@@ -17,6 +17,11 @@
 namespace formulon {
 namespace eval {
 
+/// True for the half-width katakana base block U+FF66..U+FF9D.
+constexpr bool is_halfwidth_katakana(std::uint32_t cp) noexcept {
+  return cp >= 0xFF66u && cp <= 0xFF9Du;
+}
+
 /// Returns the full-width katakana base for half-width codepoint `cp`,
 /// or 0 if `cp` does not fall in the half-width katakana base block
 /// (U+FF66..U+FF9D). Use `half_to_full_punctuation` for U+FF61..U+FF65

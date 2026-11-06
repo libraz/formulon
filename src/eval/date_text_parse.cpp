@@ -63,16 +63,8 @@ constexpr std::string_view kEnglishMonths[12] = {
     "July",    "August",   "September", "October", "November", "December",
 };
 
-bool is_digit(char c) noexcept {
-  return c >= '0' && c <= '9';
-}
-
 const LocaleFacts& profile_facts() noexcept {
   return locale_facts(current_eval_profile());
-}
-
-bool is_ascii_alpha(char c) noexcept {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
 // Skips U+0020 blanks; true when at least one was skipped.
@@ -159,7 +151,7 @@ std::string fold_date_text(std::string_view s) {
       if (b0 == 0xEF && ((b1 == 0xBC && b2 >= 0x81) || (b1 == 0xBD && b2 <= 0x9E))) {
         const unsigned cp = 0xF000u | ((b1 & 0x3Fu) << 6) | (b2 & 0x3Fu);
         const char ascii = static_cast<char>(cp - 0xFEE0u);
-        if (cjk_width || is_ascii_alpha(ascii)) {
+        if (cjk_width || strings::is_ascii_alpha(ascii)) {
           out.push_back(ascii);
           i += 3;
           continue;
@@ -183,7 +175,7 @@ constexpr int kRunCap = 1000000;
 bool scan_run(std::string_view* s, DigitRun* out) noexcept {
   std::size_t i = 0;
   int value = 0;
-  while (i < s->size() && is_digit((*s)[i])) {
+  while (i < s->size() && strings::is_ascii_digit((*s)[i])) {
     value = value < kRunCap ? value * 10 + ((*s)[i] - '0') : kRunCap;
     ++i;
   }
@@ -328,7 +320,7 @@ ShapeMatch parse_era_text(std::string_view s, double* out_serial, std::string_vi
     }
   }
   // A digit must follow the letter so `Mar` etc. don't get hijacked.
-  if (s.size() < 2 || !is_digit(s[1])) {
+  if (s.size() < 2 || !strings::is_ascii_digit(s[1])) {
     return ShapeMatch::kNoMatch;
   }
   for (const EraName& name : kEraNames) {
@@ -367,7 +359,7 @@ bool parse_kanji_date(DigitRun first, std::string_view s, int current_year, Kanj
       return false;
     }
     const std::size_t year_digits = first.value <= 99 ? 2 : 4;
-    if (s.empty() || !is_digit(s[0])) {
+    if (s.empty() || !strings::is_ascii_digit(s[0])) {
       *rest = s;
       return all_forms && serial_from_parsed_ymd(first.value, year_digits, month.value, 1, out_serial);
     }
@@ -387,7 +379,7 @@ bool parse_kanji_date(DigitRun first, std::string_view s, int current_year, Kanj
 
 // One U+0020, then a digit run closed by the hangul `unit`.
 bool scan_spaced_hangul_field(std::string_view* s, const char (&unit)[4], DigitRun* out) noexcept {
-  if (s->size() < 2 || (*s)[0] != ' ' || !is_digit((*s)[1])) {
+  if (s->size() < 2 || (*s)[0] != ' ' || !strings::is_ascii_digit((*s)[1])) {
     return false;
   }
   s->remove_prefix(1);
@@ -507,7 +499,7 @@ void leading_separator_candidates(std::string_view s, int current_year, DateCand
 
 // A letter of a month name: ASCII, Latin-1 / Latin Extended or Cyrillic.
 bool is_name_letter(std::uint32_t cp) noexcept {
-  return (cp < 0x80u && is_ascii_alpha(static_cast<char>(cp))) ||
+  return (cp < 0x80u && strings::is_ascii_alpha(static_cast<char>(cp))) ||
          (cp >= 0xC0u && cp <= 0x24Fu && cp != 0xD7u && cp != 0xF7u) || (cp >= 0x400u && cp <= 0x4FFu);
 }
 
@@ -801,7 +793,7 @@ bool parse_kanji_time_text(std::string_view s, double* out_days, std::string_vie
   if (!scan_run_with_unit(&s, kKanjiJi, &hour) || !scan_run_with_unit(&s, kKanjiFun, &minute)) {
     return false;
   }
-  if (!s.empty() && is_digit(s[0]) && !scan_run_with_unit(&s, kKanjiByou, &second)) {
+  if (!s.empty() && strings::is_ascii_digit(s[0]) && !scan_run_with_unit(&s, kKanjiByou, &second)) {
     return false;
   }
   return finish_clock_time(hour, minute, second, s, out_days, rest);
@@ -864,14 +856,14 @@ bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
     const std::string_view text_name = facts.meridiem_text_names[is_pm ? 1 : 0];
     if (!text_name.empty() && tail.substr(0, text_name.size()) == text_name &&
         (tail.size() == text_name.size() ||
-         (!is_ascii_alpha(tail[text_name.size()]) && !is_digit(tail[text_name.size()])))) {
+         (!strings::is_ascii_alpha(tail[text_name.size()]) && !strings::is_ascii_digit(tail[text_name.size()])))) {
       *pm = is_pm;
       *s = tail.substr(text_name.size());
       return true;
     }
   }
   std::size_t letters = 0;
-  while (letters < tail.size() && is_ascii_alpha(tail[letters])) {
+  while (letters < tail.size() && strings::is_ascii_alpha(tail[letters])) {
     ++letters;
   }
   const char c0 = strings::ascii_to_upper(tail[0]);
@@ -923,7 +915,7 @@ bool parse_time_text(std::string_view s, double* out_days, std::string_view* res
   count = 1;
   while (count < 3) {
     std::string_view t = s;
-    if (!consume_spaced_sep(&t, is_time_sep) || t.empty() || !is_digit(t[0])) {
+    if (!consume_spaced_sep(&t, is_time_sep) || t.empty() || !strings::is_ascii_digit(t[0])) {
       break;
     }
     if (!scan_time_field(&t, &fields[count])) {
@@ -944,7 +936,7 @@ bool parse_time_text(std::string_view s, double* out_days, std::string_view* res
       std::string_view u = t;
       skip_blanks(&u);
       std::size_t n = 0;
-      while (n < u.size() && is_digit(u[n])) {
+      while (n < u.size() && strings::is_ascii_digit(u[n])) {
         ++n;
       }
       if (n > 0) {
@@ -955,7 +947,7 @@ bool parse_time_text(std::string_view s, double* out_days, std::string_view* res
         if (count == 2) {
           std::string_view x = u;
           int ignored = 0;
-          if (consume_spaced_sep(&x, is_time_sep) && !x.empty() && is_digit(x[0])) {
+          if (consume_spaced_sep(&x, is_time_sep) && !x.empty() && strings::is_ascii_digit(x[0])) {
             std::string_view f = digits;
             if (!scan_time_field(&f, &fields[2]) || !scan_time_field(&x, &ignored)) {
               return false;

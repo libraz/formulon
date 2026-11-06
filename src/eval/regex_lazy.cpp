@@ -104,6 +104,9 @@ std::atomic<std::uint64_t> g_compile_count{0U};
 // -> truncate -> bound check. A non-coercible value or out-of-domain
 // integer surfaces #VALUE! (or the upstream error code).
 
+// Largest magnitude a coerced integer argument may take.
+constexpr double kMaxIntArgMagnitude = 2147483647.0;
+
 // Shared helper: evaluates `node`, propagates errors, coerces to a
 // truncated integer. On success writes the int into `out` and returns
 // true. On failure writes the error sentinel into `out_err` and returns
@@ -115,7 +118,7 @@ bool coerce_int_arg(const parser::AstNode& node, Arena& arena, const FunctionReg
     return false;
   }
   // Defend against NaN / Inf surviving truncation.
-  if (!(d == d) || d > static_cast<double>(0x7FFFFFFF) || d < -static_cast<double>(0x7FFFFFFF)) {
+  if (std::isnan(d) || d > kMaxIntArgMagnitude || d < -kMaxIntArgMagnitude) {
     out_err = Value::error(ErrorCode::Value);
     return false;
   }

@@ -53,7 +53,7 @@ void encode_utf8(std::uint32_t cp, std::string* out) {
 // full-width equivalents using the shared `jp_kana_table` lookups.
 // Returns 0 for codepoints outside the supported range.
 std::uint32_t half_to_full_kana_or_punct(std::uint32_t cp) noexcept {
-  if (cp >= 0xFF66u && cp <= 0xFF9Du) {
+  if (is_halfwidth_katakana(cp)) {
     return half_to_full_katakana_base(cp);
   }
   return half_to_full_punctuation(cp);
@@ -180,7 +180,7 @@ std::string compose_jp_halfwidth_voicing(std::string_view input) {
     const std::uint32_t cp = decode_utf8_step(input, i, &n);
 
     // Only a half-width katakana base can absorb a following ﾞ / ﾟ.
-    if (cp >= 0xFF66u && cp <= 0xFF9Du && i + n < input.size()) {
+    if (is_halfwidth_katakana(cp) && i + n < input.size()) {
       const std::uint32_t base = half_to_full_kana_or_punct(cp);
       std::size_t consumed = 0;
       if (append_composed_voicing(input, i + n, base, &out, &consumed)) {

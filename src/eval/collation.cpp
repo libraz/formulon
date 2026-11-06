@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -39,26 +40,6 @@ namespace eval {
 namespace {
 
 namespace cd = collation_detail;
-
-// Sorts through the engine's one shared sort body; a std::sort per element
-// type would instantiate a full introsort each.
-template <typename T, typename Less>
-void shared_sort(std::vector<T>& items, const Less& less) {
-  const auto by_index = [&items, &less](std::uint32_t a, std::uint32_t b) { return less(items[a], items[b]); };
-  std::vector<std::uint32_t> order;
-  sorted_index_order(order, static_cast<std::uint32_t>(items.size()), make_index_less(by_index));
-  std::vector<T> sorted;
-  sorted.reserve(items.size());
-  for (const std::uint32_t i : order) {
-    sorted.push_back(items[i]);
-  }
-  items.swap(sorted);
-}
-
-template <typename T>
-void shared_sort(std::vector<T>& items) {
-  shared_sort(items, [](const T& a, const T& b) { return a < b; });
-}
 
 constexpr std::uint32_t kUroFirst = 0x4E00u;
 constexpr std::uint32_t kUroLast = 0x9FFFu;
@@ -277,7 +258,7 @@ const std::vector<std::pair<std::uint32_t, std::uint32_t>>& compositions() {
       base += base_col.next_signed();
       out.emplace_back(static_cast<std::uint32_t>(base) << 7 | mark.next(), cp);
     }
-    shared_sort(out);
+    sort_by_index(out, std::less<>{});
     return out;
   }();
   return table;
@@ -455,7 +436,7 @@ struct LocaleData {
     for (std::uint32_t cp : last_group) {
       order.emplace_back(top + 1, cp);
     }
-    shared_sort(order);
+    sort_by_index(order, std::less<>{});
     han_p.assign(kUroSize, 0);
     Varints p_col(t.p), p_len(t.p_length);
     std::size_t idx = 0;
@@ -646,7 +627,7 @@ constexpr VoicedSquare kVoicedSquares[] = {
 // The character composed from the first character of `cp`'s compatibility form
 // and a voiced sound mark, or 0 when that does not compose.
 std::uint32_t voiced_form(std::uint32_t cp) noexcept {
-  if (cp >= 0xFF66u && cp <= 0xFF9Du) {
+  if (is_halfwidth_katakana(cp)) {
     return voiced_full_kana(half_to_full_katakana_base(cp));
   }
   if (cp >= 0x32D0u && cp <= 0x32FEu) {  // circled katakana, ア..ワ then ヰ ヱ ヲ
@@ -880,7 +861,7 @@ Segments base_block_order(const LocaleData& L) {
   const std::int32_t top = L.remap_p(L.base->out_of_range_p + out_of_range_index(0xFFFFu));
   const std::int32_t end = top + 2 + static_cast<std::int32_t>(0x10FFFFu - 0x10000u) / (kMaxWeight + 1);
   Segments by_locale = L.remap;  // (base P, locale P)
-  shared_sort(by_locale, [](const auto& a, const auto& b) { return a.second < b.second; });
+  sort_by_index(by_locale, [](const auto& a, const auto& b) { return a.second < b.second; });
   struct Block {
     std::int32_t base, first, end;  // locale P range [first, end)
   };
@@ -889,14 +870,14 @@ Segments base_block_order(const LocaleData& L) {
     const std::int32_t next = i + 1 < by_locale.size() ? by_locale[i + 1].second : std::max(end, by_locale[i].second);
     blocks.push_back(Block{by_locale[i].first, by_locale[i].second, next});
   }
-  shared_sort(blocks, [](const Block& a, const Block& b) { return a.base < b.base; });
+  sort_by_index(blocks, [](const Block& a, const Block& b) { return a.base < b.base; });
   Segments out;
   std::int32_t at = 0;
   for (const Block& b : blocks) {
     out.emplace_back(b.first, at);
     at += b.end - b.first;
   }
-  shared_sort(out);
+  sort_by_index(out, std::less<>{});
   return out;
 }
 
@@ -994,7 +975,7 @@ void tokenize(const LocaleData& L, std::string_view s, CollationStrength strengt
     i += n;
     if (strength != CollationStrength::kClassicExact && (cp == 0xFF9Eu || cp == 0xFF9Fu) && !toks.empty()) {
       Token& prev = toks.back();
-      if (prev.c_from == 0 && prev.cp >= 0xFF66u && prev.cp <= 0xFF9Du) {
+      if (prev.c_from == 0 && is_halfwidth_katakana(prev.cp)) {
         if (const std::uint32_t v = halfwidth_voiced(prev.cp, cp); v != 0) {
           prev.c_from = prev.cp;
           prev.cp = v;

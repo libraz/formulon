@@ -51,10 +51,6 @@ bool is_ident_start(char c) noexcept {
   return (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') || u == '_' || u == '\\' || u >= 0xC0;
 }
 
-bool is_digit(char c) noexcept {
-  return c >= '0' && c <= '9';
-}
-
 bool is_space(char c) noexcept {
   return c == ' ' || c == '\n' || c == '\r';
 }
@@ -115,7 +111,7 @@ std::size_t number_end(std::string_view text, std::size_t i) {
   while (i < text.size() && is_ident_byte(text[i])) {
     const bool exponent = strings::ascii_to_upper(text[i]) == 'E';
     ++i;
-    if (exponent && i + 1 < text.size() && (text[i] == '+' || text[i] == '-') && is_digit(text[i + 1])) {
+    if (exponent && i + 1 < text.size() && (text[i] == '+' || text[i] == '-') && strings::is_ascii_digit(text[i + 1])) {
       ++i;
     }
   }
@@ -236,7 +232,7 @@ std::optional<std::string> rewrite_r1c1(std::string_view text, std::uint32_t row
       end = bracket_end(text, i);
     } else if (c == '#') {
       end = i + error_literal_length(text, i);
-    } else if (is_digit(c)) {
+    } else if (strings::is_ascii_digit(c)) {
       end = number_end(text, i);
       const std::size_t after = skip_spaces(text, end);
       if (after < text.size() && text[after] == ':') {

@@ -271,7 +271,7 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       view.remove_prefix(d.byte_len);
       continue;
     }
-    if (cp >= 0xFF66 && cp <= 0xFF9D) {
+    if (is_halfwidth_katakana(cp)) {
       const std::uint16_t full_base = static_cast<std::uint16_t>(half_to_full_katakana_base(cp));
       view.remove_prefix(d.byte_len);
       // Peek the next codepoint for dakuten / handakuten merging.

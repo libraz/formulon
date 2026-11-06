@@ -43,10 +43,6 @@ bool is_name_byte(char c) noexcept {
   return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
 }
 
-bool is_digit_byte(char c) noexcept {
-  return c >= '0' && c <= '9';
-}
-
 bool is_octal_byte(char c) noexcept {
   return c >= '0' && c <= '7';
 }
@@ -62,7 +58,7 @@ bool append_code_point(std::string& out, std::uint32_t cp) {
 // Reads `[0-9]{1,max_digits}` at `i`, advancing it.
 std::uint32_t read_digits(std::string_view s, std::size_t& i, std::size_t max_digits) {
   std::uint32_t n = 0;
-  for (std::size_t k = 0; k < max_digits && i < s.size() && is_digit_byte(s[i]); ++k, ++i) {
+  for (std::size_t k = 0; k < max_digits && i < s.size() && strings::is_ascii_digit(s[i]); ++k, ++i) {
     n = n * 10U + static_cast<std::uint32_t>(s[i] - '0');
   }
   return n;
@@ -81,7 +77,7 @@ ReplToken group_reference_token(std::string_view body) {
     if (!is_name_byte(c)) {
       return tok;
     }
-    all_digits = all_digits && is_digit_byte(c);
+    all_digits = all_digits && strings::is_ascii_digit(c);
   }
   if (all_digits) {
     std::size_t i = 0;
@@ -103,7 +99,7 @@ ReplToken parse_dollar(std::string_view r, std::size_t& i) {
     return tok;
   }
   const char c = r[i];
-  if (is_digit_byte(c)) {
+  if (strings::is_ascii_digit(c)) {
     tok.kind = ReplTokenKind::kGroup;
     tok.number = read_digits(r, i, 2U);
     return tok;
@@ -275,7 +271,7 @@ ReplToken parse_backslash(std::string_view r, std::size_t& i) {
     default:
       break;
   }
-  if (is_digit_byte(c)) {
+  if (strings::is_ascii_digit(c)) {
     --i;  // Back onto the first digit.
     const bool octal3 = is_octal_byte(c) && i + 2U < r.size() && is_octal_byte(r[i + 1U]) && is_octal_byte(r[i + 2U]);
     if (c == '0' || octal3) {

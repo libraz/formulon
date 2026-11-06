@@ -23,23 +23,13 @@ namespace refs_internal {
 
 namespace {
 
-// ASCII letter / digit predicates — intentionally local to avoid pulling
-// in `<cctype>` which is locale-sensitive on some platforms.
-constexpr bool is_letter(char ch) noexcept {
-  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
-}
-
-constexpr bool is_digit(char ch) noexcept {
-  return ch >= '0' && ch <= '9';
-}
-
 // Parses letters (A..XFD) at `text[*i]` into a 1-based column index, then
 // advances `*i` past the consumed bytes. Returns 0 on malformed input
 // (no letters, too many letters, or overflow past XFD = 16384).
 std::uint32_t parse_column_letters(std::string_view text, std::size_t* i) {
   std::uint32_t col = 0;
   std::size_t letters_seen = 0;
-  while (*i < text.size() && is_letter(text[*i])) {
+  while (*i < text.size() && strings::is_ascii_alpha(text[*i])) {
     const char ch = strings::ascii_to_upper(text[*i]);
     col = col * 26u + static_cast<std::uint32_t>(ch - 'A' + 1);
     ++(*i);
@@ -59,7 +49,7 @@ std::uint32_t parse_column_letters(std::string_view text, std::size_t* i) {
 std::uint32_t parse_row_digits(std::string_view text, std::size_t* i) {
   std::uint64_t row = 0;
   std::size_t digits_seen = 0;
-  while (*i < text.size() && is_digit(text[*i])) {
+  while (*i < text.size() && strings::is_ascii_digit(text[*i])) {
     row = row * 10u + static_cast<std::uint32_t>(text[*i] - '0');
     ++(*i);
     ++digits_seen;
@@ -308,7 +298,7 @@ bool read_r1c1_axis(std::string_view text, std::size_t* i, const R1C1Letters& le
     }
     const std::size_t digits_start = *i;
     long long magnitude = 0;
-    while (*i < text.size() && is_digit(text[*i])) {
+    while (*i < text.size() && strings::is_ascii_digit(text[*i])) {
       magnitude = magnitude * 10 + (text[*i] - '0');
       if (magnitude > Sheet::kMaxRows) {
         return false;  // saturate well before overflow; out of grid either way
@@ -326,7 +316,7 @@ bool read_r1c1_axis(std::string_view text, std::size_t* i, const R1C1Letters& le
   // A bare `R` / `C` is the current row / column: a zero relative offset.
   const std::size_t digits_start = *i;
   long long absolute = 0;
-  while (*i < text.size() && is_digit(text[*i])) {
+  while (*i < text.size() && strings::is_ascii_digit(text[*i])) {
     // Saturated past the grid: any longer run is a name all the same.
     absolute = std::min<long long>(absolute * 10 + (text[*i] - '0'), Sheet::kMaxRows + 1LL);
     ++*i;

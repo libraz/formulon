@@ -88,7 +88,7 @@ constexpr std::uint32_t kHalfToFullPunctuation[] = {
 }  // namespace
 
 std::uint32_t half_to_full_katakana_base(std::uint32_t cp) noexcept {
-  if (cp < 0xFF66u || cp > 0xFF9Du) {
+  if (!is_halfwidth_katakana(cp)) {
     return 0u;
   }
   return kHalfToFullBase[cp - 0xFF66u];
