@@ -43,14 +43,14 @@ pip install formulon            # Python 3.9+
 
 ## クイックスタート
 
-```js
+```js run
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
 console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
 ```
 
-```python
+```python run
 import formulon
 
 print(formulon.eval_formula("=SUM(1,2,3)").to_python())  # 6.0
@@ -67,9 +67,20 @@ formulon recalc input.xlsx -o output.xlsx
 
 新しいワークブックの既定は `win-365-en_US` です。数式は常に英語の関数名と保存形式の区切り文字で書きます。プロファイルが変えるのは、文字列の解釈と結果の表示です。`=LENB("日本")` は `mac-365-en_US` では `2`、`mac-365-ja_JP` では `4` になり、`=ISEVEN(2)` は `mac-365-de_DE` では `WAHR` と表示されます。ワークブックごとに切り替えて再計算します。
 
-```js
-wb.setExcelProfileId('mac-365-ja_JP'); // Python: wb.set_excel_profile_id(...)
-wb.recalc(); // a profile change marks formulas dirty
+```js run
+import createFormulon from '@libraz/formulon';
+
+const formulon = await createFormulon();
+const wb = formulon.Workbook.createDefault();
+try {
+  const ws = wb.sheet(0);
+  ws.setFormula(0, 0, '=LENB("日本")');
+  wb.setExcelProfileId('mac-365-ja_JP'); // Python: set_excel_profile_id
+  wb.recalc(); // プロファイルを変えると数式が再計算の対象になる
+  console.log(ws.getDisplayText(0, 0).text); // 4
+} finally {
+  wb.dispose();
+}
 ```
 
 プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、読み込み後に設定し直してください。`formulon.Workbook.createForProfile(id)` を使うと、新しいブックのフォント、スタイル名、シート名も Excel がそのロケールで使うものになります。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) と [テキストの比較と並べ替え](https://formulon.libraz.net/ja/compatibility/text-collation) を参照してください。

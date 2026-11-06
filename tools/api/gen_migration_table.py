@@ -5,8 +5,9 @@ One Markdown table per surface (C, JavaScript, Python), each row a former name
 and what replaces it:
 
 * a rename (``was`` differs from the current name), records and fields included;
-* a ``drop`` name: removed, pointing at the ``list`` entry that absorbs it or at
-  the entry it was an alias of, when the ledger names one;
+* a ``drop`` name, whether or not it was also renamed: removed, pointing at the
+  ``list`` entry that absorbs it or at the entry it was an alias of, when the
+  ledger names one;
 * a ``replaced_by`` type: folded into the type it names.
 
 The table lives in ``CHANGELOG.md`` between the two marker comments below, so
@@ -89,7 +90,10 @@ def rows(data: dict) -> Dict[str, List[Row]]:
         for field, _title in SURFACES:
             old = was.get(field)
             if not isinstance(old, str):
-                continue
+                # A name that kept its spelling but was removed from this surface.
+                old = drop.get(field) if kind != "field" else None
+                if not isinstance(old, str) or entry.get(field) != old:
+                    continue
             if kind == "field":
                 record = entries.get(str(entry.get("record")), {})
                 owner = record.get(field) if isinstance(record, dict) else None
@@ -104,7 +108,7 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                 after = f"folded into `{new}`" if isinstance(new, str) else "removed"
                 out[field].append((_call(old, field, kind), after))
                 continue
-            if drop.get(field) == old:
+            if isinstance(drop.get(field), str):
                 instead = _absorbing_list(entries, key, field) or _parent_name(entries, key, field)
                 after = f"removed; use {_call(instead, field, 'op')}" if instead else "removed"
                 out[field].append((_call(old, field, kind), after))

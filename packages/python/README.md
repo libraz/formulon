@@ -17,7 +17,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 
 - **Formula engine** — 526 Excel function names, 511 implemented locally; dynamic arrays, `LET` / `LAMBDA`, and `REGEX*`. [Coverage](https://formulon.libraz.net/compatibility/formula-coverage)
 - **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables, charts and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
-- **Workbook editing** — cells, sheets, rows and columns, styles, merges, comments, validations, pivot tables, print settings and furigana, through a typed `Workbook` API. [API](https://formulon.libraz.net/api/python)
+- **Workbook editing** — cells, sheets, rows and columns, styles, merges, comments, validations, pivot tables, print settings and furigana, through typed `Workbook` and `Sheet` APIs. [API](https://formulon.libraz.net/api/python)
 - **Locale profiles** — 28 Excel behavior profiles across fourteen locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 - **Excel oracle** — formula results are compared bit for bit against goldens captured from Mac Excel 365 in fourteen locales. [Oracle testing](https://formulon.libraz.net/compatibility/oracle-testing)
 
@@ -31,38 +31,41 @@ pip install formulon   # Python 3.9+
 
 ## Quick start
 
-```python
+```python run
 import formulon
 
 print(formulon.eval_formula("=SUM(1,2,3)").to_python())  # 6.0
 
 v = formulon.eval_formula("=1/0")
-print(v.kind.name, v.error_code)  # ERROR 1
+print(v.kind.name, v.error_code.name)  # ERROR DIV0
 ```
 
 Excel errors come back as values (`Value.to_python()` gives an `ExcelError`); a host-side failure raises `FormulonError`. Its subclasses are `IndexOutOfRangeError`, `NotFoundError`, `InvalidArgumentError` and `WorkbookClosedError`. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 
-```python
+```python run
 from formulon import Workbook
 
 with open("input.xlsx", "rb") as f:
     data = f.read()
 
 with Workbook.load(data) as wb:
-    wb.set_number(0, 0, 0, 42.0)  # Sheet1!A1
-    wb.set_formula(0, 1, 0, "=A1*2")  # Sheet1!A2
+    ws = wb.sheet(0)  # or wb["Sheet1"]
+    ws.set_number(0, 0, 42.0)  # A1
+    ws.set_formula(1, 0, "=A1*2")  # A2
     wb.recalc()
-    print(wb.get_value(0, 1, 0).to_python())  # 84.0
+    print(ws.get_value(1, 0).to_python())  # 84.0
 
     with open("output.xlsx", "wb") as f:
         f.write(wb.save())
 
-    print(wb.get_sheet_index("Sheet1"))  # 0; None when there is no such sheet
-    wb.sheet("Sheet1").set("A1", 42)  # A1-addressed view of one sheet
-    print(wb["Sheet1"].get("A2").to_python())
+    print(ws.name, ws.index)  # Sheet1 0
+    ws.set("A1", 43)  # A1 notation
+    print(wb["Sheet1"].get("A1").to_python())  # 43.0
 ```
+
+A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet(key)` and `wb[key]` take an index or a name and raise `NotFoundError` or `IndexOutOfRangeError` when nothing matches; `wb.list_sheets()` lists every sheet.
 
 `wb.close()` or leaving the `with` block releases the workbook; `wb.closed` reports it, and any later call raises `WorkbookClosedError`.
 
@@ -70,16 +73,19 @@ with Workbook.load(data) as wb:
 
 New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
 
-```python
+```python run
+import formulon
+
 with formulon.Workbook.create_default() as wb:
-    wb.set_formula(0, 0, 0, '=LENB("日本")')
-    wb.set_formula(0, 1, 0, '=VALUE("1,5")')
-    wb.set_formula(0, 2, 0, "=ISEVEN(2)")
+    ws = wb.sheet(0)
+    ws.set_formula(0, 0, '=LENB("日本")')
+    ws.set_formula(1, 0, '=VALUE("1,5")')
+    ws.set_formula(2, 0, "=ISEVEN(2)")
 
     for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
         wb.set_excel_profile_id(profile)
         wb.recalc()
-        print(profile, [wb.get_display_text(0, row, 0).text for row in range(3)])
+        print(profile, [ws.get_display_text(row, 0).text for row in range(3)])
 # mac-365-en_US ['2', '#VALUE!', 'TRUE']
 # mac-365-ja_JP ['4', '#VALUE!', 'TRUE']
 # mac-365-de_DE ['2', '1,5', 'WAHR']

@@ -26,11 +26,11 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 npm install @libraz/formulon   # browsers and Node 22+
 ```
 
-The package is ES modules only and ships its TypeScript declarations.
+The package is ES modules only (no `require`) and ships its TypeScript declarations.
 
 ## Quick start
 
-```js
+```js run
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
@@ -41,17 +41,18 @@ Excel errors such as `#DIV/0!` come back as values (`v.kind === ValueKind.Error`
 
 ## Recalculate a workbook
 
-```js
+```js run
 import createFormulon from '@libraz/formulon';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const formulon = await createFormulon();
 const wb = formulon.Workbook.load(await readFile('input.xlsx'));
 try {
-  wb.setNumber(0, 0, 0, 42);        // Sheet1!A1
-  wb.setFormula(0, 1, 0, '=A1*2');  // Sheet1!A2
+  const ws = wb.sheet(0);          // or wb.sheet('Sheet1')
+  ws.setNumber(0, 0, 42);          // A1
+  ws.setFormula(1, 0, '=A1*2');    // A2
   wb.recalc();
-  console.log(wb.getValue(0, 1, 0).number); // 84
+  console.log(ws.getValue(1, 0).number); // 84
 
   await writeFile('output.xlsx', wb.save());
 } finally {
@@ -59,23 +60,29 @@ try {
 }
 ```
 
-A sheet can also be addressed in A1 notation through a view: `wb.sheet('Sheet1').set('A1', 42)`. `wb.getSheetIndex('Sheet1')` returns the sheet index, or `null` when there is no such sheet.
+On Node 24+ and in bundlers that support explicit resource management, `using wb = formulon.Workbook.load(...)` releases the workbook at the end of the scope instead.
+
+A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet('Sheet1')` finds a sheet by name (it throws `FormulonError` with `StatusCode.NotFound` when there is none), `wb.listSheets()` lists them all, and `ws.name` and `ws.index` read its current name and position. A1 notation works through `ws.set('A1', 42)` and `ws.get('A2')`.
 
 ## Switching locale profiles
 
 New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
 
-```js
+```js run
+import createFormulon from '@libraz/formulon';
+
+const formulon = await createFormulon();
 const wb = formulon.Workbook.createDefault();
 try {
-  wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
-  wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2
-  wb.setFormula(0, 2, 0, '=ISEVEN(2)');     // A3
+  const ws = wb.sheet(0);
+  ws.setFormula(0, 0, '=LENB("日本")');  // A1
+  ws.setFormula(1, 0, '=VALUE("1,5")');  // A2
+  ws.setFormula(2, 0, '=ISEVEN(2)');     // A3
 
   for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
     wb.setExcelProfileId(id);
     wb.recalc(); // a profile change marks formulas dirty
-    console.log(id, [0, 1, 2].map((row) => wb.getDisplayText(0, row, 0).text));
+    console.log(id, [0, 1, 2].map((row) => ws.getDisplayText(row, 0).text));
   }
 } finally {
   wb.dispose();

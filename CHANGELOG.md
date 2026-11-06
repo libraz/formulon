@@ -52,12 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `size_t* out_index`. `fm_workbook_evaluate_formula_array_cell` is replaced by
   an owned `fm_value_array_t`, and slicers are addressed by the object id
   `fm_sheet_add_slicer` returned.
-- **JavaScript, Python:** collections keyed by name are listed with `list*`
-  methods. The whole-collection walkers for index-keyed collections
-  (`getConditionalFormats`, `getValidations`, `getProtectedRanges`,
-  `listSparklineGroups`, `getExternalLinks`, `getCellPhoneticRuns`, Python
-  `iter_tables` and `iter_cells`) and Python's per-collection count helpers
-  are removed; use the count method with the index getter.
+- **JavaScript, Python:** every collection is read with one `list*` method
+  (`listCfRules()`, `listValidations()`, `listTables()`, `listPivotFields()`
+  and the others in the migration table) that returns a fresh array. A count
+  method paired with a getter by index (`getTableCount()` + `getTable(i)`) is
+  removed together with the getter; `listTables()[i]` replaces the pair. A
+  phonetic run list is read with `getCellPhoneticRuns(row, col)` instead of
+  `getCellPhoneticRunCount` and `getCellPhoneticRun`.
 - **JavaScript:** failures throw. A call that cannot complete throws
   `FormulonError` with a `code` (`StatusCode`), `message` and `context`;
   there are no `{ status, ... }` envelopes and no `.ok` to check. Replace
@@ -80,14 +81,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only the fields of its kind, and `boolean` is a real `boolean`.
   `Workbook.disposed` reports a released handle, and every other call on it
   throws `FormulonError` with `StatusCode.BindingInvalidHandle`.
-- **JavaScript:** `getSheetIndex(name)` finds a sheet by name and returns
-  `null` when none matches. `Workbook.sheet(nameOrIndex)` returns a `Sheet`
-  view addressed in A1 notation (`get`, `set`, `getFormula`, `setFormula`),
+- **JavaScript:** `Workbook.sheet(key)` returns the `Sheet` handle of a sheet
+  given by index, name (compared without regard to case) or another `Sheet`,
+  and every sheet-scoped method moves onto it (see [Sheet handles](#sheet-handles)).
+  `Sheet.get(a1)` and `Sheet.set(a1, value)` address a cell in A1 notation,
   and `setValue` stores a number, string, boolean, `null` or a `Value`
   through the matching typed setter. Result types lose their `Result` suffix
   and update inputs take `Patch<T>`. Enums are const objects with matching
-  union types. `delete()` is removed; use `dispose()` or
-  `[Symbol.dispose]()`.
+  union types. The embind `delete()`, `clone()` and `isDeleted()` are gone;
+  use `dispose()` or `[Symbol.dispose]()`. `Workbook` is a plain class that
+  each `createFormulon()` call builds anew, so `wb instanceof Module.Workbook`
+  and `wb.$$` no longer work and two calls never share a class.
 - **Python:** tuple results are frozen dataclasses (`PivotGrandTotals`,
   `SheetPrintTitles`, `SheetSelection`, `TableStyleDefaults`,
   `IterativeSettings`, `StyleBatchIndices`), as are `Cell` and `Table`.
@@ -104,11 +108,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `InvalidArgumentError` (also a `ValueError`) and `WorkbookClosedError` for a
   call after `close()`. Code that catches `FormulonError` keeps working.
   `Workbook.closed` replaces `is_valid`, `Workbook.save(format=...)` replaces
-  `save_as`, `get_sheet_index(name)` finds a sheet by name, and
-  `Value.to_python()` returns an `ExcelError` for an Excel error value.
-  `Workbook.sheet(key)`, `wb[key]`, `len(wb)`, iteration and `in` give
-  A1-addressed `Sheet` views. The text of exception messages changed; match on
-  the exception class, not the message.
+  `save_as`, and `Value.to_python()` returns an `ExcelError` for an Excel
+  error value. `Workbook.sheet(key)`, `wb[key]`, `len(wb)`, iteration and `in`
+  give `Sheet` handles that carry every sheet-scoped method (see
+  [Sheet handles](#sheet-handles)). The text of exception messages changed;
+  match on the exception class, not the message.
 - **C ABI:** an index past the end of a collection other than sheets returns
   `FM_STATUS_INDEX_OUT_OF_RANGE`, and removing a record by a natural key that
   does not exist returns `FM_STATUS_NOT_FOUND`. Error message text no longer
@@ -116,8 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_workbook_get_sheet_index` finds a sheet by name and
   `fm_get_version_number` returns the version as one number.
 - **Command line:** plain output escapes only newline, carriage return, tab and
-  backslash, so a value pastes back as written; `--json` output is unchanged.
-  `paginate` prints print-area ranges in A1 notation. `eval` with no formula
+  backslash, so a value pastes back as written. `paginate` prints print-area ranges in A1 notation. `eval` with no formula
   exits with status 64, and an engine failure exits with status 1. `dump` and
   `paginate` accept `--json`, and `profiles --json` lists the profile ids as
   JSON; the usage text no longer lists the profile ids.
@@ -146,11 +149,201 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_chart_preview_overrides_t` gains `na_as_blank_op` / `na_as_blank`, and
   `fm_spill_info_t` gains `blocked`, each at its end. A caller compiled
   against an earlier header must be recompiled.
-- `setChartDisplay(sheet, objectId, patch)` (JavaScript) and
-  `set_chart_display(sheet, object_id, patch)` (Python) take one patch object
+- `Sheet.setChartDisplay(objectId, patch)` (JavaScript) and
+  `Sheet.set_chart_display(object_id, patch)` (Python) take one patch object
   in place of the positional values: `blanksAs`, `plotVisibleOnly` and
   `naAsBlank` (`blanks_as`, `plot_visible_only`, `na_as_blank`). An omitted
   key keeps the element, `null` / `None` removes it, a value sets it.
+
+### Sheet handles
+
+A sheet-scoped call moves from the workbook onto a `Sheet` handle, and the
+sheet argument disappears:
+
+```js
+// before
+wb.setNumber(sheet, row, col, 42);
+// after
+wb.sheet(sheet).setNumber(row, col, 42);
+```
+
+```python
+# before
+wb.set_number(sheet, row, col, 42.0)
+# after
+wb[sheet].set_number(row, col, 42.0)   # or wb.sheet(sheet)
+```
+
+Calls that address the whole workbook (`save`, `recalc`, `addFont`,
+`setDefinedName`, `addTable`, `setExcelProfileId` and the others without a sheet
+argument) stay on `Workbook`. A handle follows its sheet through `addSheet`,
+`copySheet`, `moveSheet`, `renameSheet` and `removeSheet`; `wb.sheet(0)` and
+`wb.sheet('Data')` are the same object when they name the same sheet. Using
+the handle of a removed sheet throws `FormulonError` with
+`StatusCode.NotFound` (Python: `NotFoundError`).
+
+| Before | After |
+|---|---|
+| `getSheetCount()` / `get_sheet_count()` | `listSheets().length` / `len(wb)` |
+| `getSheetName(i)` / `get_sheet_name(i)` | `sheet(i).name` |
+| `getSheetIndex(name)` / `get_sheet_index(name)` | `sheet(name).index` (throws when there is no such sheet) |
+| `addSheet(name)` / `copySheet(...)` returning an index | return the new `Sheet` |
+| `getActiveSheet()` returning an index | returns a `Sheet`; `setActiveSheet`, `moveSheet`, `removeSheet` and `renameSheet` take a `Sheet`, an index or a name |
+| `showPivotDetails(sheet, pivot, row, col)` returning an index | `ws.showPivotDetails(pivot, row, col)` returns a `Sheet` |
+
+In JavaScript, `Sheet.getFormula` and `Sheet.setFormula` also take an A1
+address in place of `row, col`. Positional guard messages read
+`Sheet.setNumber argument 1 must be ...` and `Workbook.<name> argument N ...`
+in `@libraz/formulon` and `@libraz/formulon-native` alike.
+
+### Method shape changes
+
+Names are JavaScript; Python uses the snake_case equivalents, and a record
+argument is a keyword-only argument list there (see
+[Keyword-only arguments](#keyword-only-arguments-python)).
+
+| Before | After |
+|---|---|
+| `setIterative(enabled, maxIterations, maxChange)` | `setIterative(patch)`; an omitted field keeps the stored value |
+| `setPinnedNow(y, m, d, h, mi, s)` and `clearPinnedNow()` | `setPinnedNow(time)`; `null` clears the pin. Python takes and returns a naive `datetime.datetime` (`set_pinned_now(None)` clears it) |
+| `setPrintTitles(sheet, repeatRows, repeatCols)` / `getPrintTitles()` | `ws.setPrintTitles(titles)` / `ws.getPrintTitles()` with `PrintTitles = { rows: Span \| null, columns: Span \| null }` and `Span = { first, last }` (0-based, inclusive); `null` clears. `Pagination.printTitles` has the same type |
+| `setPivotGrandTotals(sheet, pivot, rows, cols)` | `ws.setPivotGrandTotals(pivot, { rows, columns })` |
+| `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { author, text })` writes the comment, empty text included; `ws.removeComment(row, col)` removes it and throws `NotFound` when the cell has none |
+| `setWorkbookProtection(p)` / `setSheetProtection(sheet, p)` (an all-zero record cleared them) | `null` clears them; an all-zero record still does |
+| `setCellPhoneticRuns(sheet, row, col, runs)` | `ws.setCellPhoneticRuns(row, col, runs)`; `null` and `[]` clear |
+| `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.addHyperlink(row, col, { target, location?, display?, tooltip? })`; a `null` target is an in-workbook link and requires `location`. `addHyperlinkRange(rect, link)` likewise |
+| `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ major, script, typeface })` |
+| `updateThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
+| `addThreadedComment(sheet, partial)` | `ws.addThreadedComment(input)` with `ThreadedCommentInput` |
+| `setDefinedName`, `setDefinedNameScoped`, `setDefinedNameAttrs` | `setDefinedName({ name, formula, localSheetId, comment?, hidden? })`; `localSheetId: null` is workbook scope. `removeDefinedName(name, localSheetId)` takes `number \| null`. Setting an existing name replaces every attribute |
+| `getThemeFonts(): Theme` (fonts and colors) | `getThemeFonts(): ThemeFonts` and `getThemeColors(): ThemeColors`; the `Theme` type is gone |
+| `setViewMode(sheet, mode: string)` | `ws.setViewMode(mode: SheetViewMode)` |
+| `setTabHidden(sheet, hidden)` | removed; `setVisibility` covers every tab state, very hidden included. `SheetView.tabHidden` is gone, `SheetView.viewMode` is a `SheetViewMode` and `SheetView.visibility` a `SheetVisibility` |
+| `setTableStyleDefaults`, `setPivotOptions`, `setPivotCacheOptions`, `setFormatDefaults` taking an inline object | take a `...Patch` record: an omitted key keeps the value, `null` clears a nullable one |
+| `setPivotFieldAxis(..., axis \| -1)` | `axis: PivotAxis \| null` |
+| `addPivotCache(..., requestedId = 0)` | `requestedId?: number` (omitted picks one) |
+| `setPivotFieldNumberFormat(..., utf8)` | the argument is named `formatCode` |
+| `set*Xml(sheet, '')`, `setFileName('')`, `setCellPhonetic(..., '')`, empty captions, custom names, number formats and style names clearing a value | pass `null`; the matching getters return `null` instead of `''` |
+| `setPrintArea(sheet, [])` | `ws.setPrintArea(null)` and `ws.setPrintArea([])` both clear |
+
+A chart without a title or legend reads `title: null` and `legend: null`
+instead of a record whose `kind` or `position` is `None`; a patch with
+`title: null` or `legend: null` removes it. `PivotGrandTotals.cols` is
+`columns`, `Pagination.horizontalBreaks` is `rowBreaks` (and the other
+renames in the table below).
+
+A defined name with an empty formula is rejected with `InvalidArgument`
+instead of removing the name; `removeDefinedName` removes it.
+
+### Enums
+
+A member that stood for "absent" is removed from its table, and the field or
+argument is `null` (Python `None`) instead. Reading the removed member gives
+`undefined` in JavaScript, and setting it throws `TypeError`; Python raises
+`AttributeError`.
+
+| Enum | Removed member | Replaced by |
+|---|---|---|
+| `ChartAxisCrosses` | `Absent` | `null` |
+| `ChartBlanksAs` | `Absent` | `null` |
+| `ChartLegendPosition` | `None` | `null` (no legend) |
+| `ChartTitleKind` | `None` | `null` (no title) |
+| `PivotFilterValueKind` | `None` (`-1`) | `null` |
+| `ShapePaint` | `Unset` | `null` |
+
+The numbers of these enums moved down to start at 0, and two others swapped
+order. Code that writes the numbers instead of the names changes meaning:
+
+| Enum | Before | After |
+|---|---|---|
+| `AnchorEditAs` | `TwoCell` 0, `OneCell` 1, `Absolute` 2 | `OneCell` 0, `TwoCell` 1, `Absolute` 2 |
+| `SlicerSortOrder` | `Ascending` 0, `Descending` 1 | `Descending` 0, `Ascending` 1 |
+| `ChartAxisCrosses` | `AutoZero` 1, `Min` 2, `Max` 3, `At` 4 | `AutoZero` 0, `Min` 1, `Max` 2, `At` 3 |
+| `ChartBlanksAs` | `Gap` 1, `Zero` 2, `Span` 3 | `Gap` 0, `Zero` 1, `Span` 2 |
+| `ChartLegendPosition` | `Bottom` 1, `Top` 2, `Left` 3, `Right` 4, `TopRight` 5 | `Bottom` 0, `Top` 1, `Left` 2, `Right` 3, `TopRight` 4 |
+| `ShapePaint` | `Solid` 1, `None` 2, `Other` 3 | `Solid` 0, `None` 1, `Other` 2 |
+
+`ChartLegendPosition` now shares `Bottom`, `Top`, `Left` and `Right` with the
+new `ChartAxisPosition`, which replaces the strings `'b' | 't' | 'l' | 'r'` of
+`ChartAxis.position`.
+
+Closed value sets that were plain numbers or strings are typed:
+`PageOrientation` (`Portrait` 0, `Landscape` 1; the former `Orientation` had
+`Default` 0, `Portrait` 1, `Landscape` 2, and `Default` is now an absent
+`orientation` that prints portrait), `SheetViewMode` (replaces the
+`view` attribute strings `''`, `pageBreakPreview` and `pageLayout`), `ExternalLinkKind`,
+`ChartBarDirection`, `CfDataBarDirection` and `CfDataBarAxisPosition`. An
+enum argument outside its set throws `FormulonError` with
+`StatusCode.InvalidArgument`; `-1`, a non-integer and `NaN` throw
+`RangeError`, and a string throws `TypeError` (Python: `InvalidArgumentError`
+for an out-of-range number, `TypeError` for the others).
+
+### Result fields
+
+A value that is not there reads `null` (Python `None`) instead of a sentinel.
+A comparison such as `field === -1` is silently false now.
+
+| Before | After |
+|---|---|
+| `-1` | `null`: `PivotField.axis`, `PivotField.cacheFieldIndex`, `PivotField.groupBaseIndex`, `PivotItem.cacheIndex`, `PivotDataField.showAsBaseField`, `PivotDataField.showAsBaseItem`, `PivotCacheOptions.missingItemsLimit`, `DefinedName.localSheetId`, `ValidationOutcome.ruleIndex`, `PivotFilter.valueKind`, `PivotFilter.valueHighKind` |
+| `''` | `null`: `DefinedName.comment`, `DrawingObject.mediaPath`, `Hyperlink.location`, `Hyperlink.display`, `Hyperlink.tooltip`, `PivotCell.numberFormat`, `PivotDataField.numberFormat`, `PivotField.customName`, `PivotField.numberFormat`, `PivotFilter.valueHighText`, `PivotOptions` captions and alternative text, `PivotWorksheetSource.ref` / `sheet` / `name`, the password, algorithm, hash and salt fields of `SheetProtection` and `WorkbookProtection`, `Slicer.style`, `SparklineGroup.dateAxisRef`, `TableStyleDefaults.tableStyle` / `pivotStyle` |
+| a number or boolean next to a `has...` flag | a nullable field, and the flag is gone: `AutoFilterColumn.filterVal` / `dynVal` / `dynMaxVal` / `iconId`, `AutoFilterSortCondition.dxfId` / `iconId`, `CellXf` alignment, wrap, locked and hidden fields, `ColumnLayout.width` / `styleXf`, `RowLayout.height` / `styleXf`, `SheetFormatDefaults.defaultColWidth` / `defaultRowHeight`, `PageSetup.orientation`, `Shape.fillKind` / `lineKind`, `ChartInsertInput.legend` |
+
+`Table.hasStyleInfo` and `CellXf.hasAlignment` are removed; an absent value is
+the field being `null`.
+
+### Keyword-only arguments (Python)
+
+These parameters can no longer be passed by position.
+
+| Method | Keyword-only parameters |
+|---|---|
+| `Sheet.add_column_break`, `Sheet.add_row_break` | `manual` |
+| `Sheet.add_hyperlink`, `Sheet.add_hyperlink_range` | `target`, `location`, `display`, `tooltip` |
+| `Sheet.add_image` | `description` |
+| `Sheet.add_shape`, `Sheet.update_shape` | `from_row_offset_emu`, `from_col_offset_emu`, `to_row_offset_emu`, `to_col_offset_emu`, `width_emu`, `height_emu`, `preset_geometry` |
+| `Sheet.add_slicer`, `Sheet.update_slicer` | `from_row`, `from_col`, `to_row`, `to_col`, the four `*_offset_emu` fields, `row_height_emu` |
+| `Sheet.set_chart_legend` | `overlay` |
+| `Sheet.set_chart_source` | `direction`, `header_row`, `header_column` |
+| `Sheet.set_pivot_grand_totals` | `rows`, `columns` |
+| `Sheet.add_pivot_field_item`, `Sheet.add_pivot_field_shared_item` | `visible` |
+| `Sheet.update_threaded_comment` | `text`, `mentions` |
+| `Workbook.add_table` | `range`, `name`, `columns`, `display_name`, `style_name`, `header_row`, `totals_row` |
+| `Workbook.update_table` | `rect`, `style_name`, `header_row`, `totals_row` |
+| `Workbook.set_table_style_info` | `show_first_column`, `show_last_column`, `show_row_stripes`, `show_column_stripes` |
+| `Workbook.set_table_column_totals` | `function`, `label`, `formula` |
+| `Workbook.set_table_style_defaults` | `table_style`, `pivot_style` |
+| `Workbook.set_iterative` | `enabled`, `max_iterations`, `max_change` |
+| `Workbook.get_theme_script_font` | `major`, `script` |
+| `Workbook.add_pivot_cache_field_shared_item_bool` | `value` |
+
+`add_table` takes the fields of the JavaScript `TableInput` (`range` is a
+`SheetRect`, `columns` the column names); `Sheet.set_selection` takes a
+`SheetSelection`; `get_border` returns and `add_border` takes a `Border`
+dataclass. `PrintTitles` keeps its name but holds `rows` and `columns` as
+`Span | None` instead of `has_rows`, `first_row`, `last_row`, `has_cols` and so on. `wb.sheet(-1)`
+still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
+`formulon.__all__` lists public names only.
+
+### Command line
+
+- Exit status: `0` success, `1` the engine refused the request (an empty or
+  corrupt workbook included), `64` usage error, `66` an input file that is
+  missing, unreadable or a directory, `73` an output file that cannot be
+  created, `74` an I/O error while reading or writing a stream (a closed pipe
+  on stdout included). Failures to open a file reported `1` before.
+- `eval --json` prints `{"format":1,"rows":[[{"kind":...,"value":...}]]}` for
+  every result, a single cell included; it printed a bare value object for one
+  cell and a bare array of arrays otherwise. Every `--json` output that writes
+  to stdout (`eval`, `dump`, `paginate`, `profiles`) is an object with
+  `"format": 1`, and `dump --json` may now combine with `--sheets` and
+  `--metadata`.
+- An input named `-` reads the workbook from stdin, and `-o -` writes the
+  result to stdout; both are refused with status 64 on a terminal. A file that
+  is really named `-` is written `./-`.
+- Options take `--opt value` and `--opt=value`, `--opt=` is an empty value, a
+  flag that takes no value rejects `=value` with status 64, and everything
+  after `--` is a positional argument.
 
 ### Name migration
 
@@ -287,6 +480,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `fm_print_titles` | `fm_print_titles_t` |
 | `fm_rect_pt` | `fm_rect_pt_t` |
 | `fm_reference_t` | `fm_parsed_reference_t` |
+| `FM_SHAPE_FIELD_PRST` | `FM_SHAPE_FIELD_PRESET_GEOMETRY` |
 | `fm_shape` | `fm_shape_t` |
 | `fm_sheet_add_col_break` | `fm_sheet_add_column_break` |
 | `fm_sheet_cell_rect_pt` | `fm_sheet_get_cell_rect_pt` |
@@ -330,6 +524,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `fm_sheet_row_break_count` | `fm_sheet_get_row_break_count` |
 | `fm_sheet_row_height_pt` | `fm_sheet_get_row_height_pt` |
 | `fm_sheet_set_protection` | `fm_sheet_set_sheet_protection` |
+| `fm_sheet_set_tab_hidden` | removed |
 | `fm_sheet_shape_at` | `fm_sheet_get_shape_at` |
 | `fm_sheet_shape_count` | `fm_sheet_get_shape_count` |
 | `fm_sheet_slicer_at` | `fm_sheet_get_slicer_at` |
@@ -403,7 +598,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `fm_workbook_create` | `fm_workbook_create_default` |
 | `fm_workbook_date1904` | `fm_workbook_get_date1904` |
 | `fm_workbook_defined_name_at` | `fm_workbook_get_defined_name_at` |
-| `fm_workbook_defined_name_attrs_at` | `fm_workbook_get_defined_name_attrs_at` |
+| `fm_workbook_defined_name_attrs_at` | removed |
 | `fm_workbook_defined_name_count` | `fm_workbook_get_defined_name_count` |
 | `fm_workbook_delete_cols` | `fm_sheet_delete_columns` |
 | `fm_workbook_delete_rows` | `fm_sheet_delete_rows` |
@@ -553,8 +748,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `fm_workbook_set_cell_phonetic_runs` | `fm_sheet_set_cell_phonetic_runs` |
 | `fm_workbook_set_cell_phonetic` | `fm_sheet_set_cell_phonetic` |
 | `fm_workbook_set_cell_show_phonetic` | `fm_sheet_set_cell_show_phonetic` |
+| `fm_workbook_set_defined_name_attrs` | removed |
+| `fm_workbook_set_defined_name_scoped` | removed |
 | `fm_workbook_set_error` | `fm_sheet_set_error` |
 | `fm_workbook_set_formula` | `fm_sheet_set_formula` |
+| `fm_workbook_set_iterative_enabled` | removed |
 | `fm_workbook_set_number` | `fm_sheet_set_number` |
 | `fm_workbook_set_protection` | `fm_workbook_set_workbook_protection` |
 | `fm_workbook_set_text` | `fm_sheet_set_text` |
@@ -585,38 +783,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `AddNumFmtResult` | removed |
 | `addSheetColBreak()` | `addColumnBreak()` |
 | `addSheetRowBreak()` | `addRowBreak()` |
-| `AddStyleResult` | `IndexResult` |
+| `AddStyleResult` | removed |
 | `addXf()` | `addCellXf()` |
 | `ArrayFormulaResult` | removed |
 | `AutoFilterEvalResult` | `AutoFilterEval` |
 | `AutoFilterResult` | removed |
 | `BoolResult` | removed |
 | `borderCount()` | `getBorderCount()` |
+| `BorderRecord` | `Border` |
 | `BorderResult` | removed |
 | `calcMode()` | `getCalcMode()` |
 | `calcOnSave()` | `getCalcOnSave()` |
 | `cellAt()` | `getCellAt()` |
 | `cellCount()` | `getCellCount()` |
+| `CellEntry` | `Cell` |
 | `CellRectResult` | removed |
 | `CellResult` | removed |
 | `CellShowPhoneticResult` | folded into `BoolResult` |
 | `CellsInRangeResult` | `CellsInRange` |
 | `cellStyleCount()` | removed; use `listCellStyles()` |
+| `CellStyleRecord` | `CellStyle` |
 | `cellStyleXfCount()` | `getCellStyleXfCount()` |
 | `CellXfIndexResult` | folded into `NumberResult` |
 | `CellXfResult` | folded into `CellXf` |
 | `CfCellResult` | `CfCell` |
 | `CfRangeResult` | removed |
 | `chart` | `value` |
+| `ChartAxisInfo` | `ChartAxis` |
 | `ChartDataResult` | removed |
+| `ChartFillInfo` | `ChartFill` |
+| `ChartInfo` | `Chart` |
 | `ChartInsertOptions` | `ChartInsertInput` |
+| `ChartLabelsInfo` | `ChartLabels` |
+| `ChartLineInfo` | `ChartLine` |
+| `ChartMarkerInfo` | `ChartMarker` |
+| `ChartPlotInfo` | `ChartPlot` |
+| `ChartPointInfo` | `ChartPoint` |
 | `ChartPreviewOverrides` | `ChartPreviewOverridesInput` |
 | `ChartResult` | folded into `OptionalResult` |
+| `ChartSeriesInfo` | `ChartSeries` |
 | `ChartSheetRange` | folded into `SheetRect` |
+| `ChartTitleInfo` | `ChartTitle` |
 | `clearConditionalFormats()` | `clearCfRules()` |
+| `clearPinnedNow()` | removed |
 | `clearSheetBreaks()` | `clearBreaks()` |
 | `collationClasses()` | `getCollationClasses()` |
 | `CollationClassesResult` | `CollationClasses` |
+| `ColorSpec` | `Color` |
 | `columnCharsToPt()` | `convertColumnCharsToPt()` |
 | `columnPtToChars()` | `convertColumnPtToChars()` |
 | `ColumnsResult` | removed |
@@ -624,12 +837,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `CommentEntry` | `Comment` |
 | `CommentResult` | folded into `OptionalResult` |
 | `CompareTextResult` | folded into `NumberResult` |
+| `ConditionalFormatEntry` | `ConditionalFormat` |
 | `ConditionalFormatRange` | folded into `CellRect` |
+| `ConditionalFormatResult` | removed |
 | `createTable()` | `addTable()` |
 | `dataTable` | `value` |
 | `DataTableResult` | folded into `OptionalResult` |
+| `DataTableSpec` | `DataTableInput` |
 | `DataValidationEntry` | `DataValidation` |
 | `DataValidationRange` | folded into `CellRect` |
+| `DataValidationResult` | removed |
 | `date1904()` | `getDate1904()` |
 | `definedNameAt()` | removed; use `listDefinedNames()` |
 | `definedNameCount()` | removed; use `listDefinedNames()` |
@@ -638,6 +855,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `dependents()` | `getDependents()` |
 | `DisplayTextResult` | `DisplayText` |
 | `dxfCount()` | `getDxfCount()` |
+| `DxfRecord` | `Dxf` |
 | `DxfResult` | removed |
 | `editThreadedComment()` | `updateThreadedComment()` |
 | `EffectiveStyleResult` | `EffectiveStyle` |
@@ -647,10 +865,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `evaluateConditionalFormula()` | `evaluateCfFormula()` |
 | `evaluateFormulaText()` | `evaluateFormula()` |
 | `excelProfileId()` | `getExcelProfileId()` |
+| `ExternalLinkRecord` | `ExternalLink` |
+| `ExternalLinkResult` | removed |
 | `fileName()` | `getFileName()` |
 | `fillCount()` | `getFillCount()` |
+| `FillRecord` | `Fill` |
 | `FillResult` | removed |
 | `fontCount()` | `getFontCount()` |
+| `FontRecord` | `Font` |
 | `FontResult` | removed |
 | `formula` | `value` |
 | `FormulaResult` | folded into `OptionalResult` |
@@ -660,21 +882,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `functionMetadata()` | `getFunctionMetadata()` |
 | `FunctionMetadataResult` | removed |
 | `functionNames()` | `listFunctionNames()` |
-| `getCellPhoneticRuns()` | removed |
+| `getCellPhoneticRun()` | removed |
+| `getCellPhoneticRunCount()` | removed |
+| `getCfRule()` | removed; use `listCfRules()` |
+| `getCfRuleCount()` | removed; use `listCfRules()` |
 | `getCommentResult()` | removed; use `getComment()` |
 | `getComments()` | `listComments()` |
 | `getConditionalFormats()` | removed |
+| `getExternalLink()` | removed; use `listExternalLinks()` |
+| `getExternalLinkCount()` | removed; use `listExternalLinks()` |
 | `getExternalLinks()` | removed |
 | `getHyperlinks()` | `listHyperlinks()` |
 | `getMerges()` | `listMerges()` |
 | `getNumFmt()` | `getNumFmtString()` |
 | `getPersons()` | `listPeople()` |
+| `getProtectedRange()` | removed; use `listProtectedRanges()` |
+| `getProtectedRangeCount()` | removed; use `listProtectedRanges()` |
 | `getProtectedRanges()` | removed |
 | `getSheetAutoFilterXml()` | `getAutoFilterXml()` |
 | `getSheetColBreaks()` | `listColumnBreaks()` |
 | `getSheetColumns()` | `listColumnOverrides()` |
 | `getSheetFormatDefaults()` | `getFormatDefaults()` |
 | `getSheetHeaderFooterXml()` | `getHeaderFooterXml()` |
+| `getSheetIndex()` | removed |
 | `getSheetPageMargins()` | `getPageMargins()` |
 | `getSheetPageMarginsXml()` | `getPageMarginsXml()` |
 | `getSheetPageSetup()` | `getPageSetup()` |
@@ -687,29 +917,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `getSheetSelection()` | `getSelection()` |
 | `getSheetSheetPrXml()` | `getSheetPrXml()` |
 | `getSheetView()` | `getView()` |
+| `getSparklineGroup()` | removed; use `listSparklineGroups()` |
+| `getSparklineGroupCount()` | removed; use `listSparklineGroups()` |
 | `getTheme()` | `getThemeFonts()` |
 | `getThreadedComments()` | `listThreadedComments()` |
+| `getValidation()` | removed; use `listValidations()` |
+| `getValidationCount()` | removed; use `listValidations()` |
 | `getValidations()` | removed |
 | `HyperlinkEntry` | `Hyperlink` |
-| `ImageInfoResult` | `ImageInfo` |
+| `ImageInfoResult` | folded into `ImageInfo` |
 | `ImageInsertOptions` | `ImageInsertInput` |
+| `ImagePlacement` | folded into `DrawingAnchor` |
 | `ImageResult` | removed |
 | `ImageSnapshotResult` | removed |
 | `insertChart()` | `addChart()` |
 | `InsertChartResult` | folded into `ObjectIdResult` |
 | `insertCols()` | `insertColumns()` |
 | `insertImage()` | `addImage()` |
-| `InsertImageResult` | `ObjectIdResult` |
+| `InsertImageResult` | removed |
 | `insertShape()` | `addShape()` |
 | `isValid()` | `disposed()` |
 | `IterativeSettingsResult` | `IterativeSettings` |
 | `LambdaTextResult` | folded into `OptionalResult` |
-| `lastErrorContext()` | `getLastErrorContext()` |
-| `lastErrorMessage()` | `getLastErrorMessage()` |
+| `lastErrorContext()` | removed |
+| `lastErrorMessage()` | removed |
 | `layout` | `value` |
 | `listInvalidCells()` | `getInvalidCells()` |
 | `ListResult` | removed |
-| `listSparklineGroups()` | removed |
 | `localeFacts()` | `getLocaleFacts()` |
 | `LocaleFactsResult` | removed |
 | `memoryUsage()` | `getMemoryUsage()` |
@@ -717,10 +951,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `MergeRange` | folded into `CellRect` |
 | `NumberResult` | removed |
 | `NumFmtResult` | removed |
+| `OptionalResult` | removed |
 | `order` | `value` |
-| `PageMarginsInput` | `PageMargins` |
-| `PageSetupInput` | `PageSetup` |
+| `Orientation` | folded into `PageOrientation` |
 | `paginate()` | `getPagination()` |
+| `Pagination.horizontalBreakManual` | `Pagination.rowBreakManual` |
+| `Pagination.horizontalBreaks` | `Pagination.rowBreaks` |
+| `Pagination.verticalBreakManual` | `Pagination.columnBreakManual` |
+| `Pagination.verticalBreaks` | `Pagination.columnBreaks` |
+| `PaginationPrintTitles` | folded into `PrintTitles` |
 | `PaginationResult` | `Pagination` |
 | `ParallelRecalcResult` | removed |
 | `partialRecalc()` | `recalcViewport()` |
@@ -729,14 +968,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `passthroughCount()` | removed; use `listPassthroughs()` |
 | `PersonsResult` | removed |
 | `PhoneticPropertiesResult` | folded into `PhoneticProperties` |
+| `PhoneticRunResult` | removed |
 | `pinnedNow()` | `getPinnedNow()` |
 | `PinnedNowResult` | removed |
 | `pivotCacheCalculatedFieldAdd()` | `addPivotCacheCalculatedField()` |
 | `pivotCacheCalculatedFieldRemove()` | `removePivotCacheCalculatedField()` |
 | `pivotCacheCalculatedFieldSetFormula()` | `setPivotCacheCalculatedFieldFormula()` |
 | `pivotCacheCalculatedItemAdd()` | `addPivotCacheCalculatedItem()` |
-| `pivotCacheCalculatedItemAt()` | `getPivotCacheCalculatedItem()` |
-| `pivotCacheCalculatedItemCount()` | `getPivotCacheCalculatedItemCount()` |
+| `pivotCacheCalculatedItemAt()` | removed; use `listPivotCacheCalculatedItems()` |
+| `pivotCacheCalculatedItemCount()` | removed; use `listPivotCacheCalculatedItems()` |
 | `pivotCacheCalculatedItemMove()` | `movePivotCacheCalculatedItem()` |
 | `pivotCacheCalculatedItemRemove()` | `removePivotCacheCalculatedItem()` |
 | `pivotCacheCalculatedItemSetFormula()` | `setPivotCacheCalculatedItemFormula()` |
@@ -780,26 +1020,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `pivotCount()` | `getPivotCount()` |
 | `pivotCreate()` | `addPivot()` |
 | `pivotDataFieldAdd()` | `addPivotDataField()` |
-| `pivotDataFieldAt()` | `getPivotDataField()` |
+| `pivotDataFieldAt()` | removed; use `listPivotDataFields()` |
 | `pivotDataFieldClear()` | `clearPivotDataFields()` |
-| `pivotDataFieldCount()` | `getPivotDataFieldCount()` |
+| `pivotDataFieldCount()` | removed; use `listPivotDataFields()` |
 | `pivotDataFieldDefaultName()` | `getPivotDataFieldDefaultName()` |
 | `PivotDataFieldResult` | `PivotDataField` |
 | `pivotDataFieldSet()` | `setPivotDataField()` |
+| `PivotDataFieldSpec` | `PivotDataFieldInput` |
 | `pivotFieldAdd()` | `addPivotField()` |
 | `pivotFieldAddItem()` | `addPivotFieldItem()` |
 | `pivotFieldAddItemAt()` | `addPivotFieldSharedItem()` |
 | `pivotFieldAddSubtotalFn()` | `addPivotFieldSubtotalFn()` |
-| `pivotFieldAt()` | `getPivotField()` |
+| `pivotFieldAt()` | removed; use `listPivotFields()` |
 | `pivotFieldClear()` | `clearPivotFields()` |
 | `pivotFieldClearDateGroup()` | `clearPivotFieldDateGroup()` |
 | `pivotFieldClearItems()` | `clearPivotFieldItems()` |
 | `pivotFieldClearSubtotalFns()` | `clearPivotFieldSubtotalFns()` |
-| `pivotFieldCount()` | `getPivotFieldCount()` |
+| `pivotFieldCount()` | removed; use `listPivotFields()` |
 | `pivotFieldItemAt()` | `getPivotFieldItem()` |
 | `pivotFieldItemCount()` | `getPivotFieldItemCount()` |
 | `PivotFieldOrderResult` | removed |
-| `PivotFieldResult` | `PivotField` |
+| `PivotFieldResult` | folded into `PivotField` |
 | `pivotFieldSetAxis()` | `setPivotFieldAxis()` |
 | `pivotFieldSetCustomName()` | `setPivotFieldCustomName()` |
 | `pivotFieldSetDateGroup()` | `setPivotFieldDateGroup()` |
@@ -814,19 +1055,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `pivotFieldSetShowDetail()` | `setPivotFieldShowDetail()` |
 | `pivotFieldSetSort()` | `setPivotFieldSort()` |
 | `pivotFieldSetSubtotalTop()` | `setPivotFieldSubtotalTop()` |
-| `PivotFieldSpec` | `PivotFieldSpecInput` |
+| `PivotFieldSpecInput` | `PivotFieldInput` |
 | `pivotFilterAdd()` | `addPivotFilter()` |
-| `pivotFilterAt()` | `getPivotFilter()` |
+| `pivotFilterAt()` | removed; use `listPivotFilters()` |
 | `pivotFilterClear()` | `clearPivotFilters()` |
-| `pivotFilterCount()` | `getPivotFilterCount()` |
+| `pivotFilterCount()` | removed; use `listPivotFilters()` |
 | `pivotFilterRemoveAt()` | `removePivotFilter()` |
 | `PivotFilterResult` | `PivotFilter` |
+| `PivotFilterSpec` | `PivotFilterInput` |
 | `pivotGetGrandTotals()` | `getPivotGrandTotals()` |
 | `pivotGetLayout()` | `getPivotReportLayout()` |
 | `pivotGetOptions()` | `getPivotOptions()` |
 | `pivotGetStyleInfo()` | `getPivotStyleInfo()` |
+| `PivotGrandTotals.cols` | `PivotGrandTotals.columns` |
 | `PivotGrandTotalsResult` | `PivotGrandTotals` |
-| `PivotItemResult` | `PivotItem` |
+| `PivotItemResult` | folded into `PivotItem` |
 | `pivotLayout()` | `getPivotLayout()` |
 | `PivotLayoutResult` | `PivotLayout` |
 | `pivotName()` | `getPivotName()` |
@@ -846,11 +1089,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `pivotSetRowFieldOrder()` | `setPivotRowFieldOrder()` |
 | `pivotSetStyleInfo()` | `setPivotStyleInfo()` |
 | `pivotShowDetails()` | `showPivotDetails()` |
-| `PivotStyleInfoResult` | folded into `PivotStyleInfo` |
+| `PivotStyleInfo` | `PivotStyle` |
+| `PivotStyleInfoInput` | `PivotStyleInput` |
+| `PivotStyleInfoResult` | folded into `PivotStyle` |
 | `PivotWorksheetSourceResult` | folded into `PivotWorksheetSource` |
 | `precedents()` | `getPrecedents()` |
 | `previewChartData()` | `getChartPreview()` |
 | `probeImage()` | `getImageInfo()` |
+| `ProtectedRangeResult` | removed |
 | `rangeStyleBases()` | `getRangeStyleBases()` |
 | `rangeStyleBasesExcluding()` | `getRangeStyleBasesExcluding()` |
 | `RangeStyleBasesResult` | removed |
@@ -859,8 +1105,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `ReadDiagnosticsResult` | `ReadDiagnostics` |
 | `RecalcViewport` | folded into `CellRect` |
 | `recomputed` | `value` |
+| `ReferenceRange` | `ReferenceRangeInput` |
 | `refMode()` | `getRefMode()` |
 | `removeConditionalFormatAt()` | `removeCfRule()` |
+| `removeDrawing()` | `removeDrawingObject()` |
 | `removeSheetColBreak()` | `removeColumnBreak()` |
 | `removeSheetRowBreak()` | `removeRowBreak()` |
 | `removeValidationAt()` | `removeValidation()` |
@@ -870,6 +1118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `saveAs()` | folded into `save` |
 | `SaveDiagnosticsResult` | `SaveDiagnostics` |
 | `SaveResult` | removed |
+| `setDefinedNameAttrs()` | removed |
+| `setDefinedNameScoped()` | removed |
 | `setSheetAutoFilterXml()` | `setAutoFilterXml()` |
 | `setSheetFitToPage()` | `setFitToPage()` |
 | `setSheetFormatDefaults()` | `setFormatDefaults()` |
@@ -894,38 +1144,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `setSheetShowRowColHeaders()` | `setShowRowColHeaders()` |
 | `setSheetShowZeros()` | `setShowZeros()` |
 | `setSheetSplit()` | `setSplit()` |
-| `setSheetTabHidden()` | `setTabHidden()` |
+| `setSheetTabHidden()` | removed |
 | `setSheetTabSelected()` | `setTabSelected()` |
 | `setSheetTopLeft()` | `setTopLeft()` |
 | `setSheetViewMode()` | `setViewMode()` |
 | `setSheetVisibility()` | `setVisibility()` |
 | `setSheetZoom()` | `setZoom()` |
 | `SheetAutoFilterXmlResult` | folded into `StringResult` |
-| `sheetCount()` | `getSheetCount()` |
+| `SheetCommentEntry` | `SheetComment` |
+| `sheetCount()` | removed |
 | `SheetFormatDefaultsResult` | folded into `SheetFormatDefaults` |
-| `sheetName()` | `getSheetName()` |
+| `sheetName()` | removed |
 | `SheetPageBreaksResult` | removed |
-| `SheetPageMarginsResult` | `SheetPageMargins` |
-| `SheetPageSetupResult` | `SheetPageSetup` |
+| `SheetPageMarginsResult` | folded into `PageMargins` |
+| `SheetPageSetupResult` | folded into `PageSetup` |
 | `SheetPrintAreaResult` | removed |
-| `SheetPrintTitlesResult` | `SheetPrintTitles` |
+| `SheetPrintTitlesResult` | removed |
 | `SheetPrintXmlResult` | folded into `StringResult` |
 | `SheetProtectionResult` | removed |
 | `SheetSelectionResult` | folded into `SheetSelection` |
 | `SheetViewResult` | removed |
 | `show` | `value` |
+| `SparklineGroupResult` | removed |
 | `spillInfo()` | `getSpillInfo()` |
+| `SpillInfo` | `Spill` |
 | `Status.status` | `Status.code` |
 | `Status` | removed |
 | `statusString()` | `getStatusName()` |
 | `StringResult` | removed |
-| `tableAt()` | `getTable()` |
-| `tableCount()` | `getTableCount()` |
+| `tableAt()` | removed; use `listTables()` |
+| `TableColumnEntry` | `TableColumn` |
+| `tableCount()` | removed; use `listTables()` |
+| `TableEntry` | `Table` |
 | `tableStyleCount()` | removed; use `listTableStyles()` |
 | `TableStyleDefaultsResult` | `TableStyleDefaults` |
 | `text` | `value` |
-| `ThemeResult` | `Theme` |
+| `ThemeResult` | removed |
 | `ThreadedCommentsResult` | removed |
+| `ValidationEntry` | `Validation` |
 | `ValidationOutcomeResult` | `ValidationOutcome` |
 | `version()` | removed; use `getVersion()` |
 | `versionString()` | `getVersion()` |
@@ -949,17 +1205,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `cell_style_count()` | removed; use `list_cell_styles()` |
 | `cell_style_xf_count()` | `get_cell_style_xf_count()` |
 | `cell_xf_count()` | `get_cell_xf_count()` |
-| `CellStyle` | `CellStyleRecord` |
-| `cf_count()` | `get_cf_rule_count()` |
+| `CellStyleRecord` | `CellStyle` |
+| `cf_count()` | removed; use `list_cf_rules()` |
 | `CfCellResult` | `CfCell` |
 | `CfValueObject` | `Cfvo` |
+| `ChartAxisInfo` | `ChartAxis` |
+| `ChartFillInfo` | `ChartFill` |
+| `ChartInfo` | `Chart` |
+| `ChartLabelsInfo` | `ChartLabels` |
+| `ChartLegendInfo` | `ChartLegend` |
+| `ChartLineInfo` | `ChartLine` |
+| `ChartMarkerInfo` | `ChartMarker` |
+| `ChartPlotInfo` | `ChartPlot` |
+| `ChartPointInfo` | `ChartPoint` |
 | `ChartPreviewOverrides` | `ChartPreviewOverridesInput` |
+| `ChartSeriesInfo` | `ChartSeries` |
 | `ChartSheetRange` | folded into `SheetRect` |
+| `ChartSourceInfo` | `ChartSource` |
 | `ChartTitleInfo` | `ChartTitle` |
+| `CivilTime` | removed |
 | `clear_conditional_formats()` | `clear_cf_rules()` |
+| `clear_pinned_now()` | removed |
+| `ColorSpec` | `Color` |
 | `column_chars_to_pt()` | `convert_column_chars_to_pt()` |
 | `column_pt_to_chars()` | `convert_column_pt_to_chars()` |
 | `comment_count()` | removed; use `list_comments()` |
+| `CommentEntry` | `SheetComment` |
 | `date1904()` | `get_date1904()` |
 | `delete_cols()` | `delete_columns()` |
 | `dependents()` | `get_dependents()` |
@@ -967,17 +1238,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `edit_threaded_comment()` | `update_threaded_comment()` |
 | `error_display_name()` | `get_error_display_name()` |
 | `excel_profile_id()` | `get_excel_profile_id()` |
-| `external_link_count()` | `get_external_link_count()` |
-| `ExternalLink` | `ExternalLinkRecord` |
+| `external_link_count()` | removed; use `list_external_links()` |
+| `ExternalLinkRecord` | `ExternalLink` |
 | `file_name()` | `get_file_name()` |
 | `fill_count()` | `get_fill_count()` |
+| `FillRecord` | `Fill` |
 | `font_count()` | `get_font_count()` |
+| `FontRecord` | `Font` |
 | `full_precision()` | `get_full_precision()` |
+| `get_cell_phonetic_run()` | removed |
+| `get_cell_phonetic_run_count()` | removed |
 | `get_col_breaks()` | `list_column_breaks()` |
 | `get_comments()` | `list_comments()` |
-| `get_conditional_format_at()` | `get_cf_rule()` |
+| `get_conditional_format_at()` | removed; use `list_cf_rules()` |
 | `get_conditional_formats()` | removed |
-| `get_external_link_at()` | `get_external_link()` |
+| `get_external_link_at()` | removed; use `list_external_links()` |
 | `get_external_links()` | removed |
 | `get_hyperlinks()` | `list_hyperlinks()` |
 | `get_merges()` | `list_merges()` |
@@ -985,18 +1260,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `get_persons()` | `list_people()` |
 | `get_phonetic()` | `get_cell_phonetic()` |
 | `get_phonetic_properties()` | `get_cell_phonetic_properties()` |
-| `get_phonetic_runs()` | removed |
+| `get_phonetic_runs()` | `get_cell_phonetic_runs()` |
+| `get_protected_range()` | removed; use `list_protected_ranges()` |
 | `get_protected_ranges()` | removed |
 | `get_row_breaks()` | `list_row_breaks()` |
 | `get_sheet_columns()` | `list_column_overrides()` |
 | `get_sheet_format_defaults()` | `get_format_defaults()` |
+| `get_sheet_index()` | removed |
 | `get_sheet_row_overrides()` | `list_row_overrides()` |
 | `get_sheet_selection()` | `get_selection()` |
 | `get_sheet_view()` | `get_view()` |
 | `get_show_phonetic()` | `get_cell_show_phonetic()` |
+| `get_sparkline_group()` | removed; use `list_sparkline_groups()` |
+| `get_sparkline_group_count()` | removed; use `list_sparkline_groups()` |
+| `get_table()` | removed; use `list_tables()` |
+| `get_table_count()` | removed; use `list_tables()` |
 | `get_theme()` | `get_theme_fonts()` |
 | `get_threaded_comments()` | `list_threaded_comments()` |
-| `get_validation_at()` | `get_validation()` |
+| `get_validation_at()` | removed; use `list_validations()` |
 | `get_validations()` | removed |
 | `has_phonetic_properties()` | `has_cell_phonetic_properties()` |
 | `hyperlink_count()` | removed; use `list_hyperlinks()` |
@@ -1012,20 +1293,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `lambda_text_at()` | `get_lambda_text()` |
 | `library_version()` | `get_version()` |
 | `list_invalid_cells()` | `get_invalid_cells()` |
-| `list_sparkline_groups()` | removed |
 | `memory_usage()` | `get_memory_usage()` |
 | `merge_count()` | removed; use `list_merges()` |
 | `MergeRange` | folded into `CellRect` |
 | `paginate()` | `get_pagination()` |
+| `Pagination.horizontal_break_manual` | `Pagination.row_break_manual` |
+| `Pagination.horizontal_breaks` | `Pagination.row_breaks` |
+| `Pagination.vertical_break_manual` | `Pagination.column_break_manual` |
+| `Pagination.vertical_breaks` | `Pagination.column_breaks` |
 | `PaginationResult` | `Pagination` |
+| `PaperInfo` | `Paper` |
 | `partial_recalc()` | `recalc_viewport()` |
 | `pinned_now()` | `get_pinned_now()` |
 | `pivot_cache_calculated_field_add()` | `add_pivot_cache_calculated_field()` |
 | `pivot_cache_calculated_field_remove()` | `remove_pivot_cache_calculated_field()` |
 | `pivot_cache_calculated_field_set_formula()` | `set_pivot_cache_calculated_field_formula()` |
 | `pivot_cache_calculated_item_add()` | `add_pivot_cache_calculated_item()` |
-| `pivot_cache_calculated_item_at()` | `get_pivot_cache_calculated_item()` |
-| `pivot_cache_calculated_item_count()` | `get_pivot_cache_calculated_item_count()` |
+| `pivot_cache_calculated_item_at()` | removed; use `list_pivot_cache_calculated_items()` |
+| `pivot_cache_calculated_item_count()` | removed; use `list_pivot_cache_calculated_items()` |
 | `pivot_cache_calculated_item_move()` | `move_pivot_cache_calculated_item()` |
 | `pivot_cache_calculated_item_remove()` | `remove_pivot_cache_calculated_item()` |
 | `pivot_cache_calculated_item_set_formula()` | `set_pivot_cache_calculated_item_formula()` |
@@ -1064,21 +1349,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `pivot_count()` | `get_pivot_count()` |
 | `pivot_create()` | `add_pivot()` |
 | `pivot_data_field_add()` | `add_pivot_data_field()` |
-| `pivot_data_field_at()` | `get_pivot_data_field()` |
+| `pivot_data_field_at()` | removed; use `list_pivot_data_fields()` |
 | `pivot_data_field_clear()` | `clear_pivot_data_fields()` |
-| `pivot_data_field_count()` | `get_pivot_data_field_count()` |
+| `pivot_data_field_count()` | removed; use `list_pivot_data_fields()` |
 | `pivot_data_field_default_name()` | `get_pivot_data_field_default_name()` |
 | `pivot_data_field_set()` | `set_pivot_data_field()` |
 | `pivot_field_add()` | `add_pivot_field()` |
 | `pivot_field_add_item()` | `add_pivot_field_item()` |
 | `pivot_field_add_item_at()` | `add_pivot_field_shared_item()` |
 | `pivot_field_add_subtotal_fn()` | `add_pivot_field_subtotal_fn()` |
-| `pivot_field_at()` | `get_pivot_field()` |
+| `pivot_field_at()` | removed; use `list_pivot_fields()` |
 | `pivot_field_clear()` | `clear_pivot_fields()` |
 | `pivot_field_clear_date_group()` | `clear_pivot_field_date_group()` |
 | `pivot_field_clear_items()` | `clear_pivot_field_items()` |
 | `pivot_field_clear_subtotal_fns()` | `clear_pivot_field_subtotal_fns()` |
-| `pivot_field_count()` | `get_pivot_field_count()` |
+| `pivot_field_count()` | removed; use `list_pivot_fields()` |
 | `pivot_field_item_at()` | `get_pivot_field_item()` |
 | `pivot_field_item_count()` | `get_pivot_field_item_count()` |
 | `pivot_field_set_axis()` | `set_pivot_field_axis()` |
@@ -1096,9 +1381,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `pivot_field_set_sort()` | `set_pivot_field_sort()` |
 | `pivot_field_set_subtotal_top()` | `set_pivot_field_subtotal_top()` |
 | `pivot_filter_add()` | `add_pivot_filter()` |
-| `pivot_filter_at()` | `get_pivot_filter()` |
+| `pivot_filter_at()` | removed; use `list_pivot_filters()` |
 | `pivot_filter_clear()` | `clear_pivot_filters()` |
-| `pivot_filter_count()` | `get_pivot_filter_count()` |
+| `pivot_filter_count()` | removed; use `list_pivot_filters()` |
 | `pivot_filter_remove_at()` | `remove_pivot_filter()` |
 | `pivot_get_options()` | `get_pivot_options()` |
 | `pivot_grand_totals()` | `get_pivot_grand_totals()` |
@@ -1117,20 +1402,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `pivot_set_style_info()` | `set_pivot_style_info()` |
 | `pivot_show_details()` | `show_pivot_details()` |
 | `pivot_style_info()` | `get_pivot_style_info()` |
-| `PivotFieldSpec` | `PivotFieldSpecInput` |
+| `PivotDataFieldSpec` | `PivotDataFieldInput` |
+| `PivotFieldInfo` | `PivotField` |
+| `PivotFieldSpecInput` | `PivotFieldInput` |
+| `PivotFilterSpec` | `PivotFilterInput` |
+| `PivotGrandTotals.cols` | `PivotGrandTotals.columns` |
+| `PivotItemInfo` | `PivotItem` |
+| `PivotStyleInfo` | `PivotStyle` |
 | `precedents()` | `get_precedents()` |
 | `preview_chart_data()` | `get_chart_preview()` |
 | `probe_image()` | `get_image_info()` |
-| `protected_range_count()` | `get_protected_range_count()` |
+| `protected_range_count()` | removed; use `list_protected_ranges()` |
 | `range_style_bases()` | `get_range_style_bases()` |
 | `range_style_bases_excluding()` | `get_range_style_bases_excluding()` |
 | `read_diagnostics()` | `get_diagnostics()` |
 | `ref_mode()` | `get_ref_mode()` |
 | `remove_col_break()` | `remove_column_break()` |
 | `remove_conditional_format_at()` | `remove_cf_rule()` |
+| `remove_drawing()` | `remove_drawing_object()` |
 | `remove_validation_at()` | `remove_validation()` |
 | `reset_theme()` | `clear_theme()` |
 | `save_as()` | folded into `save` |
+| `set_defined_name_attrs()` | removed |
+| `set_defined_name_scoped()` | removed |
+| `set_iterative_enabled()` | removed |
 | `set_phonetic()` | `set_cell_phonetic()` |
 | `set_phonetic_properties()` | `set_cell_phonetic_properties()` |
 | `set_phonetic_runs()` | `set_cell_phonetic_runs()` |
@@ -1145,16 +1440,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `set_sheet_show_row_col_headers()` | `set_show_row_col_headers()` |
 | `set_sheet_show_zeros()` | `set_show_zeros()` |
 | `set_sheet_split()` | `set_split()` |
-| `set_sheet_tab_hidden()` | `set_tab_hidden()` |
+| `set_sheet_tab_hidden()` | removed |
 | `set_sheet_tab_selected()` | `set_tab_selected()` |
 | `set_sheet_top_left()` | `set_top_left()` |
 | `set_sheet_view_mode()` | `set_view_mode()` |
 | `set_sheet_visibility()` | `set_visibility()` |
 | `set_sheet_zoom()` | `set_zoom()` |
 | `set_show_phonetic()` | `set_cell_show_phonetic()` |
-| `sheet_count()` | `get_sheet_count()` |
-| `sheet_name()` | `get_sheet_name()` |
+| `sheet_count()` | removed |
+| `sheet_name()` | removed |
+| `SheetPrintTitles` | removed |
 | `spill_info()` | `get_spill_info()` |
+| `SpillInfo` | `Spill` |
 | `table_create()` | `add_table()` |
 | `table_remove()` | `remove_table()` |
 | `table_rename()` | `rename_table()` |
@@ -1164,7 +1461,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `table_style_count()` | removed; use `list_table_styles()` |
 | `table_style_defaults()` | `get_table_style_defaults()` |
 | `table_update()` | `update_table()` |
-| `validation_count()` | `get_validation_count()` |
+| `Theme` | removed |
+| `validation_count()` | removed; use `list_validations()` |
 | `version_string()` | removed; use `get_version()` |
 | `Workbook.canonicalize_formula()` | `canonicalize_formula()` |
 | `Workbook.canonicalize_function_name()` | `canonicalize_function_name()` |
@@ -1177,6 +1475,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `Workbook.localize_formula()` | `localize_formula()` |
 | `Workbook.localize_function_name()` | `localize_function_name()` |
 <!-- migration-table:end -->
+
+### C ABI changes
+
+A caller compiled against an earlier header must be recompiled.
+
+**Functions.**
+
+| Before | After |
+|---|---|
+| `fm_workbook_set_defined_name(wb, name, formula)`, `fm_workbook_set_defined_name_scoped`, `fm_workbook_set_defined_name_attrs` | `fm_workbook_set_defined_name(wb, const fm_defined_name_input_t*)` (name, formula, `local_sheet_id`, comment, hidden); an empty formula is `FM_STATUS_INVALID_ARGUMENT` instead of a removal |
+| `fm_workbook_get_defined_name_at` (two strings and a scope), `fm_workbook_get_defined_name_attrs_at` | `fm_workbook_get_defined_name_at(wb, index, fm_defined_name_t*)` |
+| `fm_workbook_set_iterative(wb, enabled, max_iterations, max_change)`, `fm_workbook_set_iterative_enabled` | `fm_workbook_set_iterative(wb, const fm_iterative_settings_patch_t*)`; a negative field keeps the stored value |
+| `fm_sheet_set_print_titles(wb, sheet_index, rows_a1, cols_a1)`, `fm_sheet_get_print_titles` (A1 text) | take and fill an `fm_print_titles_t` (per-axis `has_*` flag and 0-based span); `NULL` clears |
+| `fm_sheet_set_view_mode(wb, sheet_index, const char* view)` | `int32_t` `fm_sheet_view_mode_t` |
+| `fm_sheet_set_tab_hidden` | removed; `fm_sheet_set_visibility` states every tab state |
+| (none) | `fm_sheet_remove_comment(wb, sheet_index, row, col)` returns `FM_STATUS_NOT_FOUND` when the cell has no comment |
+
+Parameter names changed without a change of type: the out-parameter that
+returns a sheet's index is `out_sheet_index` (it was `out_index`), the one
+that returns a validation's index is `out_validation_index`, and an index
+into a collection is named for the collection (`table_index`,
+`protected_range_index`, `validation_index`, `cf_rule_index`). The sheet
+name argument of `fm_workbook_add_sheet` is `name`, and the string out-parameter
+of `fm_workbook_get_sheet_name` is `out_name`.
+
+**Enums.** Values of these typedefs moved. A member for "absent" is `-1`
+where one exists, and the other members start at 0.
+
+| Typedef | Before | After |
+|---|---|---|
+| `fm_anchor_edit_as_t` | `TWO_CELL` 0, `ONE_CELL` 1, `ABSOLUTE` 2 | `ONE_CELL` 0, `TWO_CELL` 1, `ABSOLUTE` 2 |
+| `fm_slicer_sort_order_t` | `ASCENDING` 0, `DESCENDING` 1 | `DESCENDING` 0, `ASCENDING` 1 |
+| `fm_chart_axis_crosses_t` | `ABSENT` 0, `AUTO_ZERO` 1, `MIN` 2, `MAX` 3, `AT` 4 | `ABSENT` -1, `AUTO_ZERO` 0, `MIN` 1, `MAX` 2, `AT` 3 |
+| `fm_chart_bar_direction_t` | `ABSENT` 0, `COL` 1, `BAR` 2 | `ABSENT` -1, `COL` 0, `BAR` 1 |
+| `fm_chart_blanks_as_t` | `ABSENT` 0, `GAP` 1, `ZERO` 2, `SPAN` 3 | `ABSENT` -1, `GAP` 0, `ZERO` 1, `SPAN` 2 |
+| `fm_chart_legend_position_t` | `NONE` 0, `BOTTOM` 1, `TOP` 2, `LEFT` 3, `RIGHT` 4, `TOP_RIGHT` 5 | `NONE` -1, `BOTTOM` 0, `TOP` 1, `LEFT` 2, `RIGHT` 3, `TOP_RIGHT` 4 |
+| `fm_shape_paint_t` | `UNSET` 0, `SOLID` 1, `NONE` 2, `OTHER` 3 | `UNSET` -1, `SOLID` 0, `NONE` 1, `OTHER` 2 |
+
+New enum typedefs replace `#define` sets and plain integers:
+`fm_page_orientation_t` (`PORTRAIT` 0, `LANDSCAPE` 1, replacing
+`FM_ORIENTATION_DEFAULT` 0, `_PORTRAIT` 1 and `_LANDSCAPE` 2; an absent
+orientation prints portrait), `fm_external_link_kind_t` (the values of
+`FM_EXTERNAL_LINK_KIND_*` are unchanged), `fm_sheet_view_mode_t` (`NORMAL` 0,
+`PAGE_BREAK_PREVIEW` 1, `PAGE_LAYOUT` 2), `fm_cf_data_bar_direction_t`
+(`CONTEXT` 0, `LEFT_TO_RIGHT` 1, `RIGHT_TO_LEFT` 2) and
+`fm_cf_data_bar_axis_position_t` (`AUTOMATIC` 0, `MIDDLE` 1, `NONE` 2).
+
+**Zero-initialised records.** A record that was zeroed and then filled in
+field by field reads differently when a field is left at 0:
+
+| Field | 0 meant | 0 means |
+|---|---|---|
+| `fm_image_insert_t` anchor `edit_as` | `FM_ANCHOR_EDIT_AS_TWO_CELL` | `FM_ANCHOR_EDIT_AS_ONE_CELL` |
+| a legend position (`fm_chart_legend_position_t`) | no legend | `FM_CHART_LEGEND_BOTTOM` |
+| a shape fill or line (`fm_shape_paint_t`) | unset | `FM_SHAPE_PAINT_SOLID` |
+| chart blanks, crossing and bar direction | absent | gap, automatic zero and column |
+
+Set the `ABSENT`, `NONE` or `UNSET` member (`-1`) to say "not there".
+`fm_chart_display_patch_t` rejects `-1` as a value to set: clear the field
+through its operation instead.
+
+**Structs.**
+
+| Struct | Change |
+|---|---|
+| `fm_defined_name_input_t`, `fm_defined_name_t`, `fm_iterative_settings_patch_t` | new (see the functions above) |
+| `fm_image_insert_t` | `descr` is `description`; the anchor fields (`anchor_kind`, `edit_as`, `row`, `col`, `row_offset_emu`, `col_offset_emu`, `width_emu`, `height_emu`) are the `anchor` member, an `fm_drawing_anchor_t` |
+| `fm_chart_info_t`, `fm_drawing_object_t` | `descr` is `description`; `from_row_offset`, `from_col_offset`, `to_row_offset`, `to_col_offset` gain `_emu`; `cx` and `cy` are `width_emu` and `height_emu` |
+| `fm_shape_t` | the same offset and size renames; `prst` is `preset_geometry` |
+| `fm_slicer_t` | the four offsets gain `_emu`; `row_height` is `row_height_emu` |
+| `fm_sheet_view_t` | `tab_hidden` is removed; `view_mode` is an `int32_t` `fm_sheet_view_mode_t` instead of text |
+| `fm_page_setup_t` | `orientation` is an `int32_t` `fm_page_orientation_t` (was `uint32_t`) |
+| `fm_external_link_record_t` | `kind` is an `int32_t` `fm_external_link_kind_t` (was `uint32_t`) |
+| `fm_sheet_rect_t` | `sheet_index` is `uint32_t` (was `size_t`) |
+| `fm_cf_rule_t`, `fm_data_validation_t`, `fm_protected_range_t` | `range_count` is `uint32_t` (was `size_t`) |
+| `fm_chart_data_info_t` | `point_count`, `series_count`, `category_label_count`, `category_value_count`, `category_level_count`, `axis_title_count`, `unresolved_count` are `uint32_t` |
+| `fm_chart_data_points_t`, `fm_chart_data_source_t` | `count` and `literal_count` are `uint32_t` |
+| `fm_chart_data_series_t` | `plot_index`, `point_count` and the `range_count` array are `uint32_t` |
+| `fm_chart_info_t` | `legend_hidden_count`, `plot_count`, `axis_count`, `hidden_category_count` are `uint32_t` |
+| `fm_chart_legend_patch_t`, `fm_chart_plot_t`, `fm_chart_series_t` | `hidden_series_count`, `axis_id_count`, `series_count`, `point_count` are `uint32_t` |
+| `fm_fill_record_t` | `gradient_stop_count` is `uint32_t` |
+| `fm_sparkline_group_t` | `sparkline_count` is `uint32_t` |
+| `fm_styles_batch_t` | `font_count`, `fill_count`, `border_count`, `cell_xf_count`, `num_fmt_count` are `uint32_t` |
+
 
 ### Added
 

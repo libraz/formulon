@@ -11,8 +11,9 @@ it is built from the repository, as described under
 [Building from source](#building-from-source). The badges above track the
 sibling WebAssembly and Python packages, which are published.
 
-Formula evaluation uses Formulon's default `win-365-en_US` profile. Call
-`setExcelProfileId()` to select any of the 28
+The one-shot `evalFormula` always evaluates with the
+default `win-365-en_US` profile, and a new workbook starts on it too. The
+profile is a per-workbook setting: call `wb.setExcelProfileId()` to select any of the 28
 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. The
 `mac-*` profiles and `win-365-ja_JP` are measured against Excel; the other
 `win-*` profiles are estimated from the Mac measurements.
@@ -43,8 +44,8 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 435 instance methods plus the four static factories. Of those
-instance methods, 434 are shared with WASM; zero remain WASM-only, while
+register 434 instance methods plus the four static factories. Of those
+instance methods, 433 are shared with WASM; zero remain WASM-only, while
 `getMemoryUsage()` is a native-only helper.
 The shared `Workbook` methods take the same arguments, return the same values
 and throw the same `FormulonError`; switching packages still requires updating
@@ -66,7 +67,7 @@ what it does is reachable from both JS packages:
 
 - `fm_workbook_add_batch` registers fonts, fills, borders and cell xfs in one
   all-or-nothing call. JS registers the same records one call each
-  (`addFont`, `addFill`, `addBorder`, `addXf`), so a failure part-way leaves
+  (`addFont`, `addFill`, `addBorder`, `addCellXf`), so a failure part-way leaves
   the records added before it in place.
 
 The TypeScript declarations in `dist/index.d.ts` are the authoritative
@@ -102,6 +103,8 @@ node -e "import('./packages/npm-native/dist/index.mjs').then(async m => console.
 
 ## Usage
 
+Like the WASM package, it is ES modules only (no `require`).
+
 ```js
 import createFormulon from '@libraz/formulon-native';
 
@@ -111,9 +114,10 @@ console.log(formulon.evalFormula('=SUM(1,2,3)'));
 
 const wb = formulon.Workbook.createDefault();
 try {
-  wb.setFormula(0, 0, 0, '=1+2');
+  const ws = wb.sheet(0);
+  ws.setFormula(0, 0, '=1+2');
   wb.recalc();
-  const v = wb.getValue(0, 0, 0);
+  const v = ws.getValue(0, 0);
   if (v.kind === formulon.ValueKind.Number) {
     console.log(v.number);  // 3
   }
@@ -121,6 +125,8 @@ try {
   wb.dispose(); // wb.disposed is now true
 }
 ```
+
+On Node 24+, `using wb = formulon.Workbook.createDefault()` releases the workbook at the end of the scope instead.
 
 `wb.recalc()` remains serial. For synchronous parallel recalculation, call
 `wb.recalcParallel(threadCount)`: `threadCount` must be a finite integer;

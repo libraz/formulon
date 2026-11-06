@@ -1,0 +1,98 @@
+"""Runs the ```python run blocks of the READMEs against this package.
+
+A block is a program: its stdout must equal the expectations written in it,
+either as a trailing ``# value`` comment on a ``print(...)`` line or as a run of
+comment lines closing the block. A block with no expectation only has to exit
+0. Each block runs in a scratch copy of ``fixtures/readme/``.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from typing import List, Tuple
+
+HERE = Path(__file__).resolve().parent
+PKG_ROOT = HERE.parent
+REPO_ROOT = PKG_ROOT.parent.parent
+FIXTURE_DIR = HERE / "fixtures" / "readme"
+READMES = ("README.md", "README_ja.md", "packages/python/README.md")
+
+_FENCE = re.compile(r"^```python run\s*$")
+_INLINE = re.compile(r"print\(.*\)\s*# (.+)$")
+
+
+def run_blocks(markdown: str) -> List[Tuple[int, List[str]]]:
+    """Return the (first line number, lines) of every ``python run`` block."""
+    lines = markdown.split("\n")
+    blocks: List[Tuple[int, List[str]]] = []
+    i = 0
+    while i < len(lines):
+        if _FENCE.match(lines[i]):
+            start = i + 2
+            body: List[str] = []
+            i += 1
+            while i < len(lines) and not lines[i].startswith("```"):
+                body.append(lines[i])
+                i += 1
+            blocks.append((start, body))
+        i += 1
+    return blocks
+
+
+def expectations(lines: List[str]) -> List[str]:
+    """Expected stdout lines: inline ``print(...)  # x`` comments, then the closing comment run."""
+    expected = [m.group(1).rstrip() for m in map(_INLINE.search, lines) if m]
+    end = len(lines)
+    while end > 0 and not lines[end - 1].strip():
+        end -= 1
+    begin = end
+    while begin > 0 and lines[begin - 1].startswith("#"):
+        begin -= 1
+    expected.extend(re.sub(r"^# ?", "", line).rstrip() for line in lines[begin:end])
+    return expected
+
+
+class ReadmeSnippetsTest(unittest.TestCase):
+    def test_blocks_run_and_print_what_their_comments_say(self) -> None:
+        found = 0
+        for readme in READMES:
+            text = (REPO_ROOT / readme).read_text(encoding="utf-8")
+            for line_no, lines in run_blocks(text):
+                found += 1
+                with self.subTest(block=f"{readme}:{line_no}"):
+                    self._run(lines)
+        self.assertGreaterEqual(found, 3, f"found {found} `python run` blocks")
+
+    def _run(self, lines: List[str]) -> None:
+        with tempfile.TemporaryDirectory(prefix="formulon-readme-") as work:
+            shutil.copytree(FIXTURE_DIR, work, dirs_exist_ok=True)
+            script = Path(work) / "snippet.py"
+            script.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            env = dict(
+                os.environ, PYTHONPATH=os.pathsep.join(filter(None, [str(PKG_ROOT), os.environ.get("PYTHONPATH")]))
+            )
+            env["PYTHONIOENCODING"] = "utf-8"
+            run = subprocess.run(  # noqa: S603 -- runs the interpreter that runs this test
+                [sys.executable, str(script)],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            expected = expectations(lines)
+            if expected:
+                self.assertEqual(run.stdout.rstrip().split("\n"), expected)
+
+
+if __name__ == "__main__":
+    unittest.main()

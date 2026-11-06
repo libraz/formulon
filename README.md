@@ -43,14 +43,14 @@ CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Re
 
 ## Quick start
 
-```js
+```js run
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
 console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
 ```
 
-```python
+```python run
 import formulon
 
 print(formulon.eval_formula("=SUM(1,2,3)").to_python())  # 6.0
@@ -67,9 +67,20 @@ Failures throw `FormulonError` in JavaScript and `FormulonError` subclasses in P
 
 New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. `=LENB("日本")` gives `2` on `mac-365-en_US` and `4` on `mac-365-ja_JP`, and `=ISEVEN(2)` shows `WAHR` on `mac-365-de_DE`. Switch it per workbook and recalculate:
 
-```js
-wb.setExcelProfileId('mac-365-ja_JP'); // Python: wb.set_excel_profile_id(...)
-wb.recalc(); // a profile change marks formulas dirty
+```js run
+import createFormulon from '@libraz/formulon';
+
+const formulon = await createFormulon();
+const wb = formulon.Workbook.createDefault();
+try {
+  const ws = wb.sheet(0);
+  ws.setFormula(0, 0, '=LENB("日本")');
+  wb.setExcelProfileId('mac-365-ja_JP'); // Python: set_excel_profile_id
+  wb.recalc(); // a profile change marks formulas dirty
+  console.log(ws.getDisplayText(0, 0).text); // 4
+} finally {
+  wb.dispose();
+}
 ```
 
 The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so apply it again after loading. `formulon.Workbook.createForProfile(id)` also gives a new workbook the fonts, style names and sheet names Excel uses in that locale. See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles) and [Text comparison and sorting](https://formulon.libraz.net/compatibility/text-collation).
