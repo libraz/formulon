@@ -225,22 +225,22 @@ bool IsWriterRegeneratedSheetRecord(XlsbRecordType type) {
 /// added model hyperlinks on a no-merge sheet.
 bool IsAfterMergesBeforeHyperlinks(XlsbRecordType type) {
   switch (static_cast<std::uint16_t>(type)) {
-    case 537:  // BrtPhoneticInfo
-    case 461:  // BrtBeginConditionalFormatting
-    case 462:  // BrtEndConditionalFormatting
-    case 463:  // BrtBeginCFRule
-    case 464:  // BrtEndCFRule
-    case 465:  // BrtBeginIconSet
-    case 466:  // BrtEndIconSet
-    case 467:  // BrtBeginDataBar
-    case 468:  // BrtEndDataBar
-    case 469:  // BrtBeginColorScale
-    case 470:  // BrtEndColorScale
-    case 471:  // BrtCFVO
-    case 564:  // BrtColor (conditional-formatting color)
-    case 573:  // BrtBeginDVals
-    case 64:   // BrtDVal
-    case 574:  // BrtEndDVals
+    case kBrtPhoneticInfo:
+    case kBrtBeginConditionalFormatting:
+    case kBrtEndConditionalFormatting:
+    case kBrtBeginCFRule:
+    case kBrtEndCFRule:
+    case kBrtBeginIconSet:
+    case kBrtEndIconSet:
+    case kBrtBeginDataBar:
+    case kBrtEndDataBar:
+    case kBrtBeginColorScale:
+    case kBrtEndColorScale:
+    case kBrtCFVO:
+    case kBrtColor:
+    case kBrtBeginDVals:
+    case kBrtDVal:
+    case kBrtEndDVals:
       return true;
     default:
       return false;
@@ -768,8 +768,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
                           "context=xlsb_reader");
       }
       const MergeRange& rfx = rfx_or.value();
-      if (rfx.first_row >= Sheet::kMaxRows || rfx.last_row >= Sheet::kMaxRows || rfx.first_col >= Sheet::kMaxCols ||
-          rfx.last_col >= Sheet::kMaxCols || rfx.first_row > rfx.last_row || rfx.first_col > rfx.last_col) {
+      if (!in_grid(rfx)) {
         return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtMergeCell range out of bounds",
                           "context=xlsb_reader");
       }

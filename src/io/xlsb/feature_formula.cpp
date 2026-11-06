@@ -27,8 +27,7 @@ bool read_sqref(ByteSpan& cursor, std::vector<MergeRange>& out) {
   out.clear();
   for (std::uint32_t i = 0; i < count.value(); ++i) {
     const MergeRange r = read_rfx(cursor).value();
-    if (r.last_row >= Sheet::kMaxRows || r.last_col >= Sheet::kMaxCols || r.first_row > r.last_row ||
-        r.first_col > r.last_col) {
+    if (!in_grid(r)) {
       return false;
     }
     out.push_back(r);

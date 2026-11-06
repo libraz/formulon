@@ -279,7 +279,7 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
         }
         col.kind = FilterKind::kIcon;
         col.icon.icon_set = static_cast<cf::IconSetName>(set);
-        col.icon.icon_id = icon == 0xFFFFFFFFU ? std::nullopt : std::optional<std::uint32_t>(icon);
+        col.icon.icon_id = icon == kKpiNil ? std::nullopt : std::optional<std::uint32_t>(icon);
         break;
       }
       default:
@@ -379,16 +379,11 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
       return 0U;
     case FilterKind::kIcon:
       emit_u32(payload, static_cast<std::uint32_t>(col.icon.icon_set));
-      emit_u32(payload, col.icon.icon_id.value_or(0xFFFFFFFFU));
+      emit_u32(payload, col.icon.icon_id.value_or(kKpiNil));
       emit_record(out, kBrtIconFilter, payload);
       return 0U;
   }
   return 0U;
-}
-
-bool InGrid(const MergeRange& r) {
-  return r.first_row <= r.last_row && r.first_col <= r.last_col && r.last_row < Sheet::kMaxRows &&
-         r.last_col < Sheet::kMaxCols;
 }
 
 Expected<SortCondition, Error> ReadSortCond(ByteSpan payload) {
@@ -399,7 +394,7 @@ Expected<SortCondition, Error> ReadSortCond(ByteSpan payload) {
   ASSIGN_OR_RETURN(const std::uint32_t second, read_u32(payload));
   ASSIGN_OR_RETURN(auto list, read_xlnullablewidestring(payload));
   const std::uint32_t sort_on = (flags >> 1U) & 0x0FU;
-  if (sort_on > static_cast<std::uint32_t>(SortBy::kIcon) || !InGrid(rfx)) {
+  if (sort_on > static_cast<std::uint32_t>(SortBy::kIcon) || !in_grid(rfx)) {
     return Corrupt("xlsb BrtBeginSortCond has an unknown sortOn or range");
   }
   cond.ref = rfx;
@@ -412,7 +407,7 @@ Expected<SortCondition, Error> ReadSortCond(ByteSpan payload) {
       return Unsupported(kBrtBeginSortCond);
     }
     cond.icon_set = static_cast<cf::IconSetName>(first);
-    cond.icon_id = second == 0xFFFFFFFFU ? std::nullopt : std::optional<std::uint32_t>(second);
+    cond.icon_id = second == kKpiNil ? std::nullopt : std::optional<std::uint32_t>(second);
   } else {
     cond.dxf_id = first == kNoDxf ? std::nullopt : std::optional<std::uint32_t>(first);
   }
@@ -429,7 +424,7 @@ Expected<SortState, Error> read_sort_state_block(ByteSpan& cursor, ByteSpan begi
     // fAltMethod does not say which of pinYin / stroke the sort used.
     return Unsupported(kBrtBeginSortState);
   }
-  if (!InGrid(rfx)) {
+  if (!in_grid(rfx)) {
     return Corrupt("xlsb BrtBeginSortState range is inverted or outside the grid");
   }
   sort.ref = rfx;
@@ -469,7 +464,7 @@ std::uint32_t emit_sort_state_block(std::vector<std::uint8_t>& out, const SortSt
     emit_rfx(payload, cond.ref);
     if (cond.sort_by == SortBy::kIcon) {
       emit_u32(payload, static_cast<std::uint32_t>(cond.icon_set));
-      emit_u32(payload, cond.icon_id.value_or(0xFFFFFFFFU));
+      emit_u32(payload, cond.icon_id.value_or(kKpiNil));
     } else {
       emit_u32(payload, cond.sort_by == SortBy::kValue ? 0U : cond.dxf_id.value_or(kNoDxf));
       emit_u32(payload, 0U);
@@ -487,8 +482,7 @@ std::uint32_t emit_sort_state_block(std::vector<std::uint8_t>& out, const SortSt
 Expected<AutoFilter, Error> read_auto_filter_block(ByteSpan& cursor, ByteSpan begin) {
   AutoFilter filter;
   ASSIGN_OR_RETURN(const MergeRange range, read_rfx(begin));
-  if (range.first_row > range.last_row || range.first_col > range.last_col || range.last_row >= Sheet::kMaxRows ||
-      range.last_col >= Sheet::kMaxCols) {
+  if (!in_grid(range)) {
     return Corrupt("xlsb BrtBeginAFilter range is inverted or outside the grid");
   }
   filter.range = range;

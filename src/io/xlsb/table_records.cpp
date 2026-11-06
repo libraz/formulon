@@ -259,8 +259,7 @@ void EmitAcuid(std::vector<std::uint8_t>& out, const std::string* guid) {
 /// part model-readable are skipped.
 Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table, bool identity_only = false) {
   ASSIGN_OR_RETURN(const MergeRange rfx, read_rfx(payload));
-  if (rfx.first_row > rfx.last_row || rfx.first_col > rfx.last_col || rfx.last_row >= Sheet::kMaxRows ||
-      rfx.last_col >= Sheet::kMaxCols) {
+  if (!in_grid(rfx)) {
     return Corrupt("xlsb BrtBeginList range is inverted or outside the grid");
   }
   ASSIGN_OR_RETURN(const std::uint32_t lt, read_u32(payload));

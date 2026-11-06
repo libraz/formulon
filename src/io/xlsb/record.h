@@ -31,6 +31,7 @@
 
 #include "io/zip_reader.h"
 #include "merge_range.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -232,6 +233,13 @@ Expected<std::uint32_t, Error> read_u32(ByteSpan& cursor);
 /// Reads an `RfX` rectangle (rwFirst, rwLast, colFirst, colLast as u32);
 /// advances `cursor`. The bounds are not validated.
 Expected<MergeRange, Error> read_rfx(ByteSpan& cursor);
+
+/// True when `r` is ordered (first <= last on both axes) and lies inside the
+/// Excel grid.
+inline bool in_grid(const MergeRange& r) {
+  return r.first_row <= r.last_row && r.first_col <= r.last_col && r.last_row < a1::kMaxRows &&
+         r.last_col < a1::kMaxCols;
+}
 
 /// Reads a little-endian IEEE 754 64-bit double; advances `cursor`.
 Expected<double, Error> read_double(ByteSpan& cursor);

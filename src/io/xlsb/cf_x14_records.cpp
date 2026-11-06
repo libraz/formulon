@@ -495,46 +495,48 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
 
 namespace {
 
-/// KPISets14 value of an `ST_IconSetType` spelling: the 17 built-in sets,
-/// KPI3STARS_14 / KPI3TRIANGLES_14 / KPI5BOXES_14, and KPINIL_14 for `NoIcons`.
+/// KPINIL_14, spelled `NoIcons`.
+constexpr std::int32_t kKpiNil14 = -1;
+constexpr std::string_view kNoIconsName = "NoIcons";
+
+/// KPI3STARS_14 / KPI3TRIANGLES_14 / KPI5BOXES_14, which follow the 17 built-in sets.
+struct ExtraKpi14 {
+  std::int32_t id;
+  std::string_view name;
+};
+constexpr ExtraKpi14 kExtraKpi14[] = {{17, "3Stars"}, {18, "3Triangles"}, {19, "5Boxes"}};
+
+/// KPISets14 value of an `ST_IconSetType` spelling.
 std::optional<std::int32_t> Kpi14(std::string_view name) {
-  if (name == "NoIcons") {
-    return -1;
+  if (name == kNoIconsName) {
+    return kKpiNil14;
   }
   for (std::size_t i = 0; i < cf::kIconSetNames.size(); ++i) {
     if (cf::kIconSetNames[i] == name) {
       return static_cast<std::int32_t>(i);
     }
   }
-  if (name == "3Stars") {
-    return 17;
-  }
-  if (name == "3Triangles") {
-    return 18;
-  }
-  if (name == "5Boxes") {
-    return 19;
+  for (const ExtraKpi14& extra : kExtraKpi14) {
+    if (name == extra.name) {
+      return extra.id;
+    }
   }
   return std::nullopt;
 }
 
 std::optional<std::string> Kpi14Name(std::int32_t set) {
-  if (set == -1) {
-    return std::string("NoIcons");
+  if (set == kKpiNil14) {
+    return std::string(kNoIconsName);
   }
   if (set >= 0 && static_cast<std::size_t>(set) < cf::kIconSetNames.size()) {
     return std::string(cf::kIconSetNames[static_cast<std::size_t>(set)]);
   }
-  switch (set) {
-    case 17:
-      return std::string("3Stars");
-    case 18:
-      return std::string("3Triangles");
-    case 19:
-      return std::string("5Boxes");
-    default:
-      return std::nullopt;
+  for (const ExtraKpi14& extra : kExtraKpi14) {
+    if (set == extra.id) {
+      return std::string(extra.name);
+    }
   }
+  return std::nullopt;
 }
 
 /// One icon-set BrtCFVO14: FRTHeader (no formula, or one FRTFormula), iType,

@@ -53,6 +53,20 @@ inline constexpr std::uint16_t kBrtEndSortCond = 533;
 inline constexpr std::uint16_t kBrtRangeProtection = 536;  // Sqrfx at 2
 inline constexpr std::uint16_t kBrtRangeProtectionIso = 680;
 
+// Worksheet records between the merge block and the hyperlinks.
+inline constexpr std::uint16_t kBrtDVal = 64;
+inline constexpr std::uint16_t kBrtBeginCFRule = 463;
+inline constexpr std::uint16_t kBrtEndCFRule = 464;
+inline constexpr std::uint16_t kBrtBeginIconSet = 465;
+inline constexpr std::uint16_t kBrtEndIconSet = 466;
+inline constexpr std::uint16_t kBrtBeginDataBar = 467;
+inline constexpr std::uint16_t kBrtEndDataBar = 468;
+inline constexpr std::uint16_t kBrtBeginColorScale = 469;
+inline constexpr std::uint16_t kBrtEndColorScale = 470;
+inline constexpr std::uint16_t kBrtCFVO = 471;
+inline constexpr std::uint16_t kBrtPhoneticInfo = 537;
+inline constexpr std::uint16_t kBrtColor = 564;  // conditional-formatting colour
+
 // Worksheet tail grammar slots after the hyperlinks.
 inline constexpr std::uint16_t kBrtDrawing = 550;
 inline constexpr std::uint16_t kBrtLegacyDrawing = 551;

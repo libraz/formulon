@@ -205,7 +205,7 @@ bool IsRelative(const parser::Reference& ref) {
 /// the grid (2^20 rows, 2^14 columns), the `PtgRefN` / `PtgAreaN` field.
 parser::Reference OffsetFrom(parser::Reference ref, PtgBaseCell base) {
   if (!ref.row_abs) {
-    ref.row = (ref.row - base.row) & ((1U << 20) - 1U);
+    ref.row = (ref.row - base.row) & kPtgRowMask;
   }
   if (!ref.col_abs) {
     ref.col = (ref.col - base.col) & kPtgColumnMask;
@@ -1487,10 +1487,8 @@ class Encoder {
       // Always a PtgFuncVar argument below, so it stays reference-class.
       RETURN_IF_ERROR(emit_ref(node.as_spill_ref(), kPtgReferenceClass));
     }
-    emit_u8(out_, ClassedPtg(kPtgFuncVar, cls));  // PtgFuncVar result
-    emit_u8(out_, 2);                             // cparams: name-ref + one anchor operand
-    emit_u16(out_, kFutureFunctionId);
-    return Expected<void, Error>::Ok();
+    // cparams 2: name-ref + one anchor operand.
+    return emit_hidden_call_tail(2, "ANCHORARRAY(too many operands)", cls);
   }
 
   /// Encodes a written `@` as a call to the hidden `_xlfn.SINGLE` name,

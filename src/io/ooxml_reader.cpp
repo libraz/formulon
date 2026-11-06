@@ -620,6 +620,88 @@ static Expected<std::vector<PassthroughPart>, Error> CollectUnknownParts(
   return unknown_parts;
 }
 
+/// Error context for a pending shared-string cell, up to its SST index.
+static std::string SstCellContext(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::uint32_t idx) {
+  std::string ctx("context=ooxml_reader sheet_index=");
+  ctx.append(std::to_string(sheet_index));
+  ctx.append(" row=").append(std::to_string(row));
+  ctx.append(" col=").append(std::to_string(col));
+  ctx.append(" sst_index=").append(std::to_string(idx));
+  return ctx;
+}
+
+/// Replaces each queued shared-string cell's `Text("")` placeholder with a
+/// view into its SST entry. `Sheet::set_cell_cached_value_borrowed` is used
+/// directly: these cells are pure data and the workbook has no live
+/// dep-graph state to dirty. `*resolved` receives the number of cells set.
+static Expected<void, Error> ResolveSharedStrings(Workbook& wb, const std::vector<SheetReadContext>& sheet_contexts,
+                                                  const SharedStringTable& sst, bool sst_part_declared,
+                                                  std::uint32_t* resolved) {
+  for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+    const SheetReadContext& sctx = sheet_contexts[i];
+    if (sctx.pending_sst_cells.empty()) {
+      continue;
+    }
+    if (!sst_part_declared && sst.entries.empty()) {
+      // Sheet referenced an SST index but the package did not declare a
+      // sharedStrings part. The first such reference is the diagnostic
+      // anchor.
+      const auto& first = sctx.pending_sst_cells.front();
+      return make_error(FormulonErrorCode::kIoSheetCorrupt,
+                        "sheet references SST but package has no sharedStrings part",
+                        SstCellContext(i, std::get<0>(first), std::get<1>(first), std::get<2>(first)));
+    }
+    for (const auto& triple : sctx.pending_sst_cells) {
+      const std::uint32_t row = std::get<0>(triple);
+      const std::uint32_t col = std::get<1>(triple);
+      const std::uint32_t idx = std::get<2>(triple);
+      if (idx >= sst.entries.size()) {
+        std::string ctx = SstCellContext(i, row, col, idx);
+        ctx.append(" sst_size=").append(std::to_string(sst.entries.size()));
+        return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range", std::move(ctx));
+      }
+      wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[idx]));
+      // Propagate any <rPh> annotation from the SST entry onto the cell
+      // so PHONETIC() can surface the kana over the characters it
+      // covers. The SST reader keeps `phonetic_for_entries` parallel to
+      // `entries`, empty for unannotated entries; we only commit a
+      // non-empty annotation to avoid touching `Cell::phonetic_runs` for
+      // the common unannotated case. Several cells may share one `<si>`,
+      // so the runs are copied rather than moved out.
+      if (idx < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[idx].empty()) {
+        wb.sheet(i).set_cell_phonetic_runs(row, col, sst.phonetic_for_entries[idx]);
+        if (idx < sst.phonetic_props_for_entries.size()) {
+          wb.sheet(i).set_cell_phonetic_props(row, col, sst.phonetic_props_for_entries[idx],
+                                              sst.phonetic_pr_present_for_entries[idx]);
+        }
+      }
+      ++*resolved;
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// A formula is a dynamic-array formula exactly when its `cm=` names the
+/// XLDAPR entry of `xl/metadata.xml`; any other (a legacy CSE block, an
+/// implicit-intersection formula) keeps its legacy meaning.
+static void MarkLoadedDynamicArrays(ZipReader& zip, Workbook& wb, const std::vector<SheetReadContext>& sheet_contexts) {
+  std::uint32_t xldapr = 0U;
+  if (zip.has_entry("xl/metadata.xml")) {
+    if (auto metadata = zip.read_entry("xl/metadata.xml"); metadata) {
+      xldapr = xldapr_cell_metadata_index(metadata.value());
+    }
+  }
+  for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+    std::unordered_set<std::uint64_t> marked;
+    for (const auto& [row, col, cm] : sheet_contexts[i].cell_metadata) {
+      if (xldapr != 0U && cm == xldapr) {
+        marked.insert(dynamic_array_cell_key(row, col));
+      }
+    }
+    apply_loaded_dynamic_array_marks(wb.sheet(i), marked);
+  }
+}
+
 // Shared implementation behind the public `read_ooxml` and the test-only
 // threshold-injection seam. `sax_threshold` is the byte size at or above
 // which a sheet routes through the streaming SAX scanner instead of the
@@ -857,55 +939,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // (no formula text to disturb) and (b) the workbook is freshly built
   // from disk, so there is no live dep-graph state to dirty.
   std::uint32_t pending_sst_count = 0;
-  for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
-    const SheetReadContext& sctx = sheet_contexts[i];
-    if (sctx.pending_sst_cells.empty()) {
-      continue;
-    }
-    if (wb_rels.sst_path.empty() && sst.entries.empty()) {
-      // Sheet referenced an SST index but the package did not declare a
-      // sharedStrings part. The first such reference is the diagnostic
-      // anchor.
-      const auto& first = sctx.pending_sst_cells.front();
-      std::string ctx("context=ooxml_reader sheet_index=");
-      ctx.append(std::to_string(i));
-      ctx.append(" row=").append(std::to_string(std::get<0>(first)));
-      ctx.append(" col=").append(std::to_string(std::get<1>(first)));
-      ctx.append(" sst_index=").append(std::to_string(std::get<2>(first)));
-      return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                        "sheet references SST but package has no sharedStrings part", std::move(ctx));
-    }
-    for (const auto& triple : sctx.pending_sst_cells) {
-      const std::uint32_t row = std::get<0>(triple);
-      const std::uint32_t col = std::get<1>(triple);
-      const std::uint32_t idx = std::get<2>(triple);
-      if (idx >= sst.entries.size()) {
-        std::string ctx("context=ooxml_reader sheet_index=");
-        ctx.append(std::to_string(i));
-        ctx.append(" row=").append(std::to_string(row));
-        ctx.append(" col=").append(std::to_string(col));
-        ctx.append(" sst_index=").append(std::to_string(idx));
-        ctx.append(" sst_size=").append(std::to_string(sst.entries.size()));
-        return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range", std::move(ctx));
-      }
-      wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[idx]));
-      // Propagate any <rPh> annotation from the SST entry onto the cell
-      // so PHONETIC() can surface the kana over the characters it
-      // covers. The SST reader keeps `phonetic_for_entries` parallel to
-      // `entries`, empty for unannotated entries; we only commit a
-      // non-empty annotation to avoid touching `Cell::phonetic_runs` for
-      // the common unannotated case. Several cells may share one `<si>`,
-      // so the runs are copied rather than moved out.
-      if (idx < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[idx].empty()) {
-        wb.sheet(i).set_cell_phonetic_runs(row, col, sst.phonetic_for_entries[idx]);
-        if (idx < sst.phonetic_props_for_entries.size()) {
-          wb.sheet(i).set_cell_phonetic_props(row, col, sst.phonetic_props_for_entries[idx],
-                                              sst.phonetic_pr_present_for_entries[idx]);
-        }
-      }
-      ++pending_sst_count;
-    }
-  }
+  RETURN_IF_ERROR(ResolveSharedStrings(wb, sheet_contexts, sst, !wb_rels.sst_path.empty(), &pending_sst_count));
 
   // 6b. Register each sheet's dynamic-array spill regions, now that every
   // SST reference is resolved. This must run after step 6: a spill
@@ -923,23 +957,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // 6c. A formula is a dynamic-array formula exactly when its `cm=` names
   // the XLDAPR entry of `xl/metadata.xml`; any other (a legacy CSE block, an
   // implicit-intersection formula) keeps its legacy meaning.
-  {
-    std::uint32_t xldapr = 0U;
-    if (zip.has_entry("xl/metadata.xml")) {
-      if (auto metadata = zip.read_entry("xl/metadata.xml"); metadata) {
-        xldapr = xldapr_cell_metadata_index(metadata.value());
-      }
-    }
-    for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
-      std::unordered_set<std::uint64_t> marked;
-      for (const auto& [row, col, cm] : sheet_contexts[i].cell_metadata) {
-        if (xldapr != 0U && cm == xldapr) {
-          marked.insert(dynamic_array_cell_key(row, col));
-        }
-      }
-      apply_loaded_dynamic_array_marks(wb.sheet(i), marked);
-    }
-  }
+  MarkLoadedDynamicArrays(zip, wb, sheet_contexts);
 
   // 7. Defined names, read from `wb_doc` after sheet construction and resolved lazily at evaluation time.
   ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc));

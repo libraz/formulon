@@ -28,6 +28,8 @@ namespace xlsb {
 /// The low 14 bits carry the zero-based column; the two high bits mark a
 /// relative column and row respectively.
 inline constexpr std::uint16_t kPtgColumnMask = 0x3FFFU;
+/// Low 20 bits of a row field; a relative row offset is stored modulo 2^20.
+inline constexpr std::uint32_t kPtgRowMask = (1U << 20) - 1U;
 inline constexpr std::uint16_t kPtgColumnRelativeBit = 0x4000U;
 inline constexpr std::uint16_t kPtgRowRelativeBit = 0x8000U;
 

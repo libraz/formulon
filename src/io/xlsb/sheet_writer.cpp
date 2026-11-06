@@ -194,18 +194,13 @@ void EmitWorksheetDimensions(std::vector<std::uint8_t>& dst, const Sheet& sheet)
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsDim), payload);
 }
 
-bool IsEmittableMerge(const MergeRange& merge) {
-  return merge.first_row <= merge.last_row && merge.first_col <= merge.last_col && merge.last_row < Sheet::kMaxRows &&
-         merge.last_col < Sheet::kMaxCols;
-}
-
 void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   if (sheet.merges().empty()) {
     return;
   }
   std::size_t valid_count = 0;
   for (const MergeRange& merge : sheet.merges()) {
-    if (IsEmittableMerge(merge)) {
+    if (in_grid(merge)) {
       ++valid_count;
     }
   }
@@ -217,7 +212,7 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginMergeCells), count);
   std::vector<std::uint8_t> payload;
   for (const MergeRange& merge : sheet.merges()) {
-    if (!IsEmittableMerge(merge)) {
+    if (!in_grid(merge)) {
       continue;
     }
     payload.clear();

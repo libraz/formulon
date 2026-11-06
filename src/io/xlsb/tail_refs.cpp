@@ -316,7 +316,6 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
   if (relative && (!ctx.old_base || !ctx.new_base)) {
     return false;
   }
-  constexpr std::uint32_t kRowMask = (1U << 20) - 1U;
   const auto load = [&](std::uint32_t row, std::uint16_t col) {
     parser::Reference r;
     r.sheet = sheet;
@@ -325,7 +324,7 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
     r.col_abs = (col & kPtgColumnRelativeBit) == 0U;
     r.row_abs = (col & kPtgRowRelativeBit) == 0U;
     if (relative) {
-      r.row = r.row_abs ? r.row : (ctx.old_base->row + r.row) & kRowMask;
+      r.row = r.row_abs ? r.row : (ctx.old_base->row + r.row) & kPtgRowMask;
       r.col = r.col_abs ? r.col : (ctx.old_base->col + r.col) & kPtgColumnMask;
     }
     return r;
@@ -334,7 +333,7 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
     std::uint32_t row = r.row;
     std::uint32_t col = r.col;
     if (relative) {
-      row = r.row_abs ? row : (row - ctx.new_base->row) & kRowMask;
+      row = r.row_abs ? row : (row - ctx.new_base->row) & kPtgRowMask;
       col = r.col_abs ? col : (col - ctx.new_base->col) & kPtgColumnMask;
     }
     store_u32(row_at, row);
@@ -559,8 +558,7 @@ Outcome RemapRectAt(Edit& edit, std::size_t i, std::size_t offset, bool cell, co
     ByteSpan cursor{at, 16U};
     rect = read_rfx(cursor).value();
   }
-  if (rect.last_row >= Sheet::kMaxRows || rect.last_col >= Sheet::kMaxCols || rect.first_row > rect.last_row ||
-      rect.first_col > rect.last_col) {
+  if (!in_grid(rect)) {
     return Outcome::kUnchanged;
   }
   std::vector<MergeRange> ranges{rect};

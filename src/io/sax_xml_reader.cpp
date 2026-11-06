@@ -73,12 +73,6 @@ Error MakeXmlParseError(std::size_t /*offset*/, const char* /*what*/) {
   return make_error(FormulonErrorCode::kIoXmlParse, "sax: malformed sheet xml", "context=sax_xml_reader");
 }
 
-/// Wraps the shared `parse_a1_ref` helper. Preserved as a local thin
-/// shim so the rest of this TU keeps reading naturally.
-bool DecodeA1(std::string_view ref, std::uint32_t* row_out, std::uint32_t* col_out) noexcept {
-  return a1::parse_a1_ref(ref, row_out, col_out);
-}
-
 // ---------------------------------------------------------------------------
 // Tag scanner.
 // ---------------------------------------------------------------------------
@@ -949,7 +943,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   }
   std::uint32_t row = 0;
   std::uint32_t col = 0;
-  if (!DecodeA1(r_attr, &row, &col)) {
+  if (!a1::parse_a1_ref(r_attr, &row, &col)) {
     std::string ctx("context=sax_xml_reader r=");
     ctx.append(r_attr);
     *err = make_error(FormulonErrorCode::kIoXmlParse, "sax: malformed <c r=...>", std::move(ctx));
@@ -1090,7 +1084,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
       return false;
     }
   }
-  if (row_header.self_closing) {
+  const auto finish_row = [&]() {
     if (cb.on_row_end != nullptr) {
       auto re = cb.on_row_end(cb.user_data, row_1based);
       if (!re) {
@@ -1099,6 +1093,9 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
       }
     }
     return true;
+  };
+  if (row_header.self_closing) {
+    return finish_row();
   }
 
   while (*p < end) {
@@ -1108,14 +1105,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
       return false;
     }
     if (closed) {
-      if (cb.on_row_end != nullptr) {
-        auto re = cb.on_row_end(cb.user_data, row_1based);
-        if (!re) {
-          *err = std::move(re.error());
-          return false;
-        }
-      }
-      return true;
+      return finish_row();
     }
     if (child.name == "c") {
       CellRecord rec;
