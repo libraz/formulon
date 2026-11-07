@@ -342,13 +342,38 @@ std::string_view AttrOfRaw(const TagHeader& header, std::string_view name) noexc
 /// failure that masquerades as a bad reference; decoding here keeps the
 /// SAX path symmetric with the text-node path (`<v>` / `<t>`) which has
 /// always run through the same XML conversion helpers as text nodes.
-std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, std::string* scratch) {
-  const std::string_view raw = AttrOfRaw(header, name);
+std::string_view DecodeAttr(std::string_view raw, std::string* scratch) {
   if (!ContainsEntities(raw) && !ContainsAttributeWhitespace(raw)) {
     return raw;
   }
   DecodeAttributeInto(raw, scratch);
   return std::string_view(*scratch);
+}
+
+std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, std::string* scratch) {
+  return DecodeAttr(AttrOfRaw(header, name), scratch);
+}
+
+/// `AttrOfRaw` for `count` distinct names in one walk of the attributes; the
+/// first occurrence of a name wins and an absent one leaves `out[i]` empty.
+void AttrsOfRaw(const TagHeader& header, const std::string_view* names, std::size_t count,
+                std::string_view* out) noexcept {
+  bool seen[8] = {};
+  for (std::size_t i = 0; i < count; ++i) {
+    out[i] = std::string_view{};
+  }
+  AttrIterator it{header.raw_attrs};
+  std::string_view k;
+  std::string_view v;
+  while (it.next(&k, &v)) {
+    for (std::size_t i = 0; i < count; ++i) {
+      if (!seen[i] && k == names[i]) {
+        out[i] = v;
+        seen[i] = true;
+        break;
+      }
+    }
+  }
 }
 
 /// Reads a non-negative integer from a decoded attribute, returning
@@ -934,7 +959,10 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   // Decode r=, t=, s=. Attributes are routed through `AttrOfDecoded` so
   // entity-encoded values (e.g. `r="A&amp;1"`) decode to canonical text
   // before the A1 / type-token validation runs.
-  const std::string_view r_attr = AttrOfDecoded(cell_header, "r", &scratch->c_attr_r);
+  static constexpr std::string_view kCellAttrNames[] = {"r", "t", "s", "cm", "ph"};
+  std::string_view cell_attrs[5];
+  AttrsOfRaw(cell_header, kCellAttrNames, 5U, cell_attrs);
+  const std::string_view r_attr = DecodeAttr(cell_attrs[0], &scratch->c_attr_r);
   if (r_attr.empty()) {
     *err = MakeXmlParseError(cell_header.end_offset, "<c> missing r= attribute");
     return false;
@@ -949,10 +977,10 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   }
   record->row = row;
   record->col = col;
-  record->t = AttrOfDecoded(cell_header, "t", &scratch->c_attr_t);
-  record->s = AttrOfDecoded(cell_header, "s", &scratch->c_attr_s);
-  record->cm = AttrOfDecoded(cell_header, "cm", &scratch->c_attr_cm);
-  record->ph = AttrOfDecoded(cell_header, "ph", &scratch->c_attr_ph);
+  record->t = DecodeAttr(cell_attrs[1], &scratch->c_attr_t);
+  record->s = DecodeAttr(cell_attrs[2], &scratch->c_attr_s);
+  record->cm = DecodeAttr(cell_attrs[3], &scratch->c_attr_cm);
+  record->ph = DecodeAttr(cell_attrs[4], &scratch->c_attr_ph);
   record->formula = std::string_view{};
   record->f_t = std::string_view{};
   record->has_formula = false;
