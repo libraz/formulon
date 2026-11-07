@@ -2,11 +2,11 @@
   "suite": "dynamic_array_reshape",
   "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T06:50:06Z"
+    "generated_at": "2026-11-07T19:34:57Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2286,6 +2286,66 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      }
+    },
+    {
+      "id": "wraprows_omitted_pad",
+      "formula": "=WRAPROWS({1,2,3},2,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "wrapcols_omitted_pad",
+      "formula": "=WRAPCOLS({1,2,3},2,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "wraprows_blank_ref_pad",
+      "formula": "=WRAPROWS({1,2,3},2,A99)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          0.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     }
   ]

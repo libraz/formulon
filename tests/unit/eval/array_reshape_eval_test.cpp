@@ -718,7 +718,7 @@ TEST(BuiltinsWrap, BlankPadProjectsAtGridBoundary) {
   Arena parse_arena;
   Arena eval_arena;
 
-  const Value v = EvalUnder("=WRAPROWS(A1:C1, 2, )", &parse_arena, &eval_arena, ctx);
+  const Value v = EvalUnder("=WRAPROWS(A1:C1, 2, A99)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 2U);
   ASSERT_EQ(v.as_array_cols(), 2U);
@@ -727,9 +727,26 @@ TEST(BuiltinsWrap, BlankPadProjectsAtGridBoundary) {
 
   parse_arena.reset();
   eval_arena.reset();
-  const Value counta = EvalUnder("=COUNTA(WRAPROWS(A1:C1, 2, ))", &parse_arena, &eval_arena, ctx);
+  const Value counta = EvalUnder("=COUNTA(WRAPROWS(A1:C1, 2, A99))", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(counta.is_number());
   EXPECT_DOUBLE_EQ(counta.as_number(), 4.0);
+}
+
+TEST(BuiltinsWrap, OmittedPadIsNa) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  for (const char* formula : {"=WRAPROWS({1,2,3},2,)", "=WRAPCOLS({1,2,3},2,)"}) {
+    Arena parse_arena;
+    Arena eval_arena;
+    const Value v = EvalUnder(formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array()) << formula;
+    ASSERT_EQ(v.as_array_rows(), 2U) << formula;
+    ASSERT_EQ(v.as_array_cols(), 2U) << formula;
+    ASSERT_TRUE(v.as_array_cells()[3].is_error()) << formula;
+    EXPECT_EQ(v.as_array_cells()[3].as_error(), ErrorCode::NA) << formula;
+  }
 }
 
 TEST(BuiltinsWraprows, ExactDivisionNoPadding) {

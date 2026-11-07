@@ -14,6 +14,7 @@
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
+#include "eval/omitted_arg.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/a1_ref.h"
@@ -164,6 +165,11 @@ const ArrayValue* eval_array_arg(const parser::AstNode& node, Arena& arena, cons
 // helpers).
 bool read_count_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                     std::uint32_t max_value, std::uint32_t* out, Value* out_err) {
+  // An omitted count is 1; a blank reference coerces to 0.
+  if (is_omitted_arg(node)) {
+    *out = 1U;
+    return true;
+  }
   const Value v = eval_node(node, arena, registry, ctx);
   if (v.is_error()) {
     *out_err = v;

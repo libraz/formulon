@@ -44,11 +44,23 @@ struct BuiltinRegistration {
   bool last_arg_scalar = false;
   bool absent_on_mac = false;
   const FoldOps* fold = nullptr;
+  const OmittedArgDefault* omitted_defaults = nullptr;
+  std::uint32_t omitted_default_count = 0;
 };
 
 /// Gives a range-aware reducer its one-value-at-a-time form; see `FoldOps`.
 constexpr BuiltinRegistration with_fold(BuiltinRegistration def, const FoldOps* fold) noexcept {
   def.fold = fold;
+  return def;
+}
+
+/// Declares the defaults `def`'s omitted argument slots take; see
+/// `FunctionDef::omitted_defaults`.
+template <std::size_t N>
+constexpr BuiltinRegistration with_omitted_defaults(BuiltinRegistration def,
+                                                    const OmittedArgDefault (&defaults)[N]) noexcept {
+  def.omitted_defaults = defaults;
+  def.omitted_default_count = static_cast<std::uint32_t>(N);
   return def;
 }
 
@@ -137,6 +149,8 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
     fn.last_arg_scalar = def.last_arg_scalar;
     fn.absent_on_mac = def.absent_on_mac;
     fn.fold = def.fold;
+    fn.omitted_defaults = def.omitted_defaults;
+    fn.omitted_default_count = def.omitted_default_count;
     registry.register_function(fn);
   }
 }

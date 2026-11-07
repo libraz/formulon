@@ -175,6 +175,13 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
+// abs_num, a1 and sheet_text of ADDRESS; an omitted sheet_text writes no sheet.
+constexpr OmittedArgDefault kAddressOmitted[] = {
+    {2u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {3u, OmittedArgDefault::Kind::kBool, 1.0},
+    {4u, OmittedArgDefault::Kind::kAbsent, 0.0},
+};
+
 }  // namespace
 
 void register_reference_builtins(FunctionRegistry& registry) {
@@ -182,7 +189,7 @@ void register_reference_builtins(FunctionRegistry& registry) {
   // path; INDIRECT and OFFSET are routed through the lazy table in
   // `tree_walker.cpp`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"ADDRESS", 2u, 5u, &Address},
+      builtins_detail::with_omitted_defaults({"ADDRESS", 2u, 5u, &Address}, kAddressOmitted),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

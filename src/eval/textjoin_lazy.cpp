@@ -12,6 +12,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/tail_array.h"
 #include "parser/ast.h"
@@ -231,16 +232,19 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
     delimiters.push_back(std::move(t.value()));
   }
 
-  // ignore_empty (arg 1): scalar only.
-  const Value ignore_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (ignore_v.is_error()) {
-    return ignore_v;
+  // ignore_empty (arg 1): scalar only; omitted is TRUE, a blank reference FALSE.
+  bool ignore_empty = true;
+  if (!is_omitted_arg(call.as_call_arg(1))) {
+    const Value ignore_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
+    if (ignore_v.is_error()) {
+      return ignore_v;
+    }
+    auto ignore_c = coerce_to_bool(ignore_v);
+    if (!ignore_c) {
+      return Value::error(ignore_c.error());
+    }
+    ignore_empty = ignore_c.value();
   }
-  auto ignore_c = coerce_to_bool(ignore_v);
-  if (!ignore_c) {
-    return Value::error(ignore_c.error());
-  }
-  const bool ignore_empty = ignore_c.value();
 
   // text1, [text2], ... (args 2..N): each may be scalar, range, or array;
   // flatten every argument's cells, in call order, into one run list.

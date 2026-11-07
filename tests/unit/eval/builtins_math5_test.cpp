@@ -13,6 +13,7 @@
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -88,6 +89,33 @@ TEST(BuiltinsMath5PermutationA, TenPowerMatches) {
   const Value v = EvalSource("=PERMUTATIONA(2, 10)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 1024.0);
+}
+
+// ---------------------------------------------------------------------------
+// CEILING.MATH / FLOOR.MATH: an omitted significance is 1 and an omitted mode
+// 0; a blank reference significance is 0.
+// ---------------------------------------------------------------------------
+
+void ExpectNumberResult(const Value& v, double expected, std::string_view formula) {
+  ASSERT_TRUE(v.is_number()) << formula << ": " << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), expected) << formula;
+}
+
+TEST(BuiltinsMath5OmittedArgs, CeilingMathOmittedSignificanceAndMode) {
+  ExpectNumberResult(EvalSource("=CEILING.MATH(1.2,,)"), 2.0, "=CEILING.MATH(1.2,,)");
+  ExpectNumberResult(EvalSource("=CEILING.MATH(-1.5,,)"), -1.0, "=CEILING.MATH(-1.5,,)");
+  ExpectNumberResult(EvalSource("=CEILING.MATH(-1.5,,1)"), -2.0, "=CEILING.MATH(-1.5,,1)");
+}
+
+TEST(BuiltinsMath5OmittedArgs, FloorMathOmittedSignificanceAndMode) {
+  ExpectNumberResult(EvalSource("=FLOOR.MATH(-1.2,,1)"), -1.0, "=FLOOR.MATH(-1.2,,1)");
+  ExpectNumberResult(EvalSource("=FLOOR.MATH(1.5,,)"), 1.0, "=FLOOR.MATH(1.5,,)");
+}
+
+TEST(BuiltinsMath5OmittedArgs, CeilingMathBlankReferenceSignificanceIsZero) {
+  const Workbook wb = Workbook::create();
+  ExpectNumberResult(formulon::test::EvalSourceIn("=CEILING.MATH(1.2,A99)", wb, wb.sheet(0)), 0.0,
+                     "=CEILING.MATH(1.2,A99)");
 }
 
 }  // namespace

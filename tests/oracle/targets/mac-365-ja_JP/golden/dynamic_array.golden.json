@@ -2,11 +2,11 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T20:24:04Z"
+    "generated_at": "2026-11-07T19:33:02Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -698,6 +698,163 @@
       "expect": {
         "kind": "number",
         "value": 7.0
+      }
+    },
+    {
+      "id": "sequence_omitted_columns",
+      "formula": "=SEQUENCE(2,,5)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "sequence_omitted_columns_and_step",
+      "formula": "=SEQUENCE(2,,5,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "sequence_omitted_rows",
+      "formula": "=SEQUENCE(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "sequence_omitted_start",
+      "formula": "=SEQUENCE(2,2,,3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          7.0,
+          10.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "sequence_omitted_start_and_step",
+      "formula": "=SEQUENCE(1,1,,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sequence_blank_ref_columns",
+      "formula": "=SEQUENCE(2,A99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "randarray_omitted_columns",
+      "formula": "=RANDARRAY(2,,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          1.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "randarray_omitted_rows",
+      "formula": "=RANDARRAY(,2,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          1.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "randarray_omitted_max_below_min",
+      "formula": "=RANDARRAY(1,1,5,,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "makearray_omitted_columns",
+      "formula": "=MAKEARRAY(2,,LAMBDA(r,c,r))",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "makearray_omitted_rows",
+      "formula": "=MAKEARRAY(,2,LAMBDA(r,c,c))",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
       }
     }
   ]

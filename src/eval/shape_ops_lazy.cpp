@@ -24,6 +24,7 @@
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
+#include "eval/function_registry.h"
 #include "eval/lambda_helpers_lazy.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -60,7 +61,7 @@ enum class OperationShape : std::uint8_t {
 // arguments without building the grid or invoking MAKEARRAY's lambda. An
 // argument error is the call's error; a grid past
 // `kMaxEvaluatedArrayElements` abandons the formula. Any other call, or
-// an omitted or array-valued argument, is `kUnknown`.
+// an array-valued argument, is `kUnknown`.
 OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
                                Value* out_err) {
@@ -76,10 +77,15 @@ OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const 
         arity > (sequence ? 4U : 5U)) {
       return OperationShape::kUnknown;
     }
+    const FunctionDef* def = registry.lookup(name);
     Value args[5] = {Value::blank(), Value::blank(), Value::blank(), Value::blank(), Value::blank()};
     for (std::uint32_t i = 0; i < arity; ++i) {
+      // An omitted slot takes the default the dispatcher would pass.
       if (is_omitted_arg(call.as_call_arg(i))) {
-        return OperationShape::kUnknown;
+        if (def == nullptr || !omitted_arg_value(*def, i, &args[i])) {
+          return OperationShape::kUnknown;
+        }
+        continue;
       }
       args[i] = eval_node(call.as_call_arg(i), arena, registry, ctx);
       if (args[i].is_error()) {

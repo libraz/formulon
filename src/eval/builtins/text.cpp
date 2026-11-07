@@ -618,6 +618,17 @@ Value ReplaceUtf16(const Value* args, std::uint32_t arity, Arena& arena) {
 
 }  // namespace text_detail
 
+namespace {
+
+// instance_num, match_mode and match_end of TEXTBEFORE / TEXTAFTER.
+constexpr OmittedArgDefault kTextBeforeAfterOmitted[] = {
+    {2u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {3u, OmittedArgDefault::Kind::kNumber, 0.0},
+    {4u, OmittedArgDefault::Kind::kNumber, 0.0},
+};
+
+}  // namespace
+
 void register_text_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"UPPER", 1u, 1u, &Upper},
@@ -634,8 +645,10 @@ void register_text_builtins(FunctionRegistry& registry) {
       {"REPLACE", 4u, 4u, &text_detail::Replace_},
       {"FINDB", 2u, 3u, &text_detail::FindB_},
       {"SEARCHB", 2u, 3u, &text_detail::SearchB_},
-      {"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_, false},
-      {"TEXTAFTER", 2u, 6u, &text_detail::TextAfter_, false},
+      builtins_detail::with_omitted_defaults({"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_, false},
+                                             kTextBeforeAfterOmitted),
+      builtins_detail::with_omitted_defaults({"TEXTAFTER", 2u, 6u, &text_detail::TextAfter_, false},
+                                             kTextBeforeAfterOmitted),
       // TEXTJOIN is lazy (see eval/textjoin_lazy.h) so its delimiter /
       // ignore_empty positions can be told apart from the flattened
       // text1, [text2], ... positions; no FunctionDef entry here.

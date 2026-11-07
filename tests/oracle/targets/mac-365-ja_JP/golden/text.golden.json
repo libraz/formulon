@@ -2,11 +2,11 @@
   "suite": "text",
   "description": "LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T08:00:08Z"
+    "generated_at": "2026-11-07T19:24:08Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -3007,6 +3007,231 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      }
+    },
+    {
+      "id": "textbefore_omitted_instance",
+      "formula": "=TEXTBEFORE(\"xAy\",\"A\",,0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "textafter_omitted_instance",
+      "formula": "=TEXTAFTER(\"xAy\",\"A\",,0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "y"
+      }
+    },
+    {
+      "id": "textafter_omitted_instance_and_mode",
+      "formula": "=TEXTAFTER(\"xAyAz\",\"A\",,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "yAz"
+      }
+    },
+    {
+      "id": "textbefore_omitted_slots_if_not_found",
+      "formula": "=TEXTBEFORE(\"xAy\",\"a\",,,,\"nf\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "nf"
+      }
+    },
+    {
+      "id": "textbefore_blank_ref_instance",
+      "formula": "=TEXTBEFORE(\"xAy\",\"A\",A99,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "textbefore_ci_ascii",
+      "formula": "=TEXTBEFORE(\"xAy\",\"a\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "textbefore_ci_latin",
+      "formula": "=TEXTBEFORE(\"xÉy\",\"é\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "textafter_ci_latin",
+      "formula": "=TEXTAFTER(\"xÉy\",\"é\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "y"
+      }
+    },
+    {
+      "id": "textbefore_ci_fullwidth",
+      "formula": "=TEXTBEFORE(\"xＡy\",\"ａ\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "textbefore_ci_no_width_fold",
+      "formula": "=TEXTBEFORE(\"xＡy\",\"a\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "textbefore_ci_greek",
+      "formula": "=TEXTBEFORE(\"xΣy\",\"σ\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "textbefore_ci_no_kana_width_fold",
+      "formula": "=TEXTBEFORE(\"xアy\",\"ｱ\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "textbefore_ci_no_kana_fold",
+      "formula": "=TEXTBEFORE(\"xアy\",\"あ\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "textbefore_ci_no_sharp_s_expansion",
+      "formula": "=TEXTBEFORE(\"xSSy\",\"ß\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "textbefore_ci_second_instance",
+      "formula": "=TEXTBEFORE(\"aÉbéc\",\"é\",2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aÉb"
+      }
+    },
+    {
+      "id": "textbefore_cs_latin",
+      "formula": "=TEXTBEFORE(\"xÉy\",\"é\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "textjoin_omitted_ignore_empty",
+      "formula": "=TEXTJOIN(\",\",,\"a\",\"\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,b"
+      }
+    },
+    {
+      "id": "textjoin_omitted_text_argument",
+      "formula": "=TEXTJOIN(\",\",,\"a\",,\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,b"
+      }
+    },
+    {
+      "id": "textjoin_omitted_text_kept",
+      "formula": "=TEXTJOIN(\",\",FALSE,\"a\",,\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,,b"
+      }
+    },
+    {
+      "id": "textjoin_blank_ref_ignore_empty",
+      "formula": "=TEXTJOIN(\",\",A99,\"a\",\"\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,,b"
+      }
+    },
+    {
+      "id": "textjoin_trailing_omitted",
+      "formula": "=TEXTJOIN(\",\",,\"a\",\"\",)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "fixed_omitted_decimals",
+      "formula": "=FIXED(1.234,)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23"
+      }
+    },
+    {
+      "id": "fixed_omitted_decimals_and_commas",
+      "formula": "=FIXED(1234.567,,)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234.57"
+      }
+    },
+    {
+      "id": "fixed_omitted_no_commas",
+      "formula": "=FIXED(1234.567,1,)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234.6"
+      }
+    },
+    {
+      "id": "fixed_blank_ref_decimals",
+      "formula": "=FIXED(1.234,A99)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
       }
     }
   ]

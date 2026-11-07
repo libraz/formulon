@@ -344,6 +344,19 @@ TEST(BuiltinsRank, PercentRankArrayXEvaluatesPerElement) {
   EXPECT_DOUBLE_EQ(v.as_array()->cells[1].as_number(), 0.416);
 }
 
+TEST(BuiltinsRank, PercentRankOmittedSignificanceIsThree) {
+  const Value v = EvalSource("=PERCENTRANK.INC({1,2,3},2,)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.5);
+}
+
+TEST(BuiltinsRank, PercentRankBlankReferenceSignificanceIsNum) {
+  const Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=PERCENTRANK.INC({1,2,3},2,A99)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

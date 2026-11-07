@@ -47,6 +47,20 @@ struct FoldOps {
   Value (*finish)(const FoldState& state);
 };
 
+/// The value a syntactically omitted argument slot (`F(a,,c)`) takes in
+/// place of blank coercion. A blank-cell reference in the slot still coerces
+/// as blank (0 / FALSE / "").
+struct OmittedArgDefault {
+  enum class Kind : std::uint8_t {
+    kNumber,  ///< `number`.
+    kBool,    ///< `number != 0`.
+    kAbsent,  ///< Not supplied: a trailing run of such omitted slots is dropped from the call.
+  };
+  std::uint32_t slot;
+  Kind kind;
+  double number;
+};
+
 /// Built-in function entry. Every Formulon function (and every host-registered
 /// extension) is described by a `FunctionDef` and looked up by its canonical
 /// UPPERCASE name.
@@ -172,6 +186,10 @@ struct FunctionDef {
   bool absent_on_mac = false;
   /// One-value-at-a-time form of a range-aware reducer, or null. See `FoldOps`.
   const FoldOps* fold = nullptr;
+  /// Defaults of omitted argument slots, `omitted_default_count` entries, or
+  /// null. A slot without an entry is passed as blank. See `OmittedArgDefault`.
+  const OmittedArgDefault* omitted_defaults = nullptr;
+  std::uint32_t omitted_default_count = 0;
 };
 
 /// Case-insensitive function lookup table. Registry keys are stored in an

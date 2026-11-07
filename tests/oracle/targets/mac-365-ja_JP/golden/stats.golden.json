@@ -2,11 +2,11 @@
   "suite": "stats",
   "description": "MEDIAN / MODE / LARGE / SMALL / PERCENTILE / QUARTILE / STDEV / VAR",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-25T13:45:50Z"
+    "generated_at": "2026-11-07T19:40:43Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -3786,6 +3786,24 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
+      }
+    },
+    {
+      "id": "percentrank_inc_omitted_significance",
+      "formula": "=PERCENTRANK.INC({1,2,3},2,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "percentrank_inc_blank_ref_significance",
+      "formula": "=PERCENTRANK.INC({1,2,3},2,A99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
       }
     }
   ]

@@ -2,11 +2,11 @@
   "suite": "references",
   "description": "ADDRESS / INDIRECT / OFFSET reference-manipulation builtins. ADDRESS is a pure scalar text builder; INDIRECT resolves runtime-constructed A1 text to a single cell; OFFSET synthesises a reference (scalar or range) that aggregator-family callers consume through the shared `resolve_range_arg` seam. Range-producing INDIRECT and R1C1 INDIRECT are deferred until `Value::Array` lands; those cases are deliberately absent here.",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T06:50:06Z"
+    "generated_at": "2026-11-07T19:32:00Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -741,6 +741,51 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      }
+    },
+    {
+      "id": "address_omitted_abs_and_a1",
+      "formula": "=ADDRESS(1,1,,)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$A$1"
+      }
+    },
+    {
+      "id": "address_omitted_abs_r1c1",
+      "formula": "=ADDRESS(1,1,,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "R1C1"
+      }
+    },
+    {
+      "id": "address_omitted_sheet",
+      "formula": "=ADDRESS(1,1,,,)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$A$1"
+      }
+    },
+    {
+      "id": "address_omitted_with_sheet",
+      "formula": "=ADDRESS(1,1,,,\"S\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "S!$A$1"
+      }
+    },
+    {
+      "id": "address_blank_ref_abs",
+      "formula": "=ADDRESS(1,1,A99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

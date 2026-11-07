@@ -177,6 +177,23 @@ TEST(BuiltinsAddress, ColumnSnapsToNearInteger) {
   ExpectText(EvalSource("=ADDRESS(1,1.9999999)"), "$B$1", "=ADDRESS(1,1.9999999)");
 }
 
+TEST(BuiltinsAddress, OmittedAbsNumIsAbsoluteAndOmittedA1IsTrue) {
+  ExpectText(EvalSource("=ADDRESS(1,1,,)"), "$A$1", "=ADDRESS(1,1,,)");
+  ExpectText(EvalSource("=ADDRESS(1,1,,FALSE)"), "R1C1", "=ADDRESS(1,1,,FALSE)");
+}
+
+TEST(BuiltinsAddress, OmittedSheetIsNoSheet) {
+  ExpectText(EvalSource("=ADDRESS(1,1,,,)"), "$A$1", "=ADDRESS(1,1,,,)");
+  ExpectText(EvalSource("=ADDRESS(1,1,,,\"S\")"), "S!$A$1", "=ADDRESS(1,1,,,\"S\")");
+}
+
+TEST(BuiltinsAddress, BlankReferenceAbsNumIsValueError) {
+  const Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ADDRESS(1,1,A99)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

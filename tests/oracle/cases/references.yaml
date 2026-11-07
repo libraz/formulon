@@ -255,3 +255,23 @@ cases:
     description: "Excel 365: 1"
     setup: { A1: 1, A2: 2, B1: 3, B2: 4, B3: 5 }
     formula: "=OFFSET(A1,0.9999999,0)"
+
+  - id: address_omitted_abs_and_a1
+    description: 'Omitted abs_num and a1 keep their defaults'
+    formula: '=ADDRESS(1,1,,)'
+
+  - id: address_omitted_abs_r1c1
+    description: 'An omitted abs_num with R1C1 style'
+    formula: '=ADDRESS(1,1,,FALSE)'
+
+  - id: address_omitted_sheet
+    description: 'Omitted abs_num, a1 and sheet_text'
+    formula: '=ADDRESS(1,1,,,)'
+
+  - id: address_omitted_with_sheet
+    description: 'Omitted abs_num and a1 with a sheet name'
+    formula: '=ADDRESS(1,1,,,"S")'
+
+  - id: address_blank_ref_abs
+    description: 'A blank reference as abs_num is zero'
+    formula: '=ADDRESS(1,1,A99)'

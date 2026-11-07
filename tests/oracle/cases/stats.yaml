@@ -1290,3 +1290,11 @@ cases:
     description: "GEOMEAN / HARMEAN / TRIMMEAN evaluation order"
     formula: "=TRIMMEAN({3.81000000000000;-1.36600000000000;-7.70000000000000;4.37900000000000},0.0500000000000000)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: percentrank_inc_omitted_significance
+    description: 'An omitted significance takes its default of 3'
+    formula: '=PERCENTRANK.INC({1,2,3},2,)'
+
+  - id: percentrank_inc_blank_ref_significance
+    description: 'A blank reference as significance is zero'
+    formula: '=PERCENTRANK.INC({1,2,3},2,A99)'

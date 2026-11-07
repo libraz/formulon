@@ -450,6 +450,12 @@ Value Quotient(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return to_finite_value(r);
 }
 
+// significance and mode of CEILING.MATH / FLOOR.MATH.
+constexpr OmittedArgDefault kRoundingMathOmitted[] = {
+    {1u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {2u, OmittedArgDefault::Kind::kNumber, 0.0},
+};
+
 }  // namespace
 
 void register_math_builtins(FunctionRegistry& registry) {
@@ -470,8 +476,8 @@ void register_math_builtins(FunctionRegistry& registry) {
       {"CEILING", 2u, 2u, &Ceiling},
       {"FLOOR", 2u, 2u, &Floor},
       builtins_detail::analysis_toolpak({"MROUND", 2u, 2u, &MRound}),
-      {"CEILING.MATH", 1u, 3u, &CeilingMath},
-      {"FLOOR.MATH", 1u, 3u, &FloorMath},
+      builtins_detail::with_omitted_defaults({"CEILING.MATH", 1u, 3u, &CeilingMath}, kRoundingMathOmitted),
+      builtins_detail::with_omitted_defaults({"FLOOR.MATH", 1u, 3u, &FloorMath}, kRoundingMathOmitted),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

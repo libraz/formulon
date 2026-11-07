@@ -681,6 +681,16 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   return arraytotext_scalar(array_v, strict, arena);
 }
 
+namespace {
+
+// decimals and no_commas of FIXED.
+constexpr OmittedArgDefault kFixedOmitted[] = {
+    {1u, OmittedArgDefault::Kind::kNumber, 2.0},
+    {2u, OmittedArgDefault::Kind::kBool, 0.0},
+};
+
+}  // namespace
+
 void register_text_format_builtins(FunctionRegistry& registry) {
   // TEXT and VALUE are NOT registered here: both are clock-sensitive (TEXT's
   // date format codes read the workbook epoch; VALUE's year-less date_text
@@ -689,8 +699,11 @@ void register_text_format_builtins(FunctionRegistry& registry) {
   // `find_date_entry` hook (VM), which pass `EvalContext::date1904()` /
   // `EvalContext::wall_clock()` into `text_builtin_impl` / `value_builtin_impl`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"VALUETOTEXT", 1u, 2u, &ValueToText_}, {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_}, {"FIXED", 1u, 3u, &Fixed_},
-      {"DOLLAR", 1u, 2u, &Dollar_},           {"USDOLLAR", 1u, 2u, &UsDollar_},
+      {"VALUETOTEXT", 1u, 2u, &ValueToText_},
+      {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},
+      builtins_detail::with_omitted_defaults({"FIXED", 1u, 3u, &Fixed_}, kFixedOmitted),
+      {"DOLLAR", 1u, 2u, &Dollar_},
+      {"USDOLLAR", 1u, 2u, &UsDollar_},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

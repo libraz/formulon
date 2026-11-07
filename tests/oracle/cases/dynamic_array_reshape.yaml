@@ -521,3 +521,15 @@ cases:
   - id: snap_choosecols_idx
     description: "Excel 365: 1"
     formula: "=CHOOSECOLS({1,2,3},1.9999999)"
+
+  - id: wraprows_omitted_pad
+    description: 'An omitted pad_with pads with #N/A'
+    formula: '=WRAPROWS({1,2,3},2,)'
+
+  - id: wrapcols_omitted_pad
+    description: 'An omitted pad_with pads with #N/A'
+    formula: '=WRAPCOLS({1,2,3},2,)'
+
+  - id: wraprows_blank_ref_pad
+    description: 'A blank reference as pad_with pads with 0'
+    formula: '=WRAPROWS({1,2,3},2,A99)'

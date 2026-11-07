@@ -2,11 +2,11 @@
   "suite": "math",
   "description": "ABS / SIGN / INT / TRUNC / MOD / ROUND* / POWER / SQRT / EXP / LN / LOG / LOG10 / PI / VALUE",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T21:08:10Z"
+    "generated_at": "2026-11-07T19:27:27Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -4562,6 +4562,60 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
+      }
+    },
+    {
+      "id": "ceiling_math_omitted_significance",
+      "formula": "=CEILING.MATH(1.2,,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ceiling_math_negative_omitted",
+      "formula": "=CEILING.MATH(-1.5,,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "ceiling_math_negative_omitted_significance",
+      "formula": "=CEILING.MATH(-1.5,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "floor_math_omitted_significance_mode",
+      "formula": "=FLOOR.MATH(-1.2,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "floor_math_omitted_both",
+      "formula": "=FLOOR.MATH(1.5,,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ceiling_math_blank_ref_significance",
+      "formula": "=CEILING.MATH(1.2,A99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]

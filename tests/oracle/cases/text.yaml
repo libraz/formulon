@@ -1198,3 +1198,103 @@ cases:
 
   - id: supp_lenb_mixed
     formula: '=LENB("a😀b𐐨c𠀀d")'
+
+  - id: textbefore_omitted_instance
+    description: 'An omitted instance_num takes its default of 1'
+    formula: '=TEXTBEFORE("xAy","A",,0)'
+
+  - id: textafter_omitted_instance
+    description: 'An omitted instance_num takes its default of 1'
+    formula: '=TEXTAFTER("xAy","A",,0)'
+
+  - id: textafter_omitted_instance_and_mode
+    description: 'Omitted instance_num and match_mode keep their defaults'
+    formula: '=TEXTAFTER("xAyAz","A",,,1)'
+
+  - id: textbefore_omitted_slots_if_not_found
+    description: 'Omitted middle slots before if_not_found'
+    formula: '=TEXTBEFORE("xAy","a",,,,"nf")'
+
+  - id: textbefore_blank_ref_instance
+    description: 'A blank reference as instance_num is zero'
+    formula: '=TEXTBEFORE("xAy","A",A99,0)'
+
+  - id: textbefore_ci_ascii
+    description: 'Case-insensitive match of an ASCII letter'
+    formula: '=TEXTBEFORE("xAy","a",1,1)'
+
+  - id: textbefore_ci_latin
+    description: 'Case-insensitive match folds Latin letters with diacritics'
+    formula: '=TEXTBEFORE("xÉy","é",1,1)'
+
+  - id: textafter_ci_latin
+    description: 'Case-insensitive TEXTAFTER folds Latin letters with diacritics'
+    formula: '=TEXTAFTER("xÉy","é",1,1)'
+
+  - id: textbefore_ci_fullwidth
+    description: 'Case-insensitive match folds fullwidth letters'
+    formula: '=TEXTBEFORE("xＡy","ａ",1,1)'
+
+  - id: textbefore_ci_no_width_fold
+    description: 'Case-insensitive match does not fold width'
+    formula: '=TEXTBEFORE("xＡy","a",1,1)'
+
+  - id: textbefore_ci_greek
+    description: 'Case-insensitive match folds Greek letters'
+    formula: '=TEXTBEFORE("xΣy","σ",1,1)'
+
+  - id: textbefore_ci_no_kana_width_fold
+    description: 'Case-insensitive match does not fold kana width'
+    formula: '=TEXTBEFORE("xアy","ｱ",1,1)'
+
+  - id: textbefore_ci_no_kana_fold
+    description: 'Case-insensitive match does not fold hiragana to katakana'
+    formula: '=TEXTBEFORE("xアy","あ",1,1)'
+
+  - id: textbefore_ci_no_sharp_s_expansion
+    description: 'Case-insensitive match does not expand sharp s'
+    formula: '=TEXTBEFORE("xSSy","ß",1,1)'
+
+  - id: textbefore_ci_second_instance
+    description: 'Folded matches count toward instance_num'
+    formula: '=TEXTBEFORE("aÉbéc","é",2,1)'
+
+  - id: textbefore_cs_latin
+    description: 'Case-sensitive match keeps diacritic letters distinct'
+    formula: '=TEXTBEFORE("xÉy","é",1,0)'
+
+  - id: textjoin_omitted_ignore_empty
+    description: 'An omitted ignore_empty skips empty values'
+    formula: '=TEXTJOIN(",",,"a","","b")'
+
+  - id: textjoin_omitted_text_argument
+    description: 'An omitted text argument is an empty value'
+    formula: '=TEXTJOIN(",",,"a",,"b")'
+
+  - id: textjoin_omitted_text_kept
+    description: 'An omitted text argument is kept when empties are kept'
+    formula: '=TEXTJOIN(",",FALSE,"a",,"b")'
+
+  - id: textjoin_blank_ref_ignore_empty
+    description: 'A blank reference as ignore_empty is FALSE'
+    formula: '=TEXTJOIN(",",A99,"a","","b")'
+
+  - id: textjoin_trailing_omitted
+    description: 'Trailing omitted and empty text arguments are skipped'
+    formula: '=TEXTJOIN(",",,"a","",)'
+
+  - id: fixed_omitted_decimals
+    description: 'An omitted decimals takes its default of 2'
+    formula: '=FIXED(1.234,)'
+
+  - id: fixed_omitted_decimals_and_commas
+    description: 'Omitted decimals and no_commas keep their defaults'
+    formula: '=FIXED(1234.567,,)'
+
+  - id: fixed_omitted_no_commas
+    description: 'An omitted no_commas keeps separators'
+    formula: '=FIXED(1234.567,1,)'
+
+  - id: fixed_blank_ref_decimals
+    description: 'A blank reference as decimals is zero'
+    formula: '=FIXED(1.234,A99)'

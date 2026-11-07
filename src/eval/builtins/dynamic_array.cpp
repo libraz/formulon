@@ -260,6 +260,25 @@ bool generator_params(const Value* args, std::uint32_t arity, bool sequence, Gen
   return true;
 }
 
+namespace {
+
+// rows, cols, start and step of SEQUENCE.
+constexpr OmittedArgDefault kSequenceOmitted[] = {
+    {0u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {1u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {2u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {3u, OmittedArgDefault::Kind::kNumber, 1.0},
+};
+
+// rows, cols, min, max and whole_number of RANDARRAY.
+constexpr OmittedArgDefault kRandArrayOmitted[] = {
+    {0u, OmittedArgDefault::Kind::kNumber, 1.0}, {1u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {2u, OmittedArgDefault::Kind::kNumber, 0.0}, {3u, OmittedArgDefault::Kind::kNumber, 1.0},
+    {4u, OmittedArgDefault::Kind::kBool, 0.0},
+};
+
+}  // namespace
+
 void register_dynamic_array_builtins(FunctionRegistry& registry) {
   // SEQUENCE: one required arg (rows) + three optional (cols, start, step).
   // Default `accepts_ranges=false` and `propagate_errors=true` -- a range
@@ -267,10 +286,12 @@ void register_dynamic_array_builtins(FunctionRegistry& registry) {
   // scalar-coercion path, and any pre-evaluated error short-circuits before
   // the impl runs.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      builtins_detail::array_result({"SEQUENCE", 1u, 4u, &Sequence}),
+      builtins_detail::array_result(
+          builtins_detail::with_omitted_defaults({"SEQUENCE", 1u, 4u, &Sequence}, kSequenceOmitted)),
       // RANDARRAY: zero required + five optional (rows, cols, min, max,
       // whole_number). Same dispatcher policy as SEQUENCE.
-      builtins_detail::array_result({"RANDARRAY", 0u, 5u, &RandArray}),
+      builtins_detail::array_result(
+          builtins_detail::with_omitted_defaults({"RANDARRAY", 0u, 5u, &RandArray}, kRandArrayOmitted)),
       // MUNIT: single required arg (matrix size).
       builtins_detail::array_result({"MUNIT", 1u, 1u, &MUnit}),
   };

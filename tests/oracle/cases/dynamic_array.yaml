@@ -283,3 +283,47 @@ cases:
   - id: sum_omit
     description: "Excel 365: 7"
     formula: "=SUM(3,,4)"
+
+  - id: sequence_omitted_columns
+    description: 'An omitted columns takes its default of 1'
+    formula: '=SEQUENCE(2,,5)'
+
+  - id: sequence_omitted_columns_and_step
+    description: 'Omitted columns and step keep their defaults'
+    formula: '=SEQUENCE(2,,5,)'
+
+  - id: sequence_omitted_rows
+    description: 'An omitted rows takes its default of 1'
+    formula: '=SEQUENCE(,2)'
+
+  - id: sequence_omitted_start
+    description: 'An omitted start takes its default of 1'
+    formula: '=SEQUENCE(2,2,,3)'
+
+  - id: sequence_omitted_start_and_step
+    description: 'Omitted start and step keep their defaults'
+    formula: '=SEQUENCE(1,1,,)'
+
+  - id: sequence_blank_ref_columns
+    description: 'A blank reference as columns is zero'
+    formula: '=SEQUENCE(2,A99)'
+
+  - id: randarray_omitted_columns
+    description: 'An omitted columns takes its default of 1'
+    formula: '=RANDARRAY(2,,1,1)'
+
+  - id: randarray_omitted_rows
+    description: 'An omitted rows takes its default of 1'
+    formula: '=RANDARRAY(,2,1,1)'
+
+  - id: randarray_omitted_max_below_min
+    description: 'An omitted max is 1, below a min of 5'
+    formula: '=RANDARRAY(1,1,5,,TRUE)'
+
+  - id: makearray_omitted_columns
+    description: 'An omitted columns takes its default of 1'
+    formula: '=MAKEARRAY(2,,LAMBDA(r,c,r))'
+
+  - id: makearray_omitted_rows
+    description: 'An omitted rows takes its default of 1'
+    formula: '=MAKEARRAY(,2,LAMBDA(r,c,c))'

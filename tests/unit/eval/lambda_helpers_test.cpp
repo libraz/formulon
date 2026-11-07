@@ -872,6 +872,11 @@ TEST(LambdaHelpersEta, UnknownNameIsNameErrorInEveryHelper) {
   }
 }
 
+TEST(LambdaHelpersMakeArray, OmittedCountIsOne) {
+  ExpectNumbers(EvalSrc("=MAKEARRAY(2,,LAMBDA(r,c,r))"), 2U, 1U, {1.0, 2.0}, "MAKEARRAY omitted cols");
+  ExpectNumbers(EvalSrc("=MAKEARRAY(,2,LAMBDA(r,c,c))"), 1U, 2U, {1.0, 2.0}, "MAKEARRAY omitted rows");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

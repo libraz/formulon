@@ -35,6 +35,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/scalar_args.h"
 #include "eval/tree_walker/broadcast.h"
@@ -356,7 +357,10 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   std::vector<double>& sorted = std::get<std::vector<double>>(arr);
   std::sort(sorted.begin(), sorted.end());
   const Value x_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  const Value sig_v = arity == 3U ? eval_node(call.as_call_arg(2), arena, registry, ctx) : Value::number(3.0);
+  // An omitted significance is 3; a blank reference coerces to 0.
+  const Value sig_v = arity == 3U && !is_omitted_arg(call.as_call_arg(2))
+                          ? eval_node(call.as_call_arg(2), arena, registry, ctx)
+                          : Value::number(3.0);
   if (!x_v.is_array() && !sig_v.is_array()) {
     return percentrank_cell(sorted, x_v, sig_v, exclusive);
   }

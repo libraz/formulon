@@ -10,7 +10,10 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <ctime>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 
@@ -715,6 +718,66 @@ TEST(BuiltinsMiscRandArray, ColsSnapToNearInteger) {
   const Value v = EvalSource("=COLUMNS(RANDARRAY(1,2.9999999))");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 3.0);
+}
+
+// An omitted SEQUENCE / RANDARRAY slot takes its documented default; a blank
+// reference coerces to 0.
+void ExpectNumberGrid(const Value& v, std::uint32_t rows, std::uint32_t cols, std::initializer_list<double> expected,
+                      std::string_view formula) {
+  if (rows == 1U && cols == 1U && !v.is_array()) {
+    ASSERT_TRUE(v.is_number()) << formula << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), *expected.begin()) << formula;
+    return;
+  }
+  ASSERT_TRUE(v.is_array()) << formula << ": " << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), rows) << formula;
+  ASSERT_EQ(v.as_array_cols(), cols) << formula;
+  std::size_t i = 0;
+  for (const double e : expected) {
+    ASSERT_TRUE(v.as_array_cells()[i].is_number()) << formula << " cell " << i;
+    EXPECT_EQ(v.as_array_cells()[i].as_number(), e) << formula << " cell " << i;
+    ++i;
+  }
+}
+
+TEST(BuiltinsMiscSequence, OmittedArgumentsTakeDefaults) {
+  ExpectNumberGrid(EvalSource("=SEQUENCE(2,,5)"), 2U, 1U, {5.0, 6.0}, "=SEQUENCE(2,,5)");
+  ExpectNumberGrid(EvalSource("=SEQUENCE(2,,5,)"), 2U, 1U, {5.0, 6.0}, "=SEQUENCE(2,,5,)");
+  ExpectNumberGrid(EvalSource("=SEQUENCE(,2)"), 1U, 2U, {1.0, 2.0}, "=SEQUENCE(,2)");
+  ExpectNumberGrid(EvalSource("=SEQUENCE(2,2,,3)"), 2U, 2U, {1.0, 4.0, 7.0, 10.0}, "=SEQUENCE(2,2,,3)");
+  ExpectNumberGrid(EvalSource("=SEQUENCE(1,1,,)"), 1U, 1U, {1.0}, "=SEQUENCE(1,1,,)");
+}
+
+TEST(BuiltinsMiscSequence, OmittedArgumentsSizeTheShape) {
+  const Value rows = EvalSource("=ROWS(SEQUENCE(2,,5))");
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_EQ(rows.as_number(), 2.0);
+  const Value cols = EvalSource("=COLUMNS(SEQUENCE(,2))");
+  ASSERT_TRUE(cols.is_number());
+  EXPECT_EQ(cols.as_number(), 2.0);
+}
+
+TEST(BuiltinsMiscSequence, BlankReferenceColumnsIsCalc) {
+  const Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=SEQUENCE(2,A99)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
+TEST(BuiltinsMiscRandArray, OmittedArgumentsTakeDefaults) {
+  ExpectNumberGrid(EvalSource("=RANDARRAY(2,,1,1)"), 2U, 1U, {1.0, 1.0}, "=RANDARRAY(2,,1,1)");
+  ExpectNumberGrid(EvalSource("=RANDARRAY(,2,1,1)"), 1U, 2U, {1.0, 1.0}, "=RANDARRAY(,2,1,1)");
+  // Omitted min / max are 0 / 1, so a whole-number draw is 0 or 1.
+  const Value drawn = EvalSource("=RANDARRAY(1,1,,,TRUE)");
+  const Value whole = drawn.is_array() ? drawn.as_array_cells()[0] : drawn;
+  ASSERT_TRUE(whole.is_number()) << drawn.debug_to_string();
+  EXPECT_TRUE(whole.as_number() == 0.0 || whole.as_number() == 1.0) << whole.as_number();
+}
+
+TEST(BuiltinsMiscRandArray, OmittedMaxIsOneBelowMin) {
+  const Value v = EvalSource("=RANDARRAY(1,1,5,,TRUE)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 }  // namespace

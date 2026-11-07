@@ -1517,3 +1517,27 @@ cases:
   - id: roundup_third_fifteen_places
     formula: "=ROUNDUP(1/3,15)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: ceiling_math_omitted_significance
+    description: 'Omitted significance and mode keep their defaults'
+    formula: '=CEILING.MATH(1.2,,)'
+
+  - id: ceiling_math_negative_omitted
+    description: 'A negative number with omitted significance and mode'
+    formula: '=CEILING.MATH(-1.5,,)'
+
+  - id: ceiling_math_negative_omitted_significance
+    description: 'A negative number with omitted significance and mode 1'
+    formula: '=CEILING.MATH(-1.5,,1)'
+
+  - id: floor_math_omitted_significance_mode
+    description: 'Omitted significance with mode 1'
+    formula: '=FLOOR.MATH(-1.2,,1)'
+
+  - id: floor_math_omitted_both
+    description: 'Omitted significance and mode keep their defaults'
+    formula: '=FLOOR.MATH(1.5,,)'
+
+  - id: ceiling_math_blank_ref_significance
+    description: 'A blank reference as significance is zero'
+    formula: '=CEILING.MATH(1.2,A99)'

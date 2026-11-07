@@ -203,11 +203,18 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // The array a `last_arg_scalar` function's last argument evaluated to; the
   // call is then evaluated once per element.
   const ArrayValue* lifted_last_arg = nullptr;
-  const std::uint32_t evaluated_arity = def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
-                                            ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
-                                            : arity;
+  const std::uint32_t evaluated_arity =
+      def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
+          ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
+          : (def->omitted_defaults != nullptr ? trim_absent_omitted_args(node, *def, arity) : arity);
   for (std::uint32_t i = 0; i < evaluated_arity; ++i) {
     const parser::AstNode& raw_arg = node.as_call_arg(i);
+    // An omitted slot with a declared default takes it; a blank reference does not.
+    Value omitted_default = Value::blank();
+    if (def->omitted_defaults != nullptr && is_omitted_arg(raw_arg) && omitted_arg_value(*def, i, &omitted_default)) {
+      values.push_back(omitted_default);
+      continue;
+    }
     if (def->last_arg_scalar && i > 0U && i + 1U == evaluated_arity) {
       const Value v = densify(eval_node_shaped(raw_arg, arena, registry, ctx), arena);
       if (def->propagate_errors && v.is_error()) {

@@ -19,8 +19,10 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "test_eval_helpers.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -724,6 +726,113 @@ TEST(BuiltinsText3Dollar, DecimalsSnapToNearInteger) {
   EXPECT_EQ(EvalSource("=DOLLAR(1.23456,1.9999999)").as_text(),
             "\xC2\xA5"
             "1.23");
+}
+
+// ---------------------------------------------------------------------------
+// Omitted arguments take the documented default; a blank reference does not.
+// ---------------------------------------------------------------------------
+
+void ExpectTextResult(const Value& v, std::string_view expected, std::string_view formula) {
+  ASSERT_TRUE(v.is_text()) << formula << ": " << v.debug_to_string();
+  EXPECT_EQ(v.as_text(), expected) << formula;
+}
+
+void ExpectErrorResult(const Value& v, ErrorCode expected, std::string_view formula) {
+  ASSERT_TRUE(v.is_error()) << formula << ": " << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), expected) << formula;
+}
+
+Value EvalWithBlankA99(std::string_view src) {
+  static const Workbook wb = Workbook::create();
+  return formulon::test::EvalSourceIn(src, wb, wb.sheet(0));
+}
+
+TEST(BuiltinsText3OmittedArgs, TextBeforeOmittedInstanceIsOne) {
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"xAy\",\"A\",,0)"), "x", "TEXTBEFORE omitted instance");
+}
+
+TEST(BuiltinsText3OmittedArgs, TextAfterOmittedInstanceIsOne) {
+  ExpectTextResult(EvalSource("=TEXTAFTER(\"xAy\",\"A\",,0)"), "y", "TEXTAFTER omitted instance");
+}
+
+TEST(BuiltinsText3OmittedArgs, TextAfterOmittedInstanceAndMatchModeWithMatchEnd) {
+  ExpectTextResult(EvalSource("=TEXTAFTER(\"xAyAz\",\"A\",,,1)"), "yAz", "TEXTAFTER omitted instance and mode");
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"xAyAz\",\"A\",,,1)"), "x", "TEXTBEFORE omitted instance and mode");
+}
+
+TEST(BuiltinsText3OmittedArgs, TextBeforeOmittedMiddleSlotsKeepIfNotFound) {
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"xAy\",\"a\",,,,\"nf\")"), "nf", "TEXTBEFORE omitted middle slots");
+}
+
+TEST(BuiltinsText3OmittedArgs, TextBeforeBlankReferenceInstanceIsValueError) {
+  ExpectErrorResult(EvalWithBlankA99("=TEXTBEFORE(\"xAy\",\"A\",A99,0)"), ErrorCode::Value,
+                    "TEXTBEFORE blank reference instance");
+}
+
+TEST(BuiltinsText3OmittedArgs, FixedOmittedDecimalsIsTwo) {
+  ExpectTextResult(EvalSource("=FIXED(1.234,)"), "1.23", "FIXED omitted decimals");
+  ExpectTextResult(EvalWithBlankA99("=FIXED(1234.567,,)"), "1,234.57", "FIXED omitted decimals and no_commas");
+  ExpectTextResult(EvalWithBlankA99("=FIXED(1234.567,1,)"), "1,234.6", "FIXED omitted no_commas");
+}
+
+TEST(BuiltinsText3OmittedArgs, FixedBlankReferenceDecimalsIsZero) {
+  ExpectTextResult(EvalWithBlankA99("=FIXED(1.234,A99)"), "1", "FIXED blank reference decimals");
+}
+
+TEST(BuiltinsText3OmittedArgs, TextJoinOmittedIgnoreEmptyIsTrue) {
+  ExpectTextResult(EvalSource("=TEXTJOIN(\",\",,\"a\",\"\",\"b\")"), "a,b", "TEXTJOIN omitted ignore_empty");
+  ExpectTextResult(EvalSource("=TEXTJOIN(\",\",,\"a\",,\"b\")"), "a,b", "TEXTJOIN omitted ignore_empty and text");
+  ExpectTextResult(EvalSource("=TEXTJOIN(\",\",,\"a\",\"\",)"), "a", "TEXTJOIN omitted trailing text");
+}
+
+TEST(BuiltinsText3OmittedArgs, TextJoinOmittedTextIsEmptyValue) {
+  ExpectTextResult(EvalSource("=TEXTJOIN(\",\",FALSE,\"a\",,\"b\")"), "a,,b", "TEXTJOIN FALSE omitted text");
+  ExpectTextResult(EvalSource("=TEXTJOIN(\",\",TRUE,\"a\",,\"b\")"), "a,b", "TEXTJOIN TRUE omitted text");
+}
+
+TEST(BuiltinsText3OmittedArgs, TextJoinBlankReferenceIgnoreEmptyIsFalse) {
+  ExpectTextResult(EvalWithBlankA99("=TEXTJOIN(\",\",A99,\"a\",\"\",\"b\")"), "a,,b",
+                   "TEXTJOIN blank reference ignore_empty");
+}
+
+// ---------------------------------------------------------------------------
+// TEXTBEFORE / TEXTAFTER case-insensitive matching folds case per code point.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsText3TextBeforeFold, FoldsLatinFullwidthAndGreekCase) {
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"xAy\",\"a\",,1)"), "x", "ASCII");
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"x\xC3\x89y\",\"\xC3\xA9\",,1)"), "x", "Latin E acute");
+  ExpectTextResult(EvalSource("=TEXTAFTER(\"x\xC3\x89y\",\"\xC3\xA9\",,1)"), "y", "Latin E acute after");
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"x\xEF\xBC\xA1y\",\"\xEF\xBD\x81\",,1)"), "x", "fullwidth A");
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"x\xCE\xA3y\",\"\xCF\x83\",,1)"), "x", "Greek sigma");
+}
+
+TEST(BuiltinsText3TextBeforeFold, DoesNotFoldWidthKanaOrSharpS) {
+  ExpectErrorResult(EvalSource("=TEXTBEFORE(\"x\xEF\xBC\xA1y\",\"a\",,1)"), ErrorCode::NA, "fullwidth vs ASCII");
+  ExpectErrorResult(EvalSource("=TEXTBEFORE(\"x\xE3\x82\xA2y\",\"\xEF\xBD\xB1\",,1)"), ErrorCode::NA,
+                    "katakana vs halfwidth");
+  ExpectErrorResult(EvalSource("=TEXTBEFORE(\"x\xE3\x82\xA2y\",\"\xE3\x81\x82\",,1)"), ErrorCode::NA,
+                    "katakana vs hiragana");
+  ExpectErrorResult(EvalSource("=TEXTBEFORE(\"xSSy\",\"\xC3\x9F\",,1)"), ErrorCode::NA, "sharp s vs SS");
+}
+
+TEST(BuiltinsText3TextBeforeFold, CaseSensitiveModeKeepsLatinCaseApart) {
+  ExpectErrorResult(EvalSource("=TEXTBEFORE(\"x\xC3\x89y\",\"\xC3\xA9\",,0)"), ErrorCode::NA, "Latin E acute mode 0");
+}
+
+TEST(BuiltinsText3TextBeforeFold, InstanceCountsFoldedHitsOverOriginalBytes) {
+  ExpectTextResult(EvalSource("=TEXTBEFORE(\"a\xC3\x89"
+                              "b\xC3\xA9"
+                              "c\",\"\xC3\xA9\",2,1)"),
+                   "a\xC3\x89"
+                   "b",
+                   "second folded hit");
+  ExpectTextResult(EvalSource("=TEXTAFTER(\"a\xC3\x89"
+                              "b\xC3\xA9"
+                              "c\",\"\xC3\xA9\",-2,1)"),
+                   "b\xC3\xA9"
+                   "c",
+                   "second-to-last folded hit");
 }
 
 }  // namespace

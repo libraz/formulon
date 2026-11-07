@@ -1,7 +1,8 @@
 //
 // Identifies a syntactically omitted function argument (`f(a,,c)`). This is
 // distinct from an evaluated blank reference: omission carries the callee's
-// documented default rather than ordinary blank coercion.
+// documented default (`FunctionDef::omitted_defaults` for eager built-ins)
+// rather than ordinary blank coercion.
 //
 // Also hosts the former Analysis-ToolPak argument rule, shared by the eager
 // dispatcher (`FunctionDef::analysis_toolpak_args`) and the lazy impls that
@@ -22,6 +23,41 @@ namespace eval {
 
 inline bool is_omitted_arg(const parser::AstNode& arg) {
   return arg.kind() == parser::NodeKind::Literal && arg.as_literal().is_blank();
+}
+
+/// The default `def` declares for an omitted slot `index`, or null.
+inline const OmittedArgDefault* omitted_arg_default(const FunctionDef& def, std::uint32_t index) noexcept {
+  for (std::uint32_t i = 0; i < def.omitted_default_count; ++i) {
+    if (def.omitted_defaults[i].slot == index) {
+      return &def.omitted_defaults[i];
+    }
+  }
+  return nullptr;
+}
+
+/// Writes the value an omitted slot `index` of `def` takes into `*out`.
+/// Returns false when the slot has no number or boolean default.
+inline bool omitted_arg_value(const FunctionDef& def, std::uint32_t index, Value* out) {
+  const OmittedArgDefault* d = omitted_arg_default(def, index);
+  if (d == nullptr || d->kind == OmittedArgDefault::Kind::kAbsent) {
+    return false;
+  }
+  *out = d->kind == OmittedArgDefault::Kind::kBool ? Value::boolean(d->number != 0.0) : Value::number(d->number);
+  return true;
+}
+
+/// `arity` less the trailing omitted slots of `call` whose default is
+/// `kAbsent`, so the callee sees them as not supplied.
+inline std::uint32_t trim_absent_omitted_args(const parser::AstNode& call, const FunctionDef& def,
+                                              std::uint32_t arity) {
+  while (arity > def.min_arity && is_omitted_arg(call.as_call_arg(arity - 1U))) {
+    const OmittedArgDefault* d = omitted_arg_default(def, arity - 1U);
+    if (d == nullptr || d->kind != OmittedArgDefault::Kind::kAbsent) {
+      break;
+    }
+    --arity;
+  }
+  return arity;
 }
 
 /// Whether an omitted slot at `index` is a required argument under the
