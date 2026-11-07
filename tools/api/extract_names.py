@@ -828,10 +828,10 @@ def link_members(s: Surfaces, props: Dict[str, Proposal]) -> List[Link]:
 
 # Binding-only symbols whose ledger shape the rules settle.
 BINDING_ONLY = {
-    "evalFormula": ("formula.eval", "free", "evalFormula", "eval_formula",
-                    "binding convenience: evaluates one formula in a default workbook"),
-    "eval_formula": ("formula.eval", "free", "evalFormula", "eval_formula",
-                     "binding convenience: evaluates one formula in a default workbook"),
+    "evaluateFormula": ("formula.eval", "free", "evaluateFormula", "evaluate_formula",
+                        "binding convenience: evaluates one formula in a default workbook"),
+    "evaluate_formula": ("formula.eval", "free", "evaluateFormula", "evaluate_formula",
+                         "binding convenience: evaluates one formula in a default workbook"),
     "createFormulon": ("module.create", "free", "createFormulon", None,
                        "entry point of both npm packages (default and named export)"),
 }  # fmt: skip
