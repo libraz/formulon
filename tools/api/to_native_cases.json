@@ -4,7 +4,8 @@
     "cell": "instead of `formula`: read this cell of a new sheet with getValue / get_value",
     "native": "what toNative (JS) and Value.to_python() (Python) return: a JSON scalar or null as is",
     "error": "`native: { error: <ErrorCode member> }`: JS returns the ErrorValue with that errorCode, Python an ExcelError with ErrorCode.<UPPER>",
-    "passthrough": "`native: { passthrough: true }`: the input value itself is returned (array, reference, lambda)"
+    "passthrough": "`native: { passthrough: true }`: the input value itself is returned (array, reference, lambda)",
+    "facade_cases": "rows of the high-level read shapes (NativeValue), read by the facade drivers only: id; call (evaluate_formula | evaluate_formula_array | get_value | get_values); formula, or cell / range on a new sheet; native (the value the call returns). evaluate_formula folds a 1x1 result to a scalar and returns an array as a two-dimensional list; evaluate_formula_array always returns a two-dimensional list; an error is `{error: <ErrorCode member>}`, an empty cell null."
   },
   "cases": [
     { "formula": "=SUM(1,2)", "native": 3 },
@@ -21,5 +22,23 @@
     { "formula": "=SQRT(-1)", "native": { "error": "Num" } },
     { "formula": "=\"a\"+1", "native": { "error": "Value" } },
     { "cell": "Z99", "native": null }
+  ],
+  "facade_cases": [
+    {"id": "scalar_folds", "call": "evaluate_formula", "formula": "=1+1", "native": 2},
+    {"id": "seq_1x1_folds", "call": "evaluate_formula", "formula": "=SEQUENCE(1,1)", "native": 1},
+    {"id": "seq_2x2", "call": "evaluate_formula", "formula": "=SEQUENCE(2,2)", "native": [[1, 2], [3, 4]]},
+    {"id": "seq_row", "call": "evaluate_formula", "formula": "=SEQUENCE(1,3)", "native": [[1, 2, 3]]},
+    {"id": "seq_column", "call": "evaluate_formula", "formula": "=SEQUENCE(3,1)", "native": [[1], [2], [3]]},
+    {"id": "array_literal_mixed", "call": "evaluate_formula", "formula": "={1,\"a\";TRUE,#N/A}", "native": [[1, "a"], [true, {"error": "NA"}]]},
+    {"id": "array_error_cell", "call": "evaluate_formula", "formula": "={1,#DIV/0!}", "native": [[1, {"error": "Div0"}]]},
+    {"id": "scalar_error", "call": "evaluate_formula", "formula": "=1/0", "native": {"error": "Div0"}},
+    {"id": "array_scalar_wrapped", "call": "evaluate_formula_array", "formula": "=1+1", "native": [[2]]},
+    {"id": "array_seq_1x1_wrapped", "call": "evaluate_formula_array", "formula": "=SEQUENCE(1,1)", "native": [[1]]},
+    {"id": "array_seq_2x2", "call": "evaluate_formula_array", "formula": "=SEQUENCE(2,2)", "native": [[1, 2], [3, 4]]},
+    {"id": "array_text_wrapped", "call": "evaluate_formula_array", "formula": "=\"abc\"", "native": [["abc"]]},
+    {"id": "array_error_wrapped", "call": "evaluate_formula_array", "formula": "=NA()", "native": [[{"error": "NA"}]]},
+    {"id": "blank_cell", "call": "get_value", "cell": "Z99", "native": null},
+    {"id": "blank_grid", "call": "get_values", "range": "Y98:Z99", "native": [[null, null], [null, null]]},
+    {"id": "grid_1x1_stays_2d", "call": "get_values", "range": "Z99", "native": [[null]]}
   ]
 }

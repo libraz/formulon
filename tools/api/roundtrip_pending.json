@@ -1,0 +1,4 @@
+{
+  "description": "Round-trip rows of roundtrip_cases.json that the getter_setter_roundtrip drivers skip until a fix lands. Each row: id (a roundtrip_cases.json id); surfaces (the surfaces that skip it: wasm | native | py); reason (what the round trip loses or refuses); unit (the owner of the fix). The list is empty when every row round-trips.",
+  "pending": []
+}
