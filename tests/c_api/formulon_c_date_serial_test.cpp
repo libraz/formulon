@@ -7,14 +7,13 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
-#include <fstream>
 #include <limits>
-#include <sstream>
 #include <string>
 #include <vector>
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
+#include "support/json_cases.h"
 #include "utils/error.h"
 
 namespace {
@@ -30,114 +29,10 @@ struct WorkbookGuard {
   WorkbookGuard& operator=(const WorkbookGuard&) = delete;
 };
 
-// Just enough JSON for the case table: no escapes beyond \" and \\, and numbers via strtod.
-struct Json {
-  enum class Kind { kNull, kBool, kNumber, kString, kArray, kObject };
-  Kind kind = Kind::kNull;
-  bool boolean = false;
-  double number = 0.0;
-  std::string text;
-  std::vector<Json> items;
-  std::vector<std::string> keys;
-
-  const Json* Find(const std::string& key) const {
-    for (std::size_t i = 0; i < keys.size(); ++i) {
-      if (keys[i] == key) {
-        return &items[i];
-      }
-    }
-    return nullptr;
-  }
-  const Json& At(const std::string& key) const {
-    static const Json kMissing;
-    const Json* found = Find(key);
-    return found != nullptr ? *found : kMissing;
-  }
-};
-
-class JsonReader {
- public:
-  explicit JsonReader(const std::string& src) : src_(src) {}
-  Json Parse() { return Value(); }
-
- private:
-  void Skip() {
-    while (pos_ < src_.size() &&
-           (src_[pos_] == ' ' || src_[pos_] == '\n' || src_[pos_] == '\r' || src_[pos_] == '\t')) {
-      ++pos_;
-    }
-  }
-  std::string String() {
-    std::string out;
-    ++pos_;  // opening quote
-    while (pos_ < src_.size() && src_[pos_] != '"') {
-      if (src_[pos_] == '\\') {
-        ++pos_;
-      }
-      out.push_back(src_[pos_++]);
-    }
-    ++pos_;
-    return out;
-  }
-  Json Value() {
-    Skip();
-    Json v;
-    const char c = src_[pos_];
-    if (c == '{' || c == '[') {
-      const char close = c == '{' ? '}' : ']';
-      v.kind = c == '{' ? Json::Kind::kObject : Json::Kind::kArray;
-      ++pos_;
-      Skip();
-      while (src_[pos_] != close) {
-        if (c == '{') {
-          Skip();
-          v.keys.push_back(String());
-          Skip();
-          ++pos_;  // colon
-        }
-        v.items.push_back(Value());
-        Skip();
-        if (src_[pos_] == ',') {
-          ++pos_;
-          Skip();
-        }
-      }
-      ++pos_;
-    } else if (c == '"') {
-      v.kind = Json::Kind::kString;
-      v.text = String();
-    } else if (src_.compare(pos_, 4, "true") == 0 || src_.compare(pos_, 5, "false") == 0) {
-      v.kind = Json::Kind::kBool;
-      v.boolean = c == 't';
-      pos_ += v.boolean ? 4 : 5;
-    } else if (src_.compare(pos_, 4, "null") == 0) {
-      pos_ += 4;
-    } else {
-      v.kind = Json::Kind::kNumber;
-      char* end = nullptr;
-      v.number = std::strtod(src_.c_str() + pos_, &end);
-      pos_ = static_cast<std::size_t>(end - src_.c_str());
-    }
-    return v;
-  }
-
-  const std::string& src_;
-  std::size_t pos_ = 0;
-};
+using formulon::test_support::Json;
 
 bool LoadCases(Json* out) {
-  // tests/c_api/<this file> -> repository root.
-  std::string path = __FILE__;
-  path = path.substr(0, path.rfind("tests/c_api/")) + "tools/api/date_serial_cases.json";
-  std::ifstream in(path);
-  if (!in) {
-    return false;
-  }
-  std::stringstream buffer;
-  buffer << in.rdbuf();
-  const std::string src = buffer.str();
-  *out = JsonReader(src).Parse();
-  return true;
+  return formulon::test_support::LoadRepoJson(__FILE__, "tests/c_api/", "tools/api/date_serial_cases.json", out);
 }
 
 // A field is a JSON number, or a string standing for a non-finite or signed-zero number.

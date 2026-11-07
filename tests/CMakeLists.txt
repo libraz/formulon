@@ -32,6 +32,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_spill_scale_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
+  unit/workbook_auto_calc_test.cpp
   unit/workbook_tables_test.cpp
   unit/workbook_table_column_rename_test.cpp
   unit/derived_guid_test.cpp
@@ -201,6 +202,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/ast_shift_test.cpp
   unit/parser/parser_test.cpp
   unit/parser/parser_error_test.cpp
+  unit/parser/parse_diagnostics_test.cpp
   unit/parser/operator_chain_test.cpp
   unit/parser/range_chain_test.cpp
   unit/parser/let_test.cpp
@@ -641,6 +643,33 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # in tools/dev/api_convention_baseline/: a new violation fails, and so does
   # a baseline line that no longer matches one, so the baseline only shrinks.
   formulon_add_binding_drift_test(binding_drift_api_conventions api-conventions)
+  # Parse-error codes: every ParseErrorCode maps to one status code, and the
+  # tables each binding carries agree with src/parser/parse_status.h.
+  formulon_add_binding_drift_test(binding_drift_parse_error_codes parse-error-codes)
+  # The name ledger is well-formed: unique names, known surfaces, `was` chains.
+  add_test(
+    NAME ApiNamesValidate
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/validate_names.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # The shared case tables under tools/api/ are well-formed, and the
+  # round-trip cases are current against the ledger.
+  add_test(
+    NAME ApiCaseTables
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_case_tables.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME ApiRoundtripCasesDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/gen_roundtrip_cases.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # The FM_STRUCT_INIT rewriter used to migrate C ABI record initialisers.
+  add_test(
+    NAME StructInitRewriteTests
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest tools.dev.struct_init_rewrite_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # The status-code tables generated from src/utils/error.h are current:
   # formulon_status.h, binding_status.h, the JS table and declarations, and
   # the Python StatusCode module.

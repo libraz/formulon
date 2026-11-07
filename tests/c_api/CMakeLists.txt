@@ -7,6 +7,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_adhoc_arena_cap_test.cpp
   formulon_c_api_usability_test.cpp
   formulon_c_argument_range_test.cpp
+  formulon_c_auto_calc_test.cpp
   formulon_c_auto_filter_test.cpp
   formulon_c_calc_mode_test.cpp
   formulon_c_cell_geometry_test.cpp
@@ -32,6 +33,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_logging_test.cpp
   formulon_c_named_styles_test.cpp
   formulon_c_natural_key_test.cpp
+  formulon_c_parse_error_test.cpp
   formulon_c_pivot_authoring_test.cpp
   formulon_c_pivot_options_test.cpp
   formulon_c_pivot_calc_test.cpp
@@ -64,6 +66,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_styles_mutation_test.cpp
   formulon_c_styles_num_formats_test.cpp
   formulon_c_table_test.cpp
+  formulon_c_tab_color_test.cpp
   formulon_c_test.cpp
   formulon_c_theme_test.cpp
   formulon_c_threaded_comments_test.cpp
@@ -126,6 +129,8 @@ target_link_libraries(formulon_c_api_tests
 target_include_directories(formulon_c_api_tests
   PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    # `support/json_cases.h`: the case tables under tools/api/.
+    ${CMAKE_SOURCE_DIR}/tests
     ${_FM_SHEET_INDEX_CALLS_DIR}
 )
 

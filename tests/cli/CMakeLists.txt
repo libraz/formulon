@@ -36,6 +36,7 @@ target_include_directories(formulon_cli_tests
     ${CMAKE_SOURCE_DIR}/src
     # `support/ooxml_package_fixture.h`: the reader-side warnings the CLI
     # prints need a package the engine's own writer would never emit.
+    # `support/json_cases.h`: the parse-error case table in tools/api/.
     ${CMAKE_SOURCE_DIR}/tests
 )
 
