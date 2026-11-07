@@ -27,6 +27,8 @@ Numbers read back as ``float``: every Excel number is an IEEE double.
 
 from __future__ import annotations
 
+# `workbook` loads before the handle modules so each module it imports in turn finds its definitions bound.
+from . import workbook  # noqa: F401
 from ._c import (
     FormulaSyntaxError,
     IndexOutOfRangeError,
@@ -53,7 +55,7 @@ from .metadata import (
 )
 from .pivot import Pivot
 from .pivot_cache import PivotCache
-from .sheet import Sheet
+from .sheet import CellInput, Sheet, SheetOoxml
 from .table import Table
 from .workbook import (
     PIVOT_SHOW_AS_BASE_NEXT,
@@ -307,6 +309,7 @@ from .workbook import (
     WidthModel,
     Workbook,
     WorkbookFormat,
+    WorkbookOoxml,
     WorkbookProtection,
     canonicalize_formula,
     canonicalize_function_name,
@@ -412,6 +415,7 @@ __all__ = [
     "canonicalize_function_name",
     "CellAddress",
     "CellFormat",
+    "CellInput",
     "CellNode",
     "CellProtection",
     "CellProtectionPatch",
@@ -637,6 +641,7 @@ __all__ = [
     "Sheet",
     "SheetComment",
     "SheetFormatDefaults",
+    "SheetOoxml",
     "SheetProtection",
     "SheetRect",
     "SheetRef",
@@ -684,6 +689,7 @@ __all__ = [
     "Workbook",
     "WorkbookClosedError",
     "WorkbookFormat",
+    "WorkbookOoxml",
     "WorkbookProtection",
 ]
 

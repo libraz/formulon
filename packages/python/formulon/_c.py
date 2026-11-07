@@ -47,9 +47,10 @@ import numbers
 import operator
 import struct
 import threading
+from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import NamedTuple, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import wasmtime
 
@@ -62,6 +63,7 @@ __all__ = [
     "IndexOutOfRangeError",
     "FormulaSyntaxError",
     "InvalidArgumentError",
+    "InvalidFileError",
     "NotFoundError",
     "ParseError",
     "ParseErrorCode",
@@ -194,14 +196,15 @@ class ParseErrorCode(IntEnum):
     STRUCTURED_REF_INVALID = 36
 
 
-class ParseError(NamedTuple):
+@dataclass(frozen=True)
+class ParseError:
     """Position of a formula syntax failure (``fm_parse_error_t``).
 
     ``start`` / ``end`` are UTF-16 code units into the text the caller passed;
     ``line`` and ``column`` are 1-based.
     """
 
-    code: Union[ParseErrorCode, int]
+    code: ParseErrorCode
     start: int
     end: int
     line: int
@@ -212,13 +215,35 @@ class ParseError(NamedTuple):
 _SYNTAX_STATUS_FIRST = 1000
 _SYNTAX_STATUS_LAST = 1014
 
+# The I/O statuses that mean the package cannot be opened as a workbook.
+_INVALID_FILE_CODES = frozenset(
+    {
+        StatusCode.IO_ZIP_CORRUPT,
+        StatusCode.IO_ZIP_BOMB,
+        StatusCode.IO_ZIP_SLIP,
+        StatusCode.IO_XML_PARSE,
+        StatusCode.IO_XML_DOCTYPE,
+        StatusCode.IO_XML_ENTITY_EXPLOSION,
+        StatusCode.IO_RELATIONSHIP_BROKEN,
+        StatusCode.IO_CONTENT_TYPE_INVALID,
+        StatusCode.IO_SHEET_CORRUPT,
+        StatusCode.IO_XLSB_RECORD_CORRUPT,
+        StatusCode.IO_XLSB_RECORD_TRUNCATED,
+        StatusCode.IO_XLSB_UNKNOWN_RECORD,
+        StatusCode.IO_XLSB_UNSUPPORTED_PTG,
+        StatusCode.IO_XLSB_CORRUPT,
+        StatusCode.IO_XLSB_RETAINED_PART_STALE,
+    }
+)
+
 
 class FormulonError(Exception):
     """Raised for host-side failures of the Formulon engine.
 
     Constructing ``FormulonError`` with a status that has a dedicated
     subclass yields that subclass (:class:`IndexOutOfRangeError`,
-    :class:`InvalidArgumentError`, :class:`NotFoundError`,
+    :class:`InvalidArgumentError`, :class:`FormulaSyntaxError`,
+    :class:`InvalidFileError`, :class:`NotFoundError`,
     :class:`WorkbookClosedError`), so ``except IndexError`` / ``except
     ValueError`` / ``except KeyError`` also catch the matching failures.
 
@@ -257,6 +282,8 @@ class FormulonError(Exception):
                 cls = NotFoundError
             elif status == StatusCode.BINDING_INVALID_HANDLE:
                 cls = WorkbookClosedError
+            elif status in _INVALID_FILE_CODES:
+                cls = InvalidFileError
         return super().__new__(cls)
 
     def __init__(
@@ -308,7 +335,7 @@ class FormulaSyntaxError(InvalidArgumentError):
     """
 
     @property
-    def parse_error_code(self) -> Optional[Union[ParseErrorCode, int]]:
+    def parse_error_code(self) -> Optional[ParseErrorCode]:
         return None if self.parse_error is None else self.parse_error.code
 
     @property
@@ -338,6 +365,16 @@ class IndexOutOfRangeError(FormulonError, IndexError):
 
 class WorkbookClosedError(FormulonError, ValueError):
     """The workbook was used after :meth:`~formulon.Workbook.close` (``BINDING_INVALID_HANDLE``)."""
+
+
+class InvalidFileError(FormulonError):
+    """The bytes cannot be opened as a workbook package.
+
+    Raised for a corrupt or hostile archive, unparsable XML, broken
+    relationships or content types, and corrupt XLSB records. A damaged part
+    the workbook still opens without (a drawing, a chart) is not one, nor is
+    an unsupported variant (``StatusCode.IO_UNSUPPORTED_VARIANT``).
+    """
 
 
 # Generated from the current working-tree C header and WASM export manifest:
@@ -1226,11 +1263,7 @@ class _WasmInstance:
         finally:
             self._call_or_poison(self._exports["free"], "free", ptr)
         d = PARSE_ERROR.unpack_from(raw)
-        try:
-            code: Union[ParseErrorCode, int] = ParseErrorCode(d["code"])
-        except ValueError:
-            code = d["code"]
-        return ParseError(code, d["start"], d["end"], d["line"], d["column"])
+        return ParseError(ParseErrorCode(d["code"]), d["start"], d["end"], d["line"], d["column"])
 
     def _parse_error_slot(self) -> threading.local:
         # Lazy for the same seam as `_export_wrappers`: tests build this

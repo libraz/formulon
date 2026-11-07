@@ -43,6 +43,7 @@ from .workbook import (
     ChartSeriesDirection,
     ChartSeriesPatch,
     ChartTitle,
+    ColorInput,
     DrawingAnchor,
     DrawingObjectKind,
     ImageFormat,
@@ -107,9 +108,9 @@ _SHAPE_UPDATE_NAMES = (
     "text",
     "text_box",
     "fill_kind",
-    "fill_rgb",
+    "fill_color",
     "line_kind",
-    "line_rgb",
+    "line_color",
     "line_width_emu",
     "rotation",
     "hidden",
@@ -877,38 +878,39 @@ class Shape(Drawing):
         text: Union[str, Unchanged] = UNCHANGED,
         text_box: Union[bool, Unchanged] = UNCHANGED,
         fill_kind: Union[ShapePaint, None, Unchanged] = UNCHANGED,
-        fill_rgb: Union[int, Unchanged] = UNCHANGED,
+        fill_color: Union[ColorInput, None, Unchanged] = UNCHANGED,
         line_kind: Union[ShapePaint, None, Unchanged] = UNCHANGED,
-        line_rgb: Union[int, Unchanged] = UNCHANGED,
+        line_color: Union[ColorInput, None, Unchanged] = UNCHANGED,
         line_width_emu: Union[int, Unchanged] = UNCHANGED,
         rotation: Union[int, Unchanged] = UNCHANGED,
         hidden: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Apply the arguments that are given to the shape, the name and anchor included; the rest of its XML is kept.
 
-        An argument left at :data:`UNCHANGED` keeps its value. ``fill_kind`` and
-        ``line_kind`` also take ``None`` (a shape without that element reads
-        ``None``), which keeps the value too, so the properties
+        An argument left at :data:`UNCHANGED` keeps its value. ``fill_kind``,
+        ``line_kind``, ``fill_color`` and ``line_color`` also take ``None`` (a
+        shape without that element reads ``None``), which keeps the value too, so the properties
         :meth:`get_properties` returns can be passed back. The anchor is
         applied as a whole when ``anchor_kind`` is given, and its kind cannot
         change. Text applies to a shape only and keeps the first paragraph's
         properties and first run's formatting.
 
         Raises:
-          TypeError: when an argument other than ``fill_kind`` / ``line_kind``
-            is ``None``, or an anchor argument (``edit_as``, ``from_*``,
+          TypeError: when an argument other than ``fill_kind`` / ``line_kind`` /
+            ``fill_color`` / ``line_color`` is ``None``, or an anchor argument (``edit_as``, ``from_*``,
             ``to_*``, ``width_emu``, ``height_emu``) is given without ``anchor_kind``.
         """
-        given = _present(dict(locals()), _SHAPE_UPDATE_NAMES, absent=("fill_kind", "line_kind"))
+        given = _present(
+            dict(locals()), _SHAPE_UPDATE_NAMES, absent=("fill_kind", "line_kind", "fill_color", "line_color")
+        )
         if "anchor_kind" not in given:
             stray = [key for key in _SHAPE_ANCHOR_NAMES if key in given]
             if stray:
                 raise TypeError(f"formulon: {', '.join(stray)} need anchor_kind")
         h, sheet, object_id = self._at()
         values = {key: given.get(key) for key in _SHAPE_UPDATE_NAMES}
-        for key, default in (("edit_as", AnchorEditAs.TWO_CELL), ("fill_rgb", 0), ("line_rgb", 0)):
-            if values[key] is None:
-                values[key] = default
+        if values["edit_as"] is None:
+            values["edit_as"] = AnchorEditAs.TWO_CELL
         for key in _SHAPE_ANCHOR_NAMES[1:]:
             if values[key] is None:
                 values[key] = 0

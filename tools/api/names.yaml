@@ -2808,11 +2808,17 @@ entries:
   type.workbook_ooxml:
     kind: typedef
     js: WorkbookOoxml
-    surfaces: [wasm, native]
+    py: WorkbookOoxml
+    surfaces: [wasm, native, py]
   type.sheet_ooxml:
     kind: typedef
     js: SheetOoxml
-    surfaces: [wasm, native]
+    py: SheetOoxml
+    surfaces: [wasm, native, py]
+  type.cell_input:
+    kind: typedef
+    py: CellInput
+    surfaces: [py]
   type.native_value:
     kind: typedef
     js: NativeValue

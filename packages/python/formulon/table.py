@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple, Union
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
 from ._status import StatusCode
+from .sheet import _normalize_auto_filter
 from .workbook import (
     UNCHANGED,
     AutoFilter,
@@ -389,7 +390,11 @@ class Table:
         return self._workbook._read_auto_filter(LIB.fm_workbook_get_table_auto_filter, self._index(), "table_index")
 
     def set_auto_filter(self, auto_filter: AutoFilter) -> None:
-        """Replace the table's AutoFilter. Row visibility is unchanged."""
+        """Replace the table's AutoFilter. Row visibility is unchanged.
+
+        The ``ref`` of the sort state and of its conditions takes an A1 range too.
+        """
+        auto_filter = _normalize_auto_filter(auto_filter, self._workbook, None)
         self._workbook._write_auto_filter(
             LIB.fm_workbook_set_table_auto_filter, self._index(), auto_filter, "table_index"
         )

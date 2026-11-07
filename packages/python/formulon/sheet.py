@@ -9,16 +9,17 @@ from __future__ import annotations
 
 import builtins
 import dataclasses
+import datetime
+import decimal
 import inspect
 import math
 import numbers
-import re
 import struct
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -41,6 +42,7 @@ from ._c import (
     _uint,
     fm_value_t_size,
 )
+from ._inputs import color_input, date_serial, normalize_record_ranges, serial_datetime
 from ._refs import resolve_ref
 from ._status import (
     StatusCode,
@@ -59,7 +61,6 @@ from .workbook import (
     Border,
     BorderPatch,
     BorderStyle,
-    Cell,
     CellFormat,
     CellNode,
     CellProtection,
@@ -69,7 +70,6 @@ from .workbook import (
     CellXf,
     CellXfInput,
     CfCell,
-    CfColor,
     CfDataBarAxisPosition,
     CfDataBarDirection,
     CfIcon,
@@ -81,6 +81,7 @@ from .workbook import (
     ChartLegendPosition,
     ChartSeriesDirection,
     Color,
+    ColorInput,
     ColorKind,
     ColorResolution,
     ColorScale,
@@ -116,6 +117,7 @@ from .workbook import (
     IconSet,
     MarginsPt,
     Mention,
+    NativeValue,
     PageBreak,
     PageLayout,
     PageMargins,
@@ -125,9 +127,11 @@ from .workbook import (
     Paper,
     PhoneticProperties,
     PhoneticRun,
+    PivotInput,
     PrintOptions,
     PrintTitles,
     ProtectedRange,
+    RangeCell,
     ReadingOrder,
     RectPt,
     ResolvedColor,
@@ -163,6 +167,7 @@ from .workbook import (
     _cell_rect_from,
     _check,
     _check_value,
+    _color_from,
     _decode_cell_rect_array,
     _decode_cell_rect_at,
     _decode_color,
@@ -174,6 +179,7 @@ from .workbook import (
     _nullable_enum,
     _pack_cell_rect_array,
     _pack_cell_rect_at,
+    _pack_color,
     _pack_mentions,
     _pack_phonetic_run_array,
     _pack_shape,
@@ -189,12 +195,7 @@ from .workbook import (
     _write_value_input,
 )
 
-if TYPE_CHECKING:
-    from .drawing import Chart, Drawing, Picture, Shape, Slicer
-    from .pivot import Pivot
-    from .table import Table
-
-__all__ = ["Sheet"]
+__all__ = ["Sheet", "SheetOoxml"]
 
 # <facade-tables>
 WORKBOOK_METHODS = (
@@ -669,11 +670,19 @@ SPAN_ARGS = {
 }
 # </facade-tables>
 
+#: A value :meth:`Sheet.set_value` stores.
+CellInput = Union[
+    None, bool, int, float, decimal.Decimal, str, ExcelError, Value, datetime.date, datetime.datetime, datetime.time
+]
+
 _LAST_ROW = 1048575
 _LAST_COL = 16383
+# The built-in number format each en-US date code a date write gives a General cell names.
+_BUILTIN_DATE_NUM_FMT_IDS = {"m/d/yyyy": 14, "m/d/yyyy h:mm": 22, "h:mm:ss": 21}
 # Largest rectangle :meth:`Sheet.get_values` reads.
 _GET_VALUES_CELL_CAP = 1 << 22
 _BLANK = Value(ValueKind.BLANK)
+_WHOLE_SHEET = CellRect(first_row=0, first_col=0, last_row=_LAST_ROW, last_col=_LAST_COL)
 
 # An argument slot the caller left empty; ``None`` is a real argument value.
 _MISSING: Any = object()
@@ -684,13 +693,13 @@ _COORDINATE_FORMS: Dict[str, inspect.Signature] = {}
 
 def _coordinate_form(stub: _F) -> _F:
     """Record ``stub``, a method's coordinate-form overload, as that method's ``inspect`` signature."""
-    _COORDINATE_FORMS[stub.__name__] = inspect.signature(stub)
+    _COORDINATE_FORMS[stub.__qualname__] = inspect.signature(stub)
     return stub
 
 
 def _span_form(stub: _F) -> _F:
     """Record ``stub``, a method's number-pair overload of a row or column span, as its ``inspect`` signature."""
-    _COORDINATE_FORMS[stub.__name__] = inspect.signature(stub)
+    _COORDINATE_FORMS[stub.__qualname__] = inspect.signature(stub)
     return stub
 
 
@@ -819,9 +828,10 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
     """The setter :meth:`Sheet.set_value` calls for ``value`` and the arguments after the cell.
 
     Raises:
-      TypeError: for a type no cell holds, or a :class:`Value` of kind
-        ``ARRAY``, ``REF`` or ``LAMBDA``.
-      ValueError: for an integer too large to convert to a float.
+      TypeError: for a type no cell holds (a ``timedelta`` included), or a
+        :class:`Value` of kind ``ARRAY``, ``REF`` or ``LAMBDA``.
+      ValueError: for an integer too large to convert to a float, or a
+        ``datetime`` / ``time`` carrying a time zone.
       InvalidArgumentError: for a NaN or infinite number.
     """
     if isinstance(value, Value):
@@ -842,6 +852,8 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
         return "set_blank", ()
     if isinstance(value, bool):
         return "set_bool", (value,)
+    if isinstance(value, decimal.Decimal):
+        value = float(value)
     if isinstance(value, numbers.Real):
         try:
             number = float(value)
@@ -853,10 +865,34 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
             )
         return "set_number", (number,)
     if isinstance(value, str):
-        return "set_text", (value,)
+        return ("set_formula" if value.startswith("=") else "set_text"), (value,)
     if isinstance(value, ExcelError):
         return "set_error", (value.code,)
+    if isinstance(value, (datetime.date, datetime.time)):
+        if getattr(value, "tzinfo", None) is not None:
+            raise ValueError(f"formulon: a {type(value).__name__} written to a cell must be naive")
+        return "_set_date", (value,)
     raise TypeError(f"formulon: cannot store a {type(value).__name__} in a cell")
+
+
+def _normalize_auto_filter(auto_filter: AutoFilter, workbook: Workbook, sheet: Optional[int]) -> AutoFilter:
+    """``auto_filter`` with the A1 text of its sort state resolved."""
+    if auto_filter.sort is None:
+        return auto_filter
+    sort = normalize_record_ranges(auto_filter.sort, workbook, sheet=sheet, label="auto_filter.sort")
+    return dataclasses.replace(auto_filter, sort=sort)
+
+
+def _range_cell(row: int, col: int, formula: Optional[str], value: Value) -> RangeCell:
+    return RangeCell(row=row, col=col, formula=formula, value=value.to_python(), kind=value.kind)
+
+
+def _with_cell_context(exc: FormulonError, row: int, col: int) -> FormulonError:
+    """``exc`` with ``row=`` / ``col=`` naming the failing cell in its context, unless it names one already."""
+    if "row=" not in exc.context:
+        exc.context = f"{exc.context} row={row} col={col}".strip()
+        exc.args = (f"{exc.message} [{exc.context}]",)
+    return exc
 
 
 # ---------------------------------------------------------------------------
@@ -871,7 +907,6 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
 _FORMAT_FLAG = ("boolean", True, None)
 _FORMAT_BOOLEAN = ("boolean", False, None)
 _FORMAT_COLOR = ("color", False, None)
-_FORMAT_ARGB = ("argb", False, None)
 _FORMAT_SIDE = ("side", False, None)
 _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
     "font": {
@@ -890,14 +925,11 @@ _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
         "charset": ("byte", True, None),
         "scheme": ("enum", False, FontScheme),
         "color": _FORMAT_COLOR,
-        "color_argb": _FORMAT_ARGB,
     },
     "fill": {
         "pattern": ("enum", False, FillPattern),
         "fg": _FORMAT_COLOR,
         "bg": _FORMAT_COLOR,
-        "fg_argb": _FORMAT_ARGB,
-        "bg_argb": _FORMAT_ARGB,
         "gradient": ("gradient", True, None),
     },
     "border": {
@@ -909,7 +941,7 @@ _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
         "diagonal_up": _FORMAT_BOOLEAN,
         "diagonal_down": _FORMAT_BOOLEAN,
     },
-    "side": {"style": ("enum", False, BorderStyle), "color": _FORMAT_COLOR, "color_argb": _FORMAT_ARGB},
+    "side": {"style": ("enum", False, BorderStyle), "color": _FORMAT_COLOR},
     "alignment": {
         "horizontal": ("enum", False, HorizontalAlign),
         "vertical": ("enum", False, VerticalAlign),
@@ -945,7 +977,6 @@ _APPLY_FLAGS = {
     "alignment": "apply_alignment",
     "protection": "apply_protection",
 }
-_COLOR_TEXT = re.compile(r"#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")
 _INT32_MAX = 0x7FFFFFFF
 
 
@@ -967,17 +998,11 @@ def _format_count(value: Any, label: str) -> int:
 
 
 def _format_color(value: Any, label: str) -> Color:
-    """A ``ColorInput`` as a :class:`Color`: ``"#RRGGBB"`` (opaque) or ``"#AARRGGBB"``, or a :class:`Color`."""
-    if isinstance(value, str):
-        if not _COLOR_TEXT.fullmatch(value):
-            raise TypeError(f'formulon: {label} must be "#RRGGBB" or "#AARRGGBB", got {value!r}')
-        digits = value[1:] if len(value) == 9 else "FF" + value[1:]
-        return Color(kind=ColorKind.RGB, rgb=int(digits, 16))
-    if not isinstance(value, Color):
-        raise TypeError(f"formulon: {label} must be a colour string or a Color, got {type(value).__name__}")
-    if _format_count(value.kind, f"{label}.kind") > max(ColorKind):
-        raise _out_of_range(f"{label}.kind", value.kind)
-    return value
+    """A ``ColorInput`` as a :class:`Color`, its ``kind`` checked against :class:`ColorKind`."""
+    color = color_input(value, label)
+    if _format_count(color.kind, f"{label}.kind") > max(ColorKind):
+        raise _out_of_range(f"{label}.kind", color.kind)
+    return color
 
 
 def _format_value(spec: Tuple[str, bool, Any], value: Any, label: str) -> Any:
@@ -1008,10 +1033,6 @@ def _format_value(spec: Tuple[str, bool, Any], value: Any, label: str) -> Any:
         if not math.isfinite(value) or value < 0:
             raise ValueError(f"formulon: {label} must be finite and not negative, got {value!r}")
         return float(value)
-    if kind == "argb":
-        if _format_count(value, label) > 0xFFFFFFFF:
-            raise ValueError(f"formulon: {label} is outside uint32 range")
-        return int(value)
     if kind == "enum":
         number = _format_count(value, label)
         if number > max(arg):
@@ -1071,21 +1092,8 @@ def _check_cell_format_patch(given: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _merge_color(target: Dict[str, Any], patch: Dict[str, Any], color_key: str, argb_key: str) -> None:
-    """Write the colour pair of ``patch`` onto ``target``; an RGB colour also sets the literal ARGB, so it wins."""
-    if argb_key in patch:
-        target[argb_key] = patch[argb_key]
-    if color_key in patch:
-        color = patch[color_key]
-        target[color_key] = color
-        if color.kind == ColorKind.RGB:
-            target[argb_key] = color.rgb
-
-
 def _merge_font(current: Font, patch: Dict[str, Any]) -> Font:
-    changes = {key: value for key, value in patch.items() if key not in ("color", "color_argb")}
-    _merge_color(changes, patch, "color", "color_argb")
-    return dataclasses.replace(current, **changes)
+    return dataclasses.replace(current, **patch)
 
 
 def _merge_fill(current: Fill, patch: Dict[str, Any]) -> Fill:
@@ -1094,8 +1102,9 @@ def _merge_fill(current: Fill, patch: Dict[str, Any]) -> Fill:
     changes: Dict[str, Any] = {"gradient": patch.get("gradient")}
     if "pattern" in patch:
         changes["pattern"] = patch["pattern"]
-    _merge_color(changes, patch, "fg", "fg_argb")
-    _merge_color(changes, patch, "bg", "bg_argb")
+    for key in ("fg", "bg"):
+        if key in patch:
+            changes[key] = patch[key]
     colored = "fg" in patch or "bg" in patch
     if colored and "pattern" not in patch and current.pattern == FillPattern.NONE:
         changes["pattern"] = FillPattern.SOLID
@@ -1108,11 +1117,7 @@ def _merge_border(current: Border, patch: Dict[str, Any]) -> Border:
         if key in ("diagonal_up", "diagonal_down"):
             changes[key] = value
             continue
-        side: Dict[str, Any] = {}
-        if "style" in value:
-            side["style"] = value["style"]
-        _merge_color(side, value, "color", "color_argb")
-        changes[key] = dataclasses.replace(getattr(current, key), **side)
+        changes[key] = dataclasses.replace(getattr(current, key), **value)
     return dataclasses.replace(current, **changes)
 
 
@@ -1165,12 +1170,16 @@ def _patched_xf(workbook: Workbook, xf: CellXf, patch: Dict[str, Any], num_fmt_i
     if num_fmt_id is not None:
         fields["num_fmt_id"] = num_fmt_id
     if "font" in patch:
-        fields["font_index"] = workbook.add_font(_merge_font(workbook.get_font(xf.font_index), patch["font"]))
+        fields["font_index"] = workbook.ooxml.add_font(
+            _merge_font(workbook.ooxml.get_font(xf.font_index), patch["font"])
+        )
     if "fill" in patch:
-        fields["fill_index"] = workbook.add_fill(_merge_fill(workbook.get_fill(xf.fill_index), patch["fill"]))
+        fields["fill_index"] = workbook.ooxml.add_fill(
+            _merge_fill(workbook.ooxml.get_fill(xf.fill_index), patch["fill"])
+        )
     if "border" in patch:
-        fields["border_index"] = workbook.add_border(
-            _merge_border(workbook.get_border(xf.border_index), patch["border"])
+        fields["border_index"] = workbook.ooxml.add_border(
+            _merge_border(workbook.ooxml.get_border(xf.border_index), patch["border"])
         )
     if "alignment" in patch:
         for key, value in patch["alignment"].items():
@@ -1188,12 +1197,12 @@ def _patched_xf(workbook: Workbook, xf: CellXf, patch: Dict[str, Any], num_fmt_i
 
 def _cell_format_of(workbook: Workbook, xf: CellXf) -> CellFormat:
     """The :class:`CellFormat` of the cell XF record ``xf``."""
-    code = None if xf.num_fmt_id == 0 else workbook.get_num_fmt_string(xf.num_fmt_id)
+    code = None if xf.num_fmt_id == 0 else workbook.ooxml.get_num_fmt_string(xf.num_fmt_id)
     return CellFormat(
         number_format="General" if code is None else code,
-        font=workbook.get_font(xf.font_index),
-        fill=workbook.get_fill(xf.fill_index),
-        border=workbook.get_border(xf.border_index),
+        font=workbook.ooxml.get_font(xf.font_index),
+        fill=workbook.ooxml.get_fill(xf.fill_index),
+        border=workbook.ooxml.get_border(xf.border_index),
         alignment=Alignment(
             horizontal=HorizontalAlign.GENERAL if xf.horizontal_align is None else HorizontalAlign(xf.horizontal_align),
             vertical=VerticalAlign.BOTTOM if xf.vertical_align is None else VerticalAlign(xf.vertical_align),
@@ -1242,28 +1251,34 @@ class Sheet:
     (``insert_rows(row, count)``); every other row or column span is the
     closed interval ``(first, last)``.
 
-    To read cells, use :meth:`get_values` for a dense grid of values,
-    :meth:`list_cells` to enumerate the cells that hold something, and
-    :meth:`get_cells_in_range` to page through a large range.
+    To read cells, pick by shape: :meth:`get_values` for a dense grid of
+    values, :meth:`list_cells` for the populated cells of a range,
+    :meth:`get_cells_in_range` to page through a large range, and
+    :meth:`iter_rows` for the rows of the used range. A read returns native
+    values (:data:`NativeValue`); its ``*_typed_*`` variant returns tagged
+    :class:`Value` objects. A read computes pending cells first, as
+    :class:`CalcMode` says.
 
-    ``sheet["A1"]`` and ``sheet[row, col]`` return the cell's value as
-    :meth:`Value.to_python` converts it; ``sheet["A1"] = v`` and
-    ``sheet[row, col] = v`` store ``v`` as :meth:`set_value` does. A range
-    key raises :class:`InvalidArgumentError`; an ``int`` or a slice raises
-    ``TypeError``.
+    ``sheet["A1"]`` and ``sheet[row, col]`` read the cell's native value and
+    ``sheet["A1:B2"]`` the grid :meth:`get_values` reads; ``sheet["A1"] = v``
+    stores ``v`` as :meth:`set_value` does, and ``sheet["A1:B2"] = grid``
+    stores a grid of that shape as :meth:`set_values` does. An ``int`` or a
+    slice key raises ``TypeError``.
+
+    The cell, row and column XF indices and the raw worksheet XML are
+    reached through :attr:`ooxml`.
 
     Pivot tables and drawing objects are handles too: :meth:`pivot`,
     :meth:`drawing` and the per-kind accessors return the same
     :class:`Pivot` or :class:`Drawing` object for the same pivot or object
     every time.
-
-    Reads return the values of the last full :meth:`Workbook.recalc`.
     """
 
-    __slots__ = ("_workbook", "_position", "_name", "_pivots", "_drawings")
+    __slots__ = ("_workbook", "_position", "_name", "_pivots", "_drawings", "_ooxml")
 
     def __init__(self, workbook: Workbook, position: int, name: str) -> None:
         self._workbook = workbook
+        self._ooxml = SheetOoxml(self)
         # The current 0-based position, or None once the sheet is removed.
         self._position: Optional[int] = position
         self._name = name
@@ -1275,6 +1290,11 @@ class Sheet:
     def workbook(self) -> Workbook:
         """The workbook this sheet belongs to."""
         return self._workbook
+
+    @property
+    def ooxml(self) -> SheetOoxml:
+        """The OOXML-level layer of the sheet: XF indices and raw worksheet XML. Always the same object."""
+        return self._ooxml
 
     @property
     def index(self) -> int:
@@ -1424,13 +1444,26 @@ class Sheet:
             return key[0], key[1]
         raise TypeError(f"formulon: a sheet key is an A1 string or a (row, col) pair, got {key!r}")
 
-    def __getitem__(self, key: Union[str, Tuple[int, int]]) -> Union[None, float, bool, str, ExcelError, Value]:
+    def __getitem__(self, key: Union[str, Tuple[int, int]]) -> NativeValue:
+        if isinstance(key, str) and ":" in key:
+            return self.get_values(key)
         row, col = self._key(key)
-        return self.get_value(row, col).to_python()
+        return self.get_value(row, col)
 
-    def __setitem__(
-        self, key: Union[str, Tuple[int, int]], value: Union[None, bool, int, float, str, ExcelError, Value]
-    ) -> None:
+    def __setitem__(self, key: Union[str, Tuple[int, int]], value: Any) -> None:
+        if isinstance(key, str) and ":" in key:
+            rect = self._rect(key)
+            rows = rect.last_row - rect.first_row + 1
+            cols = rect.last_col - rect.first_col + 1
+            if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+                raise TypeError(f"formulon: a value assigned to {key!r} is a sequence of rows")
+            if len(value) != rows or any(not isinstance(line, Sequence) or len(line) != cols for line in value):
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT,
+                    _diagnostic_override=(f"{key!r} takes a {rows}x{cols} grid", ""),
+                )
+            self.set_values(rect.first_row, rect.first_col, value)
+            return
         row, col = self._key(key)
         self.set_value(row, col, value)
 
@@ -1550,13 +1583,17 @@ class Sheet:
     def set_formula(self, *args: Any, **kwargs: Any) -> None:
         """Store a formula at ``(row, col)``.
 
-        ``row`` and ``col`` are 0-based. The leading ``=`` is optional. The cell keeps its previous cached
-        value until the next :meth:`Workbook.recalc`.
+        ``row`` and ``col`` are 0-based. The leading ``=`` is optional.
+
+        Raises:
+          FormulaSyntaxError: when the text does not parse (a syntax error, or
+            a built-in called through a sheet or workbook qualifier); its
+            ``start`` / ``end`` locate the failure and nothing changes.
 
         Example::
 
             ws.set_formula("C1", "=A1+B1")
-            wb.recalc()
+            ws.get_value("C1")
         """
         row, col, formula = self._cell_args("set_formula", args, kwargs, ("formula",))
         sheet = self._index()
@@ -1574,40 +1611,68 @@ class Sheet:
         self,
         row: int,
         col: int,
-        value: Union[None, bool, int, float, str, ExcelError, Value],  # noqa: FBT001 -- the value is any cell type; a bool is one of them
+        value: CellInput,  # noqa: FBT001 -- the value is any cell type; a bool is one of them
     ) -> None: ...
 
     @overload
     def set_value(
         self,
         a1: str,
-        value: Union[None, bool, int, float, str, ExcelError, Value],  # noqa: FBT001 -- the value is any cell type; a bool is one of them
+        value: CellInput,  # noqa: FBT001 -- the value is any cell type; a bool is one of them
     ) -> None: ...
 
     def set_value(self, *args: Any, **kwargs: Any) -> None:
         """Store ``value`` at ``(row, col)``, choosing the setter by its type.
 
         ``None`` clears the cell (:meth:`set_blank`); a ``bool`` is a boolean
-        (:meth:`set_bool`); any other real number is a number
-        (:meth:`set_number`); a ``str`` is text, never a formula, even with a
-        leading ``=`` (:meth:`set_text`); an :class:`ExcelError` is a cell
-        error (:meth:`set_error`). A :class:`Value` is stored by its kind.
+        (:meth:`set_bool`); any other real number or a ``Decimal`` is a
+        number (:meth:`set_number`); a ``str`` starting with ``=`` is a
+        formula (:meth:`set_formula`; ``"="`` alone is a syntax error, and
+        ``+``, ``-``, ``@`` or the full-width ``＝`` do not start one); any
+        other ``str`` is text (:meth:`set_text`); an :class:`ExcelError` is a
+        cell error (:meth:`set_error`). A :class:`Value` is stored by its
+        kind, a ``TEXT`` one always as text. Store untrusted text with
+        :meth:`set_text`, which never reads it as a formula.
+
+        A ``date``, naive ``datetime`` or naive ``time`` stores its serial
+        under the workbook's date system (a ``time`` is the fraction of a
+        day) and, when the cell's effective number format is General, gives
+        the cell the format ``m/d/yyyy``, ``m/d/yyyy h:mm`` or ``h:mm:ss``.
 
         Raises:
-          TypeError: for any other type, or a :class:`Value` of kind
-            ``ARRAY``, ``REF`` or ``LAMBDA``.
-          ValueError: for an integer too large to convert to a float.
-          InvalidArgumentError: for a NaN or infinite number.
+          TypeError: for any other type (a ``timedelta`` included), or a
+            :class:`Value` of kind ``ARRAY``, ``REF`` or ``LAMBDA``.
+          ValueError: for an integer too large to convert to a float, or an
+            aware ``datetime`` / ``time``.
+          InvalidArgumentError: for a NaN or infinite number, or a date
+            outside the date system.
+          FormulaSyntaxError: for a formula that does not parse.
 
         Example::
 
             ws.set_value("A1", 42)
             ws.set_value("B1", "Total")
-            ws.set_value("C1", None)
+            ws.set_value("C1", "=A1*2")
+            ws.set_value("D1", datetime.date(2024, 1, 31))
         """
         row, col, value = self._cell_args("set_value", args, kwargs, ("value",))
         setter, payload = _cell_input(value)
         getattr(self, setter)(row, col, *payload)
+
+    def _set_date(self, row: int, col: int, value: Union[datetime.date, datetime.time]) -> None:
+        """Store the serial of ``value`` and give a General cell the built-in date format of its kind."""
+        workbook = self._workbook
+        serial, code = date_serial(value, date1904=workbook.get_date1904())
+        self.set_number(row, col, serial)
+        ooxml = workbook.ooxml
+        if ooxml.get_cell_xf(self.get_effective_style(row, col).xf_index).num_fmt_id != 0:
+            return
+        rect = CellRect(first_row=row, first_col=col, last_row=row, last_col=col)
+        patch: Dict[str, Any] = {"number_format": code}
+        bases = self.ooxml.get_range_style_bases(rect)
+        num_fmt_id = _BUILTIN_DATE_NUM_FMT_IDS[code]
+        xfs = [ooxml.add_cell_xf(_patched_xf(workbook, ooxml.get_cell_xf(base), patch, num_fmt_id)) for base in bases]
+        self.ooxml.remap_range_style(rect, dict(zip(bases, xfs)))
 
     @overload
     @_coordinate_form
@@ -1869,24 +1934,49 @@ class Sheet:
     # -- Cell read ---------------------------------------------------------
     @overload
     @_coordinate_form
-    def get_value(self, row: int, col: int) -> Value: ...
+    def get_value(self, row: int, col: int) -> NativeValue: ...
 
     @overload
-    def get_value(self, a1: str) -> Value: ...
+    def get_value(self, a1: str) -> NativeValue: ...
 
-    def get_value(self, *args: Any, **kwargs: Any) -> Value:
-        """Read the cached value at ``(row, col)``.
+    def get_value(self, *args: Any, **kwargs: Any) -> NativeValue:
+        """Read the value at ``(row, col)`` as native data (:data:`NativeValue`).
 
-        Reflects the most recent recalc; mutations made after the last
-        :meth:`Workbook.recalc` are not visible to dependents until you call
-        :meth:`Workbook.recalc` again.
+        ``None`` for an empty cell, ``float`` for a number (Excel numbers are
+        doubles, so ``42`` reads ``42.0``), ``bool``, ``str``, or an
+        :class:`ExcelError`. A read computes pending cells first, as
+        :class:`CalcMode` says. A sheet-qualified address is refused; read
+        ``wb.sheet("Sheet1").get_value("A1")`` instead.
 
         Example::
 
-            ws.set_value("A1", 42)
-            ws.get_value("A1").to_python()  # 42.0
+            ws.set_value("A1", 6)
+            ws.set_value("B1", "=A1*7")
+            ws.get_value("B1")  # 42.0
         """
         row, col = self._cell_args("get_value", args, kwargs, ())
+        return self._value_at(row, col).to_python()
+
+    @overload
+    @_coordinate_form
+    def get_typed_value(self, row: int, col: int) -> Value: ...
+
+    @overload
+    def get_typed_value(self, a1: str) -> Value: ...
+
+    def get_typed_value(self, *args: Any, **kwargs: Any) -> Value:
+        """Read the value at ``(row, col)`` tagged with its kind.
+
+        Example::
+
+            v = ws.get_typed_value("A1")
+            if v.kind == ValueKind.NUMBER:
+                print(v.number)
+        """
+        row, col = self._cell_args("get_typed_value", args, kwargs, ())
+        return self._value_at(row, col)
+
+    def _value_at(self, row: int, col: int) -> Value:
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1897,13 +1987,12 @@ class Sheet:
             _check(status)
             return Value._from_wasm(value_ptr)
 
-    def get_values(self, range: Union[CellRect, str]) -> List[List[Value]]:
-        """Read the cached values of ``range`` as a dense row-major grid.
+    def get_values(self, range: Union[CellRect, str]) -> List[List[NativeValue]]:
+        """Read the values of ``range`` as a dense row-major grid of native data.
 
         ``result[r][c]`` is the cell ``r`` rows and ``c`` columns from the
-        top-left corner; an empty cell is a ``BLANK`` :class:`Value`, and a
-        spilled cell holds its spill value. Values are those of the last full
-        :meth:`Workbook.recalc`.
+        top-left corner; an empty cell is ``None`` and a spilled cell holds
+        its spilled value. ``sheet["A1:B2"]`` reads the same grid.
 
         Raises:
           InvalidArgumentError: when the range holds more than 4,194,304
@@ -1911,8 +2000,16 @@ class Sheet:
 
         Example::
 
-            grid = ws.get_values("A1:B2")
-            grid[0][1].to_python()
+            grid = ws.get_values("A1:B2")  # grid[row][col]
+        """
+        return [[value.to_python() for value in line] for line in self.get_typed_values(range)]
+
+    def get_typed_values(self, range: Union[CellRect, str]) -> List[List[Value]]:
+        """:meth:`get_values` with each value tagged with its kind; :meth:`set_values` stores the grid back unchanged.
+
+        Raises:
+          InvalidArgumentError: when the range holds more than 4,194,304
+            (2**22) cells.
         """
         rect = self._rect(range)
         rows = rect.last_row - rect.first_row + 1
@@ -1923,30 +2020,102 @@ class Sheet:
                 _diagnostic_override=(f"get_values reads at most {_GET_VALUES_CELL_CAP} cells, got {rows}x{cols}", ""),
             )
         grid = [[_BLANK] * cols for _ in builtins.range(rows)]  # `range` is the parameter here
-        for cell in self.list_cells(rect):
-            grid[cell.row - rect.first_row][cell.col - rect.first_col] = cell.value
+        for row, col, _, value in self._typed_cells(rect):
+            grid[row - rect.first_row][col - rect.first_col] = value
         return grid
 
     @overload
     @_coordinate_form
-    def set_values(
-        self, row: int, col: int, values: Sequence[Sequence[Union[None, bool, int, float, str, ExcelError, Value]]]
-    ) -> None: ...
+    def get_date(self, row: int, col: int) -> Optional[datetime.datetime]: ...
 
     @overload
-    def set_values(
-        self, a1: str, values: Sequence[Sequence[Union[None, bool, int, float, str, ExcelError, Value]]]
-    ) -> None: ...
+    def get_date(self, a1: str) -> Optional[datetime.datetime]: ...
+
+    def get_date(self, *args: Any, **kwargs: Any) -> Optional[datetime.datetime]:
+        """Read the cell as a date: the naive ``datetime`` its serial names under the workbook's date system.
+
+        The fraction of a day is rounded to the microsecond; ``None`` for an
+        empty cell.
+
+        Raises:
+          InvalidArgumentError: for a cell holding no number, or a serial
+            outside the date system (below 1 in the 1900 system, below 0 in
+            the 1904 one, or past 9999-12-31).
+        """
+        row, col = self._cell_args("get_date", args, kwargs, ())
+        value = self._value_at(row, col)
+        if value.kind is ValueKind.BLANK:
+            return None
+        if value.kind is not ValueKind.NUMBER:
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _diagnostic_override=(
+                    f"the cell holds {value.kind.name.lower()}, not a date serial",
+                    f"row={row} col={col}",
+                ),
+            )
+        return serial_datetime(value.number, date1904=self._workbook.get_date1904())
+
+    def get_used_range(self) -> Optional[CellRect]:
+        """The bounding rectangle of the cells holding a value or a formula; ``None`` for a sheet with none.
+
+        Formatting alone does not count.
+        """
+        first_row = first_col = last_row = last_col = -1
+        for row, col, _, _ in self._typed_cells(_WHOLE_SHEET):
+            if first_row < 0:
+                first_row, first_col, last_row, last_col = row, col, row, col
+                continue
+            first_col = min(first_col, col)
+            last_col = max(last_col, col)
+            last_row = row
+        if first_row < 0:
+            return None
+        return CellRect(first_row=first_row, first_col=first_col, last_row=last_row, last_col=last_col)
+
+    def iter_rows(self, range: Union[CellRect, str, None] = None) -> Iterator[List[NativeValue]]:
+        """Iterate the rows of ``range`` (default: :meth:`get_used_range`) as lists of native values, top to bottom.
+
+        Each row is read when the iteration reaches it.
+
+        Example::
+
+            for row in ws.iter_rows():
+                print(row)
+        """
+        rect = self.get_used_range() if range is None else self._rect(range)
+        if rect is None:
+            return iter(())
+        return self._iter_rows(rect)
+
+    def _iter_rows(self, rect: CellRect) -> Iterator[List[NativeValue]]:
+        width = rect.last_col - rect.first_col + 1
+        for row in builtins.range(rect.first_row, rect.last_row + 1):
+            line: List[NativeValue] = [None] * width
+            band = CellRect(first_row=row, first_col=rect.first_col, last_row=row, last_col=rect.last_col)
+            for _, col, _, value in self._typed_cells(band):
+                line[col - rect.first_col] = value.to_python()
+            yield line
+
+    @overload
+    @_coordinate_form
+    def set_values(self, row: int, col: int, values: Sequence[Sequence[CellInput]]) -> None: ...
+
+    @overload
+    def set_values(self, a1: str, values: Sequence[Sequence[CellInput]]) -> None: ...
 
     def set_values(self, *args: Any, **kwargs: Any) -> None:
         """Store a row-major grid of values with ``(row, col)`` as its top-left cell.
 
         Each element is stored as :meth:`set_value` stores it, so a string
-        starting with ``=`` is text. Element types, finiteness, equal row
-        lengths and the grid's fit on the sheet are all checked before any
-        cell is written; an empty grid writes nothing. The write is not
+        starting with ``=`` is a formula. Element types, finiteness, equal
+        row lengths and the grid's fit on the sheet are all checked before
+        any cell is written; an empty grid writes nothing. The write is not
         atomic: when the engine refuses a cell (one inside an array formula
-        or a data table, say), the cells before it stay written.
+        or a data table, say) or a formula does not parse, the cells before it
+        stay written and the error's ``context`` names the cell (``row=`` /
+        ``col=``). :meth:`get_typed_values` reads a block back so that it
+        stores unchanged.
 
         Raises:
           TypeError: for a non-grid argument or an element :meth:`set_value`
@@ -1954,10 +2123,11 @@ class Sheet:
           ValueError: for an integer too large to convert to a float.
           InvalidArgumentError: for a NaN or infinite number, or a grid
             reaching past the last row or column.
+          FormulaSyntaxError: for a formula that does not parse.
 
         Example::
 
-            ws.set_values("A1", [[1, 2], [3, 4]])
+            ws.set_values("A1", [["Item", "Qty"], ["Apple", 3]])
         """
         row, col, values = self._cell_args("set_values", args, kwargs, ("values",))
         if isinstance(values, (str, bytes)):
@@ -1979,7 +2149,10 @@ class Sheet:
             )
         for r, line in enumerate(grid):
             for c, (setter, payload) in enumerate(line):
-                getattr(self, setter)(row + r, col + c, *payload)
+                try:
+                    getattr(self, setter)(row + r, col + c, *payload)
+                except FormulonError as exc:
+                    raise _with_cell_context(exc, row + r, col + c) from None
 
     # -- Ad-hoc array evaluation ------------------------------------------
     @overload
@@ -2019,82 +2192,100 @@ class Sheet:
 
     @overload
     @_coordinate_form
-    def evaluate_formula(self, row: int, col: int, formula: str) -> Value: ...
+    def evaluate_formula(self, row: int, col: int, formula: str) -> NativeValue: ...
 
     @overload
-    def evaluate_formula(self, a1: str, formula: str) -> Value: ...
+    def evaluate_formula(self, a1: str, formula: str) -> NativeValue: ...
 
-    def evaluate_formula(self, *args: Any, **kwargs: Any) -> Value:
+    def evaluate_formula(self, *args: Any, **kwargs: Any) -> NativeValue:
         """Evaluate ``formula`` as if entered at ``(row, col)``, without mutating the workbook.
 
-        An array result is reduced to its top-left element; use
-        :meth:`evaluate_formula_array` for the whole grid. A cell-level Excel
-        error is returned as a :class:`Value` of kind ``ERROR``. A reference
-        to the anchor cell itself reads its cached value.
+        A 1x1 result is returned as its native value, any other as a list of
+        rows. A cell-level Excel error is an :class:`ExcelError`. A reference
+        to the anchor cell itself reads its value.
+
+        Raises:
+          TypeError: when ``formula`` is not a ``str``.
+          FormulaSyntaxError: when ``formula`` does not parse.
 
         Example::
 
-            ws.evaluate_formula("A1", "=SUM(B1:B3)").to_python()
+            ws.evaluate_formula("A1", "=SUM(B1:B3)")
         """
         row, col, formula = self._cell_args("evaluate_formula", args, kwargs, ("formula",))
-        sheet = self._index()
-        return self._workbook._evaluate_formula_top_left(sheet, row, col, formula)
+        return self._workbook._evaluate_typed_formula(self._index(), row, col, formula).to_python()
 
     @overload
     @_coordinate_form
-    def evaluate_formula_array(self, row: int, col: int, formula: str) -> List[List[Value]]: ...
+    def evaluate_typed_formula(self, row: int, col: int, formula: str) -> Value: ...
 
     @overload
-    def evaluate_formula_array(self, a1: str, formula: str) -> List[List[Value]]: ...
+    def evaluate_typed_formula(self, a1: str, formula: str) -> Value: ...
 
-    def evaluate_formula_array(self, *args: Any, **kwargs: Any) -> List[List[Value]]:
-        """Evaluate ``formula`` as if entered at ``(row, col)`` and
-        return the whole multi-cell result, without mutating the workbook.
+    def evaluate_typed_formula(self, *args: Any, **kwargs: Any) -> Value:
+        """:meth:`evaluate_formula` with the result tagged; a result larger than 1x1 is a ``ValueKind.ARRAY`` value."""
+        row, col, formula = self._cell_args("evaluate_typed_formula", args, kwargs, ("formula",))
+        return self._workbook._evaluate_typed_formula(self._index(), row, col, formula)
 
-        Unlike a scalar evaluation (which reduces an array to its top-left
-        element), a dynamic-array formula such as ``=SEQUENCE(2,3)`` yields
-        the full ``rows x cols`` grid as a nested list in row-major order
-        (``result[r][c]``); a scalar result such as ``=1+2`` is returned as
-        a ``1 x 1`` grid (``[[Value(...)]]``).
+    @overload
+    @_coordinate_form
+    def evaluate_formula_array(self, row: int, col: int, formula: str) -> List[List[NativeValue]]: ...
 
-        The evaluation is read-only: no cell value is written and no spill
-        is committed. Cell-level Excel errors surface as
-        :class:`Value` entries with ``kind == ValueKind.ERROR``; only
-        host-side failures (a closed workbook, an out-of-range sheet) raise
-        :class:`FormulonError`.
+    @overload
+    def evaluate_formula_array(self, a1: str, formula: str) -> List[List[NativeValue]]: ...
 
-        Args:
-          row: 0-based anchor row (drives ``ROW()`` and relative refs).
-          col: 0-based anchor column (drives ``COLUMN()``).
-          formula: the formula text, with or without a leading ``=``.
+    def evaluate_formula_array(self, *args: Any, **kwargs: Any) -> List[List[NativeValue]]:
+        """Evaluate ``formula`` as if entered at ``(row, col)`` and return the whole result as a grid of native values.
 
-        Returns:
-          A ``rows x cols`` nested list of :class:`Value`.
+        A scalar result such as ``=1+2`` is a 1x1 grid (``[[3.0]]``); a
+        dynamic-array formula such as ``=SEQUENCE(2,3)`` yields its
+        ``rows x cols`` grid in row-major order (``result[r][c]``). Nothing is
+        written and no spill is committed.
+
+        Raises:
+          TypeError: when ``formula`` is not a ``str``.
+          FormulaSyntaxError: when ``formula`` does not parse.
         """
         row, col, formula = self._cell_args("evaluate_formula_array", args, kwargs, ("formula",))
-        sheet = self._index()
-        return self._workbook._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False)
+        grid = self._evaluate_grid(row, col, formula)
+        return [[value.to_python() for value in line] for line in grid]
+
+    @overload
+    @_coordinate_form
+    def evaluate_typed_formula_array(self, row: int, col: int, formula: str) -> List[List[Value]]: ...
+
+    @overload
+    def evaluate_typed_formula_array(self, a1: str, formula: str) -> List[List[Value]]: ...
+
+    def evaluate_typed_formula_array(self, *args: Any, **kwargs: Any) -> List[List[Value]]:
+        """:meth:`evaluate_formula_array` with each value tagged with its kind."""
+        row, col, formula = self._cell_args("evaluate_typed_formula_array", args, kwargs, ("formula",))
+        return self._evaluate_grid(row, col, formula)
+
+    def _evaluate_grid(self, row: int, col: int, formula: Any) -> List[List[Value]]:
+        if not isinstance(formula, str):
+            raise TypeError(f"formulon: formula must be a str, got {type(formula).__name__}")
+        return self._workbook._evaluate_formula_cells(self._index(), row, col, formula, top_left_only=False)
 
     # -- Iteration ---------------------------------------------------------
-    def list_cells(self, range: Union[CellRect, str, None] = None) -> List[Cell]:
+    def list_cells(self, range: Union[CellRect, str, None] = None) -> List[RangeCell]:
         """Return every populated cell in ``range``, or on the whole sheet when it is ``None``.
 
-        Cells come in row-major order; each carries its stored formula and
-        cached value, as :meth:`get_cells_in_range` pages them.
+        Cells come in row-major order; each carries its stored formula, its
+        value as native data and the value's kind, as
+        :meth:`get_cells_in_range` pages them.
         """
-        rect = (
-            CellRect(first_row=0, first_col=0, last_row=_LAST_ROW, last_col=_LAST_COL)
-            if range is None
-            else self._rect(range)
-        )
-        cells: List[Cell] = []
+        rect = _WHOLE_SHEET if range is None else self._rect(range)
+        return [_range_cell(*cell) for cell in self._typed_cells(rect)]
+
+    def _typed_cells(self, rect: CellRect) -> Iterator[Tuple[int, int, Optional[str], Value]]:
+        """``(row, col, formula, value)`` of every populated cell of ``rect``, row-major, a page at a time."""
         cursor: Optional[int] = None
         while True:
-            page = self.get_cells_in_range(rect, cursor)
-            cells.extend(page.cells)
-            if page.next_cursor is None:
-                return cells
-            cursor = page.next_cursor
+            cells, cursor = self._cell_page(rect, cursor, None)
+            yield from cells
+            if cursor is None:
+                return
 
     @overload
     @_span_form
@@ -2733,8 +2924,12 @@ class Sheet:
         )
 
     def add_validation(self, validation: DataValidationInput) -> int:
-        """Append a data-validation rule to the sheet; return its index."""
+        """Append a data-validation rule to the sheet; return its index.
+
+        ``validation.ranges`` takes :class:`CellRect` values, A1 ranges or one A1 range string.
+        """
         sheet = self._index()
+        validation = normalize_record_ranges(validation, self._workbook, sheet=sheet, label="validation")
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DATA_VALIDATION)
@@ -3070,32 +3265,35 @@ class Sheet:
         cursor: Optional[int] = None,
         limit: Optional[int] = None,
     ) -> CellsInRange:
-        """Return one page of the populated cells in ``range`` (row-major).
+        """Return one page of the populated cells in ``range`` (row-major), each a :class:`RangeCell`.
 
         Pass ``next_cursor`` back to fetch the next page; it is ``None``
         when the rectangle holds no further populated cell. ``limit`` of
         ``None`` or ``0`` means the engine maximum.
         """
-        cell_range = self._rect(range)
+        cells, next_cursor = self._cell_page(self._rect(range), cursor, limit)
+        return CellsInRange([_range_cell(*cell) for cell in cells], next_cursor)
+
+    def _cell_page(
+        self, rect: CellRect, cursor: Optional[int], limit: Optional[int]
+    ) -> Tuple[List[Tuple[int, int, Optional[str], Value]], Optional[int]]:
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             rp = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rp, cell_range)
-            return CellsInRange(
-                *self._read_cell_range_page(
-                    LIB.fm_sheet_get_cells_in_range,
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    rp,
-                    _uint(cursor or 0, "cursor", 64),
-                    _uint(limit or 0, "limit"),
-                )
+            _pack_cell_rect_at(rp, rect)
+            return self._read_cell_range_page(
+                LIB.fm_sheet_get_cells_in_range,
+                h,
+                _uint(sheet, "sheet_index"),
+                rp,
+                _uint(cursor or 0, "cursor", 64),
+                _uint(limit or 0, "limit"),
             )
 
     @staticmethod
-    def _read_cell_range_page(fn, *args) -> "tuple[List[Cell], Optional[int]]":
-        """Call a ``(..., cell_range** out)`` engine function and drain its page."""
+    def _read_cell_range_page(fn, *args) -> Tuple[List[Tuple[int, int, Optional[str], Value]], Optional[int]]:
+        """Call a ``(..., cell_range** out)`` engine function and drain its page as ``(row, col, formula, value)``."""
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(fn(*args, out))
@@ -3113,7 +3311,7 @@ class Sheet:
                 formula_ptr = scope.out_ptr()
                 cursor_ptr = scope.out_u64()
                 value_ptr = scope.alloc(fm_value_t_size)
-                cells: List[Cell] = []
+                cells: List[Tuple[int, int, Optional[str], Value]] = []
                 for i in range(count):
                     LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
                     _check(
@@ -3121,11 +3319,11 @@ class Sheet:
                     )
                     formula_addr = LIB.read_u32(formula_ptr)
                     cells.append(
-                        Cell(
-                            row=LIB.read_u32(row_ptr),
-                            col=LIB.read_u32(col_ptr),
-                            formula=LIB.read_cstr(formula_addr) if formula_addr else None,
-                            value=Value._from_wasm(value_ptr),
+                        (
+                            LIB.read_u32(row_ptr),
+                            LIB.read_u32(col_ptr),
+                            LIB.read_cstr(formula_addr) if formula_addr else None,
+                            Value._from_wasm(value_ptr),
                         )
                     )
                 _check(LIB.fm_cell_range_next_cursor(handle, cursor_ptr))
@@ -3140,8 +3338,12 @@ class Sheet:
         return self._workbook._read_auto_filter(LIB.fm_sheet_get_auto_filter, sheet, "sheet_index")
 
     def set_auto_filter(self, auto_filter: AutoFilter) -> None:
-        """Replace the sheet AutoFilter. Row visibility is unchanged; see :meth:`apply_auto_filter`."""
+        """Replace the sheet AutoFilter. Row visibility is unchanged; see :meth:`apply_auto_filter`.
+
+        The ``ref`` of the sort state and of its conditions takes an A1 range too.
+        """
         sheet = self._index()
+        auto_filter = _normalize_auto_filter(auto_filter, self._workbook, sheet)
         self._workbook._write_auto_filter(LIB.fm_sheet_set_auto_filter, sheet, auto_filter, "sheet_index")
 
     def remove_auto_filter(self) -> None:
@@ -3211,15 +3413,14 @@ class Sheet:
         """
         sheet = self._index()
         h = self._workbook._require()
-        return CellsInRange(
-            *self._read_cell_range_page(
-                LIB.fm_sheet_get_invalid_cells,
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(cursor or 0, "cursor", 64),
-                _uint(limit or 0, "limit"),
-            )
+        cells, next_cursor = self._read_cell_range_page(
+            LIB.fm_sheet_get_invalid_cells,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(cursor or 0, "cursor", 64),
+            _uint(limit or 0, "limit"),
         )
+        return CellsInRange([_range_cell(*cell) for cell in cells], next_cursor)
 
     # -- Threaded comments and persons -------------------------------------------
     def list_threaded_comments(self) -> List[ThreadedComment]:
@@ -3484,9 +3685,9 @@ class Sheet:
         text: Optional[str] = None,
         text_box: Optional[bool] = None,
         fill_kind: Optional[ShapePaint] = None,
-        fill_rgb: int = 0,
+        fill_color: Optional[ColorInput] = None,
         line_kind: Optional[ShapePaint] = None,
-        line_rgb: int = 0,
+        line_color: Optional[ColorInput] = None,
         line_width_emu: Optional[int] = None,
         rotation: Optional[int] = None,
         hidden: Optional[bool] = None,
@@ -3498,7 +3699,7 @@ class Sheet:
         geometry makes a connector, which holds no text. A two-cell anchor's
         size is its box (``width_emu`` / ``height_emu`` are ignored); an absolute anchor's
         position is ``from_col_offset_emu`` (x) and ``from_row_offset_emu`` (y). ``fill_kind``
-        and ``line_kind`` must be ``SOLID`` (with the rgb) or ``NONE``.
+        and ``line_kind`` must be ``SOLID`` (with an RGB ``fill_color`` / ``line_color``) or ``NONE``.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -3506,8 +3707,8 @@ class Sheet:
             out = scope.out_ptr()
             ptr = _pack_shape(
                 scope, name, preset_geometry, text, text_box, anchor_kind, edit_as, from_row, from_col, from_row_offset_emu,
-                from_col_offset_emu, to_row, to_col, to_row_offset_emu, to_col_offset_emu, width_emu, height_emu, fill_kind, fill_rgb, line_kind,
-                line_rgb, line_width_emu, rotation, hidden,
+                from_col_offset_emu, to_row, to_col, to_row_offset_emu, to_col_offset_emu, width_emu, height_emu, fill_kind, fill_color,
+                line_kind, line_color, line_width_emu, rotation, hidden,
             )  # fmt: skip
             _check(LIB.fm_sheet_add_shape(h, _uint(sheet, "sheet_index"), ptr, out))
             object_id = LIB.read_u32(out)
@@ -3793,14 +3994,14 @@ class Sheet:
         group_index: int,
         *,
         type: Union[SparklineType, Unchanged] = UNCHANGED,
-        color_series: Union[Color, Unchanged] = UNCHANGED,
-        color_negative: Union[Color, Unchanged] = UNCHANGED,
-        color_axis: Union[Color, Unchanged] = UNCHANGED,
-        color_markers: Union[Color, Unchanged] = UNCHANGED,
-        color_first: Union[Color, Unchanged] = UNCHANGED,
-        color_last: Union[Color, Unchanged] = UNCHANGED,
-        color_high: Union[Color, Unchanged] = UNCHANGED,
-        color_low: Union[Color, Unchanged] = UNCHANGED,
+        color_series: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_negative: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_axis: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_markers: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_first: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_last: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_high: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_low: Union[ColorInput, Unchanged] = UNCHANGED,
         markers: Union[bool, Unchanged] = UNCHANGED,
         high: Union[bool, Unchanged] = UNCHANGED,
         low: Union[bool, Unchanged] = UNCHANGED,
@@ -4311,12 +4512,22 @@ class Sheet:
             ranges = [_decode_cell_rect_at(array_ptr + i * size) for i in range(total)]
             return SheetSelection(active_row=LIB.read_u32(row_ptr), active_col=LIB.read_u32(col_ptr), ranges=ranges)
 
-    def set_selection(self, *, active_row: int, active_col: int, ranges: Sequence[CellRect] = ()) -> None:
-        """Replace the active pane's selection; empty ``ranges`` selects the active cell alone."""
+    def set_selection(
+        self,
+        *,
+        active_row: int,
+        active_col: int,
+        ranges: Union[Sequence[Union[CellRect, str]], str] = (),
+    ) -> None:
+        """Replace the active pane's selection; empty ``ranges`` selects the active cell alone.
+
+        ``ranges`` takes :class:`CellRect` values, A1 ranges or one A1 range string.
+        """
+        rects = [self._rect(r) for r in ([ranges] if isinstance(ranges, str) else ranges)]
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            ptr = _pack_cell_rect_array(list(ranges), scope)
+            ptr = _pack_cell_rect_array(rects, scope)
             _check(
                 LIB.fm_sheet_set_selection(
                     h,
@@ -4324,41 +4535,31 @@ class Sheet:
                     _uint(active_row, "active_row"),
                     _uint(active_col, "active_col"),
                     ptr,
-                    _uint(len(ranges), "count"),
+                    _uint(len(rects), "count"),
                 )
             )
 
-    def get_auto_filter_xml(self) -> Optional[str]:
-        """OOXML fragment for round trips; normally use :meth:`get_auto_filter`.
-
-        Return the sheet's ``<autoFilter>`` element, or ``None`` without one.
-        The fragment carries the filter-column criteria, sort state and
-        extension payload verbatim, so a host can preserve definitions it
-        does not interpret.
-        """
-        sheet = self._index()
-        h = self._workbook._require()
-        return (
-            _read_cstr_out(
-                LIB.fm_sheet_get_auto_filter_xml,
-                h,
-                _uint(sheet, "sheet_index"),
-            )
-            or None
-        )
-
-    def set_auto_filter_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`set_auto_filter`.
-
-        Replace the sheet's ``<autoFilter>`` element; ``None`` (or ``""``) removes the AutoFilter. Other input must be a
-        complete ``<autoFilter ...>`` fragment; the engine preserves filter
-        extensions verbatim rather than validating them in detail.
-        """
+    def get_tab_color(self) -> Optional[Color]:
+        """The sheet's tab colour (``<sheetPr><tabColor>``); ``None`` when the tab has none."""
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            xml_ptr = scope.cstr(xml or "")
-            _check(LIB.fm_sheet_set_auto_filter_xml(h, _uint(sheet, "sheet_index"), xml_ptr))
+            ptr = scope.struct(S.COLOR_SPEC)
+            _check(LIB.fm_sheet_get_tab_color(h, _uint(sheet, "sheet_index"), ptr))
+            color = _decode_color(ptr)
+        return None if color.kind == ColorKind.NONE else color
+
+    def set_tab_color(self, color: Optional[ColorInput]) -> None:
+        """Set the tab colour, a ``ColorInput``; ``None`` removes it."""
+        spec = None if color is None else _format_color(color, "color")
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = 0
+            if spec is not None:
+                ptr = scope.struct(S.COLOR_SPEC)
+                _pack_color(ptr, spec, "color")
+            _check(LIB.fm_sheet_set_tab_color(h, _uint(sheet, "sheet_index"), ptr))
 
     def _get_print_xml(self, export: str) -> Optional[str]:
         sheet = self._index()
@@ -4371,85 +4572,6 @@ class Sheet:
         with _ArgScope() as scope:
             xml_ptr = scope.cstr(xml or "")
             _check(getattr(LIB, export)(h, _uint(sheet, "sheet_index"), xml_ptr))
-
-    def get_page_setup_xml(self) -> Optional[str]:
-        """OOXML fragment for round trips; normally use :meth:`get_page_setup`.
-
-        Return the sheet's ``<pageSetup>`` element, or ``None`` without one.
-        """
-        return self._get_print_xml("fm_sheet_get_page_setup_xml")
-
-    def set_page_setup_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`set_page_setup`.
-
-        Replace the sheet's ``<pageSetup>`` element; ``None`` (or ``""``)
-        removes it. ``fitToPage`` is not a ``<pageSetup>`` attribute but lives
-        in ``<sheetPr>``. A fragment carrying ``r:id`` is rejected
-        unless the sheet already has a printerSettings part, because the
-        reference would otherwise dangle and Excel would repair the file.
-        """
-        self._set_print_xml("fm_sheet_set_page_setup_xml", xml)
-
-    def get_page_margins_xml(self) -> Optional[str]:
-        """OOXML fragment for round trips; normally use :meth:`get_page_margins`.
-
-        Return the sheet's ``<pageMargins>`` element, or ``None`` without one.
-        """
-        return self._get_print_xml("fm_sheet_get_page_margins_xml")
-
-    def set_page_margins_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`set_page_margins`.
-
-        Replace the sheet's ``<pageMargins>`` element; ``None`` (or ``""``) removes it.
-        """
-        self._set_print_xml("fm_sheet_set_page_margins_xml", xml)
-
-    def get_print_options_xml(self) -> Optional[str]:
-        """OOXML fragment for round trips; normally use :meth:`get_print_options`.
-
-        Return the sheet's ``<printOptions>`` element, or ``None`` without one.
-        """
-        return self._get_print_xml("fm_sheet_get_print_options_xml")
-
-    def set_print_options_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`set_print_options`.
-
-        Replace the sheet's ``<printOptions>`` element; ``None`` (or ``""``) removes it.
-        """
-        self._set_print_xml("fm_sheet_set_print_options_xml", xml)
-
-    def get_header_footer_xml(self) -> Optional[str]:
-        """OOXML fragment for round trips; normally use :meth:`get_header_footer`.
-
-        Return the sheet's ``<headerFooter>`` element, or ``None`` without one.
-        """
-        return self._get_print_xml("fm_sheet_get_header_footer_xml")
-
-    def set_header_footer_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`set_header_footer`.
-
-        Replace the sheet's ``<headerFooter>`` element; ``None`` (or ``""``)
-        removes it. Header and footer codes are introduced by ``&``, which lives in XML
-        element text and so must arrive escaped: Excel writes
-        ``<oddHeader>&amp;C...</oddHeader>``. Pass decoded text to
-        :meth:`set_header_footer` instead to let the engine escape it.
-        """
-        self._set_print_xml("fm_sheet_set_header_footer_xml", xml)
-
-    def get_sheet_pr_xml(self) -> Optional[str]:
-        """OOXML fragment for round trips; normally use :meth:`get_page_setup`, which reads its ``fitToPage``.
-
-        Return the sheet's ``<sheetPr>`` element, or ``None`` without one. It
-        also carries the tab colour and the VBA code name.
-        """
-        return self._get_print_xml("fm_sheet_get_sheet_pr_xml")
-
-    def set_sheet_pr_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`set_page_setup`, which writes its ``fitToPage``.
-
-        Replace the sheet's ``<sheetPr>`` element; ``None`` (or ``""``) removes it.
-        """
-        self._set_print_xml("fm_sheet_set_sheet_pr_xml", xml)
 
     def get_print_area(self) -> Optional[List[CellRect]]:
         """Return the print area's rectangles, or ``None`` when none is declared.
@@ -4466,18 +4588,14 @@ class Sheet:
             _check(LIB.fm_sheet_get_print_area(h, _uint(sheet, "sheet_index"), ranges_out, count_out))
             return _decode_cell_rect_array(LIB.read_u32(ranges_out), LIB.read_u32(count_out)) or None
 
-    def set_print_area(self, ranges: Optional[Sequence[Union[CellRect, str]]]) -> None:
+    def set_print_area(self, ranges: Union[Sequence[Union[CellRect, str]], str, None]) -> None:
         """Write ``_xlnm.Print_Area`` from one or more rectangles, printed in order.
 
         A rectangle spanning every row or column is stored as whole columns
-        or rows. ``None`` or an empty list removes the name.
-
-        Raises:
-          TypeError: when ``ranges`` is a single ``str`` rather than a sequence.
+        or rows; one A1 range string is one rectangle. ``None`` or an empty
+        list removes the name.
         """
-        if isinstance(ranges, str):
-            raise TypeError("formulon: ranges must be a sequence of CellRect or A1 ranges, got str")
-        rects = [] if ranges is None else [self._rect(r) for r in ranges]
+        rects = [] if ranges is None else [self._rect(r) for r in ([ranges] if isinstance(ranges, str) else ranges)]
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4848,28 +4966,33 @@ class Sheet:
 
     def list_column_overrides(self) -> List[ColumnLayout]:
         """Return the column-layout overrides on the sheet."""
+        return [
+            ColumnLayout(
+                first=d["first"],
+                last=d["last"],
+                width=d["width"] if d["has_width"] else None,
+                hidden=bool(d["hidden"]),
+                outline_level=d["outline_level"],
+                collapsed=bool(d["collapsed"]),
+            )
+            for d in self._layout_overrides(
+                LIB.fm_sheet_get_column_override_count, LIB.fm_sheet_get_column_override_at, S.COLUMN_LAYOUT
+            )
+        ]
+
+    def _layout_overrides(self, count_fn: Any, at_fn: Any, layout: S.Struct) -> List[Dict[str, Any]]:
+        """The decoded column or row layout structs of the sheet, in order."""
         sheet = self._index()
         h = self._workbook._require()
-        n = _read_count(LIB.fm_sheet_get_column_override_count, h, _uint(sheet, "sheet_index"))
-        out: List[ColumnLayout] = []
+        n = _read_count(count_fn, h, _uint(sheet, "sheet_index"))
+        out: List[Dict[str, Any]] = []
         # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
-            ptr = scope.struct(S.COLUMN_LAYOUT)
+            ptr = scope.struct(layout)
             for i in range(n):
-                S.zero_struct(LIB, S.COLUMN_LAYOUT, ptr)
-                _check(LIB.fm_sheet_get_column_override_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr))
-                d = S.COLUMN_LAYOUT.unpack(LIB, ptr)
-                out.append(
-                    ColumnLayout(
-                        first=d["first"],
-                        last=d["last"],
-                        width=d["width"] if d["has_width"] else None,
-                        hidden=bool(d["hidden"]),
-                        outline_level=d["outline_level"],
-                        collapsed=bool(d["collapsed"]),
-                        style_xf=d["style_xf"] if d["has_style"] else None,
-                    )
-                )
+                S.zero_struct(LIB, layout, ptr)
+                _check(at_fn(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr))
+                out.append(layout.unpack(LIB, ptr))
         return out
 
     @overload
@@ -4952,65 +5075,21 @@ class Sheet:
             )
         )
 
-    @overload
-    @_span_form
-    def set_column_style(self, first: int, last: int, xf_index: int) -> None: ...
-
-    @overload
-    def set_column_style(self, span: str, xf_index: int) -> None: ...
-
-    def set_column_style(self, *args: Any, **kwargs: Any) -> None:
-        """Set the cell-style XF on ``[first, last]``, keeping the other column attributes."""
-        first, last, xf_index = self._span_args("set_column_style", args, kwargs, ("first", "last", "xf_index"))
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_set_column_style(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
-            )
-        )
-
-    @overload
-    @_span_form
-    def clear_column_style(self, first: int, last: int) -> None: ...
-
-    @overload
-    def clear_column_style(self, span: str) -> None: ...
-
-    def clear_column_style(self, *args: Any, **kwargs: Any) -> None:
-        """Remove the cell-style XF on ``[first, last]``, keeping the other column attributes."""
-        first, last = self._span_args("clear_column_style", args, kwargs, ("first", "last"))
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_clear_column_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
-        )
-
     def list_row_overrides(self) -> List[RowLayout]:
         """Return the row-layout overrides on the sheet."""
-        sheet = self._index()
-        h = self._workbook._require()
-        n = _read_count(LIB.fm_sheet_get_row_override_count, h, _uint(sheet, "sheet_index"))
-        out: List[RowLayout] = []
-        # One scratch block for the whole walk; see list_defined_names.
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.ROW_LAYOUT)
-            for i in range(n):
-                S.zero_struct(LIB, S.ROW_LAYOUT, ptr)
-                _check(LIB.fm_sheet_get_row_override_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr))
-                d = S.ROW_LAYOUT.unpack(LIB, ptr)
-                out.append(
-                    RowLayout(
-                        row=d["row"],
-                        height=d["height"] if d["has_height"] else None,
-                        hidden=bool(d["hidden"]),
-                        outline_level=d["outline_level"],
-                        collapsed=bool(d["collapsed"]),
-                        style_xf=d["style_xf"] if d["has_style"] else None,
-                        custom_height=bool(d["custom_height"]),
-                    )
-                )
-        return out
+        return [
+            RowLayout(
+                row=d["row"],
+                height=d["height"] if d["has_height"] else None,
+                hidden=bool(d["hidden"]),
+                outline_level=d["outline_level"],
+                collapsed=bool(d["collapsed"]),
+                custom_height=bool(d["custom_height"]),
+            )
+            for d in self._layout_overrides(
+                LIB.fm_sheet_get_row_override_count, LIB.fm_sheet_get_row_override_at, S.ROW_LAYOUT
+            )
+        ]
 
     @overload
     @_span_form
@@ -5110,144 +5189,6 @@ class Sheet:
             )
         )
 
-    @overload
-    @_span_form
-    def set_row_style(self, first: int, last: int, xf_index: int) -> None: ...
-
-    @overload
-    def set_row_style(self, span: str, xf_index: int) -> None: ...
-
-    def set_row_style(self, *args: Any, **kwargs: Any) -> None:
-        """Set the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes.
-
-        Every row of the span gets an override. The span and ``xf_index`` are
-        validated before anything changes.
-        """
-        first, last, xf_index = self._span_args("set_row_style", args, kwargs, ("first", "last", "xf_index"))
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_set_row_style(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
-            )
-        )
-
-    @overload
-    @_span_form
-    def clear_row_style(self, first: int, last: int) -> None: ...
-
-    @overload
-    def clear_row_style(self, span: str) -> None: ...
-
-    def clear_row_style(self, *args: Any, **kwargs: Any) -> None:
-        """Remove the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes."""
-        first, last = self._span_args("clear_row_style", args, kwargs, ("first", "last"))
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")))
-
-    def get_range_style_bases(self, range: Union[CellRect, str]) -> List[int]:
-        """List, ascending, every cell XF some cell of the selection resolves to.
-
-        ``range`` is a selection: full height is a column selection, full
-        width a row selection, both the whole sheet, neither a cell range. It
-        is the first step of an attribute patch (for example a font size over a selection): read the
-        bases, build a patched XF for each with :meth:`Workbook.add_font` /
-        :meth:`Workbook.add_cell_xf`, then apply them with :meth:`remap_range_style`.
-        """
-        rect = self._rect(range)
-        return self.get_range_style_bases_excluding(rect, ())
-
-    def get_range_style_bases_excluding(
-        self,
-        range: Union[CellRect, str],
-        excluded: Sequence[Tuple[int, int]],
-    ) -> List[int]:
-        """:meth:`get_range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
-
-        An excluded cell contributes no XF, neither its own nor the row, column
-        or default style beneath it. Cells outside the selection and repeats are
-        ignored; excluding every cell yields an empty list.
-        """
-        rect = self._rect(range)
-        sheet = self._index()
-        h = self._workbook._require()
-        cells = list(excluded)
-        count = len(cells)
-        with _ArgScope() as scope:
-            rp = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rp, rect)
-            rows_buf = cols_buf = 0
-            if count:
-                rows_buf = scope.buffer(b"".join(struct.pack("<I", _uint(r, "excluded_row")) for r, _ in cells))
-                cols_buf = scope.buffer(b"".join(struct.pack("<I", _uint(c, "excluded_col")) for _, c in cells))
-            len_ptr = scope.out_ptr()
-            # Size the buffer first, then fetch.
-            _check(
-                LIB.fm_sheet_get_range_style_bases_excluding(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    rp,
-                    rows_buf,
-                    cols_buf,
-                    _uint(count, "excluded_count"),
-                    0,
-                    0,
-                    len_ptr,
-                )
-            )
-            total = LIB.read_u32(len_ptr)
-            if total == 0:
-                return []
-            buf = scope.alloc(4 * total)
-            _check(
-                LIB.fm_sheet_get_range_style_bases_excluding(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    rp,
-                    rows_buf,
-                    cols_buf,
-                    _uint(count, "excluded_count"),
-                    buf,
-                    _uint(total, "cap"),
-                    len_ptr,
-                )
-            )
-            n = min(total, LIB.read_u32(len_ptr))
-            return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
-
-    def remap_range_style(self, range: Union[CellRect, str], mapping: Dict[int, int]) -> None:
-        """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
-
-        An XF absent from ``mapping`` is kept. Each target must be a valid cell
-        XF, else :class:`FormulonError` and nothing changes. Patch an attribute
-        by reading :meth:`get_range_style_bases`, adding a patched XF for each base
-        and passing ``{base: patched}``. Undo with :meth:`snapshot_range_style`
-        taken beforehand and :meth:`restore_range_style`.
-        """
-        rect = self._rect(range)
-        sheet = self._index()
-        h = self._workbook._require()
-        pairs = list(mapping.items())
-        count = len(pairs)
-        from_buf = to_buf = 0
-        with _ArgScope() as scope:
-            rp = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rp, rect)
-            if count:
-                from_buf = scope.buffer(b"".join(struct.pack("<I", _uint(k, "from_xf")) for k, _ in pairs))
-                to_buf = scope.buffer(b"".join(struct.pack("<I", _uint(v, "to_xf")) for _, v in pairs))
-            _check(
-                LIB.fm_sheet_remap_range_style(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    rp,
-                    from_buf,
-                    to_buf,
-                    _uint(count, "count"),
-                )
-            )
-
     def snapshot_range_style(self, range: Union[CellRect, str]) -> bytes:
         """Capture the style state of a selection as opaque bytes for :meth:`restore_range_style`.
 
@@ -5296,14 +5237,6 @@ class Sheet:
             _check(LIB.fm_sheet_restore_range_style(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len")))
 
     # -- Conditional formatting --------------------------------------------
-    @staticmethod
-    def _decode_cf_color(d: Dict[str, Any], key: str) -> Tuple[int, int, int, int]:
-        spec = d[key]
-        if spec["kind"] != ColorKind.RGB:
-            return (0, 0, 0, 0)
-        argb = spec["rgb"]
-        return ((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, argb >> 24)
-
     def evaluate_cf_range(
         self,
         range: Union[CellRect, str],
@@ -5370,13 +5303,13 @@ class Sheet:
                                 priority=d["priority"],
                                 dxf_id_engaged=bool(d["dxf_id_engaged"]),
                                 dxf_id=d["dxf_id"],
-                                color=self._decode_cf_color(d, "color"),
+                                color=_color_from(d["color"]),
                                 bar_length_pct=d["bar_length_pct"],
                                 bar_axis_position_pct=d["bar_axis_position_pct"],
                                 bar_is_negative=bool(d["bar_is_negative"]),
-                                bar_fill=self._decode_cf_color(d, "bar_fill"),
+                                bar_fill=_color_from(d["bar_fill"]),
                                 bar_border_engaged=bool(d["bar_border_engaged"]),
-                                bar_border=self._decode_cf_color(d, "bar_border"),
+                                bar_border=_color_from(d["bar_border"]),
                                 bar_gradient=bool(d["bar_gradient"]),
                                 icon_set_name=d["icon_set_name"],
                                 icon_index=d["icon_index"],
@@ -5409,26 +5342,10 @@ class Sheet:
         return Cfvo(type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=bool(d["gte"]))
 
     @staticmethod
-    def _decode_cf_color_at(ptr: int) -> CfColor:
-        d = S.COLOR_SPEC.unpack(LIB, ptr)
-        if d["kind"] != ColorKind.RGB:
-            return CfColor(0, 0, 0, 0)
-        argb = d["rgb"]
-        return CfColor((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, argb >> 24)
-
-    @staticmethod
     def _write_cfvo(ptr: int, value: Cfvo, scope: _ArgScope) -> None:
         S.CFVO.pack(LIB, ptr, {"type": _uint(value.type, "type", 8), "gte": 1 if value.gte else 0})
         if value.value is not None:
             S.write_str_field(LIB, ptr, S.CFVO, "value", value.value, scope)
-
-    @staticmethod
-    def _write_cf_color(ptr: int, color: CfColor) -> None:
-        r, g, b, a = (_uint(color.r, "r", 8), _uint(color.g, "g", 8), _uint(color.b, "b", 8), _uint(color.a, "a", 8))
-        if (r, g, b, a) == (0, 0, 0, 0):
-            S.COLOR_SPEC.pack(LIB, ptr, {})
-        else:
-            S.COLOR_SPEC.pack(LIB, ptr, {"kind": ColorKind.RGB, "rgb": (a << 24) | (r << 16) | (g << 8) | b})
 
     def _cf_rule_at(self, cf_rule_index: int) -> ConditionalFormat:
         """Read the ``cf_rule_index``-th CF rule on the sheet (flattened order)."""
@@ -5446,7 +5363,7 @@ class Sheet:
                     for i in range(d["color_scale_count"])
                 ]
                 colors = [
-                    self._decode_cf_color_at(d["color_scale_colors"] + i * S.COLOR_SPEC.size)
+                    _decode_color(d["color_scale_colors"] + i * S.COLOR_SPEC.size)
                     for i in range(d["color_scale_count"])
                 ]
                 color_scale = ColorScale(thresholds, colors)
@@ -5456,7 +5373,7 @@ class Sheet:
                 data_bar = DataBar(
                     self._decode_cfvo(ptr + offsets["data_bar_min"][1]),
                     self._decode_cfvo(ptr + offsets["data_bar_max"][1]),
-                    self._decode_cf_color_at(ptr + offsets["data_bar_fill"][1]),
+                    _decode_color(ptr + offsets["data_bar_fill"][1]),
                     bool(d["data_bar_show_value"]),
                     d["data_bar_min_length_pct"],
                     d["data_bar_max_length_pct"],
@@ -5467,16 +5384,14 @@ class Sheet:
                     _enum(CfDataBarAxisPosition, d["data_bar_axis_position"])
                     if d["data_bar_axis_position_engaged"]
                     else None,
-                    self._decode_cf_color_at(ptr + offsets["data_bar_negative_fill"][1])
+                    _decode_color(ptr + offsets["data_bar_negative_fill"][1])
                     if d["data_bar_negative_fill_engaged"]
                     else None,
-                    self._decode_cf_color_at(ptr + offsets["data_bar_border"][1])
-                    if d["data_bar_border_engaged"]
-                    else None,
-                    self._decode_cf_color_at(ptr + offsets["data_bar_negative_border"][1])
+                    _decode_color(ptr + offsets["data_bar_border"][1]) if d["data_bar_border_engaged"] else None,
+                    _decode_color(ptr + offsets["data_bar_negative_border"][1])
                     if d["data_bar_negative_border_engaged"]
                     else None,
-                    self._decode_cf_color_at(ptr + offsets["data_bar_axis_color"][1])
+                    _decode_color(ptr + offsets["data_bar_axis_color"][1])
                     if d["data_bar_axis_color_engaged"]
                     else None,
                     _enum(CfDataBarDirection, d["data_bar_direction"]),
@@ -5529,9 +5444,11 @@ class Sheet:
 
         Every rule type is accepted, the visual ones included: a color scale,
         data bar or icon set rule carries its payload in ``rule.color_scale``,
-        ``rule.data_bar`` or ``rule.icon_set``.
+        ``rule.data_bar`` or ``rule.icon_set``. ``rule.ranges`` takes
+        :class:`CellRect` values, A1 ranges or one A1 range string.
         """
         sheet = self._index()
+        rule = normalize_record_ranges(rule, self._workbook, sheet=sheet, label="rule")
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CF_RULE)
@@ -5576,7 +5493,7 @@ class Sheet:
                 for i, value in enumerate(rule.color_scale.thresholds):
                     self._write_cfvo(thresholds + i * S.CFVO.size, value, scope)
                 for i, color in enumerate(rule.color_scale.colors):
-                    self._write_cf_color(colors + i * S.COLOR_SPEC.size, color)
+                    _pack_color(colors + i * S.COLOR_SPEC.size, color, f"color_scale.colors[{i}]")
                 LIB.write_bytes(ptr + ro["color_scale_thresholds"][1], struct.pack("<I", thresholds))
                 LIB.write_bytes(ptr + ro["color_scale_colors"][1], struct.pack("<I", colors))
                 LIB.write_bytes(ptr + ro["color_scale_count"][1], struct.pack("<I", count))
@@ -5584,7 +5501,7 @@ class Sheet:
                 data_bar = rule.data_bar
                 self._write_cfvo(ptr + ro["data_bar_min"][1], data_bar.minimum, scope)
                 self._write_cfvo(ptr + ro["data_bar_max"][1], data_bar.maximum, scope)
-                self._write_cf_color(ptr + ro["data_bar_fill"][1], data_bar.fill)
+                _pack_color(ptr + ro["data_bar_fill"][1], data_bar.fill, "data_bar.fill")
                 LIB.write_bytes(ptr + ro["data_bar_engaged"][1], struct.pack("<i", 1))
                 LIB.write_bytes(ptr + ro["data_bar_show_value"][1], struct.pack("<i", 1 if data_bar.show_value else 0))
                 LIB.write_bytes(
@@ -5614,7 +5531,7 @@ class Sheet:
                 ):
                     if color is not None:
                         LIB.write_bytes(ptr + ro[f"data_bar_{field}_engaged"][1], struct.pack("<i", 1))
-                        self._write_cf_color(ptr + ro[f"data_bar_{field}"][1], color)
+                        _pack_color(ptr + ro[f"data_bar_{field}"][1], color, f"data_bar.{field}")
                 LIB.write_bytes(
                     ptr + ro["data_bar_direction"][1], struct.pack("<B", _uint(data_bar.direction, "direction", 8))
                 )
@@ -5684,7 +5601,7 @@ class Sheet:
         row, col = self._cell_args("get_cell_format", args, kwargs, ())
         workbook = self._workbook
         xf_index = self.get_effective_style(row, col).xf_index
-        return _cell_format_of(workbook, workbook.get_cell_xf(xf_index))
+        return _cell_format_of(workbook, workbook.ooxml.get_cell_xf(xf_index))
 
     def set_cell_format(
         self,
@@ -5712,7 +5629,7 @@ class Sheet:
 
         Every argument is checked before anything is written and the sheet
         changes in one step at the end, but an engine failure on the way can
-        leave unused style records behind (:meth:`Workbook.list_cell_xfs`).
+        leave unused style records behind (:meth:`WorkbookOoxml.list_cell_xfs`).
 
         Raises:
           TypeError: for an unknown key, a value of the wrong type, or
@@ -5738,93 +5655,17 @@ class Sheet:
             }
         )
         rect = self._rect(range)
-        bases = self.get_range_style_bases(rect)
+        bases = self.ooxml.get_range_style_bases(rect)
         if not patch:
             return
         workbook = self._workbook
         num_fmt_id: Optional[int] = None
         if "number_format" in patch:
             code = patch["number_format"]
-            num_fmt_id = 0 if code == "General" else workbook.add_num_fmt(code)
-        xfs = [
-            workbook.add_cell_xf(_patched_xf(workbook, workbook.get_cell_xf(base), patch, num_fmt_id)) for base in bases
-        ]
-        self.remap_range_style(rect, dict(zip(bases, xfs)))
-
-    @overload
-    @_coordinate_form
-    def get_cell_xf_index(self, row: int, col: int) -> int: ...
-
-    @overload
-    def get_cell_xf_index(self, a1: str) -> int: ...
-
-    def get_cell_xf_index(self, *args: Any, **kwargs: Any) -> int:
-        """Return the xf (style record) index attached to a cell."""
-        row, col = self._cell_args("get_cell_xf_index", args, kwargs, ())
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            out = scope.out_ptr()
-            _check(LIB.fm_sheet_get_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out))
-            return LIB.read_u32(out)
-
-    @overload
-    @_coordinate_form
-    def set_cell_xf_index(self, row: int, col: int, xf_index: int) -> None: ...
-
-    @overload
-    def set_cell_xf_index(self, a1: str, xf_index: int) -> None: ...
-
-    def set_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
-        """Store ``xf_index`` on the cell at ``(row, col)``.
-
-        Raises:
-          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``xf_index`` is not
-            below the workbook's cell-XF count.
-        """
-        row, col, xf_index = self._cell_args("set_cell_xf_index", args, kwargs, ("xf_index",))
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_set_cell_xf_index(
-                h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), _uint(xf_index, "xf_index")
-            )
-        )
-
-    @overload
-    @_coordinate_form
-    def clear_cell_xf_index(self, row: int, col: int) -> None: ...
-
-    @overload
-    def clear_cell_xf_index(self, a1: str) -> None: ...
-
-    def clear_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
-        """Remove the direct style assignment from the cell at ``(row, col)``.
-
-        A blank cell inherits the row / column style again; value, formula and
-        comments are kept. An absent cell is a no-op. A non-blank cell keeps
-        owning the default xf. Use the ``source`` of :meth:`get_effective_style`
-        to tell an unassigned cell from one directly assigned the Normal xf.
-        """
-        row, col = self._cell_args("clear_cell_xf_index", args, kwargs, ())
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
-
-    def set_range_xf_index(self, range: Union[CellRect, str], xf_index: int) -> None:
-        """Store ``xf_index`` on every cell of ``range``.
-
-        Cells that do not exist yet are materialised as blanks carrying only
-        the style, so an empty ruled box renders. Ruling a report this way
-        costs one call instead of one per cell.
-        """
-        rect = self._rect(range)
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            rp = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rp, rect)
-            _check(LIB.fm_sheet_set_range_xf_index(h, _uint(sheet, "sheet"), rp, _uint(xf_index, "xf_index")))
+            num_fmt_id = 0 if code == "General" else workbook.ooxml.add_num_fmt(code)
+        ooxml = workbook.ooxml
+        xfs = [ooxml.add_cell_xf(_patched_xf(workbook, ooxml.get_cell_xf(base), patch, num_fmt_id)) for base in bases]
+        self.ooxml.remap_range_style(rect, dict(zip(bases, xfs)))
 
     @overload
     @_coordinate_form
@@ -5917,28 +5758,30 @@ class Sheet:
             )
         return self._pivot_at(pivot_index)
 
-    def add_pivot(self, *, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> Pivot:
-        """Create an empty pivot table over cache ``cache_id`` with its top-left cell at
-        ``(anchor_row, anchor_col)``; return its handle.
+    def add_pivot(self, input: PivotInput) -> Pivot:
+        """Create the empty pivot table ``input`` describes and return its handle.
+
+        ``input.anchor`` is the top-left cell, a :class:`CellAddress` or one A1 cell.
 
         Example::
 
             cache = wb.add_pivot_cache()
-            pivot = ws.add_pivot(name="Sales", cache_id=cache.cache_id, anchor_row=0, anchor_col=4)
+            pivot = ws.add_pivot(PivotInput(name="Sales", cache_id=cache.cache_id, anchor="E1"))
         """
         sheet = self._index()
+        pivot = normalize_record_ranges(input, self._workbook, sheet=sheet, label="input")
         h = self._workbook._require()
         with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
+            name_ptr = scope.cstr(pivot.name)
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_add_pivot(
                     h,
                     _uint(sheet, "sheet_index"),
                     name_ptr,
-                    _uint(cache_id, "cache_id"),
-                    _uint(anchor_row, "anchor_row"),
-                    _uint(anchor_col, "anchor_col"),
+                    _uint(pivot.cache_id, "cache_id"),
+                    _uint(pivot.anchor.row, "anchor_row"),
+                    _uint(pivot.anchor.col, "anchor_col"),
                     out,
                 )
             )
@@ -6084,8 +5927,414 @@ class Sheet:
             _check(status)
 
 
-for _name, _signature in _COORDINATE_FORMS.items():
-    getattr(Sheet, _name).__signature__ = _signature
-del _name, _signature
+class SheetOoxml:
+    """The OOXML-level layer of a sheet, :attr:`Sheet.ooxml`.
+
+    The cell, row and column XF indices, the range-style remap that works on
+    them, and the raw XML of the worksheet elements the typed setters cover.
+    Most code uses :meth:`Sheet.set_cell_format`, which takes whole columns
+    (``"B:B"``) and rows (``"3:3"``) too.
+    """
+
+    __slots__ = ("_sheet",)
+
+    def __init__(self, sheet: Sheet) -> None:
+        self._sheet = sheet
+
+    def __repr__(self) -> str:
+        return f"{self._sheet!r}.ooxml"
+
+    def get_column_style(self, col: int) -> Optional[int]:
+        """The cell-style XF index column ``col`` carries (:meth:`set_column_style`); ``None`` when it has none."""
+        col = _uint(col, "col")
+        spans = self._sheet._layout_overrides(
+            LIB.fm_sheet_get_column_override_count, LIB.fm_sheet_get_column_override_at, S.COLUMN_LAYOUT
+        )
+        for d in spans:
+            if d["first"] <= col <= d["last"]:
+                return d["style_xf"] if d["has_style"] else None
+        return None
+
+    def get_row_style(self, row: int) -> Optional[int]:
+        """The cell-style XF index row ``row`` makes effective (:meth:`set_row_style`); ``None`` when it has none."""
+        row = _uint(row, "row")
+        rows = self._sheet._layout_overrides(
+            LIB.fm_sheet_get_row_override_count, LIB.fm_sheet_get_row_override_at, S.ROW_LAYOUT
+        )
+        for d in rows:
+            if d["row"] == row:
+                return d["style_xf"] if d["has_style"] else None
+        return None
+
+    def get_auto_filter_xml(self) -> Optional[str]:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.get_auto_filter`.
+
+        Return the sheet's ``<autoFilter>`` element, or ``None`` without one.
+        The fragment carries the filter-column criteria, sort state and
+        extension payload verbatim, so a host can preserve definitions it
+        does not interpret.
+        """
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        return (
+            _read_cstr_out(
+                LIB.fm_sheet_get_auto_filter_xml,
+                h,
+                _uint(sheet, "sheet_index"),
+            )
+            or None
+        )
+
+    def set_auto_filter_xml(self, xml: Optional[str]) -> None:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.set_auto_filter`.
+
+        Replace the sheet's ``<autoFilter>`` element; ``None`` (or ``""``) removes the AutoFilter. Other input must be a
+        complete ``<autoFilter ...>`` fragment; the engine preserves filter
+        extensions verbatim rather than validating them in detail.
+        """
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        with _ArgScope() as scope:
+            xml_ptr = scope.cstr(xml or "")
+            _check(LIB.fm_sheet_set_auto_filter_xml(h, _uint(sheet, "sheet_index"), xml_ptr))
+
+    def get_page_setup_xml(self) -> Optional[str]:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.get_page_setup`.
+
+        Return the sheet's ``<pageSetup>`` element, or ``None`` without one.
+        """
+        return self._sheet._get_print_xml("fm_sheet_get_page_setup_xml")
+
+    def set_page_setup_xml(self, xml: Optional[str]) -> None:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.set_page_setup`.
+
+        Replace the sheet's ``<pageSetup>`` element; ``None`` (or ``""``)
+        removes it. ``fitToPage`` is not a ``<pageSetup>`` attribute but lives
+        in ``<sheetPr>``. A fragment carrying ``r:id`` is rejected
+        unless the sheet already has a printerSettings part, because the
+        reference would otherwise dangle and Excel would repair the file.
+        """
+        self._sheet._set_print_xml("fm_sheet_set_page_setup_xml", xml)
+
+    def get_page_margins_xml(self) -> Optional[str]:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.get_page_margins`.
+
+        Return the sheet's ``<pageMargins>`` element, or ``None`` without one.
+        """
+        return self._sheet._get_print_xml("fm_sheet_get_page_margins_xml")
+
+    def set_page_margins_xml(self, xml: Optional[str]) -> None:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.set_page_margins`.
+
+        Replace the sheet's ``<pageMargins>`` element; ``None`` (or ``""``) removes it.
+        """
+        self._sheet._set_print_xml("fm_sheet_set_page_margins_xml", xml)
+
+    def get_print_options_xml(self) -> Optional[str]:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.get_print_options`.
+
+        Return the sheet's ``<printOptions>`` element, or ``None`` without one.
+        """
+        return self._sheet._get_print_xml("fm_sheet_get_print_options_xml")
+
+    def set_print_options_xml(self, xml: Optional[str]) -> None:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.set_print_options`.
+
+        Replace the sheet's ``<printOptions>`` element; ``None`` (or ``""``) removes it.
+        """
+        self._sheet._set_print_xml("fm_sheet_set_print_options_xml", xml)
+
+    def get_header_footer_xml(self) -> Optional[str]:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.get_header_footer`.
+
+        Return the sheet's ``<headerFooter>`` element, or ``None`` without one.
+        """
+        return self._sheet._get_print_xml("fm_sheet_get_header_footer_xml")
+
+    def set_header_footer_xml(self, xml: Optional[str]) -> None:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.set_header_footer`.
+
+        Replace the sheet's ``<headerFooter>`` element; ``None`` (or ``""``)
+        removes it. Header and footer codes are introduced by ``&``, which lives in XML
+        element text and so must arrive escaped: Excel writes
+        ``<oddHeader>&amp;C...</oddHeader>``. Pass decoded text to
+        :meth:`Sheet.set_header_footer` instead to let the engine escape it.
+        """
+        self._sheet._set_print_xml("fm_sheet_set_header_footer_xml", xml)
+
+    def get_sheet_pr_xml(self) -> Optional[str]:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.get_page_setup`, which reads its ``fitToPage``.
+
+        Return the sheet's ``<sheetPr>`` element, or ``None`` without one. It
+        also carries the tab colour and the VBA code name.
+        """
+        return self._sheet._get_print_xml("fm_sheet_get_sheet_pr_xml")
+
+    def set_sheet_pr_xml(self, xml: Optional[str]) -> None:
+        """OOXML fragment for round trips; normally use :meth:`Sheet.set_page_setup`, which writes its ``fitToPage``.
+
+        Replace the sheet's ``<sheetPr>`` element; ``None`` (or ``""``) removes it.
+        """
+        self._sheet._set_print_xml("fm_sheet_set_sheet_pr_xml", xml)
+
+    @overload
+    @_span_form
+    def set_column_style(self, first: int, last: int, xf_index: int) -> None: ...
+
+    @overload
+    def set_column_style(self, span: str, xf_index: int) -> None: ...
+
+    def set_column_style(self, *args: Any, **kwargs: Any) -> None:
+        """Set the cell-style XF on ``[first, last]``, keeping the other column attributes."""
+        first, last, xf_index = self._sheet._span_args("set_column_style", args, kwargs, ("first", "last", "xf_index"))
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        _check(
+            LIB.fm_sheet_set_column_style(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
+            )
+        )
+
+    @overload
+    @_span_form
+    def clear_column_style(self, first: int, last: int) -> None: ...
+
+    @overload
+    def clear_column_style(self, span: str) -> None: ...
+
+    def clear_column_style(self, *args: Any, **kwargs: Any) -> None:
+        """Remove the cell-style XF on ``[first, last]``, keeping the other column attributes."""
+        first, last = self._sheet._span_args("clear_column_style", args, kwargs, ("first", "last"))
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        _check(
+            LIB.fm_sheet_clear_column_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+        )
+
+    @overload
+    @_span_form
+    def set_row_style(self, first: int, last: int, xf_index: int) -> None: ...
+
+    @overload
+    def set_row_style(self, span: str, xf_index: int) -> None: ...
+
+    def set_row_style(self, *args: Any, **kwargs: Any) -> None:
+        """Set the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes.
+
+        Every row of the span gets an override. The span and ``xf_index`` are
+        validated before anything changes.
+        """
+        first, last, xf_index = self._sheet._span_args("set_row_style", args, kwargs, ("first", "last", "xf_index"))
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        _check(
+            LIB.fm_sheet_set_row_style(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
+            )
+        )
+
+    @overload
+    @_span_form
+    def clear_row_style(self, first: int, last: int) -> None: ...
+
+    @overload
+    def clear_row_style(self, span: str) -> None: ...
+
+    def clear_row_style(self, *args: Any, **kwargs: Any) -> None:
+        """Remove the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes."""
+        first, last = self._sheet._span_args("clear_row_style", args, kwargs, ("first", "last"))
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        _check(LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")))
+
+    def get_range_style_bases(self, range: Union[CellRect, str]) -> List[int]:
+        """List, ascending, every cell XF some cell of the selection resolves to.
+
+        ``range`` is a selection: full height is a column selection, full
+        width a row selection, both the whole sheet, neither a cell range. It
+        is the first step of an attribute patch (for example a font size over a selection): read the
+        bases, build a patched XF for each with :meth:`WorkbookOoxml.add_font` /
+        :meth:`WorkbookOoxml.add_cell_xf`, then apply them with :meth:`remap_range_style`.
+        """
+        rect = self._sheet._rect(range)
+        return self.get_range_style_bases_excluding(rect, ())
+
+    def get_range_style_bases_excluding(
+        self,
+        range: Union[CellRect, str],
+        excluded: Sequence[Tuple[int, int]],
+    ) -> List[int]:
+        """:meth:`get_range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
+
+        An excluded cell contributes no XF, neither its own nor the row, column
+        or default style beneath it. Cells outside the selection and repeats are
+        ignored; excluding every cell yields an empty list.
+        """
+        rect = self._sheet._rect(range)
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        cells = list(excluded)
+        count = len(cells)
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
+            rows_buf = cols_buf = 0
+            if count:
+                rows_buf = scope.buffer(b"".join(struct.pack("<I", _uint(r, "excluded_row")) for r, _ in cells))
+                cols_buf = scope.buffer(b"".join(struct.pack("<I", _uint(c, "excluded_col")) for _, c in cells))
+            len_ptr = scope.out_ptr()
+            # Size the buffer first, then fetch.
+            _check(
+                LIB.fm_sheet_get_range_style_bases_excluding(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    rp,
+                    rows_buf,
+                    cols_buf,
+                    _uint(count, "excluded_count"),
+                    0,
+                    0,
+                    len_ptr,
+                )
+            )
+            total = LIB.read_u32(len_ptr)
+            if total == 0:
+                return []
+            buf = scope.alloc(4 * total)
+            _check(
+                LIB.fm_sheet_get_range_style_bases_excluding(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    rp,
+                    rows_buf,
+                    cols_buf,
+                    _uint(count, "excluded_count"),
+                    buf,
+                    _uint(total, "cap"),
+                    len_ptr,
+                )
+            )
+            n = min(total, LIB.read_u32(len_ptr))
+            return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
+
+    def remap_range_style(self, range: Union[CellRect, str], mapping: Dict[int, int]) -> None:
+        """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
+
+        An XF absent from ``mapping`` is kept. Each target must be a valid cell
+        XF, else :class:`FormulonError` and nothing changes. Patch an attribute
+        by reading :meth:`get_range_style_bases`, adding a patched XF for each base
+        and passing ``{base: patched}``. Undo with :meth:`Sheet.snapshot_range_style`
+        taken beforehand and :meth:`Sheet.restore_range_style`.
+        """
+        rect = self._sheet._rect(range)
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        pairs = list(mapping.items())
+        count = len(pairs)
+        from_buf = to_buf = 0
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
+            if count:
+                from_buf = scope.buffer(b"".join(struct.pack("<I", _uint(k, "from_xf")) for k, _ in pairs))
+                to_buf = scope.buffer(b"".join(struct.pack("<I", _uint(v, "to_xf")) for _, v in pairs))
+            _check(
+                LIB.fm_sheet_remap_range_style(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    rp,
+                    from_buf,
+                    to_buf,
+                    _uint(count, "count"),
+                )
+            )
+
+    @overload
+    @_coordinate_form
+    def get_cell_xf_index(self, row: int, col: int) -> int: ...
+
+    @overload
+    def get_cell_xf_index(self, a1: str) -> int: ...
+
+    def get_cell_xf_index(self, *args: Any, **kwargs: Any) -> int:
+        """Return the xf (style record) index attached to a cell."""
+        row, col = self._sheet._cell_args("get_cell_xf_index", args, kwargs, ())
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(LIB.fm_sheet_get_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out))
+            return LIB.read_u32(out)
+
+    @overload
+    @_coordinate_form
+    def set_cell_xf_index(self, row: int, col: int, xf_index: int) -> None: ...
+
+    @overload
+    def set_cell_xf_index(self, a1: str, xf_index: int) -> None: ...
+
+    def set_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
+        """Store ``xf_index`` on the cell at ``(row, col)``.
+
+        Raises:
+          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``xf_index`` is not
+            below the workbook's cell-XF count.
+        """
+        row, col, xf_index = self._sheet._cell_args("set_cell_xf_index", args, kwargs, ("xf_index",))
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        _check(
+            LIB.fm_sheet_set_cell_xf_index(
+                h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), _uint(xf_index, "xf_index")
+            )
+        )
+
+    @overload
+    @_coordinate_form
+    def clear_cell_xf_index(self, row: int, col: int) -> None: ...
+
+    @overload
+    def clear_cell_xf_index(self, a1: str) -> None: ...
+
+    def clear_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
+        """Remove the direct style assignment from the cell at ``(row, col)``.
+
+        A blank cell inherits the row / column style again; value, formula and
+        comments are kept. An absent cell is a no-op. A non-blank cell keeps
+        owning the default xf. Use the ``source`` of :meth:`Sheet.get_effective_style`
+        to tell an unassigned cell from one directly assigned the Normal xf.
+        """
+        row, col = self._sheet._cell_args("clear_cell_xf_index", args, kwargs, ())
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        _check(LIB.fm_sheet_clear_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
+
+    def set_range_xf_index(self, range: Union[CellRect, str], xf_index: int) -> None:
+        """Store ``xf_index`` on every cell of ``range``.
+
+        Cells that do not exist yet are materialised as blanks carrying only
+        the style, so an empty ruled box renders. Ruling a report this way
+        costs one call instead of one per cell.
+        """
+        rect = self._sheet._rect(range)
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
+            _check(LIB.fm_sheet_set_range_xf_index(h, _uint(sheet, "sheet"), rp, _uint(xf_index, "xf_index")))
+
+
+for _qualname, _signature in _COORDINATE_FORMS.items():
+    _owner, _, _name = _qualname.partition(".")
+    getattr({"Sheet": Sheet, "SheetOoxml": SheetOoxml}[_owner], _name).__signature__ = _signature
+del _qualname, _owner, _name, _signature
 
 _install_workbook_locks(Sheet)
+_install_workbook_locks(SheetOoxml)
+
+# Bound after `Sheet` exists so `typing.get_type_hints` resolves the handle types its annotations name; the
+# package imports `workbook` first, which imports this module before any of these.
+from .drawing import Chart, Drawing, Picture, Shape, Slicer  # noqa: E402
+from .pivot import Pivot  # noqa: E402
+from .table import Table  # noqa: E402

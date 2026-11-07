@@ -212,22 +212,22 @@ class StyleColourTests(unittest.TestCase):
     def test_font_colour_is_one_color_and_takes_text(self) -> None:
         self.assertNotIn("color_argb", {f.name for f in dataclasses.fields(Font)})
         with Workbook.create_default() as wb:
-            index = wb.add_font(Font(name="Arial", color="#FF0000"))
-            self.assertEqual(wb.get_font(index).color, Color(kind=ColorKind.RGB, rgb=0xFFFF0000))
+            index = wb.ooxml.add_font(Font(name="Arial", color="#FF0000"))
+            self.assertEqual(wb.ooxml.get_font(index).color, Color(kind=ColorKind.RGB, rgb=0xFFFF0000))
             theme = Color(kind=ColorKind.THEME, theme=4, tint=0.5)
-            self.assertEqual(wb.get_font(wb.add_font(Font(name="Arial", color=theme))).color, theme)
-            self.assertEqual(wb.get_font(wb.add_font(Font(name="Arial Black"))).color.kind, ColorKind.NONE)
+            self.assertEqual(wb.ooxml.get_font(wb.ooxml.add_font(Font(name="Arial", color=theme))).color, theme)
+            self.assertEqual(wb.ooxml.get_font(wb.ooxml.add_font(Font(name="Arial Black"))).color.kind, ColorKind.NONE)
 
     def test_fill_border_and_gradient_colours(self) -> None:
         self.assertFalse({"fg_argb", "bg_argb"} & {f.name for f in dataclasses.fields(Fill)})
         with Workbook.create_default() as wb:
-            fill = wb.get_fill(wb.add_fill(Fill(pattern=FillPattern.SOLID, fg="#00FF00")))
+            fill = wb.ooxml.get_fill(wb.ooxml.add_fill(Fill(pattern=FillPattern.SOLID, fg="#00FF00")))
             self.assertEqual(fill.fg, Color(kind=ColorKind.RGB, rgb=0xFF00FF00))
             stops = [GradientStop(0.0, "#80112233"), GradientStop(1.0, Color(kind=ColorKind.THEME, theme=1))]
-            gradient = wb.get_fill(wb.add_fill(Fill(gradient=GradientFill(stops=stops)))).gradient
+            gradient = wb.ooxml.get_fill(wb.ooxml.add_fill(Fill(gradient=GradientFill(stops=stops)))).gradient
             self.assertEqual([s.color for s in gradient.stops], [Color(ColorKind.RGB, rgb=0x80112233), stops[1].color])
             side = BorderSideRecord(style=formulon.BorderStyle.THIN, color="#0000FF")
-            border = wb.get_border(wb.add_border(BorderRecord(left=side)))
+            border = wb.ooxml.get_border(wb.ooxml.add_border(BorderRecord(left=side)))
             self.assertEqual(border.left.color, Color(kind=ColorKind.RGB, rgb=0xFF0000FF))
 
     def test_a_malformed_colour_is_a_type_error(self) -> None:
@@ -235,7 +235,7 @@ class StyleColourTests(unittest.TestCase):
             for bad in ("red", "#12345", 0xFF0000):
                 with self.subTest(bad):
                     with self.assertRaises(TypeError):
-                        wb.add_font(Font(name="Arial", color=bad))  # type: ignore[arg-type]
+                        wb.ooxml.add_font(Font(name="Arial", color=bad))  # type: ignore[arg-type]
 
     def test_colour_input_helpers(self) -> None:
         self.assertEqual(_inputs.color_input("#abcdef", "c"), Color(kind=ColorKind.RGB, rgb=0xFFABCDEF))

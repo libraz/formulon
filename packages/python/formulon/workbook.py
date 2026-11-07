@@ -54,7 +54,7 @@ from typing import (
 )
 
 from . import _structs as S
-from ._c import LIB, FormulaSyntaxError, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
+from ._c import LIB, FormulaSyntaxError, FormulonError, InvalidFileError, ValueKind, _sint, _uint, fm_value_t_size
 from ._refs import resolve_ref
 from ._status import StatusCode
 
@@ -446,42 +446,10 @@ class ReadDiagnostics:
     unknown_content_type_count: int
 
 
-class InvalidFileError(FormulonError):
-    """The bytes cannot be opened as a workbook package.
-
-    Raised for a corrupt or hostile archive, unparsable XML, broken
-    relationships or content types, and corrupt XLSB records. A damaged part
-    the workbook still opens without (a drawing, a chart) is not one, nor is
-    an unsupported variant (``StatusCode.IO_UNSUPPORTED_VARIANT``).
-    """
-
-
-# The I/O statuses that mean the package cannot be opened as a workbook.
-_INVALID_FILE_CODES = frozenset(
-    {
-        StatusCode.IO_ZIP_CORRUPT,
-        StatusCode.IO_ZIP_BOMB,
-        StatusCode.IO_ZIP_SLIP,
-        StatusCode.IO_XML_PARSE,
-        StatusCode.IO_XML_DOCTYPE,
-        StatusCode.IO_XML_ENTITY_EXPLOSION,
-        StatusCode.IO_RELATIONSHIP_BROKEN,
-        StatusCode.IO_CONTENT_TYPE_INVALID,
-        StatusCode.IO_SHEET_CORRUPT,
-        StatusCode.IO_XLSB_RECORD_CORRUPT,
-        StatusCode.IO_XLSB_RECORD_TRUNCATED,
-        StatusCode.IO_XLSB_UNKNOWN_RECORD,
-        StatusCode.IO_XLSB_UNSUPPORTED_PTG,
-        StatusCode.IO_XLSB_CORRUPT,
-        StatusCode.IO_XLSB_RETAINED_PART_STALE,
-    }
-)
-
-
 def _check(status: int) -> None:
     """Raise :class:`FormulonError` (or its subclass for ``status``) if ``status`` is non-zero."""
     if status != 0:
-        raise (InvalidFileError if status in _INVALID_FILE_CODES else FormulonError)(status)
+        raise FormulonError(status)
 
 
 # `_uint` / `_sint` live in `formulon._c` (imported above) alongside
@@ -683,15 +651,6 @@ class RangeCell:
     formula: Optional[str]
     value: NativeValue
     kind: ValueKind
-
-
-# Retained only while `sheet.py` still builds its cell pages from it; not exported.
-@dataclass(frozen=True)
-class Cell:
-    row: int
-    col: int
-    formula: Optional[str]
-    value: Value
 
 
 @dataclass(frozen=True)
@@ -2840,8 +2799,8 @@ class ColumnLayout:
 
     ``width`` is the explicit width (the raw source bit or a legacy non-zero
     width), ``None`` when the span states none; an explicit zero stays
-    distinguishable from an absent width. ``style_xf`` is ``None`` when the
-    span carries no column style.
+    distinguishable from an absent width. The column style is read through
+    :meth:`SheetOoxml.get_column_style`.
     """
 
     first: int
@@ -2849,22 +2808,19 @@ class ColumnLayout:
     width: Optional[float]
     hidden: bool
     outline_level: int
-    style_xf: Optional[int] = None
     #: ``collapsed="1"``: the outline group this span summarises is collapsed.
     collapsed: bool = False
 
 
 @dataclass(frozen=True)
 class RowLayout:
-    """A per-row layout override."""
+    """A per-row layout override; the row style is read through :meth:`SheetOoxml.get_row_style`."""
 
     row: int
     #: The stored height; ``None`` when the row stores none.
     height: Optional[float]
     hidden: bool
     outline_level: int
-    #: The row style ``customFormat="1"`` makes effective; ``None`` when the row has none.
-    style_xf: Optional[int] = None
     #: ``customHeight="1"``: an explicit override rather than a cached auto height.
     custom_height: bool = False
     #: ``collapsed="1"``: the outline group this row summarises is collapsed.
@@ -3182,15 +3138,6 @@ class CfCell:
     row: int
     col: int
     matches: List[CfMatch]
-
-
-# Retained only while `sheet.py` still decodes CF colours with it; not exported.
-@dataclass(frozen=True)
-class CfColor:
-    r: int
-    g: int
-    b: int
-    a: int = 255
 
 
 @dataclass(frozen=True)
@@ -5914,7 +5861,7 @@ class Workbook:
       serially; it has no parallel-recalc entry point.
     """
 
-    __slots__ = ("_handle", "_sheets", "_tables", "_pivot_caches")
+    __slots__ = ("_handle", "_sheets", "_tables", "_pivot_caches", "_ooxml")
 
     def __init__(self) -> None:
         raise TypeError("use Workbook.create_default(), create_for_profile() or load()")
@@ -6018,7 +5965,7 @@ class Workbook:
         Example::
 
             with Workbook.load("book.xlsx") as wb:
-                print(wb[0].get_value(0, 0).to_python())
+                print(wb[0].get_value("A1"))
         """
         if isinstance(source, (bytes, bytearray, memoryview)):
             buf = bytes(source)
@@ -6285,10 +6232,6 @@ class Workbook:
         if not isinstance(formula, str):
             raise TypeError(f"formulon: formula must be a str, got {type(formula).__name__}")
         return _folded(self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False))
-
-    def _evaluate_formula_top_left(self, sheet: int, row: int, col: int, formula: str) -> Value:
-        """Evaluate as :meth:`Sheet.evaluate_formula_array` and read back only the top-left cell."""
-        return self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=True)[0][0]
 
     def _evaluate_formula_cells(
         self, sheet: int, row: int, col: int, formula: str, *, top_left_only: bool
@@ -6731,29 +6674,6 @@ class Workbook:
         index = self._table_index(table)
         h = self._require()
         _check(LIB.fm_workbook_remove_table(h, _uint(index, "table_index")))
-
-    def list_passthroughs(self) -> List[PassthroughPart]:
-        """Return the passthrough OOXML part paths."""
-        h = self._require()
-        n = _read_count(LIB.fm_workbook_get_passthrough_count, h)
-        # Scratch hoisted out of the loop; see list_defined_names.
-        with _ArgScope() as scope:
-            path_ptr = scope.out_ptr()
-            out: List[PassthroughPart] = []
-            for i in range(n):
-                status = LIB.fm_workbook_get_passthrough_at(h, _uint(i, "idx"), path_ptr)
-                _check(status)
-                out.append(PassthroughPart(path=LIB.read_cstr(LIB.read_u32(path_ptr))))
-        return out
-
-    def get_passthrough(self, path: str) -> Optional[str]:
-        """Return ``path`` when a passthrough part sits there (no leading ``/``), else ``None``."""
-        h = self._require()
-        with _ArgScope() as scope:
-            path_ptr = scope.cstr(path)
-            present = scope.out_ptr()
-            _check(LIB.fm_workbook_get_passthrough(h, path_ptr, present))
-            return path if LIB.read_u32(present) else None
 
     # -- Sheet structure ---------------------------------------------------
     def copy_sheet(
@@ -7279,127 +7199,9 @@ class Workbook:
             _check(fn(h, _uint(index, index_field), ptr))
             return decode(ptr)
 
-    def get_cell_xf(self, xf_index: int) -> CellXf:
-        """Return the resolved ``<xf>`` record at ``xf_index``."""
-        return self._get_style_record(
-            LIB.fm_workbook_get_cell_xf,
-            S.CELL_XF,
-            xf_index,
-            "xf_index",
-            self._decode_cell_xf,
-        )
-
-    def get_font(self, font_index: int) -> Font:
-        """Return the font record at ``font_index``."""
-        return self._get_style_record(LIB.fm_workbook_get_font, S.FONT_RECORD, font_index, "font_index", _decode_font)
-
-    def get_fill(self, fill_index: int) -> Fill:
-        """Return the fill record at ``fill_index``."""
-        return self._get_style_record(LIB.fm_workbook_get_fill, S.FILL_RECORD, fill_index, "fill_index", _decode_fill)
-
-    def get_border(self, border_index: int) -> Border:
-        """Return the border record at ``border_index``."""
-        return self._get_style_record(
-            LIB.fm_workbook_get_border,
-            S.BORDER_RECORD,
-            border_index,
-            "border_index",
-            _decode_border_record,
-        )
-
-    def get_dxf(self, dxf_index: int) -> DifferentialFormat:
-        """Read one differential format by its conditional-format ``dxfId``."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.DXF_RECORD)
-            _check(LIB.fm_workbook_get_dxf(h, _uint(dxf_index, "dxf_index"), ptr))
-            d = S.DXF_RECORD.unpack(LIB, ptr)
-            offsets = S.DXF_RECORD.offsets
-            font = _decode_font(ptr + offsets["font"][1]) if d["font_engaged"] else None
-            fill = _decode_fill(ptr + offsets["fill"][1]) if d["fill_engaged"] else None
-            return DifferentialFormat(
-                font=font,
-                fill=fill,
-                border=_decode_border_record(ptr + offsets["border"][1]) if d["border_engaged"] else None,
-                num_fmt_id=d["num_fmt_id"] if d["num_fmt_engaged"] else None,
-                num_fmt_code=(LIB.read_cstr(d["num_fmt_code"]) or None) if d["num_fmt_engaged"] else None,
-                alignment_xml=LIB.read_cstr(d["alignment_xml"]) or None,
-                protection_xml=LIB.read_cstr(d["protection_xml"]) or None,
-            )
-
-    def get_num_fmt_string(self, num_fmt_id: int) -> Optional[str]:
-        """Return the effective format code for ``num_fmt_id``; ``None`` when no format maps to it."""
-        h = self._require()
-        return _read_optional_cstr_out(
-            LIB.fm_workbook_get_num_fmt_string,
-            h,
-            _uint(num_fmt_id, "num_fmt_id", 16),
-        )
-
-    def list_fonts(self) -> List[Font]:
-        """Every font record, in index order."""
-        return [self.get_font(i) for i in range(self._style_count(LIB.fm_workbook_get_font_count))]
-
-    def list_fills(self) -> List[Fill]:
-        """Every fill record, in index order."""
-        return [self.get_fill(i) for i in range(self._style_count(LIB.fm_workbook_get_fill_count))]
-
-    def list_borders(self) -> List[Border]:
-        """Every border record, in index order."""
-        return [self.get_border(i) for i in range(self._style_count(LIB.fm_workbook_get_border_count))]
-
-    def list_cell_xfs(self) -> List[CellXf]:
-        """Every ``<xf>`` record of ``<cellXfs>``, in index order."""
-        return [self.get_cell_xf(i) for i in range(self._style_count(LIB.fm_workbook_get_cell_xf_count))]
-
-    def list_cell_styles(self) -> List[CellStyle]:
-        """Return the named cell styles in file order."""
-        h = self._require()
-        n = _read_count(LIB.fm_workbook_get_cell_style_count, h)
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.CELL_STYLE_RECORD)
-            out: List[CellStyle] = []
-            for i in range(n):
-                S.zero_struct(LIB, S.CELL_STYLE_RECORD, ptr)
-                _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index"), ptr))
-                out.append(_cell_style_from(S.CELL_STYLE_RECORD.unpack(LIB, ptr)))
-        return out
-
-    def list_cell_style_xfs(self) -> List[CellXf]:
-        """Every ``<cellStyleXfs>`` record, in index order."""
-        count = self._style_count(LIB.fm_workbook_get_cell_style_xf_count)
-        return [self.get_cell_style_xf(i) for i in range(count)]
-
-    def list_dxfs(self) -> List[DifferentialFormat]:
-        """Every differential format available to CF rules, in ``dxfId`` order."""
-        return [self.get_dxf(i) for i in range(self._style_count(LIB.fm_workbook_get_dxf_count))]
-
     def _style_count(self, fn) -> int:
         h = self._require()
         return _read_count(fn, h)
-
-    def add_font(self, record: Font) -> int:
-        """Add (dedup) a font record; return its index."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.FONT_RECORD)
-            out = scope.out_ptr()
-            _pack_font(ptr, record, scope)
-            _check(LIB.fm_workbook_add_font(h, ptr, out))
-            return LIB.read_u32(out)
-
-    def set_font(self, font_index: int, record: Font) -> None:
-        """Overwrite an existing font slot in place.
-
-        Every ``<xf>`` naming ``font_index`` restyles at once, so this is a
-        bulk change rather than a local edit; :meth:`add_font` is the way to
-        introduce a new appearance. The index must already exist.
-        """
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.FONT_RECORD)
-            _pack_font(ptr, record, scope)
-            _check(LIB.fm_workbook_set_font(h, _uint(font_index, "font_index"), ptr))
 
     def set_default_font(self, record: Font) -> None:
         """Declare the workbook's default font (font 0).
@@ -7416,53 +7218,6 @@ class Workbook:
             _pack_font(ptr, record, scope)
             _check(LIB.fm_workbook_set_default_font(h, ptr))
 
-    def add_fill(self, record: Fill) -> int:
-        """Add (dedup) a fill record; return its index."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.FILL_RECORD)
-            out = scope.out_ptr()
-            _pack_fill(ptr, record, scope)
-            _check(LIB.fm_workbook_add_fill(h, ptr, out))
-            return LIB.read_u32(out)
-
-    def add_border(self, record: Border) -> int:
-        """Add (dedup) a border record; return its index."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.BORDER_RECORD)
-            out = scope.out_ptr()
-            _pack_border_record(ptr, record)
-            _check(LIB.fm_workbook_add_border(h, ptr, out))
-            return LIB.read_u32(out)
-
-    def add_num_fmt(self, format_code: str) -> int:
-        """Add (dedup) a number-format code; return its resolved id."""
-        h = self._require()
-        with _ArgScope() as scope:
-            code_ptr = scope.cstr(format_code)
-            out = scope.out_ptr()
-            _check(LIB.fm_workbook_add_num_fmt(h, code_ptr, out))
-            return LIB.read_u32(out)
-
-    def add_cell_xf(self, record: CellXfInput) -> int:
-        """Add (dedup) an ``<xf>`` record; return its index.
-
-        Out-of-range font, fill or border indices and an unregistered
-        ``num_fmt_id`` raise :class:`InvalidArgumentError` rather than growing
-        the style tables.
-        """
-        return self._add_xf_record(record, LIB.fm_workbook_add_cell_xf)
-
-    def add_cell_style_xf(self, record: CellXfInput) -> int:
-        """Add (dedup) a named-style ``<xf>``; return its ``<cellStyleXfs>`` id.
-
-        The counterpart of :meth:`get_cell_style_xf`. Named-style xfs are
-        the records a ``<cellStyle>`` points at; :meth:`add_cell_xf` writes
-        the per-cell ``<cellXfs>`` pool instead.
-        """
-        return self._add_xf_record(record, LIB.fm_workbook_add_cell_style_xf)
-
     def _add_xf_record(self, record: CellXfInput, fn) -> int:
         h = self._require()
         with _ArgScope() as scope:
@@ -7471,72 +7226,6 @@ class Workbook:
             S.CELL_XF.pack(LIB, ptr, _cell_xf_fields(record))
             _check(fn(h, ptr, out))
             return LIB.read_u32(out)
-
-    def add_dxf(self, record: DifferentialFormat) -> int:
-        """Add (dedup) a differential format and return its ``dxfId``."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.DXF_RECORD)
-            out = scope.out_ptr()
-            S.DXF_RECORD.pack(
-                LIB,
-                ptr,
-                {
-                    "font_engaged": 1 if record.font is not None else 0,
-                    "fill_engaged": 1 if record.fill is not None else 0,
-                    "border_engaged": 1 if record.border is not None else 0,
-                    "num_fmt_engaged": 1 if record.num_fmt_id is not None else 0,
-                    "num_fmt_id": _uint(record.num_fmt_id or 0, "num_fmt_id", 16),
-                },
-            )
-            offsets = S.DXF_RECORD.offsets
-            if record.font is not None:
-                _pack_font(ptr + offsets["font"][1], record.font, scope)
-            if record.fill is not None:
-                _pack_fill(ptr + offsets["fill"][1], record.fill, scope)
-            if record.border is not None:
-                _pack_border_record(ptr + offsets["border"][1], record.border)
-            S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, scope)
-            S.write_str_field(LIB, ptr, S.DXF_RECORD, "alignment_xml", record.alignment_xml, scope)
-            S.write_str_field(LIB, ptr, S.DXF_RECORD, "protection_xml", record.protection_xml, scope)
-            _check(LIB.fm_workbook_add_dxf(h, ptr, out))
-            return LIB.read_u32(out)
-
-    def set_cell_style(self, record: CellStyle) -> None:
-        """Add or replace the named ``<cellStyle>`` record ``record.name``.
-
-        ``record.xf_id`` must reference an existing named-style xf -- register
-        one with :meth:`add_cell_style_xf` first. ``builtin_id`` is an Excel
-        built-in style ordinal (0..53); leave it at
-        ``CELL_STYLE_BUILTIN_ID_NONE`` for a custom style.
-        """
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.CELL_STYLE_RECORD)
-            S.CELL_STYLE_RECORD.pack(
-                LIB,
-                ptr,
-                {
-                    "xf_id": _uint(record.xf_id, "xf_id"),
-                    "builtin_id": _uint(record.builtin_id, "builtin_id"),
-                    "i_level": _uint(record.i_level, "i_level"),
-                    "hidden": 1 if record.hidden else 0,
-                    "custom_builtin": 1 if record.custom_builtin else 0,
-                },
-            )
-            S.write_str_field(LIB, ptr, S.CELL_STYLE_RECORD, "name", record.name, scope, allow_empty=True)
-            _check(LIB.fm_workbook_set_cell_style(h, ptr))
-
-    def remove_cell_style(self, name: str) -> None:
-        """Remove the named cell style ``name``.
-
-        Cell xfs inheriting from it are repointed at Normal; no xf index
-        shifts. The Normal style and unknown names raise ``FormulonError``.
-        """
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            _check(LIB.fm_workbook_remove_cell_style(h, name_ptr))
 
     def list_table_styles(self) -> List[TableStyle]:
         """Return the custom table / PivotTable styles in file order."""
@@ -7735,18 +7424,6 @@ class Workbook:
             _pack_color(spec_ptr, spec)
             _check(LIB.fm_workbook_resolve_color(h, spec_ptr, _sint(context, "context"), argb_ptr, res_ptr))
             return ResolvedColor(LIB.read_u32(argb_ptr), ColorResolution(LIB.read_i32(res_ptr)))
-
-    def get_cell_style(self, name: str) -> Optional[CellStyle]:
-        """Return the named cell style ``name`` (matched exactly), or ``None``."""
-        return self._lookup(LIB.fm_workbook_get_cell_style, (name,), S.CELL_STYLE_RECORD, _cell_style_from)
-
-    def get_cell_style_xf(self, cell_style_xf_index: int) -> CellXf:
-        """Return the named-style xf record at ``cell_style_xf_index``."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.CELL_XF)
-            _check(LIB.fm_workbook_get_cell_style_xf(h, _uint(cell_style_xf_index, "cell_style_xf_index"), ptr))
-            return self._decode_cell_xf(ptr)
 
     # -- Pivot caches ------------------------------------------------------
     def list_pivot_caches(self) -> List[PivotCache]:
@@ -8004,6 +7681,305 @@ def _install_workbook_locks(cls: type) -> None:
 
 
 # <ooxml-namespace>
+class WorkbookOoxml:
+    """The OOXML-level layer of a workbook, :attr:`Workbook.ooxml`.
+
+    The style tables a cell XF indexes (fonts, fills, borders, number
+    formats, ``<cellXfs>``, ``<cellStyleXfs>``, DXFs), the named cell styles
+    and the passthrough parts. Most code uses :meth:`Sheet.set_cell_format`
+    and :meth:`Sheet.get_cell_format` instead.
+    """
+
+    __slots__ = ("_workbook",)
+
+    def __init__(self, workbook: Workbook) -> None:
+        self._workbook = workbook
+
+    def __repr__(self) -> str:
+        return f"{self._workbook!r}.ooxml"
+
+    def list_passthroughs(self) -> List[PassthroughPart]:
+        """Return the passthrough OOXML part paths."""
+        h = self._workbook._require()
+        n = _read_count(LIB.fm_workbook_get_passthrough_count, h)
+        # Scratch hoisted out of the loop; see list_defined_names.
+        with _ArgScope() as scope:
+            path_ptr = scope.out_ptr()
+            out: List[PassthroughPart] = []
+            for i in range(n):
+                status = LIB.fm_workbook_get_passthrough_at(h, _uint(i, "idx"), path_ptr)
+                _check(status)
+                out.append(PassthroughPart(path=LIB.read_cstr(LIB.read_u32(path_ptr))))
+        return out
+
+    def get_passthrough(self, path: str) -> Optional[str]:
+        """Return ``path`` when a passthrough part sits there (no leading ``/``), else ``None``."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            path_ptr = scope.cstr(path)
+            present = scope.out_ptr()
+            _check(LIB.fm_workbook_get_passthrough(h, path_ptr, present))
+            return path if LIB.read_u32(present) else None
+
+    def get_cell_xf(self, xf_index: int) -> CellXf:
+        """Return the resolved ``<xf>`` record at ``xf_index``."""
+        return self._workbook._get_style_record(
+            LIB.fm_workbook_get_cell_xf,
+            S.CELL_XF,
+            xf_index,
+            "xf_index",
+            self._workbook._decode_cell_xf,
+        )
+
+    def get_font(self, font_index: int) -> Font:
+        """Return the font record at ``font_index``."""
+        return self._workbook._get_style_record(
+            LIB.fm_workbook_get_font, S.FONT_RECORD, font_index, "font_index", _decode_font
+        )
+
+    def get_fill(self, fill_index: int) -> Fill:
+        """Return the fill record at ``fill_index``."""
+        return self._workbook._get_style_record(
+            LIB.fm_workbook_get_fill, S.FILL_RECORD, fill_index, "fill_index", _decode_fill
+        )
+
+    def get_border(self, border_index: int) -> Border:
+        """Return the border record at ``border_index``."""
+        return self._workbook._get_style_record(
+            LIB.fm_workbook_get_border,
+            S.BORDER_RECORD,
+            border_index,
+            "border_index",
+            _decode_border_record,
+        )
+
+    def get_dxf(self, dxf_index: int) -> DifferentialFormat:
+        """Read one differential format by its conditional-format ``dxfId``."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.DXF_RECORD)
+            _check(LIB.fm_workbook_get_dxf(h, _uint(dxf_index, "dxf_index"), ptr))
+            d = S.DXF_RECORD.unpack(LIB, ptr)
+            offsets = S.DXF_RECORD.offsets
+            font = _decode_font(ptr + offsets["font"][1]) if d["font_engaged"] else None
+            fill = _decode_fill(ptr + offsets["fill"][1]) if d["fill_engaged"] else None
+            return DifferentialFormat(
+                font=font,
+                fill=fill,
+                border=_decode_border_record(ptr + offsets["border"][1]) if d["border_engaged"] else None,
+                num_fmt_id=d["num_fmt_id"] if d["num_fmt_engaged"] else None,
+                num_fmt_code=(LIB.read_cstr(d["num_fmt_code"]) or None) if d["num_fmt_engaged"] else None,
+                alignment_xml=LIB.read_cstr(d["alignment_xml"]) or None,
+                protection_xml=LIB.read_cstr(d["protection_xml"]) or None,
+            )
+
+    def get_num_fmt_string(self, num_fmt_id: int) -> Optional[str]:
+        """Return the effective format code for ``num_fmt_id``; ``None`` when no format maps to it."""
+        h = self._workbook._require()
+        return _read_optional_cstr_out(
+            LIB.fm_workbook_get_num_fmt_string,
+            h,
+            _uint(num_fmt_id, "num_fmt_id", 16),
+        )
+
+    def list_fonts(self) -> List[Font]:
+        """Every font record, in index order."""
+        return [self.get_font(i) for i in range(self._workbook._style_count(LIB.fm_workbook_get_font_count))]
+
+    def list_fills(self) -> List[Fill]:
+        """Every fill record, in index order."""
+        return [self.get_fill(i) for i in range(self._workbook._style_count(LIB.fm_workbook_get_fill_count))]
+
+    def list_borders(self) -> List[Border]:
+        """Every border record, in index order."""
+        return [self.get_border(i) for i in range(self._workbook._style_count(LIB.fm_workbook_get_border_count))]
+
+    def list_cell_xfs(self) -> List[CellXf]:
+        """Every ``<xf>`` record of ``<cellXfs>``, in index order."""
+        return [self.get_cell_xf(i) for i in range(self._workbook._style_count(LIB.fm_workbook_get_cell_xf_count))]
+
+    def list_cell_styles(self) -> List[CellStyle]:
+        """Return the named cell styles in file order."""
+        h = self._workbook._require()
+        n = _read_count(LIB.fm_workbook_get_cell_style_count, h)
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CELL_STYLE_RECORD)
+            out: List[CellStyle] = []
+            for i in range(n):
+                S.zero_struct(LIB, S.CELL_STYLE_RECORD, ptr)
+                _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index"), ptr))
+                out.append(_cell_style_from(S.CELL_STYLE_RECORD.unpack(LIB, ptr)))
+        return out
+
+    def list_cell_style_xfs(self) -> List[CellXf]:
+        """Every ``<cellStyleXfs>`` record, in index order."""
+        count = self._workbook._style_count(LIB.fm_workbook_get_cell_style_xf_count)
+        return [self.get_cell_style_xf(i) for i in range(count)]
+
+    def list_dxfs(self) -> List[DifferentialFormat]:
+        """Every differential format available to CF rules, in ``dxfId`` order."""
+        return [self.get_dxf(i) for i in range(self._workbook._style_count(LIB.fm_workbook_get_dxf_count))]
+
+    def add_font(self, record: Font) -> int:
+        """Add (dedup) a font record; return its index."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.FONT_RECORD)
+            out = scope.out_ptr()
+            _pack_font(ptr, record, scope)
+            _check(LIB.fm_workbook_add_font(h, ptr, out))
+            return LIB.read_u32(out)
+
+    def set_font(self, font_index: int, record: Font) -> None:
+        """Overwrite an existing font slot in place.
+
+        Every ``<xf>`` naming ``font_index`` restyles at once, so this is a
+        bulk change rather than a local edit; :meth:`add_font` is the way to
+        introduce a new appearance. The index must already exist.
+        """
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.FONT_RECORD)
+            _pack_font(ptr, record, scope)
+            _check(LIB.fm_workbook_set_font(h, _uint(font_index, "font_index"), ptr))
+
+    def add_fill(self, record: Fill) -> int:
+        """Add (dedup) a fill record; return its index."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.FILL_RECORD)
+            out = scope.out_ptr()
+            _pack_fill(ptr, record, scope)
+            _check(LIB.fm_workbook_add_fill(h, ptr, out))
+            return LIB.read_u32(out)
+
+    def add_border(self, record: Border) -> int:
+        """Add (dedup) a border record; return its index."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.BORDER_RECORD)
+            out = scope.out_ptr()
+            _pack_border_record(ptr, record)
+            _check(LIB.fm_workbook_add_border(h, ptr, out))
+            return LIB.read_u32(out)
+
+    def add_num_fmt(self, format_code: str) -> int:
+        """Add (dedup) a number-format code; return its resolved id."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            code_ptr = scope.cstr(format_code)
+            out = scope.out_ptr()
+            _check(LIB.fm_workbook_add_num_fmt(h, code_ptr, out))
+            return LIB.read_u32(out)
+
+    def add_cell_xf(self, record: CellXfInput) -> int:
+        """Add (dedup) an ``<xf>`` record; return its index.
+
+        Out-of-range font, fill or border indices and an unregistered
+        ``num_fmt_id`` raise :class:`InvalidArgumentError` rather than growing
+        the style tables.
+        """
+        return self._workbook._add_xf_record(record, LIB.fm_workbook_add_cell_xf)
+
+    def add_cell_style_xf(self, record: CellXfInput) -> int:
+        """Add (dedup) a named-style ``<xf>``; return its ``<cellStyleXfs>`` id.
+
+        The counterpart of :meth:`get_cell_style_xf`. Named-style xfs are
+        the records a ``<cellStyle>`` points at; :meth:`add_cell_xf` writes
+        the per-cell ``<cellXfs>`` pool instead.
+        """
+        return self._workbook._add_xf_record(record, LIB.fm_workbook_add_cell_style_xf)
+
+    def add_dxf(self, record: DifferentialFormat) -> int:
+        """Add (dedup) a differential format and return its ``dxfId``."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.DXF_RECORD)
+            out = scope.out_ptr()
+            S.DXF_RECORD.pack(
+                LIB,
+                ptr,
+                {
+                    "font_engaged": 1 if record.font is not None else 0,
+                    "fill_engaged": 1 if record.fill is not None else 0,
+                    "border_engaged": 1 if record.border is not None else 0,
+                    "num_fmt_engaged": 1 if record.num_fmt_id is not None else 0,
+                    "num_fmt_id": _uint(record.num_fmt_id or 0, "num_fmt_id", 16),
+                },
+            )
+            offsets = S.DXF_RECORD.offsets
+            if record.font is not None:
+                _pack_font(ptr + offsets["font"][1], record.font, scope)
+            if record.fill is not None:
+                _pack_fill(ptr + offsets["fill"][1], record.fill, scope)
+            if record.border is not None:
+                _pack_border_record(ptr + offsets["border"][1], record.border)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, scope)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "alignment_xml", record.alignment_xml, scope)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "protection_xml", record.protection_xml, scope)
+            _check(LIB.fm_workbook_add_dxf(h, ptr, out))
+            return LIB.read_u32(out)
+
+    def set_cell_style(self, record: CellStyle) -> None:
+        """Add or replace the named ``<cellStyle>`` record ``record.name``.
+
+        ``record.xf_id`` must reference an existing named-style xf -- register
+        one with :meth:`add_cell_style_xf` first. ``builtin_id`` is an Excel
+        built-in style ordinal (0..53); leave it at
+        ``CELL_STYLE_BUILTIN_ID_NONE`` for a custom style.
+        """
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CELL_STYLE_RECORD)
+            S.CELL_STYLE_RECORD.pack(
+                LIB,
+                ptr,
+                {
+                    "xf_id": _uint(record.xf_id, "xf_id"),
+                    "builtin_id": _uint(record.builtin_id, "builtin_id"),
+                    "i_level": _uint(record.i_level, "i_level"),
+                    "hidden": 1 if record.hidden else 0,
+                    "custom_builtin": 1 if record.custom_builtin else 0,
+                },
+            )
+            S.write_str_field(LIB, ptr, S.CELL_STYLE_RECORD, "name", record.name, scope, allow_empty=True)
+            _check(LIB.fm_workbook_set_cell_style(h, ptr))
+
+    def remove_cell_style(self, name: str) -> None:
+        """Remove the named cell style ``name``.
+
+        Cell xfs inheriting from it are repointed at Normal; no xf index
+        shifts. The Normal style and unknown names raise ``FormulonError``.
+        """
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            _check(LIB.fm_workbook_remove_cell_style(h, name_ptr))
+
+    def get_cell_style(self, name: str) -> Optional[CellStyle]:
+        """Return the named cell style ``name`` (matched exactly), or ``None``."""
+        return self._workbook._lookup(LIB.fm_workbook_get_cell_style, (name,), S.CELL_STYLE_RECORD, _cell_style_from)
+
+    def get_cell_style_xf(self, cell_style_xf_index: int) -> CellXf:
+        """Return the named-style xf record at ``cell_style_xf_index``."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CELL_XF)
+            _check(LIB.fm_workbook_get_cell_style_xf(h, _uint(cell_style_xf_index, "cell_style_xf_index"), ptr))
+            return self._workbook._decode_cell_xf(ptr)
+
+
+def _workbook_ooxml(self: Workbook) -> WorkbookOoxml:
+    """The OOXML-level layer of the workbook: style tables, named styles and passthrough parts. Always the same object."""
+    layer = getattr(self, "_ooxml", None)
+    if layer is None:
+        layer = WorkbookOoxml(self)
+        self._ooxml = layer
+    return layer
+
+
+Workbook.ooxml = property(_workbook_ooxml)  # type: ignore[attr-defined]
+_install_workbook_locks(WorkbookOoxml)
 # </ooxml-namespace>
 
 
