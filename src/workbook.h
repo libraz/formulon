@@ -569,6 +569,14 @@ class Workbook {
   /// success.
   Expected<eval::RecalcStats, Error> recalc(const eval::FunctionRegistry& registry);
 
+  /// Brings cached values up to date before a value read or a save: unless
+  /// the calc mode is `kManual`, runs `recalc(registry)` when the dirty set
+  /// is non-empty and discards its stats. A clean workbook is left alone, so
+  /// volatile formulas are not recomputed per read. Called from inside a
+  /// recalc on this thread it fails with `kGraphRecalcReentrant`; any recalc
+  /// error is returned as is, with the dirty set as `recalc()` left it.
+  Expected<void, Error> ensure_calculated(const eval::FunctionRegistry& registry);
+
   /// Returns the embedded recalc engine. Exposed for tests and debug
   /// tooling; lifetime is tied to the workbook.
   const eval::RecalcEngine& recalc_engine() const noexcept { return *engine_; }
@@ -1098,13 +1106,11 @@ class Workbook {
   // ---------------------------------------------------------------------------
   //
   // Excel's "Calculation options" workbook setting. `kAuto` is the
-  // default; `kManual` suppresses automatic recalc on input, leaving
-  // it to the host UI to drive `recalc()` explicitly; `kAutoNoTable`
-  // recalcs everything except data-table cells, which `recalc()` then
-  // leaves to `recalc_data_tables()`. Apart from that the engine does
-  // not gate evaluation on this setting (every `recalc()` call honours
-  // all dirty cells); it is round-trip metadata surfaced through the
-  // bindings so the host UI can mirror Excel's user-visible state.
+  // default: `ensure_calculated()` computes pending cells before a value
+  // read or a save. `kManual` leaves them pending until `recalc()`.
+  // `kAutoNoTable` behaves like `kAuto` except that `recalc()` leaves the
+  // data tables to `recalc_data_tables()`. An explicit `recalc()` call
+  // honours all dirty cells whatever the mode.
 
   /// Workbook-level calc-mode enum. Type-aliased from `CalcMode`
   /// (declared in `calc_settings.h`) so the C ABI, the OOXML
@@ -1116,12 +1122,13 @@ class Workbook {
   /// Returns the workbook-level calc mode. Defaults to `kAuto`.
   CalcMode calc_mode() const noexcept { return calc_mode_; }
 
-  /// Sets the workbook-level calc mode. Only `kAutoNoTable` changes what
-  /// `recalc()` does: it skips the data tables.
+  /// Sets the workbook-level calc mode. `kManual` turns
+  /// `ensure_calculated()` into a no-op; `kAutoNoTable` makes `recalc()`
+  /// skip the data tables.
   void set_calc_mode(CalcMode mode) noexcept { calc_mode_ = mode; }
 
   /// The remaining `<calcPr>` attributes (`fullPrecision`, `calcOnSave`,
-  /// `refMode`, `calcId`, ...). Plain metadata, like `calc_mode`.
+  /// `refMode`, `calcId`, ...). Plain metadata.
   const CalcOptions& calc_options() const noexcept { return calc_options_; }
   CalcOptions& mutable_calc_options() noexcept { return calc_options_; }
 

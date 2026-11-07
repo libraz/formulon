@@ -15,10 +15,11 @@ namespace formulon {
 /// Excel calc-mode enum. Mirrors the `calcMode` attribute on `<calcPr>`
 /// (`auto` / `manual` / `autoNoTable`).
 ///
-/// Round-trip metadata surfaced through the bindings so a host UI can
-/// mirror Excel's user-visible state. The one effect on evaluation:
-/// `kAutoNoTable` makes `Workbook::recalc()` skip What-If data tables,
-/// which `Workbook::recalc_data_tables()` then computes on demand.
+/// `kAuto` computes pending cells before a value read or a save
+/// (`Workbook::ensure_calculated()`); `kManual` leaves them pending until
+/// `Workbook::recalc()`; `kAutoNoTable` is `kAuto` except that `recalc()`
+/// skips What-If data tables, which `Workbook::recalc_data_tables()` then
+/// computes on demand.
 enum class CalcMode : std::uint8_t {
   kAuto = 0,
   kManual = 1,

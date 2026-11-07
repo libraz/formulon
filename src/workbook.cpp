@@ -405,6 +405,21 @@ Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry
   return result;
 }
 
+Expected<void, Error> Workbook::ensure_calculated(const eval::FunctionRegistry& registry) {
+  if (calc_mode_ == CalcMode::kManual) {
+    return {};
+  }
+  // Inside a recalc the dirty set cannot be read; recalc() rejects the nested pass as re-entrant.
+  if (!eval::detail::g_in_recalc && !has_dirty_cells()) {
+    return {};
+  }
+  auto result = recalc(registry);
+  if (!result) {
+    return result.error();
+  }
+  return {};
+}
+
 Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& registry,
                                                 const eval::SchedulerConfig& cfg, eval::SchedulerStats* stats) {
   eval::SchedulerStats local_stats;
