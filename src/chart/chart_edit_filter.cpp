@@ -1,5 +1,5 @@
-#include <cstring>
 #include <initializer_list>
+#include <iterator>
 #include <optional>
 #include <set>
 #include <string>
@@ -22,6 +22,7 @@
 #include "io/xml_utils.h"
 #include "sheet.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -37,7 +38,7 @@ namespace {
 void put_ref(xml_node ser, const char* tag, const std::string& formula, bool multi, bool filtered) {
   drop(ser, local_name(tag));
   const bool name = local_name(tag) == "tx";
-  const char* ref = name ? "strRef" : multi ? "multiLvlStrRef" : "numRef";
+  const char* ref = chart_ref_tag(name ? ChartRefKind::kStr : multi ? ChartRefKind::kMulti : ChartRefKind::kNum);
   std::string x = std::string("<") + tag + "><c:" + ref + ">";
   std::string esc;
   io::AppendXmlRawTextEscaped(esc, formula);
@@ -90,7 +91,7 @@ std::string filtered_group_name(std::string_view plot) {
                                           {"ofPie", "Pie"},   {"scatter", "Scatter"}, {"bubble", "Bubble"},
                                           {"radar", "Radar"}, {"surface", "Surface"}};
   for (const auto& k : kKinds) {
-    if (plot.substr(0, std::strlen(k[0])) == k[0]) {
+    if (strings::starts_with(plot, k[0])) {
       return std::string("c15:filtered") + k[1] + "Series";
     }
   }
@@ -363,7 +364,7 @@ void vary_bar(xml_node plot, bool on, const Palette& palette) {
     for (const xml_node& d : children_local(ser, "dPt")) {
       const std::string_view clr =
           child_local(child_local(child_local(d, "spPr"), "solidFill"), "schemeClr").attribute("val").value();
-      if (clr.substr(0, 6) == "accent") {
+      if (strings::starts_with(clr, "accent")) {
         ser.remove_child(d);
       }
     }
@@ -375,15 +376,6 @@ void vary_bar(xml_node plot, bool on, const Palette& palette) {
 }
 
 namespace {
-
-xml_node find_ext(const xml_node& ext_list, const char* uri) {
-  for (const xml_node& ext : children_local(ext_list, "ext")) {
-    if (std::string_view(ext.attribute("uri").value()) == uri) {
-      return ext;
-    }
-  }
-  return {};
-}
 
 void patch_na_as_blank(xml_node chart, const ChartPatchField<bool>& field) {
   if (field.is_keep()) {
@@ -416,10 +408,9 @@ void patch_na_as_blank(xml_node chart, const ChartPatchField<bool>& field) {
 void patch_display(const Chart& c, const ChartDisplayPatch& patch) {
   xml_node chart = c.chart();
   if (!patch.blanks_as.is_keep()) {
-    static const char* const kBlanks[] = {"gap", "zero", "span"};
     const int b = static_cast<int>(patch.blanks_as.value);
-    if (patch.blanks_as.is_set() && b >= 1 && b <= 3) {
-      put_val(chart, "c:dispBlanksAs", kChartOrder, kBlanks[b - 1]);
+    if (patch.blanks_as.is_set() && b >= 1 && b < static_cast<int>(std::size(kChartBlanksTokens))) {
+      put_val(chart, "c:dispBlanksAs", kChartOrder, kChartBlanksTokens[b]);
     } else {
       drop(chart, "dispBlanksAs");
     }

@@ -290,12 +290,11 @@ void walk_subtotal_tree(HierNode& tree, const std::vector<HierLevel>& levels, co
     }
     const OrderedHierarchyChild& entry = top.children[top.child_cursor++];
     HierNode* child = entry.node;
-    const std::string label = node_label(*entry.key, *child);
     if (child->children.empty()) {
       stack_leaves.push_back(child->leaf_index);
     } else {
       path.resize(top.depth);
-      path.push_back(label);
+      path.push_back(node_label(*entry.key, *child));
       stack.push_back(
           {child, ordered_children(*child, levels, top.depth + 1U), 0, top.depth + 1U, stack_leaves.size()});
     }

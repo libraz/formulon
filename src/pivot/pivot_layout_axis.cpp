@@ -20,6 +20,7 @@
 #include "pivot/value_order.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon::pivot::detail {
@@ -398,10 +399,7 @@ Expected<std::vector<AxisEntry>, Error> collect_axis_entries(const PivotTable& t
   std::size_t subtotal_cursor = 0;
   if (shape.depth > 0) {
     for (const AxisHierarchyNode& root : roots) {
-      auto root_or = check_axis_impl(root, path, views, subtotal_cursor, counts, axis);
-      if (!root_or) {
-        return std::move(root_or.error());
-      }
+      RETURN_IF_ERROR(check_axis_impl(root, path, views, subtotal_cursor, counts, axis));
     }
   }
   if (subtotal_cursor != views.size()) {

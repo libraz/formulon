@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <set>
@@ -16,6 +17,7 @@
 #include "utils/a1_ref.h"
 #include "utils/double_parse.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -102,7 +104,7 @@ std::optional<std::uint32_t> scheme_index(std::string_view name) {
     return 10U;
   if (name == "folHlink")
     return 11U;
-  if (name.size() == 7 && name.substr(0, 6) == "accent" && name[6] >= '1' && name[6] <= '6') {
+  if (name.size() == 7 && strings::starts_with(name, "accent") && name[6] >= '1' && name[6] <= '6') {
     return 4U + static_cast<std::uint32_t>(name[6] - '1');
   }
   return std::nullopt;
@@ -169,15 +171,8 @@ ChartFill read_fill(const Workbook& wb, const xml_node& sp_pr) {
 }
 
 ChartLineDash dash_of(std::string_view name) {
-  if (name == "solid")
-    return ChartLineDash::kSolid;
-  if (name == "dash")
-    return ChartLineDash::kDash;
-  if (name == "dot")
-    return ChartLineDash::kDot;
-  if (name == "dashDot")
-    return ChartLineDash::kDashDot;
-  return ChartLineDash::kOther;
+  const int i = chart_token_index(kChartDashTokens, std::size(kChartDashTokens), name);
+  return i < 0 ? ChartLineDash::kOther : static_cast<ChartLineDash>(i);
 }
 
 ChartLine read_line(const Workbook& wb, const xml_node& sp_pr) {
@@ -201,31 +196,9 @@ ChartLine read_line(const Workbook& wb, const xml_node& sp_pr) {
 }
 
 ChartMarkerSymbol symbol_of(std::string_view name) {
-  if (name == "none")
-    return ChartMarkerSymbol::kNone;
-  if (name == "auto")
-    return ChartMarkerSymbol::kAuto;
-  if (name == "circle")
-    return ChartMarkerSymbol::kCircle;
-  if (name == "square")
-    return ChartMarkerSymbol::kSquare;
-  if (name == "diamond")
-    return ChartMarkerSymbol::kDiamond;
-  if (name == "triangle")
-    return ChartMarkerSymbol::kTriangle;
-  if (name == "x")
-    return ChartMarkerSymbol::kX;
-  if (name == "star")
-    return ChartMarkerSymbol::kStar;
-  if (name == "plus")
-    return ChartMarkerSymbol::kPlus;
-  if (name == "dot")
-    return ChartMarkerSymbol::kDot;
-  if (name == "dash")
-    return ChartMarkerSymbol::kDash;
-  if (name == "picture")
-    return ChartMarkerSymbol::kPicture;
-  return ChartMarkerSymbol::kAuto;  // Not an ST_MarkerStyle value.
+  const int i = chart_token_index(kChartSymbolTokens, std::size(kChartSymbolTokens), name);
+  return i < 0 ? ChartMarkerSymbol::kAuto  // Not an ST_MarkerStyle value.
+               : static_cast<ChartMarkerSymbol>(i);
 }
 
 ChartMarker read_marker(const Workbook& wb, const xml_node& marker) {
@@ -242,25 +215,11 @@ ChartMarker read_marker(const Workbook& wb, const xml_node& marker) {
 }
 
 std::optional<ChartLabelPosition> label_position_of(std::string_view name) {
-  if (name == "bestFit")
-    return ChartLabelPosition::kBestFit;
-  if (name == "ctr")
-    return ChartLabelPosition::kCenter;
-  if (name == "inBase")
-    return ChartLabelPosition::kInsideBase;
-  if (name == "inEnd")
-    return ChartLabelPosition::kInsideEnd;
-  if (name == "outEnd")
-    return ChartLabelPosition::kOutsideEnd;
-  if (name == "t")
-    return ChartLabelPosition::kAbove;
-  if (name == "b")
-    return ChartLabelPosition::kBelow;
-  if (name == "l")
-    return ChartLabelPosition::kLeft;
-  if (name == "r")
-    return ChartLabelPosition::kRight;
-  return std::nullopt;
+  const int i = chart_token_index(kChartLabelPositionTokens, std::size(kChartLabelPositionTokens), name);
+  if (i < 0) {
+    return std::nullopt;
+  }
+  return static_cast<ChartLabelPosition>(i);
 }
 
 ChartNumFmt read_num_fmt(const xml_node& node) {
@@ -323,10 +282,11 @@ void read_points(const xml_node& cache, bool numeric, bool direct_text, std::vec
     point_count = cache.attribute("ptCount").as_uint();
   }
   out.clear();
+  std::string decoded;
   for (const xml_node& pt : children_local(cache, "pt")) {
     const std::string_view raw_text =
         direct_text ? std::string_view(pt.child_value()) : std::string_view(kid(pt, "v").child_value());
-    std::string decoded;
+    decoded.clear();
     if (!direct_text) {
       io::AppendOoxmlTextUnescaped(decoded, raw_text);
     }
@@ -446,17 +406,8 @@ ChartTitle read_title(const xml_node& title) {
 }
 
 ChartLegendPosition legend_position_of(std::string_view name, ChartLegendPosition fallback) {
-  if (name == "b")
-    return ChartLegendPosition::kBottom;
-  if (name == "t")
-    return ChartLegendPosition::kTop;
-  if (name == "l")
-    return ChartLegendPosition::kLeft;
-  if (name == "r")
-    return ChartLegendPosition::kRight;
-  if (name == "tr")
-    return ChartLegendPosition::kTopRight;
-  return fallback;
+  const int i = chart_token_index(kChartLegendTokens, std::size(kChartLegendTokens), name, 1);
+  return i < 0 ? fallback : static_cast<ChartLegendPosition>(i);
 }
 
 ChartLegend read_legend(const xml_node& legend) {
@@ -493,12 +444,8 @@ ChartAxis read_axis(const xml_node& node, ChartAxisKind kind) {
   axis.deleted = flag_of(kid(node, "delete"));
   axis.cross_ax = uint_of(kid(node, "crossAx")).value_or(0U);
   const std::string_view crosses = val_of(kid(node, "crosses"));
-  if (crosses == "autoZero") {
-    axis.crosses = ChartAxisCrosses::kAutoZero;
-  } else if (crosses == "min") {
-    axis.crosses = ChartAxisCrosses::kMin;
-  } else if (crosses == "max") {
-    axis.crosses = ChartAxisCrosses::kMax;
+  if (const int i = chart_token_index(kChartCrossesTokens, std::size(kChartCrossesTokens), crosses, 1); i > 0) {
+    axis.crosses = static_cast<ChartAxisCrosses>(i);
   }
   if (const xml_node at = kid(node, "crossesAt")) {
     axis.crosses = ChartAxisCrosses::kAt;
@@ -630,9 +577,7 @@ ChartPlot read_plot(const Workbook& wb, const xml_node& node, ChartPlotType type
   // Series hidden through the chart filter move to `c15:filtered*Series`.
   for (const xml_node& ext : children_local(kid(node, "extLst"), "ext")) {
     for (xml_node group = ext.first_child(); group; group = group.next_sibling()) {
-      const std::string_view name = local_name(group);
-      if (group.type() == pugi::node_element && name.size() > 14 && name.substr(0, 8) == "filtered" &&
-          name.substr(name.size() - 6) == "Series") {
+      if (is_filtered_series_group(group)) {
         for (const xml_node& ser : children_local(group, "ser")) {
           plot.series.push_back(read_series(wb, ser, true));
         }
@@ -778,10 +723,8 @@ void read_drawingml_chart(const Workbook& wb, const xml_node& root, ChartModel& 
     }
   }
   const std::string_view blanks = val_of(kid(chart, "dispBlanksAs"));
-  model.disp_blanks_as = blanks == "gap"    ? ChartBlanksAs::kGap
-                         : blanks == "zero" ? ChartBlanksAs::kZero
-                         : blanks == "span" ? ChartBlanksAs::kSpan
-                                            : ChartBlanksAs::kAbsent;
+  const int blanks_idx = chart_token_index(kChartBlanksTokens, std::size(kChartBlanksTokens), blanks, 1);
+  model.disp_blanks_as = blanks_idx < 0 ? ChartBlanksAs::kAbsent : static_cast<ChartBlanksAs>(blanks_idx);
 
   const xml_node plot_area = kid(chart, "plotArea");
   for (xml_node node = plot_area.first_child(); node; node = node.next_sibling()) {
@@ -1012,6 +955,12 @@ Expected<void, Error> parse_chart_part(const std::vector<std::uint8_t>& bytes, p
     return unparseable("part root is not chartSpace", doc.document_element().name());
   }
   return Expected<void, Error>::Ok();
+}
+
+bool is_filtered_series_group(const pugi::xml_node& node) {
+  const std::string_view name = local_name(node);
+  return node.type() == pugi::node_element && name.size() > 14 && strings::starts_with(name, "filtered") &&
+         strings::ends_with(name, "Series");
 }
 
 Expected<ChartModel, Error> read_chart_model(const Workbook& wb, const pugi::xml_document& doc) {

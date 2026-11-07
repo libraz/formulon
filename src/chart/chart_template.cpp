@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -262,10 +263,6 @@ constexpr const char* kStyleAlt =
 
 constexpr const char* kNoFillSpPr = "<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr>";
 
-constexpr const char* kShowFlags =
-    "<c:showLegendKey val=\"0\"/><c:showVal val=\"0\"/><c:showCatName val=\"0\"/><c:showSerName val=\"0\"/>"
-    "<c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/>";
-
 constexpr std::uint32_t kAxisId1 = 507100001U;
 constexpr std::uint32_t kAxisId2 = 507100002U;
 
@@ -323,15 +320,13 @@ std::string chart_lang(const Workbook& wb) {
   return lang;
 }
 
-enum class RefKind : std::uint8_t { kStr, kNum, kMulti };
-
-void append_source(std::string& x, const char* tag, const std::string& f, RefKind kind) {
-  const char* ref = kind == RefKind::kNum ? "numRef" : (kind == RefKind::kStr ? "strRef" : "multiLvlStrRef");
-  const char* cache = kind == RefKind::kNum ? "numCache" : (kind == RefKind::kStr ? "strCache" : "multiLvlStrCache");
+void append_source(std::string& x, const char* tag, const std::string& f, ChartRefKind kind) {
+  const char* ref = chart_ref_tag(kind);
+  const char* cache = chart_cache_tag(kind);
   x += std::string("<c:") + tag + "><c:" + ref + "><c:f>";
   io::AppendXmlRawTextEscaped(x, f);
   x += std::string("</c:f><c:") + cache + ">";
-  x += kind == RefKind::kNum ? "<c:formatCode>General</c:formatCode>" : "";
+  x += kind == ChartRefKind::kNum ? "<c:formatCode>General</c:formatCode>" : "";
   x += std::string("<c:ptCount val=\"0\"/></c:") + cache + "></c:" + ref + "></c:" + tag + ">";
 }
 
@@ -345,9 +340,7 @@ void append_axis(std::string& x, bool category, std::uint32_t id, std::uint32_t 
   x += std::string("<c:") + tag + "><c:axId val=\"" + std::to_string(id) +
        "\"/><c:scaling><c:orientation val=\"minMax\"/></c:scaling><c:delete val=\"0\"/><c:axPos val=\"" + pos + "\"/>";
   if (grid) {
-    x += "<c:majorGridlines><c:spPr>";
-    append_grey_ln(x, 15);
-    x += "<a:effectLst/></c:spPr></c:majorGridlines>";
+    x += gridlines_xml();
   }
   x += std::string("<c:numFmt formatCode=\"") + num_fmt + "\" sourceLinked=\"1\"/><c:majorTickMark val=\"" + tick +
        "\"/><c:minorTickMark val=\"none\"/><c:tickLblPos val=\"nextTo\"/><c:spPr><a:noFill/>";
@@ -368,18 +361,8 @@ void append_axis(std::string& x, bool category, std::uint32_t id, std::uint32_t 
 }
 
 const char* legend_pos(ChartLegendPosition p) {
-  switch (p) {
-    case ChartLegendPosition::kTop:
-      return "t";
-    case ChartLegendPosition::kLeft:
-      return "l";
-    case ChartLegendPosition::kRight:
-      return "r";
-    case ChartLegendPosition::kTopRight:
-      return "tr";
-    default:
-      return "b";
-  }
+  const int i = static_cast<int>(p);
+  return kChartLegendTokens[i > 0 && i < static_cast<int>(std::size(kChartLegendTokens)) ? i : 1];
 }
 
 /// Cell class of the first cell of `formula` (a qualified rectangle).
@@ -414,6 +397,12 @@ void append_grey_ln(std::string& x, int lum) {
   x += "\"/><a:lumOff val=\"";
   x += std::to_string(100000 - lum * 1000);
   x += "\"/></a:schemeClr></a:solidFill><a:round/></a:ln>";
+}
+
+std::string gridlines_xml() {
+  std::string x = "<c:majorGridlines><c:spPr>";
+  append_grey_ln(x, 15);
+  return x + "<a:effectLst/></c:spPr></c:majorGridlines>";
 }
 
 Expected<ChartSplit, Error> split_chart_source(const Workbook& wb, std::size_t host_sheet, std::string_view source,
@@ -580,7 +569,7 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
     const ChartSeriesRefs& s = split.series[i];
     x += "<c:ser><c:idx val=\"" + std::to_string(i) + "\"/><c:order val=\"" + std::to_string(i) + "\"/>";
     if (!s.name.empty()) {
-      append_source(x, "tx", s.name, RefKind::kStr);
+      append_source(x, "tx", s.name, ChartRefKind::kStr);
     }
     if (is_bar || is_area) {
       x += "<c:spPr><a:solidFill>";
@@ -618,19 +607,19 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
       }
     }
     if (is_scatter) {
-      append_source(x, "xVal", s.x, first_cell_class(wb, s.x) == Cls::kText ? RefKind::kStr : RefKind::kNum);
-      append_source(x, "yVal", s.y, RefKind::kNum);
+      append_source(x, "xVal", s.x, first_cell_class(wb, s.x) == Cls::kText ? ChartRefKind::kStr : ChartRefKind::kNum);
+      append_source(x, "yVal", s.y, ChartRefKind::kNum);
     } else {
       if (!s.cat.empty()) {
         RectRef r;
         const bool multi = parse_rect(s.cat, &r) &&
                            (split.direction == ChartSeriesDirection::kRows ? r.bottom > r.top : r.right > r.left);
         const Cls first = first_cell_class(wb, s.cat);
-        append_source(
-            x, "cat", s.cat,
-            multi ? RefKind::kMulti : (first == Cls::kNumber || first == Cls::kDate ? RefKind::kNum : RefKind::kStr));
+        append_source(x, "cat", s.cat,
+                      multi ? ChartRefKind::kMulti
+                            : (first == Cls::kNumber || first == Cls::kDate ? ChartRefKind::kNum : ChartRefKind::kStr));
       }
-      append_source(x, "val", s.val, RefKind::kNum);
+      append_source(x, "val", s.val, ChartRefKind::kNum);
     }
     if (is_line || is_scatter) {
       x += "<c:smooth val=\"0\"/>";
@@ -643,7 +632,7 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
          uid + "\"/></c:ext></c:extLst></c:ser>";
   }
 
-  x += std::string("<c:dLbls>") + kShowFlags + (is_pie ? "<c:showLeaderLines val=\"1\"/>" : "") + "</c:dLbls>";
+  x += std::string("<c:dLbls>") + kChartShowFlags + (is_pie ? "<c:showLeaderLines val=\"1\"/>" : "") + "</c:dLbls>";
   if (is_bar) {
     x += kind == ChartInsertKind::kBar ? "<c:gapWidth val=\"182\"/>" : "<c:gapWidth val=\"219\"/>";
     x += stacked ? "<c:overlap val=\"100\"/>" : "";
@@ -812,8 +801,7 @@ std::string chart_cycle_color(const pugi::xml_node& style, std::size_t idx) {
     if (n.type() != pugi::node_element) {
       continue;
     }
-    const std::string_view name = n.name();
-    const std::string_view local = name.substr(name.find(':') + 1);
+    const std::string_view local = io::local_name(n);
     if (local == "variation") {
       variations.push_back(n);
     } else if (std::find(std::begin(kColours), std::end(kColours), local) != std::end(kColours)) {

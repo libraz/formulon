@@ -88,9 +88,8 @@ inline bool same_value(const Value& a, const Value& b) noexcept {
 /// Renders a cache `Value` to the same string that would appear in a
 /// `PivotItem::name`. Mirrors what the OOXML reader would have written
 /// out: numbers as their canonical decimal, bools as TRUE/FALSE, errors
-/// as their `#…` token, blanks as the empty string. This is sufficient
-/// for matching against `PivotItem::name`, which is the only place we
-/// use it (manual-filter visibility check).
+/// as their `#…` token, blanks as the empty string. Sufficient for
+/// matching against `PivotItem::name`; not a display format.
 inline std::string display_string(const Value& v) {
   switch (v.kind()) {
     case ValueKind::Blank:

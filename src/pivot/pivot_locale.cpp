@@ -15,6 +15,7 @@
 
 #include "eval/collation.h"
 #include "excel_profile.h"
+#include "pivot/date_serial.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_table.h"
@@ -427,20 +428,11 @@ const PivotDateWords& date_words(ExcelProfile profile) noexcept {
   return kDateWords[static_cast<std::size_t>(profile.locale)];
 }
 
-// Days before each month in a leap year.
-constexpr std::array<unsigned, 13> kLeapDaysBefore{0U,   31U,  60U,  91U,  121U, 152U, 182U,
-                                                   213U, 244U, 274U, 305U, 335U, 366U};
-
-void append_two_digits(std::string& out, unsigned n) {
-  out.push_back(static_cast<char>('0' + (n / 10U) % 10U));
-  out.push_back(static_cast<char>('0' + n % 10U));
-}
-
 std::string clock_label(unsigned n, std::string_view suffix) {
   std::string out;
   if (suffix.empty()) {
     out.push_back(':');
-    append_two_digits(out, n);
+    append_padded(out, n, 2);
     return out;
   }
   out = std::to_string(n);
@@ -463,7 +455,7 @@ std::string hour_label(unsigned hour, const PivotDateWords& words) {
       out = std::to_string(hour);
       break;
     case ClockStyle::kPadded:
-      append_two_digits(out, hour);
+      append_padded(out, hour, 2);
       break;
   }
   return out;
@@ -478,7 +470,7 @@ std::string day_label(unsigned day_of_leap_year, const PivotDateWords& words) {
   const unsigned day = day_of_leap_year - kLeapDaysBefore[month] + 1U;
   std::string day_text;
   if (words.pad_day) {
-    append_two_digits(day_text, day);
+    append_padded(day_text, day, 2);
   } else {
     day_text = std::to_string(day);
   }

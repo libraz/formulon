@@ -16,6 +16,7 @@
 #include "utils/formula_text.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
 
@@ -55,11 +56,8 @@ struct Resolver {
 
   Expected<void, Error> push(std::string_view qualifier, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
                              std::uint32_t right) {
-    auto sheet = sheet_of(qualifier);
-    if (!sheet) {
-      return sheet.error();
-    }
-    areas.push_back(SheetRect{sheet.value(), top, left, bottom, right});
+    ASSIGN_OR_RETURN(const auto sheet, sheet_of(qualifier));
+    areas.push_back(SheetRect{sheet, top, left, bottom, right});
     return Expected<void, Error>::Ok();
   }
 
@@ -116,15 +114,12 @@ struct Resolver {
       row = ref.row;
       col = ref.col;
     }
-    auto sheet = sheet_of(qualifier);
-    if (!sheet) {
-      return sheet.error();
-    }
-    const SpillRegion* region = wb.sheet(sheet.value()).spill_region_at_anchor(row, col);
+    ASSIGN_OR_RETURN(const auto sheet, sheet_of(qualifier));
+    const SpillRegion* region = wb.sheet(sheet).spill_region_at_anchor(row, col);
     if (region == nullptr || region->rows == 0 || region->cols == 0) {
       return invalid(formula, "no spill at anchor");
     }
-    areas.push_back(SheetRect{sheet.value(), row, col, row + region->rows - 1, col + region->cols - 1});
+    areas.push_back(SheetRect{sheet, row, col, row + region->rows - 1, col + region->cols - 1});
     return Expected<void, Error>::Ok();
   }
 
@@ -184,10 +179,7 @@ Expected<ResolvedSource, Error> resolve_chart_source(const Workbook& wb, std::si
   }
   const Sheet& bound = wb.sheet(host_sheet == kChartNoHostSheet ? 0U : host_sheet);
   const eval::EvalContext ctx = eval::EvalContext::workbook_only(wb, bound);
-  auto resolved = resolver.resolve(*root, ctx);
-  if (!resolved) {
-    return resolved.error();
-  }
+  RETURN_IF_ERROR(resolver.resolve(*root, ctx));
   ResolvedSource out;
   out.areas = std::move(resolver.areas);
   return out;

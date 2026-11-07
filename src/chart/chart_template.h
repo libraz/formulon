@@ -6,6 +6,7 @@
 #define FORMULON_CHART_CHART_TEMPLATE_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -75,6 +76,25 @@ std::string chart_rect_ref(const std::string& sheet_name, std::uint32_t top, std
 
 /// Appends the `a:ln` in the tx1 tint `lum` percent (e.g. 15 for gridlines, 35 for leader lines).
 void append_grey_ln(std::string& x, int lum);
+
+/// The reference element a series input carries, and the cache element under it.
+enum class ChartRefKind : std::uint8_t { kNum, kStr, kMulti };
+
+inline const char* chart_ref_tag(ChartRefKind kind) {
+  return kind == ChartRefKind::kNum ? "numRef" : kind == ChartRefKind::kStr ? "strRef" : "multiLvlStrRef";
+}
+
+inline const char* chart_cache_tag(ChartRefKind kind) {
+  return kind == ChartRefKind::kNum ? "numCache" : kind == ChartRefKind::kStr ? "strCache" : "multiLvlStrCache";
+}
+
+/// `c:majorGridlines` as Excel writes it.
+std::string gridlines_xml();
+
+/// The six `c:show*` flags of a data-label block, all off.
+inline constexpr const char* kChartShowFlags =
+    "<c:showLegendKey val=\"0\"/><c:showVal val=\"0\"/><c:showCatName val=\"0\"/><c:showSerName val=\"0\"/>"
+    "<c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/>";
 
 }  // namespace formulon
 

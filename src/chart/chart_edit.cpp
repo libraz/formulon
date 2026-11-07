@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <optional>
 #include <set>
 #include <string>
@@ -19,6 +20,7 @@
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
 #include "io/ooxml/part_dom.h"
+#include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
@@ -32,8 +34,6 @@ using namespace chart_edit;
 
 namespace {
 
-constexpr const char* kRelChart = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
-constexpr const char* kCtChart = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 // Excel's default chart frame, 360 x 216 pt.
 constexpr std::int64_t kFrameCx = 4572000;
 constexpr std::int64_t kFrameCy = 2743200;
@@ -95,9 +95,7 @@ Expected<std::optional<std::string>, Error> title_text(const Workbook& wb, const
     if (title.ref_formula.empty()) {
       return bad_arg("chart: a reference title needs a formula");
     }
-    ASSIGN_OR_RETURN(ResolvedSource unused,
-                     resolve_chart_source(wb, c.host, title.ref_formula, eval::default_registry()));
-    static_cast<void>(unused);
+    RETURN_IF_ERROR(resolve_chart_source(wb, c.host, title.ref_formula, eval::default_registry()));
   } else if (title.kind == ChartTitleKind::kText && title.text.empty()) {
     return bad_arg("chart: a text title needs text");
   } else if (title.kind != ChartTitleKind::kText && title.kind != ChartTitleKind::kAuto) {
@@ -245,8 +243,7 @@ Expected<std::uint32_t, Error> insert_chart(Workbook& wb, std::size_t sheet, con
   if (sheet >= wb.sheet_count()) {
     return bad_arg("chart: sheet index out of range");
   }
-  if (static_cast<int>(options.kind) < 0 || static_cast<int>(options.kind) > 6 ||
-      static_cast<int>(options.grouping) < 0 || static_cast<int>(options.grouping) > 3) {
+  if (!valid_kind_grouping(options.kind, options.grouping)) {
     return bad_arg("chart: unknown chart kind or grouping");
   }
   ASSIGN_OR_RETURN(ChartSplit split, split_chart_source(wb, sheet, options.source, options.kind, options.direction,
@@ -270,13 +267,13 @@ Expected<std::uint32_t, Error> insert_chart(Workbook& wb, std::size_t sheet, con
   placement.width_emu = placement.width_emu == 0 ? kFrameCx : placement.width_emu;
   placement.height_emu = placement.height_emu == 0 ? kFrameCy : placement.height_emu;
   const std::string data = std::string("<a:graphicData uri=\"") + kNsC + "\"><c:chart xmlns:c=\"" + kNsC +
-                           "\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" "
-                           "r:id=\"{rId}\"/></a:graphicData>";
-  ASSIGN_OR_RETURN(std::uint32_t id, insert_graphic_frame(wb, sheet, placement, data, path, kRelChart));
+                           "\" xmlns:r=\"" + std::string(io::kNsOfficeRelationships) +
+                           "\" r:id=\"{rId}\"/></a:graphicData>";
+  ASSIGN_OR_RETURN(std::uint32_t id, insert_graphic_frame(wb, sheet, placement, data, path, io::kRelChart));
   std::string bytes(io::kXmlDecl);
   io::append_raw_xml(bytes, doc.document_element());
-  RETURN_IF_ERROR(
-      wb.add_passthrough_part(PassthroughPart(path, kCtChart, std::vector<std::uint8_t>(bytes.begin(), bytes.end()))));
+  RETURN_IF_ERROR(wb.add_passthrough_part(
+      PassthroughPart(path, std::string(io::kCtChart), std::vector<std::uint8_t>(bytes.begin(), bytes.end()))));
   return id;
 }
 
@@ -302,7 +299,7 @@ Expected<void, Error> set_chart_legend(Workbook& wb, std::size_t sheet, std::uin
   RETURN_IF_ERROR(open_edit(wb, sheet, object_id, c, false));
   xml_node chart = c.chart();
   const int pos = static_cast<int>(legend.position);
-  if (pos < 0 || pos > 5) {
+  if (pos < 0 || pos >= static_cast<int>(std::size(kChartLegendTokens))) {
     return bad_arg("chart: unknown legend position");
   }
   if (legend.position == ChartLegendPosition::kNone) {
@@ -316,8 +313,7 @@ Expected<void, Error> set_chart_legend(Workbook& wb, std::size_t sheet, std::uin
         template_doc(wb, c, ChartInsertKind::kColumn, ChartGrouping::kClustered, std::nullopt, legend.position, {}, t));
     node = copy_at(chart, child_local(template_chart(t), "legend"), kChartOrder);
   }
-  static const char* const kPos[] = {"", "b", "t", "l", "r", "tr"};
-  put_val(node, "c:legendPos", kLegendOrder, kPos[pos]);
+  put_val(node, "c:legendPos", kLegendOrder, kChartLegendTokens[pos]);
   put_val(node, "c:overlay", kLegendOrder, legend.overlay ? "1" : "0");
   if (legend.hidden_series_idx.has_value()) {
     const std::set<std::uint32_t> hidden(legend.hidden_series_idx->begin(), legend.hidden_series_idx->end());
@@ -409,7 +405,6 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
     }
   }
   if (patch.crosses.has_value()) {
-    static const char* const kCrosses[] = {"", "autoZero", "min", "max"};
     const ChartAxisCrosses cr = *patch.crosses;
     drop(ax, "crosses");
     drop(ax, "crossesAt");
@@ -420,10 +415,10 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
       put_val(ax, "c:crossesAt", kAxisOrder, num(patch.crosses_at));
     } else if (cr != ChartAxisCrosses::kAbsent) {
       const int i = static_cast<int>(cr);
-      if (i < 1 || i > 3) {
+      if (i < 1 || i >= static_cast<int>(std::size(kChartCrossesTokens))) {
         return bad_arg("chart: unknown axis crossing");
       }
-      put_val(ax, "c:crosses", kAxisOrder, kCrosses[i]);
+      put_val(ax, "c:crosses", kAxisOrder, kChartCrossesTokens[i]);
     }
   }
   if (!patch.tick_label_pos.is_keep()) {

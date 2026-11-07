@@ -12,6 +12,7 @@
 
 #include "pivot/aggregator.h"
 #include "pivot/calculated.h"
+#include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/hierarchy_builder.h"
 #include "pivot/pivot_cache.h"
@@ -24,14 +25,14 @@ namespace formulon::pivot {
 namespace {
 
 // A custom subtotal's aggregation, else the data field's own.
-Aggregation AggregationFor(const std::optional<Aggregation>& subtotal, const PivotDataField& df) {
+Aggregation aggregation_for(const std::optional<Aggregation>& subtotal, const PivotDataField& df) {
   return subtotal.value_or(df.aggregation);
 }
 
 // Maps a subtotal's leaf set (in current, post-filter leaf-position
 // space) to `buckets` coordinates via `original_of_position`.
-std::vector<std::size_t> ToOriginalLeaves(const std::vector<std::size_t>& leaf_set,
-                                          const std::vector<std::size_t>& original_of_position) {
+std::vector<std::size_t> to_original_leaves(const std::vector<std::size_t>& leaf_set,
+                                            const std::vector<std::size_t>& original_of_position) {
   std::vector<std::size_t> out;
   out.reserve(leaf_set.size());
   for (const std::size_t position : leaf_set) {
@@ -62,13 +63,14 @@ std::vector<std::size_t> ToOriginalLeaves(const std::vector<std::size_t>& leaf_s
 // same `keep` mask, at the same point in the filter loop, as
 // `surviving_row_leaves` / `surviving_col_leaves` themselves -- so a
 // subtotal's own leaf set maps to `buckets` coordinates through the same
-// lookup (`ToOriginalLeaves`).
-void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
-                                       const std::vector<std::size_t>& surviving_row_leaves,
-                                       const std::vector<std::size_t>& surviving_col_leaves,
-                                       const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
-                                       const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets,
-                                       PivotResult& result) {
+// lookup (`to_original_leaves`).
+void reaggregate_totals_after_value_filter(const PivotTable& table, const PivotCache& cache,
+                                           const RecordBuckets& buckets,
+                                           const std::vector<std::size_t>& surviving_row_leaves,
+                                           const std::vector<std::size_t>& surviving_col_leaves,
+                                           const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                                           const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets,
+                                           PivotResult& result) {
   const std::size_t data_field_count = table.data_fields().size();
   if (data_field_count == 0) {
     return;
@@ -91,8 +93,8 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     result.grand_total = result.grand_totals[0];
   }
 
+  std::vector<RecordIndexSpan> spans;
   for (std::size_t r = 0; r < result.row_leaf_totals.size() && r < surviving_row_leaves.size(); ++r) {
-    std::vector<RecordIndexSpan> spans;
     const RecordIndexView records =
         make_leaf_set_record_view(buckets, surviving_row_leaves[r], surviving_col_leaves, spans);
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.row_leaf_totals[r].size(); ++df_idx) {
@@ -103,7 +105,6 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
   }
 
   for (std::size_t c = 0; c < result.col_leaf_totals.size() && c < surviving_col_leaves.size(); ++c) {
-    std::vector<RecordIndexSpan> spans;
     const RecordIndexView records =
         make_leaf_set_record_view(buckets, surviving_row_leaves, surviving_col_leaves[c], spans);
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.col_leaf_totals[c].size(); ++df_idx) {
@@ -115,7 +116,7 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
 
   for (std::size_t rs = 0; rs < result.row_subtotals.size() && rs < row_subtotal_leaf_sets.size(); ++rs) {
     RowSubtotal& subtotal = result.row_subtotals[rs];
-    const std::vector<std::size_t> rows = ToOriginalLeaves(row_subtotal_leaf_sets[rs], surviving_row_leaves);
+    const std::vector<std::size_t> rows = to_original_leaves(row_subtotal_leaf_sets[rs], surviving_row_leaves);
     std::vector<RecordIndexSpan> subtotal_spans;
     const RecordIndexView subtotal_records =
         make_leaf_set_record_view(buckets, rows, surviving_col_leaves, subtotal_spans);
@@ -127,7 +128,7 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     }
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      const Aggregation aggregation = AggregationFor(subtotal.aggregation, df);
+      const Aggregation aggregation = aggregation_for(subtotal.aggregation, df);
       const MissingStats missing =
           subtotal.aggregation.has_value()
               ? missing_custom_subtotal_stats(table, subtotal.depth, aggregation, df.aggregation)
@@ -140,17 +141,17 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     for (std::size_t c = 0; c < subtotal.col_values.size() && c < surviving_col_leaves.size(); ++c) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_values[c].size(); ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
-        subtotal.col_values[c][df_idx] = aggregate_records_or_blank(AggregationFor(subtotal.aggregation, df), cache,
+        subtotal.col_values[c][df_idx] = aggregate_records_or_blank(aggregation_for(subtotal.aggregation, df), cache,
                                                                     col_records[c], df.field_index, result);
       }
     }
     for (std::size_t cs = 0; cs < subtotal.col_subtotal_values.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
-      const std::vector<std::size_t> cols = ToOriginalLeaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
+      const std::vector<std::size_t> cols = to_original_leaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
       const ColSubtotal& col_subtotal = result.col_subtotals[cs];
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_subtotal_values[cs].size();
            ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
-        const Aggregation aggregation = AggregationFor(col_subtotal.aggregation, df);
+        const Aggregation aggregation = aggregation_for(col_subtotal.aggregation, df);
         subtotal.col_subtotal_values[cs][df_idx] =
             aggregate_row_partials_or_blank(aggregation, cache, buckets, rows, cols, df.field_index, result);
       }
@@ -159,7 +160,7 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
 
   for (std::size_t cs = 0; cs < result.col_subtotals.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
     ColSubtotal& subtotal = result.col_subtotals[cs];
-    const std::vector<std::size_t> cols = ToOriginalLeaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
+    const std::vector<std::size_t> cols = to_original_leaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
     std::vector<std::vector<RecordIndexSpan>> row_spans(surviving_row_leaves.size());
     std::vector<RecordIndexView> row_records;
     row_records.reserve(surviving_row_leaves.size());
@@ -171,14 +172,14 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     for (std::size_t r = 0; r < subtotal.values.size() && r < surviving_row_leaves.size(); ++r) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values[r].size(); ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
-        const Aggregation aggregation = AggregationFor(subtotal.aggregation, df);
+        const Aggregation aggregation = aggregation_for(subtotal.aggregation, df);
         subtotal.values[r][df_idx] =
             aggregate_records_or_blank(aggregation, cache, row_records[r], df.field_index, result);
       }
     }
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.total.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      const Aggregation aggregation = AggregationFor(subtotal.aggregation, df);
+      const Aggregation aggregation = aggregation_for(subtotal.aggregation, df);
       subtotal.total[df_idx] =
           both_axes ? aggregate_row_partials_or_blank(aggregation, cache, buckets, surviving_row_leaves, cols,
                                                       df.field_index, result)
@@ -215,8 +216,8 @@ struct ValueFilterState {
 // cells across the standing cross leaves, a calculated field evaluated over
 // the folded Sums. `records` are the group's records, for the functions a
 // fold cannot rebuild.
-Value DisplayedGroupValue(const ValueFilterState& state, bool row_axis, const std::vector<std::size_t>& positions,
-                          const RecordIndexView& records, std::size_t slot) {
+Value displayed_group_value(const ValueFilterState& state, bool row_axis, const std::vector<std::size_t>& positions,
+                            const RecordIndexView& records, std::size_t slot) {
   const PivotTable& table = state.table;
   const std::size_t cross_count = row_axis ? state.surviving_col_leaves.size() : state.surviving_row_leaves.size();
   std::vector<std::size_t> cross(cross_count);
@@ -241,7 +242,7 @@ Value DisplayedGroupValue(const ValueFilterState& state, bool row_axis, const st
 
 // Applies the value filter `f` to the leaves of `axis`, pruning the items of
 // the field at `depth` in that axis's order.
-void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, PivotAxis axis, std::size_t depth) {
+void apply_value_filter(ValueFilterState& state, const PivotFilter& f, PivotAxis axis, std::size_t depth) {
   const PivotTable& table = state.table;
   const PivotCache& cache = state.cache;
   const RecordBuckets& buckets = state.buckets;
@@ -275,6 +276,7 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, PivotAxis a
   scores.scores.assign(groups.size(), 0.0);
   scores.all_blank.assign(groups.size(), true);
   std::vector<bool> has_records(groups.size(), false);
+  std::vector<RecordIndexSpan> spans;
   for (std::size_t g = 0; g < groups.size(); ++g) {
     std::vector<std::size_t> positions;
     std::vector<std::size_t> group_leaves;
@@ -282,13 +284,12 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, PivotAxis a
       positions.push_back(i);
       group_leaves.push_back(axis_leaves[i]);
     }
-    std::vector<RecordIndexSpan> spans;
     const RecordIndexView records = make_leaf_set_record_view(buckets, row_axis ? group_leaves : cross_leaves,
                                                               row_axis ? cross_leaves : group_leaves, spans);
     has_records[g] = !records.empty();
     Value value = Value::blank();
     if (displayed) {
-      value = DisplayedGroupValue(state, row_axis, positions, records, f.data_field_index);
+      value = displayed_group_value(state, row_axis, positions, records, f.data_field_index);
     } else if (!records.empty()) {
       value = apply_record_aggregation(df.aggregation, cache, records, df.field_index);
     }
@@ -334,19 +335,12 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, PivotAxis a
 // The axis and depth `f` prunes. The field's own position when it sits on a
 // report axis; otherwise an entry added through the API falls back to the
 // innermost field of its stated axis, while a decoded one filters nothing.
-std::optional<std::pair<PivotAxis, std::size_t>> ValueFilterTarget(const PivotTable& table, const PivotFilter& f,
-                                                                   std::size_t field_index) {
-  const auto depth_in = [&](const std::vector<std::uint32_t>& order) -> std::optional<std::size_t> {
-    const auto it = std::find(order.begin(), order.end(), field_index);
-    if (it == order.end()) {
-      return std::nullopt;
-    }
-    return static_cast<std::size_t>(it - order.begin());
-  };
+std::optional<std::pair<PivotAxis, std::size_t>> value_filter_target(const PivotTable& table, const PivotFilter& f,
+                                                                     std::size_t field_index) {
   const std::vector<std::uint32_t>& stated =
       f.axis == PivotAxis::Col ? table.col_field_order() : table.row_field_order();
   const PivotAxis stated_axis = f.axis == PivotAxis::Col ? PivotAxis::Col : PivotAxis::Row;
-  if (const auto depth = depth_in(stated)) {
+  if (const auto depth = field_position_in_order(stated, field_index)) {
     return std::pair<PivotAxis, std::size_t>{stated_axis, *depth};
   }
   if (!f.source.has_value()) {
@@ -356,7 +350,8 @@ std::optional<std::pair<PivotAxis, std::size_t>> ValueFilterTarget(const PivotTa
     return std::pair<PivotAxis, std::size_t>{stated_axis, stated.size() - 1U};
   }
   const PivotAxis other_axis = stated_axis == PivotAxis::Row ? PivotAxis::Col : PivotAxis::Row;
-  if (const auto depth = depth_in(other_axis == PivotAxis::Col ? table.col_field_order() : table.row_field_order())) {
+  if (const auto depth = field_position_in_order(
+          other_axis == PivotAxis::Col ? table.col_field_order() : table.row_field_order(), field_index)) {
     return std::pair<PivotAxis, std::size_t>{other_axis, *depth};
   }
   return std::nullopt;
@@ -389,8 +384,8 @@ bool apply_value_filters(const PivotTable& table, const PivotCache& cache, const
       if (!field_index.has_value()) {
         continue;
       }
-      if (const auto target = ValueFilterTarget(table, f, *field_index)) {
-        ApplyValueFilter(state, f, target->first, target->second);
+      if (const auto target = value_filter_target(table, f, *field_index)) {
+        apply_value_filter(state, f, target->first, target->second);
       }
     }
   }
@@ -398,8 +393,8 @@ bool apply_value_filters(const PivotTable& table, const PivotCache& cache, const
   if (!state.any_applied || state.keep_totals) {
     return false;
   }
-  ReaggregateTotalsAfterValueFilter(table, cache, buckets, state.surviving_row_leaves, state.surviving_col_leaves,
-                                    row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);
+  reaggregate_totals_after_value_filter(table, cache, buckets, state.surviving_row_leaves, state.surviving_col_leaves,
+                                        row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);
   return true;
 }
 

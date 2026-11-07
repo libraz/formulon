@@ -7,10 +7,13 @@
 #ifndef FORMULON_PIVOT_FIELD_LOOKUP_H_
 #define FORMULON_PIVOT_FIELD_LOOKUP_H_
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -22,6 +25,16 @@ namespace formulon::pivot {
 /// layout renders).
 inline bool pivot_field_has_name(const PivotField& field, std::string_view name) {
   return field.source_name == name || (!field.custom_name.empty() && field.custom_name == name);
+}
+
+/// Position of `field_index` in an axis field order, or `nullopt` when the axis does not hold it.
+inline std::optional<std::size_t> field_position_in_order(const std::vector<std::uint32_t>& order,
+                                                          std::size_t field_index) {
+  const auto it = std::find(order.begin(), order.end(), field_index);
+  if (it == order.end()) {
+    return std::nullopt;
+  }
+  return static_cast<std::size_t>(it - order.begin());
 }
 
 /// The name a field is drawn with: its `custom_name` when the user renamed

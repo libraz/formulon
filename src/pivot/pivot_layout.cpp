@@ -23,6 +23,7 @@
 #include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -126,24 +127,16 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
 
   std::vector<AxisLeaf> row_leaves = collect_axis_leaves(result.rows, row_depth);
   std::vector<AxisLeaf> col_leaves = collect_axis_leaves(result.cols, col_depth);
-  auto valid_or = validate_result_shape(table, result, row_leaves.size(), col_leaves.size());
-  if (!valid_or) {
-    return std::move(valid_or.error());
-  }
-  auto row_entries_or = collect_axis_entries(table, result.rows, result.row_subtotals, row_shape, "row");
-  if (!row_entries_or) {
-    return std::move(row_entries_or.error());
-  }
-  std::vector<AxisEntry> row_entries = row_entries_or.take();
-  auto col_entries_or = collect_axis_entries(table, result.cols, result.col_subtotals, col_shape, "column");
-  if (!col_entries_or) {
-    return std::move(col_entries_or.error());
-  }
+  RETURN_IF_ERROR(validate_result_shape(table, result, row_leaves.size(), col_leaves.size()));
+  ASSIGN_OR_RETURN(std::vector<AxisEntry> row_entries,
+                   collect_axis_entries(table, result.rows, result.row_subtotals, row_shape, "row"));
+  ASSIGN_OR_RETURN(std::vector<AxisEntry> col_entries_all,
+                   collect_axis_entries(table, result.cols, result.col_subtotals, col_shape, "column"));
   // Column fields without a data field still lay out their items and total
   // column, over empty value cells; without column fields there is nothing to lay out.
   const bool valueless = data_field_count == 0 && col_depth > 0;
   std::vector<AxisEntry> col_entries =
-      data_field_count == 0 && !valueless ? std::vector<AxisEntry>{} : col_entries_or.take();
+      data_field_count == 0 && !valueless ? std::vector<AxisEntry>{} : std::move(col_entries_all);
   const std::size_t data_cols = col_entries.size();
   // Without row fields either, such a report is its caption and column-item rows alone.
   if (valueless && !legacy && row_levels == 0) {
@@ -225,14 +218,11 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
     return make_error(FormulonErrorCode::kEvalPivotInvalid, "pivot layout: projected bounds exceed uint32_t",
                       "rows=" + std::to_string(total_rows) + " cols=" + std::to_string(total_cols));
   }
-  auto cell_count_or = checked_mul_size_t(total_rows, total_cols);
-  if (!cell_count_or) {
-    return std::move(cell_count_or.error());
-  }
+  ASSIGN_OR_RETURN(std::size_t cell_count, checked_mul_size_t(total_rows, total_cols));
 
   const std::uint32_t body_top = std::max(table.anchor_row(), static_cast<std::uint32_t>(page_rows));
   plan.cells_top = body_top - static_cast<std::uint32_t>(page_rows);
-  plan.cell_count = cell_count_or.value();
+  plan.cell_count = cell_count;
 
   plan.left = table.anchor_col();
   plan.top = body_top;
@@ -314,11 +304,7 @@ Expected<void, Error> append_item_refs(const AxisEntry& entry, const std::vector
 
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
                                    const PivotLayoutOptions& options) {
-  auto plan_or = build_layout_plan(table, result, options);
-  if (!plan_or) {
-    return std::move(plan_or.error());
-  }
-  const LayoutPlan plan = plan_or.take();
+  ASSIGN_OR_RETURN(const LayoutPlan plan, build_layout_plan(table, result, options));
 
   PivotCells cells;
   cells.top = plan.cells_top;
@@ -341,11 +327,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
 
 Expected<CellItemPath, Error> cell_item_path(const PivotTable& table, const PivotResult& result,
                                              const PivotLayoutOptions& options, std::uint32_t row, std::uint32_t col) {
-  auto plan_or = build_layout_plan(table, result, options);
-  if (!plan_or) {
-    return std::move(plan_or.error());
-  }
-  const LayoutPlan plan = plan_or.take();
+  ASSIGN_OR_RETURN(const LayoutPlan plan, build_layout_plan(table, result, options));
   const auto not_a_value_cell = [&]() {
     return make_error(FormulonErrorCode::kInvalidArgument, "pivot cell item path: not a value cell of the report",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
@@ -377,16 +359,10 @@ Expected<CellItemPath, Error> cell_item_path(const PivotTable& table, const Pivo
     path.kind = PivotCellKind::GrandTotal;
   }
   if (row_entry != nullptr) {
-    auto rows_or = append_item_refs(*row_entry, table.row_field_order(), path.row_items, path.text_storage);
-    if (!rows_or) {
-      return std::move(rows_or.error());
-    }
+    RETURN_IF_ERROR(append_item_refs(*row_entry, table.row_field_order(), path.row_items, path.text_storage));
   }
   if (col_entry != nullptr) {
-    auto cols_or = append_item_refs(*col_entry, table.col_field_order(), path.col_items, path.text_storage);
-    if (!cols_or) {
-      return std::move(cols_or.error());
-    }
+    RETURN_IF_ERROR(append_item_refs(*col_entry, table.col_field_order(), path.col_items, path.text_storage));
   }
   return path;
 }

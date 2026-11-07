@@ -21,6 +21,7 @@
 #include "io/xml_utils.h"
 #include "sheet.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -245,7 +246,7 @@ std::vector<xml_node> axes_of(const Chart& c, const std::vector<std::uint32_t>& 
   for (const std::uint32_t id : ids) {
     for (xml_node n = c.area().first_child(); n; n = n.next_sibling()) {
       const std::string_view name = local_name(n);
-      if (name.size() > 2 && name.substr(name.size() - 2) == "Ax" && val_u(n, "axId") == id) {
+      if (name.size() > 2 && strings::ends_with(name, "Ax") && val_u(n, "axId") == id) {
         out.push_back(n);
         break;
       }
@@ -272,7 +273,7 @@ void place_axis(const Chart& c, xml_node ax) {
 Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_index, ChartInsertKind kind,
                                  ChartGrouping grouping) {
   const int k = static_cast<int>(kind);
-  if (k < 0 || k > 6 || static_cast<int>(grouping) < 0 || static_cast<int>(grouping) > 3) {
+  if (!valid_kind_grouping(kind, grouping)) {
     return bad_arg("chart: unknown chart kind or grouping");
   }
   ASSIGN_OR_RETURN(xml_node plot, plot_at(c, plot_index));
@@ -310,8 +311,8 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   const std::vector<xml_node> sers = children_local(plot, "ser");
   ChartSplit split;
   for (const xml_node& s : sers) {
-    const xml_node cat = child_local(s, "cat") ? child_local(s, "cat") : child_local(s, "xVal");
-    const xml_node val = child_local(s, "val") ? child_local(s, "val") : child_local(s, "yVal");
+    const xml_node cat = category_input(s);
+    const xml_node val = value_input(s);
     ChartSeriesRefs refs;
     refs.name = formula_of(child_local(s, "tx"));
     (scatter ? refs.x : refs.cat) = formula_of(cat);
@@ -337,8 +338,8 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     if (const xml_node tx = child_local(from, "tx")) {
       copy_at(to, tx, kSerOrder);
     }
-    const xml_node cat = child_local(from, "cat") ? child_local(from, "cat") : child_local(from, "xVal");
-    const xml_node val = child_local(from, "val") ? child_local(from, "val") : child_local(from, "yVal");
+    const xml_node cat = category_input(from);
+    const xml_node val = value_input(from);
     if (cat) {
       copy_at(to, cat, kSerOrder, scatter ? "c:xVal" : "c:cat");
     }

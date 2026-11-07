@@ -57,6 +57,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -440,15 +441,9 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   //   * result-cell budget — even a non-wrapping product can describe a
   //     matrix far past anything a real pivot produces.
   // Both surface `kFnOverflow` so the caller keeps one recoverable path.
-  auto value_count_or = checked_mul_size_t(row_leaf_count, col_leaf_count);
-  if (!value_count_or) {
-    return std::move(value_count_or.error());
-  }
+  ASSIGN_OR_RETURN(std::size_t value_count, checked_mul_size_t(row_leaf_count, col_leaf_count));
   ResourceBudget result_cell_budget(kMaxPivotResultCells, FormulonErrorCode::kFnOverflow);
-  auto budget_ok = result_cell_budget.consume(static_cast<std::uint64_t>(value_count_or.value()));
-  if (!budget_ok) {
-    return std::move(budget_ok.error());
-  }
+  RETURN_IF_ERROR(result_cell_budget.consume(static_cast<std::uint64_t>(value_count)));
 
   // Bucket surviving record indices by (row_leaf, col_leaf).
   // `[row_leaf][col_leaf]` -> indices into `cache.records()`.
@@ -497,8 +492,8 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   const bool both_axes = !row_levels.empty() && !col_levels.empty();
   if (data_field_count > 0) {
     result.row_leaf_totals.assign(row_leaf_count, std::vector<Value>(data_field_count, Value::blank()));
+    std::vector<RecordIndexSpan> spans;
     for (std::size_t r = 0; r < row_leaf_count; ++r) {
-      std::vector<RecordIndexSpan> spans;
       const RecordIndexView records = make_leaf_set_record_view(buckets, r, all_col_leaves, spans);
       for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
@@ -508,7 +503,6 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     }
     result.col_leaf_totals.assign(col_leaf_count, std::vector<Value>(data_field_count, Value::blank()));
     for (std::size_t c = 0; c < col_leaf_count; ++c) {
-      std::vector<RecordIndexSpan> spans;
       const RecordIndexView records = make_leaf_set_record_view(buckets, all_row_leaves, c, spans);
       for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
@@ -717,7 +711,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   plan.fill_field_slots(result);
 
   // 8. Show-values-as transforms.
-  apply_show_values_as_transforms(table, cache, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+  apply_show_values_as_transforms(table, cache, result);
 
   plan.drop_sum_slots(result);
   if (!table.grand_totals_rows() && !table.grand_totals_cols()) {

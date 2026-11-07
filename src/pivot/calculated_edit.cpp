@@ -14,6 +14,7 @@
 
 #include "pivot/calculated.h"
 #include "pivot/calculated_internal.h"
+#include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_formula_host.h"
 #include "pivot/pivot_table.h"
@@ -21,6 +22,7 @@
 #include "pivot/value_order.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -69,11 +71,7 @@ Expected<std::vector<FormulaRef>, Error> compile_refs(PivotFormulaHost& host, co
                                                       std::optional<std::size_t> item_field, std::string_view formula,
                                                       std::string* canonical = nullptr) {
   std::vector<FormulaRef> refs;
-  Expected<std::uint32_t, Error> id =
-      host.compile(without_equals(formula), FormulaScope{&cache, item_field}, &refs, canonical);
-  if (!id) {
-    return id.error();
-  }
+  RETURN_IF_ERROR(host.compile(without_equals(formula), FormulaScope{&cache, item_field}, &refs, canonical));
   return refs;
 }
 
@@ -176,9 +174,8 @@ bool on_axis(const PivotField& field) {
 std::optional<std::uint32_t> axis_position(const PivotTable& table, std::size_t field) {
   for (const std::vector<std::uint32_t>& order :
        {table.row_field_order(), table.col_field_order(), table.page_field_order()}) {
-    const auto it = std::find(order.begin(), order.end(), static_cast<std::uint32_t>(field));
-    if (it != order.end()) {
-      return static_cast<std::uint32_t>(it - order.begin());
+    if (const auto position = field_position_in_order(order, field)) {
+      return static_cast<std::uint32_t>(*position);
     }
   }
   return std::nullopt;
@@ -268,9 +265,7 @@ void sync_table_fields(const PivotCache& cache, const std::vector<PivotTable*>& 
 Expected<std::size_t, Error> add_calculated_field(PivotCache& cache, const std::vector<PivotTable*>& tables,
                                                   std::string_view name, std::string_view formula,
                                                   PivotFormulaHost& host) {
-  if (Expected<void, Error> checked = check_name(name); !checked) {
-    return checked.error();
-  }
+  RETURN_IF_ERROR(check_name(name));
   for (const PivotCacheField& field : cache.fields()) {
     if (same_name(field.name, name)) {
       return invalid("calculated field name is already a field", name);
@@ -283,9 +278,7 @@ Expected<std::size_t, Error> add_calculated_field(PivotCache& cache, const std::
       }
     }
   }
-  if (Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, std::nullopt, formula); !refs) {
-    return refs.error();
-  }
+  RETURN_IF_ERROR(compile_refs(host, cache, std::nullopt, formula));
   PivotCacheField field;
   field.name = std::string(name);
   field.num_fmt_id = 0U;
@@ -301,11 +294,8 @@ Expected<void, Error> set_calculated_field_formula(PivotCache& cache, std::size_
   if (field_index >= cache.fields().size() || !cache.fields()[field_index].formula.has_value()) {
     return invalid("not a calculated field");
   }
-  Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, std::nullopt, formula);
-  if (!refs) {
-    return refs.error();
-  }
-  if (field_refs_reach(host, cache, refs.value(), field_index)) {
+  ASSIGN_OR_RETURN(std::vector<FormulaRef> refs, compile_refs(host, cache, std::nullopt, formula));
+  if (field_refs_reach(host, cache, refs, field_index)) {
     return invalid("calculated field refers to itself", formula);
   }
   cache.mutable_fields()[field_index].formula = std::string(without_equals(formula));
@@ -407,19 +397,14 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
   if (!position.has_value()) {
     return precondition("calculated item field is on no axis");
   }
-  if (Expected<void, Error> checked = check_name(name); !checked) {
-    return checked.error();
-  }
+  RETURN_IF_ERROR(check_name(name));
   for (const Value& item : cache_field.shared_items) {
     if (same_name(display_string(item), name)) {
       return invalid("calculated item name is already an item", name);
     }
   }
   std::string canonical;
-  if (Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, field_index, formula, &canonical);
-      !refs) {
-    return refs.error();
-  }
+  RETURN_IF_ERROR(compile_refs(host, cache, field_index, formula, &canonical));
 
   PivotCacheField& field = cache.mutable_fields()[field_index];
   const auto item = static_cast<std::uint32_t>(field.shared_items.size());
@@ -476,12 +461,9 @@ Expected<void, Error> set_calculated_item_formula(PivotCache& cache, std::size_t
   const PivotCalculatedItem& entry = cache.calculated_items()[index];
   const std::size_t field = entry.cache_field_index;
   std::string canonical;
-  Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, field, formula, &canonical);
-  if (!refs) {
-    return refs.error();
-  }
+  ASSIGN_OR_RETURN(std::vector<FormulaRef> refs, compile_refs(host, cache, field, formula, &canonical));
   if (const std::optional<std::uint32_t> item = entry_item(entry);
-      item.has_value() && item_refs_reach(host, cache, field, refs.value(), *item)) {
+      item.has_value() && item_refs_reach(host, cache, field, refs, *item)) {
     return invalid("calculated item refers to itself", formula);
   }
   cache.mutable_calculated_items()[index].formula = std::move(canonical);

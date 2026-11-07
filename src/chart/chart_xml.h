@@ -27,6 +27,9 @@ Expected<void, Error> parse_chart_part(const std::vector<std::uint8_t>& bytes, p
 /// owning `graphicFrame`; `source` is derived through `chart_template`.
 Expected<ChartModel, Error> read_chart_model(const Workbook& wb, const pugi::xml_document& doc);
 
+/// True for a `c15:filtered*Series` extension group (series hidden through the chart filter).
+bool is_filtered_series_group(const pugi::xml_node& node);
+
 }  // namespace formulon
 
 #endif  // FORMULON_CHART_CHART_XML_H_

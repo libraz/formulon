@@ -28,10 +28,8 @@ namespace formulon::pivot {
 
 /// Applies the `show_as` transform of every data field in `table` to
 /// `result`. `cache` is the table's bound cache, which labels a specific
-/// `baseItem`. The subtotal leaf-set vectors are not consulted.
-void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& cache, PivotResult& result,
-                                     const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
-                                     const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
+/// `baseItem`.
+void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& cache, PivotResult& result);
 
 }  // namespace formulon::pivot
 

@@ -30,15 +30,12 @@
 #include "utils/index_sort.h"
 #include "utils/iso_date.h"
 #include "utils/japanese_era.h"
+#include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
 
 namespace formulon::pivot {
 namespace {
-
-// Days before each month in a leap year: a days group numbers 2/29 as day 60
-// in every year, so 3/1 is day 61 whether or not the year has a 2/29.
-constexpr unsigned kLeapDaysBeforeMonth[12] = {0U, 31U, 60U, 91U, 121U, 152U, 182U, 213U, 244U, 274U, 305U, 335U};
 
 // 1900-03-01, the first serial past Excel's phantom 1900-02-29 (serial 60).
 constexpr double kFirstSerialAfterPhantomDay = 61.0;
@@ -201,7 +198,7 @@ std::uint32_t range_group_item_number(const RangeGroup& range, const GroupBounds
         return inner_item(std::floor((day - start_day) / std::floor(range.interval)) + 1.0, last);
       }
       const unsigned month = ymd.m >= 1U && ymd.m <= 12U ? ymd.m : 1U;
-      return inner_item(static_cast<double>(kLeapDaysBeforeMonth[month - 1U] + ymd.d), last);
+      return inner_item(static_cast<double>(kLeapDaysBefore[month - 1U] + ymd.d), last);
     }
     case GroupBy::Months:
       return inner_item(static_cast<double>(ymd.m), last);
@@ -819,33 +816,24 @@ std::string group_date_iso(double serial, bool date1904) {
   // The inverse of `group_date_serial`: serials through 60 name the day before.
   const bool before_phantom = !date1904 && day < kFirstSerialAfterPhantomDay;
   const date_time::YMD ymd = date_time::ymd_from_serial(before_phantom ? day - 1.0 : day, date1904);
-  const auto two = [](std::string& out, long long v) {
-    out.push_back(static_cast<char>('0' + (v / 10) % 10));
-    out.push_back(static_cast<char>('0' + v % 10));
-  };
-  std::string text = std::to_string(ymd.y);
-  while (text.size() < 4U) {
-    text.insert(text.begin(), '0');
-  }
+  std::string text;
+  append_padded(text, ymd.y, 4);
   text.push_back('-');
-  two(text, ymd.m);
+  append_padded(text, ymd.m, 2);
   text.push_back('-');
-  two(text, ymd.d);
+  append_padded(text, ymd.d, 2);
   text.push_back('T');
-  two(text, seconds / 3600);
+  append_padded(text, seconds / 3600, 2);
   text.push_back(':');
-  two(text, seconds / 60 % 60);
+  append_padded(text, seconds / 60 % 60, 2);
   text.push_back(':');
-  two(text, seconds % 60);
+  append_padded(text, seconds % 60, 2);
   return text;
 }
 
 Expected<std::size_t, Error> group_cache_by_date(PivotCache& cache, std::size_t base, const DateGroupSpec& spec,
                                                  bool date1904, ExcelProfile profile) {
-  Expected<GroupBounds, Error> bounds = resolve_date_group_bounds(cache, base, spec, date1904);
-  if (!bounds) {
-    return bounds.error();
-  }
+  ASSIGN_OR_RETURN(GroupBounds bounds, resolve_date_group_bounds(cache, base, spec, date1904));
   const std::optional<FieldGroup>& existing = cache.fields()[base].field_group;
   if (existing.has_value() && existing->par.has_value()) {
     return group_error(FormulonErrorCode::kPreconditionFailed, "the field is grouped already",
@@ -858,7 +846,7 @@ Expected<std::size_t, Error> group_cache_by_date(PivotCache& cache, std::size_t 
     }
     PivotCacheField field = period == GroupBy::Years && spec.calendar == CalendarSystem::Japanese
                                 ? era_year_group_field(cache, base, date1904, profile)
-                                : range_group_field(cache, base, period, spec, bounds.value(), date1904, profile);
+                                : range_group_field(cache, base, period, spec, bounds, date1904, profile);
     cache.mutable_fields().push_back(std::move(field));
   }
   std::optional<FieldGroup>& base_group = cache.mutable_fields()[base].field_group;
@@ -871,12 +859,9 @@ Expected<std::size_t, Error> group_cache_by_date(PivotCache& cache, std::size_t 
 }
 
 Expected<std::size_t, Error> ungroup_cache_field(PivotCache& cache, std::size_t base) {
-  Expected<GroupRun, Error> run = group_run(cache, base);
-  if (!run) {
-    return run.error();
-  }
-  const std::size_t first = run.value().first;
-  if (run.value().count != 0U) {
+  ASSIGN_OR_RETURN(GroupRun run, group_run(cache, base));
+  const std::size_t first = run.first;
+  if (run.count != 0U) {
     cache.mutable_fields().resize(first);
     for (PivotCacheRecord& record : cache.mutable_records()) {
       record.cells.resize(std::min(record.cells.size(), first), Value::blank());
@@ -895,33 +880,22 @@ Expected<std::size_t, Error> ungroup_cache_field(PivotCache& cache, std::size_t 
       }
     }
   }
-  return run.value().count;
+  return run.count;
 }
 
 Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
                                      std::uint32_t periods, CalendarSystem calendar, std::uint32_t interval_days,
                                      std::optional<double> start, std::optional<double> end) {
-  Expected<GroupTarget, Error> target = resolve_group_target(wb, sheet, pivot, field);
-  if (!target) {
-    return target.error();
-  }
-  PivotCache& cache = *target.value().cache;
-  const std::size_t base = target.value().base;
+  ASSIGN_OR_RETURN(GroupTarget target, resolve_group_target(wb, sheet, pivot, field));
+  PivotCache& cache = *target.cache;
+  const std::size_t base = target.base;
   const DateGroupSpec spec{periods, calendar, interval_days, start, end};
-  if (Expected<GroupBounds, Error> checked = resolve_date_group_bounds(cache, base, spec, wb.date1904()); !checked) {
-    return checked.error();
-  }
-  Expected<GroupRun, Error> run = group_run(cache, base);
-  if (!run) {
-    return run.error();
-  }
-  remove_date_group(wb, cache, base, run.value());
-  Expected<std::size_t, Error> first = group_cache_by_date(cache, base, spec, wb.date1904(), wb.excel_profile());
-  if (!first) {
-    return first.error();
-  }
+  RETURN_IF_ERROR(resolve_date_group_bounds(cache, base, spec, wb.date1904()));
+  ASSIGN_OR_RETURN(GroupRun run, group_run(cache, base));
+  remove_date_group(wb, cache, base, run);
+  ASSIGN_OR_RETURN(std::size_t first, group_cache_by_date(cache, base, spec, wb.date1904(), wb.excel_profile()));
   for_each_cache_table(wb, cache.cache_id(), [&](PivotTable& table) {
-    add_group_pivot_fields(table, cache, base, first.value(), &table == target.value().table);
+    add_group_pivot_fields(table, cache, base, first, &table == target.table);
     resolve_pivot_names(table, cache);
   });
   invalidate_tables(wb, cache.cache_id());
@@ -929,19 +903,13 @@ Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_
 }
 
 Expected<void, Error> clear_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field) {
-  Expected<GroupTarget, Error> target = resolve_group_target(wb, sheet, pivot, field);
-  if (!target) {
-    return target.error();
-  }
-  PivotCache& cache = *target.value().cache;
-  Expected<GroupRun, Error> run = group_run(cache, target.value().base);
-  if (!run) {
-    return run.error();
-  }
-  if (run.value().count == 0U) {
+  ASSIGN_OR_RETURN(GroupTarget target, resolve_group_target(wb, sheet, pivot, field));
+  PivotCache& cache = *target.cache;
+  ASSIGN_OR_RETURN(GroupRun run, group_run(cache, target.base));
+  if (run.count == 0U) {
     return Expected<void, Error>::Ok();
   }
-  remove_date_group(wb, cache, target.value().base, run.value());
+  remove_date_group(wb, cache, target.base, run);
   invalidate_tables(wb, cache.cache_id());
   return Expected<void, Error>::Ok();
 }

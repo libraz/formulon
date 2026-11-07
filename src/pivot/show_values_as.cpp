@@ -11,7 +11,9 @@
 #include <utility>
 #include <vector>
 
+#include "pivot/field_lookup.h"
 #include "pivot/pivot_index.h"
+#include "pivot/pivot_layout_internal.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -101,18 +103,6 @@ struct Line {
   bool custom = false;
 };
 
-void collect_leaf_paths(const std::vector<AxisHierarchyNode>& nodes, Path& prefix, std::vector<Path>& out) {
-  for (const AxisHierarchyNode& node : nodes) {
-    prefix.push_back(node.label);
-    if (node.children.empty()) {
-      out.push_back(prefix);
-    } else {
-      collect_leaf_paths(node.children, prefix, out);
-    }
-    prefix.pop_back();
-  }
-}
-
 // Leaves, subtotals and the grand total of one axis, addressable by item path.
 struct Axis {
   std::vector<Line> lines;
@@ -170,10 +160,13 @@ template <typename Labels, typename Custom>
 bool build_axis(const std::vector<AxisHierarchyNode>& tree, std::size_t leaf_count, std::size_t sub_count,
                 const Labels& sub_labels, const Custom& sub_custom, Axis& axis) {
   std::vector<Path> leaves;
-  Path prefix;
-  collect_leaf_paths(tree, prefix, leaves);
   if (tree.empty()) {
     leaves.assign(leaf_count, Path{});
+  } else {
+    // A non-empty tree has at least one level.
+    for (detail::AxisLeaf& leaf : detail::collect_axis_leaves(tree, 1U)) {
+      leaves.push_back(std::move(leaf.labels));
+    }
   }
   if (leaves.size() != leaf_count) {
     return false;
@@ -260,23 +253,15 @@ struct BaseRef {
   std::size_t depth = 0;
 };
 
-std::optional<std::size_t> find_in(const std::vector<std::uint32_t>& order, std::uint32_t fi) {
-  const auto it = std::find(order.begin(), order.end(), fi);
-  if (it == order.end()) {
-    return std::nullopt;
-  }
-  return static_cast<std::size_t>(it - order.begin());
-}
-
 // Axis and depth of the data field's base field. Without a base field a running total follows
 // its mode's direction and the other base-field modes follow a lone single-level axis.
 std::optional<BaseRef> resolve_base(const PivotTable& table, const PivotDataField& df, std::size_t row_leaves,
                                     std::size_t col_leaves) {
   if (df.show_as_base_field.has_value()) {
-    if (const auto d = find_in(table.row_field_order(), *df.show_as_base_field); d.has_value()) {
+    if (const auto d = field_position_in_order(table.row_field_order(), *df.show_as_base_field); d.has_value()) {
       return BaseRef{true, *d};
     }
-    if (const auto d = find_in(table.col_field_order(), *df.show_as_base_field); d.has_value()) {
+    if (const auto d = field_position_in_order(table.col_field_order(), *df.show_as_base_field); d.has_value()) {
       return BaseRef{false, *d};
     }
     return std::nullopt;
@@ -646,9 +631,7 @@ static void apply_transforms(const PivotTable& table, const PivotCache& cache, P
   }
 }
 
-void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& cache, PivotResult& result,
-                                     const std::vector<std::vector<std::size_t>>& /*row_subtotal_leaf_sets*/,
-                                     const std::vector<std::vector<std::size_t>>& /*col_subtotal_leaf_sets*/) {
+void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& cache, PivotResult& result) {
   apply_transforms(table, cache, result);
   sync_legacy_mirrors(result);
 }

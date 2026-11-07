@@ -49,19 +49,17 @@ struct Cache {
   std::vector<std::vector<CachePt>> lvls;  ///< Lowest level first; one entry unless multi-level.
 };
 
-enum class RefKind : std::uint8_t { kNum, kStr, kMultiLvl };
-
 bool is_role(std::string_view n) {
   return std::find(std::begin(chart_edit::kRoles), std::end(chart_edit::kRoles), n) != std::end(chart_edit::kRoles);
 }
 
-bool ref_kind_of(std::string_view n, RefKind& kind) {
+bool ref_kind_of(std::string_view n, ChartRefKind& kind) {
   if (n == "numRef") {
-    kind = RefKind::kNum;
+    kind = ChartRefKind::kNum;
   } else if (n == "strRef") {
-    kind = RefKind::kStr;
+    kind = ChartRefKind::kStr;
   } else if (n == "multiLvlStrRef") {
-    kind = RefKind::kMultiLvl;
+    kind = ChartRefKind::kMulti;
   } else {
     return false;
   }
@@ -72,7 +70,7 @@ bool ref_kind_of(std::string_view n, RefKind& kind) {
 void collect_refs(const pugi::xml_node& node, std::vector<pugi::xml_node>& out) {
   for (pugi::xml_node c = node.first_child(); c && c != node;) {
     if (c.type() == pugi::node_element) {
-      RefKind kind;
+      ChartRefKind kind;
       const pugi::xml_node role = c.parent();
       if (ref_kind_of(local_name(c.name()), kind) && is_role(local_name(role.name())) &&
           local_name(role.parent().name()) == "ser") {
@@ -119,10 +117,10 @@ class Gatherer {
   /// change from numeric to string when a category holds text. False, with
   /// `kind` untouched, when the populated cells exceed
   /// `kMaxRangeExpansionCells`; the existing cache then stays as it is.
-  bool build(const std::vector<SheetRect>& areas, RefKind& kind, std::string_view role, bool apply_hidden,
+  bool build(const std::vector<SheetRect>& areas, ChartRefKind& kind, std::string_view role, bool apply_hidden,
              Cache& cache) const {
     const bool hide = vis_only_ && apply_hidden;
-    if (kind == RefKind::kMultiLvl && areas.size() == 1 && areas[0].top != areas[0].bottom &&
+    if (kind == ChartRefKind::kMulti && areas.size() == 1 && areas[0].top != areas[0].bottom &&
         areas[0].left != areas[0].right) {
       return build_levels(areas[0], hide, cache);
     }
@@ -131,11 +129,11 @@ class Gatherer {
     if (!flatten(areas, hide, items, had_cells, cache.point_count)) {
       return false;
     }
-    if (kind == RefKind::kNum && (role == "cat" || role == "xVal") && has_text(items)) {
-      kind = RefKind::kStr;
+    if (kind == ChartRefKind::kNum && (role == "cat" || role == "xVal") && has_text(items)) {
+      kind = ChartRefKind::kStr;
     }
     cache.lvls.emplace_back();
-    if (kind == RefKind::kNum) {
+    if (kind == ChartRefKind::kNum) {
       cache.format_code = format_code_at(second_position(areas));
       if (items.empty() && had_cells && hide) {
         cache.present = false;  // every cell hidden: the ref keeps `c:f` alone
@@ -401,14 +399,14 @@ bool same_point(const CachePt& fresh, const CachePt& old) {
   return std::memcmp(&parsed, &fresh.number, sizeof(double)) == 0;
 }
 
-bool same_cache(const Cache& fresh, const Cache& old, RefKind kind) {
+bool same_cache(const Cache& fresh, const Cache& old, ChartRefKind kind) {
   if (fresh.present != old.present) {
     return false;
   }
   if (!fresh.present) {
     return true;
   }
-  if (fresh.point_count != old.point_count || (kind == RefKind::kNum && fresh.format_code != old.format_code) ||
+  if (fresh.point_count != old.point_count || (kind == ChartRefKind::kNum && fresh.format_code != old.format_code) ||
       fresh.lvls.size() != old.lvls.size()) {
     return false;
   }
@@ -454,7 +452,7 @@ void write_points(pugi::xml_node parent, const std::string& prefix, const std::v
 }
 
 /// Replaces the cache under `ref` (or inserts one after `c:f`) with `cache`.
-void write_cache(pugi::xml_node ref, const std::string& prefix, RefKind kind, const Cache& cache) {
+void write_cache(pugi::xml_node ref, const std::string& prefix, ChartRefKind kind, const Cache& cache) {
   const pugi::xml_node old = find_cache(ref);
   if (!cache.present) {
     if (old) {
@@ -462,8 +460,7 @@ void write_cache(pugi::xml_node ref, const std::string& prefix, RefKind kind, co
     }
     return;
   }
-  const char* name = kind == RefKind::kNum ? "numCache" : kind == RefKind::kStr ? "strCache" : "multiLvlStrCache";
-  const std::string qualified = prefix + name;
+  const std::string qualified = prefix + chart_cache_tag(kind);
   pugi::xml_node node;
   if (old) {
     node = ref.insert_child_after(qualified.c_str(), old);
@@ -473,13 +470,13 @@ void write_cache(pugi::xml_node ref, const std::string& prefix, RefKind kind, co
   } else {
     node = ref.append_child(qualified.c_str());
   }
-  if (kind == RefKind::kNum) {
+  if (kind == ChartRefKind::kNum) {
     node.append_child((prefix + "formatCode").c_str())
         .append_child(pugi::node_pcdata)
         .set_value(cache.format_code.c_str());
   }
   node.append_child((prefix + "ptCount").c_str()).append_attribute("val") = count_text(cache.point_count).c_str();
-  if (kind == RefKind::kMultiLvl) {
+  if (kind == ChartRefKind::kMulti) {
     for (const std::vector<CachePt>& lvl : cache.lvls) {
       write_points(node.append_child((prefix + "lvl").c_str()), prefix, lvl);
     }
@@ -504,7 +501,7 @@ bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_
   collect_refs(root, refs);
   bool changed = false;
   for (pugi::xml_node ref : refs) {
-    RefKind kind = RefKind::kNum;
+    ChartRefKind kind = ChartRefKind::kNum;
     ref_kind_of(local_name(ref.name()), kind);
     const std::string_view role = local_name(ref.parent().name());
     const std::string formula = ref_formula(ref);
@@ -515,7 +512,7 @@ bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_
     if (!source || source.value().areas.empty()) {
       continue;
     }
-    const RefKind original = kind;
+    const ChartRefKind original = kind;
     // A series name is not plotted, so hidden cells do not drop out of it.
     Cache fresh;
     if (!gatherer.build(source.value().areas, kind, role, role != "tx", fresh)) {

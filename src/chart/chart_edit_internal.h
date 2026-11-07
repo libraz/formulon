@@ -21,6 +21,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 
 namespace formulon {
 
@@ -35,6 +36,14 @@ using chart_ns::kNsC;
 using chart_ns::kNsC15;
 using chart_ns::kUriC15;
 using chart_ns::kUriLeader;
+
+/// True when `kind` and `grouping` are both within their enum ranges.
+inline bool valid_kind_grouping(ChartInsertKind kind, ChartGrouping grouping) {
+  return static_cast<int>(kind) >= static_cast<int>(ChartInsertKind::kColumn) &&
+         static_cast<int>(kind) <= static_cast<int>(ChartInsertKind::kDoughnut) &&
+         static_cast<int>(grouping) >= static_cast<int>(ChartGrouping::kClustered) &&
+         static_cast<int>(grouping) <= static_cast<int>(ChartGrouping::kStandard);
+}
 
 // Child orders of the CT_ types edits insert into (unions where siblings share a parent tag).
 // clang-format off
@@ -103,12 +112,6 @@ inline std::string leader_sp_pr() {
   std::string x = "<c:spPr>";
   append_grey_ln(x, 35);
   return x + "<a:effectLst/></c:spPr>";
-}
-
-inline std::string gridlines_xml() {
-  std::string x = "<c:majorGridlines><c:spPr>";
-  append_grey_ln(x, 15);
-  return x + "<a:effectLst/></c:spPr></c:majorGridlines>";
 }
 
 inline Expected<void, Error> ok() {
@@ -202,7 +205,7 @@ Expected<void, Error> commit(Workbook& wb, Chart& c, bool refresh);
 
 inline bool is_plot(const xml_node& node) {
   const std::string_view name = local_name(node);
-  return node.type() == pugi::node_element && name.size() > 5 && name.substr(name.size() - 5) == "Chart";
+  return node.type() == pugi::node_element && name.size() > 5 && strings::ends_with(name, "Chart");
 }
 
 std::vector<xml_node> plots_of(const Chart& c);
@@ -260,11 +263,22 @@ inline std::vector<xml_node> plot_series(const xml_node& plot) {
 
 Expected<xml_node, Error> series_at(const xml_node& plot, std::uint32_t idx);
 
+/// A series' category input (`c:cat`, else `c:xVal`) and value input (`c:val`, else `c:yVal`).
+inline xml_node category_input(const xml_node& ser) {
+  const xml_node cat = child_local(ser, "cat");
+  return cat ? cat : child_local(ser, "xVal");
+}
+
+inline xml_node value_input(const xml_node& ser) {
+  const xml_node val = child_local(ser, "val");
+  return val ? val : child_local(ser, "yVal");
+}
+
 /// The `strRef` / `numRef` / `multiLvlStrRef` of a series input, or null.
 inline xml_node ref_of(const xml_node& holder) {
   const xml_node ref = io::first_element_child(holder);
   const std::string_view n = local_name(ref);
-  return n.size() > 3 && n.substr(n.size() - 3) == "Ref" ? ref : xml_node();
+  return n.size() > 3 && strings::ends_with(n, "Ref") ? ref : xml_node();
 }
 
 /// Declares `c15` on `node` unless it already resolves there to the c15 namespace.
@@ -277,6 +291,9 @@ inline void bind_c15(xml_node node) {
 /// The `c:ext` holding a ref's c15 children; `create` makes it the ref's first
 /// child and binds `c15` on it for the children the caller appends.
 xml_node c15_ext(xml_node ref, bool create);
+
+/// The `c:ext` of `ext_list` with `uri`, or null.
+xml_node find_ext(const xml_node& ext_list, std::string_view uri);
 
 /// Removes an empty c15 ext and an empty extLst from `ref`.
 void prune_ext(xml_node ref);

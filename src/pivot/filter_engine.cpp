@@ -44,6 +44,17 @@ std::string_view payload_text(const std::variant<std::monostate, int, double, st
   return {};
 }
 
+// The numeric alternative of `slot` (an int widens to double), as stored.
+std::optional<double> raw_payload_number(const std::variant<std::monostate, int, double, std::string>& slot) {
+  if (const auto* d = std::get_if<double>(&slot)) {
+    return *d;
+  }
+  if (const auto* i = std::get_if<int>(&slot)) {
+    return static_cast<double>(*i);
+  }
+  return std::nullopt;
+}
+
 // The value a label comparison reads for `cell` of field `field_index`: a group
 // field's materialised number stands for its group item's text.
 Value label_value(const PivotCache& cache, std::size_t field_index, const Value& cell) {
@@ -147,13 +158,7 @@ std::vector<bool> remap_leaf_sets(std::vector<std::vector<std::size_t>>& leaf_se
 // variant carries either `int` or `double`; both coerce to double here.
 // Returns 0 for non-numeric variants (caller treats as no-op).
 double filter_number_value(const PivotFilter& f) {
-  if (const auto* d = std::get_if<double>(&f.value)) {
-    return *d;
-  }
-  if (const auto* i = std::get_if<int>(&f.value)) {
-    return static_cast<double>(*i);
-  }
-  return 0.0;
+  return raw_payload_number(f.value).value_or(0.0);
 }
 
 // Pulls the numeric upper-bound payload of a range filter. Returns
@@ -161,13 +166,7 @@ double filter_number_value(const PivotFilter& f) {
 // it), signalling the range is unbounded above; the calling filter
 // then no-ops.
 std::optional<double> filter_number_value_high(const PivotFilter& f) {
-  if (const auto* d = std::get_if<double>(&f.value_high)) {
-    return *d;
-  }
-  if (const auto* i = std::get_if<int>(&f.value_high)) {
-    return static_cast<double>(*i);
-  }
-  return std::nullopt;
+  return raw_payload_number(f.value_high);
 }
 
 PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotCache& cache, const PivotFilterEnv& env)
@@ -438,13 +437,8 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
 }
 
 std::optional<double> payload_number(const std::variant<std::monostate, int, double, std::string>& slot) {
-  if (const auto* d = std::get_if<double>(&slot)) {
-    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
-  }
-  if (const auto* i = std::get_if<int>(&slot)) {
-    return static_cast<double>(*i);
-  }
-  return std::nullopt;
+  const std::optional<double> number = raw_payload_number(slot);
+  return number.has_value() && !std::isfinite(*number) ? std::nullopt : number;
 }
 
 std::optional<std::string> caption_wildcard_pattern(FilterType type, std::string_view value) {

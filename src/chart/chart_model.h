@@ -24,6 +24,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -146,6 +147,28 @@ enum class ChartBarDirection : std::uint8_t { kAbsent = 0, kCol = 1, kBar = 2 };
 enum class ChartAxisPosition : std::uint8_t { kBottom = 0, kTop = 1, kLeft = 2, kRight = 3 };
 
 enum class ChartAxisCrosses : std::uint8_t { kAbsent = 0, kAutoZero = 1, kMin = 2, kMax = 3, kAt = 4 };
+
+// XML tokens by enum value, shared by the chart reader and the editors. Index 0 of the tables for enums with an
+// absent/none member is the empty token.
+inline constexpr const char* kChartDashTokens[] = {"solid", "dash", "dot", "dashDot"};
+inline constexpr const char* kChartSymbolTokens[] = {"none", "auto", "circle", "square", "diamond", "triangle",
+                                                     "x",    "star", "plus",   "dot",    "dash",    "picture"};
+inline constexpr const char* kChartLabelPositionTokens[] = {"bestFit", "ctr", "inBase", "inEnd", "outEnd",
+                                                            "t",       "b",   "l",      "r"};
+inline constexpr const char* kChartLegendTokens[] = {"", "b", "t", "l", "r", "tr"};
+inline constexpr const char* kChartCrossesTokens[] = {"", "autoZero", "min", "max"};
+inline constexpr const char* kChartBlanksTokens[] = {"", "gap", "zero", "span"};
+
+/// Index of `token` in `table[first, count)`, or -1.
+inline int chart_token_index(const char* const* table, std::size_t count, std::string_view token,
+                             std::size_t first = 0) {
+  for (std::size_t i = first; i < count; ++i) {
+    if (token == table[i]) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
 
 /// Forced use of a heading row / column when splitting a source range.
 enum class ChartHeaderMode : std::uint8_t { kAuto = 0, kYes = 1, kNo = 2 };

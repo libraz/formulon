@@ -22,6 +22,7 @@
 #include "sheet.h"
 #include "unknown_relationship.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -133,7 +134,7 @@ int kind_of(const xml_node& plot) {
                : static_cast<int>(ChartInsertKind::kColumn);
   }
   static const char* const kNames[] = {"lineChart", "areaChart", "pieChart", "scatterChart", "doughnutChart"};
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < static_cast<int>(std::size(kNames)); ++i) {
     if (name == kNames[i]) {
       return static_cast<int>(ChartInsertKind::kLine) + i;
     }
@@ -144,9 +145,7 @@ int kind_of(const xml_node& plot) {
 xml_node filter_group(const xml_node& plot) {
   for (const xml_node& ext : children_local(child_local(plot, "extLst"), "ext")) {
     for (xml_node g = ext.first_child(); g; g = g.next_sibling()) {
-      const std::string_view n = local_name(g);
-      if (g.type() == pugi::node_element && n.size() > 14 && n.substr(0, 8) == "filtered" &&
-          n.substr(n.size() - 6) == "Series") {
+      if (is_filtered_series_group(g)) {
         return g;
       }
     }
@@ -163,15 +162,22 @@ Expected<xml_node, Error> series_at(const xml_node& plot, std::uint32_t idx) {
   return bad_arg("chart: no series with that idx");
 }
 
-xml_node c15_ext(xml_node ref, bool create) {
-  xml_node list = child_local(ref, "extLst");
-  for (xml_node ext : children_local(list, "ext")) {
-    if (std::string_view(ext.attribute("uri").value()) == kUriC15) {
-      if (create) {
-        bind_c15(ext);
-      }
+xml_node find_ext(const xml_node& ext_list, std::string_view uri) {
+  for (const xml_node& ext : children_local(ext_list, "ext")) {
+    if (std::string_view(ext.attribute("uri").value()) == uri) {
       return ext;
     }
+  }
+  return {};
+}
+
+xml_node c15_ext(xml_node ref, bool create) {
+  xml_node list = child_local(ref, "extLst");
+  if (xml_node ext = find_ext(list, kUriC15)) {
+    if (create) {
+      bind_c15(ext);
+    }
+    return ext;
   }
   if (!create) {
     return {};
@@ -198,7 +204,7 @@ void prune_ext(xml_node ref) {
 }
 
 std::uint32_t point_count(const xml_node& ser) {
-  const xml_node val = child_local(ser, "val") ? child_local(ser, "val") : child_local(ser, "yVal");
+  const xml_node val = value_input(ser);
   const xml_node ref = ref_of(val);
   for (xml_node c = ref.first_child(); c; c = c.next_sibling()) {
     if (child_local(c, "ptCount")) {
@@ -215,9 +221,7 @@ void load_palette(const Workbook& wb, const std::string& chart_path, Palette& ou
   if (rels != nullptr && doc.load_buffer(rels->bytes.data(), rels->bytes.size())) {
     for (const xml_node& r : children_local(doc.document_element(), "Relationship")) {
       const std::string_view type = r.attribute("Type").value();
-      const auto ends = [&](std::string_view tail) {
-        return type.size() >= tail.size() && type.substr(type.size() - tail.size()) == tail;
-      };
+      const auto ends = [&](std::string_view tail) { return strings::ends_with(type, tail); };
       if (ends("/chartStyle")) {
         out.styled = true;
       } else if (ends("/chartColorStyle")) {

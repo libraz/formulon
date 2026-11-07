@@ -16,14 +16,6 @@
 namespace formulon {
 namespace chart_edit {
 
-namespace {
-
-// `c:symbol` values by `ChartMarkerSymbol`, up to the last one a marker can be written with.
-constexpr const char* kSymbols[] = {"none", "auto", "circle", "square", "diamond", "triangle",
-                                    "x",    "star", "plus",   "dot",    "dash"};
-
-}  // namespace
-
 // ---------------------------------------------------------------------------
 // Shape properties, markers, labels
 // ---------------------------------------------------------------------------
@@ -118,13 +110,12 @@ Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const Chart
   if (line.dash.is_clear()) {
     drop(ln, "prstDash");
   } else if (line.dash.is_set()) {
-    static const char* const kDash[] = {"solid", "dash", "dot", "dashDot"};
     const int d = static_cast<int>(line.dash.value);
-    if (d < 0 || d > 3) {
+    if (d < 0 || d >= static_cast<int>(std::size(kChartDashTokens))) {
       return bad_arg("chart: line dash must be solid, dash, dot or dashDot");
     }
     drop(ln, "custDash");
-    put_val(ln, "a:prstDash", kLineOrder, kDash[d]);
+    put_val(ln, "a:prstDash", kLineOrder, kChartDashTokens[d]);
   }
   return ok();
 }
@@ -143,7 +134,7 @@ Expected<void, Error> apply_marker(xml_node owner, Order order, const ChartPatch
     if (s < 0 || s > static_cast<int>(ChartMarkerSymbol::kDash)) {
       return bad_arg("chart: marker symbol must be a named shape");
     }
-    put_val(node, "c:symbol", kMarkerOrder, kSymbols[s]);
+    put_val(node, "c:symbol", kMarkerOrder, kChartSymbolTokens[s]);
   }
   if (m.size.is_clear()) {
     drop(node, "size");
@@ -184,7 +175,7 @@ void settle_marker(xml_node ser, xml_node owner, const Palette& p) {
   if (symbol.empty() || symbol == "auto") {
     symbol = owner == ser ? "" : child_local(child_local(ser, "marker"), "symbol").attribute("val").value();
     if (symbol.empty() || symbol == "auto") {
-      symbol = kSymbols[static_cast<int>(kAutoSymbols[idx % std::size(kAutoSymbols)])];
+      symbol = kChartSymbolTokens[static_cast<int>(kAutoSymbols[idx % std::size(kAutoSymbols)])];
     }
     put_val(m, "c:symbol", kMarkerOrder, symbol);
   }
@@ -234,9 +225,7 @@ std::string labels_xml(bool pie, const std::string& lang) {
       "baseline=\"0\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"75000\"/><a:lumOff val=\"25000\"/>"
       "</a:schemeClr></a:solidFill><a:latin typeface=\"+mn-lt\"/><a:ea typeface=\"+mn-ea\"/>"
       "<a:cs typeface=\"+mn-cs\"/></a:defRPr></a:pPr><a:endParaRPr lang=\"" +
-      lang +
-      "\"/></a:p></c:txPr><c:showLegendKey val=\"0\"/><c:showVal val=\"0\"/><c:showCatName val=\"0\"/>"
-      "<c:showSerName val=\"0\"/><c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/>";
+      lang + "\"/></a:p></c:txPr>" + kChartShowFlags;
   const std::string ext = std::string("<c:extLst><c:ext uri=\"") + kUriLeader + "\" xmlns:c15=\"" + kNsC15 + "\"";
   if (pie) {
     x += std::string("<c:showLeaderLines val=\"1\"/><c:leaderLines>") + leader_sp_pr() + "</c:leaderLines>" + ext +
@@ -284,12 +273,11 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
   if (p.position.is_clear()) {
     drop(d, "dLblPos");
   } else if (p.position.is_set()) {
-    static const char* const kPos[] = {"bestFit", "ctr", "inBase", "inEnd", "outEnd", "t", "b", "l", "r"};
     const int i = static_cast<int>(p.position.value);
-    if (i < 0 || i > 8) {
+    if (i < 0 || i >= static_cast<int>(std::size(kChartLabelPositionTokens))) {
       return bad_arg("chart: unknown label position");
     }
-    put_val(d, "c:dLblPos", kLabelsOrder, kPos[i]);
+    put_val(d, "c:dLblPos", kLabelsOrder, kChartLabelPositionTokens[i]);
   }
   if (p.number_format.is_clear()) {
     drop(d, "numFmt");

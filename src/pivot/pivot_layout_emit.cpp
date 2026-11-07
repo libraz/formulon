@@ -426,14 +426,21 @@ void emit_drop_zone_row(const LayoutPlan& plan, PivotCells& cells) {
   }
 }
 
+// The data field header cells of a layout with no column levels, one per column entry.
+void emit_flat_data_headers(const LayoutPlan& plan, PivotCells& cells) {
+  for (std::size_t c_entry = 0; c_entry < plan.data_cols; ++c_entry) {
+    const std::size_t df = plan.col_entries[c_entry].data_field.value_or(0);
+    emit_text_or_blank(cells, plan.header_top, plan.data_left + static_cast<std::uint32_t>(c_entry),
+                       flat_col_header(plan, c_entry), PivotCellKind::Header, PivotCellRole::DataHeader, 0,
+                       data_field_name(plan.table, df), data_field_format(plan.table, df));
+  }
+}
+
 void emit_header_multi_col(const LayoutPlan& plan, PivotCells& cells) {
-  const PivotTable& table = plan.table;
-  const std::vector<AxisEntry>& col_entries = plan.col_entries;
   const std::uint32_t left = plan.left;
   const std::uint32_t top = plan.header_top;
   const std::uint32_t data_left = plan.data_left;
   const std::size_t row_header_cols = plan.row_header_cols;
-  const std::size_t data_cols = plan.data_cols;
   const std::size_t col_levels = plan.col_levels;
   if (plan.col_depth == 0) {
     // One header row: the row level names, then the data field names.
@@ -441,12 +448,7 @@ void emit_header_multi_col(const LayoutPlan& plan, PivotCells& cells) {
       emit_text_or_blank(cells, top, left + static_cast<std::uint32_t>(d), field_caption(plan, row_level_name(plan, d)),
                          PivotCellKind::Header, PivotCellRole::FieldHeader, static_cast<std::uint32_t>(d));
     }
-    for (std::size_t c_entry = 0; c_entry < data_cols; ++c_entry) {
-      const std::size_t df = col_entries[c_entry].data_field.value_or(0);
-      emit_text_or_blank(cells, top, data_left + static_cast<std::uint32_t>(c_entry), flat_col_header(plan, c_entry),
-                         PivotCellKind::Header, PivotCellRole::DataHeader, 0, data_field_name(table, df),
-                         data_field_format(table, df));
-    }
+    emit_flat_data_headers(plan, cells);
   } else {
     // Caption row: the corner, then each column level's own name -- the
     // Values level under the stored caption -- where Compact draws its
@@ -478,12 +480,10 @@ void emit_header_multi_col(const LayoutPlan& plan, PivotCells& cells) {
 void emit_header_compact(const LayoutPlan& plan, PivotCells& cells) {
   const PivotTable& table = plan.table;
   const PivotLayoutOptions& options = plan.options;
-  const std::vector<AxisEntry>& col_entries = plan.col_entries;
   const std::uint32_t left = plan.left;
   const std::uint32_t top = plan.header_top;
   const std::uint32_t data_left = plan.data_left;
   const std::size_t row_header_cols = plan.row_header_cols;
-  const std::size_t data_cols = plan.data_cols;
   const std::size_t col_levels = plan.col_levels;
   if (plan.col_depth == 0) {
     // One header row: the "Row Labels" placeholder, then the data field
@@ -495,12 +495,7 @@ void emit_header_compact(const LayoutPlan& plan, PivotCells& cells) {
       emit_text_or_blank(cells, top, left, field_caption(plan, options.row_labels_label), PivotCellKind::Header,
                          PivotCellRole::FieldHeader, 0);
     }
-    for (std::size_t c_entry = 0; c_entry < data_cols; ++c_entry) {
-      const std::size_t df = col_entries[c_entry].data_field.value_or(0);
-      emit_text_or_blank(cells, top, data_left + static_cast<std::uint32_t>(c_entry), flat_col_header(plan, c_entry),
-                         PivotCellKind::Header, PivotCellRole::DataHeader, 0, data_field_name(table, df),
-                         data_field_format(table, df));
-    }
+    emit_flat_data_headers(plan, cells);
   } else {
     // Caption row: the corner, then the "Column Labels" placeholder over
     // the first column. Without row fields the single data field's name
