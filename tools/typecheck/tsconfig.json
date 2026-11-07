@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "target": "esnext",
+    "lib": ["esnext", "esnext.disposable", "dom"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types"],
+    "paths": {
+      "@libraz/formulon": ["../../packages/npm/dist/formulon.d.ts"],
+      "@libraz/formulon/threads": ["../../packages/npm/dist/formulon.d.ts"],
+      "@libraz/formulon-native": ["../../packages/npm-native/index.d.ts"],
+      "./packages/npm-native/dist/index.mjs": ["../../packages/npm-native/index.d.ts"]
+    }
+  }
+}

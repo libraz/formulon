@@ -1,0 +1,12 @@
+{
+  "name": "formulon-typecheck",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Type-checks the README examples and the d.ts type tests against the staged declarations.",
+  "type": "module",
+  "packageManager": "yarn@4.18.1",
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

@@ -56,7 +56,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 
 .PHONY: all build release build-type test test-slow test-all format format-check lint clean \
         wasm wasm-threads wasm-debug wasm-capi test-wasm test-python size-check \
-        npm-package npm-test npm-pack npm-check-dts \
+        npm-package npm-test npm-pack npm-check-dts npm-typecheck \
         node-native node-package node-test \
         python-package python-test python-wheel \
         parity-test \
@@ -383,6 +383,12 @@ npm-test: npm-package
 	$(NODE) $(NPM_PKG_DIR)/scripts/check-dts.mjs
 	(cd $(NPM_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')
 	(cd $(NPM_PKG_DIR) && FORMULON_NPM_ENTRY=./threads $(NODE) --test 'test/*.test.mjs')
+
+# `make npm-typecheck` -> type-check the README examples and the d.ts type tests
+#                         against the staged package with the pinned TypeScript in
+#                         tools/typecheck/. TYPECHECK_ARGS passes --types-only or --docs <dir>.
+npm-typecheck: npm-package
+	cd tools/typecheck && yarn install --immutable && $(NODE) typecheck.mjs $(TYPECHECK_ARGS)
 
 npm-pack: npm-package
 	@if ! command -v npm >/dev/null 2>&1; then \
