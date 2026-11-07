@@ -84,7 +84,7 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   if (has_row != has_col) {
     return reject(kReferenceTypeError, "parseReference: `baseRow` and `baseCol` must be given together");
   }
-  fm_parsed_reference_t ref{};
+  fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
   const fm_status_t rc =
       fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
   if (rc != 0 || ref.valid == 0) {

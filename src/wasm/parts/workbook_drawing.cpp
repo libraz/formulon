@@ -53,7 +53,7 @@ emscripten::val drawing_object_to_val(const fm_drawing_object_t& d) {
 }
 
 fm_status_t drawing_object_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_drawing_object_t d{};
+  fm_drawing_object_t d = FM_STRUCT_INIT(fm_drawing_object_t);
   const fm_status_t rc = fm_sheet_get_drawing_object_at(handle, sheet, index, &d);
   if (rc == 0) {
     *out = drawing_object_to_val(d);
@@ -94,7 +94,7 @@ emscripten::val probe_image(emscripten::val bytes) {
   if (!val_to_bytes_checked(bytes, &data)) {
     return emscripten::val::undefined();
   }
-  fm_image_info_t info{};
+  fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   if (!succeeded(fm_get_image_info(data.data(), data.size(), &info))) {
     return emscripten::val::undefined();
   }
@@ -110,7 +110,7 @@ emscripten::val JsWorkbook::listDrawingObjects(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getDrawingObject(uint32_t sheet, uint32_t objectId) const {
-  fm_drawing_object_t d{};
+  fm_drawing_object_t d = FM_STRUCT_INIT(fm_drawing_object_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_drawing_object(handle_, sheet, objectId, &present, &d) : kBindingInvalidHandle;
@@ -121,7 +121,7 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   int32_t present = 0;
   const uint8_t* data = nullptr;
   size_t len = 0;
-  fm_image_info_t info{};
+  fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_image(handle_, sheet, objectId, &present, &data, &len, &info)
                                             : kBindingInvalidHandle;
   if (rc != 0 || present == 0) {

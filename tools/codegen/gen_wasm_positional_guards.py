@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FACADE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 427
+EXPECTED_NODE_REGISTRATIONS = 429
 
 MASK_NAMES = (
     "u32",
@@ -53,11 +53,11 @@ WASM_METHOD = re.compile(r"\.function\(\s*\"([A-Za-z0-9_]+)\"")
 WASM_FREE_FUNCTION = re.compile(r"(?<![.\w])function\(\s*\"([A-Za-z0-9_]+)\"")
 WASM_STATIC_FUNCTION = re.compile(r"\.class_function\(\s*\"([A-Za-z0-9_]+)\"")
 
-# The Node class has one lifecycle helper that is intentionally not exposed
-# by the embind class. Every other method both surfaces share takes its spec
-# from the Node registration. Keeping the set explicit makes a future binding
-# drift fail at generation time instead of silently losing validation.
-NODE_ONLY_METHODS = frozenset(("getMemoryUsage",))
+# Node methods intentionally not exposed by the embind class; today there are
+# none. Every method both surfaces share takes its spec from the Node
+# registration. Keeping the set explicit makes a future binding drift fail at
+# generation time instead of silently losing validation.
+NODE_ONLY_METHODS: frozenset[str] = frozenset()
 
 # Positional specs of the free functions that take checked primitives. Every
 # other registered free function is still wrapped, with an empty spec.
@@ -333,7 +333,7 @@ def _render(metadata: dict[str, object]) -> str:
       if (typeof FormulonError !== 'function') {{
         return new TypeError('FormulonError was not provided to the module factory');
       }}
-      return new FormulonError(pending.code, pending.message, pending.context);
+      return new FormulonError(pending.code, pending.message, pending.context, pending.parseError);
     }}
     if (pending.kind === 1) return new RangeError(pending.message);
     if (pending.kind === 2 && pending.thrown !== undefined) return pending.thrown.value;

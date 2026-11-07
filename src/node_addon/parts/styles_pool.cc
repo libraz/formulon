@@ -24,7 +24,6 @@ Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record_t& f) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, f.name));
   out.Set("size", JsNumberOrNull(env, f.has_size, f.size));
-  out.Set("colorArgb", Napi::Number::New(env, f.color_argb));
   out.Set("bold", JsBoolOrNull(env, f.has_bold, f.bold));
   out.Set("italic", JsBoolOrNull(env, f.has_italic, f.italic));
   out.Set("strike", JsBoolOrNull(env, f.has_strike, f.strike));
@@ -69,15 +68,12 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
   flag("shadow", &out->has_shadow, &out->shadow);
   flag("condense", &out->has_condense, &out->condense);
   flag("extend", &out->has_extend, &out->extend);
-  out->color_argb = reader.U32(record, "colorArgb", 0xFF000000U);
   out->color = PullColorSpec(reader, record, "color");
 }
 
 Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record_t& f) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(f.pattern)));
-  out.Set("fgArgb", Napi::Number::New(env, f.fg_argb));
-  out.Set("bgArgb", Napi::Number::New(env, f.bg_argb));
   out.Set("fg", ColorSpecToJs(env, f.fg));
   out.Set("bg", ColorSpecToJs(env, f.bg));
   if (f.has_gradient != 0) {
@@ -92,7 +88,6 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record_t& f) {
     for (std::size_t i = 0; i < f.gradient_stop_count; ++i) {
       Napi::Object stop = Napi::Object::New(env);
       stop.Set("position", Napi::Number::New(env, f.gradient_stops[i].position));
-      stop.Set("colorArgb", Napi::Number::New(env, f.gradient_stops[i].color_argb));
       stop.Set("color", ColorSpecToJs(env, f.gradient_stops[i].color));
       stops.Set(static_cast<uint32_t>(i), stop);
     }
@@ -108,8 +103,6 @@ fm_fill_record_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& r
                                 std::vector<fm_gradient_stop_t>* stops) {
   fm_fill_record_t out{};
   out.pattern = reader.U8(record, "pattern", 0U);
-  out.fg_argb = reader.U32(record, "fgArgb", 0U);
-  out.bg_argb = reader.U32(record, "bgArgb", 0U);
   out.fg = PullColorSpec(reader, record, "fg");
   out.bg = PullColorSpec(reader, record, "bg");
   Napi::Object gradient;
@@ -136,7 +129,6 @@ fm_fill_record_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& r
         }
         fm_gradient_stop_t stop{};
         stop.position = reader.Double(item, "position", 0.0);
-        stop.color_argb = reader.U32(item, "colorArgb", 0U);
         stop.color = PullColorSpec(reader, item, "color");
         stops->push_back(stop);
       }
@@ -150,7 +142,6 @@ fm_fill_record_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& r
 Napi::Object BorderSideToJs(Napi::Env env, const fm_border_side_t& s) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("style", Napi::Number::New(env, static_cast<uint32_t>(s.style)));
-  out.Set("colorArgb", Napi::Number::New(env, s.color_argb));
   out.Set("color", ColorSpecToJs(env, s.color));
   return out;
 }
@@ -174,7 +165,6 @@ fm_border_side_t PullBorderSide(CheckedSpecReader& reader, const Napi::Object& o
     return s;
   }
   s.style = reader.U8(v, "style", 0U);
-  s.color_argb = reader.U32(v, "colorArgb", 0U);
   s.color = PullColorSpec(reader, v, "color");
   return s;
 }
@@ -202,8 +192,7 @@ Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf_t& xf) {
   out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
   out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
   out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
-  out.Set("horizontalAlign",
-          JsNumberOrNull(env, xf.has_horizontal_align, static_cast<uint32_t>(xf.horizontal_align)));
+  out.Set("horizontalAlign", JsNumberOrNull(env, xf.has_horizontal_align, static_cast<uint32_t>(xf.horizontal_align)));
   out.Set("verticalAlign", JsNumberOrNull(env, xf.has_vertical_align, static_cast<uint32_t>(xf.vertical_align)));
   out.Set("wrapText", JsBoolOrNull(env, xf.has_wrap_text, xf.wrap_text));
   out.Set("justifyLastLine", JsBoolOrNull(env, xf.has_justify_last_line, xf.justify_last_line));

@@ -46,6 +46,7 @@ from .api_conventions_bindings import (
     _owned,
     _parse_members,
     _split_top,
+    _top_union,
     _tree_c,
     _violation,
     surfaces,
@@ -210,7 +211,14 @@ def _rule_cell_a1(ctx: Context) -> Iterable[Violation]:
 
 
 def _element(alternatives: List[str], js: bool) -> List[str]:
-    """The element type of a single array alternative, else the alternatives unchanged."""
+    """The element type of a single array alternative, or of an array that also takes one A1 string in its place;
+    else the alternatives unchanged."""
+    a1 = "string" if js else "str"
+    if len(alternatives) == 2 and a1 in alternatives:
+        array = [a for a in alternatives if a != a1]
+        element = _element(array, js)
+        if element != array:
+            return element
     if len(alternatives) != 1:
         return alternatives
     text = alternatives[0]
@@ -232,7 +240,8 @@ def _py_union(text: str) -> List[str]:
 @_owned("R25.rect")
 def _rule_rect_a1(ctx: Context) -> Iterable[Violation]:
     """An op's `rect_args` argument takes a rectangle or an A1 range: `CellRect | string` in JS,
-    `Union[CellRect, str]` in Python, as the element type when the argument is an array.
+    `Union[CellRect, str]` in Python, as the element type when the argument is an array (which may also take
+    one A1 string in place of the array).
     """
     for key, entry in _ledger_ops(ctx, "rect_args"):
         for surface in BINDING_SURFACES:
@@ -298,11 +307,12 @@ def _rule_count_at(ctx: Context) -> Iterable[Violation]:
 # ---------------------------------------------------------------------------
 
 
-_TS_EXTENDS_RE = re.compile(r"^export\s+interface\s+([A-Za-z_$][\w$]*)\s+extends\s+([^{]+)\{", re.M)
+_TS_EXTENDS_RE = re.compile(r"^(?:export\s+)?(?:declare\s+)?interface\s+([A-Za-z_$][\w$]*)\s+extends\s+([^{]+)\{", re.M)
 
 
 def _js_fields(decls: Dict[str, TsDecl], raw: str, name: str, seen: Tuple[str, ...] = ()) -> Optional[Dict[str, str]]:
-    """Field name -> type of interface `name`, inherited fields included; None when it is not an interface."""
+    """Field name -> type of interface `name`, inherited fields included (from any interface in `decls`, which
+    may hold module-private ones); None when it is not an interface."""
     decl = decls.get(name)
     if decl is None or decl.kind != "interface":
         return None
@@ -335,13 +345,18 @@ def _patch_keys(decls: Dict[str, TsDecl], raw: str, text: str) -> Optional[Dict[
     return _js_fields(decls, raw, text)
 
 
-def _same_type(patch_type: str, record_type: str) -> bool:
-    """The patch key's type is the record field's, `null` aside, the patch of a nested record, or a rectangle
-    field that also takes its A1 string."""
+def _same_type(patch_type: str, record_type: str, decls: Optional[Dict[str, TsDecl]] = None) -> bool:
+    """The patch key's type is the record field's, `null` aside, the patch of a nested record, a rectangle
+    field that also takes its A1 string, or the record type's declared input alias (`ColorInput = string | Color`
+    for a `Color` field)."""
     patch = sorted(_strip_null(patch_type, True))
     record = sorted(_strip_null(record_type, True))
     if len(record) == 1 and record[0] in _RECT_RECORDS and patch == sorted([record[0], "string"]):
         return True
+    if len(record) == 1 and patch == [f"{record[0]}Input"]:
+        alias = (decls or {}).get(patch[0])
+        if alias is not None and alias.kind == "type" and record[0] in _top_union(alias.text):
+            return True
     return patch == record or (len(record) == 1 and patch == [f"{record[0]}Patch"])
 
 
@@ -364,7 +379,7 @@ def _js_patch_problems(decls: Dict[str, TsDecl], raw: str, member, record: Optio
     for key, ptype in sorted(keys.items()):
         if key not in fields:
             yield f"key:{key}", f"`{kinds[0]}.{key}` is not a field of `{record}`"
-        elif not _same_type(ptype, fields[key]):
+        elif not _same_type(ptype, fields[key], decls):
             yield f"type:{key}", f"`{kinds[0]}.{key}: {ptype}` differs from `{record}.{key}: {fields[key]}`"
 
 

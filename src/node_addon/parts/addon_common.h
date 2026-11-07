@@ -41,6 +41,8 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "c_api/binding_status.h"
@@ -71,8 +73,9 @@ AddonData& GetAddonData(Napi::Env env);
 // Result builders
 // ---------------------------------------------------------------------
 
-/// Throws a `FormulonError` carrying `rc` and the last-error message and
-/// context of the C-ABI call that failed, and returns `env.Undefined()`.
+/// Throws a `FormulonError` carrying `rc`, the last-error message and
+/// context of the C-ABI call that failed and, after a formula syntax error,
+/// its `parseError` position; returns `env.Undefined()`.
 /// Throws nothing when an exception is already pending (a callback's own
 /// exception, or a rejected argument), so that exception reaches JS as-is.
 /// Without an injected error class it throws a `TypeError` instead.
@@ -99,12 +102,32 @@ Napi::Value OptionalOrNull(Napi::Env env, fm_status_t rc, int32_t present, Napi:
 /// the field that kind carries (`number`, `boolean`, `text` or `errorCode`).
 Napi::Value ValueToJs(Napi::Env env, const fm_value_t& v);
 
+/// Translates `array` into `{ rows, cols, cells }`, `cells` a rows x cols
+/// nested array of `Value` objects. Does not take ownership of `array`.
+Napi::Object ValueArrayToJs(Napi::Env env, const fm_value_array_t* array);
+
 /// Reads a JS `Value` into `out`. `kind` is required, and the field its kind
 /// carries must be present with its type (`boolean` must be a JS boolean);
 /// other fields are ignored. A text payload is copied into `text`, which
 /// must outlive the C call reading `out`. Throws a `TypeError` and returns
 /// false on a malformed value.
 bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text);
+
+/// A default record for an out-parameter: `FM_STRUCT_INIT(T)` for a C-ABI
+/// record (one leading `struct_size`), value-initialised otherwise.
+template <typename T, typename = void>
+struct IsCRecord : std::false_type {};
+template <typename T>
+struct IsCRecord<T, std::void_t<decltype(std::declval<T&>().struct_size)>> : std::true_type {};
+
+template <typename T>
+T InitOut() {
+  if constexpr (IsCRecord<T>::value) {
+    return FM_STRUCT_INIT(T);
+  } else {
+    return T{};
+  }
+}
 
 /// Fills `items` by asking `count_fn(size_t*)` for the element count and then
 /// `at_fn(size_t, Item*)` for each element, converting it with `to_js(item)`.
@@ -115,7 +138,7 @@ fm_status_t CollectList(Napi::Array& items, CountFn count_fn, AtFn at_fn, ToJs t
   std::size_t count = 0;
   fm_status_t rc = count_fn(&count);
   for (std::size_t i = 0; rc == 0 && i < count; ++i) {
-    Item item{};
+    Item item = InitOut<Item>();
     rc = at_fn(i, &item);
     if (rc != 0) {
       break;
@@ -134,14 +157,14 @@ constexpr double kUint32MaxNumber = static_cast<double>(std::numeric_limits<std:
 /// Translates an `fm_pivot_cell_t` into the JS shape.
 Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell);
 
-/// Translates an `fm_cf_color_t` into the JS shape used by embind.
-Napi::Object TranslateCfColor(Napi::Env env, const fm_cf_color_t& c);
-
 /// Translates an `fm_cf_match_t` into the JS shape used by embind.
 Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m);
 
 /// Translates an `fm_color_spec_t` into `{ kind, rgb, theme, tint, indexed }`.
 Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec);
+
+/// `ColorSpecToJs(spec)`, or `null` when `spec.kind` is `kFmColorNone`.
+Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_spec_t& spec);
 
 /// Builds a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }`.
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r);
@@ -266,11 +289,13 @@ PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, c
 bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out);
 
 /// Reads the `{ kind, rgb, theme, tint, indexed }` colour specification out
-/// of `owner[key]`. An absent object leaves `kind` at `kFmColorNone`, so
-/// the writer emits the sibling `*Argb` as literal `rgb`. A supplied
-/// selector is authoritative; this binding does not resolve theme/indexed /
-/// auto colours.
+/// of `owner[key]`. An absent object leaves `kind` at `kFmColorNone` (no
+/// colour). A supplied selector is authoritative; this binding does not
+/// resolve theme/indexed / auto colours.
 fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key);
+
+/// `PullColorSpec` for a value already in hand; `key` names it in a rejection.
+fm_color_spec_t ReadColorSpec(CheckedSpecReader& reader, const Napi::Value& value, const char* key);
 
 /// Reads the `CellRect` array `value`; `key` names it in a rejection. A
 /// missing array, or a missing element, reads as nothing.

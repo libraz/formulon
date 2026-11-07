@@ -95,29 +95,21 @@ struct JsReadDiagnostics {
   uint32_t unknownContentTypeCount = 0;
 };
 
-/// JS-side mirror of `fm_cf_color_t`. Channels are 0-255 (sRGB); widened
-/// to signed int32 because embind serialises that more cleanly.
-struct JsCfColor {
-  int32_t r = 0;
-  int32_t g = 0;
-  int32_t b = 0;
-  int32_t a = 0;
-};
-
 /// JS-side mirror of `fm_cf_match_t`. The active sub-fields depend on
-/// `kind`; the rest carry default-zero values.
+/// `kind`; the rest carry default-zero values. The colours are
+/// `{kind, rgb, theme, tint, indexed}` objects.
 struct JsCfMatch {
   int32_t kind = 0;
   int32_t priority = 0;
   int32_t dxfIdEngaged = 0;
   uint32_t dxfId = 0;
-  JsCfColor color{};
+  emscripten::val color = emscripten::val::null();
   double barLengthPct = 0.0;
   double barAxisPositionPct = 0.0;
   int32_t barIsNegative = 0;
-  JsCfColor barFill{};
+  emscripten::val barFill = emscripten::val::null();
   int32_t barBorderEngaged = 0;
-  JsCfColor barBorder{};
+  emscripten::val barBorder = emscripten::val::null();
   int32_t barGradient = 0;
   int32_t barDirection = 0;
   int32_t iconSetName = 0;
@@ -183,7 +175,8 @@ struct JsSheetProtection {
 // call there is no slot, and the record is dropped.
 
 /// Records `rc` as the call's failure, carrying the message and context of
-/// the most recent C-ABI call. `kBindingInvalidHandle` records as
+/// the most recent C-ABI call and, after a formula syntax error, its
+/// `parseError` position. `kBindingInvalidHandle` records as
 /// `record_invalid_handle` does, since no C-ABI call produced it.
 void record_failure(fm_status_t rc);
 
@@ -382,8 +375,9 @@ emscripten::val value_to_val(const fm_value_t& v);
 /// missing or wrongly-typed field.
 bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text);
 
-/// Translates an `fm_cf_color_t` into the embind value-object mirror.
-JsCfColor translate_cf_color(const fm_cf_color_t& c);
+/// Builds `{rows, cols, cells}` from `array`, `cells` a rows x cols nested
+/// array of `Value` objects. Does not take ownership of `array`.
+emscripten::val value_array_to_val(const fm_value_array_t* array);
 
 /// Translates an `fm_cf_match_t` POD into the embind value-object
 /// mirror.
@@ -444,14 +438,18 @@ std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, co
                                                 JsNarrowNumericReader* reader);
 
 /// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
-/// of `v[key]`. An absent object leaves `kind` at `kFmColorNone`, which
-/// makes the writer emit the sibling `*Argb` as literal `rgb`. A supplied
-/// selector is authoritative; the binding does not resolve theme/indexed /
-/// auto colours.
+/// of `v[key]`. An absent object leaves `kind` at `kFmColorNone` (no
+/// colour). A supplied selector is authoritative; the binding does not
+/// resolve theme/indexed / auto colours.
 fm_color_spec_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
 
-/// Pulls a `{style, colorArgb, color}` border-side record out of `v`,
-/// defaulting every absent field to zero.
+/// `js_pull_color_spec` for a value already in hand; `field` names it in a
+/// rejection. A missing value reads as `kFmColorNone`.
+fm_color_spec_t js_pull_color_spec_value(const emscripten::val& value, const char* field,
+                                         JsNarrowNumericReader* reader);
+
+/// Pulls a `{style, color}` border-side record out of `v`, defaulting every
+/// absent field to zero.
 fm_border_side_t js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader);
 
 /// One string field of a record built by `js_set_cstr_fields`.
@@ -507,6 +505,9 @@ inline void js_set_present_or_null(emscripten::val& o, const char* key, int32_t 
 /// unconditionally so a get / edit / add cycle passes the theme or
 /// indexed colour straight back and keeps hitting style-table dedup.
 emscripten::val js_color_spec(const fm_color_spec_t& spec);
+
+/// `js_color_spec(spec)`, or `null` when `spec.kind` is `kFmColorNone`.
+emscripten::val js_color_spec_or_null(const fm_color_spec_t& spec);
 
 /// Builds the JS mirror of a border side.
 emscripten::val js_border_side(const fm_border_side_t& s);

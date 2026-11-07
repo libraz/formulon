@@ -156,7 +156,7 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   int32_t present = 0;
-  fm_comment_t c{};
+  fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
   const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &present, &c);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
@@ -233,7 +233,7 @@ Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_workbook_protection_t p{};
+  fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
   const fm_status_t rc = fm_workbook_get_workbook_protection(handle_, &p);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -267,7 +267,7 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   const auto optional = [&](const char* key, std::string* store) {
     return reader.String(in, key, store) ? store->c_str() : nullptr;
   };
-  fm_workbook_protection_t p{};
+  fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
   p.lock_structure = reader.Bool(in, "lockStructure", false) ? 1 : 0;
   p.lock_windows = reader.Bool(in, "lockWindows", false) ? 1 : 0;
   p.lock_revision = reader.Bool(in, "lockRevision", false) ? 1 : 0;
@@ -332,7 +332,7 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   (void)reader.String(in, "hashValue", &text[3]);
   (void)reader.String(in, "saltValue", &text[4]);
   (void)reader.String(in, "securityDescriptor", &text[5]);
-  fm_protected_range_t r{};
+  fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
   r.spin_count = reader.U32(in, "spinCount", 0U);
   if (!reader.ok()) {
     return env.Undefined();
@@ -397,7 +397,7 @@ fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& in
   const std::string display = Workbook::ArgString(info, text_index + 1);
   const std::string tooltip = Workbook::ArgString(info, text_index + 2);
   const std::string location = Workbook::ArgString(info, text_index + 3);
-  fm_hyperlink_t hl{};
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
   hl.rect = rect;
   hl.target = target.empty() ? nullptr : target.c_str();
   hl.location = location.empty() ? nullptr : location.c_str();
@@ -470,7 +470,7 @@ Napi::Value Workbook::GetHyperlink(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_hyperlink_t h{};
+  fm_hyperlink_t h = FM_STRUCT_INIT(fm_hyperlink_t);
   int32_t present = 0;
   const fm_status_t rc =
       fm_sheet_get_hyperlink(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &h);
@@ -572,7 +572,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   reader.String(v, "promptTitle", &prompt_title);
   reader.String(v, "promptMessage", &prompt_message);
 
-  fm_data_validation_t dv{};
+  fm_data_validation_t dv = FM_STRUCT_INIT(fm_data_validation_t);
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = ranges_buf.size();
   dv.type = reader.U8(v, "type", 0U);
@@ -716,7 +716,7 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   if (reader.Array(spec, "mentions", &mention_array)) {
     ReadMentions(reader, mention_array, mention_ids, mentions);
   }
-  fm_threaded_comment_t c{};
+  fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
   c.id = id.c_str();
   c.row = reader.U32(spec, "row", 0U);
   c.col = reader.U32(spec, "col", 0U);
@@ -741,7 +741,7 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   const std::string id = ArgString(info, 1);
   const Napi::Object patch = ArgObject(info, 2);
-  fm_threaded_comment_patch_t out{};
+  fm_threaded_comment_patch_t out = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
   out.done = -1;
   std::string text;
   const bool has_text = reader.String(patch, "text", &text);
@@ -773,7 +773,7 @@ Napi::Value Workbook::GetThreadedComment(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::string id = ArgString(info, 1);
-  fm_threaded_comment_t c{};
+  fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), &present, &c);
   return OptionalOrNull(env, rc, present,
@@ -806,7 +806,7 @@ Napi::Value Workbook::GetPerson(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::string id = ArgString(info, 0);
-  fm_person_t p{};
+  fm_person_t p = FM_STRUCT_INIT(fm_person_t);
   int32_t present = 0;
   const fm_status_t rc = fm_workbook_get_person(handle_, id.c_str(), &present, &p);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(PersonToJs(env, p)) : env.Null());
@@ -827,7 +827,7 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   reader.String(spec, "displayName", &display_name);
   reader.String(spec, "userId", &user_id);
   reader.String(spec, "providerId", &provider_id);
-  fm_person_t p{};
+  fm_person_t p = FM_STRUCT_INIT(fm_person_t);
   p.id = id.c_str();
   p.display_name = display_name.c_str();
   p.user_id = user_id.c_str();

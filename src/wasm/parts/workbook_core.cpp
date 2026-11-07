@@ -250,7 +250,7 @@ JsSaveDiagnostics JsWorkbook::saveWithDiagnostics(emscripten::val format) const 
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  fm_save_diagnostics_t d{};
+  fm_save_diagnostics_t d = FM_STRUCT_INIT(fm_save_diagnostics_t);
   const fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, save_format(format), &out, &len, &d);
   r.bytes = snapshot_bytes(rc, out, len);
   if (rc != 0) {
@@ -270,7 +270,7 @@ JsReadDiagnostics JsWorkbook::readDiagnostics() const {
     record_invalid_handle();
     return r;
   }
-  fm_read_diagnostics_t d{};
+  fm_read_diagnostics_t d = FM_STRUCT_INIT(fm_read_diagnostics_t);
   if (!succeeded(fm_workbook_get_diagnostics(handle_, &d))) {
     return r;
   }
@@ -363,7 +363,7 @@ void JsWorkbook::setDefinedName(emscripten::val input) {
   if (!reader.ok()) {
     return;
   }
-  fm_defined_name_input_t in{};
+  fm_defined_name_input_t in = FM_STRUCT_INIT(fm_defined_name_input_t);
   in.name = name.c_str();
   in.formula = formula.c_str();
   in.local_sheet_id = local_sheet_id;
@@ -453,7 +453,7 @@ JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
     return r;
   }
 
-  fm_parallel_recalc_stats_t stats{};
+  fm_parallel_recalc_stats_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
   const uint32_t native_thread_count = static_cast<uint32_t>(requested);
   progress_callback_threw_ = false;
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
@@ -499,7 +499,10 @@ void JsWorkbook::setIterative(emscripten::val patch) {
   if (!reader.require_object(patch, "patch")) {
     return;
   }
-  fm_iterative_settings_patch_t p{-1, -1, -1.0};
+  fm_iterative_settings_patch_t p = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+  p.enabled = -1;
+  p.max_iterations = -1;
+  p.max_change = -1.0;
   const emscripten::val enabled = reader.value(patch, "enabled", "enabled");
   if (reader.ok() && !enabled.isUndefined()) {
     if (enabled.isNull() || !(enabled.isTrue() || enabled.isFalse())) {
@@ -644,16 +647,24 @@ void JsWorkbook::clearPinnedNow() {
   succeeded(handle_ != nullptr ? fm_workbook_clear_pinned_now(handle_) : kBindingInvalidHandle);
 }
 
-std::string JsWorkbook::excelProfileId() const {
+std::string JsWorkbook::profileId() const {
   const char* id = nullptr;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_excel_profile_id(handle_, &id) : kBindingInvalidHandle)) {
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_profile_id(handle_, &id) : kBindingInvalidHandle)) {
     return std::string();
   }
   return string_from_cstr(id);
 }
 
-void JsWorkbook::setExcelProfileId(const std::string& profile_id) {
-  succeeded(handle_ != nullptr ? fm_workbook_set_excel_profile_id(handle_, profile_id.c_str()) : kBindingInvalidHandle);
+void JsWorkbook::setProfileId(const std::string& profile_id) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_profile_id(handle_, profile_id.c_str()) : kBindingInvalidHandle);
+}
+
+double JsWorkbook::memoryUsage() const {
+  std::size_t bytes = 0;
+  if (handle_ == nullptr || fm_workbook_get_memory_usage(handle_, &bytes) != 0) {
+    return 0.0;
+  }
+  return static_cast<double>(bytes);
 }
 
 emscripten::val JsWorkbook::fileName() const {
@@ -761,11 +772,12 @@ emscripten::val evaluate_formula(const std::string& formula) {
     return emscripten::val::undefined();
   }
   std::size_t sheet_index = 0;
-  fm_value_t v{};
+  fm_value_array_t* array = nullptr;
   const bool ok = succeeded(fm_workbook_add_sheet(wb, "Sheet1", &sheet_index)) &&
-                  succeeded(fm_sheet_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v));
-  // The text payload points into the workbook, so convert before destroying it.
-  emscripten::val out = ok ? value_to_val(v) : emscripten::val::undefined();
+                  succeeded(fm_sheet_evaluate_formula_array(wb, 0, 0, 0, formula.c_str(), &array));
+  // A text payload borrows the array, so convert before destroying it.
+  emscripten::val out = ok ? value_array_to_val(array) : emscripten::val::undefined();
+  fm_value_array_destroy(array);
   fm_workbook_destroy(wb);
   return out;
 }

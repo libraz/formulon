@@ -32,7 +32,7 @@ void store(void* base, size_t off, T v) {
 
 // ---- Patch input ----------------------------------------------------
 
-enum class Wr : uint8_t { kU32, kI32, kF64, kBool, kStr, kTitle, kRef, kPlainF64, kObj, kObjOp };
+enum class Wr : uint8_t { kU32, kI32, kF64, kBool, kStr, kTitle, kColor, kRef, kPlainF64, kObj, kObjOp };
 
 /// One input property: the `_op` and value slots in the C patch struct. A `kObj` nests without an op,
 /// a `kObjOp` carries one.
@@ -54,13 +54,13 @@ struct WrField {
 // clang-format on
 
 constexpr WrField kFillWr[] = {
-    WR("color", fm_chart_fill_patch_t, kU32, color_op, color),
+    WR("color", fm_chart_fill_patch_t, kColor, color_op, color),
     WR("transparency", fm_chart_fill_patch_t, kF64, transparency_op, transparency_pct),
     WR_END,
 };
 
 constexpr WrField kLineWr[] = {
-    WR("color", fm_chart_line_patch_t, kU32, color_op, color),
+    WR("color", fm_chart_line_patch_t, kColor, color_op, color),
     WR("transparency", fm_chart_line_patch_t, kF64, transparency_op, transparency_pct),
     WR("widthPt", fm_chart_line_patch_t, kF64, width_op, width_pt),
     WR("dash", fm_chart_line_patch_t, kI32, dash_op, dash),
@@ -85,7 +85,7 @@ constexpr WrField kLabelsWr[] = {
     WR("separator", fm_chart_labels_patch_t, kStr, separator_op, separator),
     WR("position", fm_chart_labels_patch_t, kI32, position_op, position),
     WR("numberFormat", fm_chart_labels_patch_t, kStr, number_format_op, number_format),
-    WR("fontColor", fm_chart_labels_patch_t, kU32, font_color_op, font_color),
+    WR("fontColor", fm_chart_labels_patch_t, kColor, font_color_op, font_color),
     WR("fontSizePt", fm_chart_labels_patch_t, kF64, font_size_op, font_size_pt),
     WR_END,
 };
@@ -217,6 +217,9 @@ void read_patch(JsNarrowNumericReader& r, Arena& arena, const val& owner, void* 
           case Wr::kTitle:
             store(base, f->value, read_title(r, arena, v, f->key));
             break;
+          case Wr::kColor:
+            store(base, f->value, js_pull_color_spec_value(v, f->key, &r));
+            break;
           default:
             arena.push_back(r.string_value(v, f->key));
             store(base, f->value, arena.back().c_str());
@@ -276,7 +279,7 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   std::string name_store;
   std::string descr_store;
   std::string title_store;
-  fm_chart_insert_t opts{};
+  fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
   opts.kind = reader.i32(options, "kind", FM_CHART_INSERT_COLUMN, "kind");
   opts.grouping = reader.i32(options, "grouping", FM_CHART_GROUPING_CLUSTERED, "grouping");
   const std::string source = reader.string(options, "source", "source");
@@ -341,7 +344,7 @@ void JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, int32_t posit
   if (!reader.ok()) {
     return;
   }
-  fm_chart_legend_patch_t legend{};
+  fm_chart_legend_patch_t legend = FM_STRUCT_INIT(fm_chart_legend_patch_t);
   legend.position = position;
   legend.overlay = overlay ? 1 : 0;
   if (js_value_present(hiddenSeries)) {
@@ -359,7 +362,7 @@ void JsWorkbook::setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId
   }
   JsNarrowNumericReader reader("setChartAxis");
   Arena arena;
-  fm_chart_axis_patch_t p{};
+  fm_chart_axis_patch_t p = FM_STRUCT_INIT(fm_chart_axis_patch_t);
   if (!read_patch_arg(reader, patch, &p, kAxisWr, arena)) {
     return;
   }
@@ -373,7 +376,7 @@ void JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, val patch) {
   }
   JsNarrowNumericReader reader("setChartDisplay");
   Arena arena;
-  fm_chart_display_patch_t p{};
+  fm_chart_display_patch_t p = FM_STRUCT_INIT(fm_chart_display_patch_t);
   if (!read_patch_arg(reader, patch, &p, kDisplayWr, arena)) {
     return;
   }
@@ -387,7 +390,7 @@ void JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot
   }
   JsNarrowNumericReader reader("setChartSeries");
   Arena arena;
-  fm_chart_series_patch_t p{};
+  fm_chart_series_patch_t p = FM_STRUCT_INIT(fm_chart_series_patch_t);
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return;
   }
@@ -402,7 +405,7 @@ void JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot,
   }
   JsNarrowNumericReader reader("setChartPoint");
   Arena arena;
-  fm_chart_point_patch_t p{};
+  fm_chart_point_patch_t p = FM_STRUCT_INIT(fm_chart_point_patch_t);
   // A null or empty patch removes the point's formatting.
   if (!read_patch_arg(reader, patch, &p, kPointWr, arena)) {
     return;
@@ -417,7 +420,7 @@ void JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, 
   }
   JsNarrowNumericReader reader("setChartPlot");
   Arena arena;
-  fm_chart_plot_patch_t p{};
+  fm_chart_plot_patch_t p = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   if (!read_patch_arg(reader, patch, &p, kPlotWr, arena)) {
     return;
   }
@@ -446,7 +449,7 @@ uint32_t JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t 
   }
   JsNarrowNumericReader reader("addChartSeries");
   Arena arena;
-  fm_chart_series_patch_t p{};
+  fm_chart_series_patch_t p = FM_STRUCT_INIT(fm_chart_series_patch_t);
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return 0U;
   }

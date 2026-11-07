@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 import { StatusCode } from '../../packages/npm/common.mjs';
 import { expectFailure, VAL } from './smoke_support.mjs';
 
+/** The single cell of a 1 x 1 module `evaluateFormula` result. */
+function scalar(result) {
+  assert.equal(result.rows, 1);
+  assert.equal(result.cols, 1);
+  return result.cells[0][0];
+}
+
 export function registerSurfaceRecalc(Module, test, threadsBuild) {
   test('getVersion is non-empty', () => {
     const v = Module.getVersion();
@@ -22,27 +29,40 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
   });
 
   test('evaluateFormula(=SUM(1,2,3)) returns NUMBER 6', () => {
-    const r = Module.evaluateFormula('=SUM(1,2,3)');
+    const r = scalar(Module.evaluateFormula('=SUM(1,2,3)'));
     assert.equal(r.kind, VAL.NUMBER);
     assert.equal(r.number, 6);
   });
 
   test('evaluateFormula(=IF(TRUE,1,2)) returns NUMBER 1', () => {
-    const r = Module.evaluateFormula('=IF(TRUE,1,2)');
+    const r = scalar(Module.evaluateFormula('=IF(TRUE,1,2)'));
     assert.equal(r.kind, VAL.NUMBER);
     assert.equal(r.number, 1);
   });
 
   test('evaluateFormula evaluates intersection read-only and returns #NULL!', () => {
-    const r = Module.evaluateFormula('=A1 B1');
+    const r = scalar(Module.evaluateFormula('=A1 B1'));
     assert.equal(r.kind, VAL.ERROR);
     assert.equal(r.errorCode, 0); // ErrorCode::Null / #NULL!
   });
 
   test('evaluateFormula(=CONCAT) returns TEXT "hello world"', () => {
-    const r = Module.evaluateFormula('=CONCAT("hello"," ","world")');
+    const r = scalar(Module.evaluateFormula('=CONCAT("hello"," ","world")'));
     assert.equal(r.kind, VAL.TEXT);
     assert.equal(r.text, 'hello world');
+  });
+
+  test('evaluateFormula returns the whole array result', () => {
+    const r = Module.evaluateFormula('={1,2;3,4}');
+    assert.equal(r.rows, 2);
+    assert.equal(r.cols, 2);
+    assert.deepEqual(
+      r.cells.map((row) => row.map((v) => v.number)),
+      [
+        [1, 2],
+        [3, 4],
+      ],
+    );
   });
 
   test('numeric comparisons share the 15-digit bucket without fuzzy exact lookups', () => {
@@ -55,7 +75,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       ['>=', true],
     ];
     for (const [operator, expected] of operators) {
-      const r = Module.evaluateFormula(`=7.1${operator}7.1000000000000005`);
+      const r = scalar(Module.evaluateFormula(`=7.1${operator}7.1000000000000005`));
       assert.equal(r.kind, VAL.BOOL, `operator=${operator}`);
       assert.equal(r.boolean, expected, `operator=${operator}`);
     }

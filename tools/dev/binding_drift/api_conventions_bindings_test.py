@@ -2759,5 +2759,133 @@ class SheetParamTest(BindingRuleTestBase):
         )
 
 
+class AdoptedShapeTest(BindingRuleTestBase):
+    """The input / output asymmetries and layers the published declarations take on purpose."""
+
+    def test_r7_js_accepts_a_discriminated_input_union(self) -> None:
+        ledger = {"entries": {"record.cf_input": {"kind": "record", "role": "input", "js": "ConditionalFormatInput"}}}
+        alternatives = (
+            "interface CfBase {\n  priority?: number;\n}\n"
+            "interface CfExpressionRuleInput extends CfBase {\n  type: 0;\n  formula: string;\n}\n"
+            "interface CfDataBarRule extends CfBase {\n  type: 1;\n}\n"
+        )
+        good = (
+            alternatives + "export type ConditionalFormatInput =\n  | CfExpressionRuleInput\n  | CfDataBarRuleInput;\n"
+        )
+        good = good.replace("CfDataBarRule ", "CfDataBarRuleInput ")
+        bad = alternatives + "export type ConditionalFormatInput = CfExpressionRuleInput | CfDataBarRule;\n"
+        undeclared = "export type ConditionalFormatInput = CfExpressionRuleInput | CfOtherInput;\n"
+        self.assert_rule(
+            "R7.js",
+            self.fixture.context("", ledger, wasm=bad, native=undeclared),
+            self.fixture.context("", ledger, wasm=good, native=good),
+            [("native", "record.cf_input", "interface"), ("wasm", "record.cf_input", "name:CfDataBarRule")],
+        )
+
+    def test_r25_rect_accepts_one_a1_string_for_an_array(self) -> None:
+        good_js = _sheet("  setPrintArea(ranges: readonly (CellRect | string)[] | string | null): void;\n")
+        bad_js = _sheet("  setPrintArea(ranges: readonly CellRect[] | string | null): void;\n")
+        good_py = _py_sheet(
+            "    def set_print_area(self, ranges: Union[Sequence[Union[CellRect, str]], str, None]) -> None: ...\n"
+        )
+        bad_py = _py_sheet("    def set_print_area(self, ranges: Union[Sequence[CellRect], str, None]) -> None: ...\n")
+        self.assert_rule(
+            "R25.rect",
+            self.fixture.context("", _cell_ledger(), wasm=bad_js, native=good_js, py_sheet=bad_py),
+            self.fixture.context("", _cell_ledger(), wasm=good_js, native=good_js, py_sheet=good_py),
+            [("py", "print_area.set", "arg0"), ("wasm", "print_area.set", "arg0")],
+        )
+
+    def test_r18_all_accepts_the_input_alias_of_a_record_type(self) -> None:
+        ledger = {
+            "entries": {
+                "shape.update": {"kind": "op", "scope": "sheet", "js": "updateShape", "surfaces": ["wasm", "native"],
+                                 "patch": True, "patch_record": "ShapeProperties"},
+            }
+        }  # fmt: skip
+        records = (
+            "export interface Color {\n  readonly kind: number;\n}\n"
+            "export interface ShapeProperties {\n  readonly fillColor: Color | null;\n}\n"
+            "export interface ShapePatch {\n  fillColor?: ColorInput | null;\n}\n"
+        )
+        good = (
+            records
+            + "export type ColorInput = string | Color;\n"
+            + _sheet("  updateShape(id: number, patch: ShapePatch): void;\n")
+        )
+        bad = good.replace("export type ColorInput = string | Color;", "export type ColorInput = string | number;")
+        self.assert_rule(
+            "R18.all",
+            self.fixture.context("", ledger, wasm=bad, native=good),
+            self.fixture.context("", ledger, wasm=good, native=good),
+            [("wasm", "shape.update", "type:fillColor")],
+        )
+
+    def test_r18_js_reads_a_cell_address_and_a_sheet_ref_input(self) -> None:
+        records = (
+            "export type SheetRef = Sheet | number | string;\n"
+            "export interface CellAddress {\n  readonly row: number;\n  readonly col: number;\n}\n"
+            "export interface SheetSelection {\n  readonly activeRow: number;\n  readonly activeCol: number;\n}\n"
+            "export interface SheetSelectionInput {\n  active: CellAddress | string;\n}\n"
+            "export interface DefinedName {\n  readonly name: string;\n  readonly localSheetId: number | null;\n}\n"
+            "export interface DefinedNameInput {\n  name: string;\n  scope?: SheetRef | null;\n}\n"
+        )
+        members = _wb(
+            "  getSelection(): SheetSelection;\n  setSelection(input: SheetSelectionInput): void;\n"
+            "  getDefinedName(name: string): DefinedName;\n  setDefinedName(input: DefinedNameInput): void;\n"
+        )
+        bad = (
+            records.replace("active: CellAddress", "focus: CellAddress").replace(
+                "  readonly localSheetId: number | null;\n", ""
+            )
+            + members
+        )
+        self.assert_rule(
+            "R18.js",
+            self.fixture.context("", None, wasm=bad),
+            self.fixture.context("", None, wasm=records + members),
+            [("wasm", "setDefinedName", "fields"), ("wasm", "setSelection", "fields")],
+        )
+
+    def test_r17_entry_allows_the_shared_host_exports_only_as_members(self) -> None:
+        common = (
+            "export const FORMULON_MEMBERS = Object.freeze(['Workbook', 'FormulonError', 'ExcelError', 'enumName']);\n"
+        )
+        base = (
+            "export class FormulonError extends Error { readonly code: number }\n"
+            "export class ExcelError { readonly code: number }\n"
+            "export function enumName<T>(enumType: T, value: number): string | null;\n"
+            "export default function createFormulon(opts?: FormulonOptions): Promise<Formulon>;\n"
+        )
+        good = base + (
+            "export interface Formulon {\n  Workbook: WorkbookCtor;\n  FormulonError: typeof FormulonError;\n"
+            "  ExcelError: typeof ExcelError;\n  enumName: typeof enumName;\n}\n"
+        )
+        bad = good.replace("  enumName: typeof enumName;\n", "").replace("  ExcelError: typeof ExcelError;\n", "")
+        self.assert_rule(
+            "R17.entry",
+            self.fixture.context(
+                "", None, wasm=bad, native=good, common=common.replace("'ExcelError', 'enumName'", "")
+            ),
+            self.fixture.context("", None, wasm=good, native=good, common=common),
+            [
+                ("native", "Formulon", "ExcelError"),
+                ("native", "Formulon", "enumName"),
+                ("wasm", "ExcelError", "ExcelError"),
+                ("wasm", "enumName", "enumName"),
+            ],
+        )
+
+    def test_ooxml_layer_methods_are_on_the_surface(self) -> None:
+        ledger = CollectionAccessTest().ledger()
+        ooxml = "export interface WorkbookOoxml {\n  getFont(i: number): Font;\n  listFonts(): readonly Font[];\n}\n"
+        good = _wb("  readonly ooxml: WorkbookOoxml;\n") + ooxml
+        bad = _wb("  readonly ooxml: WorkbookOoxml;\n") + ooxml.replace("WorkbookOoxml", "WorkbookStyles")
+        found = [h for h in hits(self.fixture.context("", ledger, wasm=bad), "R23.list") if h[1] == "collection.font"]
+        self.assertEqual(found, [("wasm", "collection.font", "getter"), ("wasm", "collection.font", "listFonts")])
+        found = [h for h in hits(self.fixture.context("", ledger, wasm=good), "R23.list") if h[1] == "collection.font"]
+        self.assertEqual(found, [])
+
+
 if __name__ == "__main__":
     unittest.main()

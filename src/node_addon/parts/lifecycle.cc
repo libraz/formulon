@@ -182,23 +182,23 @@ Napi::Value Workbook::ClearPinnedNow(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, fm_workbook_clear_pinned_now(handle_), env.Undefined());
 }
 
-Napi::Value Workbook::ExcelProfileId(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::ProfileId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
   const char* id = nullptr;
-  const fm_status_t rc = fm_workbook_get_excel_profile_id(handle_, &id);
+  const fm_status_t rc = fm_workbook_get_profile_id(handle_, &id);
   return ValueOrThrow(env, rc, JsString(env, id));
 }
 
-Napi::Value Workbook::SetExcelProfileId(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SetProfileId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
   const std::string profile_id = ArgString(info, 0);
-  const fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
+  const fm_status_t rc = fm_workbook_set_profile_id(handle_, profile_id.c_str());
   return ValueOrThrow(env, rc, env.Undefined());
 }
 
@@ -250,7 +250,7 @@ Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
   if (!ReadThreadCount(info, thread_count)) {
     return env.Undefined();
   }
-  fm_parallel_recalc_stats_t stats{};
+  fm_parallel_recalc_stats_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, thread_count, &stats);
   const Napi::Value result =
       rc == 0 && !env.IsExceptionPending() ? Napi::Value(ParallelRecalcStatsToJs(env, stats)) : ThrowStatus(env, rc);
@@ -289,7 +289,10 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   // stored value, `null` and a non-integer cap are type errors.
   const Napi::Object patch = ArgObject(info, 0);
   CheckedSpecReader reader(env);
-  fm_iterative_settings_patch_t p{-1, -1, -1.0};
+  fm_iterative_settings_patch_t p = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+  p.enabled = -1;
+  p.max_iterations = -1;
+  p.max_change = -1.0;
   const Napi::Value enabled = reader.Get(patch, "enabled");
   if (reader.ok() && !enabled.IsUndefined()) {
     if (!enabled.IsBoolean()) {
@@ -453,7 +456,7 @@ Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
   const int32_t format = FormatOmitted(info) ? static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSX) : ArgI32(info, 0);
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  fm_save_diagnostics_t d{};
+  fm_save_diagnostics_t d = FM_STRUCT_INIT(fm_save_diagnostics_t);
   const fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &buf, &len, &d);
   if (rc != 0) {
     fm_buffer_destroy(buf);
@@ -474,7 +477,7 @@ Napi::Value Workbook::ReadDiagnostics(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_read_diagnostics_t d{};
+  fm_read_diagnostics_t d = FM_STRUCT_INIT(fm_read_diagnostics_t);
   const fm_status_t rc = fm_workbook_get_diagnostics(handle_, &d);
   if (rc != 0) {
     return ThrowStatus(env, rc);

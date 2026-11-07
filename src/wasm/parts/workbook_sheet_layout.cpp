@@ -28,7 +28,7 @@ emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, JsListCo
 }
 
 fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_column_layout_t entry{};
+  fm_column_layout_t entry = FM_STRUCT_INIT(fm_column_layout_t);
   if (const fm_status_t rc = fm_sheet_get_column_override_at(handle, sheet, index, &entry); rc != 0) {
     return rc;
   }
@@ -44,7 +44,7 @@ fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index
 }
 
 fm_status_t row_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_row_layout_t entry{};
+  fm_row_layout_t entry = FM_STRUCT_INIT(fm_row_layout_t);
   if (const fm_status_t rc = fm_sheet_get_row_override_at(handle, sheet, index, &entry); rc != 0) {
     return rc;
   }
@@ -74,12 +74,12 @@ emscripten::val js_rect_pt(const fm_rect_pt_t& r) {
 
 /// Writes the pagination detail keys onto `result`.
 void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagination) {
-  fm_paper_info_t paper{};
-  fm_margins_pt_t margins{};
-  fm_rect_pt_t printable{};
+  fm_paper_info_t paper = FM_STRUCT_INIT(fm_paper_info_t);
+  fm_margins_pt_t margins = FM_STRUCT_INIT(fm_margins_pt_t);
+  fm_rect_pt_t printable = FM_STRUCT_INIT(fm_rect_pt_t);
   double scale = 0.0;
   int32_t page_order = 0;
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   std::size_t page_count = 0;
   std::size_t horizontal_count = 0;
   std::size_t vertical_count = 0;
@@ -112,7 +112,7 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
   result->set("printTitles", print_titles_to_val(titles));
   emscripten::val pages = emscripten::val::array();
   for (std::size_t i = 0; i < page_count; ++i) {
-    fm_page_layout_t page{};
+    fm_page_layout_t page = FM_STRUCT_INIT(fm_page_layout_t);
     if (fm_pagination_get_page_at(pagination, i, &page) != 0) {
       continue;
     }
@@ -191,7 +191,7 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
 
 JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   JsSheetView r;
-  fm_sheet_view_t v{};
+  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_view(handle_, sheet, &v) : kBindingInvalidHandle)) {
     return r;
   }
@@ -218,7 +218,7 @@ JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
 
 JsSheetProtection JsWorkbook::getSheetProtection(uint32_t sheet) const {
   JsSheetProtection r;
-  fm_sheet_protection_t p{};
+  fm_sheet_protection_t p = FM_STRUCT_INIT(fm_sheet_protection_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_sheet_protection(handle_, sheet, &p) : kBindingInvalidHandle)) {
     return r;
   }
@@ -258,7 +258,7 @@ void JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
   std::string hash_value;
   std::string salt_value;
   std::string legacy_password;
-  fm_sheet_protection_t p{};
+  fm_sheet_protection_t p = FM_STRUCT_INIT(fm_sheet_protection_t);
   p.algorithm_name = reader.optional_string(input, "algorithmName", algorithm_name, "algorithmName");
   p.hash_value = reader.optional_string(input, "hashValue", hash_value, "hashValue");
   p.salt_value = reader.optional_string(input, "saltValue", salt_value, "saltValue");
@@ -595,7 +595,7 @@ void JsWorkbook::clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t last)
 // ---- Sheet format defaults and point geometry ---------------------------
 
 emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
-  fm_sheet_format_defaults_t d{};
+  fm_sheet_format_defaults_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, sheet, &d) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -620,7 +620,7 @@ void JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defaults
   if (!reader.require_object(defaults, "defaults")) {
     return;
   }
-  fm_sheet_format_defaults_t d{};
+  fm_sheet_format_defaults_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   if (!succeeded(fm_sheet_get_format_defaults(handle_, sheet, &d))) {
     return;
   }
@@ -678,7 +678,7 @@ emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range,
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  fm_rect_pt_t r{};
+  fm_rect_pt_t r = FM_STRUCT_INIT(fm_rect_pt_t);
   if (!succeeded(fm_sheet_get_cell_rect_pt(handle_, sheet, &b, mode, &r))) {
     return emscripten::val::undefined();
   }
@@ -703,7 +703,7 @@ double JsWorkbook::getRowHeightPt(uint32_t sheet, uint32_t row) const {
 }
 
 emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
-  fm_width_model_t m{};
+  fm_width_model_t m = FM_STRUCT_INIT(fm_width_model_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_width_model(handle_, sheet, mode, &m) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }

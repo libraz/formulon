@@ -14,6 +14,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FormulonError } from '../../packages/npm/common.mjs';
+import { registerAdoption } from './run_adoption.mjs';
 import { registerCellGeometryDisplay } from './run_cell_geometry_display.mjs';
 import { registerCellsIo } from './run_cells_io.mjs';
 import { registerDrawing } from './run_drawing.mjs';
@@ -119,6 +120,7 @@ async function run() {
   registerLayoutValidation(Module, test);
   registerDrawing(Module, test);
   registerSparseRows(Module, test);
+  registerAdoption(factory, test);
 
   // ---- Run --------------------------------------------------------------
   for (const c of cases) {

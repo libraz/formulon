@@ -50,6 +50,8 @@ DEFAULT_DROP_RULE = "R5.list"
 ENTRY_INTERFACE = "Formulon"
 WORKBOOK_CLASS = "Workbook"
 SHEET_CLASS = "Sheet"
+# The interface each class's read-only `ooxml` property returns; its methods are binding ops like the class's own.
+OOXML_CLASSES = {WORKBOOK_CLASS: "WorkbookOoxml", SHEET_CLASS: "SheetOoxml"}
 
 # Hand-written facade members that no ledger op stands behind (or that the facade adds around one); the
 # `Workbook` statics are the ledger factories and are not repeated here.
@@ -122,6 +124,8 @@ _TS_DECL_RE = re.compile(
     r"^export\s+(?:declare\s+)?(?:default\s+)?(interface|type|enum|const|function|class)\s+([A-Za-z_$][\w$]*)",
     re.M,
 )
+# A module-private interface: an alternative of an exported discriminated union, never published by name.
+_TS_PRIVATE_INTERFACE_RE = re.compile(r"^(?:declare\s+)?interface\s+([A-Za-z_$][\w$]*)", re.M)
 _TS_HEAD_RE = re.compile(r"(readonly\s+)?([A-Za-z_$][\w$]*|\[[^\]]+\])\??\s*")
 _TS_PARAM_RE = re.compile(r"(?:\.\.\.)?([A-Za-z_$][\w$]*|\{[^}]*\}|\[[^\]]*\])\??\s*(?::\s*(.*))?$", re.S)
 _OPEN, _CLOSE = "([{<", ")]}>"
@@ -222,6 +226,11 @@ class JsSurface:
                     rhs = rhs[1:]
                 decl = TsDecl(name, kind, _norm(rhs), ())
             self.decls.setdefault(name, decl)
+        self.private: Dict[str, TsDecl] = {}
+        for match in _TS_PRIVATE_INTERFACE_RE.finditer(text):
+            brace = text.find("{", match.end())
+            body = _extract_braced_block(text, brace + 1) if brace >= 0 else ""
+            self.private.setdefault(match.group(1), TsDecl(match.group(1), "interface", body, _parse_members(body)))
 
     def interface_members(self, name: str) -> Dict[str, TsMember]:
         """Members of interface `name`; an overloaded method is its first signature (the coordinate form)."""
@@ -232,8 +241,9 @@ class JsSurface:
         return out
 
     def overloads(self, name: str) -> Tuple[TsMember, ...]:
-        """Every signature of the `Workbook` or `Sheet` method `name`, in declaration order."""
-        for interface in (SHEET_CLASS, WORKBOOK_CLASS):
+        """Every signature of the `Workbook` or `Sheet` method `name` (or of their `ooxml` layers), in declaration
+        order."""
+        for interface in (SHEET_CLASS, WORKBOOK_CLASS, *OOXML_CLASSES.values()):
             decl = self.decls.get(interface)
             found = tuple(m for m in decl.members if m.name == name and m.is_method) if decl else ()
             if found:
@@ -249,7 +259,16 @@ class JsSurface:
         """Methods of the `Sheet` facade; they omit the leading sheet argument of the raw registration."""
         return {n: m for n, m in self.interface_members(SHEET_CLASS).items() if m.is_method}
 
+    @property
+    def ooxml(self) -> Dict[str, TsMember]:
+        """Methods of the `ooxml` layers of `Workbook` and `Sheet`; the sheet-level ones omit the sheet argument."""
+        out: Dict[str, TsMember] = {}
+        for interface in OOXML_CLASSES.values():
+            out.update({n: m for n, m in self.interface_members(interface).items() if m.is_method})
+        return out
+
     def classes(self) -> Dict[str, Dict[str, TsMember]]:
+        """The direct methods of `Workbook` and `Sheet`; the `ooxml` layers are not among them."""
         return {WORKBOOK_CLASS: self.workbook, SHEET_CLASS: self.sheet}
 
     @property
@@ -269,8 +288,10 @@ class JsSurface:
         return {**exported, **module}
 
     def callables(self) -> Dict[str, TsMember]:
-        """Instance methods, free functions and `Workbook.<static>` factories by tree name."""
+        """Instance methods (the `ooxml` layers' included), free functions and `Workbook.<static>` factories by
+        tree name."""
         out = dict(self.functions)
+        out.update(self.ooxml)
         out.update(self.sheet)
         out.update(self.workbook)
         out.update({f"Workbook.{n}": m for n, m in self.statics.items()})
@@ -283,6 +304,7 @@ class JsSurface:
         """
         out = {name: "type" for name in self.decls}
         out.update({name: "function" for name in self.functions})
+        out.update({name: "method" for name in self.ooxml})
         out.update({name: "method" for name in self.sheet if name not in FACADE_EXTRA["js"][SHEET_CLASS]})
         out.update({name: "method" for name in self.workbook})
         out.update({f"Workbook.{name}": "static" for name in self.statics})
@@ -1234,10 +1256,12 @@ def _role_name_problem(name: str, role: str) -> Optional[str]:
     return None
 
 
-def _is_interface_union(decls: Dict[str, TsDecl], decl: TsDecl) -> bool:
-    """True for a type alias that is a union of two or more exported interfaces (a discriminated record)."""
+def _is_interface_union(decls: Dict[str, TsDecl], decl: TsDecl, private: Optional[Dict[str, TsDecl]] = None) -> bool:
+    """True for a type alias that is a union of two or more interfaces (a discriminated record): exported ones, or
+    the module-private alternatives in `private`."""
     alternatives = _top_union(decl.text)
-    return len(alternatives) > 1 and all(a in decls and decls[a].kind == "interface" for a in alternatives)
+    pool = {**(private or {}), **decls}
+    return len(alternatives) > 1 and all(a in pool and pool[a].kind == "interface" for a in alternatives)
 
 
 @_owned("R7.js")
@@ -1272,6 +1296,14 @@ def _rule_js_records(ctx: Context) -> Iterable[Violation]:
                     )
             elif decl.kind == "type" and _is_interface_union(decls, decl):
                 continue
+            elif (
+                role == "input" and decl.kind == "type" and _is_interface_union(decls, decl, found.js[surface].private)
+            ):
+                # A discriminated input: every alternative is itself an input record.
+                for alternative in _top_union(decl.text):
+                    problem = _role_name_problem(alternative, role)
+                    if problem:
+                        yield _violation(ctx, "R7.js", surface, key, f"name:{alternative}", problem)
             elif decl.kind != "interface":
                 yield _violation(
                     ctx, "R7.js", surface, key, "interface", f"`{name}` is a {decl.kind}, not an interface"
@@ -1820,6 +1852,8 @@ def _rule_entry_points(ctx: Context) -> Iterable[Violation]:
 
 
 _ENTRY_REQUIRED_EXPORTS = frozenset({"FormulonError", "createFormulon"})
+# Host-side values both packages also export by name, besides carrying them as `Formulon` members.
+_ENTRY_SHARED_EXPORTS = frozenset({"ExcelError", "enumName"})
 _SCALAR_CONSTANT_RE = re.compile(r"=?\s*-?\d+")
 _MEMBERS_LIST_RE = re.compile(r"\bFORMULON_MEMBERS\s*=\s*(?:Object\.freeze\(\s*)?\[(.*?)\]", re.S)
 _MJS_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
@@ -1850,7 +1884,8 @@ def _formulon_members(ctx: Context) -> Optional[Set[str]]:
 @_owned("R17.entry")
 def _rule_entry_shape(ctx: Context) -> Iterable[Violation]:
     """Each declaration file's `Formulon` interface has exactly the members `FORMULON_MEMBERS` lists, and its
-    runtime named exports are the constant tables, `FormulonError` and `createFormulon` only.
+    runtime named exports are the constant tables, `FormulonError`, `createFormulon` and the host-side values
+    `ExcelError` / `enumName` (which must also be `Formulon` members) only.
     """
     js = surfaces(ctx).js
     listed = _formulon_members(ctx)
@@ -1877,6 +1912,8 @@ def _rule_entry_shape(ctx: Context) -> Iterable[Violation]:
                 )
         values = {d.name: d for d in js[surface].decls.values() if d.kind in ("const", "function", "class", "enum")}
         for name in sorted(values):
+            if name in _ENTRY_SHARED_EXPORTS and name in declared:
+                continue
             if name not in _ENTRY_REQUIRED_EXPORTS and not _is_constant(values[name]):
                 yield _violation(
                     ctx,
@@ -1884,7 +1921,8 @@ def _rule_entry_shape(ctx: Context) -> Iterable[Violation]:
                     surface,
                     _key(ctx, surface, name),
                     name,
-                    f"`{name}` is a named export; only constants, `FormulonError` and `createFormulon` are",
+                    f"`{name}` is a named export; only constants, `FormulonError`, `createFormulon` and the "
+                    f"`Formulon` members {' / '.join(f'`{n}`' for n in sorted(_ENTRY_SHARED_EXPORTS))} are",
                 )
         for name in sorted(_ENTRY_REQUIRED_EXPORTS - set(values)):
             yield _violation(ctx, "R17.entry", surface, _key(ctx, surface, name), name, f"`{name}` is not exported")

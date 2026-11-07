@@ -50,7 +50,7 @@ struct SlicerText {
 
 /// Reads the fields `spec` carries; the `fields` mask names exactly those.
 fm_slicer_t pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& spec, SlicerText& store) {
-  fm_slicer_t s{};
+  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
   const auto has = [&](const char* key) { return reader.ok() && js_value_present(reader.value(spec, key, key)); };
   if (has("name")) {
     s.fields |= FM_SLICER_FIELD_NAME;
@@ -97,7 +97,7 @@ fm_slicer_t pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& sp
 }
 
 fm_status_t slicer_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_slicer_t s{};
+  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
   const fm_status_t rc = fm_sheet_get_slicer_at(handle, sheet, index, &s);
   if (rc == 0) {
     *out = slicer_to_val(s);
@@ -134,7 +134,7 @@ uint32_t JsWorkbook::addSlicer(uint32_t sheet, uint32_t table, uint32_t column, 
 }
 
 emscripten::val JsWorkbook::getSlicer(uint32_t sheet, uint32_t objectId) const {
-  fm_slicer_t s{};
+  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_slicer(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;

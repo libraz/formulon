@@ -312,7 +312,7 @@ void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_
 }
 
 emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {
-  fm_auto_filter_t f{};
+  fm_auto_filter_t f = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
   const fm_status_t rc = wb != nullptr ? ops.get(wb, index, &f, &present) : kBindingInvalidHandle;
   return optional_or_null(rc, present, rc == 0 && present != 0 ? auto_filter_to_val(f) : emscripten::val::null());
@@ -324,7 +324,7 @@ void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index
     return;
   }
   JsNarrowNumericReader reader("setAutoFilter");
-  fm_auto_filter_t f{};
+  fm_auto_filter_t f = FM_STRUCT_INIT(fm_auto_filter_t);
   f.range = js_pull_range(reader.value(filter, "range", "autoFilter.range"), &reader);
   if (!reader.ok()) {
     return;

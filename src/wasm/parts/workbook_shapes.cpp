@@ -46,9 +46,9 @@ emscripten::val shape_to_val(const fm_shape_t& s) {
   js_set_cstr_fields(o, {{"name", s.name}, {"presetGeometry", s.preset_geometry}, {"text", s.text}});
   o.set("textBox", s.text_box != 0);
   js_set_index_or_null(o, "fillKind", s.fill_kind);
-  o.set("fillRgb", s.fill_rgb);
+  o.set("fillColor", js_color_spec_or_null(s.fill_color));
   js_set_index_or_null(o, "lineKind", s.line_kind);
-  o.set("lineRgb", s.line_rgb);
+  o.set("lineColor", js_color_spec_or_null(s.line_color));
   o.set("lineWidthEmu", static_cast<double>(s.line_width_emu));
   o.set("rotation", s.rotation);
   o.set("hidden", s.hidden != 0);
@@ -63,7 +63,7 @@ struct ShapeText {
 
 /// Reads the fields `spec` carries; the `fields` mask names exactly those.
 fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
-  fm_shape_t s{};
+  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
   if (present(reader, spec, "name")) {
     s.fields |= FM_SHAPE_FIELD_NAME;
     s.name = reader.optional_string(spec, "name", store.name, "shape.name");
@@ -98,12 +98,12 @@ fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec
   if (present(reader, spec, "fillKind")) {
     s.fields |= FM_SHAPE_FIELD_FILL;
     s.fill_kind = reader.i32(spec, "fillKind", 0, "shape.fillKind");
-    s.fill_rgb = reader.u32(spec, "fillRgb", 0U, "shape.fillRgb");
+    s.fill_color = js_pull_color_spec(spec, "fillColor", &reader);
   }
   if (present(reader, spec, "lineKind")) {
     s.fields |= FM_SHAPE_FIELD_LINE;
     s.line_kind = reader.i32(spec, "lineKind", 0, "shape.lineKind");
-    s.line_rgb = reader.u32(spec, "lineRgb", 0U, "shape.lineRgb");
+    s.line_color = js_pull_color_spec(spec, "lineColor", &reader);
   }
   if (present(reader, spec, "lineWidthEmu")) {
     s.fields |= FM_SHAPE_FIELD_LINE_WIDTH;
@@ -154,7 +154,7 @@ emscripten::val sparkline_group_to_val(fm_sparkline_group_t g, emscripten::val s
 
 /// Reads a group spec; absent keys take the defaults of a new line group.
 fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten::val& spec, std::string& ref_store) {
-  fm_sparkline_group_t g{};
+  fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
   for (std::size_t i = 0; i < 8U; ++i) {
     *group_color(g, i) = js_pull_color_spec(spec, kSparklineColorKeys[i], &reader);
   }
@@ -204,7 +204,7 @@ bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array
 }
 
 fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_shape_t s{};
+  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
   const fm_status_t rc = fm_sheet_get_shape_at(handle, sheet, index, &s);
   if (rc == 0) {
     *out = shape_to_val(s);
@@ -215,7 +215,7 @@ fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, 
 // Reads sparkline group `index` with its sparklines nested under `sparklines`;
 // a failed read leaves `*out` untouched.
 fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_sparkline_group_t g{};
+  fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
   fm_status_t rc = fm_sheet_get_sparkline_group(handle, sheet, index, &g);
   if (rc != 0) {
     return rc;
@@ -279,7 +279,7 @@ void JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val 
 }
 
 emscripten::val JsWorkbook::getShape(uint32_t sheet, uint32_t objectId) const {
-  fm_shape_t s{};
+  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_shape(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;

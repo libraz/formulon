@@ -30,7 +30,7 @@ struct ShapeText {
 
 // Reads the fields `spec` carries; the `fields` mask names exactly those.
 fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
-  fm_shape_t s{};
+  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
   bool present = false;
   if (reader.String(spec, "name", &store.name)) {
     s.fields |= FM_SHAPE_FIELD_NAME;
@@ -67,12 +67,12 @@ fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeT
   s.fill_kind = reader.I32(spec, "fillKind", 0, &present);
   if (present) {
     s.fields |= FM_SHAPE_FIELD_FILL;
-    s.fill_rgb = reader.U32(spec, "fillRgb", 0U);
+    s.fill_color = PullColorSpec(reader, spec, "fillColor");
   }
   s.line_kind = reader.I32(spec, "lineKind", 0, &present);
   if (present) {
     s.fields |= FM_SHAPE_FIELD_LINE;
-    s.line_rgb = reader.U32(spec, "lineRgb", 0U);
+    s.line_color = PullColorSpec(reader, spec, "lineColor");
   }
   s.line_width_emu = reader.I64(spec, "lineWidthEmu", 0, &present);
   s.fields |= present ? FM_SHAPE_FIELD_LINE_WIDTH : 0U;
@@ -88,7 +88,7 @@ fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeT
 
 // Reads a group spec; absent keys take the defaults of a new line group.
 fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& spec, std::string& ref_store) {
-  fm_sparkline_group_t g{};
+  fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
   for (size_t i = 0; i < 8U; ++i) {
     *GroupColor(g, i) = PullColorSpec(reader, spec, kSparklineColorKeys[i]);
   }
@@ -164,9 +164,9 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_t& s) {
   item.Set("text", JsString(env, s.text));
   item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
   item.Set("fillKind", JsIndexOrNull(env, s.fill_kind));
-  item.Set("fillRgb", JsNumber(env, s.fill_rgb));
+  item.Set("fillColor", ColorSpecOrNull(env, s.fill_color));
   item.Set("lineKind", JsIndexOrNull(env, s.line_kind));
-  item.Set("lineRgb", JsNumber(env, s.line_rgb));
+  item.Set("lineColor", ColorSpecOrNull(env, s.line_color));
   item.Set("lineWidthEmu", JsNumber(env, static_cast<double>(s.line_width_emu)));
   item.Set("rotation", JsNumber(env, s.rotation));
   item.Set("hidden", Napi::Boolean::New(env, s.hidden != 0));
@@ -194,7 +194,7 @@ Napi::Value Workbook::GetShape(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_shape_t s{};
+  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &s);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(ShapeToJs(env, s)) : env.Null());
@@ -251,7 +251,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = ArgU32(info, 0);
   const std::size_t index = ArgU32(info, 1);
-  fm_sparkline_group_t g{};
+  fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
   fm_status_t rc = fm_sheet_get_sparkline_group(handle_, sheet, index, &g);
   if (rc != 0) {
     return ThrowStatus(env, rc);

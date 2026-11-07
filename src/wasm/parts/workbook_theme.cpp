@@ -43,7 +43,7 @@ emscripten::val JsWorkbook::getThemeScriptFont(bool major, const std::string& sc
 }
 
 emscripten::val JsWorkbook::getThemeColors() const {
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   int32_t source = 0;
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_theme_colors(handle_, &colors, &source)
                                     : kBindingInvalidHandle)) {
@@ -60,7 +60,7 @@ emscripten::val JsWorkbook::getThemeColors() const {
 }
 
 emscripten::val JsWorkbook::getThemeFonts() const {
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_theme_fonts(handle_, &fonts) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -77,7 +77,7 @@ void JsWorkbook::setThemeColors(emscripten::val colors) {
     record_invalid_handle();
     return;
   }
-  fm_theme_colors_t tc{};
+  fm_theme_colors_t tc = FM_STRUCT_INIT(fm_theme_colors_t);
   JsNarrowNumericReader reader("setThemeColors");
   if (!reader.is_array(colors, "colors") || reader.length(colors, "colors") != std::size(tc.argb)) {
     record_type_error("setThemeColors: `colors` must be an array of 12 ARGB numbers");
@@ -105,7 +105,7 @@ void JsWorkbook::setThemeFonts(emscripten::val fonts) {
   if (!reader.ok()) {
     return;
   }
-  fm_theme_fonts_t tf{};
+  fm_theme_fonts_t tf = FM_STRUCT_INIT(fm_theme_fonts_t);
   tf.major_latin = major_latin.c_str();
   tf.major_east_asian = major_ea.c_str();
   tf.minor_latin = minor_latin.c_str();
@@ -144,7 +144,7 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
 }
 
 emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint32_t col) const {
-  fm_effective_style_t e{};
+  fm_effective_style_t e = FM_STRUCT_INIT(fm_effective_style_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_effective_style(handle_, sheet, row, col, &e)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();

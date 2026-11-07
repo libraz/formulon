@@ -47,7 +47,7 @@ void JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
     return;
   }
   JsNarrowNumericReader reader("addDataTable");
-  fm_data_table_t table{};
+  fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
   if (js_value_present(spec)) {
     table.rect = js_pull_range(reader.value(spec, "rect", "rect"), &reader);
     pull_input(reader, spec, "rowInput", &table.has_row_input, &table.row_input_row, &table.row_input_col);
@@ -61,7 +61,7 @@ void JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
 
 emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t col) const {
   int32_t present = 0;
-  fm_data_table_t t{};
+  fm_data_table_t t = FM_STRUCT_INIT(fm_data_table_t);
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_data_table(handle_, sheet, row, col, &present, &t) : kBindingInvalidHandle;
   if (rc != 0 || present == 0) {

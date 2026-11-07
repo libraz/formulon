@@ -117,10 +117,11 @@ Napi::Value EvaluateFormula(const Napi::CallbackInfo& info) {
     fm_workbook_destroy(wb);
     return failed;
   }
-  fm_value_t v{};
-  rc = fm_sheet_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
-  // Translate before the destroy: a text result borrows the workbook's scratch.
-  const Napi::Value out = rc == 0 ? ValueToJs(env, v) : ThrowStatus(env, rc);
+  fm_value_array_t* array = nullptr;
+  rc = fm_sheet_evaluate_formula_array(wb, 0, 0, 0, formula.c_str(), &array);
+  // Translate before the destroy: a text result borrows the array.
+  const Napi::Value out = rc == 0 ? Napi::Value(ValueArrayToJs(env, array)) : ThrowStatus(env, rc);
+  fm_value_array_destroy(array);
   fm_workbook_destroy(wb);
   return out;
 }

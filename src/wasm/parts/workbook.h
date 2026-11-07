@@ -56,6 +56,9 @@ class JsWorkbook {
   /// Releases the native handle and keeps the wrapper; idempotent. Every later
   /// call fails with `kBindingInvalidHandle`.
   void dispose();
+  /// Estimated bytes the workbook holds; 0 once disposed or when the
+  /// estimate fails. See `fm_workbook_get_memory_usage`.
+  double memoryUsage() const;
 
   /// Serialises the workbook as a `Uint8Array` in container `format`
   /// (`fm_workbook_format_t` ordinal: 1 = xlsx, 2 = xlsb); `undefined`
@@ -203,8 +206,8 @@ class JsWorkbook {
   emscripten::val pinnedNow() const;
   void setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute, uint32_t second);
   void clearPinnedNow();
-  std::string excelProfileId() const;
-  void setExcelProfileId(const std::string& profile_id);
+  std::string profileId() const;
+  void setProfileId(const std::string& profile_id);
   /// The stored file name; `null` when none is set.
   emscripten::val fileName() const;
   void setFileName(const std::string& name);
@@ -267,6 +270,10 @@ class JsWorkbook {
   void setSheetHeaderFooterXml(uint32_t sheet, const std::string& xml);
   emscripten::val getSheetSheetPrXml(uint32_t sheet) const;
   void setSheetSheetPrXml(uint32_t sheet, const std::string& xml);
+  /// The `<tabColor>` colour spec, or `null` when the sheet has none.
+  emscripten::val getSheetTabColor(uint32_t sheet) const;
+  /// Sets the tab colour from a colour spec; `null` clears it.
+  void setSheetTabColor(uint32_t sheet, emscripten::val color);
 
   /// Toggles `<sheetPr><pageSetUpPr fitToPage>` without touching anything
   /// else `<sheetPr>` carries. Pair with `fitToWidth` / `fitToHeight` on
@@ -787,9 +794,9 @@ class JsWorkbook {
 
 // ---- Free helpers ------------------------------------------------------
 
-/// Convenience entry point that mirrors `formulon_cli eval <formula>`:
-/// spin up an empty workbook with the default Sheet1, place the formula
-/// at A1, recalc, and return the resulting cell value.
+/// Evaluates `formula` read-only against a fresh single-sheet workbook,
+/// anchored at `Sheet1!A1`, and returns the whole result as
+/// `{rows, cols, cells}` (a scalar is 1 x 1).
 emscripten::val evaluate_formula(const std::string& formula);
 
 /// Returns the Formulon library version (NUL-terminated UTF-8).

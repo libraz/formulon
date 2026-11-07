@@ -285,7 +285,7 @@ Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_pivot_cache_options_t o{};
+  fm_pivot_cache_options_t o = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   const fm_status_t rc = fm_workbook_get_pivot_cache_options(handle_, ArgU32(info, 0), &o);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -305,7 +305,7 @@ Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
   }
   const uint32_t cache_id = ArgU32(info, 0);
   const Napi::Object spec = ArgObject(info, 1);
-  fm_pivot_cache_options_t o{};
+  fm_pivot_cache_options_t o = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   const fm_status_t read_rc = fm_workbook_get_pivot_cache_options(handle_, cache_id, &o);
   if (read_rc != 0) {
     return ThrowStatus(env, read_rc);
@@ -392,7 +392,7 @@ Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info)
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_pivot_calculated_item_t item{};
+  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
   const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item(handle_, ArgU32(info, 0),
                                                                      static_cast<std::size_t>(ArgU32(info, 1)), &item);
   if (rc != 0) {

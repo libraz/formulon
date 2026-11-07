@@ -66,6 +66,7 @@ enum class Rd : uint8_t {
   kOptI32,
   kOptU32,
   kTri,
+  kColor,
   kObj,
   kObjOpt,
   kTitle,
@@ -97,19 +98,21 @@ constexpr RdField kTitleRd[] = {
 };
 
 constexpr RdField kFillRd[] = {
-    RD_OPT("color", fm_chart_fill_t, has_color, color, kOptU32),
+    RD("color", fm_chart_fill_t, color, kColor),
     RD("transparency", fm_chart_fill_t, transparency_pct, kNanNull),
     RD_END,
 };
 
+// clang-format off
 constexpr RdField kLineRd[] = {
-    RD_OPT("color", fm_chart_line_t, has_color, color, kOptU32),
+    RD("color", fm_chart_line_t, color, kColor),
     RD("transparency", fm_chart_line_t, transparency_pct, kNanNull),
     RD("widthPt", fm_chart_line_t, width_pt, kNanNull),
     RD_OPT("dash", fm_chart_line_t, has_dash, dash, kOptI32),
     RD("none", fm_chart_line_t, none, kBool),
     RD_END,
 };
+// clang-format on
 
 constexpr RdField kMarkerRd[] = {
     RD("symbol", fm_chart_marker_t, symbol, kI32),
@@ -129,7 +132,7 @@ constexpr RdField kLabelsRd[] = {
     RD_OPT("position", fm_chart_labels_t, has_position, position, kOptI32),
     RD("numberFormat", fm_chart_labels_t, number_format, kStrOrNull),
     RD("sourceLinked", fm_chart_labels_t, source_linked, kBool),
-    RD_OPT("fontColor", fm_chart_labels_t, has_font_color, font_color, kOptU32),
+    RD("fontColor", fm_chart_labels_t, font_color, kColor),
     RD("fontSizePt", fm_chart_labels_t, font_size_pt, kNanNull),
     RD("deleted", fm_chart_labels_t, deleted, kBool),
     RD_END,
@@ -257,6 +260,9 @@ val fields_to_val(const void* base, const RdField* f) {
           v = val(tri == FM_CHART_TRI_TRUE);
         }
         break;
+      case Rd::kColor:
+        v = js_color_spec_or_null(load<fm_color_spec_t>(base, f->off));
+        break;
       case Rd::kObj:
         v = fields_to_val(static_cast<const char*>(base) + f->off, f->sub);
         break;
@@ -289,7 +295,7 @@ val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t r
   o.set("formula", val(string_from_cstr(src.formula)));
   val literal = val::array();
   for (size_t i = 0; i < src.literal_count; ++i) {
-    fm_chart_literal_t lit{};
+    fm_chart_literal_t lit = FM_STRUCT_INIT(fm_chart_literal_t);
     if (!step(rc, fm_chart_get_series_literal_at(chart, plot, series, role, i, &lit))) {
       break;
     }
@@ -300,7 +306,7 @@ val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t r
 }
 
 val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_t& rc) {
-  fm_chart_series_t s{};
+  fm_chart_series_t s = FM_STRUCT_INIT(fm_chart_series_t);
   if (!step(rc, fm_chart_get_series_at(chart, plot, index, &s))) {
     return val::object();
   }
@@ -311,7 +317,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
   }
   val points = val::array();
   for (size_t i = 0; i < s.point_count; ++i) {
-    fm_chart_point_t p{};
+    fm_chart_point_t p = FM_STRUCT_INIT(fm_chart_point_t);
     if (!step(rc, fm_chart_get_series_point_at(chart, plot, index, i, &p))) {
       break;
     }
@@ -322,7 +328,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
 }
 
 val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
-  fm_chart_plot_t p{};
+  fm_chart_plot_t p = FM_STRUCT_INIT(fm_chart_plot_t);
   if (!step(rc, fm_chart_get_plot_at(chart, index, &p))) {
     return val::object();
   }
@@ -363,7 +369,7 @@ val indices_to_val(size_t count, fm_status_t& rc, Fetch fetch) {
 }
 
 val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
-  fm_chart_info_t info{};
+  fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
   if (!step(rc, fm_chart_get_info(chart, &info))) {
     return val::object();
   }
@@ -387,7 +393,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   o.set("plots", plots);
   val axes = val::array();
   for (size_t i = 0; i < info.axis_count; ++i) {
-    fm_chart_axis_t axis{};
+    fm_chart_axis_t axis = FM_STRUCT_INIT(fm_chart_axis_t);
     if (!step(rc, fm_chart_get_axis_at(chart, i, &axis))) {
       break;
     }
@@ -429,8 +435,8 @@ val range_to_val(const fm_sheet_rect_t& r) {
 }
 
 val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& rc) {
-  fm_chart_data_series_t s{};
-  fm_chart_data_points_t pts{};
+  fm_chart_data_series_t s = FM_STRUCT_INIT(fm_chart_data_series_t);
+  fm_chart_data_points_t pts = FM_STRUCT_INIT(fm_chart_data_points_t);
   if (!step(rc, fm_chart_data_get_series_at(data, index, &s)) ||
       !step(rc, fm_chart_data_get_series_points(data, index, &pts))) {
     return val::object();
@@ -463,7 +469,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
 }
 
 val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
-  fm_chart_data_info_t info{};
+  fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
   if (!step(rc, fm_chart_data_get_info(data, &info))) {
     return val::object();
   }
@@ -514,7 +520,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
 
   val axis_titles = val::array();
   for (size_t i = 0; i < info.axis_title_count; ++i) {
-    fm_chart_axis_title_text_t t{};
+    fm_chart_axis_title_text_t t = FM_STRUCT_INIT(fm_chart_axis_title_text_t);
     if (!step(rc, fm_chart_data_get_axis_title_at(data, i, &t))) {
       break;
     }
@@ -526,7 +532,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   o.set("axisTitleTexts", axis_titles);
   val unresolved = val::array();
   for (size_t i = 0; i < info.unresolved_count; ++i) {
-    fm_chart_unresolved_t u{};
+    fm_chart_unresolved_t u = FM_STRUCT_INIT(fm_chart_unresolved_t);
     if (!step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       break;
     }
@@ -587,7 +593,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
   JsNarrowNumericReader reader("getChartPreview");
   const val spec = js_object_or_empty(overrides);
   std::string source_store;
-  fm_chart_preview_overrides_t o{};
+  fm_chart_preview_overrides_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   o.source = reader.optional_string(spec, "source", source_store, "source");
   // A `null` or omitted override stays unset.
   const auto set = [&](const char* key, int32_t& op, int32_t& out, bool is_bool) {

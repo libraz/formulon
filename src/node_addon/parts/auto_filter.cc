@@ -131,7 +131,7 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter_t& f) {
 
 // Owns the strings and arrays an `fm_auto_filter_t` borrows from.
 struct AutoFilterInput {
-  fm_auto_filter_t filter{};
+  fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   std::vector<fm_filter_column_t> columns;
   std::vector<fm_sort_condition_t> conditions;
   // A deque never relocates its elements, so the `c_str()` views stay valid.
@@ -321,7 +321,7 @@ Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_
     return ThrowInvalidHandle(env);
   }
   const size_t idx = Workbook::ArgU32(info, 0);
-  fm_auto_filter_t af{};
+  fm_auto_filter_t af = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
   const fm_status_t rc = table ? fm_workbook_get_table_auto_filter(wb, idx, &af, &present)
                                : fm_sheet_get_auto_filter(wb, idx, &af, &present);

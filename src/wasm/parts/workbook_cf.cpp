@@ -23,15 +23,6 @@ namespace wasm {
 namespace parts {
 namespace {
 
-fm_cf_color_t js_pull_cf_color(emscripten::val v, JsNarrowNumericReader& reader) {
-  fm_cf_color_t out{};
-  out.r = reader.u8(v, "r", 0U, "color.r");
-  out.g = reader.u8(v, "g", 0U, "color.g");
-  out.b = reader.u8(v, "b", 0U, "color.b");
-  out.a = reader.u8(v, "a", 255U, "color.a");
-  return out;
-}
-
 fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* strings,
                        JsNarrowNumericReader& reader) {
   fm_cfvo_t out{};
@@ -92,7 +83,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val rang
     emscripten::val matches = emscripten::val::array();
     std::size_t emitted_matches = 0;
     for (std::size_t j = 0; j < match_count; ++j) {
-      fm_cf_match_t m{};
+      fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
       if (fm_cf_results_get_match_at(results, i, j, &m) != 0) {
         continue;
       }
@@ -158,7 +149,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
     emscripten::val colors = emscripten::val::array();
     for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
       thresholds.set(j, cfvo_to_js(rule.color_scale_thresholds[j]));
-      colors.set(j, emscripten::val(translate_cf_color(rule.color_scale_colors[j])));
+      colors.set(j, js_color_spec(rule.color_scale_colors[j]));
     }
     color_scale.set("thresholds", thresholds);
     color_scale.set("colors", colors);
@@ -168,7 +159,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
     emscripten::val data_bar = emscripten::val::object();
     data_bar.set("min", cfvo_to_js(rule.data_bar_min));
     data_bar.set("max", cfvo_to_js(rule.data_bar_max));
-    data_bar.set("fill", emscripten::val(translate_cf_color(rule.data_bar_fill)));
+    data_bar.set("fill", js_color_spec(rule.data_bar_fill));
     data_bar.set("showValue", rule.data_bar_show_value != 0);
     data_bar.set("minLengthPct", static_cast<uint32_t>(rule.data_bar_min_length_pct));
     data_bar.set("maxLengthPct", static_cast<uint32_t>(rule.data_bar_max_length_pct));
@@ -185,16 +176,16 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
       data_bar.set("axisPosition", static_cast<uint32_t>(rule.data_bar_axis_position));
     }
     if (rule.data_bar_negative_fill_engaged != 0) {
-      data_bar.set("negativeFill", emscripten::val(translate_cf_color(rule.data_bar_negative_fill)));
+      data_bar.set("negativeFill", js_color_spec(rule.data_bar_negative_fill));
     }
     if (rule.data_bar_border_engaged != 0) {
-      data_bar.set("border", emscripten::val(translate_cf_color(rule.data_bar_border)));
+      data_bar.set("border", js_color_spec(rule.data_bar_border));
     }
     if (rule.data_bar_negative_border_engaged != 0) {
-      data_bar.set("negativeBorder", emscripten::val(translate_cf_color(rule.data_bar_negative_border)));
+      data_bar.set("negativeBorder", js_color_spec(rule.data_bar_negative_border));
     }
     if (rule.data_bar_axis_color_engaged != 0) {
-      data_bar.set("axisColor", emscripten::val(translate_cf_color(rule.data_bar_axis_color)));
+      data_bar.set("axisColor", js_color_spec(rule.data_bar_axis_color));
     }
     data_bar.set("direction", static_cast<uint32_t>(rule.data_bar_direction));
     item.set("dataBar", data_bar);
@@ -235,7 +226,7 @@ double JsWorkbook::getCfRuleCount(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getCfRule(uint32_t sheet, uint32_t cfRuleIndex) const {
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_cf_rule(handle_, sheet, cfRuleIndex, &rule) : kBindingInvalidHandle;
   if (!succeeded(rc)) {
@@ -256,7 +247,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   // below all feed the same store, and a vector would relocate the
   // earlier strings as the later branches add theirs.
   std::vector<fm_cfvo_t> color_scale_thresholds;
-  std::vector<fm_cf_color_t> color_scale_colors;
+  std::vector<fm_color_spec_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
@@ -276,7 +267,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   const std::string formula2 = reader.string(v, "formula2", "rule.formula2");
   const std::string text = reader.string(v, "text", "rule.text");
 
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.id = id.empty() ? nullptr : id.c_str();
   rule.type = reader.u8(v, "type", 0U, "rule.type");
   rule.priority = reader.i32(v, "priority", 0, "rule.priority");
@@ -331,7 +322,8 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
       const uint32_t n = reader.length(colors, "colorScale.colors");
       color_scale_colors.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
-        color_scale_colors.push_back(js_pull_cf_color(reader.array_element(colors, i, "colorScale.colors[]"), reader));
+        color_scale_colors.push_back(js_pull_color_spec_value(reader.array_element(colors, i, "colorScale.colors[]"),
+                                                              "colorScale.colors[]", &reader));
       }
     }
     rule.color_scale_thresholds = color_scale_thresholds.empty() ? nullptr : color_scale_thresholds.data();
@@ -343,7 +335,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
     rule.data_bar_engaged = 1;
     rule.data_bar_min = js_pull_cfvo(reader.value(data_bar, "min", "dataBar.min"), &cfvo_strings, reader);
     rule.data_bar_max = js_pull_cfvo(reader.value(data_bar, "max", "dataBar.max"), &cfvo_strings, reader);
-    rule.data_bar_fill = js_pull_cf_color(reader.value(data_bar, "fill", "dataBar.fill"), reader);
+    rule.data_bar_fill = js_pull_color_spec(data_bar, "fill", &reader);
     rule.data_bar_show_value = reader.boolean(data_bar, "showValue", true, "dataBar.showValue") ? 1 : 0;
     rule.data_bar_min_length_pct = reader.u8(data_bar, "minLengthPct", 10U, "dataBar.minLengthPct");
     rule.data_bar_max_length_pct = reader.u8(data_bar, "maxLengthPct", 90U, "dataBar.maxLengthPct");
@@ -364,22 +356,22 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
     const emscripten::val negative_fill = reader.value(data_bar, "negativeFill", "dataBar.negativeFill");
     if (js_value_present(negative_fill)) {
       rule.data_bar_negative_fill_engaged = 1;
-      rule.data_bar_negative_fill = js_pull_cf_color(negative_fill, reader);
+      rule.data_bar_negative_fill = js_pull_color_spec_value(negative_fill, "dataBar.negativeFill", &reader);
     }
     const emscripten::val border = reader.value(data_bar, "border", "dataBar.border");
     if (js_value_present(border)) {
       rule.data_bar_border_engaged = 1;
-      rule.data_bar_border = js_pull_cf_color(border, reader);
+      rule.data_bar_border = js_pull_color_spec_value(border, "dataBar.border", &reader);
     }
     const emscripten::val negative_border = reader.value(data_bar, "negativeBorder", "dataBar.negativeBorder");
     if (js_value_present(negative_border)) {
       rule.data_bar_negative_border_engaged = 1;
-      rule.data_bar_negative_border = js_pull_cf_color(negative_border, reader);
+      rule.data_bar_negative_border = js_pull_color_spec_value(negative_border, "dataBar.negativeBorder", &reader);
     }
     const emscripten::val axis_color = reader.value(data_bar, "axisColor", "dataBar.axisColor");
     if (js_value_present(axis_color)) {
       rule.data_bar_axis_color_engaged = 1;
-      rule.data_bar_axis_color = js_pull_cf_color(axis_color, reader);
+      rule.data_bar_axis_color = js_pull_color_spec_value(axis_color, "dataBar.axisColor", &reader);
     }
     rule.data_bar_direction = reader.u8(data_bar, "direction", 0U, "dataBar.direction");
   }

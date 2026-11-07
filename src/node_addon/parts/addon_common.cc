@@ -463,8 +463,25 @@ namespace {
 // never injected the error class.
 constexpr const char* kMissingErrorClassMessage = "FormulonError was not provided to the addon";
 
-// Throws `new FormulonError(code, message, context)`; NULL strings become "".
-Napi::Value ThrowFormulonError(Napi::Env env, fm_status_t code, const char* message, const char* context) {
+// The `parseError` argument of a failure: `{ code, start, end, line, column }`
+// when the failing call recorded a formula syntax error, else `undefined`.
+Napi::Value LastParseErrorToJs(Napi::Env env) {
+  fm_parse_error_t record = FM_STRUCT_INIT(fm_parse_error_t);
+  if (fm_get_last_parse_error(&record) != 0) {
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("code", Napi::Number::New(env, record.code));
+  out.Set("start", Napi::Number::New(env, record.start));
+  out.Set("end", Napi::Number::New(env, record.end));
+  out.Set("line", Napi::Number::New(env, record.line));
+  out.Set("column", Napi::Number::New(env, record.column));
+  return out;
+}
+
+// Throws `new FormulonError(code, message, context, parseError)`; NULL strings become "".
+Napi::Value ThrowFormulonError(Napi::Env env, fm_status_t code, const char* message, const char* context,
+                               Napi::Value parse_error) {
   const Napi::FunctionReference& error_class = GetAddonData(env).error_class;
   if (error_class.IsEmpty()) {
     Napi::TypeError::New(env, kMissingErrorClassMessage).ThrowAsJavaScriptException();
@@ -474,6 +491,7 @@ Napi::Value ThrowFormulonError(Napi::Env env, fm_status_t code, const char* mess
       Napi::Number::New(env, static_cast<double>(code)),
       JsString(env, message),
       JsString(env, context),
+      parse_error,
   });
   if (!env.IsExceptionPending()) {
     napi_throw(env, error);
@@ -517,21 +535,25 @@ Napi::Value ThrowStatus(Napi::Env env, fm_status_t rc) {
   if (env.IsExceptionPending()) {
     return env.Undefined();
   }
-  return ThrowFormulonError(env, rc, fm_get_last_error_message(), fm_get_last_error_context());
+  // The parse-error record first, then message and context, before any other `fm_*` call.
+  const Napi::Value parse_error = LastParseErrorToJs(env);
+  const char* message = fm_get_last_error_message();
+  const char* context = fm_get_last_error_context();
+  return ThrowFormulonError(env, rc, message, context, parse_error);
 }
 
 Napi::Value ThrowInvalidHandle(Napi::Env env) {
   if (env.IsExceptionPending()) {
     return env.Undefined();
   }
-  return ThrowFormulonError(env, kBindingInvalidHandle, "the workbook is disposed", "");
+  return ThrowFormulonError(env, kBindingInvalidHandle, "the workbook is disposed", "", env.Undefined());
 }
 
 Napi::Value ThrowReentrant(Napi::Env env, const char* message) {
   if (env.IsExceptionPending()) {
     return env.Undefined();
   }
-  return ThrowFormulonError(env, FM_STATUS_GRAPH_RECALC_REENTRANT, message, "");
+  return ThrowFormulonError(env, FM_STATUS_GRAPH_RECALC_REENTRANT, message, "", env.Undefined());
 }
 
 Napi::Value ValueOrThrow(Napi::Env env, fm_status_t rc, Napi::Value ok_value) {
@@ -565,6 +587,27 @@ Napi::Value ValueToJs(Napi::Env env, const fm_value_t& v) {
       break;
   }
   return o;
+}
+
+Napi::Object ValueArrayToJs(Napi::Env env, const fm_value_array_t* array) {
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  fm_value_array_get_dimensions(array, &rows, &cols);
+  Napi::Array cells = Napi::Array::New(env, rows);
+  for (uint32_t r = 0; r < rows; ++r) {
+    Napi::Array js_row = Napi::Array::New(env, cols);
+    for (uint32_t c = 0; c < cols; ++c) {
+      fm_value_t v{};
+      fm_value_array_get_value_at(array, static_cast<std::size_t>(r) * cols + c, &v);
+      js_row.Set(c, ValueToJs(env, v));
+    }
+    cells.Set(r, js_row);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("rows", Napi::Number::New(env, rows));
+  out.Set("cols", Napi::Number::New(env, cols));
+  out.Set("cells", cells);
+  return out;
 }
 
 bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text) {
@@ -642,28 +685,19 @@ Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell) {
   return out;
 }
 
-Napi::Object TranslateCfColor(Napi::Env env, const fm_cf_color_t& c) {
-  Napi::Object o = Napi::Object::New(env);
-  o.Set("r", Napi::Number::New(env, static_cast<int32_t>(c.r)));
-  o.Set("g", Napi::Number::New(env, static_cast<int32_t>(c.g)));
-  o.Set("b", Napi::Number::New(env, static_cast<int32_t>(c.b)));
-  o.Set("a", Napi::Number::New(env, static_cast<int32_t>(c.a)));
-  return o;
-}
-
 Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(m.kind)));
   o.Set("priority", Napi::Number::New(env, m.priority));
   o.Set("dxfIdEngaged", Napi::Number::New(env, m.dxf_id_engaged));
   o.Set("dxfId", Napi::Number::New(env, m.dxf_id));
-  o.Set("color", TranslateCfColor(env, m.color));
+  o.Set("color", ColorSpecToJs(env, m.color));
   o.Set("barLengthPct", Napi::Number::New(env, m.bar_length_pct));
   o.Set("barAxisPositionPct", Napi::Number::New(env, m.bar_axis_position_pct));
   o.Set("barIsNegative", Napi::Number::New(env, m.bar_is_negative));
-  o.Set("barFill", TranslateCfColor(env, m.bar_fill));
+  o.Set("barFill", ColorSpecToJs(env, m.bar_fill));
   o.Set("barBorderEngaged", Napi::Number::New(env, m.bar_border_engaged));
-  o.Set("barBorder", TranslateCfColor(env, m.bar_border));
+  o.Set("barBorder", ColorSpecToJs(env, m.bar_border));
   o.Set("barGradient", Napi::Number::New(env, m.bar_gradient));
   o.Set("barDirection", Napi::Number::New(env, static_cast<int32_t>(m.bar_direction)));
   o.Set("iconSetName", Napi::Number::New(env, m.icon_set_name));
@@ -679,6 +713,10 @@ Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec) {
   out.Set("tint", Napi::Number::New(env, spec.tint));
   out.Set("indexed", Napi::Number::New(env, spec.indexed));
   return out;
+}
+
+Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_spec_t& spec) {
+  return spec.kind != kFmColorNone ? Napi::Value(ColorSpecToJs(env, spec)) : env.Null();
 }
 
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r) {
@@ -797,18 +835,28 @@ bool ReadCellRects(CheckedSpecReader& reader, const Napi::Value& value, const ch
   return reader.ok();
 }
 
-fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
+namespace {
+
+fm_color_spec_t ColorSpecFields(CheckedSpecReader& reader, const Napi::Object& v) {
   fm_color_spec_t spec{};
-  Napi::Object v;
-  if (!reader.Object(owner, key, &v)) {
-    return spec;
-  }
   spec.kind = reader.U8(v, "kind", 0U);
   spec.rgb = reader.U32(v, "rgb", 0U);
   spec.theme = reader.U32(v, "theme", 0U);
   spec.tint = reader.Double(v, "tint", 0.0);
   spec.indexed = reader.U32(v, "indexed", 0U);
   return spec;
+}
+
+}  // namespace
+
+fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
+  Napi::Object v;
+  return reader.Object(owner, key, &v) ? ColorSpecFields(reader, v) : fm_color_spec_t{};
+}
+
+fm_color_spec_t ReadColorSpec(CheckedSpecReader& reader, const Napi::Value& value, const char* key) {
+  Napi::Object v;
+  return reader.Object(value, key, &v) ? ColorSpecFields(reader, v) : fm_color_spec_t{};
 }
 
 // Reads the range at `info[idx]`; a missing/nullish argument reads as all

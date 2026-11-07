@@ -45,7 +45,7 @@ Napi::Value PivotCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
 // The pivot options with their strings copied out of the model, so the
 // struct stays valid across the `set_options` call that rewrites them.
 struct OptionsSnapshot {
-  fm_pivot_options_t c{};
+  fm_pivot_options_t c = FM_STRUCT_INIT(fm_pivot_options_t);
   std::string error_caption;
   std::string missing_caption;
   std::string alt_text;
@@ -292,7 +292,7 @@ Napi::Value Workbook::PivotGetStyleInfo(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
-  fm_pivot_style_info_t style{};
+  fm_pivot_style_info_t style = FM_STRUCT_INIT(fm_pivot_style_info_t);
   const fm_status_t rc = fm_sheet_get_pivot_style_info(handle_, sheet, pivot_index, &style);
   if (rc != 0 || style.present == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
@@ -321,7 +321,7 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const PivotFieldArgs args = ReadPivotField(info);
-  fm_pivot_field_info_t field{};
+  fm_pivot_field_info_t field = FM_STRUCT_INIT(fm_pivot_field_info_t);
   const fm_status_t rc = fm_sheet_get_pivot_field(handle_, args.sheet, args.pivot_index, args.field_index, &field);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -371,7 +371,7 @@ Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
   }
   const PivotFieldArgs args = ReadPivotField(info);
   const std::size_t item_index = static_cast<std::size_t>(ArgU32(info, 3));
-  fm_pivot_item_info_t item{};
+  fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
   const fm_status_t rc =
       fm_sheet_get_pivot_field_item(handle_, args.sheet, args.pivot_index, args.field_index, item_index, &item);
   if (rc != 0) {
@@ -403,7 +403,7 @@ Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
   const bool has_custom = reader.String(spec, "customName", &custom_name);
   const bool has_nfmt = reader.String(spec, "numberFormat", &number_format);
 
-  fm_pivot_field_spec_t c_spec{};
+  fm_pivot_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   // `sourceName` is required; an omitted key passes NULL through rather
   // than the coerced literal string "undefined" `.ToString()` would
   // otherwise produce, so the C ABI's own kBindingNullPointer check is
@@ -491,7 +491,7 @@ Napi::Value Workbook::PivotGetOptions(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
-  fm_pivot_options_t o{};
+  fm_pivot_options_t o = FM_STRUCT_INIT(fm_pivot_options_t);
   const fm_status_t rc = fm_sheet_get_pivot_options(handle_, sheet, pivot_index, &o);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -774,7 +774,7 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   Napi::Object spec = ArgObject(info, 2);
-  fm_pivot_data_field_spec_t c_spec{};
+  fm_pivot_data_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   std::string name_buf;
   std::string nfmt_buf;
   CheckedSpecReader reader(env);
@@ -795,7 +795,7 @@ Napi::Value Workbook::PivotDataFieldAt(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const PivotFieldArgs args = ReadPivotField(info);
-  fm_pivot_data_field_spec_t spec{};
+  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   const fm_status_t rc = fm_sheet_get_pivot_data_field(handle_, args.sheet, args.pivot_index, args.field_index, &spec);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -824,7 +824,7 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t data_field_index = static_cast<std::size_t>(ArgU32(info, 2));
   Napi::Object spec = ArgObject(info, 3);
-  fm_pivot_data_field_spec_t c_spec{};
+  fm_pivot_data_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   std::string name_buf;
   std::string nfmt_buf;
   CheckedSpecReader reader(env);
@@ -849,7 +849,7 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t filter_index = static_cast<std::size_t>(ArgU32(info, 2));
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   const fm_status_t rc = fm_sheet_get_pivot_filter(handle_, sheet, pivot_index, filter_index, &spec);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -887,7 +887,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   std::string value_high_text;
   const bool has_high_text = reader.String(spec, "valueHighText", &value_high_text);
 
-  fm_pivot_filter_spec_t c_spec{};
+  fm_pivot_filter_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   c_spec.axis = static_cast<fm_pivot_axis_t>(reader.U32(spec, "axis", 0U));
   // `fieldName` is required; see the `sourceName` comment in
   // `PivotFieldAdd` above -- an omitted key must reach the C ABI as NULL,

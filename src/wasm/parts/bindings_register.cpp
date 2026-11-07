@@ -53,12 +53,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("unknownContentTypeCount", &JsReadDiagnostics::unknownContentTypeCount);
 
   // ---- Conditional-format value-objects ------------------------------------
-  value_object<JsCfColor>("CfColor")
-      .field("r", &JsCfColor::r)
-      .field("g", &JsCfColor::g)
-      .field("b", &JsCfColor::b)
-      .field("a", &JsCfColor::a);
-
   value_object<JsCfMatch>("CfMatch")
       .field("kind", &JsCfMatch::kind)
       .field("priority", &JsCfMatch::priority)
@@ -169,6 +163,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("deleteRows", &JsWorkbook::deleteRows)
       .function("getDependents", &JsWorkbook::dependents)
       .function("dispose", &JsWorkbook::dispose)
+      .function("getMemoryUsage", &JsWorkbook::memoryUsage)
       .function("getDxfCount", &JsWorkbook::dxfCount)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
       .function("evaluateCfFormula", &JsWorkbook::evaluateConditionalFormula)
@@ -176,7 +171,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("evaluateFormula", &JsWorkbook::evaluateFormulaText)
       // Profile ids are {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,
       // th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}. New workbooks default to win-365-en_US.
-      .function("getExcelProfileId", &JsWorkbook::excelProfileId)
+      .function("getProfileId", &JsWorkbook::profileId)
       .function("getFileName", &JsWorkbook::fileName)
       .function("getFillCount", &JsWorkbook::fillCount)
       .function("getFontCount", &JsWorkbook::fontCount)
@@ -578,8 +573,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("removeProtectedRange", &JsWorkbook::removeProtectedRange)
       .function("setDefinedName", &JsWorkbook::setDefinedName)
       .function("setError", &JsWorkbook::setError)
-      // `setExcelProfileId` accepts the fourteen ids documented at `excelProfileId`.
-      .function("setExcelProfileId", &JsWorkbook::setExcelProfileId)
+      // `setProfileId` accepts the ids documented at `getProfileId`.
+      .function("setProfileId", &JsWorkbook::setProfileId)
       .function("setFileName", &JsWorkbook::setFileName)
       .function("setFormula", &JsWorkbook::setFormula)
       .function("setIterative", &JsWorkbook::setIterative)
@@ -610,6 +605,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setPrintOptionsXml", &JsWorkbook::setSheetPrintOptionsXml)
       .function("setPrintTitles", &JsWorkbook::setSheetPrintTitles)
       .function("setSheetPrXml", &JsWorkbook::setSheetSheetPrXml)
+      .function("getTabColor", &JsWorkbook::getSheetTabColor)
+      .function("setTabColor", &JsWorkbook::setSheetTabColor)
       .function("setSheetProtection", &JsWorkbook::setSheetProtection)
       .function("setRightToLeft", &JsWorkbook::setSheetRightToLeft)
       .function("setShowGridLines", &JsWorkbook::setSheetShowGridLines)

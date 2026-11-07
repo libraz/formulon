@@ -17,7 +17,7 @@ Napi::Value Workbook::GetThemeColors(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   int32_t source = 0;
   const fm_status_t rc = fm_workbook_get_theme_colors(handle_, &colors, &source);
   if (rc != 0) {
@@ -38,7 +38,7 @@ Napi::Value Workbook::GetThemeFonts(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   const fm_status_t rc = fm_workbook_get_theme_fonts(handle_, &fonts);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -62,7 +62,7 @@ Napi::Value Workbook::SetThemeColors(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   for (uint32_t i = 0; i < 12; ++i) {
     const std::string key = std::to_string(i);
     colors.argb[i] = reader.U32(arr, key.c_str(), 0U);
@@ -91,7 +91,7 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   fonts.major_latin = major_latin.c_str();
   fonts.major_east_asian = major_ea.c_str();
   fonts.minor_latin = minor_latin.c_str();
@@ -108,8 +108,7 @@ Napi::Value Workbook::GetThemeScriptFont(const Napi::CallbackInfo& info) {
   const std::string script = ArgString(info, 1);
   const char* typeface = nullptr;
   int32_t present = 0;
-  const fm_status_t rc =
-      fm_workbook_get_theme_script_font(handle_, major ? 1 : 0, script.c_str(), &present, &typeface);
+  const fm_status_t rc = fm_workbook_get_theme_script_font(handle_, major ? 1 : 0, script.c_str(), &present, &typeface);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
   }
@@ -172,7 +171,7 @@ Napi::Value Workbook::GetEffectiveStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_effective_style_t es{};
+  fm_effective_style_t es = FM_STRUCT_INIT(fm_effective_style_t);
   const fm_status_t rc = fm_sheet_get_effective_style(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &es);
   if (rc != 0) {
     return ThrowStatus(env, rc);

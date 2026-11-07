@@ -14,10 +14,10 @@ namespace formulon_node {
 
 /// `evaluateFormula(formula)`: convenience that mirrors the embind variant.
 /// Evaluates `formula` read-only against a fresh single-sheet workbook,
-/// anchored at `Sheet1!A1`, and returns the `Value`. Nothing is
-/// written and no recalc runs, so an anchor-referencing formula such as
-/// `=A1` reads the (blank) anchor rather than becoming a self-reference.
-/// An array result is reduced to its top-left element.
+/// anchored at `Sheet1!A1`, and returns the whole result as
+/// `{ rows, cols, cells }` (a scalar is 1 x 1). Nothing is written and no
+/// recalc runs, so an anchor-referencing formula such as `=A1` reads the
+/// (blank) anchor rather than becoming a self-reference.
 Napi::Value EvaluateFormula(const Napi::CallbackInfo& info);
 
 /// Returns the engine version string (`fm_get_version`).

@@ -65,14 +65,14 @@ Napi::Value TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
 
 Napi::Object FillToJs(Napi::Env env, const fm_chart_fill_t& f) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("color", OptionalNumber(env, f.has_color, f.color));
+  o.Set("color", ColorSpecOrNull(env, f.color));
   o.Set("transparency", NumberOrNull(env, f.transparency_pct));
   return o;
 }
 
 Napi::Object LineToJs(Napi::Env env, const fm_chart_line_t& l) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("color", OptionalNumber(env, l.has_color, l.color));
+  o.Set("color", ColorSpecOrNull(env, l.color));
   o.Set("transparency", NumberOrNull(env, l.transparency_pct));
   o.Set("widthPt", NumberOrNull(env, l.width_pt));
   o.Set("dash", OptionalNumber(env, l.has_dash, l.dash));
@@ -100,7 +100,7 @@ Napi::Object LabelsToJs(Napi::Env env, const fm_chart_labels_t& l) {
   o.Set("position", OptionalNumber(env, l.has_position, l.position));
   o.Set("numberFormat", StringOrNull(env, l.number_format));
   o.Set("sourceLinked", JsBool(env, l.source_linked));
-  o.Set("fontColor", OptionalNumber(env, l.has_font_color, l.font_color));
+  o.Set("fontColor", ColorSpecOrNull(env, l.font_color));
   o.Set("fontSizePt", NumberOrNull(env, l.font_size_pt));
   o.Set("deleted", JsBool(env, l.deleted));
   return o;
@@ -113,7 +113,7 @@ Napi::Object DataSourceToJs(Napi::Env env, const fm_chart_t* chart, size_t plot,
   o.Set("formula", JsString(env, src.formula));
   Napi::Array literal = Napi::Array::New(env);
   for (size_t i = 0; i < src.literal_count && rc == 0; ++i) {
-    fm_chart_literal_t lit{};
+    fm_chart_literal_t lit = FM_STRUCT_INIT(fm_chart_literal_t);
     if (!Step(rc, fm_chart_get_series_literal_at(chart, plot, series, role, i, &lit))) {
       break;
     }
@@ -125,7 +125,7 @@ Napi::Object DataSourceToJs(Napi::Env env, const fm_chart_t* chart, size_t plot,
 
 Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, size_t index, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_series_t s{};
+  fm_chart_series_t s = FM_STRUCT_INIT(fm_chart_series_t);
   if (!Step(rc, fm_chart_get_series_at(chart, plot, index, &s))) {
     return o;
   }
@@ -144,7 +144,7 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
   o.Set("smooth", TriToJs(env, s.smooth));
   Napi::Array points = Napi::Array::New(env);
   for (size_t i = 0; i < s.point_count && rc == 0; ++i) {
-    fm_chart_point_t p{};
+    fm_chart_point_t p = FM_STRUCT_INIT(fm_chart_point_t);
     if (!Step(rc, fm_chart_get_series_point_at(chart, plot, index, i, &p))) {
       break;
     }
@@ -162,7 +162,7 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
 
 Napi::Object PlotToJs(Napi::Env env, const fm_chart_t* chart, size_t index, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_plot_t p{};
+  fm_chart_plot_t p = FM_STRUCT_INIT(fm_chart_plot_t);
   if (!Step(rc, fm_chart_get_plot_at(chart, index, &p))) {
     return o;
   }
@@ -218,7 +218,7 @@ Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_t& a) {
 
 Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_info_t info{};
+  fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
   if (!Step(rc, fm_chart_get_info(chart, &info))) {
     return o;
   }
@@ -261,7 +261,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   o.Set("plots", plots);
   Napi::Array axes = Napi::Array::New(env);
   for (size_t i = 0; i < info.axis_count && rc == 0; ++i) {
-    fm_chart_axis_t axis{};
+    fm_chart_axis_t axis = FM_STRUCT_INIT(fm_chart_axis_t);
     if (Step(rc, fm_chart_get_axis_at(chart, i, &axis))) {
       axes.Set(static_cast<uint32_t>(i), AxisToJs(env, axis));
     }
@@ -309,8 +309,8 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   constexpr int32_t kRoleCount = FM_CHART_ROLE_SIZE + 1;
   static_assert(sizeof(kRoleKeys) / sizeof(kRoleKeys[0]) == kRoleCount, "role keys must cover every fm_chart_role_t");
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_data_series_t s{};
-  fm_chart_data_points_t pts{};
+  fm_chart_data_series_t s = FM_STRUCT_INIT(fm_chart_data_series_t);
+  fm_chart_data_points_t pts = FM_STRUCT_INIT(fm_chart_data_points_t);
   if (!Step(rc, fm_chart_data_get_series_at(data, index, &s)) ||
       !Step(rc, fm_chart_data_get_series_points(data, index, &pts))) {
     return o;
@@ -342,7 +342,7 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
 
 Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_data_info_t info{};
+  fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
   if (!Step(rc, fm_chart_data_get_info(data, &info))) {
     return o;
   }
@@ -393,7 +393,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
 
   Napi::Array axis_titles = Napi::Array::New(env);
   for (size_t i = 0; i < info.axis_title_count && rc == 0; ++i) {
-    fm_chart_axis_title_text_t t{};
+    fm_chart_axis_title_text_t t = FM_STRUCT_INIT(fm_chart_axis_title_text_t);
     if (Step(rc, fm_chart_data_get_axis_title_at(data, i, &t))) {
       Napi::Object item = Napi::Object::New(env);
       item.Set("axisId", JsNumber(env, t.axis_id));
@@ -404,7 +404,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   o.Set("axisTitleTexts", axis_titles);
   Napi::Array unresolved = Napi::Array::New(env);
   for (size_t i = 0; i < info.unresolved_count && rc == 0; ++i) {
-    fm_chart_unresolved_t u{};
+    fm_chart_unresolved_t u = FM_STRUCT_INIT(fm_chart_unresolved_t);
     if (Step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       Napi::Object item = Napi::Object::New(env);
       item.Set("seriesIndex", JsNumber(env, u.series_index));
@@ -469,7 +469,7 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string source;
   const bool has_source = reader.String(spec, "source", &source);
-  fm_chart_preview_overrides_t overrides{};
+  fm_chart_preview_overrides_t overrides = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   overrides.source = has_source ? source.c_str() : nullptr;
   const auto set = [&](const char* key, int32_t& op, int32_t& out, bool is_bool) {
     const Field f = Probe(reader, spec, key);

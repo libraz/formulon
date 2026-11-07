@@ -12,15 +12,6 @@
 namespace formulon_node {
 namespace {
 
-fm_cf_color_t PullCfColor(CheckedSpecReader& reader, const Napi::Object& spec) {
-  fm_cf_color_t out{};
-  out.r = reader.U8(spec, "r", 0U);
-  out.g = reader.U8(spec, "g", 0U);
-  out.b = reader.U8(spec, "b", 0U);
-  out.a = reader.U8(spec, "a", 255U);
-  return out;
-}
-
 fm_cfvo_t PullCfvo(CheckedSpecReader& reader, const Napi::Object& spec, formulon::c_api::BorrowedStringArena* strings) {
   fm_cfvo_t out{};
   out.type = reader.U8(spec, "type", 0U);
@@ -84,7 +75,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
     Napi::Array matches = Napi::Array::New(env, match_count);
     std::size_t mj = 0;
     for (std::size_t j = 0; j < match_count; ++j) {
-      fm_cf_match_t m{};
+      fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
       if (fm_cf_results_get_match_at(results, i, j, &m) != 0) {
         continue;
       }
@@ -157,7 +148,7 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     Napi::Array colors = Napi::Array::New(env, rule.color_scale_count);
     for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
       thresholds.Set(j, CfvoToJs(env, rule.color_scale_thresholds[j]));
-      colors.Set(j, TranslateCfColor(env, rule.color_scale_colors[j]));
+      colors.Set(j, ColorSpecToJs(env, rule.color_scale_colors[j]));
     }
     color_scale.Set("thresholds", thresholds);
     color_scale.Set("colors", colors);
@@ -167,7 +158,7 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     Napi::Object data_bar = Napi::Object::New(env);
     data_bar.Set("min", CfvoToJs(env, rule.data_bar_min));
     data_bar.Set("max", CfvoToJs(env, rule.data_bar_max));
-    data_bar.Set("fill", TranslateCfColor(env, rule.data_bar_fill));
+    data_bar.Set("fill", ColorSpecToJs(env, rule.data_bar_fill));
     data_bar.Set("showValue", Napi::Boolean::New(env, rule.data_bar_show_value != 0));
     data_bar.Set("minLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_min_length_pct)));
     data_bar.Set("maxLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_max_length_pct)));
@@ -182,16 +173,16 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
       data_bar.Set("axisPosition", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_axis_position)));
     }
     if (rule.data_bar_negative_fill_engaged != 0) {
-      data_bar.Set("negativeFill", TranslateCfColor(env, rule.data_bar_negative_fill));
+      data_bar.Set("negativeFill", ColorSpecToJs(env, rule.data_bar_negative_fill));
     }
     if (rule.data_bar_border_engaged != 0) {
-      data_bar.Set("border", TranslateCfColor(env, rule.data_bar_border));
+      data_bar.Set("border", ColorSpecToJs(env, rule.data_bar_border));
     }
     if (rule.data_bar_negative_border_engaged != 0) {
-      data_bar.Set("negativeBorder", TranslateCfColor(env, rule.data_bar_negative_border));
+      data_bar.Set("negativeBorder", ColorSpecToJs(env, rule.data_bar_negative_border));
     }
     if (rule.data_bar_axis_color_engaged != 0) {
-      data_bar.Set("axisColor", TranslateCfColor(env, rule.data_bar_axis_color));
+      data_bar.Set("axisColor", ColorSpecToJs(env, rule.data_bar_axis_color));
     }
     data_bar.Set("direction", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_direction)));
     item.Set("dataBar", data_bar);
@@ -242,7 +233,7 @@ Napi::Value Workbook::GetCfRule(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   const fm_status_t rc = fm_sheet_get_cf_rule(handle_, ArgU32(info, 0), ArgU32(info, 1), &rule);
   return ValueOrThrow(env, rc, rc == 0 ? Napi::Value(CfRuleToJs(env, rule)) : env.Undefined());
 }
@@ -263,7 +254,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   // the earlier strings as the later branches add theirs.
   std::vector<fm_cell_rect_t> ranges_buf;
   std::vector<fm_cfvo_t> color_scale_thresholds;
-  std::vector<fm_cf_color_t> color_scale_colors;
+  std::vector<fm_color_spec_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
@@ -306,7 +297,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   reader.String(v, "formula2", &formula2);
   reader.String(v, "text", &text);
 
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.id = id.empty() ? nullptr : id.c_str();
   rule.type = reader.U8(v, "type", 0U);
   rule.priority = reader.I32(v, "priority", 0);
@@ -380,7 +371,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
           continue;
         }
         if (color.IsObject()) {
-          color_scale_colors.push_back(PullCfColor(reader, color.As<Napi::Object>()));
+          color_scale_colors.push_back(ReadColorSpec(reader, color, "colors"));
         }
       }
     }
@@ -401,7 +392,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     }
     Napi::Object fill;
     if (reader.Object(db, "fill", &fill)) {
-      rule.data_bar_fill = PullCfColor(reader, fill);
+      rule.data_bar_fill = ReadColorSpec(reader, fill, "fill");
     }
     rule.data_bar_show_value = reader.Bool(db, "showValue", true) ? 1 : 0;
     rule.data_bar_min_length_pct = reader.U8(db, "minLengthPct", 10U);
@@ -424,22 +415,22 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     Napi::Object negative_fill;
     if (reader.Object(db, "negativeFill", &negative_fill)) {
       rule.data_bar_negative_fill_engaged = 1;
-      rule.data_bar_negative_fill = PullCfColor(reader, negative_fill);
+      rule.data_bar_negative_fill = ReadColorSpec(reader, negative_fill, "negativeFill");
     }
     Napi::Object border;
     if (reader.Object(db, "border", &border)) {
       rule.data_bar_border_engaged = 1;
-      rule.data_bar_border = PullCfColor(reader, border);
+      rule.data_bar_border = ReadColorSpec(reader, border, "border");
     }
     Napi::Object negative_border;
     if (reader.Object(db, "negativeBorder", &negative_border)) {
       rule.data_bar_negative_border_engaged = 1;
-      rule.data_bar_negative_border = PullCfColor(reader, negative_border);
+      rule.data_bar_negative_border = ReadColorSpec(reader, negative_border, "negativeBorder");
     }
     Napi::Object axis_color;
     if (reader.Object(db, "axisColor", &axis_color)) {
       rule.data_bar_axis_color_engaged = 1;
-      rule.data_bar_axis_color = PullCfColor(reader, axis_color);
+      rule.data_bar_axis_color = ReadColorSpec(reader, axis_color, "axisColor");
     }
     rule.data_bar_direction = reader.U8(db, "direction", 0U);
   }

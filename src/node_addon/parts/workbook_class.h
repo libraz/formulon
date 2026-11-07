@@ -147,9 +147,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// New workbooks default to win-365-en_US. The getter returns one of the
   /// 28 ids {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,
   /// es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}.
-  Napi::Value ExcelProfileId(const Napi::CallbackInfo& info);
-  /// SetExcelProfileId accepts the same 28 ids.
-  Napi::Value SetExcelProfileId(const Napi::CallbackInfo& info);
+  Napi::Value ProfileId(const Napi::CallbackInfo& info);
+  /// SetProfileId accepts the same 28 ids.
+  Napi::Value SetProfileId(const Napi::CallbackInfo& info);
   /// The file name `[0]!Name` is spelled with; see `fm_workbook_get_file_name`.
   Napi::Value FileName(const Napi::CallbackInfo& info);
   Napi::Value SetFileName(const Napi::CallbackInfo& info);
@@ -197,6 +197,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetHeaderFooterXml(const Napi::CallbackInfo& info);
   Napi::Value GetSheetSheetPrXml(const Napi::CallbackInfo& info);
   Napi::Value SetSheetSheetPrXml(const Napi::CallbackInfo& info);
+  /// `getTabColor(sheet)` returns the colour spec or `null`;
+  /// `setTabColor(sheet, spec | null)` sets or clears it.
+  Napi::Value GetSheetTabColor(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetTabColor(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPrintArea(const Napi::CallbackInfo& info);
   Napi::Value SetSheetPrintArea(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPrintTitles(const Napi::CallbackInfo& info);

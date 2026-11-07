@@ -7,7 +7,8 @@ Inputs:
   the ``createFormulon`` entry point included; only its file header comment
   is WASM-specific and is replaced.
 * ``packages/npm-native/dts-delta.d.ts``: the members only the native package
-  has, as a ``Workbook`` interface whose members are appended to the shared one.
+  has, as a ``Workbook`` interface (or, when empty, the ``{}`` type alias a
+  formatter rewrites it to) whose members are appended to the shared one.
 
 Modes:
   (default)  rewrite index.d.ts
@@ -60,9 +61,13 @@ def _block(text: str, open_index: int) -> int:
     raise GenError("unbalanced braces")
 
 
-def _interface_body(text: str, name: str) -> Tuple[int, int]:
-    """Half-open range of the text between the braces of ``export interface <name>``."""
-    match = re.search(rf"^export interface {re.escape(name)}\b[^{{]*\{{", text, re.M)
+def _interface_body(text: str, name: str, *, alias: bool = False) -> Tuple[int, int]:
+    """Half-open range of the text between the braces of ``export interface <name>``, or with ``alias`` also of
+    ``export type <name> = {``."""
+    pattern = rf"^export interface {re.escape(name)}\b[^{{]*\{{"
+    if alias:
+        pattern += rf"|^export type {re.escape(name)}\s*=\s*\{{"
+    match = re.search(pattern, text, re.M)
     if match is None:
         raise GenError(f"interface {name} not found")
     open_index = match.end() - 1
@@ -73,11 +78,12 @@ def generate(wasm_text: str, delta_text: str) -> str:
     # Drop the WASM file header comment; the directives after it stay.
     shared = re.sub(r"\A(?://(?!/)[^\n]*\n)+\n", "", wasm_text)
 
-    start, stop = _interface_body(delta_text, "Workbook")
+    start, stop = _interface_body(delta_text, "Workbook", alias=True)
     delta_members = delta_text[start:stop].strip("\n")
-    wb_start, wb_stop = _interface_body(shared, "Workbook")
-    wb_body = shared[wb_start:wb_stop].rstrip("\n")
-    shared = shared[:wb_start] + wb_body + "\n\n" + delta_members + "\n" + shared[wb_stop:]
+    if delta_members.strip():
+        wb_start, wb_stop = _interface_body(shared, "Workbook")
+        wb_body = shared[wb_start:wb_stop].rstrip("\n")
+        shared = shared[:wb_start] + wb_body + "\n\n" + delta_members + "\n" + shared[wb_stop:]
 
     # The usage example imports the package being declared.
     example = "import createFormulon from '@libraz/formulon';"

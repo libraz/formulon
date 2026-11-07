@@ -284,27 +284,8 @@ Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
 
-  // Build a rows x cols nested array of Value objects, reading each cell by
-  // its row-major index (r * cols + c).
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  fm_value_array_get_dimensions(array, &rows, &cols);
-  Napi::Array cells = Napi::Array::New(env, rows);
-  for (uint32_t r = 0; r < rows; ++r) {
-    Napi::Array js_row = Napi::Array::New(env, cols);
-    for (uint32_t c = 0; c < cols; ++c) {
-      fm_value_t v{};
-      fm_value_array_get_value_at(array, static_cast<std::size_t>(r) * cols + c, &v);
-      js_row.Set(c, ValueToJs(env, v));
-    }
-    cells.Set(r, js_row);
-  }
+  const Napi::Object out = ValueArrayToJs(env, array);
   fm_value_array_destroy(array);
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("rows", Napi::Number::New(env, rows));
-  out.Set("cols", Napi::Number::New(env, cols));
-  out.Set("cells", cells);
   return out;
 }
 
@@ -460,7 +441,7 @@ Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const CellAddressArgs address = ReadCellAddress(info);
-  fm_validation_outcome_t outcome{};
+  fm_validation_outcome_t outcome = FM_STRUCT_INIT(fm_validation_outcome_t);
   const fm_status_t rc = fm_sheet_validate_value(handle_, address.sheet, address.row, address.col, &value, &outcome);
   if (rc != 0) {
     return ThrowStatus(env, rc);

@@ -54,7 +54,7 @@ emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t ro
   std::size_t count = 0;
   fm_status_t rc = fm_cell_nodes_get_node_count(nodes, &count);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_cell_node_t n{};
+    fm_cell_node_t n = FM_STRUCT_INIT(fm_cell_node_t);
     rc = fm_cell_nodes_get_node_at(nodes, i, &n);
     if (rc != 0) {
       break;
@@ -84,7 +84,7 @@ emscripten::val JsWorkbook::dependents(uint32_t sheet, uint32_t row, uint32_t co
 
 emscripten::val function_metadata(const std::string& name) {
   int32_t present = 0;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   const fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
   if (rc != 0 || present == 0) {
     return optional_or_null(rc, present, emscripten::val::null());
@@ -169,7 +169,7 @@ fm_status_t collect_locale_error_names(const std::string& profile_id, emscripten
 }  // namespace
 
 emscripten::val locale_facts(const std::string& profile_id) {
-  fm_locale_facts_t f{};
+  fm_locale_facts_t f = FM_STRUCT_INIT(fm_locale_facts_t);
   if (!succeeded(fm_get_locale_facts(profile_id.c_str(), &f))) {
     return emscripten::val::undefined();
   }
@@ -207,7 +207,7 @@ emscripten::val list_locale_error_names(const std::string& profile_id) {
 // ---- Spill info --------------------------------------------------------
 
 emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const {
-  fm_spill_info_t info{};
+  fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_spill_info(handle_, sheet, row, col, &info)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -222,7 +222,7 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
 // ---- Legacy array (CSE) formulas ---------------------------------------
 
 emscripten::val JsWorkbook::getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
-  fm_array_formula_t info{};
+  fm_array_formula_t info = FM_STRUCT_INIT(fm_array_formula_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_array_formula(handle_, sheet, row, col, &info)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -251,7 +251,7 @@ void JsWorkbook::setArrayFormula(uint32_t sheet, emscripten::val range, const st
 
 double compare_text(const std::string& a, const std::string& b, int32_t strength, const std::string& profile_id) {
   int32_t order = 0;
-  if (!succeeded(fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order))) {
+  if (!succeeded(fm_compare_text(a.c_str(), b.c_str(), strength, profile_id.c_str(), &order))) {
     return 0.0;
   }
   return order;
@@ -321,7 +321,7 @@ emscripten::val collation_classes(emscripten::val values, int32_t strength, cons
   }
   std::vector<uint32_t> ids(n);
   uint32_t class_count = 0;
-  if (!succeeded(fm_get_collation_classes(items.data(), n, profile_id.c_str(), strength, n == 0 ? nullptr : ids.data(),
+  if (!succeeded(fm_get_collation_classes(items.data(), n, strength, profile_id.c_str(), n == 0 ? nullptr : ids.data(),
                                           &class_count))) {
     return emscripten::val::undefined();
   }

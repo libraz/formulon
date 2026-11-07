@@ -65,6 +65,10 @@ void ReadU32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key,
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.U32(v, key, 0U); });
 }
 
+void ReadColorOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, fm_color_spec_t& out) {
+  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return ReadColorSpec(r, v, key); });
+}
+
 void ReadI32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, int32_t& out) {
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.I32(v, key, 0); });
 }
@@ -141,7 +145,7 @@ void ReadFillPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_fil
   if (!ReadChild(r, owner, "fill", &o)) {
     return;
   }
-  ReadU32Op(r, o, "color", out.color_op, out.color);
+  ReadColorOp(r, o, "color", out.color_op, out.color);
   ReadDoubleOp(r, o, "transparency", out.transparency_op, out.transparency_pct);
 }
 
@@ -150,7 +154,7 @@ void ReadLinePatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_lin
   if (!ReadChild(r, owner, "line", &o)) {
     return;
   }
-  ReadU32Op(r, o, "color", out.color_op, out.color);
+  ReadColorOp(r, o, "color", out.color_op, out.color);
   ReadDoubleOp(r, o, "transparency", out.transparency_op, out.transparency_pct);
   ReadDoubleOp(r, o, "widthPt", out.width_op, out.width_pt);
   ReadI32Op(r, o, "dash", out.dash_op, out.dash);
@@ -186,7 +190,7 @@ void ReadLabelsPatch(CheckedSpecReader& r, const Napi::Object& owner, Arena& are
   ReadStringOp(r, o, "separator", arena, out.separator_op, out.separator);
   ReadI32Op(r, o, "position", out.position_op, out.position);
   ReadStringOp(r, o, "numberFormat", arena, out.number_format_op, out.number_format);
-  ReadU32Op(r, o, "fontColor", out.font_color_op, out.font_color);
+  ReadColorOp(r, o, "fontColor", out.font_color_op, out.font_color);
   ReadDoubleOp(r, o, "fontSizePt", out.font_size_op, out.font_size_pt);
 }
 
@@ -269,7 +273,7 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
       has_title = true;
     }
   }
-  fm_chart_insert_t opts{};
+  fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
   opts.kind = reader.I32(spec, "kind", FM_CHART_INSERT_COLUMN);
   opts.grouping = reader.I32(spec, "grouping", FM_CHART_GROUPING_CLUSTERED);
   opts.source = source.c_str();
@@ -338,7 +342,7 @@ Napi::Value Workbook::SetChartLegend(const Napi::CallbackInfo& info) {
   if (!ReadIndexList(reader, info, 4, "hiddenSeries", &hidden)) {
     return env.Undefined();
   }
-  fm_chart_legend_patch_t legend{};
+  fm_chart_legend_patch_t legend = FM_STRUCT_INIT(fm_chart_legend_patch_t);
   legend.position = ArgI32(info, 2);
   legend.overlay = ArgBool(info, 3) ? 1 : 0;
   if (has_hidden) {
@@ -361,7 +365,7 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   Arena arena;
-  fm_chart_axis_patch_t patch{};
+  fm_chart_axis_patch_t patch = FM_STRUCT_INIT(fm_chart_axis_patch_t);
   ReadBoolOp(reader, spec, "visible", patch.visible_op, patch.visible);
   const Field title = Probe(reader, spec, "title");
   patch.title_op = title.op;
@@ -395,7 +399,7 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
-  fm_chart_display_patch_t patch{};
+  fm_chart_display_patch_t patch = FM_STRUCT_INIT(fm_chart_display_patch_t);
   ReadI32Op(reader, spec, "blanksAs", patch.blanks_as_op, patch.blanks_as);
   ReadBoolOp(reader, spec, "plotVisibleOnly", patch.plot_vis_only_op, patch.plot_vis_only);
   ReadBoolOp(reader, spec, "naAsBlank", patch.na_as_blank_op, patch.na_as_blank);
@@ -417,7 +421,7 @@ Napi::Value Workbook::SetChartSeries(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   Arena arena;
-  fm_chart_series_patch_t patch{};
+  fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   ReadSeriesPatch(reader, spec, arena, patch);
   if (!reader.ok()) {
     return env.Undefined();
@@ -439,7 +443,7 @@ Napi::Value Workbook::SetChartPoint(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
-  fm_chart_point_patch_t patch{};
+  fm_chart_point_patch_t patch = FM_STRUCT_INIT(fm_chart_point_patch_t);
   ReadPointPatch(reader, spec, patch);
   if (!reader.ok()) {
     return env.Undefined();
@@ -460,7 +464,7 @@ Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
-  fm_chart_plot_patch_t patch{};
+  fm_chart_plot_patch_t patch = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   ReadU32Op(reader, spec, "gapWidth", patch.gap_width_op, patch.gap_width);
   ReadI32Op(reader, spec, "overlap", patch.overlap_op, patch.overlap);
   ReadU32Op(reader, spec, "firstSliceAngle", patch.first_slice_angle_op, patch.first_slice_angle);
@@ -503,7 +507,7 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   Arena arena;
-  fm_chart_series_patch_t patch{};
+  fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   ReadSeriesPatch(reader, spec, arena, patch);
   if (!reader.ok()) {
     return env.Undefined();

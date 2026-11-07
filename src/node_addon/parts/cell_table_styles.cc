@@ -149,7 +149,7 @@ Napi::Value Workbook::GetTableStyle(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::string name = ArgString(info, 0);
-  fm_table_style_t style{};
+  fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
   int32_t present = 0;
   const fm_status_t rc = fm_workbook_get_table_style(handle_, name.c_str(), &present, &style);
   return OptionalOrNull(env, rc, present,
@@ -194,7 +194,7 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
   for (std::size_t i = 0; i < records.size(); ++i) {
     records[i].type = types[i].c_str();
   }
-  fm_table_style_t style{};
+  fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
   style.name = name.c_str();
   style.pivot = pivot ? 1 : 0;
   style.table = table ? 1 : 0;

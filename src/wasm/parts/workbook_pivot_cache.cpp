@@ -261,7 +261,7 @@ void JsWorkbook::pivotCacheRecordSetError(uint32_t cacheId, uint32_t recordIndex
 }
 
 emscripten::val JsWorkbook::pivotCacheGetOptions(uint32_t cacheId) const {
-  fm_pivot_cache_options_t opt{};
+  fm_pivot_cache_options_t opt = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_options(handle_, cacheId, &opt)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -282,7 +282,7 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
     record_type_error("setPivotCacheOptions: `options` must be an object");
     return;
   }
-  fm_pivot_cache_options_t opt{};
+  fm_pivot_cache_options_t opt = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   if (!succeeded(fm_workbook_get_pivot_cache_options(handle_, cacheId, &opt))) {
     return;
   }
@@ -364,7 +364,7 @@ double JsWorkbook::pivotCacheCalculatedItemCount(uint32_t cacheId) const {
 }
 
 emscripten::val JsWorkbook::pivotCacheCalculatedItemAt(uint32_t cacheId, uint32_t idx) const {
-  fm_pivot_calculated_item_t item{};
+  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_calculated_item(handle_, cacheId, idx, &item)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();

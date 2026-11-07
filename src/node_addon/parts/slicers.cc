@@ -19,7 +19,7 @@ struct SlicerText {
 
 // Reads the fields `spec` carries; the `fields` mask names exactly those.
 fm_slicer_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
-  fm_slicer_t s{};
+  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
   bool present = false;
   if (reader.String(spec, "name", &store.name)) {
     s.fields |= FM_SLICER_FIELD_NAME;
@@ -104,7 +104,7 @@ Napi::Value Workbook::GetSlicer(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_slicer_t s{};
+  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &s);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(SlicerToJs(env, s)) : env.Null());

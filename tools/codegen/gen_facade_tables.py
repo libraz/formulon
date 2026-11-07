@@ -33,7 +33,8 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   ``packages/python/formulon/_inputs.py``: the fields of the input records in
   src/wasm/formulon.d.ts typed ``CellRect``, ``SheetRect`` or ``CellAddress``
   (``[]`` for an array), or typed by another input record that has such a
-  field, less the ledger's ``a1_exempt`` fields. Python keys and nested record
+  field, less the ledger's ``a1_exempt`` fields. A discriminated input (a
+  union type alias of interfaces) has the fields of every alternative. Python keys and nested record
   names are the ledger's Python names, fields snake_case. Both files follow the
   ``sheet.py`` rule for an absent or empty region.
 * ``packages/python/formulon/_handle_tables.py``: the same tables for the handle
@@ -69,7 +70,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import facade_scope  # noqa: E402
 
 from tools.dev.binding_drift.api_conventions_arguments import _js_fields  # noqa: E402
-from tools.dev.binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
+from tools.dev.binding_drift.api_conventions_bindings import JsSurface, _top_union  # noqa: E402
 from tools.dev.binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
 
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
@@ -406,6 +407,24 @@ def _range_type(text: str, known: Sequence[str]) -> Optional[str]:
     return (base + "[]" if array else base) if base in known else None
 
 
+def _record_fields(surface: JsSurface, name: str) -> Dict[str, str]:
+    """Field name -> type of the input record `name`: an interface, or a union type alias of interfaces (a
+    discriminated input, alternatives module-private or exported), whose fields are every alternative's."""
+    pool = {**surface.private, **surface.decls}
+    decl = pool.get(name)
+    if decl is None or decl.kind != "type":
+        return _js_fields(pool, surface.raw, name) or {}
+    alternatives = [_js_fields(pool, surface.raw, alt) for alt in _top_union(decl.text)]
+    if len(alternatives) < 2 or any(alt is None for alt in alternatives):
+        return {}
+    types: Dict[str, List[str]] = {}
+    for alt in alternatives:
+        for field, ftype in alt.items():
+            if ftype not in types.setdefault(field, []):
+                types[field].append(ftype)
+    return {field: " | ".join(kinds) for field, kinds in types.items()}
+
+
 def _snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
@@ -425,7 +444,7 @@ def record_range_fields(
             continue
         if entry.get("kind") == "record" and entry.get("role") in INPUT_ROLES or "a1_exempt" in entry:
             exempt[entry["js"]] = set((entry.get("a1_exempt") or {}).get("fields") or [])
-    fields = {name: _js_fields(surface.decls, surface.raw, name) or {} for name in exempt}
+    fields = {name: _record_fields(surface, name) for name in exempt}
     out: Dict[str, Dict[str, str]] = {}
     while True:
         known = (*RANGE_TYPES, *out)

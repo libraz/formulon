@@ -90,7 +90,7 @@ Napi::Value ProbeImage(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "getImageInfo expects (bytes:Uint8Array)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  fm_image_info_t img{};
+  fm_image_info_t img = FM_STRUCT_INIT(fm_image_info_t);
   const fm_status_t rc = fm_get_image_info(data, len, &img);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -121,7 +121,7 @@ Napi::Value Workbook::GetDrawingObject(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_drawing_object_t o{};
+  fm_drawing_object_t o = FM_STRUCT_INIT(fm_drawing_object_t);
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_drawing_object(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &o);
   return OptionalOrNull(env, rc, present,
@@ -136,7 +136,7 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   int32_t present = 0;
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  fm_image_info_t img{};
+  fm_image_info_t img = FM_STRUCT_INIT(fm_image_info_t);
   const fm_status_t rc = fm_sheet_get_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &bytes, &len, &img);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());

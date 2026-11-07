@@ -60,7 +60,7 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
   }
   emscripten::val items = emscripten::val::array();
   for (size_t i = 0; i < count; ++i) {
-    fm_page_break_t brk{};
+    fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
     const fm_status_t rc =
         rows ? fm_sheet_get_row_break_at(handle, sheet, i, &brk) : fm_sheet_get_column_break_at(handle, sheet, i, &brk);
     if (!succeeded(rc)) {
@@ -120,6 +120,33 @@ void JsWorkbook::setSheetSheetPrXml(uint32_t sheet, const std::string& xml) {
   return xml_set(handle_, sheet, xml, &fm_sheet_set_sheet_pr_xml);
 }
 
+// `null` when the sheet has no `<tabColor>` (the C ABI reports kind None).
+emscripten::val JsWorkbook::getSheetTabColor(uint32_t sheet) const {
+  fm_color_spec_t color{};
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_tab_color(handle_, sheet, &color) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  return js_color_spec_or_null(color);
+}
+
+// `null` clears the tab colour; an object is read as an `fm_color_spec_t`.
+void JsWorkbook::setSheetTabColor(uint32_t sheet, emscripten::val color) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (color.isNull()) {
+    succeeded(fm_sheet_set_tab_color(handle_, sheet, nullptr));
+    return;
+  }
+  JsNarrowNumericReader reader("setTabColor");
+  const fm_color_spec_t spec = js_pull_color_spec_value(color, "color", &reader);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_set_tab_color(handle_, sheet, &spec));
+}
+
 // ---- Print area / titles -----------------------------------------------
 
 emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
@@ -146,7 +173,7 @@ void JsWorkbook::setSheetPrintArea(uint32_t sheet, emscripten::val ranges) {
 }
 
 emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_print_titles(handle_, sheet, &titles) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -166,7 +193,7 @@ void JsWorkbook::setSheetPrintTitles(uint32_t sheet, emscripten::val titles) {
   if (!reader.require_object(titles, "titles")) {
     return;
   }
-  fm_print_titles_t in{};
+  fm_print_titles_t in = FM_STRUCT_INIT(fm_print_titles_t);
   const emscripten::val rows = reader.value(titles, "rows", "rows");
   if (reader.ok() && js_value_present(rows) && reader.require_object(rows, "rows")) {
     in.has_rows = 1;
@@ -224,7 +251,7 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
     return;
   }
   JsNarrowNumericReader reader("setPageSetup");
-  fm_page_setup_t out{};
+  fm_page_setup_t out = FM_STRUCT_INIT(fm_page_setup_t);
   const emscripten::val orientation = reader.value(setup, "orientation", "pageSetup.orientation");
   out.orientation_engaged = js_value_present(orientation) ? 1 : 0;
   out.orientation = reader.u32_value(orientation, 0U, "pageSetup.orientation");
@@ -255,7 +282,7 @@ void JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
     return;
   }
   JsNarrowNumericReader reader("setPageMargins");
-  fm_page_margins_t out{};
+  fm_page_margins_t out = FM_STRUCT_INIT(fm_page_margins_t);
   const emscripten::val left = reader.value(margins, "left", "pageMargins.left");
   out.left_engaged = js_value_present(left) ? 1 : 0;
   out.left = reader.number_value(left, 0.0, "pageMargins.left");
@@ -286,7 +313,7 @@ void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
     return;
   }
   JsNarrowNumericReader reader("setPrintOptions");
-  fm_print_options_t out{};
+  fm_print_options_t out = FM_STRUCT_INIT(fm_print_options_t);
   const emscripten::val grid_lines = reader.value(options, "gridLines", "printOptions.gridLines");
   out.grid_lines_engaged = js_value_present(grid_lines) ? 1 : 0;
   out.grid_lines = reader.boolean_value(grid_lines, false) ? 1 : 0;
@@ -320,7 +347,7 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   std::string first_header;
   std::string first_footer;
   JsNarrowNumericReader reader("setHeaderFooter");
-  fm_header_footer_t out{};
+  fm_header_footer_t out = FM_STRUCT_INIT(fm_header_footer_t);
   const emscripten::val odd_header_value = reader.value(headerFooter, "oddHeader", "headerFooter.oddHeader");
   out.odd_header = reader.optional_string_value(odd_header_value, odd_header, "headerFooter.oddHeader");
   const emscripten::val odd_footer_value = reader.value(headerFooter, "oddFooter", "headerFooter.oddFooter");
@@ -354,7 +381,7 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
 }
 
 emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
-  fm_page_setup_t setup{};
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_page_setup(handle_, sheet, &setup) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -377,7 +404,7 @@ emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getSheetPageMargins(uint32_t sheet) const {
-  fm_page_margins_t margins{};
+  fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_page_margins(handle_, sheet, &margins) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -398,7 +425,7 @@ emscripten::val JsWorkbook::getSheetPageMargins(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getSheetPrintOptions(uint32_t sheet) const {
-  fm_print_options_t options{};
+  fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_print_options(handle_, sheet, &options) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -415,7 +442,7 @@ emscripten::val JsWorkbook::getSheetPrintOptions(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getSheetHeaderFooter(uint32_t sheet) const {
-  fm_header_footer_t hf{};
+  fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_header_footer(handle_, sheet, &hf) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }

@@ -69,7 +69,7 @@ fm_status_t count_table_styles(const fm_workbook_t* handle, size_t, size_t* out)
 }
 
 fm_status_t table_style_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
-  fm_table_style_t style{};
+  fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
   const fm_status_t rc = fm_workbook_get_table_style_at(handle, index, &style);
   if (rc == 0) {
     *out = table_style_to_val(style);
@@ -128,7 +128,7 @@ emscripten::val JsWorkbook::listTableStyles() const {
 }
 
 emscripten::val JsWorkbook::getTableStyle(const std::string& name) const {
-  fm_table_style_t style{};
+  fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_workbook_get_table_style(handle_, name.c_str(), &present, &style) : kBindingInvalidHandle;
@@ -175,7 +175,7 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
   for (std::size_t i = 0; i < records.size(); ++i) {
     records[i].type = types[i].c_str();
   }
-  fm_table_style_t record{};
+  fm_table_style_t record = FM_STRUCT_INIT(fm_table_style_t);
   record.name = name.c_str();
   record.pivot = pivot ? 1 : 0;
   record.table = table ? 1 : 0;

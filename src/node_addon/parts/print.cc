@@ -119,6 +119,33 @@ Napi::Value Workbook::SetSheetSheetPrXml(const Napi::CallbackInfo& info) {
   return SheetStringSetter(info, &fm_sheet_set_sheet_pr_xml);
 }
 
+// `null` when the sheet has no `<tabColor>` (the C ABI reports kind None).
+Napi::Value Workbook::GetSheetTabColor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  fm_color_spec_t color{};
+  const fm_status_t rc = fm_sheet_get_tab_color(handle_, ArgU32(info, 0), &color);
+  return ValueOrThrow(env, rc, ColorSpecOrNull(env, color));
+}
+
+// `null` clears the tab colour; an object is read as an `fm_color_spec_t`.
+Napi::Value Workbook::SetSheetTabColor(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    if (info[1].IsNull()) {
+      return fm_sheet_set_tab_color(handle, sheet, nullptr);
+    }
+    CheckedSpecReader reader(info.Env());
+    const fm_color_spec_t color = ReadColorSpec(reader, info[1], "color");
+    if (!reader.ok()) {
+      return fm_status_t{0};
+    }
+    return fm_sheet_set_tab_color(handle, sheet, &color);
+  });
+}
+
 Napi::Value Workbook::GetSheetPrintArea(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -156,7 +183,7 @@ Napi::Value Workbook::GetSheetPrintTitles(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   const fm_status_t rc = fm_sheet_get_print_titles(handle_, ArgU32(info, 0), &titles);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -179,7 +206,7 @@ Napi::Value Workbook::SetSheetPrintTitles(const Napi::CallbackInfo& info) {
   if (!reader.Object(info[1], "titles", &titles)) {
     return env.Undefined();
   }
-  fm_print_titles_t in{};
+  fm_print_titles_t in = FM_STRUCT_INIT(fm_print_titles_t);
   Napi::Object rows;
   if (reader.Object(titles, "rows", &rows)) {
     in.has_rows = 1;
@@ -236,7 +263,7 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
     return ThrowStatus(env, count_rc);
   }
   for (std::size_t i = 0; i < count; ++i) {
-    fm_page_break_t brk{};
+    fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
     const fm_status_t rc = rows ? fm_sheet_get_row_break_at(handle_, sheet, i, &brk)
                                 : fm_sheet_get_column_break_at(handle_, sheet, i, &brk);
     if (rc != 0) {
@@ -261,7 +288,7 @@ Napi::Value Workbook::GetSheetColBreaks(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
-  fm_page_setup_t out{};
+  fm_page_setup_t out = FM_STRUCT_INIT(fm_page_setup_t);
   return InvokeSheetSpec(
       info, "setPageSetup expects (sheet:number, setup:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
@@ -279,7 +306,7 @@ Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetPageMargins(const Napi::CallbackInfo& info) {
-  fm_page_margins_t out{};
+  fm_page_margins_t out = FM_STRUCT_INIT(fm_page_margins_t);
   return InvokeSheetSpec(
       info, "setPageMargins expects (sheet:number, margins:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
@@ -294,7 +321,7 @@ Napi::Value Workbook::SetSheetPageMargins(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetPrintOptions(const Napi::CallbackInfo& info) {
-  fm_print_options_t out{};
+  fm_print_options_t out = FM_STRUCT_INIT(fm_print_options_t);
   return InvokeSheetSpec(
       info, "setPrintOptions expects (sheet:number, options:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
@@ -316,7 +343,7 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   std::string even_footer;
   std::string first_header;
   std::string first_footer;
-  fm_header_footer_t out{};
+  fm_header_footer_t out = FM_STRUCT_INIT(fm_header_footer_t);
   return InvokeSheetSpec(
       info, "setHeaderFooter expects (sheet:number, headerFooter:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
@@ -341,7 +368,7 @@ Napi::Value Workbook::GetSheetPageSetup(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_page_setup_t setup{};
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   const fm_status_t rc = fm_sheet_get_page_setup(handle_, ArgU32(info, 0), &setup);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -367,7 +394,7 @@ Napi::Value Workbook::GetSheetPageMargins(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_page_margins_t margins{};
+  fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
   const fm_status_t rc = fm_sheet_get_page_margins(handle_, ArgU32(info, 0), &margins);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -410,12 +437,12 @@ Napi::Object RectToJs(Napi::Env env, const fm_rect_pt_t& r) {
 
 // Sets the pagination detail keys on `result`.
 void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination_t* pagination) {
-  fm_paper_info_t paper{};
-  fm_margins_pt_t margins{};
-  fm_rect_pt_t printable{};
+  fm_paper_info_t paper = FM_STRUCT_INIT(fm_paper_info_t);
+  fm_margins_pt_t margins = FM_STRUCT_INIT(fm_margins_pt_t);
+  fm_rect_pt_t printable = FM_STRUCT_INIT(fm_rect_pt_t);
   double scale = 0.0;
   int32_t page_order = 0;
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   Napi::Array pages = Napi::Array::New(env);
   Napi::Array horizontal_manual = Napi::Array::New(env);
   Napi::Array vertical_manual = Napi::Array::New(env);
@@ -426,7 +453,7 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
   (void)fm_pagination_get_page_order(pagination, &page_order);
   (void)fm_pagination_get_print_titles(pagination, &titles);
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_page_count); ++i) {
-    fm_page_layout_t page{};
+    fm_page_layout_t page = FM_STRUCT_INIT(fm_page_layout_t);
     if (fm_pagination_get_page_at(pagination, i, &page) != 0) {
       continue;
     }
@@ -528,7 +555,7 @@ Napi::Value Workbook::GetSheetPrintOptions(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_print_options_t options{};
+  fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
   const fm_status_t rc = fm_sheet_get_print_options(handle_, ArgU32(info, 0), &options);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -550,7 +577,7 @@ Napi::Value Workbook::GetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_header_footer_t hf{};
+  fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
   const fm_status_t rc = fm_sheet_get_header_footer(handle_, ArgU32(info, 0), &hf);
   if (rc != 0) {
     return ThrowStatus(env, rc);

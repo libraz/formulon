@@ -131,7 +131,7 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
 
 emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t col) const {
   int32_t present = 0;
-  fm_comment_t c{};
+  fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_comment(handle_, sheet, row, col, &present, &c) : kBindingInvalidHandle;
   if (rc != 0 || present == 0) {
@@ -145,7 +145,7 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
 namespace {
 
 fm_status_t comment_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
-  fm_comment_t c{};
+  fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
   const fm_status_t rc = fm_sheet_get_comment_at(wb, sheet, index, &c);
   if (rc != 0) {
     return rc;
@@ -197,7 +197,7 @@ void JsWorkbook::setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, b
 // ---- Protection records ------------------------------------------------
 
 emscripten::val JsWorkbook::getWorkbookProtection() const {
-  fm_workbook_protection_t p{};
+  fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_workbook_protection(handle_, &p) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -224,7 +224,7 @@ void JsWorkbook::setWorkbookProtection(emscripten::val protection) {
     return;
   }
   JsNarrowNumericReader reader("setWorkbookProtection");
-  fm_workbook_protection_t p{};
+  fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
   p.lock_structure = reader.boolean(protection, "lockStructure", false, "protection.lockStructure") ? 1 : 0;
   p.lock_windows = reader.boolean(protection, "lockWindows", false, "protection.lockWindows") ? 1 : 0;
   p.lock_revision = reader.boolean(protection, "lockRevision", false, "protection.lockRevision") ? 1 : 0;
@@ -274,7 +274,7 @@ double JsWorkbook::getProtectedRangeCount(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getProtectedRange(uint32_t sheet, uint32_t protectedRangeIndex) const {
-  fm_protected_range_t r{};
+  fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_protected_range(handle_, sheet, protectedRangeIndex, &r)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -318,7 +318,7 @@ uint32_t JsWorkbook::addProtectedRange(uint32_t sheet, emscripten::val range) {
   }
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
-  fm_protected_range_t r{};
+  fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
   if (!pull_protected_range(range, "addProtectedRange", text, ranges, &r)) {
     return 0U;
   }
@@ -336,7 +336,7 @@ void JsWorkbook::updateProtectedRange(uint32_t sheet, uint32_t index, emscripten
   }
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
-  fm_protected_range_t r{};
+  fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
   const fm_cell_rect_t empty_sentinel{};
   if (!pull_protected_range(range, "updateProtectedRange", text, ranges, &r, true, &empty_sentinel)) {
     return;
@@ -354,7 +354,7 @@ namespace {
 
 fm_status_t add_hyperlink_rect(fm_workbook_t* wb, uint32_t sheet, const fm_cell_rect_t& rect, const std::string& target,
                                const std::string& display, const std::string& tooltip, const std::string& location) {
-  fm_hyperlink_t hl{};
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
   hl.rect = rect;
   hl.target = target.empty() ? nullptr : target.c_str();
   hl.location = location.empty() ? nullptr : location.c_str();
@@ -412,7 +412,7 @@ emscripten::val hyperlink_to_val(const fm_hyperlink_t& h) {
 }
 
 fm_status_t hyperlink_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
-  fm_hyperlink_t h{};
+  fm_hyperlink_t h = FM_STRUCT_INIT(fm_hyperlink_t);
   const fm_status_t rc = fm_sheet_get_hyperlink_at(wb, sheet, index, &h);
   if (rc != 0) {
     return rc;
@@ -428,7 +428,7 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getHyperlink(uint32_t sheet, uint32_t row, uint32_t col) const {
-  fm_hyperlink_t h{};
+  fm_hyperlink_t h = FM_STRUCT_INIT(fm_hyperlink_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_hyperlink(handle_, sheet, row, col, &present, &h) : kBindingInvalidHandle;
@@ -465,7 +465,7 @@ double JsWorkbook::getValidationCount(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getValidation(uint32_t sheet, uint32_t validationIndex) const {
-  fm_data_validation_t v{};
+  fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_validation(handle_, sheet, validationIndex, &v)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -500,7 +500,7 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
     return 0U;
   }
 
-  fm_data_validation_t dv{};
+  fm_data_validation_t dv = FM_STRUCT_INIT(fm_data_validation_t);
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = ranges_buf.size();
   dv.type = reader.u8(v, "type", 0U, "validation.type");
@@ -610,7 +610,7 @@ emscripten::val person_to_val(const fm_person_t& p) {
 }
 
 fm_status_t threaded_comment_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_threaded_comment_t c{};
+  fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
   const fm_status_t rc = fm_sheet_get_threaded_comment_at(handle, sheet, index, &c);
   if (rc == 0) {
     *out = threaded_comment_to_val(c);
@@ -624,7 +624,7 @@ fm_status_t person_count(const fm_workbook_t* handle, size_t, size_t* out) {
 }
 
 fm_status_t person_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
-  fm_person_t p{};
+  fm_person_t p = FM_STRUCT_INIT(fm_person_t);
   const fm_status_t rc = fm_workbook_get_person_at(handle, index, &p);
   if (rc == 0) {
     *out = person_to_val(p);
@@ -665,7 +665,7 @@ void JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
   if (!reader.ok()) {
     return;
   }
-  fm_threaded_comment_t c{};
+  fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
   c.id = id.c_str();
   c.row = reader.u32(comment, "row", 0U, "comment.row");
   c.col = reader.u32(comment, "col", 0U, "comment.col");
@@ -688,7 +688,7 @@ void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, emsc
     return;
   }
   JsNarrowNumericReader reader("updateThreadedComment");
-  fm_threaded_comment_patch_t out{};
+  fm_threaded_comment_patch_t out = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
   out.done = -1;
   std::string text;
   out.text = reader.optional_string(patch, "text", text, "patch.text");
@@ -735,7 +735,11 @@ void JsWorkbook::addPerson(emscripten::val person) {
   if (!reader.ok()) {
     return;
   }
-  const fm_person_t p = {id.c_str(), display_name.c_str(), user_id.c_str(), provider_id.c_str()};
+  fm_person_t p = FM_STRUCT_INIT(fm_person_t);
+  p.id = id.c_str();
+  p.display_name = display_name.c_str();
+  p.user_id = user_id.c_str();
+  p.provider_id = provider_id.c_str();
   succeeded(fm_workbook_add_person(handle_, &p));
 }
 
@@ -744,7 +748,7 @@ void JsWorkbook::removePerson(const std::string& id) {
 }
 
 emscripten::val JsWorkbook::getPerson(const std::string& id) const {
-  fm_person_t p{};
+  fm_person_t p = FM_STRUCT_INIT(fm_person_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_workbook_get_person(handle_, id.c_str(), &present, &p) : kBindingInvalidHandle;
@@ -752,7 +756,7 @@ emscripten::val JsWorkbook::getPerson(const std::string& id) const {
 }
 
 emscripten::val JsWorkbook::getThreadedComment(uint32_t sheet, const std::string& id) const {
-  fm_threaded_comment_t c{};
+  fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
   int32_t present = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_threaded_comment(handle_, sheet, id.c_str(), &present, &c)
                                             : kBindingInvalidHandle;

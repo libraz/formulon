@@ -135,7 +135,6 @@ emscripten::val js_font_record(const fm_font_record_t& f) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", f.name);
   js_set_present_or_null(o, "size", f.has_size, f.size);
-  o.set("colorArgb", f.color_argb);
   js_set_present_or_null(o, "bold", f.has_bold, f.bold != 0);
   js_set_present_or_null(o, "italic", f.has_italic, f.italic != 0);
   js_set_present_or_null(o, "strike", f.has_strike, f.strike != 0);
@@ -183,15 +182,12 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
   flag("shadow", "font.shadow", &out->has_shadow, &out->shadow);
   flag("condense", "font.condense", &out->has_condense, &out->condense);
   flag("extend", "font.extend", &out->has_extend, &out->extend);
-  out->color_argb = reader.u32(record, "colorArgb", 0xFF000000U, "font.colorArgb");
   out->color = js_pull_color_spec(record, "color", &reader);
 }
 
 emscripten::val js_fill_record(const fm_fill_record_t& f) {
   emscripten::val o = emscripten::val::object();
   o.set("pattern", static_cast<std::uint32_t>(f.pattern));
-  o.set("fgArgb", f.fg_argb);
-  o.set("bgArgb", f.bg_argb);
   o.set("fg", js_color_spec(f.fg));
   o.set("bg", js_color_spec(f.bg));
   if (f.has_gradient != 0) {
@@ -206,7 +202,6 @@ emscripten::val js_fill_record(const fm_fill_record_t& f) {
     for (std::size_t i = 0; i < f.gradient_stop_count; ++i) {
       emscripten::val stop = emscripten::val::object();
       stop.set("position", f.gradient_stops[i].position);
-      stop.set("colorArgb", f.gradient_stops[i].color_argb);
       stop.set("color", js_color_spec(f.gradient_stops[i].color));
       stops.set(static_cast<std::uint32_t>(i), stop);
     }
@@ -222,8 +217,6 @@ fm_fill_record_t js_pull_fill_record(const emscripten::val& record, std::vector<
                                      JsNarrowNumericReader& reader) {
   fm_fill_record_t fr{};
   fr.pattern = reader.u8(record, "pattern", 0U, "fill.pattern");
-  fr.fg_argb = reader.u32(record, "fgArgb", 0U, "fill.fgArgb");
-  fr.bg_argb = reader.u32(record, "bgArgb", 0U, "fill.bgArgb");
   fr.fg = js_pull_color_spec(record, "fg", &reader);
   fr.bg = js_pull_color_spec(record, "bg", &reader);
   const emscripten::val gradient = reader.value(record, "gradient", "fill.gradient");
@@ -243,7 +236,6 @@ fm_fill_record_t js_pull_fill_record(const emscripten::val& record, std::vector<
         const emscripten::val item = reader.array_element(list, i, "fill.gradient.stops[]");
         fm_gradient_stop_t stop{};
         stop.position = reader.number(item, "position", 0.0, "fill.gradient.stops[].position");
-        stop.color_argb = reader.u32(item, "colorArgb", 0U, "fill.gradient.stops[].colorArgb");
         stop.color = js_pull_color_spec(item, "color", &reader);
         stops->push_back(stop);
       }

@@ -146,15 +146,24 @@ EM_JS(void, fm_wasm_record_argument_error, (int32_t kind, const char* message), 
 EM_JS_DEPS(fm_wasm_argument_error, "$UTF8ToString");
 
 // Records a failed status for the pre-js method wrapper, which throws it as
-// `FormulonError(code, message, context)` once the native method has
-// returned. Any failure already recorded in the call is kept.
+// `FormulonError(code, message, context, parseError)` once the native method
+// has returned; `parse_error` is NULL unless the call recorded a formula
+// syntax error. Any failure already recorded in the call is kept.
 // clang-format off
-EM_JS(void, fm_wasm_record_status_error, (int32_t code, const char* message, const char* context), {
+EM_JS(void, fm_wasm_record_status_error,
+      (int32_t code, const char* message, const char* context, const fm_parse_error_t* parse_error), {
   var errors = Module[Symbol.for('formulon.argumentErrors')];
   if (!errors || errors.depth === 0 || errors.pending !== undefined) {
     return;
   }
-  errors.pending = { kind: 3, code: code, message: UTF8ToString(message), context: UTF8ToString(context) };
+  var parsed = undefined;
+  if (parse_error) {
+    var base = parse_error >> 2;
+    parsed = { code: HEAP32[base + 1], start: HEAPU32[base + 2], end: HEAPU32[base + 3],
+               line: HEAPU32[base + 4], column: HEAPU32[base + 5] };
+  }
+  errors.pending = { kind: 3, code: code, message: UTF8ToString(message), context: UTF8ToString(context),
+                     parseError: parsed };
 });
 // clang-format on
 
@@ -196,7 +205,7 @@ emscripten::val js_object_or_empty(const emscripten::val& value) {
 }
 
 void record_binding_failure(int32_t code, const char* message) {
-  fm_wasm_record_status_error(code, message != nullptr ? message : "", "");
+  fm_wasm_record_status_error(code, message != nullptr ? message : "", "", nullptr);
 }
 
 void record_type_error(const char* message) {
@@ -218,9 +227,13 @@ void record_failure(fm_status_t rc) {
     record_invalid_handle();
     return;
   }
+  // The parse-error record first, then message and context, before any other `fm_*` call.
+  fm_parse_error_t parse_error = FM_STRUCT_INIT(fm_parse_error_t);
+  const bool has_parse_error = fm_get_last_parse_error(&parse_error) == 0;
   const char* message = fm_get_last_error_message();
   const char* context = fm_get_last_error_context();
-  fm_wasm_record_status_error(rc, message != nullptr ? message : "", context != nullptr ? context : "");
+  fm_wasm_record_status_error(rc, message != nullptr ? message : "", context != nullptr ? context : "",
+                              has_parse_error ? &parse_error : nullptr);
 }
 
 bool succeeded(fm_status_t rc) {
@@ -693,12 +706,24 @@ emscripten::val value_to_val(const fm_value_t& v) {
   return out;
 }
 
-JsCfColor translate_cf_color(const fm_cf_color_t& c) {
-  JsCfColor out;
-  out.r = static_cast<int32_t>(c.r);
-  out.g = static_cast<int32_t>(c.g);
-  out.b = static_cast<int32_t>(c.b);
-  out.a = static_cast<int32_t>(c.a);
+emscripten::val value_array_to_val(const fm_value_array_t* array) {
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  fm_value_array_get_dimensions(array, &rows, &cols);
+  emscripten::val cells = emscripten::val::array();
+  for (uint32_t r = 0; r < rows; ++r) {
+    emscripten::val row = emscripten::val::array();
+    for (uint32_t c = 0; c < cols; ++c) {
+      fm_value_t v{};
+      fm_value_array_get_value_at(array, static_cast<std::size_t>(r) * cols + c, &v);
+      row.set(c, value_to_val(v));
+    }
+    cells.set(r, row);
+  }
+  emscripten::val out = emscripten::val::object();
+  out.set("rows", rows);
+  out.set("cols", cols);
+  out.set("cells", cells);
   return out;
 }
 
@@ -708,13 +733,13 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m) {
   out.priority = m.priority;
   out.dxfIdEngaged = m.dxf_id_engaged;
   out.dxfId = m.dxf_id;
-  out.color = translate_cf_color(m.color);
+  out.color = js_color_spec(m.color);
   out.barLengthPct = m.bar_length_pct;
   out.barAxisPositionPct = m.bar_axis_position_pct;
   out.barIsNegative = m.bar_is_negative;
-  out.barFill = translate_cf_color(m.bar_fill);
+  out.barFill = js_color_spec(m.bar_fill);
   out.barBorderEngaged = m.bar_border_engaged;
-  out.barBorder = translate_cf_color(m.bar_border);
+  out.barBorder = js_color_spec(m.bar_border);
   out.barGradient = m.bar_gradient;
   out.barDirection = static_cast<int32_t>(m.bar_direction);
   out.iconSetName = m.icon_set_name;
@@ -861,15 +886,19 @@ std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, co
 }
 
 fm_color_spec_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
-  fm_color_spec_t spec{};
   if (reader == nullptr) {
-    return spec;
+    return fm_color_spec_t{};
   }
   const emscripten::val f = reader->value(v, key, key);
-  if (!reader->ok()) {
+  return js_pull_color_spec_value(f, key, reader);
+}
+
+fm_color_spec_t js_pull_color_spec_value(const emscripten::val& f, const char* field, JsNarrowNumericReader* reader) {
+  fm_color_spec_t spec{};
+  if (reader == nullptr || !reader->ok() || !js_value_present(f)) {
     return spec;
   }
-  if (!js_value_present(f)) {
+  if (!reader->require_object(f, field)) {
     return spec;
   }
   spec.kind = reader->u8(f, "kind", 0, "color.kind");
@@ -886,7 +915,6 @@ fm_border_side_t js_pull_border_side(const emscripten::val& v, JsNarrowNumericRe
     return s;
   }
   s.style = reader->u8(v, "style", 0, "border.style");
-  s.color_argb = reader->u32(v, "colorArgb", 0U, "border.colorArgb");
   s.color = js_pull_color_spec(v, "color", reader);
   return s;
 }
@@ -970,10 +998,13 @@ emscripten::val js_color_spec(const fm_color_spec_t& spec) {
   return o;
 }
 
+emscripten::val js_color_spec_or_null(const fm_color_spec_t& spec) {
+  return spec.kind != kFmColorNone ? js_color_spec(spec) : emscripten::val::null();
+}
+
 emscripten::val js_border_side(const fm_border_side_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("style", static_cast<uint32_t>(s.style));
-  o.set("colorArgb", s.color_argb);
   o.set("color", js_color_spec(s.color));
   return o;
 }

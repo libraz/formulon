@@ -221,26 +221,9 @@ emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, u
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  fm_value_array_get_dimensions(array, &rows, &cols);
-  // Build a rows x cols nested array of Value objects (row-major).
-  emscripten::val cells = emscripten::val::array();
-  for (uint32_t r = 0; r < rows; ++r) {
-    emscripten::val js_row = emscripten::val::array();
-    for (uint32_t c = 0; c < cols; ++c) {
-      fm_value_t v{};
-      fm_value_array_get_value_at(array, static_cast<std::size_t>(r) * cols + c, &v);
-      js_row.set(c, value_to_val(v));
-    }
-    cells.set(r, js_row);
-  }
+  emscripten::val out = value_array_to_val(array);
   fm_value_array_destroy(array);
-  emscripten::val o = emscripten::val::object();
-  o.set("rows", rows);
-  o.set("cols", cols);
-  o.set("cells", cells);
-  return o;
+  return out;
 }
 
 emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const {
@@ -293,7 +276,7 @@ fm_status_t count_defined_names(const fm_workbook_t* handle, size_t, size_t* out
 }
 
 fm_status_t defined_name_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
-  fm_defined_name_t d{};
+  fm_defined_name_t d = FM_STRUCT_INIT(fm_defined_name_t);
   const fm_status_t rc = fm_workbook_get_defined_name_at(handle, index, &d);
   if (rc == 0) {
     *out = defined_name_to_val(d.name, d.formula, d.local_sheet_id, d.comment, d.hidden);
@@ -345,11 +328,11 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  fm_table_info_t info{};
+  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
   fm_status_t rc = fm_workbook_get_table_info(handle_, idx, &info);
   emscripten::val columns = emscripten::val::array();
   for (uint32_t i = 0; rc == 0 && i < info.column_count; ++i) {
-    fm_table_column_info_t column{};
+    fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
     rc = fm_workbook_get_table_column(handle_, idx, i, &column);
     if (rc == 0) {
       emscripten::val c = emscripten::val::object();
@@ -415,7 +398,7 @@ JsTableStyleToggles js_table_style_toggles(JsNarrowNumericReader& reader, const 
 /// Applies the supplied toggles over the table's current ones, keeping its
 /// style name.
 fm_status_t apply_table_style_toggles(fm_workbook_t* handle, uint32_t idx, const JsTableStyleToggles& toggles) {
-  fm_table_info_t info{};
+  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
   if (const fm_status_t rc = fm_workbook_get_table_info(handle, idx, &info); rc != 0) {
     return rc;
   }
@@ -659,7 +642,7 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
   }
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
-    fm_pivot_cell_t cell{};
+    fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
     if (fm_pivot_cells_get_cell_at(cells, i, &cell) != 0) {
       continue;
     }
@@ -698,7 +681,7 @@ double JsWorkbook::getExternalLinkCount() const {
 }
 
 emscripten::val JsWorkbook::getExternalLink(uint32_t externalLinkIndex) const {
-  fm_external_link_record_t rec{};
+  fm_external_link_record_t rec = FM_STRUCT_INIT(fm_external_link_record_t);
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_external_link(handle_, externalLinkIndex, &rec)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -840,7 +823,7 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
   if (!val_to_value(value, &proposed, text)) {
     return emscripten::val::undefined();
   }
-  fm_validation_outcome_t outcome{};
+  fm_validation_outcome_t outcome = FM_STRUCT_INIT(fm_validation_outcome_t);
   if (!succeeded(fm_sheet_validate_value(handle_, sheet, row, col, &proposed, &outcome))) {
     return emscripten::val::undefined();
   }

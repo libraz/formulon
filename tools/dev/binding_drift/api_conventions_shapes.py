@@ -474,6 +474,38 @@ def _js_records(ctx: Context, surface: str) -> Dict[str, Set[str]]:
     return {name: fields(name) for name in own}
 
 
+def _js_field_types(ctx: Context, surface: str, name: str) -> Dict[str, str]:
+    """Field name -> declared type of interface `name`, inherited fields included."""
+    js = surfaces(ctx).js[surface]
+    parents = {m.group(1): [p.strip() for p in m.group(2).split(",")] for m in _TS_EXTENDS_RE.finditer(js.raw)}
+
+    def fields(name: str, seen: Tuple[str, ...]) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for parent in parents.get(name, ()):
+            if parent not in seen:
+                out.update(fields(parent, seen + (name,)))
+        decl = js.decls.get(name)
+        if decl is not None and decl.kind == "interface":
+            out.update({m.name: m.type for m in decl.members if not m.is_method})
+        return out
+
+    return fields(name, ())
+
+
+_SHEET_INDEX_FIELD_RE = re.compile(r"(?:^s|S)heet(?:Id|Index)$")
+
+
+def _input_spelling(decls: Dict[str, object], field: str, ftype: str, record: Dict[str, str]) -> bool:
+    """True when the input field `field: ftype` spells record fields of another shape: a `CellAddress` for the
+    record's `<field>Row` / `<field>Col` pair, or a `SheetRef` for the record's sheet index (`localSheetId`)."""
+    kinds = _alias_alternatives(decls, ftype)
+    if "CellAddress" in kinds and {f"{field}Row", f"{field}Col"} <= set(record):
+        return True
+    return "SheetRef" in kinds and any(
+        _SHEET_INDEX_FIELD_RE.search(name) and _strip_null(rtype, True) == ["number"] for name, rtype in record.items()
+    )
+
+
 def _alias_alternatives(decls: Dict[str, object], text: str, seen: Tuple[str, ...] = ()) -> List[str]:
     """Top-level union alternatives of `text` without `null`, each union type alias also expanded in place."""
     out: List[str] = []
@@ -507,7 +539,8 @@ def _accessor_pairs(pool: Dict[str, object], js: bool) -> Iterator[Tuple[str, st
 @_owned("R18.js")
 def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
     """When `get<X>` returns a record `R` and `set<X>` exists, `set<X>` takes one value argument typed `R`,
-    `<R>Patch` or `<R>Input` (an input's fields are `R`'s). The setter's address arguments are not values: those
+    `<R>Patch` or `<R>Input` (an input's fields are `R`'s, a `CellAddress` field `x` standing for `R`'s `xRow` /
+    `xCol` and a `SheetRef` field for `R`'s sheet index). The setter's address arguments are not values: those
     the getter shares, and those the ledger names in `cell_args` / `rect_args` / `span_args` (a setter may address
     a range where the getter reads a cell). No public argument is `Partial<...>`.
     """
@@ -545,7 +578,15 @@ def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
                     f"`{getter}` returns `{record}` but `{setter}` takes ({shown})",
                 )
             elif kinds[0] == f"{record}Input" and kinds[0] in records and not records[kinds[0]] <= records[record]:
-                extra = sorted(records[kinds[0]] - records[record])
+                inputs = _js_field_types(ctx, surface, kinds[0])
+                stored = _js_field_types(ctx, surface, record)
+                extra = sorted(
+                    f
+                    for f in records[kinds[0]] - records[record]
+                    if not _input_spelling(decls, f, inputs.get(f, ""), stored)
+                )
+                if not extra:
+                    continue
                 yield _violation(
                     ctx,
                     "R18.js",

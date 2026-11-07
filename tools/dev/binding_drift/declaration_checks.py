@@ -16,7 +16,7 @@ from .api_conventions import (
     handle_name,
     load_ledger,
 )
-from .api_conventions_bindings import FACADE_EXTRA, SHEET_CLASS, WORKBOOK_CLASS
+from .api_conventions_bindings import FACADE_EXTRA, OOXML_CLASSES, SHEET_CLASS, WORKBOOK_CLASS
 from .enum_decl import (
     _cpp_enum_class_values,
     _extract_c_typedef_enum,
@@ -63,7 +63,7 @@ from .ts_decl import (
 # method or a removed method fail drift checking instead of becoming a stale
 # exception in one binding.
 WASM_ONLY_METHODS: set = set()
-NODE_ONLY_METHODS = {"getMemoryUsage"}
+NODE_ONLY_METHODS: set = set()
 
 # Members of the `Formulon` interface that are intentionally NOT backed by a
 # native `exports.Set(...)` / embind `function(...)` registration -- host-side
@@ -72,12 +72,19 @@ NODE_ONLY_METHODS = {"getMemoryUsage"}
 # d.ts free-function surface against the registrations.
 NODE_PURE_JS_FREE_FUNCTIONS = {"mergeFunctionMetadata", "toNative"}
 
+# `Formulon` members `buildFormulon` derives from a registered runtime member of another name
+# (`evaluateTypedFormula` tags the result of the raw `evaluateFormula`); nothing registers them.
+FACADE_FREE_FUNCTIONS = {"evaluateTypedFormula"}
+
 # `Workbook` methods the pure-JS layer adds (`installWorkbookExtensions`, or the
 # `makeFacade` classes); no registration stands behind them in either runtime.
 PURE_JS_WORKBOOK_METHODS = {"setValue", "sheet"}
 
 # Read-only `Workbook` properties, registered as an accessor rather than a method.
 WORKBOOK_ACCESSORS = {"disposed"}
+
+# Read-only `Workbook` properties the facade builds; no runtime registers them.
+FACADE_WORKBOOK_ACCESSORS = {"ooxml"}
 
 # Addon exports that are internal wiring and not part of the `Formulon` interface.
 NODE_ADDON_INTERNAL_EXPORTS = {"__setErrorClass"}
@@ -194,9 +201,12 @@ def _facade_built(entry) -> bool:
 
 
 def _declared_instance_methods(dts_text: str, source: Path) -> Set[str]:
-    """Methods of the `Workbook` and `Sheet` interfaces; the `Sheet` ones omit the raw sheet argument."""
+    """Methods of the `Workbook` and `Sheet` interfaces and of their `ooxml` layers; the sheet-level ones omit
+    the raw sheet argument."""
     methods = _extract_ts_methods(_find_interface_body(dts_text, WORKBOOK_CLASS, source))
-    return methods | _extract_ts_methods(_optional_interface_body(dts_text, SHEET_CLASS))
+    for cls in (SHEET_CLASS, *OOXML_CLASSES.values()):
+        methods |= _extract_ts_methods(_optional_interface_body(dts_text, cls))
+    return methods
 
 
 def _registration_problems(
@@ -241,8 +251,8 @@ def check_dts_wasm() -> List[str]:
     for label, cpp_set, dts_set, allowed in (
         ("Workbook / Sheet instance methods", instance_cpp, instance_dts, split),
         ("Workbook static factories", static_cpp, static_dts, (set(), set())),
-        ("free functions", free_cpp, free_dts, (set(), set())),
-        ("Workbook accessors", accessor_cpp & WORKBOOK_ACCESSORS, accessor_dts, (set(), set())),
+        ("free functions", free_cpp, free_dts, (set(), FACADE_FREE_FUNCTIONS)),
+        ("Workbook accessors", accessor_cpp & WORKBOOK_ACCESSORS, accessor_dts, (set(), FACADE_WORKBOOK_ACCESSORS)),
     ):
         problems += _registration_problems(
             "dts-wasm",
@@ -319,8 +329,8 @@ def check_dts_node() -> List[str]:
     for label, cc_set, dts_set, allowed in (
         ("Workbook / Sheet instance methods", instance_cc, instance_dts, split),
         ("Workbook static factories", static_cc, static_dts, (set(), set())),
-        ("free functions", free_cc, free_dts, (set(), set())),
-        ("Workbook accessors", accessor_cc & WORKBOOK_ACCESSORS, accessor_dts, (set(), set())),
+        ("free functions", free_cc, free_dts, (set(), FACADE_FREE_FUNCTIONS)),
+        ("Workbook accessors", accessor_cc & WORKBOOK_ACCESSORS, accessor_dts, (set(), FACADE_WORKBOOK_ACCESSORS)),
     ):
         problems += _registration_problems(
             "dts-node",

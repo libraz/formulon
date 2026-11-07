@@ -124,7 +124,7 @@ export function registerPositional(Module, test, hookProbe) {
       }),
     );
     const result = Module.evaluateFormula('=1+1');
-    assert.equal(result.number, 2);
+    assert.equal(result.cells[0][0].number, 2);
   });
 
   test('WASM paging positions reject invalid cursors and retain nullish defaults', () => {

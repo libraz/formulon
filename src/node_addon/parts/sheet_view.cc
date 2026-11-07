@@ -104,7 +104,7 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  fm_sheet_view_t v{};
+  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
   fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -137,7 +137,7 @@ Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  fm_sheet_protection_t p{};
+  fm_sheet_protection_t p = FM_STRUCT_INIT(fm_sheet_protection_t);
   const fm_status_t rc = fm_sheet_get_sheet_protection(handle_, sheet, &p);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -187,7 +187,7 @@ Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
     return reader.String(in, key, store) ? store->c_str() : nullptr;
   };
   const auto flag = [&](const char* key) { return reader.Bool(in, key, false) ? 1 : 0; };
-  fm_sheet_protection_t p{};
+  fm_sheet_protection_t p = FM_STRUCT_INIT(fm_sheet_protection_t);
   p.algorithm_name = text("algorithmName", &algorithm_name);
   p.hash_value = text("hashValue", &hash_value);
   p.salt_value = text("saltValue", &salt_value);
@@ -405,7 +405,7 @@ Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_sheet_format_defaults_t d{};
+  fm_sheet_format_defaults_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   const fm_status_t rc = fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -428,7 +428,7 @@ Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   }
   // A patch: an omitted key keeps the stored value, `null` clears a nullable one.
   const Napi::Object spec = ArgObject(info, 1);
-  fm_sheet_format_defaults_t d{};
+  fm_sheet_format_defaults_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   const fm_status_t read_rc = fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d);
   if (read_rc != 0) {
     return ThrowStatus(env, read_rc);
@@ -479,7 +479,7 @@ Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, range, &cells)) {
     return env.Undefined();
   }
-  fm_rect_pt_t rect{};
+  fm_rect_pt_t rect = FM_STRUCT_INIT(fm_rect_pt_t);
   const fm_status_t rc = fm_sheet_get_cell_rect_pt(handle_, ArgU32(info, 0), &cells, ArgMode(info, 2), &rect);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -517,7 +517,7 @@ Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_width_model_t model{};
+  fm_width_model_t model = FM_STRUCT_INIT(fm_width_model_t);
   const fm_status_t rc = fm_sheet_get_width_model(handle_, ArgU32(info, 0), ArgMode(info, 1), &model);
   if (rc != 0) {
     return ThrowStatus(env, rc);

@@ -253,21 +253,131 @@ export type StatusCode =
   | 5054;
 // <status-codes:end>
 
+/** Why a formula failed to parse, as carried by {@link ParseError.code}. Values are fixed; new codes are only
+ *  appended. The `Entry*` codes are refusals of formula entry that Excel applies on top of the grammar. */
+export const ParseErrorCode: Readonly<{
+  LexerInvalidCharacter: 0;
+  LexerUnterminatedString: 1;
+  LexerUnterminatedSheetQuote: 2;
+  LexerInvalidNumberLiteral: 3;
+  LexerInvalidErrorLiteral: 4;
+  LexerInvalidEscape: 5;
+  LexerInvalidReference: 6;
+  LexerExcessiveLength: 7;
+  UnexpectedToken: 8;
+  UnexpectedEof: 9;
+  ExpectedExpression: 10;
+  ExpectedCloseParen: 11;
+  UnbalancedBraces: 12;
+  ArrayRowMismatch: 13;
+  ExpectedRparenOrComma: 14;
+  ExpectedCommaOrSemiInArray: 15;
+  InvalidReference: 16;
+  UnsupportedConstruct: 17;
+  ExpectedOpenParen: 18;
+  ExpectedComma: 19;
+  UnbalancedBrackets: 20;
+  InvalidRange: 21;
+  NestedFormulaTooDeep: 22;
+  TooManyErrors: 23;
+  LetInvalidName: 24;
+  LetWrongArity: 25;
+  LambdaInvalidParam: 26;
+  LambdaEmpty: 27;
+  LambdaDuplicateParam: 28;
+  EntryWrongArity: 29;
+  EntryReferenceRequired: 30;
+  EntryQualifiedBuiltin: 31;
+  EntryRefusedWhitespace: 32;
+  EntryParamShapedName: 33;
+  EntryDoubleEquals: 34;
+  EntryBomNotSupported: 35;
+  StructuredRefInvalid: 36;
+}>;
+/** Union of the {@link ParseErrorCode} ordinals. */
+export type ParseErrorCode =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20
+  | 21
+  | 22
+  | 23
+  | 24
+  | 25
+  | 26
+  | 27
+  | 28
+  | 29
+  | 30
+  | 31
+  | 32
+  | 33
+  | 34
+  | 35
+  | 36;
+
+/** Where and why a formula failed to parse. `start` / `end` are UTF-16 offsets into the text the caller passed,
+ *  `end` exclusive; `line` and `column` are 1-based, `column` in UTF-16 code units. A failure that cannot be
+ *  placed in the caller's text covers all of it. */
+export interface ParseError {
+  readonly code: ParseErrorCode;
+  readonly start: number;
+  readonly end: number;
+  readonly line: number;
+  readonly column: number;
+}
+
 /** The error every host-side failure throws: an engine call that did not complete, or a call on a
  *  disposed workbook (`StatusCode.BindingInvalidHandle`). Distinguish failures by `code`; there are no
  *  subclasses. An argument of the wrong type or range throws `TypeError` / `RangeError` instead.
+ *
+ *  A formula that does not parse fails with a parser status (1000-1014) and carries its position in
+ *  `parseError`, wherever the formula entered: a cell, an ad-hoc evaluation, a defined name, a
+ *  conditional-format or validation formula, a table column formula, a pivot calculated field or item, or
+ *  `parseReference`. For a record argument `context` names the field (`field=formula2`).
  *
  *  `instanceof FormulonError` holds for the class imported from the same package that threw it. Code that
  *  may see errors from both `@libraz/formulon` and `@libraz/formulon-native` should test
  *  `e.name === 'FormulonError'`. */
 export class FormulonError extends Error {
-  constructor(code: StatusCode, message: string, context?: string);
+  constructor(code: StatusCode, message: string, context?: string, parseError?: ParseError);
   readonly name: 'FormulonError';
   /** What went wrong. */
   readonly code: StatusCode;
   /** Structured detail as space-separated `key=value` pairs (`sheet_index=5 sheet_count=1`); `''` when
    *  there is none. */
   readonly context: string;
+  /** Where the formula failed to parse; `undefined` for a failure that is not a formula syntax error. */
+  readonly parseError: ParseError | undefined;
+  /** `FormulonError [<StatusCode key>]: <message>`, for example `FormulonError [NotFound]: no such sheet`. */
+  toString(): string;
+}
+
+/** An Excel cell error such as `#DIV/0!`, as a native read returns it. `setValue` stores one as a cell error. */
+export class ExcelError {
+  constructor(code: ErrorCode);
+  /** The error, as an {@link ErrorCode} ordinal. */
+  readonly code: ErrorCode;
+  /** The en-US display literal, as {@link ErrorDisplayName} spells it (`'#DIV/0!'`). */
+  toString(): string;
 }
 
 /** Per-call telemetry returned by `Workbook.recalcParallel`. The five
@@ -313,9 +423,13 @@ export interface ErrorValue {
   readonly kind: typeof ValueKind.Error;
   readonly errorCode: ErrorCode;
 }
-/** An array result; its elements are not carried on this value. */
+/** An array result: `rows` x `cols` elements in row-major order (`cells[r * cols + c]`), each a scalar
+ *  value. */
 export interface ArrayValue {
   readonly kind: typeof ValueKind.Array;
+  readonly rows: number;
+  readonly cols: number;
+  readonly cells: readonly Value[];
 }
 /** A reference result; the referenced cells are not carried on this value. */
 export interface RefValue {
@@ -326,24 +440,17 @@ export interface LambdaValue {
   readonly kind: typeof ValueKind.Lambda;
 }
 
-/** A cell or formula value, discriminated by `kind`. Each member carries only
+/** A cell or formula value tagged with its kind, as the `*Typed*` reads return it. Each member carries only
  *  the fields of its kind, so `if (v.kind === ValueKind.Number) v.number`
  *  narrows. A method taking a `Value` reads `kind` (required) and the field
  *  that kind needs, and throws `TypeError` when that field is missing or has
  *  the wrong type; `BoolValue.boolean` must be a `boolean`, not 0 / 1. */
 export type Value = BlankValue | NumberValue | BoolValue | TextValue | ErrorValue | ArrayValue | RefValue | LambdaValue;
 
-/**
- * Return type of `Sheet.evaluateFormulaArray(...)`: the whole multi-cell
- * result of an ad-hoc formula. `cells` is a `rows` x `cols` nested array in
- * row-major order (`cells[r][c]`); a scalar result is reported as a 1x1
- * array (`rows === cols === 1`).
- */
-export interface EvalArray {
-  readonly rows: number;
-  readonly cols: number;
-  readonly cells: readonly (readonly Value[])[];
-}
+/** A value as plain JS data, as the primary reads return it: `null` for blank, a `number`, a `boolean`, a
+ *  `string`, an {@link ExcelError}, or the rows of an array result. A read that must keep every distinction
+ *  (`getTypedValues` before `setValues`) uses the `*Typed*` variant. */
+export type NativeValue = null | number | boolean | string | ExcelError | readonly (readonly NativeValue[])[];
 
 /**
  * Return type of `Workbook.saveWithDiagnostics(format)`.
@@ -406,15 +513,6 @@ export const WorkbookFormat: Readonly<{
 /** Union of the {@link WorkbookFormat} ordinals. */
 export type WorkbookFormat = 0 | 1 | 2;
 
-/** A cell's coordinates, formula and value. */
-export interface Cell {
-  readonly row: number;
-  readonly col: number;
-  /** Formula text spelled as `getFormula` returns it, or `null` for pure literals. */
-  readonly formula: string | null;
-  readonly value: Value;
-}
-
 /** A defined name, as `Workbook.getDefinedName` and `Workbook.listDefinedNames` return it. */
 export interface DefinedName {
   readonly name: string;
@@ -428,12 +526,13 @@ export interface DefinedName {
   readonly hidden: boolean;
 }
 
-/** Argument of `Workbook.setDefinedName`: the whole defined name. An omitted (or `null`) `localSheetId` is
- *  workbook scope; an omitted `comment` / `hidden` is no comment / visible. */
+/** Argument of `Workbook.setDefinedName`: the whole defined name. `scope` is the sheet the name is local to; an
+ *  omitted (or `null`) `scope` is workbook scope. An omitted `comment` / `hidden` is no comment / visible. The
+ *  leading `=` of `formula` is optional. */
 export interface DefinedNameInput {
   name: string;
   formula: string;
-  localSheetId?: number | null;
+  scope?: SheetRef | null;
   comment?: string | null;
   hidden?: boolean;
 }
@@ -479,18 +578,19 @@ export interface TableProperties {
   readonly columns: readonly TableColumn[];
 }
 
-/** Authoring input for a worksheet table over `range`. `columns` must have
- * exactly one name per column of the range; `styleName` names a built-in
- * TableStyle or a custom style. A styled table starts with row stripes on and the other
- * toggles off; a supplied toggle overrides that (and, without `styleName`,
- * writes an unnamed style element). With `headerRow` (the default), the
- * caller still writes the header cells: Excel expects the first row of the
- * range to hold the column names. */
+/** Authoring input for a worksheet table over `range`, a {@link SheetRect} or a sheet-qualified A1 range
+ * (`'Sheet1!A1:C9'`; an unqualified one fails with `StatusCode.InvalidArgument`). Without `columns` the
+ * column names are the header row's cell texts, and an empty header cell takes the profile's column word
+ * and a number (`Column2`). With `columns`, one name per column of the range, each non-empty header cell
+ * must equal its name (otherwise `StatusCode.InvalidArgument`) and an empty one is written with it.
+ * `styleName` names a built-in TableStyle or a custom style. A styled table starts with row stripes on and
+ * the other toggles off; a supplied toggle overrides that (and, without `styleName`, writes an unnamed style
+ * element). */
 export interface TableInput {
-  range: SheetRect;
+  range: SheetRect | string;
   name: string;
   displayName?: string;
-  columns: readonly string[];
+  columns?: readonly string[];
   styleName?: string;
   showFirstColumn?: boolean;
   showLastColumn?: boolean;
@@ -1086,13 +1186,13 @@ export interface PivotItem {
  *  have no cleared form. */
 export type PivotItemPatch = Patch<Pick<PivotItem, 'visible' | 'showDetail' | 'caption'>>;
 
-/** Argument of `Sheet.addPivot`: a new empty pivot named `name`, drawing from cache `cacheId`, anchored at
- *  `(anchorRow, anchorCol)`. A `PivotCache` handle passes its `cacheId`. */
+/** Argument of `Sheet.addPivot`: a new empty pivot named `name`, drawing from cache `cacheId`, with its
+ *  top-left cell at `anchor` (a {@link CellAddress} or an A1 cell, `'C3'`). A `PivotCache` handle passes its
+ *  `cacheId`. */
 export interface PivotInput {
   name: string;
   cacheId: number;
-  anchorRow: number;
-  anchorCol: number;
+  anchor: CellAddress | string;
 }
 
 /** Return type of `Pivot.getProperties()`. */
@@ -1243,13 +1343,12 @@ export const ErrorDisplayName: Readonly<Record<ErrorCode, string>>;
 /**
  * Workbook-level calc mode (`<calcPr calcMode>`).
  *
- * - `Auto` — recalc on every input change (Excel default).
- * - `Manual` — only recalc when explicitly requested.
- * - `AutoNoTable` — recalc on every change EXCEPT data-table cells, which
- *   `recalcDataTables()` computes on demand.
+ * - `Auto` (the default) — pending cells are computed before a value is read and before a save.
+ * - `Manual` — nothing is computed until `recalc()`.
+ * - `AutoNoTable` — as `Auto`, but the data tables are skipped; `recalcDataTables()` computes them.
  *
- * Round-trip metadata apart from `AutoNoTable` — the engine recalcs all
- * dirty cells regardless of which other mode is set.
+ * A volatile function (`NOW()`, `RAND()`) is re-evaluated when a change or `recalc()` recomputes it, not on
+ * every read.
  */
 export const CalcMode: Readonly<{
   Auto: 0;
@@ -1289,9 +1388,9 @@ export type CollationStrength = 0 | 1 | 2;
  * (for example `win-365-en_US`). New workbooks default to `win-365-en_US`.
  * The `mac-*` ids and `win-365-ja_JP` follow Excel measurements; every other
  * `win-*` id is estimated from the Mac measurements plus the Windows host
- * rules.
+ * rules. The profile sets evaluation semantics; formula text stays en-US unless localized explicitly.
  */
-export type ExcelProfileId =
+export type ProfileId =
   | 'mac-365-ja_JP'
   | 'win-365-ja_JP'
   | 'mac-365-en_US'
@@ -1336,19 +1435,112 @@ export interface CivilTime {
   readonly second: number;
 }
 
-/** RGBA colour. Channels are 0-255 (sRGB). */
-export interface CfColor {
-  readonly r: number;
-  readonly g: number;
-  readonly b: number;
-  readonly a: number;
+/** Argument of `Formulon.convertCivilToSerial`: a {@link CivilTime} whose time of day may be left out; an
+ *  omitted `hour`, `minute` or `second` is 0. */
+export interface CivilTimeInput {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly hour?: number;
+  readonly minute?: number;
+  readonly second?: number;
 }
 
-/** Conditional-format value object.
- *  `type`: 0 number, 1 percent, 2 percentile, 3 min, 4 max,
- *  5 formula, 6 autoMin, 7 autoMax. */
+/** The kind of a conditional-format rule (`<cfRule type>`). */
+export const CfRuleType: Readonly<{
+  Expression: 0;
+  CellIs: 1;
+  ColorScale: 2;
+  DataBar: 3;
+  IconSet: 4;
+  Top10: 5;
+  AboveAverage: 6;
+  ContainsText: 7;
+  NotContainsText: 8;
+  BeginsWith: 9;
+  EndsWith: 10;
+  ContainsBlanks: 11;
+  NotContainsBlanks: 12;
+  ContainsErrors: 13;
+  NotContainsErrors: 14;
+  TimePeriod: 15;
+  DuplicateValues: 16;
+  UniqueValues: 17;
+}>;
+/** Union of the {@link CfRuleType} ordinals. */
+export type CfRuleType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
+
+/** The comparison of a `CellIs` conditional-format rule. */
+export const CfOperator: Readonly<{
+  LessThan: 0;
+  LessThanOrEqual: 1;
+  Equal: 2;
+  NotEqual: 3;
+  GreaterThanOrEqual: 4;
+  GreaterThan: 5;
+  Between: 6;
+  NotBetween: 7;
+}>;
+/** Union of the {@link CfOperator} ordinals. */
+export type CfOperator = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** The period of a `TimePeriod` conditional-format rule. */
+export const CfTimePeriod: Readonly<{
+  Today: 0;
+  Yesterday: 1;
+  Tomorrow: 2;
+  Last7Days: 3;
+  ThisWeek: 4;
+  LastWeek: 5;
+  NextWeek: 6;
+  ThisMonth: 7;
+  LastMonth: 8;
+  NextMonth: 9;
+}>;
+/** Union of the {@link CfTimePeriod} ordinals. */
+export type CfTimePeriod = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+/** How a conditional-format threshold reads its value (`<cfvo type>`). */
+export const CfValueObjectType: Readonly<{
+  Number: 0;
+  Percent: 1;
+  Percentile: 2;
+  Min: 3;
+  Max: 4;
+  Formula: 5;
+  AutoMin: 6;
+  AutoMax: 7;
+}>;
+/** Union of the {@link CfValueObjectType} ordinals. */
+export type CfValueObjectType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** A built-in icon set (`ST_IconSetType`); the leading word is the level count. */
+export const IconSetName: Readonly<{
+  ThreeArrows: 0;
+  ThreeArrowsGray: 1;
+  ThreeFlags: 2;
+  ThreeTrafficLights1: 3;
+  ThreeTrafficLights2: 4;
+  ThreeSigns: 5;
+  ThreeSymbols: 6;
+  ThreeSymbols2: 7;
+  FourArrows: 8;
+  FourArrowsGray: 9;
+  FourRedToBlack: 10;
+  FourRating: 11;
+  FourTrafficLights: 12;
+  FiveArrows: 13;
+  FiveArrowsGray: 14;
+  FiveRating: 15;
+  FiveQuarters: 16;
+}>;
+/** Union of the {@link IconSetName} ordinals. */
+export type IconSetName = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+
+/** A conditional-format threshold (`<cfvo>`). `value` is the number, percentage or formula the `type` reads;
+ *  `gte` (default `true`) makes the threshold inclusive. */
 export interface CfValueObjectInput {
-  type: number;
+  type: CfValueObjectType;
   value?: string;
   gte?: boolean;
 }
@@ -1372,7 +1564,8 @@ export const CfDataBarAxisPosition: Readonly<{
 export type CfDataBarAxisPosition = 0 | 1 | 2;
 
 /** Resolved CF match. Active fields depend on `kind`; the others carry
- *  default-zero values. */
+ *  default-zero values. The colours are resolved against the theme and palette, so their `kind` is
+ *  `ColorKind.Rgb`, or `ColorKind.None` when inactive. */
 export interface CfMatch {
   readonly kind: CfMatchKind;
   readonly priority: number;
@@ -1380,19 +1573,19 @@ export interface CfMatch {
   readonly dxfIdEngaged: number;
   readonly dxfId: number;
   /** Active when `kind === ColorScale`. */
-  readonly color: CfColor;
+  readonly color: Color;
   /** Active when `kind === DataBar`. */
   readonly barLengthPct: number;
   readonly barAxisPositionPct: number;
   readonly barIsNegative: number;
-  readonly barFill: CfColor;
+  readonly barFill: Color;
   readonly barBorderEngaged: number;
-  readonly barBorder: CfColor;
+  readonly barBorder: Color;
   readonly barGradient: number;
   /** The rule's direction; the bar geometry is stated from the left edge. */
   readonly barDirection: CfDataBarDirection;
-  /** Active when `kind === IconSet`; ordinal of `formulon::cf::IconSetName`. */
-  readonly iconSetName: number;
+  /** Active when `kind === IconSet`. */
+  readonly iconSetName: IconSetName;
   readonly iconIndex: number;
 }
 
@@ -1528,12 +1721,14 @@ export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
   readonly effectiveDefaultRowHeight: number;
 }
 
-/** One populated cell of `Sheet.getCellsInRange`. */
+/** One populated cell, as `Sheet.listCells` and `Sheet.getCellsInRange` return it: its coordinates, its
+ *  formula (`null` for a constant), its value as native data and that value's kind. */
 export interface RangeCell {
   readonly row: number;
   readonly col: number;
   readonly formula: string | null;
-  readonly value: Value;
+  readonly value: NativeValue;
+  readonly kind: ValueKind;
 }
 
 /** Return type of `Sheet.getCellsInRange(...)`. */
@@ -1631,9 +1826,8 @@ export type SheetViewPatch = Patch<SheetView>;
  *  Input of `Sheet.setSelection`; `ranges` may be empty or omitted,
  *  which selects the active cell alone. */
 export interface SheetSelectionInput {
-  activeRow: number;
-  activeCol: number;
-  ranges?: readonly CellRect[];
+  active: CellAddress | string;
+  ranges?: readonly (CellRect | string)[] | string;
 }
 
 /** Return type of `Sheet.getSelection(sheet)`, read as it is saved:
@@ -1693,8 +1887,6 @@ export interface ColumnLayout {
   readonly outlineLevel: number;
   /** The outline group this span summarises is collapsed. */
   readonly collapsed: boolean;
-  /** The explicit column style; `null` when the span carries none. */
-  readonly styleXf: number | null;
 }
 
 /** Per-row layout override. */
@@ -1706,14 +1898,14 @@ export interface RowLayout {
   readonly outlineLevel: number;
   /** The outline group this row summarises is collapsed. */
   readonly collapsed: boolean;
-  /** The row style OOXML `customFormat="1"` makes effective; `null` when the row has none. */
-  readonly styleXf: number | null;
   /** An explicit override (`customHeight="1"`) rather than an auto height Excel recomputes. */
   readonly customHeight: boolean;
 }
 
 /** Cell rectangle: 0-based, inclusive corners `(firstRow, firstCol)` through `(lastRow, lastCol)`.
- *  Every rectangle the API takes or returns uses this type. */
+ *  Every rectangle the API returns uses this type. Where a record or an argument takes one, an A1 range
+ *  (`'A1:B2'`) is accepted too, and a list of them also takes one A1 range; a space-separated multi-area
+ *  string is not. */
 export interface CellRect {
   readonly firstRow: number;
   readonly firstCol: number;
@@ -1721,7 +1913,15 @@ export interface CellRect {
   readonly lastCol: number;
 }
 
-/** A cell rectangle on sheet index `sheet`. */
+/** One cell: 0-based `row` and `col`. A record field of this type also takes an A1 cell (`'C3'`). */
+export interface CellAddress {
+  readonly row: number;
+  readonly col: number;
+}
+
+/** A cell rectangle on sheet index `sheet`. A record field of this type also takes a sheet-qualified A1 range
+ *  (`'Sheet1!A1:B2'`); an unqualified one resolves on the record's own sheet, and fails with
+ *  `StatusCode.InvalidArgument` where the record has none. */
 export interface SheetRect {
   readonly sheet: number;
   readonly rect: CellRect;
@@ -1745,7 +1945,7 @@ export interface Hyperlink {
  *  `location`, its A1 destination. */
 export interface HyperlinkInput {
   target: string | null;
-  location?: string;
+  location?: string | null;
   display?: string;
   tooltip?: string;
 }
@@ -1804,21 +2004,39 @@ export interface SheetComment extends Comment {
   readonly col: number;
 }
 
-/** One sheet `<dataValidation>` block as returned by
- *  `Sheet.listValidations()`.
- *
- *  Field semantics (matches OOXML `dataValidations.xsd`):
- *    * `type`        — 0 none, 1 whole, 2 decimal, 3 list, 4 date,
- *                       5 time, 6 textLength, 7 custom.
- *    * `op`          — 0 between, 1 notBetween, 2 equal, 3 notEqual,
- *                       4 greaterThan, 5 lessThan,
- *                       6 greaterThanOrEqual, 7 lessThanOrEqual.
- *    * `errorStyle`  — a `ValidationErrorStyle`.
- */
+/** What a data-validation rule checks (`ST_DataValidationType`). */
+export const ValidationType: Readonly<{
+  None: 0;
+  Whole: 1;
+  Decimal: 2;
+  List: 3;
+  Date: 4;
+  Time: 5;
+  TextLength: 6;
+  Custom: 7;
+}>;
+/** Union of the {@link ValidationType} ordinals. */
+export type ValidationType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** How a data-validation rule compares the value with its formulas (`ST_DataValidationOperator`). */
+export const ValidationOperator: Readonly<{
+  Between: 0;
+  NotBetween: 1;
+  Equal: 2;
+  NotEqual: 3;
+  GreaterThan: 4;
+  LessThan: 5;
+  GreaterThanOrEqual: 6;
+  LessThanOrEqual: 7;
+}>;
+/** Union of the {@link ValidationOperator} ordinals. */
+export type ValidationOperator = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** One sheet `<dataValidation>` block as returned by `Sheet.listValidations()` (OOXML `dataValidations.xsd`). */
 export interface DataValidation {
   readonly ranges: readonly CellRect[];
-  readonly type: number;
-  readonly op: number;
+  readonly type: ValidationType;
+  readonly op: ValidationOperator;
   readonly errorStyle: ValidationErrorStyle;
   readonly allowBlank: boolean;
   readonly showInputMessage: boolean;
@@ -1837,12 +2055,12 @@ export interface DataValidation {
 
 /** Argument shape accepted by `Sheet.addValidation(validation)`. Every
  *  field except `ranges` and `type` is optional; missing fields default to
- *  `0` for the small enum-shaped integers, `false` for booleans, and `""`
- *  for strings. `ranges` must hold at least one rectangle. */
+ *  `Between` / `Stop`, `false` for booleans, and `""` for strings. `ranges` must hold at least one
+ *  rectangle. A formula that does not parse fails with its parser status and `FormulonError.parseError`. */
 export interface DataValidationInput {
-  ranges: readonly CellRect[];
-  type: number;
-  op?: number;
+  ranges: readonly (CellRect | string)[] | string;
+  type: ValidationType;
+  op?: ValidationOperator;
   errorStyle?: ValidationErrorStyle;
   allowBlank?: boolean;
   showInputMessage?: boolean;
@@ -1858,9 +2076,6 @@ export interface DataValidationInput {
   promptTitle?: string;
   promptMessage?: string;
 }
-
-/** @deprecated Use {@link DataValidation} instead. */
-export type Validation = DataValidation;
 
 /** Workbook-wide cell coordinate used by trace results. `sheet` is the
  *  0-based sheet index. */
@@ -1888,7 +2103,7 @@ export const LocaleDateOrder: Readonly<{
 /** Union of the {@link LocaleDateOrder} ordinals. */
 export type LocaleDateOrder = 0 | 1 | 2;
 
-/** Scalar locale facts of one {@link ExcelProfileId}. `measured` is `true`
+/** Scalar locale facts of one {@link ProfileId}. `measured` is `true`
  *  for the profiles captured from Excel (every `mac-*` id and
  *  `win-365-ja_JP`) and `false` for the estimated `win-*` ids. Every
  *  scalar field is captured in each Mac locale, so `measured` covers them
@@ -2005,14 +2220,26 @@ declare function mergeFunctionMetadata(
   locale: string,
 ): MergedFunctionMetadata;
 
-/** Maps a {@link Value} to its native JS value: Blank to `null`, Number to a `number`, Bool to a `boolean`, Text
- *  to a `string`; an `ErrorValue`, `ArrayValue`, `RefValue` or `LambdaValue` is returned as it is. Throws
- *  `TypeError` for anything that is not a `Value`. `toNative(ws.getValue('A1'))` reads a cell natively.
+/** Maps a {@link Value} to its native JS value, as the primary reads return it: Blank to `null`, Number to a
+ *  `number`, Bool to a `boolean`, Text to a `string`, Error to an {@link ExcelError} and an `ArrayValue` to its
+ *  rows. A `RefValue` or `LambdaValue`, which no read returns, and anything that is not a `Value` throw
+ *  `TypeError`.
  *
  *  A pure host-side helper, reached as `Formulon.toNative` on both packages. */
-declare function toNative(
-  value: Value,
-): number | string | boolean | null | ErrorValue | ArrayValue | RefValue | LambdaValue;
+declare function toNative(value: BlankValue): null;
+declare function toNative(value: NumberValue): number;
+declare function toNative(value: BoolValue): boolean;
+declare function toNative(value: TextValue): string;
+declare function toNative(value: ErrorValue): ExcelError;
+declare function toNative(value: ArrayValue): readonly (readonly NativeValue[])[];
+declare function toNative(value: Value): NativeValue;
+
+/** The key `value` has in the ordinal table `enumType` (`enumName(CfRuleType, 3)` is `'DataBar'`); `null` when
+ *  no key has it. A pure host-side helper, reached as `Formulon.enumName` and as a named export of both packages. */
+export function enumName<T extends Readonly<Record<string, number>>>(
+  enumType: T,
+  value: number,
+): (keyof T & string) | null;
 
 // Without this, a declaration file exports every top-level declaration, the two above included.
 // biome-ignore lint/complexity/noUselessEmptyExport: it stops the declarations above from being exported.
@@ -2057,7 +2284,7 @@ export interface ParseReferenceOptions {
 /** The rectangle `formatReference` writes; `sheetName` `null`, omitted or `""` writes no qualifier. */
 export interface ReferenceRangeInput {
   sheetName?: string | null;
-  rect: CellRect;
+  rect: CellRect | string;
 }
 
 /** Options for `formatReference`. */
@@ -2067,13 +2294,6 @@ export interface FormatReferenceOptions {
 
 /** One CF rule, an element of `Sheet.listCfRules()`.
  *
- *  `type` ordinal mirrors `formulon::cf::RuleType`:
- *    0 expression, 1 cellIs, 2 colorScale, 3 dataBar, 4 iconSet,
- *    5 top10, 6 aboveAverage, 7 containsText, 8 notContainsText,
- *    9 beginsWith, 10 endsWith, 11 containsBlanks, 12 notContainsBlanks,
- *    13 containsErrors, 14 notContainsErrors, 15 timePeriod,
- *    16 duplicateValues, 17 uniqueValues.
- *
  *  `id`, `type`, `priority`, `stopIfTrue` and `ranges` populate for every
  *  rule kind; the remaining fields are engaged by the kinds noted on
  *  each. A visual rule (`colorScale` / `dataBar` / `iconSet`) carries its
@@ -2082,7 +2302,7 @@ export interface FormatReferenceOptions {
  */
 export interface ConditionalFormat {
   readonly id: string;
-  readonly type: number;
+  readonly type: CfRuleType;
   readonly priority: number;
   readonly stopIfTrue: boolean;
   readonly ranges: readonly CellRect[];
@@ -2090,32 +2310,31 @@ export interface ConditionalFormat {
   /** Formula text, leading `=` included. */
   readonly formula1?: string;
   readonly formula2?: string;
-  /** `formulon::cf::CellIsOperator` ordinal: 0 lt, 1 le, 2 eq, 3 ne,
-   *   4 ge, 5 gt, 6 between, 7 notBetween. Engaged for `cellIs` rules. */
-  readonly op?: number;
-  /** Engaged for `top10` rules. */
+  /** Engaged for `CellIs` rules. */
+  readonly op?: CfOperator;
+  /** Engaged for `Top10` rules. */
   readonly rank?: number;
   readonly percent?: boolean;
   readonly bottom?: boolean;
-  /** Engaged for `aboveAverage` rules. */
+  /** Engaged for `AboveAverage` rules. */
   readonly aboveAverage?: boolean;
   readonly equalAverage?: boolean;
   readonly stdDev?: number;
-  /** Engaged for `containsText` / `beginsWith` / `endsWith` /
-   *  `notContainsText` rules. */
+  /** Engaged for `ContainsText` / `BeginsWith` / `EndsWith` /
+   *  `NotContainsText` rules. */
   readonly text?: string;
-  /** `formulon::cf::TimePeriod` ordinal. Engaged for `timePeriod` rules. */
-  readonly timePeriod?: number;
-  /** Engaged for `colorScale` rules. */
+  /** Engaged for `TimePeriod` rules. */
+  readonly timePeriod?: CfTimePeriod;
+  /** Engaged for `ColorScale` rules. */
   readonly colorScale?: {
     readonly thresholds: readonly CfValueObjectInput[];
-    readonly colors: readonly CfColor[];
+    readonly colors: readonly Color[];
   };
-  /** Engaged for `dataBar` rules. */
+  /** Engaged for `DataBar` rules. */
   readonly dataBar?: {
     readonly min: CfValueObjectInput;
     readonly max: CfValueObjectInput;
-    readonly fill: CfColor;
+    readonly fill: Color;
     readonly showValue: boolean;
     readonly minLengthPct: number;
     readonly maxLengthPct: number;
@@ -2126,16 +2345,16 @@ export interface ConditionalFormat {
      */
     readonly gradient?: boolean;
     readonly axisPosition?: CfDataBarAxisPosition;
-    readonly negativeFill?: CfColor;
-    readonly border?: CfColor;
-    readonly negativeBorder?: CfColor;
-    readonly axisColor?: CfColor;
+    readonly negativeFill?: Color;
+    readonly border?: Color;
+    readonly negativeBorder?: Color;
+    readonly axisColor?: Color;
     /** Edge the bar grows from. */
     readonly direction: CfDataBarDirection;
   };
-  /** Engaged for `iconSet` rules. */
+  /** Engaged for `IconSet` rules. */
   readonly iconSet?: {
-    readonly name: number;
+    readonly name: IconSetName;
     /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries no leading `=`. */
     readonly thresholds: readonly CfValueObjectInput[];
     readonly reverse: boolean;
@@ -2155,47 +2374,58 @@ export interface ConditionalFormat {
 
 /** One level of a custom icon set. `iconSet` is the `ST_IconSetType` spelling
  *  of the set the icon comes from (`"3Arrows"`, `"3Triangles"`, `"5Boxes"`,
- *  `"NoIcons"` for a level that draws nothing, ...); `iconId` is the
- *  zero-based icon within it. */
+ *  `"NoIcons"` for a level that draws nothing, ...), which reaches past
+ *  {@link IconSetName}; `iconId` is the zero-based icon within it. */
 export interface CfIconInput {
   iconSet: string;
   iconId: number;
 }
 
-/** Argument shape accepted by `Sheet.addCfRule(rule)`.
- *
- *  When `priority` is missing, zero, or negative, the engine assigns
- *  `existing_max + 1`. When `id` is missing or empty, the engine
- *  synthesises one. */
-export interface ConditionalFormatInput {
-  ranges: readonly CellRect[];
-  type: number;
+/** The members every {@link ConditionalFormatInput} shares. When `priority` is missing, zero, or negative, the
+ *  engine assigns `existing_max + 1`. When `id` is missing, empty, or names another rule of the sheet, the
+ *  engine assigns a new one. */
+interface CfRuleInputBase {
+  ranges: readonly (CellRect | string)[] | string;
   priority?: number;
   stopIfTrue?: boolean;
   id?: string;
+}
+
+/** A rule that applies a differential format (`dxfId`, an index of `Workbook.ooxml.listDxfs()`). */
+interface CfFormatRuleInputBase extends CfRuleInputBase {
   dxfId?: number;
-  /** Formula text; the leading `=` is optional. */
-  formula1?: string;
+}
+
+/** `Expression`: formats a cell where `formula1` (leading `=` optional) is true. */
+interface CfExpressionRuleInput extends CfFormatRuleInputBase {
+  type: typeof CfRuleType.Expression;
+  formula1: string;
+}
+
+/** `CellIs`: compares the cell with `formula1`, and `formula2` for `Between` / `NotBetween`. */
+interface CfCellIsRuleInput extends CfFormatRuleInputBase {
+  type: typeof CfRuleType.CellIs;
+  op: CfOperator;
+  formula1: string;
   formula2?: string;
-  op?: number;
-  rank?: number;
-  percent?: boolean;
-  bottom?: boolean;
-  aboveAverage?: boolean;
-  equalAverage?: boolean;
-  stdDev?: number;
-  text?: string;
-  timePeriod?: number;
-  /** Payload for type 2 (`colorScale`). Threshold and color counts must match: 2 or 3. */
-  colorScale?: {
+}
+
+/** `ColorScale`: two or three thresholds with as many colours. */
+interface CfColorScaleRuleInput extends CfRuleInputBase {
+  type: typeof CfRuleType.ColorScale;
+  colorScale: {
     thresholds: readonly CfValueObjectInput[];
-    colors: readonly CfColor[];
+    colors: readonly ColorInput[];
   };
-  /** Payload for type 3 (`dataBar`). */
-  dataBar?: {
+}
+
+/** `DataBar`. */
+interface CfDataBarRuleInput extends CfRuleInputBase {
+  type: typeof CfRuleType.DataBar;
+  dataBar: {
     min: CfValueObjectInput;
     max: CfValueObjectInput;
-    fill: CfColor;
+    fill: ColorInput;
     showValue?: boolean;
     minLengthPct?: number;
     maxLengthPct?: number;
@@ -2206,16 +2436,20 @@ export interface ConditionalFormatInput {
      */
     gradient?: boolean;
     axisPosition?: CfDataBarAxisPosition;
-    negativeFill?: CfColor;
-    border?: CfColor;
-    negativeBorder?: CfColor;
-    axisColor?: CfColor;
+    negativeFill?: ColorInput;
+    border?: ColorInput;
+    negativeBorder?: ColorInput;
+    axisColor?: ColorInput;
     /** Defaults to `CfDataBarDirection.Context`. */
     direction?: CfDataBarDirection;
   };
-  /** Payload for type 4 (`iconSet`). `name` is `formulon::cf::IconSetName` ordinal. */
-  iconSet?: {
-    name: number;
+}
+
+/** `IconSet`: the cell's bucket among the thresholds picks an icon of `name`. */
+interface CfIconSetRuleInput extends CfRuleInputBase {
+  type: typeof CfRuleType.IconSet;
+  iconSet: {
+    name: IconSetName;
     /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `StatusCode.InvalidArgument`. A formula-typed value is stored without its leading `=`. */
     thresholds: readonly CfValueObjectInput[];
     reverse?: boolean;
@@ -2232,6 +2466,70 @@ export interface ConditionalFormatInput {
     icons?: readonly CfIconInput[];
   };
 }
+
+/** `Top10`: the top (or with `bottom`, the bottom) `rank` values, or `rank` percent with `percent`. */
+interface CfTop10RuleInput extends CfFormatRuleInputBase {
+  type: typeof CfRuleType.Top10;
+  rank?: number;
+  percent?: boolean;
+  bottom?: boolean;
+}
+
+/** `AboveAverage`: values above (or with `aboveAverage: false`, below) the mean, optionally by `stdDev`
+ *  standard deviations. */
+interface CfAboveAverageRuleInput extends CfFormatRuleInputBase {
+  type: typeof CfRuleType.AboveAverage;
+  aboveAverage?: boolean;
+  equalAverage?: boolean;
+  stdDev?: number;
+}
+
+/** `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith`: a text test against `text`. `formula1` is the
+ *  stored test formula Excel writes beside it; omit it to have it derived. */
+interface CfTextRuleInput extends CfFormatRuleInputBase {
+  type:
+    | typeof CfRuleType.ContainsText
+    | typeof CfRuleType.NotContainsText
+    | typeof CfRuleType.BeginsWith
+    | typeof CfRuleType.EndsWith;
+  text: string;
+  formula1?: string;
+}
+
+/** `TimePeriod`: a date in `timePeriod` relative to today. */
+interface CfTimePeriodRuleInput extends CfFormatRuleInputBase {
+  type: typeof CfRuleType.TimePeriod;
+  timePeriod: CfTimePeriod;
+  formula1?: string;
+}
+
+/** `ContainsBlanks` / `NotContainsBlanks` / `ContainsErrors` / `NotContainsErrors` / `DuplicateValues` /
+ *  `UniqueValues`: a test with no operand. `formula1` is the stored test formula, derived when omitted. */
+interface CfPlainRuleInput extends CfFormatRuleInputBase {
+  type:
+    | typeof CfRuleType.ContainsBlanks
+    | typeof CfRuleType.NotContainsBlanks
+    | typeof CfRuleType.ContainsErrors
+    | typeof CfRuleType.NotContainsErrors
+    | typeof CfRuleType.DuplicateValues
+    | typeof CfRuleType.UniqueValues;
+  formula1?: string;
+}
+
+/** Argument of `Sheet.addCfRule(rule)`, discriminated by `type`: each member carries the fields its kind uses.
+ *  A colour takes a {@link ColorInput}. A formula that does not parse fails with its parser status, with
+ *  `FormulonError.parseError` set and the field named in `context` (`field=formula1`). */
+export type ConditionalFormatInput =
+  | CfExpressionRuleInput
+  | CfCellIsRuleInput
+  | CfColorScaleRuleInput
+  | CfDataBarRuleInput
+  | CfIconSetRuleInput
+  | CfTop10RuleInput
+  | CfAboveAverageRuleInput
+  | CfTextRuleInput
+  | CfTimePeriodRuleInput
+  | CfPlainRuleInput;
 
 /** Horizontal alignment of a cell (OOXML `ST_HorizontalAlignment`). */
 export const HorizontalAlign: Readonly<{
@@ -2361,7 +2659,7 @@ export const BorderStyle: Readonly<{
 /** Union of the {@link BorderStyle} ordinals. */
 export type BorderStyle = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
-/** Return type of `Workbook.getCellXf(xfIndex)`. */
+/** Return type of `Workbook.ooxml.getCellXf(xfIndex)`. */
 export interface CellXf {
   readonly fontIndex: number;
   readonly fillIndex: number;
@@ -2416,15 +2714,9 @@ export const ColorKind: Readonly<{
 /** Union of the {@link ColorKind} ordinals. */
 export type ColorKind = 0 | 1 | 2 | 3 | 4;
 
-/** How an OOXML `<color>` element expressed its value.
- *  Mirrors `formulon::io::Color`.
- *
- *  A record read from a workbook carries the original specification here.
- *  When `kind` is non-zero, this selector is authoritative; the sibling
- *  `*Argb` field is not an Excel-rendered value for theme/indexed/auto
- *  selectors. It is literal RGB for `kind === 1`, or a compatibility
- *  fallback otherwise. Leave `kind` at 0 on a record built from scratch and
- *  the writer emits the sibling `*Argb` as `rgb`. */
+/** A colour as an OOXML `<color>` element states it: `kind` selects the meaningful field. `ColorKind.None`
+ *  is no colour. A theme, indexed or automatic colour is not resolved here; `Workbook.resolveColor` renders
+ *  it. Where an input takes a {@link ColorInput}, `"#RRGGBB"` / `"#AARRGGBB"` is accepted too. */
 export interface Color {
   /** Which selector the colour carries. */
   readonly kind: ColorKind;
@@ -2465,23 +2757,16 @@ export interface Font {
   readonly charset: number | null;
   /** `<scheme>` theme link; `None` when absent. Meaningful only on a workbook that carries a theme part. */
   readonly scheme: FontScheme;
-  /** AARRGGBB literal RGB or compatibility fallback; not a resolved
-   *  theme/indexed/auto render colour. */
-  readonly colorArgb: number;
-  /** Original `<color>` specification, preserved for round-tripping. */
+  /** The `<color>` element; `ColorKind.None` without one, which renders as the automatic colour. */
   readonly color: Color;
 }
 
 /** Plain-data shape of a fill record. Mirrors `formulon::io::Fill`. */
 export interface Fill {
   readonly pattern: FillPattern;
-  /** Foreground literal RGB or compatibility fallback. */
-  readonly fgArgb: number;
-  /** Background literal RGB or compatibility fallback. */
-  readonly bgArgb: number;
-  /** Original `<fgColor>` specification, preserved for round-tripping. */
+  /** The `<fgColor>` element; `ColorKind.None` without one. */
   readonly fg: Color;
-  /** Original `<bgColor>` specification, preserved for round-tripping. */
+  /** The `<bgColor>` element; `ColorKind.None` without one. */
   readonly bg: Color;
   /** A `<gradientFill>`; when present the pattern fields are ignored. */
   readonly gradient?: GradientFill;
@@ -2503,19 +2788,13 @@ export interface GradientFill {
 export interface GradientStop {
   /** 0..1 along the gradient. */
   readonly position: number;
-  /** AARRGGBB literal RGB or compatibility fallback. */
-  readonly colorArgb: number;
-  /** Original `<color>` specification, preserved for round-tripping. */
   readonly color: Color;
 }
 
 /** One side of a `Border`. */
 export interface BorderSide {
   readonly style: BorderStyle;
-  /** AARRGGBB literal RGB or compatibility fallback; not a resolved
-   *  theme/indexed/auto render colour. */
-  readonly colorArgb: number;
-  /** Original `<color>` specification, preserved for round-tripping. */
+  /** The side's `<color>`; `ColorKind.None` without one. */
   readonly color: Color;
 }
 
@@ -2729,7 +3008,7 @@ export interface PhoneticProperties extends PhoneticPropertiesInput {
   readonly present: boolean;
 }
 
-/** Return type of `Workbook.getDxf(dxfIndex)`.
+/** Return type of `Workbook.ooxml.getDxf(dxfIndex)`.
  *  Optional properties are present only when that `<dxf>` child exists. */
 export interface Dxf {
   readonly font?: Font;
@@ -2793,7 +3072,7 @@ export interface ExternalLink {
   readonly kind: ExternalLinkKind;
 }
 
-/** Argument of `Workbook.setCellStyle`. Also the record `listCellStyles` and `getCellStyle` return. */
+/** Argument of `Workbook.ooxml.setCellStyle`. Also the record `listCellStyles` and `getCellStyle` return. */
 export interface CellStyle {
   /** Display name of the style. */
   readonly name: string;
@@ -3367,8 +3646,7 @@ export interface AutoFilterDateGroup {
  *  criterion's fields are read on input (a `FilterKind`); on output every other criterion's
  *  fields are zero. Custom operators `op1` / `op2` are
  *  `FilterOperator`s; `dynamicType` is a `DynamicFilterType`.
- *  `dxfId` of `4294967295` means absent. `iconSet` is the conditional-format
- *  icon-set ordinal. */
+ *  `dxfId` of `4294967295` means absent. */
 export interface AutoFilterColumn {
   colId: number;
   hiddenButton: boolean;
@@ -3397,7 +3675,7 @@ export interface AutoFilterColumn {
   maxValIso: string;
   dxfId: number;
   cellColor: boolean;
-  iconSet: number;
+  iconSet: IconSetName;
   /** `null` when the icon filter names no icon. */
   iconId: number | null;
 }
@@ -3410,7 +3688,7 @@ export interface AutoFilterSortCondition {
   customList: string;
   /** `null` when the condition names no differential format. */
   dxfId: number | null;
-  iconSet: number;
+  iconSet: IconSetName;
   /** `null` when the condition names no icon. */
   iconId: number | null;
 }
@@ -3473,26 +3751,26 @@ export interface AutoFilterColumnInput {
   maxValIso?: string;
   dxfId?: number;
   cellColor?: boolean;
-  iconSet?: number;
+  iconSet?: IconSetName;
   iconId?: number | null;
 }
 
 /** Input form of {@link AutoFilterSortCondition}; only `ref` is required.
  *  Omitted fields read as false / zero / empty / `null`, and `sortBy` as `SortBy.Value`. */
 export interface AutoFilterSortConditionInput {
-  ref: CellRect;
+  ref: CellRect | string;
   descending?: boolean;
   sortBy?: SortBy;
   customList?: string;
   dxfId?: number | null;
-  iconSet?: number;
+  iconSet?: IconSetName;
   iconId?: number | null;
 }
 
 /** Input form of {@link AutoFilterSortState}; only `ref` is required.
  *  Omitted fields read as false / empty, and `sortMethod` as `SortMethod.None`. */
 export interface AutoFilterSortStateInput {
-  ref: CellRect;
+  ref: CellRect | string;
   columnSort?: boolean;
   caseSensitive?: boolean;
   sortMethod?: SortMethod;
@@ -3503,7 +3781,7 @@ export interface AutoFilterSortStateInput {
  *  reads as empty and omitted `sort` as none. The {@link AutoFilter} result is
  *  assignable to it. */
 export interface AutoFilterInput {
-  range: CellRect;
+  range: CellRect | string;
   columns?: readonly AutoFilterColumnInput[];
   sort?: AutoFilterSortStateInput | null;
 }
@@ -3648,8 +3926,8 @@ export interface DrawingAnchor {
 }
 
 /** Return type of `Shape.getProperties()`: a shape, connector or group of a sheet's drawing. The anchor fields
- *  read as in {@link DrawingProperties}. `fillKind` / `lineKind` are {@link ShapePaint}; `fillRgb` /
- *  `lineRgb` are 0xRRGGBB when the kind is `Solid`. `rotation` is in 60000ths of a degree,
+ *  read as in {@link DrawingProperties}. `fillKind` / `lineKind` are {@link ShapePaint}; `fillColor` /
+ *  `lineColor` are the RGB colour when the kind is `Solid`, else `null`. `rotation` is in 60000ths of a degree,
  *  `lineWidthEmu` is 0 without a width. `presetGeometry` is the preset geometry, empty for custom
  *  geometry or a group; `text` joins paragraphs with `\n`. */
 export interface ShapeProperties {
@@ -3672,9 +3950,9 @@ export interface ShapeProperties {
   readonly text: string;
   readonly textBox: boolean;
   readonly fillKind: ShapePaint | null;
-  readonly fillRgb: number;
+  readonly fillColor: Color | null;
   readonly lineKind: ShapePaint | null;
-  readonly lineRgb: number;
+  readonly lineColor: Color | null;
   readonly lineWidthEmu: number;
   readonly rotation: number;
   readonly hidden: boolean;
@@ -3682,8 +3960,8 @@ export interface ShapeProperties {
 
 /** Fields `Sheet.addShape` applies and the keys {@link ShapePatch} takes; a key left out is not applied.
  *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`; a
- *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with
- *  `fillRgb` / `lineRgb`) or `None`. An insert needs `anchorKind`, defaults `presetGeometry` to
+ *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with an RGB
+ *  `fillColor` / `lineColor`) or `None`. An insert needs `anchorKind`, defaults `presetGeometry` to
  *  `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector geometry makes a
  *  connector, which holds no text. An update cannot change the anchor kind. */
 export interface ShapeInput {
@@ -3704,17 +3982,17 @@ export interface ShapeInput {
   widthEmu?: number;
   heightEmu?: number;
   fillKind?: ShapePaint;
-  fillRgb?: number;
+  fillColor?: ColorInput;
   lineKind?: ShapePaint;
-  lineRgb?: number;
+  lineColor?: ColorInput;
   lineWidthEmu?: number;
   rotation?: number;
   hidden?: boolean;
 }
 
 /** Argument of `Shape.update`: every {@link ShapeInput} key, each optional. A key left out is unchanged and
- *  no key accepts `null` to clear, except `fillKind` / `lineKind`, where `null` also means unchanged so that
- *  the value {@link ShapeProperties} returns can be passed back as is. Any other `null` fails with a
+ *  no key accepts `null` to clear, except `fillKind` / `lineKind` / `fillColor` / `lineColor`, where `null` also
+ *  means unchanged so that the value {@link ShapeProperties} returns can be passed back as is. Any other `null` fails with a
  *  `TypeError`. The anchor keys (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`) need `anchorKind` in the
  *  same patch, otherwise the call fails with a `TypeError`. `objectId` and `kind` of a
  *  {@link ShapeProperties} are ignored; any other unknown key fails with a `TypeError`. */
@@ -3865,14 +4143,14 @@ export interface SparklineGroup {
  *  out. `sparklines` is required by an add. A `SparklineGroup` read back passes as is. */
 export interface SparklineGroupInput {
   readonly type?: SparklineType;
-  readonly colorSeries?: Color;
-  readonly colorNegative?: Color;
-  readonly colorAxis?: Color;
-  readonly colorMarkers?: Color;
-  readonly colorFirst?: Color;
-  readonly colorLast?: Color;
-  readonly colorHigh?: Color;
-  readonly colorLow?: Color;
+  readonly colorSeries?: ColorInput;
+  readonly colorNegative?: ColorInput;
+  readonly colorAxis?: ColorInput;
+  readonly colorMarkers?: ColorInput;
+  readonly colorFirst?: ColorInput;
+  readonly colorLast?: ColorInput;
+  readonly colorHigh?: ColorInput;
+  readonly colorLow?: ColorInput;
   readonly markers?: boolean;
   readonly high?: boolean;
   readonly low?: boolean;
@@ -3915,14 +4193,15 @@ export interface ChartDataSource {
   readonly literal: readonly (number | string)[];
 }
 
-/** Solid fill; `color` is ARGB (`0xAARRGGBB`), `transparency` a percentage (0..100). */
+/** Solid fill; `color` is an RGB colour (`ColorKind.Rgb`, resolved), `null` when the element states none;
+ *  `transparency` is a percentage (0..100). */
 export interface ChartFill {
-  readonly color: number | null;
+  readonly color: Color | null;
   readonly transparency: number | null;
 }
 
 export interface ChartLine {
-  readonly color: number | null;
+  readonly color: Color | null;
   readonly transparency: number | null;
   readonly widthPt: number | null;
   readonly dash: ChartLineDash | null;
@@ -3946,7 +4225,7 @@ export interface ChartLabels {
   readonly position: ChartLabelPosition | null;
   readonly numberFormat: string | null;
   readonly sourceLinked: boolean;
-  readonly fontColor: number | null;
+  readonly fontColor: Color | null;
   readonly fontSizePt: number | null;
   readonly deleted: boolean;
 }
@@ -4123,14 +4402,15 @@ export interface ChartSourceInput {
   headerColumn?: boolean | null;
 }
 
-/** A patch leaves an omitted field unchanged; `null` removes the element. Colors are ARGB (`0xAARRGGBB`). */
+/** A patch leaves an omitted field unchanged; `null` removes the element. A colour must be RGB: `"#RRGGBB"`,
+ *  `"#AARRGGBB"` or a `ColorKind.Rgb` {@link Color}. */
 export type ChartFillPatch = Patch<{
-  color: number;
+  color: ColorInput;
   transparency: number;
 }>;
 
 export type ChartLinePatch = Patch<{
-  color: number;
+  color: ColorInput;
   transparency: number;
   widthPt: number;
   dash: ChartLineDash;
@@ -4153,7 +4433,7 @@ export type ChartLabelsPatch = Patch<{
   separator: string;
   position: ChartLabelPosition;
   numberFormat: string;
-  fontColor: number;
+  fontColor: ColorInput;
   fontSizePt: number;
 }>;
 
@@ -4457,8 +4737,13 @@ export type ProtectedRangeRef = number | string;
  *  A `set<X>` method follows its argument type: `R` replaces the whole value, `<R>Patch` updates part of it, and
  *  `<R>Input` is an input with defaults.
  *
- *  Reads return the values as of the last full recalc (`recalc` / `recalcParallel`); after a change, call one
- *  first. `hasDirtyCells()` tells whether a change is pending.
+ *  Under `CalcMode.Auto` (the default) a value read or a save first computes the cells a change left pending,
+ *  so a read after a write sees the new value without a `recalc()`. Such a read may run the iterative-progress
+ *  callback and fail with a recalculation status (4000-4006). Under `CalcMode.Manual` a read returns the
+ *  values as of the last recalc; call `setCalcMode(CalcMode.Manual)` right after `load` to read the cached
+ *  values a file carries. `hasDirtyCells()` tells whether a change is pending.
+ *
+ *  The XF-level style tables, named styles and XML passthrough parts are reached through `ooxml`.
  *
  *  Tables, pivots, pivot caches and drawing objects are handles (`Table`, `Pivot`, `PivotCache`, `Drawing`): the
  *  parent adds, removes, lists and looks them up, and every other operation is a method of the handle. One object
@@ -4480,9 +4765,15 @@ export interface Workbook {
   dispose(): void;
   /** Same as `dispose()`, so `using wb = ...` releases the handle. */
   [Symbol.dispose](): void;
+  /** Iterates the sheets' handles in sheet order, as `listSheets()` lists them. */
+  [Symbol.iterator](): IterableIterator<Sheet>;
+  /** The OOXML-level layer of the workbook: the style record tables addressed by index, the named styles and
+   *  the passthrough parts. Always the same object. */
+  readonly ooxml: WorkbookOoxml;
 
-  /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`).
-   *  An archive or writer failure throws with one of the `StatusCode.Io*` codes; an unknown `format`
+  /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`). Pending
+   *  cells are computed first unless the mode is `CalcMode.Manual` with `calcOnSave` off, which writes the
+   *  cached values. An archive or writer failure throws with one of the `StatusCode.Io*` codes; an unknown `format`
    *  value with `StatusCode.InvalidArgument`.
    *
    *  @example
@@ -4517,14 +4808,15 @@ export interface Workbook {
    *  `StatusCode.CannotRemoveLastSheet` when only one sheet remains. Removing the only visible sheet fails with
    *  `StatusCode.InvalidArgument` and leaves the workbook unchanged. */
   removeSheet(sheet: SheetRef): void;
-  /** Copies the worksheet `source` into the workbook before the sheet now at `insertBefore`
-   *  (`listSheets().length` appends) and returns the copy's handle. Without `newName` the copy
+  /** Copies the worksheet `source` into the workbook before the sheet now at `insertBefore` (omitted, `null` or
+   *  `listSheets().length` appends, so `copySheet(src, null, 'Copy')` names the copy only) and returns the copy's
+   *  handle. Without `newName` the copy
    *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
    *  sheet are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
    *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.SheetCountLimitExceeded`,
    *  `StatusCode.PreconditionFailed` (very hidden source) or `StatusCode.NotImplemented` (slicers, shapes, pivot
    *  charts and other content the copy cannot model); the workbook is unchanged when it throws. */
-  copySheet(source: SheetRef, insertBefore: number, newName?: string): Sheet;
+  copySheet(source: SheetRef, insertBefore?: number | null, newName?: string): Sheet;
   /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); without workbook views (an XLSB
    *  load) the first tab-selected sheet; the first sheet when neither is recorded. Removing or hiding the
    *  active sheet activates the next visible sheet, else the previous one. */
@@ -4536,25 +4828,28 @@ export interface Workbook {
   /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format `formatCode`; empty means General. */
   formatValue(value: Value, formatCode: string): DisplayText;
 
-  /** Recalculates all dirty cells serially on the caller thread.
+  /** Computes every pending cell now, serially on the caller thread, whatever the calc mode. Under
+   *  `CalcMode.Auto` a read does this on its own; call it to choose when the work happens, or under
+   *  `CalcMode.Manual`.
    *
    *  When an installed `IterativeProgressCallback` throws, the pass stops and this call rethrows
    *  that same exception.
    *
    *  @example
    *  ```ts
+   *  wb.setCalcMode(formulon.CalcMode.Manual);
    *  ws.setFormula('B1', '=SUM(A1:A3)');
    *  wb.recalc();
-   *  const total = ws.getValue('B1'); // read after the recalc
+   *  const total = ws.getValue('B1');
    *  ``` */
   recalc(): void;
   /**
    * Recalculates all dirty cells using the parallel SCC scheduler and returns
    * per-call telemetry. This call is synchronous: it returns after all
-   * workers have joined. `threadCount` is an integer: 0 selects
+   * workers have joined. `threadCount` is an integer: 0 (the default) selects
    * automatic detection (capped at 8), 1 keeps evaluation on the caller and
-   * starts no workers, and 2..8 set the worker upper bound. A missing or
-   * non-number argument throws `TypeError`; a fractional, non-finite or
+   * starts no workers, and 2..8 set the worker upper bound. A non-number
+   * argument throws `TypeError`; a fractional, non-finite or
    * negative one throws `RangeError`; a value above 8 fails with
    * `StatusCode.InvalidArgument`.
    * The 64-bit counters in `stats` are JavaScript numbers and are exact
@@ -4565,9 +4860,9 @@ export interface Workbook {
    * `@libraz/formulon` build has no pthreads, so the same pass runs
    * serially with `workerThreadsStarted` at 0.
    */
-  recalcParallel(threadCount: number): ParallelRecalcStats;
+  recalcParallel(threadCount?: number): ParallelRecalcStats;
   /** `true` when a change (a cell, a defined name, the profile, a row or column insert / delete, a sheet removal)
-   *  is not yet reflected by a full recalc (`recalc` / `recalcParallel`). Volatile formulas and a fresh load do
+   *  is not yet computed, by a read under `CalcMode.Auto` or by `recalc` / `recalcParallel`. Volatile formulas and a fresh load do
    *  not count, `recalcViewport` does not clear it, and a recalc that throws leaves it set. */
   hasDirtyCells(): boolean;
 
@@ -4591,22 +4886,15 @@ export interface Workbook {
    *  `TypeError` and leaves the installed callback in place. */
   setIterativeProgress(callback: IterativeProgressCallback | null): void;
 
-  /**
-   * Workbook-level calc mode (Excel `<calcPr calcMode>` policy).
-   *
-   * The result is one of the `CalcMode` codes. Apart from `AutoNoTable`, which
-   * makes `recalc()` skip the data tables (see `recalcDataTables`), the
-   * engine does NOT gate evaluation on this value — every `recalc()` call
-   * honours all dirty cells. The mode is round-trip metadata surfaced here
-   * so the UI can mirror Excel's user-visible state.
-   */
+  /** Workbook-level calc mode (`<calcPr calcMode>`): when pending cells are computed (see {@link CalcMode}). */
   getCalcMode(): CalcMode;
-  /** Sets the calc mode; only `AutoNoTable` changes evaluation (`recalc()` skips the data tables). Fails with `StatusCode.InvalidArgument` for a value outside `CalcMode`. */
+  /** Sets the calc mode. Fails with `StatusCode.InvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): void;
   /** `<calcPr fullPrecision>`; `false` is "set precision as displayed". Metadata only. */
   getFullPrecision(): boolean;
   setFullPrecision(fullPrecision: boolean): void;
-  /** `<calcPr calcOnSave>` (default `true`). */
+  /** `<calcPr calcOnSave>` (default `true`). Under `CalcMode.Manual`, `false` makes `save` write the cached
+   *  values without computing pending cells. */
   getCalcOnSave(): boolean;
   setCalcOnSave(calcOnSave: boolean): void;
   /** `<calcPr refMode>` as a `RefMode` code. */
@@ -4633,8 +4921,7 @@ export interface Workbook {
    * results in any zone. This is model state, not file state — `save()` does
    * not record it and a reloaded workbook comes back unpinned.
    *
-   * Cached formula values are not recomputed by `setPinnedNow`; drive
-   * `recalc()` to see the pin take effect on existing cells.
+   * `setPinnedNow` does not mark existing formulas pending; `recalc()` recomputes them under the pin.
    *
    * `setPinnedNow` fails with `StatusCode.InvalidArgument` unless `year` is in
    * `[1900, 9999]`, `month` in `[1, 12]`, `day` within that month's real
@@ -4644,16 +4931,17 @@ export interface Workbook {
    */
   getPinnedNow(): CivilTime | null;
   /** Pins the workbook clock to a local civil instant (see `getPinnedNow` for the accepted ranges), or with `null`
-   *  releases the pin so the clock follows the host again; releasing an unpinned workbook does nothing. */
-  setPinnedNow(time: CivilTime | null): void;
+   *  releases the pin so the clock follows the host again; releasing an unpinned workbook does nothing. A `Date`
+   *  pins its UTC fields. */
+  setPinnedNow(time: CivilTime | Date | null): void;
 
   /** The workbook's Excel profile id. Defaults to `win-365-en_US`.
-   * Pick another locale or host with any {@link ExcelProfileId}.
+   * Pick another locale or host with any {@link ProfileId}.
    */
-  getExcelProfileId(): ExcelProfileId;
-  /** Selects the Excel profile; `StatusCode.InvalidArgument` for an id that is not an {@link ExcelProfileId}.
-   *  Cached formula values are not recomputed until the next `recalc()`. */
-  setExcelProfileId(profileId: ExcelProfileId): void;
+  getProfileId(): ProfileId;
+  /** Selects the Excel profile; `StatusCode.InvalidArgument` for an id that is not a {@link ProfileId}.
+   *  The change leaves the formulas pending, computed as {@link CalcMode} says. */
+  setProfileId(profileId: ProfileId): void;
   /** File name the workbook is shown under, extension included and without a directory; `null` when unset.
    *  While set, every formula getter spells a reference to the workbook's own defined name (stored `[0]!Name`)
    *  as `Book.xlsx!Name`, quoted when needed (`'My Book.xlsx'!Name`); unset, it reads `[0]!Name`.
@@ -4710,10 +4998,11 @@ export interface Workbook {
   /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `recalcViewport()` never computes tables. */
   recalcDataTables(): void;
 
-  /** Lists the paths of the OOXML parts the reader carried through unchanged. */
-  listPassthroughs(): readonly string[];
-  /** Reports whether a passthrough part sits at `path` (no leading `/`); returns the path, or `null`. */
-  getPassthrough(path: string): string | null;
+  /** Estimated heap bytes the workbook occupies: the cell store, shared strings, passthrough parts and workbook
+   *  metadata. An estimate, not an allocation ledger. The native package also reports it to V8 as external
+   *  memory when a workbook is created, loaded, recalculated or disposed, and this call refreshes that report. */
+  getMemoryUsage(): number;
+
   /** Lists the external-link records in `<externalReferences>` document order; empty for a fresh workbook and for
    *  a package without that block. A formula, name, conditional-format rule or data validation that names an
    *  unregistered book (bracket or path spelling) appends a record without renumbering; a book already present,
@@ -4731,84 +5020,11 @@ export interface Workbook {
    *  same id is added. Fails if any pivot table still references it. */
   removePivotCache(cacheId: number | PivotCache): void;
 
-  /** Returns the resolved XF record at `xfIndex`. */
-  getCellXf(xfIndex: number): CellXf;
-  /** Returns the font record at `fontIndex`, including its Color selector. */
-  getFont(fontIndex: number): Font;
-  /** Returns the fill record at `fillIndex`, including its Color selectors. */
-  getFill(fillIndex: number): Fill;
-  /** Returns the border record at `borderIndex`, including its Color selectors. */
-  getBorder(borderIndex: number): Border;
-  /** Returns the effective format string for `numFmtId`; `null` when no format maps to it. */
-  getNumFmtString(numFmtId: number): string | null;
-  /** Returns the differential-format record referenced by CF `dxfId`. */
-  getDxf(dxfIndex: number): Dxf;
-
-  /** Adds a font (deduplicating against existing entries) and returns
-   *  the resolved index. */
-  addFont(record: Font): number;
-  /** Overwrites the font at `fontIndex` in place. Every `<xf>` naming that
-   *  index restyles at once, so this is a bulk change rather than a local
-   *  edit; `addFont` is the way to introduce a new appearance. The index
-   *  must already exist -- the table does not auto-grow. */
-  setFont(fontIndex: number, record: Font): void;
   /** Declares the workbook's default font: font 0, the record an unstyled
    *  cell resolves to. A new workbook seeds it with Excel's Calibri 11 and
    *  `addFont` can only append beside it, so this is the way to change what
-   *  a never-styled cell is saved as. Read it back with `getFont(0)`. */
+   *  a never-styled cell is saved as. Read it back with `ooxml.getFont(0)`. */
   setDefaultFont(record: Font): void;
-  /** Adds a fill (deduplicating against existing entries). */
-  addFill(record: Fill): number;
-  /** Adds a border (deduplicating against existing entries). */
-  addBorder(record: Border): number;
-  /** Adds a number-format code. An existing effective mapping is reused,
-   *  including an existing custom record; a built-in id is reused without
-   *  modifying the table only when its current effective mapping matches the
-   *  code. Otherwise custom codes are appended at
-   *  `max(existing_custom_id, 163) + 1`. Effective mappings use the first
-   *  valid custom record for an id in document order, then a non-empty
-   *  built-in code. */
-  addNumFmt(formatCode: string): number;
-  /** Adds an `<xf>` record (deduplicating against existing entries).
-   *  Out-of-range font/fill/border indices or unregistered `numFmtId`
-   *  surface `StatusCode.InvalidArgument` rather than auto-growing the parallel
-   *  tables. */
-  addCellXf(record: CellXfInput): number;
-  /** Adds a `<dxf>` differential-format record for conditional formats. */
-  addDxf(record: Dxf): number;
-
-  /** Lists the font records; a record's position is its font index. */
-  listFonts(): readonly Font[];
-  /** Lists the fill records; a record's position is its fill index. */
-  listFills(): readonly Fill[];
-  /** Lists the border records; a record's position is its border index. */
-  listBorders(): readonly Border[];
-  /** Lists the resolved `<xf>` records; a record's position is its XF index. */
-  listCellXfs(): readonly CellXf[];
-  /** Lists the `<dxf>` records; a record's position is the CF `dxfId` naming it. */
-  listDxfs(): readonly Dxf[];
-
-  /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
-  listCellStyles(): readonly CellStyle[];
-  /** Lists the `<cellStyleXfs>` records — the named-style xf table referenced by `CellStyle.xfId`, independent of
-   *  the per-cell `cellXfs` table; a record's position is its `cellStyleXfIndex`. */
-  listCellStyleXfs(): readonly CellXf[];
-  /** Reads the named cell style `name` (matched exactly); `null` when there is none. */
-  getCellStyle(name: string): CellStyle | null;
-  /** Returns the named-style xf record at `cellStyleXfIndex`. Output shape mirrors
-   *  `getCellXf`. */
-  getCellStyleXf(cellStyleXfIndex: number): CellXf;
-  /** Appends (deduplicating) a named-style xf and returns its
-   *  `<cellStyleXfs>` index, which is what `setCellStyle` and
-   *  `CellXf.xfId` reference. */
-  addCellStyleXf(record: CellXfInput): number;
-  /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent
-   *  fields default to `xfId` 0, a custom style (`0xFFFFFFFF`), level 0 and
-   *  both flags false. */
-  setCellStyle(record: CellStyle): void;
-  /** Removes the `<cellStyle>` named `name`; cell formats that used it are
-   *  repointed at the Normal style. */
-  removeCellStyle(name: string): void;
 
   /** Lists the custom table / PivotTable styles (`<tableStyles>`) in file order. */
   listTableStyles(): readonly TableStyle[];
@@ -4872,18 +5088,6 @@ export interface Workbook {
    *  (every column), with the sheet name quoted as a stored formula quotes it. A coordinate outside the
    *  grid or an unordered rectangle fails with `StatusCode.InvalidArgument`. */
   formatReference(range: ReferenceRangeInput, options?: FormatReferenceOptions): string;
-
-  /** Estimated heap bytes the native workbook occupies.
-   *
-   *  The addon reports this figure to V8 as external memory when a
-   *  workbook is created, loaded, recalculated or disposed, so a runtime
-   *  that acts on the hint can weigh workbooks that are large in native
-   *  memory but pointer-sized on the JS heap. Calling this method also
-   *  refreshes that report, which is worth doing after a long run of
-   *  cell writes. The value covers the cell store, shared strings,
-   *  passthrough parts and workbook metadata; it is an estimate, not an
-   *  allocation ledger. */
-  getMemoryUsage(): number;
 }
 
 /** One worksheet: the sheet-scope operations, addressed without a sheet argument, and the `Pivot` and `Drawing`
@@ -4908,10 +5112,16 @@ export interface Workbook {
  *  row or column span is the closed interval `(first, last)`. The parameter names say which form a method uses.
  *
  *  To read cells, pick by shape: `getValues` for a dense grid of values, `listCells` for the populated cells of a
- *  range, and `getCellsInRange` to page through a large range with a cursor. */
+ *  range, `getCellsInRange` to page through a large range with a cursor, and `iterRows` for the rows of the
+ *  used range. A read returns native values ({@link NativeValue}); its `*Typed*` variant returns tagged
+ *  {@link Value}s. A read computes pending cells first, as {@link CalcMode} says.
+ *
+ *  The cell, row and column XF indices and the raw worksheet XML are reached through `ooxml`. */
 export interface Sheet {
   /** The workbook this sheet belongs to. */
   readonly workbook: Workbook;
+  /** The OOXML-level layer of the sheet. Always the same object. */
+  readonly ooxml: SheetOoxml;
   /** The sheet's current 0-based position in the workbook. */
   readonly index: number;
   /** The sheet's current name. */
@@ -4961,38 +5171,45 @@ export interface Sheet {
   setBlank(row: number, col: number): void;
   /** `setBlank` at the A1 address `a1`. */
   setBlank(a1: string): void;
-  /** Stores a formula at `(row, col)`. Fails with `StatusCode.ParserUnexpectedToken` and changes nothing when the
-   *  text does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier.
+  /** Stores a formula at `(row, col)`; the leading `=` is optional. When the text does not parse (a syntax
+   *  error, or a built-in called through a sheet / workbook qualifier) it fails with a parser status
+   *  (1000-1014) whose `FormulonError.parseError` locates the failure, and changes nothing.
    *
    *  @example
    *  ```ts
    *  ws.setFormula('C1', '=A1*B1'); // or ws.setFormula(0, 2, '=A1*B1')
-   *  wb.recalc();
+   *  ws.getValue('C1');
    *  ``` */
   setFormula(row: number, col: number, formula: string): void;
   /** `setFormula` at the A1 address `a1`. */
   setFormula(a1: string, formula: string): void;
   /** Stores `value` through the setter its type selects: a `number` through `setNumber` (`-0` included; NaN and
-   *  infinity fail with `StatusCode.InvalidArgument`), a `string` through `setText` (a leading `=` stays
-   *  text; use `setFormula` for formulas), a `boolean` through `setBool` and `null` through `setBlank`. A
-   *  {@link Value} is stored by its `kind`; an `ErrorValue` goes through `setError`. `undefined`, a
-   *  `bigint`, a symbol, an array, any other object, and an `ArrayValue` / `RefValue` / `LambdaValue`
-   *  throw `TypeError`. The value `getValue` returns stores back unchanged for every scalar kind.
+   *  infinity fail with `StatusCode.InvalidArgument`), a `string` that starts with `=` through `setFormula`
+   *  (`'='` alone is a syntax error; `+`, `-`, `@` and the full-width `＝` do not start a formula), any other
+   *  `string` through `setText`, a `boolean` through `setBool`, `null` through `setBlank` and an
+   *  {@link ExcelError} through `setError`. A `Date` stores the serial of its UTC fields and, when the cell's
+   *  effective number format is General, gives it a date format (`m/d/yyyy`, or `m/d/yyyy h:mm` with a time
+   *  of day). A {@link Value} is stored by its `kind`; a `TextValue` is always text. `undefined`, a `bigint`,
+   *  a symbol, an array, any other object, and an `ArrayValue` / `RefValue` / `LambdaValue` throw
+   *  `TypeError`. Store untrusted text with `setText`, which never reads it as a formula.
    *
    *  @example
    *  ```ts
    *  ws.setValue('A1', 42);
    *  ws.setValue('A2', 'text');
-   *  ws.setValue('A3', null); // blank
+   *  ws.setValue('A3', '=A1*2'); // a formula
+   *  ws.setValue('A4', null); // blank
    *  ``` */
-  setValue(row: number, col: number, value: number | string | boolean | null | Value): void;
+  setValue(row: number, col: number, value: number | string | boolean | null | Date | ExcelError | Value): void;
   /** `setValue` at the A1 address `a1`. */
-  setValue(a1: string, value: number | string | boolean | null | Value): void;
+  setValue(a1: string, value: number | string | boolean | null | Date | ExcelError | Value): void;
 
   /** Writes `values` (rows of `setValue` values, row-major) into the block whose top-left cell is `(row, col)`.
    *  Every element's type, NaN / infinity, equal row lengths and the block's fit in the sheet are checked first,
-   *  and a violation writes nothing. A cell the engine refuses (inside an array formula or a data table) throws
-   *  with the cells before it already written. An empty `values` or empty rows write nothing.
+   *  and a violation writes nothing. A cell the engine refuses (inside an array formula or a data table) or a
+   *  formula that does not parse throws with the cells before it already written, its `context` naming the
+   *  cell (`row=` / `col=`). An empty `values` or empty rows write nothing. `getTypedValues` reads a block back
+   *  so that it stores unchanged.
    *
    *  @example
    *  ```ts
@@ -5001,30 +5218,60 @@ export interface Sheet {
    *    ['Apple', 3],
    *  ]);
    *  ``` */
-  setValues(row: number, col: number, values: readonly (readonly (number | string | boolean | null | Value)[])[]): void;
+  setValues(
+    row: number,
+    col: number,
+    values: readonly (readonly (number | string | boolean | null | Date | ExcelError | Value)[])[],
+  ): void;
   /** `setValues` at the A1 address `a1`. */
-  setValues(a1: string, values: readonly (readonly (number | string | boolean | null | Value)[])[]): void;
+  setValues(
+    a1: string,
+    values: readonly (readonly (number | string | boolean | null | Date | ExcelError | Value)[])[],
+  ): void;
 
-  /** Reads the cell's cached value, as of the last full recalc. Fails with `StatusCode.InvalidArgument` when
-   *  `row` or `col` is out of range.
+  /** Reads the cell's value as native data. Fails with `StatusCode.InvalidArgument` when `row` or `col` is out
+   *  of range; a sheet-qualified address (`'Sheet1!A1'`) is refused in favour of `wb.sheet('Sheet1').getValue('A1')`.
    *
    *  @example
    *  ```ts
-   *  const v = ws.getValue('A1');
+   *  ws.setValue('A1', 6);
+   *  ws.setValue('B1', '=A1*7');
+   *  ws.getValue('B1'); // 42
+   *  ``` */
+  getValue(row: number, col: number): NativeValue;
+  /** `getValue` at the A1 address `a1`. */
+  getValue(a1: string): NativeValue;
+  /** Reads the cell's value tagged with its kind.
+   *
+   *  @example
+   *  ```ts
+   *  const v = ws.getTypedValue('A1');
    *  if (v.kind === formulon.ValueKind.Number) console.log(v.number);
    *  ``` */
-  getValue(row: number, col: number): Value;
-  /** `getValue` at the A1 address `a1`. */
-  getValue(a1: string): Value;
-  /** Reads the cached values of `range` as a dense row-major grid, as of the last full recalc: an empty cell is
-   *  Blank and a spilled cell holds its spilled value. A range over 4,194,304 (2^22) cells fails with
-   *  `StatusCode.InvalidArgument`.
+  getTypedValue(row: number, col: number): Value;
+  /** `getTypedValue` at the A1 address `a1`. */
+  getTypedValue(a1: string): Value;
+  /** Reads the values of `range` as a dense row-major grid of native data: an empty cell is `null` and a spilled
+   *  cell holds its spilled value. A range over 4,194,304 (2^22) cells fails with `StatusCode.InvalidArgument`.
    *
    *  @example
    *  ```ts
-   *  const grid = ws.getValues('A1:B2'); // grid[row][col] is a Value
+   *  const grid = ws.getValues('A1:B2'); // grid[row][col]
    *  ``` */
-  getValues(range: CellRect | string): readonly (readonly Value[])[];
+  getValues(range: CellRect | string): readonly (readonly NativeValue[])[];
+  /** `getValues` with each value tagged with its kind; `setValues` stores the grid back unchanged. */
+  getTypedValues(range: CellRect | string): readonly (readonly Value[])[];
+  /** Reads the cell as a date: the serial's calendar date under the workbook's date system, its fraction
+   *  rounded to the millisecond, as a `Date` whose UTC fields carry it. `null` for an empty cell; a cell that
+   *  holds no number fails with `StatusCode.InvalidArgument`. */
+  getDate(row: number, col: number): Date | null;
+  /** `getDate` at the A1 address `a1`. */
+  getDate(a1: string): Date | null;
+  /** The bounding rectangle of the cells holding a value or a formula (formatting alone does not count);
+   *  `null` for a sheet with none. */
+  getUsedRange(): CellRect | null;
+  /** Iterates the rows of `range` (default: the used range) as arrays of native values, top to bottom. */
+  iterRows(range?: CellRect | string): IterableIterator<readonly NativeValue[]>;
 
   /** The stored A1 formula (leading `=` included), or `null` for a cell that holds none. The text is
    *  re-spelled from the parsed formula, so literals read normalised (`=1.50` reads `=1.5`); a formula loaded
@@ -5040,14 +5287,14 @@ export interface Sheet {
   /** `getFormulaR1C1` at the A1 address `a1`. */
   getFormulaR1C1(a1: string): string | null;
   /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
-   *  `range`, row-major. `cursor` is the `nextCursor` of the previous page (omit for the first);
+   *  `range`, row-major, each a {@link RangeCell}. `cursor` is the `nextCursor` of the previous page (omit for the first);
    *  `limit` caps the page (omit or 0 for the maximum, 65536). */
   getCellsInRange(range: CellRect | string, cursor?: number | null, limit?: number | null): CellsInRange;
   /** Lists every populated cell (formula or non-blank value, spill phantoms included) inside `range`, or on the
    *  whole sheet when `range` is omitted, row-major. */
   listCells(range?: CellRect | string): readonly RangeCell[];
-  /** The text Excel displays for the cell, from its value (as of the last full recalc) and number format under
-   *  the workbook's date system.
+  /** The text Excel displays for the cell, from its value and number format under the workbook's date
+   *  system.
    *
    *  @example
    *  ```ts
@@ -5059,33 +5306,34 @@ export interface Sheet {
   /** `getDisplayText` at the A1 address `a1`. */
   getDisplayText(a1: string): DisplayText;
 
-  /** Evaluates `formula` as if entered at `(row, col)` and returns a
-   *  single scalar result, without mutating the workbook. Local and
-   *  cross-sheet references, defined names, and `ROW()` / `COLUMN()` resolve
-   *  relative to the anchor. An array / spill result is reduced to its
-   *  top-left element (not Excel implicit intersection or spilling; use
-   *  `evaluateFormulaArray` for the whole multi-cell result).
-   *  Note: a self-reference reads the target cell's cached value rather than
-   *  raising `#REF!`, since the ad-hoc formula never joins the dep graph.
+  /** Evaluates `formula` as if entered at `(row, col)`, without mutating the workbook, and returns the result
+   *  as native data: a scalar for a 1x1 result, the rows of the array otherwise. Local and cross-sheet
+   *  references, defined names, and `ROW()` / `COLUMN()` resolve relative to the anchor. A self-reference reads
+   *  the target cell's value rather than raising `#REF!`, since the ad-hoc formula never joins the dependency
+   *  graph. A formula that does not parse fails with its parser status and `FormulonError.parseError`.
    *
    *  @example
    *  ```ts
-   *  const v = ws.evaluateFormula('A1', '=SUM(1,2,3)'); // { kind: ValueKind.Number, number: 6 }
+   *  ws.evaluateFormula('A1', '=SUM(1,2,3)'); // 6
+   *  ws.evaluateFormula('A1', '=SEQUENCE(2,2)'); // [[1, 2], [3, 4]]
    *  ``` */
-  evaluateFormula(row: number, col: number, formula: string): Value;
+  evaluateFormula(row: number, col: number, formula: string): NativeValue;
   /** `evaluateFormula` at the A1 address `a1`. */
-  evaluateFormula(a1: string, formula: string): Value;
+  evaluateFormula(a1: string, formula: string): NativeValue;
+  /** `evaluateFormula` with the result tagged: an array result is an {@link ArrayValue}. */
+  evaluateTypedFormula(row: number, col: number, formula: string): Value;
+  /** `evaluateTypedFormula` at the A1 address `a1`. */
+  evaluateTypedFormula(a1: string, formula: string): Value;
 
-  /** Evaluates `formula` as if entered at `(row, col)` and returns the
-   *  whole multi-cell result without mutating the workbook. Unlike
-   *  `evaluateFormula` (which reduces an array to its top-left element),
-   *  a dynamic-array formula such as `=SEQUENCE(2,3)` yields the full
-   *  `rows` x `cols` grid in `result.cells` (row-major, `cells[r][c]`); a
-   *  scalar result is reported as a 1x1 array. Same read-only purity and
-   *  self-reference caveat as `evaluateFormula`. */
-  evaluateFormulaArray(row: number, col: number, formula: string): EvalArray;
+  /** `evaluateFormula`, always as rows: a scalar result is one row of one value. A range blank reads as 0, as a
+   *  dynamic array spills it. */
+  evaluateFormulaArray(row: number, col: number, formula: string): readonly (readonly NativeValue[])[];
   /** `evaluateFormulaArray` at the A1 address `a1`. */
-  evaluateFormulaArray(a1: string, formula: string): EvalArray;
+  evaluateFormulaArray(a1: string, formula: string): readonly (readonly NativeValue[])[];
+  /** `evaluateFormulaArray` with each value tagged with its kind. */
+  evaluateTypedFormulaArray(row: number, col: number, formula: string): readonly (readonly Value[])[];
+  /** `evaluateTypedFormulaArray` at the A1 address `a1`. */
+  evaluateTypedFormulaArray(a1: string, formula: string): readonly (readonly Value[])[];
 
   /** Evaluates `formula` as a conditional-formatting predicate anchored at
    *  `(row, col)`, with relative references written relative to
@@ -5177,13 +5425,6 @@ export interface Sheet {
   deleteColumns(col: number, count: number): void;
   /** `deleteColumns` over the columns of the A1 column span `span` (`"B"`, `"B:D"`). */
   deleteColumns(span: string): void;
-
-  /** OOXML fragment for round trips; normally use `getAutoFilter`. Reads the complete worksheet-level
-   *  `<autoFilter>` element; `null` when the sheet has no AutoFilter definition. */
-  getAutoFilterXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setAutoFilter`. Replaces the worksheet-level `<autoFilter>`
-   *  element; `null` (or `""`) clears it. */
-  setAutoFilterXml(xml: string | null): void;
 
   /** Reads the sheet's typed AutoFilter; `null` when absent. */
   getAutoFilter(): AutoFilter | null;
@@ -5309,7 +5550,7 @@ export interface Sheet {
    *  ```ts
    *  const cache = wb.addPivotCache();
    *  // ... bind the cache to its source and add fields ...
-   *  const pivot = ws.addPivot({ name: 'ByItem', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+   *  const pivot = ws.addPivot({ name: 'ByItem', cacheId: cache.cacheId, anchor: 'E1' });
    *  ``` */
   addPivot(input: PivotInput): Pivot;
   /** Removes the pivot table `pivot`; its handle then fails with `StatusCode.NotFound`. */
@@ -5317,54 +5558,21 @@ export interface Sheet {
 
   /** Evaluates every CF block on the sheet against the cells of `range` and returns only the cells that
    *  produced at least one match. `todaySerial` pins the
-   *  date basis for `TimePeriod` rules; pass `NaN` to disable them (no
+   *  date basis for `TimePeriod` rules (default: the pinned clock, else today); pass `NaN` to disable them (no
    *  `TimePeriod` rule then matches). `0` does *not* disable them -- it is
    *  the valid serial for 1899-12-30. */
-  evaluateCfRange(range: CellRect | string, todaySerial: number): readonly CfCell[];
+  evaluateCfRange(range: CellRect | string, todaySerial?: number): readonly CfCell[];
 
   /** Computes print-area page breaks and physical page count for the sheet. */
   getPagination(): Pagination;
-
-  /** OOXML fragment for round trips; normally use `getPageSetup`. Reads the worksheet's `<pageSetup>` element;
-   *  `null` when absent. */
-  getPageSetupXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPageSetup`. Replaces `<pageSetup>`; `null` (or `""`)
-   *  removes it and restores the defaults. A fragment carrying `r:id` is rejected unless the sheet already has a
-   *  printerSettings part, since the reference would otherwise dangle. */
-  setPageSetupXml(xml: string | null): void;
-  /** OOXML fragment for round trips; normally use `getPageMargins`. Reads the worksheet's `<pageMargins>`
-   *  element; `null` when absent. */
-  getPageMarginsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPageMargins`. Replaces `<pageMargins>`; `null` (or `""`)
-   *  removes it. */
-  setPageMarginsXml(xml: string | null): void;
-  /** OOXML fragment for round trips; normally use `getPrintOptions`. Reads the worksheet's `<printOptions>`
-   *  element; `null` when absent. */
-  getPrintOptionsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPrintOptions`. Replaces `<printOptions>`; `null` (or `""`)
-   *  removes it. */
-  setPrintOptionsXml(xml: string | null): void;
-  /** OOXML fragment for round trips; normally use `getHeaderFooter`. Reads the worksheet's `<headerFooter>`
-   *  element; `null` when absent. */
-  getHeaderFooterXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setHeaderFooter`. Replaces `<headerFooter>`; `null` (or `""`)
-   *  removes it. Header codes live in XML element text, so a hand-built fragment writes them escaped
-   *  (`<oddHeader>&amp;C...</oddHeader>`); `setHeaderFooter` takes the decoded text instead. */
-  setHeaderFooterXml(xml: string | null): void;
-  /** OOXML fragment for round trips; normally use `getPageSetup`, which reads its `fitToPage`. Reads the
-   *  worksheet's `<sheetPr>` element; `null` when absent. It also carries the tab colour and VBA code name. */
-  getSheetPrXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPageSetup`, which writes its `fitToPage`. Replaces
-   *  `<sheetPr>`; `null` (or `""`) removes it. */
-  setSheetPrXml(xml: string | null): void;
 
   /** Reads `_xlnm.Print_Area` as rectangles, in print order; `null` without a print area. A whole-axis
    *  area reads back expanded to the grid edge. */
   getPrintArea(): readonly CellRect[] | null;
   /** Writes `_xlnm.Print_Area` from one or more rectangles, printed in the
    *  given order; a rectangle spanning every row or column is stored as whole
-   *  columns or rows. `null` (or an empty array) removes it. */
-  setPrintArea(ranges: readonly (CellRect | string)[] | null): void;
+   *  columns or rows; one A1 range string is one rectangle. `null` (or an empty array) removes it. */
+  setPrintArea(ranges: readonly (CellRect | string)[] | string | null): void;
   /** Reads `_xlnm.Print_Titles` as a row span and a column span; `null` when neither axis repeats. */
   getPrintTitles(): PrintTitles | null;
   /** Writes `_xlnm.Print_Titles`; an axis whose span is `null` does not repeat, and `null` removes the name. */
@@ -5411,10 +5619,14 @@ export interface Sheet {
    *  non-zero split throws `TypeError`. Applied in a fixed order: freeze or split (each replaces the other, and a
    *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomScale` (clamped to
    *  `[10, 400]`), `viewMode`, `rightToLeft`, `tabSelected`, `visibility`. The pane origin must lie past the
-   *  frozen rows and columns. Hiding the only visible sheet and a pane origin without panes are checked against
+   *  frozen rows and columns. Hiding the only visible sheet and a pane origin other than `0, 0` without panes are checked against
    *  the merged view before anything is written, failing with `StatusCode.InvalidArgument`; another engine
    *  failure throws with the earlier keys applied. */
   setView(patch: SheetViewPatch): void;
+  /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */
+  getTabColor(): Color | null;
+  /** Sets the tab colour; `null` removes it. */
+  setTabColor(color: ColorInput | null): void;
   /** Reads the active pane's selection (active cell and ranges). */
   getSelection(): SheetSelection;
   /** Replaces the active pane's selection. In a frozen or split view the
@@ -5454,14 +5666,6 @@ export interface Sheet {
   setColumnCollapsed(first: number, last: number, collapsed: boolean): void;
   /** `setColumnCollapsed` over the A1 column span `span` (`"B"`, `"B:D"`). */
   setColumnCollapsed(span: string, collapsed: boolean): void;
-  /** Sets / replaces the cell-style XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled cell of the span takes this XF, unless its row has a style. */
-  setColumnStyle(first: number, last: number, xfIndex: number): void;
-  /** `setColumnStyle` over the A1 column span `span` (`"B"`, `"B:D"`). */
-  setColumnStyle(span: string, xfIndex: number): void;
-  /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
-  clearColumnStyle(first: number, last: number): void;
-  /** `clearColumnStyle` over the A1 column span `span` (`"B"`, `"B:D"`). */
-  clearColumnStyle(span: string): void;
 
   /** Returns the row-layout overrides on the sheet. */
   listRowOverrides(): readonly RowLayout[];
@@ -5486,48 +5690,6 @@ export interface Sheet {
   setRowCollapsed(first: number, last: number, collapsed: boolean): void;
   /** `setRowCollapsed` over the A1 row span `span` (`"3"`, `"3:5"`). */
   setRowCollapsed(span: string, collapsed: boolean): void;
-  /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes when it throws. */
-  setRowStyle(first: number, last: number, xfIndex: number): void;
-  /** `setRowStyle` over the A1 row span `span` (`"3"`, `"3:5"`). */
-  setRowStyle(span: string, xfIndex: number): void;
-  /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
-  clearRowStyle(first: number, last: number): void;
-  /** `clearRowStyle` over the A1 row span `span` (`"3"`, `"3:5"`). */
-  clearRowStyle(span: string): void;
-  /**
-   * Lists, ascending, every cell-XF index some cell of the selection resolves to: the XFs of
-   * cells that carry their own, then the row, column or default (0) style of the rest. `range`
-   * is a selection: all rows make it a column
-   * selection, all columns a row selection, both the whole sheet.
-   *
-   * First step of an attribute-only change (say the font size) over a selection, the way
-   * Excel applies it to a row, column, range or the whole sheet: read the bases here, build
-   * each one's patched XF with `addFont` / `addCellXf`, then apply the pairs with
-   * `remapRangeStyle`.
-   */
-  getRangeStyleBases(range: CellRect | string): readonly number[];
-  /**
-   * `getRangeStyleBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
-   * an excluded cell contributes no XF, neither its own nor the row, column or default style
-   * beneath it. Use it when the host resolves those cells itself (say, a pending edit overrides
-   * their style). Excluded cells outside the selection and repeats are ignored; excluding every
-   * cell yields an empty list. Fails when the arrays differ in length.
-   */
-  getRangeStyleBasesExcluding(
-    range: CellRect | string,
-    excludedRows: readonly number[],
-    excludedCols: readonly number[],
-  ): readonly number[];
-  /**
-   * Second step of the attribute patch: every cell of the selection ends at `toXfs[i]` where
-   * it resolved to `fromXfs[i]` before; an XF not listed is kept. Covered row and column
-   * styles are rewritten and existing cells remapped; a cell is materialised only where
-   * row-over-column precedence would otherwise resolve differently (for a plain range, every
-   * cell). Values and formulas are untouched. Fails, changing nothing, when the arrays differ
-   * in length, a `fromXfs` entry repeats, a `toXfs` entry is past the cell-XF table, or more
-   * than 1,048,576 cells would be written.
-   */
-  remapRangeStyle(range: CellRect | string, fromXfs: readonly number[], toXfs: readonly number[]): void;
   /** Captures the style state of a selection (covered column or row styles and every stored cell's XF) as opaque, versioned bytes for `restoreRangeStyle`; use it to undo a `remapRangeStyle`. */
   snapshotRangeStyle(range: CellRect | string): Uint8Array;
   /** Puts a `snapshotRangeStyle` capture back exactly. Values, formulas, phonetic runs and comments are not touched; nothing changes when it throws. */
@@ -5574,7 +5736,7 @@ export interface Sheet {
    *  whole-row or whole-sheet range (`B:B`, `3:3`, `A:XFD`) formats the column, row or sheet, so cells entered
    *  there later take the format too. Equal formats share one style record. Every argument is checked before
    *  anything is written; the sheet changes in one step at the end, but an engine failure on the way can leave
-   *  unused style records behind (`listCellXfs()`). Fails with `StatusCode.InvalidArgument` for an empty
+   *  unused style records behind (`Workbook.ooxml.listCellXfs()`). Fails with `StatusCode.InvalidArgument` for an empty
    *  `numberFormat`, an enum value outside its table, `indent` above 255, or `textRotation` outside 0..180 and
    *  255.
    *
@@ -5583,31 +5745,6 @@ export interface Sheet {
    *  ws.setCellFormat('A1:C1', { font: { bold: true }, numberFormat: '#,##0.00' });
    *  ``` */
   setCellFormat(range: CellRect | string, patch: CellFormatPatch): void;
-
-  /** Returns the cell XF index of the cell at `(row, col)`. */
-  getCellXfIndex(row: number, col: number): number;
-  /** `getCellXfIndex` at the A1 address `a1`. */
-  getCellXfIndex(a1: string): number;
-  /** Persists `xfIndex` on the cell at `(row, col)`. An index not
-   *  below `listCellXfs().length` fails with `StatusCode.InvalidArgument`. */
-  setCellXfIndex(row: number, col: number, xfIndex: number): void;
-  /** `setCellXfIndex` at the A1 address `a1`. */
-  setCellXfIndex(a1: string, xfIndex: number): void;
-  /**
-   * Removes the direct style assignment from the cell at `(row, col)`
-   * so a blank cell inherits its row / column style again. Value, formula and
-   * comments are kept; an absent cell stays absent. A non-blank cell keeps
-   * owning the default xf. Use `getEffectiveStyle().source` to tell an
-   * unassigned cell (`Row` / `Column` / `Default`) from a direct Normal
-   * (`Cell`).
-   */
-  clearCellXfIndex(row: number, col: number): void;
-  /** `clearCellXfIndex` at the A1 address `a1`. */
-  clearCellXfIndex(a1: string): void;
-  /** Applies `xfIndex` across the cells of `range`, materialising blank
-   *  cells so an empty ruled box renders. Saves one call per cell. An
-   *  index not below `listCellXfs().length` fails with `StatusCode.InvalidArgument`. */
-  setRangeXfIndex(range: CellRect | string, xfIndex: number): void;
   /** The formatting a cell shows: the xf chosen from cell, row, column or
    *  the default, with its colours resolved. Conditional formatting is not
    *  applied. */
@@ -5696,10 +5833,11 @@ export interface Sheet {
    *  sequence (the same indexing `listCfRules` and
    *  `removeCfRule` use); it stays valid until a subsequent
    *  add/remove/clear mutation on the same sheet renumbers the sequence.
-   *  A non-empty `formula1` / `formula2` that does not parse is rejected
-   *  with `StatusCode.ParserUnexpectedToken`, and an `id` another rule on the sheet has with
-   *  `StatusCode.InvalidArgument`. */
+   *  A non-empty `formula1` / `formula2` that does not parse fails with its parser status and
+   *  `FormulonError.parseError`. An `id` another rule on the sheet has is replaced by a new one. */
   addCfRule(rule: ConditionalFormatInput): number;
+  /** Adds back a rule `listCfRules` returned, as it is. */
+  addCfRule(rule: ConditionalFormat): number;
   /** Removes the CF rule `cfRule`. When the containing block becomes empty it is removed too. */
   removeCfRule(cfRule: CfRuleRef): void;
   /** Drops every CF block on the sheet. */
@@ -5707,17 +5845,17 @@ export interface Sheet {
 
   /** Returns the cells that `(row, col)` directly reads
    *  (1-step precedents) when `depth <= 1`, or every cell reached
-   *  within `depth` BFS steps otherwise. `depth` is capped at 32 to
+   *  within `depth` BFS steps otherwise (default 1). `depth` is capped at 32 to
    *  avoid runaway expansion in cyclic graphs. An invalid sheet, row or
    *  column throws `FormulonError`. */
-  getPrecedents(row: number, col: number, depth: number): readonly CellNode[];
+  getPrecedents(row: number, col: number, depth?: number): readonly CellNode[];
   /** `getPrecedents` at the A1 address `a1`. */
-  getPrecedents(a1: string, depth: number): readonly CellNode[];
+  getPrecedents(a1: string, depth?: number): readonly CellNode[];
   /** Returns the cells that read `(row, col)` directly
    *  (1-step dependents). Same depth semantics as `getPrecedents`. */
-  getDependents(row: number, col: number, depth: number): readonly CellNode[];
+  getDependents(row: number, col: number, depth?: number): readonly CellNode[];
   /** `getDependents` at the A1 address `a1`. */
-  getDependents(a1: string, depth: number): readonly CellNode[];
+  getDependents(a1: string, depth?: number): readonly CellNode[];
 
   /** Returns dynamic-array spill info for `(row, col)`.
    *  When the cell is part of a spill region (anchor or phantom),
@@ -5746,6 +5884,217 @@ export interface Sheet {
    *  cell replaces the whole block, which is how a block is cleared; a write to any other cell of
    *  a block is refused. */
   setArrayFormula(arrayFormula: ArrayFormula): void;
+}
+
+/** The OOXML-level layer of a workbook, `Workbook.ooxml`: the style record tables (cell XFs, fonts, fills,
+ *  borders, number formats, differential formats, named-style XFs), the named cell styles that reference
+ *  them by index, and the parts carried through unchanged. Most code formats cells with
+ *  `Sheet.setCellFormat` and never needs it. */
+export interface WorkbookOoxml {
+  /** Returns the resolved XF record at `xfIndex`. */
+  getCellXf(xfIndex: number): CellXf;
+  /** Returns the font record at `fontIndex`, including its Color selector. */
+  getFont(fontIndex: number): Font;
+  /** Returns the fill record at `fillIndex`, including its Color selectors. */
+  getFill(fillIndex: number): Fill;
+  /** Returns the border record at `borderIndex`, including its Color selectors. */
+  getBorder(borderIndex: number): Border;
+  /** Returns the effective format string for `numFmtId`; `null` when no format maps to it. */
+  getNumFmtString(numFmtId: number): string | null;
+  /** Returns the differential-format record referenced by CF `dxfId`. */
+  getDxf(dxfIndex: number): Dxf;
+
+  /** Adds a font (deduplicating against existing entries) and returns
+   *  the resolved index. */
+  addFont(record: Font): number;
+  /** Overwrites the font at `fontIndex` in place. Every `<xf>` naming that
+   *  index restyles at once, so this is a bulk change rather than a local
+   *  edit; `addFont` is the way to introduce a new appearance. The index
+   *  must already exist -- the table does not auto-grow. */
+  setFont(fontIndex: number, record: Font): void;
+  /** Adds a fill (deduplicating against existing entries). */
+  addFill(record: Fill): number;
+  /** Adds a border (deduplicating against existing entries). */
+  addBorder(record: Border): number;
+  /** Adds a number-format code. An existing effective mapping is reused,
+   *  including an existing custom record; a built-in id is reused without
+   *  modifying the table only when its current effective mapping matches the
+   *  code. Otherwise custom codes are appended at
+   *  `max(existing_custom_id, 163) + 1`. Effective mappings use the first
+   *  valid custom record for an id in document order, then a non-empty
+   *  built-in code. */
+  addNumFmt(formatCode: string): number;
+  /** Adds an `<xf>` record (deduplicating against existing entries).
+   *  Out-of-range font/fill/border indices or unregistered `numFmtId`
+   *  surface `StatusCode.InvalidArgument` rather than auto-growing the parallel
+   *  tables. */
+  addCellXf(record: CellXfInput): number;
+  /** Adds a `<dxf>` differential-format record for conditional formats. */
+  addDxf(record: Dxf): number;
+
+  /** Lists the font records; a record's position is its font index. */
+  listFonts(): readonly Font[];
+  /** Lists the fill records; a record's position is its fill index. */
+  listFills(): readonly Fill[];
+  /** Lists the border records; a record's position is its border index. */
+  listBorders(): readonly Border[];
+  /** Lists the resolved `<xf>` records; a record's position is its XF index. */
+  listCellXfs(): readonly CellXf[];
+  /** Lists the `<dxf>` records; a record's position is the CF `dxfId` naming it. */
+  listDxfs(): readonly Dxf[];
+
+  /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
+  listCellStyles(): readonly CellStyle[];
+  /** Lists the `<cellStyleXfs>` records — the named-style xf table referenced by `CellStyle.xfId`, independent of
+   *  the per-cell `cellXfs` table; a record's position is its `cellStyleXfIndex`. */
+  listCellStyleXfs(): readonly CellXf[];
+  /** Reads the named cell style `name` (matched exactly); `null` when there is none. */
+  getCellStyle(name: string): CellStyle | null;
+  /** Returns the named-style xf record at `cellStyleXfIndex`. Output shape mirrors
+   *  `getCellXf`. */
+  getCellStyleXf(cellStyleXfIndex: number): CellXf;
+  /** Appends (deduplicating) a named-style xf and returns its
+   *  `<cellStyleXfs>` index, which is what `setCellStyle` and
+   *  `CellXf.xfId` reference. */
+  addCellStyleXf(record: CellXfInput): number;
+  /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent
+   *  fields default to `xfId` 0, a custom style (`0xFFFFFFFF`), level 0 and
+   *  both flags false. */
+  setCellStyle(record: CellStyle): void;
+  /** Removes the `<cellStyle>` named `name`; cell formats that used it are
+   *  repointed at the Normal style. */
+  removeCellStyle(name: string): void;
+
+  /** Lists the paths of the OOXML parts the reader carried through unchanged. */
+  listPassthroughs(): readonly string[];
+  /** Reports whether a passthrough part sits at `path` (no leading `/`); returns the path, or `null`. */
+  getPassthrough(path: string): string | null;
+}
+
+/** The OOXML-level layer of a sheet, `Sheet.ooxml`: the cell, row and column XF indices, the range-style
+ *  remap that works on them, and the raw XML of the worksheet elements the typed setters cover. Most code
+ *  uses `Sheet.setCellFormat`, which takes whole columns (`'B:B'`) and rows (`'3:3'`) too. */
+export interface SheetOoxml {
+  /** The cell-style XF index the columns of `col` carry (`setColumnStyle`); `null` when the column has none. */
+  getColumnStyle(col: number): number | null;
+  /** The cell-style XF index row `row` makes effective (OOXML `customFormat="1"`, `setRowStyle`); `null` when
+   *  the row has none. */
+  getRowStyle(row: number): number | null;
+
+  /** OOXML fragment for round trips; normally use `getAutoFilter`. Reads the complete worksheet-level
+   *  `<autoFilter>` element; `null` when the sheet has no AutoFilter definition. */
+  getAutoFilterXml(): string | null;
+  /** OOXML fragment for round trips; normally use `setAutoFilter`. Replaces the worksheet-level `<autoFilter>`
+   *  element; `null` (or `""`) clears it. */
+  setAutoFilterXml(xml: string | null): void;
+
+  /** OOXML fragment for round trips; normally use `getPageSetup`. Reads the worksheet's `<pageSetup>` element;
+   *  `null` when absent. */
+  getPageSetupXml(): string | null;
+  /** OOXML fragment for round trips; normally use `setPageSetup`. Replaces `<pageSetup>`; `null` (or `""`)
+   *  removes it and restores the defaults. A fragment carrying `r:id` is rejected unless the sheet already has a
+   *  printerSettings part, since the reference would otherwise dangle. */
+  setPageSetupXml(xml: string | null): void;
+  /** OOXML fragment for round trips; normally use `getPageMargins`. Reads the worksheet's `<pageMargins>`
+   *  element; `null` when absent. */
+  getPageMarginsXml(): string | null;
+  /** OOXML fragment for round trips; normally use `setPageMargins`. Replaces `<pageMargins>`; `null` (or `""`)
+   *  removes it. */
+  setPageMarginsXml(xml: string | null): void;
+  /** OOXML fragment for round trips; normally use `getPrintOptions`. Reads the worksheet's `<printOptions>`
+   *  element; `null` when absent. */
+  getPrintOptionsXml(): string | null;
+  /** OOXML fragment for round trips; normally use `setPrintOptions`. Replaces `<printOptions>`; `null` (or `""`)
+   *  removes it. */
+  setPrintOptionsXml(xml: string | null): void;
+  /** OOXML fragment for round trips; normally use `getHeaderFooter`. Reads the worksheet's `<headerFooter>`
+   *  element; `null` when absent. */
+  getHeaderFooterXml(): string | null;
+  /** OOXML fragment for round trips; normally use `setHeaderFooter`. Replaces `<headerFooter>`; `null` (or `""`)
+   *  removes it. Header codes live in XML element text, so a hand-built fragment writes them escaped
+   *  (`<oddHeader>&amp;C...</oddHeader>`); `setHeaderFooter` takes the decoded text instead. */
+  setHeaderFooterXml(xml: string | null): void;
+  /** OOXML fragment for round trips; normally use `getPageSetup`, which reads its `fitToPage`. Reads the
+   *  worksheet's `<sheetPr>` element; `null` when absent. It also carries the tab colour and VBA code name. */
+  getSheetPrXml(): string | null;
+  /** OOXML fragment for round trips; normally use `setPageSetup`, which writes its `fitToPage`. Replaces
+   *  `<sheetPr>`; `null` (or `""`) removes it. */
+  setSheetPrXml(xml: string | null): void;
+  /** Sets / replaces the cell-style XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled cell of the span takes this XF, unless its row has a style. */
+  setColumnStyle(first: number, last: number, xfIndex: number): void;
+  /** `setColumnStyle` over the A1 column span `span` (`"B"`, `"B:D"`). */
+  setColumnStyle(span: string, xfIndex: number): void;
+  /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
+  clearColumnStyle(first: number, last: number): void;
+  /** `clearColumnStyle` over the A1 column span `span` (`"B"`, `"B:D"`). */
+  clearColumnStyle(span: string): void;
+  /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes when it throws. */
+  setRowStyle(first: number, last: number, xfIndex: number): void;
+  /** `setRowStyle` over the A1 row span `span` (`"3"`, `"3:5"`). */
+  setRowStyle(span: string, xfIndex: number): void;
+  /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
+  clearRowStyle(first: number, last: number): void;
+  /** `clearRowStyle` over the A1 row span `span` (`"3"`, `"3:5"`). */
+  clearRowStyle(span: string): void;
+  /**
+   * Lists, ascending, every cell-XF index some cell of the selection resolves to: the XFs of
+   * cells that carry their own, then the row, column or default (0) style of the rest. `range`
+   * is a selection: all rows make it a column
+   * selection, all columns a row selection, both the whole sheet.
+   *
+   * First step of an attribute-only change (say the font size) over a selection, the way
+   * Excel applies it to a row, column, range or the whole sheet: read the bases here, build
+   * each one's patched XF with `Workbook.ooxml.addFont` / `addCellXf`, then apply the pairs with
+   * `remapRangeStyle`.
+   */
+  getRangeStyleBases(range: CellRect | string): readonly number[];
+  /**
+   * `getRangeStyleBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
+   * an excluded cell contributes no XF, neither its own nor the row, column or default style
+   * beneath it. Use it when the host resolves those cells itself (say, a pending edit overrides
+   * their style). Excluded cells outside the selection and repeats are ignored; excluding every
+   * cell yields an empty list. Fails when the arrays differ in length.
+   */
+  getRangeStyleBasesExcluding(
+    range: CellRect | string,
+    excludedRows: readonly number[],
+    excludedCols: readonly number[],
+  ): readonly number[];
+  /**
+   * Second step of the attribute patch: every cell of the selection ends at `toXfs[i]` where
+   * it resolved to `fromXfs[i]` before; an XF not listed is kept. Covered row and column
+   * styles are rewritten and existing cells remapped; a cell is materialised only where
+   * row-over-column precedence would otherwise resolve differently (for a plain range, every
+   * cell). Values and formulas are untouched. Fails, changing nothing, when the arrays differ
+   * in length, a `fromXfs` entry repeats, a `toXfs` entry is past the cell-XF table, or more
+   * than 1,048,576 cells would be written.
+   */
+  remapRangeStyle(range: CellRect | string, fromXfs: readonly number[], toXfs: readonly number[]): void;
+
+  /** Returns the cell XF index of the cell at `(row, col)`. */
+  getCellXfIndex(row: number, col: number): number;
+  /** `getCellXfIndex` at the A1 address `a1`. */
+  getCellXfIndex(a1: string): number;
+  /** Persists `xfIndex` on the cell at `(row, col)`. An index not
+   *  below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.InvalidArgument`. */
+  setCellXfIndex(row: number, col: number, xfIndex: number): void;
+  /** `setCellXfIndex` at the A1 address `a1`. */
+  setCellXfIndex(a1: string, xfIndex: number): void;
+  /**
+   * Removes the direct style assignment from the cell at `(row, col)`
+   * so a blank cell inherits its row / column style again. Value, formula and
+   * comments are kept; an absent cell stays absent. A non-blank cell keeps
+   * owning the default xf. Use `getEffectiveStyle().source` to tell an
+   * unassigned cell (`Row` / `Column` / `Default`) from a direct Normal
+   * (`Cell`).
+   */
+  clearCellXfIndex(row: number, col: number): void;
+  /** `clearCellXfIndex` at the A1 address `a1`. */
+  clearCellXfIndex(a1: string): void;
+  /** Applies `xfIndex` across the cells of `range`, materialising blank
+   *  cells so an empty ruled box renders. Saves one call per cell. An
+   *  index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.InvalidArgument`. */
+  setRangeXfIndex(range: CellRect | string, xfIndex: number): void;
 }
 
 /** One worksheet table. Get it from `Workbook.table(ref)`, `listTables()` or `addTable`; the workbook keeps one
@@ -6168,20 +6517,23 @@ export interface WorkbookCtor {
    *  table with an 11 pt body font, no row height or base column width).
    *  `setDefaultFont` afterwards leaves font 1 unchanged. `createDefault`
    *  still seeds Calibri 11. An unknown id fails with `StatusCode.InvalidArgument`. */
-  createForProfile(profileId: ExcelProfileId): Workbook;
+  createForProfile(profileId: ProfileId): Workbook;
   /** Loads from an in-memory workbook byte buffer, auto-detecting
    *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
    *  to route on). Empty input fails with `StatusCode.InvalidArgument`, a damaged archive with one of
    *  the `StatusCode.Io*` codes (`StatusCode.IoZipCorrupt` for bytes that are not a ZIP archive), and a
-   *  value that is not a `Uint8Array` throws `TypeError`.
+   *  value that is not an `ArrayBuffer` or an `ArrayBufferView` throws `TypeError`; read a `Blob` with
+   *  `await blob.arrayBuffer()`. The formulas load pending, so under `CalcMode.Auto` the first value read or
+   *  save recomputes the workbook; to read the cached values the file carries, call
+   *  `setCalcMode(CalcMode.Manual)` first (and `setCalcOnSave(false)` to save them unchanged).
    *
    *  @example
    *  ```ts
-   *  const wb = formulon.Workbook.load(new Uint8Array(await (await fetch('book.xlsx')).arrayBuffer()));
+   *  const wb = formulon.Workbook.load(await (await fetch('book.xlsx')).arrayBuffer());
    *  console.log(wb.sheet(0).getDisplayText('A1').text);
    *  wb.dispose();
    *  ``` */
-  load(bytes: Uint8Array): Workbook;
+  load(bytes: Uint8Array | ArrayBuffer | ArrayBufferView): Workbook;
 }
 
 /** Options for {@link createFormulon}. Keys other than these four are ignored, and a key set to `null` is
@@ -6212,10 +6564,13 @@ export interface Formulon {
   Workbook: WorkbookCtor;
   /** The error class this package throws; the same class as the named export. */
   FormulonError: typeof FormulonError;
+  /** The cell-error class native reads return; the same class as the named export. */
+  ExcelError: typeof ExcelError;
 
   /** Value tables and helpers; the tables are also exported by name from the package. */
   ValueKind: typeof ValueKind;
   StatusCode: typeof StatusCode;
+  ParseErrorCode: typeof ParseErrorCode;
   WorkbookFormat: typeof WorkbookFormat;
   PivotCellKind: typeof PivotCellKind;
   PivotAxis: typeof PivotAxis;
@@ -6228,6 +6583,11 @@ export interface Formulon {
   PivotReportLayout: typeof PivotReportLayout;
   PivotFilterValueKind: typeof PivotFilterValueKind;
   CfMatchKind: typeof CfMatchKind;
+  CfRuleType: typeof CfRuleType;
+  CfOperator: typeof CfOperator;
+  CfTimePeriod: typeof CfTimePeriod;
+  CfValueObjectType: typeof CfValueObjectType;
+  IconSetName: typeof IconSetName;
   ErrorCode: typeof ErrorCode;
   ErrorDisplayName: typeof ErrorDisplayName;
   CalcMode: typeof CalcMode;
@@ -6245,6 +6605,8 @@ export interface Formulon {
   SortMethod: typeof SortMethod;
   DateTimeGrouping: typeof DateTimeGrouping;
   ValidationErrorStyle: typeof ValidationErrorStyle;
+  ValidationType: typeof ValidationType;
+  ValidationOperator: typeof ValidationOperator;
   ColorContext: typeof ColorContext;
   ImageFormat: typeof ImageFormat;
   DrawingObjectKind: typeof DrawingObjectKind;
@@ -6297,22 +6659,24 @@ export interface Formulon {
   PIVOT_VALUES_FIELD: typeof PIVOT_VALUES_FIELD;
   mergeFunctionMetadata: typeof mergeFunctionMetadata;
   toNative: typeof toNative;
+  enumName: typeof enumName;
 
   /** Convenience: evaluates `formula` read-only against a fresh
-   *  single-sheet workbook, anchored at `Sheet1!A1`. Nothing is written
-   *  and no recalc runs, so an anchor-referencing formula such as `=A1`
-   *  or `=COUNTA(A1)` reads the blank anchor rather than becoming a
-   *  self-reference. An array result is reduced to its top-left element;
-   *  use `Sheet.evaluateFormulaArray` for the whole grid.
+   *  single-sheet workbook, anchored at `Sheet1!A1`, and returns the result as native data: a scalar for a
+   *  1x1 result, the rows of the array otherwise. Nothing is written, so an anchor-referencing formula such as
+   *  `=A1` or `=COUNTA(A1)` reads the blank anchor rather than becoming a self-reference. A formula that does
+   *  not parse fails with its parser status and `FormulonError.parseError`.
    *
    *  @example
    *  ```ts
-   *  formulon.toNative(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
+   *  formulon.evaluateFormula('=SUM(1,2,3)'); // 6
    *  ``` */
-  evaluateFormula(formula: string): Value;
+  evaluateFormula(formula: string): NativeValue;
+  /** `evaluateFormula` with the result tagged: an array result is an {@link ArrayValue}. */
+  evaluateTypedFormula(formula: string): Value;
 
-  /** Converts a civil date and time to a serial number, as `=DATE(y,m,d)+TIME(h,mi,s)` computes it.
-   *  `date1904` (default `false`) selects the 1904 date system. No field is normalized: `year` must be
+  /** Converts a civil date and time to a serial number, as `=DATE(y,m,d)+TIME(h,mi,s)` computes it; an omitted
+   *  `hour`, `minute` or `second` is 0. `date1904` (default `false`) selects the 1904 date system. No field is normalized: `year` must be
    *  1900-9999 (1904-9999 in the 1904 system), `month` 1-12, `day` within the month, `hour` 0-23, `minute` and
    *  `second` 0-59. The one exception is 1900-02-29, which the 1900 system accepts as serial 60. A non-integer
    *  or out-of-`int32` field throws `RangeError`, a non-object `civil` or a non-boolean `date1904` throws
@@ -6321,7 +6685,7 @@ export interface Formulon {
    *  ```ts
    *  formulon.convertCivilToSerial({ year: 2024, month: 3, day: 1, hour: 12, minute: 0, second: 0 }); // 45352.5
    *  ``` */
-  convertCivilToSerial(civil: CivilTime, date1904?: boolean): number;
+  convertCivilToSerial(civil: CivilTimeInput, date1904?: boolean): number;
   /** Converts a serial number to civil fields, as `YEAR` ... `SECOND` read it. The fraction is rounded to the
    *  nearest whole second, carrying into the next day. `serial` must be finite, at least 1 (0 in the 1904
    *  system) and below the last serial of the date system plus one; otherwise the call fails with
@@ -6355,32 +6719,32 @@ export interface Formulon {
    *  `DBCS`; `zh_TW` renames only `DBCS`. Fails with `StatusCode.InvalidArgument`
    *  when `profileId` is unknown or the name does not match a registered
    *  function. */
-  localizeFunctionName(canonicalName: string, profileId: ExcelProfileId): string;
+  localizeFunctionName(canonicalName: string, profileId: ProfileId): string;
   /** Inverse of `localizeFunctionName`: returns the canonical English
    *  name for the localized function `localizedName` under `profileId`.
    *  Fails with `StatusCode.InvalidArgument` when
    *  `profileId` is unknown or no function matches. */
-  canonicalizeFunctionName(localizedName: string, profileId: ExcelProfileId): string;
+  canonicalizeFunctionName(localizedName: string, profileId: ProfileId): string;
   /** Rewrites stored (en-invariant) formula text into `profileId`'s Excel
    *  spelling: function names, list / array separators, decimal points,
    *  booleans and error names. Strings, quoted sheet names, external
    *  qualifiers and structured-reference brackets are kept verbatim. A pure
    *  text rewrite; the grammar is not validated. An unknown `profileId`
    *  fails with `StatusCode.InvalidArgument`. */
-  localizeFormula(formula: string, profileId: ExcelProfileId): string;
+  localizeFormula(formula: string, profileId: ProfileId): string;
   /** Inverse of `localizeFormula`: rewrites `profileId`-spelled formula text
    *  into the en-invariant form. */
-  canonicalizeFormula(formula: string, profileId: ExcelProfileId): string;
+  canonicalizeFormula(formula: string, profileId: ProfileId): string;
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
-  getLocaleFacts(profileId: ExcelProfileId): LocaleFacts;
+  getLocaleFacts(profileId: ProfileId): LocaleFacts;
   /** Lists the error names of `profileId` in error-code order. */
-  listLocaleErrorNames(profileId: ExcelProfileId): readonly LocaleErrorName[];
+  listLocaleErrorNames(profileId: ProfileId): readonly LocaleErrorName[];
   /** Compares two texts under `profileId` and returns the sign of the
    *  result (-1, 0 or 1). `strength` picks the fold (see
    *  {@link CollationStrength}); it is a text comparison, not Excel's `=`
    *  on two cells. An unknown `profileId` fails with `StatusCode.InvalidArgument`. */
-  compareText(a: string, b: string, strength: CollationStrength, profileId: ExcelProfileId): number;
+  compareText(a: string, b: string, strength: CollationStrength, profileId: ProfileId): number;
   /** Classifies `values` into collation-ordered equivalence classes under
    *  `profileId`. `classIds[i]` is the class of `values[i]`: two values share
    *  an id exactly when they have the same kind and compare equal (texts by
@@ -6399,14 +6763,10 @@ export interface Formulon {
    *    `[...saved, ...columnValues]` in one call and select the ids that match.
    *  - Multi-column dedupe: call once per column and compare the per-row id
    *    tuples.
-   *  - Feed it kind-preserving values (cell getters, paged range reads);
-   *    `evaluateFormulaArray` returns range blanks as 0, losing the
+   *  - Feed it kind-preserving values (`getTypedValue`, `getTypedValues`);
+   *    `evaluateTypedFormulaArray` returns range blanks as 0, losing the
    *    blank/zero distinction. */
-  getCollationClasses(
-    values: readonly Value[],
-    strength: CollationStrength,
-    profileId: ExcelProfileId,
-  ): CollationClasses;
+  getCollationClasses(values: readonly Value[], strength: CollationStrength, profileId: ProfileId): CollationClasses;
 
   /** Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes. */
   getImageInfo(bytes: Uint8Array): ImageInfo;
@@ -6443,8 +6803,7 @@ export interface Formulon {
  * ```ts
  * import createFormulon from '@libraz/formulon-native';
  * const formulon = await createFormulon();
- * const v = formulon.evaluateFormula('=SUM(1,2,3)');
- * console.log(formulon.toNative(v)); // 6
+ * console.log(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
  * ```
  */
 export function createFormulon(options?: FormulonOptions): Promise<Formulon>;

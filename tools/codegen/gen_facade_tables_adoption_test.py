@@ -116,6 +116,19 @@ class RecordRangeFieldsTest(unittest.TestCase):
         self.assertIn('"FilterInput": {\n', text)
         self.assertIn('        "sort": "SortInput",\n', text)
 
+    def test_a_discriminated_union_has_every_alternatives_fields(self) -> None:
+        dts = DTS + (
+            "interface RuleBase { ranges: readonly (CellRect | string)[] | string; }\n"
+            "interface ExprRuleInput extends RuleBase { type: 0; formula: string; }\n"
+            "interface BarRuleInput extends RuleBase { type: 1; anchor: CellAddress | string; }\n"
+            "export type RuleInput = ExprRuleInput | BarRuleInput;\n"
+            "export type NotUnionInput = ExprRuleInput;\n"
+        )
+        ledger = _ledger({"record.rule_input": _record("RuleInput"), "record.not_union": _record("NotUnionInput")})
+        self.assertEqual(
+            gen.record_range_fields(ledger, dts), {"RuleInput": {"ranges": "CellRect[]", "anchor": "CellAddress"}}
+        )
+
     def test_no_input_records_emit_an_empty_table(self) -> None:
         self.assertEqual(
             gen.range_fields_region("js", _ledger({}), DTS), "const RECORD_RANGE_FIELDS = Object.freeze({});\n"

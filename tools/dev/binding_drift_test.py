@@ -1244,7 +1244,7 @@ class DeclarationEntryShapeTest(unittest.TestCase):
 
     WASM_CPP = (
         'class_<Workbook>("Workbook")\n'
-        '  .function("getSheetIndex", &W::a)\n  .function("save", &W::b)\n'
+        '  .function("getSheetIndex", &W::a)\n  .function("save", &W::b)\n  .function("getMemoryUsage", &W::e)\n'
         '  .property("disposed", &W::c)\n  .class_function("load", &W::d);\n'
         'function("getVersion", &getVersion);\n'
     )
@@ -1257,6 +1257,7 @@ class DeclarationEntryShapeTest(unittest.TestCase):
     WORKBOOK = (
         "export interface Workbook {\n  readonly disposed: boolean;\n"
         "  getSheetIndex(name: string): number | null;\n  save(format?: WorkbookFormat): Uint8Array;\n"
+        "  getMemoryUsage(): number;\n"
         "  setValue(sheet: number, row: number, col: number, value: number): void;\n"
         "  sheet(nameOrIndex: string | number): Sheet;\n%s}\n"
         "export interface WorkbookCtor {\n  load(bytes: Uint8Array): Workbook;\n}\n"
@@ -1287,7 +1288,7 @@ class DeclarationEntryShapeTest(unittest.TestCase):
     def tree(self, *, wasm_cpp=None, node_class=None, node_addon=None, wasm_dts=None, node_dts=None,
              common=None, native_index=None, entry=None, ledger=None) -> dict:  # fmt: skip
         entry_text = entry if entry is not None else "export { FormulonError } from './common.js';\n"
-        native_dts = node_dts if node_dts is not None else self.WORKBOOK % "  getMemoryUsage(): number;\n"
+        native_dts = node_dts if node_dts is not None else self.WORKBOOK % ""
         return {
             "REPO_ROOT": self.root,
             # The fixture entry point ships one pure-JS helper.
@@ -1426,6 +1427,30 @@ class DeclarationEntryShapeTest(unittest.TestCase):
         self.assertNotIn("getValues", text)
         self.assertNotIn("listFonts", text)
         self.assertIn("addSheet", text)
+
+    def test_ooxml_layers_and_facade_members_are_matched(self) -> None:
+        cpp = self.WASM_CPP.replace(
+            '.function("save", &W::b)\n',
+            '.function("save", &W::b)\n  .function("addFont", &W::f)\n  .function("getCellXfIndex", &W::g)\n',
+        )
+        ooxml = (
+            "export interface WorkbookOoxml {\n  addFont(font: Font): number;\n}\n"
+            "export interface SheetOoxml {\n  getCellXfIndex(a1: string): number;\n}\n"
+        )
+        members = "  readonly ooxml: WorkbookOoxml;\n"
+        entry = self.ENTRY % "  evaluateTypedFormula(formula: string): Value;\n"
+        wasm_dts = self.WORKBOOK % members + ooxml + entry
+        self.assertEqual(self.run_check(declaration_checks.check_dts_wasm, wasm_cpp=cpp, wasm_dts=wasm_dts), [])
+        problems = self.run_check(
+            declaration_checks.check_dts_wasm,
+            wasm_cpp=cpp,
+            wasm_dts=wasm_dts.replace("  addFont(font: Font): number;\n", "").replace(
+                "evaluateTypedFormula", "evaluateTaggedFormula"
+            ),
+        )
+        text = "\n".join(problems)
+        self.assertIn("addFont", text)
+        self.assertIn("evaluateTaggedFormula", text)
 
     def test_guarded_module_functions_count_as_free_functions(self) -> None:
         node_class = (
@@ -1742,6 +1767,11 @@ class NativeDtsGeneratorTest(unittest.TestCase):
         interface = interface[: interface.index("\n}\n")]
         self.assertIn("disposed: boolean;", interface)
         self.assertIn("/** Bytes. */\n  getMemoryUsage(): number;", interface)
+
+    def test_an_empty_delta_leaves_the_workbook_interface_unchanged(self) -> None:
+        for delta in ("export interface Workbook {}\n", "export type Workbook = {};\n"):
+            out = self.gen.generate(self.WASM, delta)
+            self.assertIn("export interface Workbook {\n  disposed: boolean;\n}\n", out)
 
     def test_a_missing_workbook_interface_is_an_error(self) -> None:
         with self.assertRaises(self.gen.GenError):

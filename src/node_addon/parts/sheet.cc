@@ -155,7 +155,7 @@ Napi::Value Workbook::ListDefinedNames(const Napi::CallbackInfo& info) {
   std::size_t n = 0;
   fm_status_t rc = fm_workbook_get_defined_name_count(handle_, &n);
   for (std::size_t i = 0; rc == 0 && i < n; ++i) {
-    fm_defined_name_t d{};
+    fm_defined_name_t d = FM_STRUCT_INIT(fm_defined_name_t);
     rc = fm_workbook_get_defined_name_at(handle_, i, &d);
     if (rc == 0) {
       arr.Set(static_cast<uint32_t>(i), DefinedNameToJs(env, d.name, d.formula, d.local_sheet_id, d.comment, d.hidden));
@@ -216,7 +216,7 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
   const char* display = nullptr;
   fm_cell_rect_t rect{};
   std::size_t sheet_index = 0;
-  fm_table_info_t table{};
+  fm_table_info_t table = FM_STRUCT_INIT(fm_table_info_t);
   std::vector<fm_table_column_info_t> columns;
   // A respelled totals formula lives in read scratch, which the next column's read may recycle.
   std::vector<std::string> totals_formulas;
@@ -228,7 +228,7 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
         if (rc == 0) {
           rc = fm_workbook_get_table_info(handle, idx, &table);
         }
-        columns.resize(rc == 0 ? table.column_count : 0U);
+        columns.resize(rc == 0 ? table.column_count : 0U, FM_STRUCT_INIT(fm_table_column_info_t));
         totals_formulas.resize(columns.size());
         for (std::size_t i = 0; rc == 0 && i < columns.size(); ++i) {
           rc = fm_workbook_get_table_column(handle, idx, i, &columns[i]);
@@ -297,7 +297,7 @@ TableStyleToggles ReadTableStyleToggles(CheckedSpecReader& reader, const Napi::O
 /// Applies the supplied toggles over the table's current ones, keeping its
 /// style name; a table without the element takes the creation defaults.
 fm_status_t ApplyTableStyleToggles(fm_workbook_t* handle, std::size_t idx, const TableStyleToggles& toggles) {
-  fm_table_info_t current{};
+  fm_table_info_t current = FM_STRUCT_INIT(fm_table_info_t);
   if (const fm_status_t rc = fm_workbook_get_table_info(handle, idx, &current); rc != 0) {
     return rc;
   }
@@ -547,7 +547,7 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
   Napi::Array arr = Napi::Array::New(env);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
-    fm_pivot_cell_t cell{};
+    fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
     if (fm_pivot_cells_get_cell_at(cells, i, &cell) != 0) {
       continue;
     }
@@ -585,7 +585,7 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  fm_defined_name_input_t in{};
+  fm_defined_name_input_t in = FM_STRUCT_INIT(fm_defined_name_input_t);
   in.name = name.c_str();
   in.formula = formula.c_str();
   in.local_sheet_id = scoped ? static_cast<int32_t>(sheet) : -1;
