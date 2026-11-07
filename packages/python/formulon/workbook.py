@@ -6,12 +6,12 @@ Public surface:
   * :class:`Value` -- frozen dataclass holding a cell value.
   * :class:`ExcelError` -- an Excel cell error as a Python value.
   * :class:`FormulonError` -- exception raised on host-side failures.
-  * :class:`Cell`, :class:`DefinedName`, :class:`TableProperties` -- iteration tuples.
+  * :class:`RangeCell`, :class:`DefinedName`, :class:`TableProperties` -- iteration tuples.
 
-Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, etc.) are reported as
-``Value`` instances with ``kind == ValueKind.ERROR``; only host-side
-problems (a closed workbook, an unreadable archive in ``Workbook.load``,
-out of memory) raise :class:`FormulonError`.
+Reads return native values (:data:`NativeValue`): a cell-level Excel error
+(``#DIV/0!``, ``#VALUE!``, ...) is an :class:`ExcelError` value, not an
+exception. Host-side problems (a closed workbook, an unreadable archive in
+``Workbook.load``, out of memory) raise :class:`FormulonError`.
 
 Sheet, row, column, and count arguments are 32-bit in the engine. A value
 that does not fit the parameter it is bound for raises ``ValueError``
@@ -37,7 +37,6 @@ from enum import IntEnum, IntFlag
 from functools import wraps
 from inspect import isgeneratorfunction
 from typing import (
-    TYPE_CHECKING,
     Any,
     BinaryIO,
     Dict,
@@ -55,14 +54,9 @@ from typing import (
 )
 
 from . import _structs as S
-from ._c import LIB, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
+from ._c import LIB, FormulaSyntaxError, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
 from ._refs import resolve_ref
 from ._status import StatusCode
-
-if TYPE_CHECKING:
-    from .pivot_cache import PivotCache
-    from .sheet import Sheet
-    from .table import Table
 
 __all__ = [
     "Alignment",
@@ -84,8 +78,8 @@ __all__ = [
     "CalcMode",
     "canonicalize_formula",
     "canonicalize_function_name",
-    "Cell",
     "CELL_STYLE_BUILTIN_ID_NONE",
+    "CellAddress",
     "CellFormat",
     "CellNode",
     "CellProtection",
@@ -96,12 +90,15 @@ __all__ = [
     "CellXf",
     "CellXfInput",
     "CfCell",
-    "CfColor",
     "CfDataBarAxisPosition",
     "CfDataBarDirection",
     "CfIcon",
     "CfMatch",
     "CfMatchKind",
+    "CfOperator",
+    "CfRuleType",
+    "CfTimePeriod",
+    "CfValueObjectType",
     "Cfvo",
     "ChartAxis",
     "ChartAxisCrosses",
@@ -177,10 +174,10 @@ __all__ = [
     "DynamicFilterType",
     "EffectiveStyle",
     "EffectiveStyleSource",
+    "enum_name",
     "ErrorCode",
     "ErrorName",
     "ExcelError",
-    "ExcelProfileId",
     "ExternalLink",
     "ExternalLinkKind",
     "Fill",
@@ -197,8 +194,8 @@ __all__ = [
     "FunctionMetadata",
     "GeometryMode",
     "get_collation_classes",
-    "get_image_info",
     "get_function_metadata",
+    "get_image_info",
     "get_locale_facts",
     "GradientFill",
     "GradientStop",
@@ -207,8 +204,10 @@ __all__ = [
     "HorizontalAlign",
     "Hyperlink",
     "IconSet",
+    "IconSetName",
     "ImageFormat",
     "ImageInfo",
+    "InvalidFileError",
     "IterativeSettings",
     "list_function_names",
     "list_locale_error_names",
@@ -219,6 +218,7 @@ __all__ = [
     "LogLevel",
     "MarginsPt",
     "Mention",
+    "NativeValue",
     "PageBreak",
     "PageLayout",
     "PageMargins",
@@ -266,7 +266,9 @@ __all__ = [
     "PivotWorksheetSource",
     "PrintOptions",
     "PrintTitles",
+    "ProfileId",
     "ProtectedRange",
+    "RangeCell",
     "ReadDiagnostics",
     "ReadingOrder",
     "RectPt",
@@ -312,7 +314,9 @@ __all__ = [
     "Unchanged",
     "UnderlineStyle",
     "ValidationErrorStyle",
+    "ValidationOperator",
     "ValidationOutcome",
+    "ValidationType",
     "Value",
     "VerticalAlign",
     "WidthModel",
@@ -353,8 +357,8 @@ Unchanged = Literal[_UnchangedType.UNCHANGED]
 #: A sheet argument: a :class:`Sheet` of the same workbook, a 0-based sheet index, or a sheet name.
 SheetRef = Union["Sheet", int, str]
 
-#: Excel formula profile id accepted by `Workbook.set_excel_profile_id`.
-ExcelProfileId = Literal[
+#: Excel profile id accepted by `Workbook.set_profile_id`.
+ProfileId = Literal[
     "mac-365-ja_JP",
     "win-365-ja_JP",
     "mac-365-en_US",
@@ -442,10 +446,42 @@ class ReadDiagnostics:
     unknown_content_type_count: int
 
 
+class InvalidFileError(FormulonError):
+    """The bytes cannot be opened as a workbook package.
+
+    Raised for a corrupt or hostile archive, unparsable XML, broken
+    relationships or content types, and corrupt XLSB records. A damaged part
+    the workbook still opens without (a drawing, a chart) is not one, nor is
+    an unsupported variant (``StatusCode.IO_UNSUPPORTED_VARIANT``).
+    """
+
+
+# The I/O statuses that mean the package cannot be opened as a workbook.
+_INVALID_FILE_CODES = frozenset(
+    {
+        StatusCode.IO_ZIP_CORRUPT,
+        StatusCode.IO_ZIP_BOMB,
+        StatusCode.IO_ZIP_SLIP,
+        StatusCode.IO_XML_PARSE,
+        StatusCode.IO_XML_DOCTYPE,
+        StatusCode.IO_XML_ENTITY_EXPLOSION,
+        StatusCode.IO_RELATIONSHIP_BROKEN,
+        StatusCode.IO_CONTENT_TYPE_INVALID,
+        StatusCode.IO_SHEET_CORRUPT,
+        StatusCode.IO_XLSB_RECORD_CORRUPT,
+        StatusCode.IO_XLSB_RECORD_TRUNCATED,
+        StatusCode.IO_XLSB_UNKNOWN_RECORD,
+        StatusCode.IO_XLSB_UNSUPPORTED_PTG,
+        StatusCode.IO_XLSB_CORRUPT,
+        StatusCode.IO_XLSB_RETAINED_PART_STALE,
+    }
+)
+
+
 def _check(status: int) -> None:
-    """Raise :class:`FormulonError` if ``status`` is non-zero."""
+    """Raise :class:`FormulonError` (or its subclass for ``status``) if ``status`` is non-zero."""
     if status != 0:
-        raise FormulonError(status)
+        raise (InvalidFileError if status in _INVALID_FILE_CODES else FormulonError)(status)
 
 
 # `_uint` / `_sint` live in `formulon._c` (imported above) alongside
@@ -457,12 +493,13 @@ def _check(status: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-# The one payload field each scalar kind carries; the other kinds carry none.
+# The one payload field each kind carries; BLANK, REF and LAMBDA carry none.
 _VALUE_PAYLOAD_FIELD = {
     ValueKind.NUMBER: "number",
     ValueKind.BOOL: "boolean",
     ValueKind.TEXT: "text",
     ValueKind.ERROR: "error_code",
+    ValueKind.ARRAY: "array",
 }
 
 
@@ -470,9 +507,8 @@ _VALUE_PAYLOAD_FIELD = {
 class ExcelError:
     """An Excel cell error such as ``#DIV/0!``.
 
-    :meth:`Value.to_python` returns one for an error value, and
-    :meth:`Sheet.set_value` stores one as a cell error. Its string form
-    is the en-US display literal.
+    Native reads return one for an error value, and :meth:`Sheet.set_value`
+    stores one as a cell error. Its string form is the en-US display literal.
     """
 
     code: ErrorCode
@@ -486,15 +522,22 @@ class ExcelError:
         return self.code.display_name
 
 
+#: A value as plain Python data: ``None`` for blank, ``float``, ``bool``,
+#: ``str``, :class:`ExcelError`, or a row-major list of rows of them for an
+#: array result.
+NativeValue = Union[None, float, bool, str, ExcelError, List[List["NativeValue"]]]
+
+
 @dataclass(frozen=True)
 class Value:
-    """A cell or formula value.
+    """A cell or formula value tagged with its kind (the ``*_typed_*`` reads return it).
 
-    Exactly one of ``number`` / ``boolean`` / ``text`` / ``error_code`` is
-    populated according to ``kind``. The constructor enforces the
-    invariant: ``kind`` is coerced to :class:`ValueKind`, a missing or
-    extra payload raises ``ValueError`` and a payload of the wrong type
-    raises ``TypeError``.
+    Exactly one of ``number`` / ``boolean`` / ``text`` / ``error_code`` /
+    ``array`` is populated according to ``kind``; ``array`` holds the rows of
+    an array result, each a tuple of scalar values of equal length. The
+    constructor enforces the invariant: ``kind`` is coerced to
+    :class:`ValueKind`, a missing or extra payload raises ``ValueError`` and a
+    payload of the wrong type raises ``TypeError``.
     """
 
     kind: ValueKind
@@ -502,6 +545,7 @@ class Value:
     boolean: Optional[bool] = None
     text: Optional[str] = None
     error_code: Optional[ErrorCode] = None
+    array: Optional[Tuple[Tuple["Value", ...], ...]] = None
 
     def __post_init__(self) -> None:
         kind = self.kind
@@ -527,8 +571,10 @@ class Value:
         elif kind == ValueKind.TEXT:
             if not isinstance(payload, str):
                 raise TypeError(f"formulon: Value.text must be a str, got {type(payload).__name__}")
-        else:
+        elif kind == ValueKind.ERROR:
             object.__setattr__(self, "error_code", ErrorCode(_sint(payload, "error_code")))
+        else:
+            object.__setattr__(self, "array", _array_payload(payload))
 
     def __repr__(self) -> str:
         kind = self.kind
@@ -538,6 +584,8 @@ class Value:
         payload = getattr(self, field)
         if kind == ValueKind.ERROR:
             shown = payload.name
+        elif kind == ValueKind.ARRAY:
+            shown = f"{len(payload)}x{len(payload[0])}"
         elif kind == ValueKind.TEXT:
             shown = repr(payload if len(payload) <= 32 else payload[:32] + "...")
         else:
@@ -566,11 +614,11 @@ class Value:
         if kind is ValueKind.ERROR:
             error_code = struct.unpack_from("<i", buf, 8)[0]
             return cls(kind=kind, error_code=ErrorCode(error_code))
-        # BLANK / ARRAY / REF / LAMBDA: no scalar payload.
+        # BLANK / REF / LAMBDA: no payload. A value slot never holds an array.
         return cls(kind=kind)
 
-    def to_python(self) -> Union[None, float, bool, str, ExcelError, "Value"]:
-        """Convert to a native Python type.
+    def to_python(self) -> NativeValue:
+        """Convert to a native Python value (:data:`NativeValue`).
 
         - ``BLANK`` -> ``None``
         - ``NUMBER`` -> ``float``
@@ -578,21 +626,43 @@ class Value:
         - ``TEXT`` -> ``str``
         - ``ERROR`` -> :class:`ExcelError` (Excel cell errors are values,
           not Python exceptions)
-        - ``ARRAY`` / ``REF`` / ``LAMBDA`` -> the :class:`Value` itself, since
-          the engine reports no payload for these kinds
+        - ``ARRAY`` -> a list of rows, each a list of the cells' native values
         """
         if self.kind is ValueKind.BLANK:
             return None
         if self.kind is ValueKind.NUMBER:
-            return self.number  # type: ignore[return-value]
+            return self.number
         if self.kind is ValueKind.BOOL:
-            return self.boolean  # type: ignore[return-value]
+            return self.boolean
         if self.kind is ValueKind.TEXT:
-            return self.text  # type: ignore[return-value]
+            return self.text
         if self.kind is ValueKind.ERROR:
             return ExcelError(cast(ErrorCode, self.error_code))
-        # ARRAY / REF / LAMBDA: surface the wrapping Value.
-        return self
+        assert self.kind is ValueKind.ARRAY, f"a {self.kind.name} value never reaches a public read"
+        return [[cell.to_python() for cell in row] for row in cast(Tuple[Tuple[Value, ...], ...], self.array)]
+
+
+def _array_payload(rows: object) -> Tuple[Tuple[Value, ...], ...]:
+    """``rows`` as a non-empty rectangle of scalar :class:`Value` cells, rows and cells as tuples."""
+    if isinstance(rows, (str, bytes)) or not isinstance(rows, (list, tuple)):
+        raise TypeError(f"formulon: Value.array must be a sequence of rows, got {type(rows).__name__}")
+    grid = tuple(tuple(row) if isinstance(row, (list, tuple)) else row for row in rows)
+    if not grid or not all(isinstance(row, tuple) and row for row in grid):
+        raise ValueError("formulon: Value.array must hold at least one non-empty row")
+    if any(len(row) != len(grid[0]) for row in grid):
+        raise ValueError("formulon: Value.array rows must all have the same length")
+    for row in grid:
+        for cell in row:
+            if not isinstance(cell, Value) or cell.kind is ValueKind.ARRAY:
+                raise TypeError(f"formulon: Value.array cells must be scalar Values, got {cell!r}")
+    return grid
+
+
+def _folded(grid: List[List[Value]]) -> Value:
+    """A 1x1 result as its one cell, any other shape as an ``ARRAY`` value."""
+    if len(grid) == 1 and len(grid[0]) == 1:
+        return grid[0][0]
+    return Value(kind=ValueKind.ARRAY, array=tuple(tuple(row) for row in grid))
 
 
 # ---------------------------------------------------------------------------
@@ -601,9 +671,23 @@ class Value:
 
 
 @dataclass(frozen=True)
-class Cell:
-    """One written coordinate, as :meth:`Sheet.list_cells` returns it."""
+class RangeCell:
+    """One written coordinate, as :meth:`Sheet.list_cells` returns it.
 
+    ``value`` is the computed value as native data and ``kind`` its
+    :class:`ValueKind`; ``formula`` is ``None`` for a constant.
+    """
+
+    row: int
+    col: int
+    formula: Optional[str]
+    value: NativeValue
+    kind: ValueKind
+
+
+# Retained only while `sheet.py` still builds its cell pages from it; not exported.
+@dataclass(frozen=True)
+class Cell:
     row: int
     col: int
     formula: Optional[str]
@@ -627,11 +711,15 @@ class DefinedName:
 
 @dataclass
 class DefinedNameInput:
-    """A defined name :meth:`Workbook.set_defined_name` writes; ``local_sheet_id`` ``None`` is workbook scope."""
+    """A defined name :meth:`Workbook.set_defined_name` writes.
+
+    ``formula`` takes the text with or without a leading ``=``; ``scope`` is
+    the sheet the name is local to, ``None`` for workbook scope.
+    """
 
     name: str
     formula: str
-    local_sheet_id: Optional[int] = None
+    scope: Optional[SheetRef] = None
     comment: Optional[str] = None
     hidden: bool = False
 
@@ -850,6 +938,133 @@ class ValidationErrorStyle(IntEnum):
     INFORMATION = 2
 
 
+class ValidationType(IntEnum):
+    """What a data-validation rule checks (``fm_validation_type_t``)."""
+
+    NONE = 0
+    WHOLE = 1
+    DECIMAL = 2
+    LIST = 3
+    DATE = 4
+    TIME = 5
+    TEXT_LENGTH = 6
+    CUSTOM = 7
+
+
+class ValidationOperator(IntEnum):
+    """How a data-validation rule compares the value with its formulas (``fm_validation_operator_t``)."""
+
+    BETWEEN = 0
+    NOT_BETWEEN = 1
+    EQUAL = 2
+    NOT_EQUAL = 3
+    GREATER_THAN = 4
+    LESS_THAN = 5
+    GREATER_THAN_OR_EQUAL = 6
+    LESS_THAN_OR_EQUAL = 7
+
+
+class CfRuleType(IntEnum):
+    """The kind of a conditional-format rule (``fm_cf_rule_type_t``)."""
+
+    EXPRESSION = 0
+    CELL_IS = 1
+    COLOR_SCALE = 2
+    DATA_BAR = 3
+    ICON_SET = 4
+    TOP10 = 5
+    ABOVE_AVERAGE = 6
+    CONTAINS_TEXT = 7
+    NOT_CONTAINS_TEXT = 8
+    BEGINS_WITH = 9
+    ENDS_WITH = 10
+    CONTAINS_BLANKS = 11
+    NOT_CONTAINS_BLANKS = 12
+    CONTAINS_ERRORS = 13
+    NOT_CONTAINS_ERRORS = 14
+    TIME_PERIOD = 15
+    DUPLICATE_VALUES = 16
+    UNIQUE_VALUES = 17
+
+
+class CfOperator(IntEnum):
+    """The comparison of a ``CELL_IS`` conditional-format rule (``fm_cf_operator_t``)."""
+
+    LESS_THAN = 0
+    LESS_THAN_OR_EQUAL = 1
+    EQUAL = 2
+    NOT_EQUAL = 3
+    GREATER_THAN_OR_EQUAL = 4
+    GREATER_THAN = 5
+    BETWEEN = 6
+    NOT_BETWEEN = 7
+
+
+class CfTimePeriod(IntEnum):
+    """The period of a ``TIME_PERIOD`` conditional-format rule (``fm_cf_time_period_t``)."""
+
+    TODAY = 0
+    YESTERDAY = 1
+    TOMORROW = 2
+    LAST_7_DAYS = 3
+    THIS_WEEK = 4
+    LAST_WEEK = 5
+    NEXT_WEEK = 6
+    THIS_MONTH = 7
+    LAST_MONTH = 8
+    NEXT_MONTH = 9
+
+
+class CfValueObjectType(IntEnum):
+    """How a conditional-format threshold reads its value (``fm_cf_value_object_type_t``)."""
+
+    NUMBER = 0
+    PERCENT = 1
+    PERCENTILE = 2
+    MIN = 3
+    MAX = 4
+    FORMULA = 5
+    AUTO_MIN = 6
+    AUTO_MAX = 7
+
+
+class IconSetName(IntEnum):
+    """A built-in icon set (``fm_icon_set_t``); the digit is the level count."""
+
+    THREE_ARROWS = 0
+    THREE_ARROWS_GRAY = 1
+    THREE_FLAGS = 2
+    THREE_TRAFFIC_LIGHTS_1 = 3
+    THREE_TRAFFIC_LIGHTS_2 = 4
+    THREE_SIGNS = 5
+    THREE_SYMBOLS = 6
+    THREE_SYMBOLS_2 = 7
+    FOUR_ARROWS = 8
+    FOUR_ARROWS_GRAY = 9
+    FOUR_RED_TO_BLACK = 10
+    FOUR_RATING = 11
+    FOUR_TRAFFIC_LIGHTS = 12
+    FIVE_ARROWS = 13
+    FIVE_ARROWS_GRAY = 14
+    FIVE_RATING = 15
+    FIVE_QUARTERS = 16
+
+
+def enum_name(enum_type: "type[enum.Enum]", value: int) -> Optional[str]:
+    """The member name ``value`` has in ``enum_type``, or ``None`` when no member has it.
+
+    Example::
+
+        enum_name(CfRuleType, 3)  # "DATA_BAR"
+    """
+    if not (isinstance(enum_type, type) and issubclass(enum_type, enum.Enum)):
+        raise TypeError(f"formulon: enum_type must be an enum class, got {enum_type!r}")
+    try:
+        return enum_type(value).name
+    except ValueError:
+        return None
+
+
 class ColorContext(IntEnum):
     """Where a colour is used; decides what auto means."""
 
@@ -993,12 +1208,16 @@ class EffectiveStyleSource(IntEnum):
 
 
 class CalcMode(IntEnum):
-    """Workbook-level calc mode (``<calcPr calcMode>`` policy).
+    """Workbook-level calc mode (``<calcPr calcMode>``).
 
-    Round-trip metadata apart from ``AUTO_NO_TABLE``: the engine recalcs all
-    dirty cells on every :meth:`Workbook.recalc` regardless of this value,
-    except that ``AUTO_NO_TABLE`` leaves the What-If data tables to
-    :meth:`Workbook.recalc_data_tables`.
+    - ``AUTO`` (the default): a value read and a save first calculate the
+      pending cells.
+    - ``MANUAL``: nothing is calculated until :meth:`Workbook.recalc`.
+    - ``AUTO_NO_TABLE``: as ``AUTO``, but the What-If data tables wait for
+      :meth:`Workbook.recalc_data_tables`.
+
+    A volatile function (``NOW()``, ``RAND()``) is evaluated again when a change
+    or :meth:`Workbook.recalc` recalculates it, not on every read.
     """
 
     AUTO = 0
@@ -1515,6 +1734,14 @@ class CellRect:
 
 
 @dataclass(frozen=True)
+class CellAddress:
+    """One cell: 0-based ``row`` and ``col``. A record field of this type also takes an A1 string (``"C3"``)."""
+
+    row: int
+    col: int
+
+
+@dataclass(frozen=True)
 class SheetRect:
     """A cell rectangle on sheet index ``sheet``."""
 
@@ -1556,8 +1783,8 @@ class DataValidation:
     """A sheet ``<dataValidation>`` rule (getter result); a text the rule does not state is ``None``."""
 
     ranges: List[CellRect]
-    type: int
-    op: int
+    type: ValidationType
+    op: ValidationOperator
     error_style: ValidationErrorStyle
     allow_blank: bool
     show_input_message: bool
@@ -1569,6 +1796,10 @@ class DataValidation:
     error_message: Optional[str]
     prompt_title: Optional[str]
     prompt_message: Optional[str]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "type", _enum(ValidationType, self.type))
+        object.__setattr__(self, "op", _enum(ValidationOperator, self.op))
 
 
 @dataclass
@@ -1582,9 +1813,10 @@ class DataValidationInput:
     shown for ``list`` validations unless explicitly suppressed).
     """
 
-    type: int
-    ranges: List[CellRect]
-    op: int = 0
+    type: ValidationType
+    #: Rectangles, unqualified A1 ranges, or one A1 string.
+    ranges: Union[List[Union[CellRect, str]], str]
+    op: ValidationOperator = ValidationOperator.BETWEEN
     error_style: ValidationErrorStyle = ValidationErrorStyle.STOP
     allow_blank: bool = False
     show_input_message: bool = False
@@ -1705,7 +1937,7 @@ class AutoFilterEval:
 class CellsInRange:
     """One page of populated cells; ``next_cursor`` is ``None`` once no further cell exists."""
 
-    cells: List[Cell]
+    cells: List[RangeCell]
     next_cursor: Optional[int]
 
 
@@ -1826,9 +2058,10 @@ class DrawingProperties:
 class ShapeProperties:
     """A shape, connector or group of a sheet's drawing; sizes and offsets are in EMU.
 
-    The anchor fields read as in :class:`DrawingProperties`. ``fill_rgb`` and
-    ``line_rgb`` are ``0xRRGGBB`` when the matching kind is ``ShapePaint.SOLID``;
-    a kind is ``None`` when the shape states no fill or outline element.
+    The anchor fields read as in :class:`DrawingProperties`. ``fill_color`` and
+    ``line_color`` are RGB colours when the matching kind is ``ShapePaint.SOLID``
+    and ``None`` otherwise; a kind is ``None`` when the shape states no fill or
+    outline element.
     ``rotation`` is in 60000ths of a degree; ``preset_geometry`` is empty for custom
     geometry or a group.
     """
@@ -1852,9 +2085,9 @@ class ShapeProperties:
     text: str
     text_box: bool
     fill_kind: Optional[ShapePaint]
-    fill_rgb: int
+    fill_color: Optional[Color]
     line_kind: Optional[ShapePaint]
-    line_rgb: int
+    line_color: Optional[Color]
     line_width_emu: int
     rotation: int
     hidden: bool
@@ -2153,17 +2386,17 @@ class ChartTitle:
 
 @dataclass(frozen=True)
 class ChartFill:
-    """Solid fill; ``color`` is ``0xAARRGGBB`` and ``transparency`` a percentage, each ``None`` when absent."""
+    """Solid fill; ``color`` is an RGB :class:`Color` and ``transparency`` a percentage, each ``None`` when absent."""
 
-    color: Optional[int] = None
+    color: Optional[Color] = None
     transparency: Optional[float] = None
 
 
 @dataclass(frozen=True)
 class ChartLine:
-    """Outline; ``none`` is an explicit no-line."""
+    """Outline; ``color`` is an RGB :class:`Color` (``None`` when absent) and ``none`` an explicit no-line."""
 
-    color: Optional[int] = None
+    color: Optional[Color] = None
     transparency: Optional[float] = None
     width_pt: Optional[float] = None
     dash: Optional[ChartLineDash] = None
@@ -2193,7 +2426,7 @@ class ChartLabels:
     position: Optional[ChartLabelPosition]
     number_format: Optional[str]
     source_linked: bool
-    font_color: Optional[int]
+    font_color: Optional[Color]
     font_size_pt: Optional[float]
     deleted: bool
 
@@ -2399,16 +2632,16 @@ class ChartData:
 
 
 class ChartFillPatch(TypedDict, total=False):
-    """Fill patch: an omitted key is kept, ``None`` removes the element."""
+    """Fill patch: an omitted key is kept, ``None`` removes the element; a colour is an RGB ``ColorInput``."""
 
-    color: Optional[int]
+    color: Optional[ColorInput]
     transparency: Optional[float]
 
 
 class ChartLinePatch(TypedDict, total=False):
-    """Outline patch; ``none`` is a bool and rejects ``None``."""
+    """Outline patch; ``none`` is a bool and rejects ``None``; a colour is an RGB ``ColorInput``."""
 
-    color: Optional[int]
+    color: Optional[ColorInput]
     transparency: Optional[float]
     width_pt: Optional[float]
     dash: Optional[ChartLineDash]
@@ -2435,7 +2668,7 @@ class ChartLabelsPatch(TypedDict, total=False):
     separator: Optional[str]
     position: Optional[ChartLabelPosition]
     number_format: Optional[str]
-    font_color: Optional[int]
+    font_color: Optional[ColorInput]
     font_size_pt: Optional[float]
 
 
@@ -2926,17 +3159,20 @@ class CfMatch:
     priority: int
     dxf_id_engaged: bool
     dxf_id: int
-    color: Tuple[int, int, int, int]  # (r, g, b, a)
+    color: Color
     bar_length_pct: float
     bar_axis_position_pct: float
     bar_is_negative: bool
-    bar_fill: Tuple[int, int, int, int]
+    bar_fill: Color
     bar_border_engaged: bool
-    bar_border: Tuple[int, int, int, int]
+    bar_border: Color
     bar_gradient: bool
-    icon_set_name: int
+    icon_set_name: IconSetName
     icon_index: int
     bar_direction: CfDataBarDirection = CfDataBarDirection.CONTEXT
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "icon_set_name", _enum(IconSetName, self.icon_set_name))
 
 
 @dataclass(frozen=True)
@@ -2948,10 +3184,9 @@ class CfCell:
     matches: List[CfMatch]
 
 
+# Retained only while `sheet.py` still decodes CF colours with it; not exported.
 @dataclass(frozen=True)
 class CfColor:
-    """RGBA color used by a visual conditional-format rule."""
-
     r: int
     g: int
     b: int
@@ -2962,15 +3197,20 @@ class CfColor:
 class Cfvo:
     """One conditional-format threshold."""
 
-    type: int
+    type: CfValueObjectType
     value: Optional[str] = None
     gte: bool = True
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "type", _enum(CfValueObjectType, self.type))
 
 
 @dataclass(frozen=True)
 class ColorScale:
+    """``<colorScale>`` payload: one colour per threshold (a ``ColorInput`` on input)."""
+
     thresholds: List[Cfvo]
-    colors: List[CfColor]
+    colors: List[Color]
 
 
 @dataclass(frozen=True)
@@ -2982,21 +3222,22 @@ class DataBar:
     model default" -- gradient fill on, automatic axis, negative fill
     equal to ``fill``, no border, and a black axis. Reading a rule back
     always populates them, so ``add_conditional_format`` of a value
-    returned by :meth:`Sheet.list_cf_rules` reproduces the rule.
+    returned by :meth:`Sheet.list_cf_rules` reproduces the rule. Each colour
+    takes a ``ColorInput`` on input.
     """
 
     minimum: Cfvo
     maximum: Cfvo
-    fill: CfColor
+    fill: Color
     show_value: bool = True
     min_length_pct: int = 10
     max_length_pct: int = 90
     gradient: Optional[bool] = None
     axis_position: Optional[CfDataBarAxisPosition] = None
-    negative_fill: Optional[CfColor] = None
-    border: Optional[CfColor] = None
-    negative_border: Optional[CfColor] = None
-    axis_color: Optional[CfColor] = None
+    negative_fill: Optional[Color] = None
+    border: Optional[Color] = None
+    negative_border: Optional[Color] = None
+    axis_color: Optional[Color] = None
     #: The edge the bar grows from.
     direction: CfDataBarDirection = CfDataBarDirection.CONTEXT
 
@@ -3015,7 +3256,7 @@ class IconSet:
     a rule back always populates it.
     """
 
-    name: int
+    name: IconSetName
     thresholds: List[Cfvo]
     reverse: bool = False
     show_value: bool = True
@@ -3024,6 +3265,9 @@ class IconSet:
     #: Custom icon set: the icon drawn for each level, empty when the set
     #: draws its own icons.
     icons: List["CfIcon"] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "name", _enum(IconSetName, self.name))
 
 
 @dataclass(frozen=True)
@@ -3044,14 +3288,14 @@ class ConditionalFormat:
     """A conditional-format rule (getter result, flattened priority order)."""
 
     id: str
-    type: int
+    type: CfRuleType
     priority: int
     stop_if_true: bool
     ranges: List[CellRect]
     dxf_id: Optional[int]
     formula1: str
     formula2: str
-    op: Optional[int]
+    op: Optional[CfOperator]
     rank: Optional[int]
     percent: bool
     bottom: bool
@@ -3059,10 +3303,17 @@ class ConditionalFormat:
     equal_average: bool
     std_dev: Optional[float]
     text: str
-    time_period: Optional[int]
+    time_period: Optional[CfTimePeriod]
     color_scale: Optional[ColorScale]
     data_bar: Optional[DataBar]
     icon_set: Optional[IconSet]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "type", _enum(CfRuleType, self.type))
+        if self.op is not None:
+            object.__setattr__(self, "op", _enum(CfOperator, self.op))
+        if self.time_period is not None:
+            object.__setattr__(self, "time_period", _enum(CfTimePeriod, self.time_period))
 
 
 @dataclass
@@ -3073,15 +3324,16 @@ class ConditionalFormatInput:
     icon-set rules. The C ABI validates each payload's cardinality.
     """
 
-    ranges: List[CellRect]
-    type: int
+    #: Rectangles, unqualified A1 ranges, or one A1 string.
+    ranges: Union[List[Union[CellRect, str]], str]
+    type: CfRuleType
     priority: int = 0
     stop_if_true: bool = False
     id: str = ""
     dxf_id: Optional[int] = None
     formula1: str = ""
     formula2: str = ""
-    op: Optional[int] = None
+    op: Optional[CfOperator] = None
     rank: Optional[int] = None
     percent: bool = False
     bottom: bool = False
@@ -3089,7 +3341,7 @@ class ConditionalFormatInput:
     equal_average: bool = False
     std_dev: Optional[float] = None
     text: str = ""
-    time_period: Optional[int] = None
+    time_period: Optional[CfTimePeriod] = None
     color_scale: Optional[ColorScale] = None
     data_bar: Optional[DataBar] = None
     icon_set: Optional[IconSet] = None
@@ -3162,7 +3414,7 @@ class ErrorName:
 
 @dataclass(frozen=True)
 class LocaleFacts:
-    """Scalar locale facts of one :data:`ExcelProfileId`.
+    """Scalar locale facts of one :data:`ProfileId`.
 
     ``measured`` is ``True`` for the profiles captured from Excel (every
     ``mac-*`` id and ``win-365-ja_JP``) and ``False`` for the estimated
@@ -3278,14 +3530,14 @@ class CellXfInput:
 
 @dataclass(frozen=True)
 class Color:
-    """How an OOXML ``<color>`` element expressed its value.
+    """A colour as an OOXML ``<color>`` element states it.
 
-    Records read from a file carry the original specification here. When
-    ``kind`` is not ``ColorKind.NONE``, it is authoritative; the owning
-    record's ``*_argb`` field is not an Excel-rendered value for
-    theme/indexed/auto. It is literal RGB for ``ColorKind.RGB`` or a
-    compatibility fallback otherwise. The default ``ColorKind.NONE`` makes the
-    writer emit ``*_argb`` as ``rgb``.
+    ``kind`` selects the meaningful field: ``rgb`` (``0xAARRGGBB``) for
+    ``ColorKind.RGB``, ``theme`` and ``tint`` for ``ColorKind.THEME``,
+    ``indexed`` for ``ColorKind.INDEXED``; ``ColorKind.NONE`` is no colour.
+    Records read from a file keep the specification as written, so a theme
+    colour stays a theme reference. An input that takes a colour also takes
+    ``"#RRGGBB"`` or ``"#AARRGGBB"`` (:data:`ColorInput`).
     """
 
     kind: ColorKind = ColorKind.NONE
@@ -3334,15 +3586,12 @@ class Font:
     unchanged" while ``False`` (``<b val="0"/>``) means "switch bold off".
     ``size``, ``family`` and ``charset`` are ``None`` without their element;
     a ``None`` size leaves the size unchanged on a differential font, and
-    every cell-font entry point writes a size. ``color`` is authoritative
-    when its ``kind`` is not ``ColorKind.NONE``; ``color_argb`` is literal
-    RGB for ``ColorKind.RGB`` and a compatibility fallback for
-    theme/indexed/auto selectors, not a rendered colour.
+    every cell-font entry point writes a size. ``color`` is ``ColorKind.NONE``
+    without a ``<color>`` element and takes a ``ColorInput`` on input.
     """
 
     name: str = ""
     size: Optional[float] = 11.0
-    color_argb: int = 0
     bold: Optional[bool] = None
     italic: Optional[bool] = None
     strike: Optional[bool] = None
@@ -3364,7 +3613,6 @@ class GradientStop:
     """One ``<stop>`` of a gradient fill: a colour at ``position`` (0..1)."""
 
     position: float = 0.0
-    color_argb: int = 0
     color: Color = field(default_factory=Color)
 
 
@@ -3389,16 +3637,12 @@ class GradientFill:
 class Fill:
     """A fill record.
 
-    ``fg`` and ``bg`` carry the authoritative OOXML colour selectors. Their
-    sibling ``*_argb`` fields are literal RGB for ``kind=1`` or compatibility
-    fallbacks otherwise; ``kind=0`` writes the sibling as ``rgb``. A
-    ``gradient`` makes the record a ``<gradientFill>`` and the pattern fields
-    are ignored.
+    ``fg`` and ``bg`` are the pattern's colours, each a ``ColorInput`` on
+    input. A ``gradient`` makes the record a ``<gradientFill>`` and the pattern
+    fields are ignored.
     """
 
     pattern: FillPattern = FillPattern.NONE
-    fg_argb: int = 0
-    bg_argb: int = 0
     fg: Color = field(default_factory=Color)
     bg: Color = field(default_factory=Color)
     gradient: Optional[GradientFill] = None
@@ -3406,14 +3650,9 @@ class Fill:
 
 @dataclass(frozen=True)
 class BorderSide:
-    """One side of a border: its style and colour.
-
-    ``color_argb`` is the literal ``0xAARRGGBB`` or a compatibility
-    fallback; ``color`` is the original ``<color>`` specification.
-    """
+    """One side of a border: its style and colour (a ``ColorInput`` on input)."""
 
     style: BorderStyle = BorderStyle.NONE
-    color_argb: int = 0
     color: Color = field(default_factory=Color)
 
 
@@ -3579,30 +3818,33 @@ class DifferentialFormat:
 
 
 def _decode_color(ptr: int) -> Color:
-    d = S.COLOR_SPEC.unpack(LIB, ptr)
+    return _color_from(S.COLOR_SPEC.unpack(LIB, ptr))
+
+
+def _color_fields(spec: Color) -> Dict[str, object]:
+    """The ``fm_color_spec_t`` fields of ``spec``."""
+    return {
+        "kind": _uint(spec.kind, "kind", 8),
+        "rgb": _uint(spec.rgb, "rgb"),
+        "theme": _uint(spec.theme, "theme"),
+        "tint": float(spec.tint),
+        "indexed": _uint(spec.indexed, "indexed"),
+    }
+
+
+def _color_from(d: Mapping[str, Any]) -> Color:
+    """A :class:`Color` from decoded ``fm_color_spec_t`` fields."""
     return Color(kind=_enum(ColorKind, d["kind"]), rgb=d["rgb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"])
 
 
-def _argb_of(color: Color) -> int:
-    """The literal ``0xAARRGGBB`` a facade ``*_argb`` field reports for ``color``."""
-    return color.rgb if color.kind == ColorKind.RGB else 0
+def _optional_color_from(d: Mapping[str, Any]) -> Optional[Color]:
+    """:func:`_color_from`, ``None`` for an absent colour (``ColorKind.NONE``)."""
+    return None if d["kind"] == ColorKind.NONE else _color_from(d)
 
 
-def _pack_color(ptr: int, spec: Color, argb: int = 0) -> None:
-    """Write ``spec``; with no selector, a non-zero ``argb`` is written as a literal RGB."""
-    if spec.kind == ColorKind.NONE and argb:
-        spec = Color(kind=ColorKind.RGB, rgb=_uint(argb, "argb"))
-    S.COLOR_SPEC.pack(
-        LIB,
-        ptr,
-        {
-            "kind": _uint(spec.kind, "kind", 8),
-            "rgb": _uint(spec.rgb, "rgb"),
-            "theme": _uint(spec.theme, "theme"),
-            "tint": float(spec.tint),
-            "indexed": _uint(spec.indexed, "indexed"),
-        },
-    )
+def _pack_color(ptr: int, spec: ColorInput, label: str = "color") -> None:
+    """Write the ``ColorInput`` ``spec`` as the ``fm_color_spec_t`` at ``ptr``."""
+    S.COLOR_SPEC.pack(LIB, ptr, _color_fields(color_input(spec, label)))
 
 
 # The font toggles whose element may be absent, each paired with a ``has_<name>`` C flag.
@@ -3615,7 +3857,6 @@ def _decode_font(ptr: int) -> Font:
     return Font(
         name=LIB.read_cstr(d["name"]),
         size=d["size"] if d["has_size"] else None,
-        color_argb=_argb_of(color),
         **{name: bool(d[name]) if d[f"has_{name}"] else None for name in _FONT_TOGGLES},
         underline=_enum(UnderlineStyle, d["underline"]),
         vert_align=_enum(FontVerticalAlign, d["vert_align"]),
@@ -3643,7 +3884,7 @@ def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
         fields[name] = 1 if value else 0
         fields[f"has_{name}"] = 0 if value is None else 1
     S.FONT_RECORD.pack(LIB, ptr, fields)
-    _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color, record.color_argb)
+    _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color, "Font.color")
     S.write_str_field(LIB, ptr, S.FONT_RECORD, "name", record.name, scope)
 
 
@@ -3657,7 +3898,7 @@ def _decode_fill(ptr: int) -> Fill:
             stop_ptr = d["gradient_stops"] + i * stop_size
             stop = S.GRADIENT_STOP.unpack(LIB, stop_ptr)
             stop_color = _decode_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1])
-            stops.append(GradientStop(position=stop["position"], color_argb=_argb_of(stop_color), color=stop_color))
+            stops.append(GradientStop(position=stop["position"], color=stop_color))
         gradient = GradientFill(
             type=_enum(GradientType, d["gradient_type"]),
             degree=d["gradient_degree"],
@@ -3671,8 +3912,6 @@ def _decode_fill(ptr: int) -> Fill:
     bg = _decode_color(ptr + S.FILL_RECORD.offsets["bg"][1])
     return Fill(
         pattern=_enum(FillPattern, d["pattern"]),
-        fg_argb=_argb_of(fg),
-        bg_argb=_argb_of(bg),
         fg=fg,
         bg=bg,
         gradient=gradient,
@@ -3695,7 +3934,7 @@ def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
             for i, stop in enumerate(gradient.stops):
                 stop_ptr = stops_ptr + i * stop_size
                 S.GRADIENT_STOP.pack(LIB, stop_ptr, {"position": float(stop.position)})
-                _pack_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1], stop.color, stop.color_argb)
+                _pack_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1], stop.color, f"GradientStop[{i}].color")
         values.update(
             has_gradient=1,
             gradient_type=_sint(gradient.type, "gradient.type"),
@@ -3708,8 +3947,8 @@ def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
             gradient_stop_count=len(gradient.stops),
         )
     S.FILL_RECORD.pack(LIB, ptr, values)
-    _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg, record.fg_argb)
-    _pack_color(ptr + S.FILL_RECORD.offsets["bg"][1], record.bg, record.bg_argb)
+    _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg, "Fill.fg")
+    _pack_color(ptr + S.FILL_RECORD.offsets["bg"][1], record.bg, "Fill.bg")
 
 
 def _decode_border_record(ptr: int) -> Border:
@@ -3718,9 +3957,7 @@ def _decode_border_record(ptr: int) -> Border:
         side_ptr = ptr + S.BORDER_RECORD.offsets[side][1]
         d = S.BORDER_SIDE.unpack(LIB, side_ptr)
         side_color = _decode_color(side_ptr + S.BORDER_SIDE.offsets["color"][1])
-        sides[side] = BorderSide(
-            style=_enum(BorderStyle, d["style"]), color_argb=_argb_of(side_color), color=side_color
-        )
+        sides[side] = BorderSide(style=_enum(BorderStyle, d["style"]), color=side_color)
     outer = S.BORDER_RECORD.unpack(LIB, ptr)
     return Border(**sides, diagonal_up=bool(outer["diagonal_up"]), diagonal_down=bool(outer["diagonal_down"]))
 
@@ -3737,7 +3974,7 @@ def _pack_border_record(ptr: int, border: Border) -> None:
         spec: BorderSide = getattr(border, side)
         side_ptr = ptr + S.BORDER_RECORD.offsets[side][1]
         S.BORDER_SIDE.pack(LIB, side_ptr, {"style": _uint(spec.style, "style", 8)})
-        _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.color, spec.color_argb)
+        _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.color, f"Border.{side}.color")
 
 
 @dataclass(frozen=True)
@@ -3860,12 +4097,12 @@ class PivotWorksheetSource:
 
 @dataclass
 class PivotInput:
-    """A pivot table :meth:`Sheet.add_pivot` creates: its name, its cache and its 0-based top-left cell."""
+    """A pivot table :meth:`Sheet.add_pivot` creates: its name, its cache and its top-left cell."""
 
     name: str
     cache_id: int
-    anchor_row: int
-    anchor_col: int
+    #: The top-left cell, or its A1 text (``"C3"``).
+    anchor: Union[CellAddress, str]
 
 
 @dataclass(frozen=True)
@@ -4373,14 +4610,17 @@ def _pack_shape(
     width_emu,
     height_emu,
     fill_kind,
-    fill_rgb,
+    fill_color,
     line_kind,
-    line_rgb,
+    line_color,
     line_width_emu,
     rotation,
     hidden,
 ) -> int:
-    """Build a shape input struct; a ``None`` argument is a field left out of the mask."""
+    """Build a shape input struct; a ``None`` argument is a field left out of the mask.
+
+    ``fill_color`` / ``line_color`` are the ``ColorInput`` of a solid kind, ``None`` for any other.
+    """
     ptr = scope.struct_array(S.SHAPE, 1)
     mask = 0
     values: Dict[str, Any] = {}
@@ -4406,11 +4646,11 @@ def _pack_shape(
     if fill_kind is not None:
         mask |= _SHAPE_FIELDS["fill"]
         values.update(fill_kind=_sint(fill_kind, "fill_kind"))
-        values["fill_color"] = {"kind": ColorKind.RGB, "rgb": _uint(fill_rgb, "fill_rgb")}
+        values["fill_color"] = _color_fields(optional_color_input(fill_color, "fill_color"))
     if line_kind is not None:
         mask |= _SHAPE_FIELDS["line"]
         values.update(line_kind=_sint(line_kind, "line_kind"))
-        values["line_color"] = {"kind": ColorKind.RGB, "rgb": _uint(line_rgb, "line_rgb")}
+        values["line_color"] = _color_fields(optional_color_input(line_color, "line_color"))
     if line_width_emu is not None:
         mask |= _SHAPE_FIELDS["line_width"]
         values["line_width_emu"] = _sint(line_width_emu, "line_width_emu", 64)
@@ -4542,7 +4782,7 @@ def _pack_sparkline_group(scope: _ArgScope, group: SparklineGroup) -> int:
         },
     )
     for key in _SPARKLINE_COLORS:
-        _pack_color(ptr + S.SPARKLINE_GROUP.offsets[key][1], getattr(group, key))
+        _pack_color(ptr + S.SPARKLINE_GROUP.offsets[key][1], getattr(group, key), f"SparklineGroup.{key}")
     S.write_str_field(LIB, ptr, S.SPARKLINE_GROUP, "date_axis_ref", group.date_axis_ref, scope)
     return ptr
 
@@ -4595,9 +4835,9 @@ _CHART_LEGEND_NONE = -1
 _CHART_ROLES = ("name", "categories", "values", "x", "y", "size")
 
 # (patch key, C field, scalar kind) per patch struct.
-_FILL_PATCH_SPEC = (("color", "color", "rgb"), ("transparency", "transparency_pct", "f64"))
+_FILL_PATCH_SPEC = (("color", "color", "color"), ("transparency", "transparency_pct", "f64"))
 _LINE_PATCH_SPEC = (
-    ("color", "color", "rgb"),
+    ("color", "color", "color"),
     ("transparency", "transparency_pct", "f64"),
     ("width_pt", "width_pt", "f64"),
     ("dash", "dash", "i32"),
@@ -4613,7 +4853,7 @@ _LABELS_PATCH_SPEC = (
     ("separator", "separator", "str"),
     ("position", "position", "i32"),
     ("number_format", "number_format", "str"),
-    ("font_color", "font_color", "rgb"),
+    ("font_color", "font_color", "color"),
     ("font_size_pt", "font_size_pt", "f64"),
 )
 _PLOT_PATCH_SPEC = (
@@ -4696,18 +4936,13 @@ def _read_chart_title(d: Dict[str, object]) -> Optional[ChartTitle]:
     )
 
 
-def _chart_rgb(spec: Dict[str, Any]) -> Optional[int]:
-    """The literal RGB of a chart colour spec, ``None`` when it is not one."""
-    return spec["rgb"] if spec["kind"] == ColorKind.RGB else None
-
-
 def _read_chart_fill(d: Dict[str, object]) -> ChartFill:
-    return ChartFill(color=_chart_rgb(d["color"]), transparency=_nan_none(d["transparency_pct"]))
+    return ChartFill(color=_optional_color_from(d["color"]), transparency=_nan_none(d["transparency_pct"]))
 
 
 def _read_chart_line(d: Dict[str, object]) -> ChartLine:
     return ChartLine(
-        color=_chart_rgb(d["color"]),
+        color=_optional_color_from(d["color"]),
         transparency=_nan_none(d["transparency_pct"]),
         width_pt=_nan_none(d["width_pt"]),
         dash=_enum(ChartLineDash, d["dash"]) if d["has_dash"] else None,
@@ -4735,7 +4970,7 @@ def _read_chart_labels(d: Dict[str, object]) -> ChartLabels:
         position=_enum(ChartLabelPosition, d["position"]) if d["has_position"] else None,
         number_format=_opt_cstr(d["number_format"]),
         source_linked=bool(d["source_linked"]),
-        font_color=_chart_rgb(d["font_color"]),
+        font_color=_optional_color_from(d["font_color"]),
         font_size_pt=_nan_none(d["font_size_pt"]),
         deleted=bool(d["deleted"]),
     )
@@ -4967,8 +5202,8 @@ def _title_fields(title: Union[str, ChartTitle], scope: _ArgScope) -> Dict[str, 
 def _patch_scalar(kind: str, value, key: str, scope: _ArgScope):
     if kind == "u32":
         return _uint(value, key)
-    if kind == "rgb":
-        return {"kind": ColorKind.RGB, "rgb": _uint(value, key)}
+    if kind == "color":
+        return _color_fields(color_input(value, key))
     if kind == "i32":
         return _sint(value, key)
     if kind == "bool":
@@ -5274,9 +5509,9 @@ def _shape_from(d: Dict[str, Any]) -> ShapeProperties:
         text=LIB.read_cstr(d["text"]),
         text_box=bool(d["text_box"]),
         fill_kind=_enum_or_none(ShapePaint, d["fill_kind"]),
-        fill_rgb=d["fill_color"]["rgb"] if d["fill_color"]["kind"] == ColorKind.RGB else 0,
+        fill_color=_optional_color_from(d["fill_color"]),
         line_kind=_enum_or_none(ShapePaint, d["line_kind"]),
-        line_rgb=d["line_color"]["rgb"] if d["line_color"]["kind"] == ColorKind.RGB else 0,
+        line_color=_optional_color_from(d["line_color"]),
         line_width_emu=d["line_width_emu"],
         rotation=d["rotation"],
         hidden=bool(d["hidden"]),
@@ -5563,14 +5798,24 @@ _SAVE_EXTENSIONS = {".xlsx": WorkbookFormat.XLSX, ".xlsb": WorkbookFormat.XLSB}
 
 
 def _save_format(dest: object, format: Optional[WorkbookFormat]) -> WorkbookFormat:
-    """The container a save writes: ``format``, else the one ``dest``'s extension names, else XLSX."""
+    """The container a save writes: ``format``, else the one a path's extension names.
+
+    Bytes and streams default to XLSX; a path with any other extension needs ``format``.
+    """
     if not (dest is None or isinstance(dest, (str, os.PathLike)) or callable(getattr(dest, "write", None))):
         raise TypeError(f"Workbook.save: expected a path or a binary stream, got {type(dest).__name__}")
     implied = None
     if isinstance(dest, (str, os.PathLike)):
         implied = _SAVE_EXTENSIONS.get(os.path.splitext(os.fspath(dest))[1].lower())
     if format is None:
-        return WorkbookFormat.XLSX if implied is None else implied
+        if implied is not None:
+            return implied
+        if isinstance(dest, (str, os.PathLike)):
+            raise ValueError(
+                f"formulon: cannot infer the workbook format from {os.fspath(dest)!r}; "
+                "use a .xlsx or .xlsb extension or pass format=WorkbookFormat.XLSX or WorkbookFormat.XLSB"
+            )
+        return WorkbookFormat.XLSX
     fmt = WorkbookFormat(format)
     if implied is not None and fmt != implied:
         raise FormulonError(
@@ -5642,7 +5887,9 @@ class Workbook:
       by a natural name (:meth:`get_defined_name`) returns ``None`` instead.
 
     Recalculation:
-      Recalculation is explicit. A read returns the value as of the last
+      Under the default ``CalcMode.AUTO`` a value read and a save first
+      calculate whatever changed, so a read never returns a stale value.
+      Under ``CalcMode.MANUAL`` a read returns the value as of the last
       :meth:`recalc`; :meth:`has_dirty_cells` reports whether a change has
       happened since.
 
@@ -5650,9 +5897,9 @@ class Workbook:
       Always release via :meth:`close`, ideally through ``with`` syntax::
 
           with Workbook.create_default() as wb:
-              wb[0].set_number(0, 0, 42.0)
-              wb.recalc()
-              print(wb[0].get_value(0, 0).to_python())
+              wb[0].set_value("A1", 2)
+              wb[0].set_formula("A2", "=A1*10")
+              print(wb[0].get_value("A2"))  # 20.0
 
       :meth:`close` is idempotent and :attr:`closed` reports it. Any
       other call on a closed workbook raises :class:`WorkbookClosedError`.
@@ -5702,12 +5949,12 @@ class Workbook:
         return wb
 
     @classmethod
-    def create_for_profile(cls, profile_id: ExcelProfileId) -> "Workbook":
+    def create_for_profile(cls, profile_id: ProfileId) -> "Workbook":
         """Build a new workbook with the defaults of an Excel profile.
 
         ``profile_id`` has the form ``{mac,win}-365-<locale>`` (see
-        :meth:`set_excel_profile_id`). The workbook carries that profile as
-        its :meth:`get_excel_profile_id` and takes the profile's locale defaults:
+        :meth:`set_profile_id`). The workbook carries that profile as
+        its :meth:`get_profile_id` and takes the profile's locale defaults:
         body font (name, charset, minor theme scheme), phonetic font (font 1,
         ja/ko/zh only), Normal style name, vertical alignment, first sheet
         name, row height, margins and phonetic settings. ``mac-*`` values are
@@ -6033,6 +6280,12 @@ class Workbook:
             index = LIB.read_u32(out)
         return self._insert_sheet_handle(handles, index)
 
+    def _evaluate_typed_formula(self, sheet: int, row: int, col: int, formula: str) -> Value:
+        """Evaluate as :meth:`Sheet.evaluate_typed_formula`: a 1x1 result is its cell, any other an ``ARRAY``."""
+        if not isinstance(formula, str):
+            raise TypeError(f"formulon: formula must be a str, got {type(formula).__name__}")
+        return _folded(self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False))
+
     def _evaluate_formula_top_left(self, sheet: int, row: int, col: int, formula: str) -> Value:
         """Evaluate as :meth:`Sheet.evaluate_formula_array` and read back only the top-left cell."""
         return self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=True)[0][0]
@@ -6072,14 +6325,15 @@ class Workbook:
 
     # -- Recalc ------------------------------------------------------------
     def recalc(self) -> None:
-        """Drive a full incremental recalc.
+        """Calculate every pending cell now.
 
-        The wheel exposes only the serial recalc contract. Thread-capable
-        bindings may opt in to the parallel scheduler, but this method
-        always runs serially.
+        Under ``CalcMode.AUTO`` reads already do this; call it under
+        ``CalcMode.MANUAL``, or to re-evaluate volatile functions. The wheel
+        always recalculates serially.
 
         Example::
 
+            wb.set_calc_mode(CalcMode.MANUAL)
             wb[0].set_formula("B1", "=A1*2")
             wb.recalc()
         """
@@ -6092,10 +6346,10 @@ class Workbook:
 
         Edits to cells, defined names or the profile, row / column inserts and
         deletes, and sheet removal make the workbook dirty; volatile functions
-        do not. A loaded workbook with formulas is dirty until the first
-        :meth:`recalc`; :meth:`Sheet.recalc_viewport` does not clean it, and a
-        failed recalc leaves it dirty. Reads (:meth:`Sheet.get_value` and friends) return the values of the
-        last recalc.
+        do not. A loaded workbook with formulas is dirty until it is first
+        calculated; :meth:`Sheet.recalc_viewport` does not clean it, and a
+        failed recalc leaves it dirty. Under ``CalcMode.AUTO`` a value read
+        calculates first, so this is mostly of use under ``CalcMode.MANUAL``.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -6191,15 +6445,18 @@ class Workbook:
             as ``bytes``. A ``str`` or :class:`os.PathLike` names a file to
             create or overwrite; an object with a ``write`` method (a file
             opened in ``"wb"`` mode, :class:`io.BytesIO`) receives the bytes.
-          format: the container. Omitted, a path ending in ``.xlsb`` (any
-            case) writes XLSB and anything else XLSX. The extension decides
-            only the container: ``.xlsm`` writes a plain XLSX package.
+          format: the container. Omitted, a path ending in ``.xlsx`` or
+            ``.xlsb`` (any case) writes that container, bytes and streams
+            get XLSX, and any other path extension is an error. ``format``
+            decides only the container: ``.xlsm`` with ``WorkbookFormat.XLSX``
+            writes a plain XLSX package.
 
         Returns:
           The archive bytes when ``dest`` is omitted, otherwise ``None``.
 
         Raises:
-          ValueError: when ``format`` is not a :class:`WorkbookFormat` value.
+          ValueError: when ``format`` is not a :class:`WorkbookFormat` value,
+            or is omitted for a path that ends in neither ``.xlsx`` nor ``.xlsb``.
           InvalidArgumentError: for ``WorkbookFormat.UNKNOWN``, or a ``format``
             that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
           TypeError: when ``dest`` is none of the above.
@@ -6228,7 +6485,8 @@ class Workbook:
         holds the archive whether or not it was also written to ``dest``.
 
         Raises:
-          ValueError: when ``format`` is not a :class:`WorkbookFormat` value.
+          ValueError: when ``format`` is not a :class:`WorkbookFormat` value,
+            or is omitted for a path that ends in neither ``.xlsx`` nor ``.xlsb``.
           InvalidArgumentError: for ``WorkbookFormat.UNKNOWN``, or a ``format``
             that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
           TypeError: when ``dest`` is none of the accepted kinds.
@@ -6373,9 +6631,9 @@ class Workbook:
     def add_table(
         self,
         *,
-        range: SheetRect,
+        range: Union[SheetRect, str],
         name: str,
-        columns: Sequence[str],
+        columns: Optional[Sequence[str]] = None,
         display_name: Optional[str] = None,
         style_name: Optional[str] = None,
         show_first_column: Optional[bool] = None,
@@ -6387,36 +6645,40 @@ class Workbook:
     ) -> Table:
         """Create a worksheet table over ``range`` and return its handle.
 
-        ``columns`` must hold one non-empty, table-unique header per column
-        of the range, and its length must equal the range's width;
-        ``display_name`` defaults to ``name``. Without ``style_name`` the
-        table has no ``<tableStyleInfo>``; a styled table starts with row
-        stripes on and the other toggles off, and a supplied ``show_*``
-        overrides that (without a style name it writes an unnamed style
-        element). With ``header_row`` set, the caller still owns the header
-        cells: Excel expects the first row of the range to hold exactly these
-        names.
+        ``range`` is a :class:`SheetRect` or a sheet-qualified A1 range
+        (``"Sheet1!A1:B4"``). Omitted ``columns`` take their names from the
+        header cells, an empty one named as Excel does (``Column1``, ...).
+        Given, ``columns`` holds one non-empty, table-unique name per column of
+        the range: a non-empty header cell must already hold that name, and an
+        empty one receives it. ``display_name`` defaults to ``name``. Without
+        ``style_name`` the table has no ``<tableStyleInfo>``; a styled table
+        starts with row stripes on and the other toggles off, and a supplied
+        ``show_*`` overrides that (without a style name it writes an unnamed
+        style element).
 
         Example::
 
             ws.set_text("A1", "Item")
             ws.set_text("B1", "Qty")
-            table = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 3, 1)),
-                name="Orders",
-                columns=["Item", "Qty"],
-            )
+            table = wb.add_table(range="Sheet1!A1:B4", name="Orders")
         """
+        target = sheet_rect(self, range, None, "range")
+        for label, text in (("name", name), ("display_name", display_name)):
+            if isinstance(text, str) and self._names_a_cell(text):
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT,
+                    _diagnostic_override=(f'invalid table {label}: "{text}" is a cell address', f"{label}={text}"),
+                )
         h = self._require()
-        sheet = range.sheet
-        rect = range.rect
+        sheet = target.sheet
+        rect = target.rect
         with _ArgScope() as scope:
             rect_ptr = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rect_ptr, rect)
             name_ptr = scope.nonempty_cstr(name)
             display_ptr = scope.nonempty_cstr(name if display_name is None else display_name)
             style_ptr = scope.nonempty_cstr(style_name)
-            names = [str(column) for column in columns]
+            names = [str(column) for column in columns or ()]
             name_ptrs = [scope.nonempty_cstr(column) for column in names]
             array_ptr = scope.alloc(4 * len(name_ptrs)) if name_ptrs else 0
             if array_ptr:
@@ -6447,6 +6709,15 @@ class Workbook:
                 self.remove_table(index)
                 raise
         return handle
+
+    def _names_a_cell(self, text: str) -> bool:
+        """Whether ``text`` reads as one A1 cell (``"T2"``), which a table name may not be."""
+        try:
+            ref = self.parse_reference(text)
+        except FormulaSyntaxError:
+            return False
+        rect = ref.rect
+        return ref.sheet_name is None and rect.first_row == rect.last_row and rect.first_col == rect.last_col
 
     def remove_table(self, table: Union[int, str, Table]) -> None:
         """Remove ``table``; its handle raises :class:`NotFoundError` from then on.
@@ -6485,11 +6756,14 @@ class Workbook:
             return path if LIB.read_u32(present) else None
 
     # -- Sheet structure ---------------------------------------------------
-    def copy_sheet(self, source: SheetRef, insert_before: int, new_name: Optional[str] = None) -> Sheet:
+    def copy_sheet(
+        self, source: SheetRef, insert_before: Optional[int] = None, new_name: Optional[str] = None
+    ) -> Sheet:
         """Copy the worksheet ``source`` and return the copy's handle.
 
-        The copy goes before the sheet now at ``insert_before`` (the sheet
-        count appends). Without ``new_name`` it is named as Excel does
+        The copy goes before the sheet now at ``insert_before``; omitted or
+        ``None`` (or the sheet count) appends it, so ``copy_sheet(src, None,
+        "Copy")`` names an appended copy. Without ``new_name`` it is named as Excel does
         (``Src (2)``); an explicit name follows the :meth:`add_sheet` rules.
         The active sheet does not change.
 
@@ -6507,7 +6781,7 @@ class Workbook:
                 LIB.fm_workbook_copy_sheet,
                 h,
                 _uint(source_index, "source"),
-                _uint(insert_before, "insert_before"),
+                _uint(len(handles) if insert_before is None else insert_before, "insert_before"),
                 name_ptr,
             )
         return self._insert_sheet_handle(handles, index)
@@ -6540,6 +6814,7 @@ class Workbook:
           InvalidArgumentError: when ``formula`` is empty (remove a name with
             :meth:`remove_defined_name`).
         """
+        local_sheet_id = _local_sheet_id(None if defined_name.scope is None else self.sheet(defined_name.scope).index)
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DEFINED_NAME_INPUT)
@@ -6549,7 +6824,7 @@ class Workbook:
                 {
                     "name": scope.cstr(defined_name.name),
                     "formula": scope.cstr(defined_name.formula),
-                    "local_sheet_id": _sint(_local_sheet_id(defined_name.local_sheet_id), "local_sheet_id"),
+                    "local_sheet_id": _sint(local_sheet_id, "local_sheet_id"),
                     "comment": scope.nonempty_cstr(defined_name.comment),
                     "hidden": 1 if defined_name.hidden else 0,
                 },
@@ -6622,7 +6897,7 @@ class Workbook:
 
     # -- Calc policy / behaviour profile -----------------------------------
     def get_calc_mode(self) -> CalcMode:
-        """Return the workbook's calc mode (round-trip metadata)."""
+        """Return the workbook's calc mode (see :class:`CalcMode`)."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
@@ -6630,7 +6905,12 @@ class Workbook:
             return CalcMode(LIB.read_i32(out))
 
     def set_calc_mode(self, mode: CalcMode) -> None:
-        """Set the workbook's calc mode."""
+        """Set the workbook's calc mode (see :class:`CalcMode`).
+
+        To read the values a loaded file has cached, set ``CalcMode.MANUAL``
+        right after :meth:`load`; to keep them through a save as well, also
+        :meth:`set_calc_on_save` ``False``.
+        """
         h = self._require()
         _check(LIB.fm_workbook_set_calc_mode(h, _sint(mode, "mode")))
 
@@ -6737,28 +7017,20 @@ class Workbook:
             )
             _check(LIB.fm_workbook_set_pinned_now(h, ptr))
 
-    def get_excel_profile_id(
-        self,
-    ) -> ExcelProfileId:
-        """Return the active Excel formula profile id.
+    def get_profile_id(self) -> ProfileId:
+        """Return the id of the workbook's Excel profile.
 
         New workbooks default to ``win-365-en_US``. Select another host or
-        locale with :meth:`set_excel_profile_id`.
+        locale with :meth:`set_profile_id`.
         """
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(LIB.fm_workbook_get_profile_id(h, out))
-            return cast(
-                ExcelProfileId,
-                LIB.read_cstr(LIB.read_u32(out)),
-            )
+            return cast(ProfileId, LIB.read_cstr(LIB.read_u32(out)))
 
-    def set_excel_profile_id(
-        self,
-        profile_id: ExcelProfileId,
-    ) -> None:
-        """Set the workbook's Excel formula profile by id.
+    def set_profile_id(self, profile_id: ProfileId) -> None:
+        """Set the workbook's Excel profile by id.
 
         New workbooks use ``win-365-en_US`` by default. Ids have the form
         ``{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}``.
@@ -7564,10 +7836,13 @@ class Workbook:
         r1c1: bool = False,
         base_row: Optional[int] = None,
         base_col: Optional[int] = None,
-    ) -> Optional[ParsedReference]:
-        """Parse ``text`` as ``INDIRECT`` reads a reference; ``None`` when it is not one.
+    ) -> ParsedReference:
+        """Parse ``text`` as ``INDIRECT`` reads a reference.
 
         ``base_row`` and ``base_col`` anchor R1C1 relative axes and are given together or not at all.
+
+        Raises:
+          FormulaSyntaxError: with ``StatusCode.PARSER_INVALID_REFERENCE`` when ``text`` is not a reference.
         """
         if (base_row is None) != (base_col is None):
             raise ValueError("formulon: base_row and base_col must be given together")
@@ -7586,8 +7861,6 @@ class Workbook:
                 )
             )
             d = S.REFERENCE.unpack(LIB, ptr)
-            if not d["valid"]:
-                return None
             return ParsedReference(
                 sheet_name=LIB.read_cstr(d["sheet_name"]) if d["has_sheet"] else None,
                 rect=_cell_rect_from(d["rect"]),
@@ -7730,6 +8003,10 @@ def _install_workbook_locks(cls: type) -> None:
             setattr(cls, name, _lock_workbook_method(descriptor))
 
 
+# <ooxml-namespace>
+# </ooxml-namespace>
+
+
 _install_workbook_locks(Workbook)
 
 
@@ -7806,19 +8083,19 @@ def list_function_names() -> List[str]:
 
 
 @_lock_workbook_method
-def localize_function_name(canonical_name: str, profile_id: ExcelProfileId) -> str:
+def localize_function_name(canonical_name: str, profile_id: ProfileId) -> str:
     """Return the display name of ``canonical_name`` under ``profile_id``."""
     return _map_profile_text("fm_localize_function_name", canonical_name, profile_id)
 
 
 @_lock_workbook_method
-def canonicalize_function_name(localized_name: str, profile_id: ExcelProfileId) -> str:
+def canonicalize_function_name(localized_name: str, profile_id: ProfileId) -> str:
     """Return the canonical English name for ``localized_name`` under ``profile_id``."""
     return _map_profile_text("fm_canonicalize_function_name", localized_name, profile_id)
 
 
 @_lock_workbook_method
-def localize_formula(formula: str, profile_id: ExcelProfileId) -> str:
+def localize_formula(formula: str, profile_id: ProfileId) -> str:
     """Rewrite stored (en-invariant) formula text into ``profile_id``'s spelling.
 
     Function names, list / array separators, decimal points, booleans
@@ -7830,7 +8107,7 @@ def localize_formula(formula: str, profile_id: ExcelProfileId) -> str:
 
 
 @_lock_workbook_method
-def canonicalize_formula(formula: str, profile_id: ExcelProfileId) -> str:
+def canonicalize_formula(formula: str, profile_id: ProfileId) -> str:
     """Rewrite ``profile_id``-spelled formula text into the en-invariant form."""
     return _map_profile_text("fm_canonicalize_formula", formula, profile_id)
 
@@ -7857,7 +8134,7 @@ def _read_locale_error_names(scope: _ArgScope, pid_ptr: int) -> List[ErrorName]:
 
 
 @_lock_workbook_method
-def list_locale_error_names(profile_id: ExcelProfileId) -> List[ErrorName]:
+def list_locale_error_names(profile_id: ProfileId) -> List[ErrorName]:
     """Return the error names of ``profile_id`` in error-code order.
 
     Raises:
@@ -7868,7 +8145,7 @@ def list_locale_error_names(profile_id: ExcelProfileId) -> List[ErrorName]:
 
 
 @_lock_workbook_method
-def get_locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
+def get_locale_facts(profile_id: ProfileId) -> LocaleFacts:
     """Return the locale facts (separators, names, currency, error names) of ``profile_id``.
 
     Raises:
@@ -7900,7 +8177,7 @@ def get_locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
 
 
 @_lock_workbook_method
-def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ExcelProfileId) -> int:
+def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ProfileId) -> int:
     """Compare two texts under the collation of ``profile_id``.
 
     Returns -1, 0 or 1. This is the text fold only, not ``=`` on two
@@ -7920,7 +8197,7 @@ def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ExcelP
 
 @_lock_workbook_method
 def get_collation_classes(
-    values: Sequence[Value], strength: CollationStrength, profile_id: ExcelProfileId
+    values: Sequence[Value], strength: CollationStrength, profile_id: ProfileId
 ) -> CollationClasses:
     """Classify ``values`` into collation-ordered equivalence classes.
 
@@ -7958,3 +8235,11 @@ def get_collation_classes(
         )
         class_ids = list(struct.unpack(f"<{n}I", LIB.read_bytes(ids, 4 * n))) if n else []
         return CollationClasses(class_ids=class_ids, class_count=LIB.read_u32(count_out))
+
+
+# Imported last: these modules import this one, and the annotations above name their classes, which
+# `typing.get_type_hints` resolves from this module's globals.
+from ._inputs import color_input, optional_color_input, sheet_rect  # noqa: E402
+from .pivot_cache import PivotCache  # noqa: E402
+from .sheet import Sheet  # noqa: E402
+from .table import Table  # noqa: E402

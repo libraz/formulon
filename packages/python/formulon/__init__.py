@@ -1,7 +1,8 @@
 """Formulon -- Excel 365 calculation engine, Python binding.
 
 Public API:
-  * :func:`evaluate_formula` -- one-shot formula evaluation.
+  * :func:`evaluate_formula` / :func:`evaluate_typed_formula` -- one-shot
+    formula evaluation.
   * :func:`get_version` -- query the version of the bundled engine.
   * :class:`Workbook` -- full workbook lifecycle.
   * :class:`Sheet` -- every operation on one sheet of a workbook.
@@ -9,28 +10,30 @@ Public API:
     (:class:`Picture`, :class:`Chart`, :class:`Shape`, :class:`Slicer`) --
     handles of a workbook's tables, pivot tables, pivot caches and drawing
     objects; each reads its record with ``get_properties()``.
-  * :class:`Value`, :class:`ValueKind` -- cell value.
+  * :data:`NativeValue` -- a value as plain Python data (what reads return);
+    :class:`Value`, :class:`ValueKind` -- the same value tagged with its kind.
   * :class:`ExcelError` -- an Excel cell error as a Python value;
     :attr:`ErrorCode.display_name` spells a code as Excel does (``#DIV/0!``).
-  * :class:`FormulonError` and its subclasses -- host-side failures.
+  * :class:`FormulonError` and its subclasses -- host-side failures;
+    :class:`FormulaSyntaxError` carries the position of a formula syntax error.
 
-Cell-level Excel errors (``#DIV/0!`` and friends) surface as ``Value``
-instances with ``kind == ValueKind.ERROR`` (``ExcelError`` through
-:meth:`Value.to_python`); only host-side failures (a closed workbook, an
-unreadable archive in ``Workbook.load``, out of memory) raise
-:class:`FormulonError`.
+Cell-level Excel errors (``#DIV/0!`` and friends) are values: an
+:class:`ExcelError` in a native read. Host-side failures (a closed workbook,
+an unreadable archive in ``Workbook.load``, a formula that does not parse,
+out of memory) raise :class:`FormulonError`.
+
+Numbers read back as ``float``: every Excel number is an IEEE double.
 """
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _dist_version
-from pathlib import Path
-
 from ._c import (
+    FormulaSyntaxError,
     IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
+    ParseError,
+    ParseErrorCode,
     ValueKind,
     WorkbookClosedError,
 )
@@ -74,7 +77,7 @@ from .workbook import (
     BorderSidePatch,
     BorderStyle,
     CalcMode,
-    Cell,
+    CellAddress,
     CellFormat,
     CellNode,
     CellProtection,
@@ -85,12 +88,15 @@ from .workbook import (
     CellXf,
     CellXfInput,
     CfCell,
-    CfColor,
     CfDataBarAxisPosition,
     CfDataBarDirection,
     CfIcon,
     CfMatch,
     CfMatchKind,
+    CfOperator,
+    CfRuleType,
+    CfTimePeriod,
+    CfValueObjectType,
     Cfvo,
     ChartAxis,
     ChartAxisCrosses,
@@ -168,7 +174,6 @@ from .workbook import (
     ErrorCode,
     ErrorName,
     ExcelError,
-    ExcelProfileId,
     ExternalLink,
     ExternalLinkKind,
     Fill,
@@ -192,14 +197,17 @@ from .workbook import (
     HorizontalAlign,
     Hyperlink,
     IconSet,
+    IconSetName,
     ImageFormat,
     ImageInfo,
+    InvalidFileError,
     IterativeSettings,
     LocaleDateOrder,
     LocaleFacts,
     LogLevel,
     MarginsPt,
     Mention,
+    NativeValue,
     PageBreak,
     PageLayout,
     PageMargins,
@@ -244,7 +252,9 @@ from .workbook import (
     PivotWorksheetSource,
     PrintOptions,
     PrintTitles,
+    ProfileId,
     ProtectedRange,
+    RangeCell,
     ReadDiagnostics,
     ReadingOrder,
     RectPt,
@@ -289,7 +299,9 @@ from .workbook import (
     Unchanged,
     UnderlineStyle,
     ValidationErrorStyle,
+    ValidationOperator,
     ValidationOutcome,
+    ValidationType,
     Value,
     VerticalAlign,
     WidthModel,
@@ -299,6 +311,7 @@ from .workbook import (
     canonicalize_formula,
     canonicalize_function_name,
     compare_text,
+    enum_name,
     get_collation_classes,
     get_function_metadata,
     get_image_info,
@@ -322,8 +335,13 @@ def _resolve_version() -> str:
     to the C-ABI build version as a last resort. The number is never
     hardcoded here, so a release bumps exactly one place.
     """
+    # Imported here so the helpers do not become attributes of the package.
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as dist_version
+    from pathlib import Path
+
     try:
-        return _dist_version("formulon")
+        return dist_version("formulon")
     except PackageNotFoundError:
         pass
 
@@ -358,6 +376,19 @@ def _resolve_version() -> str:
 
 __version__ = _resolve_version()
 
+# The public exceptions report the package, not the module that defines them.
+for _exception in (
+    FormulonError,
+    InvalidArgumentError,
+    FormulaSyntaxError,
+    NotFoundError,
+    IndexOutOfRangeError,
+    WorkbookClosedError,
+    InvalidFileError,
+):
+    _exception.__module__ = __name__
+del _exception
+
 __all__ = [
     "__version__",
     "Alignment",
@@ -379,7 +410,7 @@ __all__ = [
     "CalcMode",
     "canonicalize_formula",
     "canonicalize_function_name",
-    "Cell",
+    "CellAddress",
     "CellFormat",
     "CellNode",
     "CellProtection",
@@ -390,12 +421,15 @@ __all__ = [
     "CellXf",
     "CellXfInput",
     "CfCell",
-    "CfColor",
     "CfDataBarAxisPosition",
     "CfDataBarDirection",
     "CfIcon",
     "CfMatch",
     "CfMatchKind",
+    "CfOperator",
+    "CfRuleType",
+    "CfTimePeriod",
+    "CfValueObjectType",
     "Cfvo",
     "Chart",
     "ChartAxis",
@@ -455,6 +489,8 @@ __all__ = [
     "compare_text",
     "ConditionalFormat",
     "ConditionalFormatInput",
+    "convert_civil_to_serial",
+    "convert_serial_to_civil",
     "DataBar",
     "DataTable",
     "DataTableInputCell",
@@ -473,13 +509,12 @@ __all__ = [
     "DynamicFilterType",
     "EffectiveStyle",
     "EffectiveStyleSource",
+    "enum_name",
     "ErrorCode",
     "ErrorName",
-    "convert_civil_to_serial",
-    "convert_serial_to_civil",
     "evaluate_formula",
+    "evaluate_typed_formula",
     "ExcelError",
-    "ExcelProfileId",
     "ExternalLink",
     "ExternalLinkKind",
     "Fill",
@@ -492,6 +527,7 @@ __all__ = [
     "FontPatch",
     "FontScheme",
     "FontVerticalAlign",
+    "FormulaSyntaxError",
     "FormulonError",
     "FunctionAvailability",
     "FunctionMetadata",
@@ -512,10 +548,12 @@ __all__ = [
     "HorizontalAlign",
     "Hyperlink",
     "IconSet",
+    "IconSetName",
     "ImageFormat",
     "ImageInfo",
     "IndexOutOfRangeError",
     "InvalidArgumentError",
+    "InvalidFileError",
     "IterativeSettings",
     "list_function_names",
     "list_locale_error_names",
@@ -528,6 +566,7 @@ __all__ = [
     "Mention",
     "merge_function_metadata",
     "MergedFunctionMetadata",
+    "NativeValue",
     "NotFoundError",
     "PageBreak",
     "PageLayout",
@@ -537,6 +576,8 @@ __all__ = [
     "Pagination",
     "Paper",
     "ParsedReference",
+    "ParseError",
+    "ParseErrorCode",
     "PassthroughPart",
     "Person",
     "PhoneticProperties",
@@ -579,7 +620,9 @@ __all__ = [
     "PivotWorksheetSource",
     "PrintOptions",
     "PrintTitles",
+    "ProfileId",
     "ProtectedRange",
+    "RangeCell",
     "ReadDiagnostics",
     "ReadingOrder",
     "RectPt",
@@ -631,7 +674,9 @@ __all__ = [
     "Unchanged",
     "UnderlineStyle",
     "ValidationErrorStyle",
+    "ValidationOperator",
     "ValidationOutcome",
+    "ValidationType",
     "Value",
     "ValueKind",
     "VerticalAlign",
@@ -643,25 +688,34 @@ __all__ = [
 ]
 
 
-def evaluate_formula(formula: str) -> Value:
-    """Evaluate a single formula against a fresh, default workbook.
+def evaluate_formula(formula: str) -> NativeValue:
+    """Evaluate a single formula against a fresh, default workbook and return its value as native data.
 
-    The formula is evaluated read-only as if entered at ``Sheet1!A1``;
-    the temporary workbook is not mutated or recalculated.
-
-    Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, etc.) surface as a
-    :class:`Value` with ``kind == ValueKind.ERROR``; only host-side
-    failures (a parser crash, out of memory) raise :class:`FormulonError`.
+    The formula is evaluated read-only as if entered at ``Sheet1!A1``. A
+    1x1 result is returned as its value; any other result as a list of rows.
+    Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, ...) are returned as
+    :class:`ExcelError` values.
 
     Args:
       formula: the formula text, with or without a leading ``=``.
 
-    Returns:
-      The scalar :class:`Value` at the formula's top-left result cell.
+    Raises:
+      TypeError: when ``formula`` is not a ``str``.
+      FormulaSyntaxError: when ``formula`` does not parse.
 
     Example::
 
-        evaluate_formula("=SUM(1,2,3)").to_python()  # 6.0
+        evaluate_formula("=SUM(1,2,3)")  # 6.0
+        evaluate_formula("=SEQUENCE(2,2)")  # [[1.0, 2.0], [3.0, 4.0]]
+    """
+    return evaluate_typed_formula(formula).to_python()
+
+
+def evaluate_typed_formula(formula: str) -> Value:
+    """Evaluate as :func:`evaluate_formula` does and return the tagged :class:`Value`.
+
+    A result larger than 1x1 is a ``ValueKind.ARRAY`` value whose ``array``
+    holds the rows.
     """
     with Workbook.create_default() as wb:
-        return wb._evaluate_formula_top_left(0, 0, 0, formula)
+        return wb._evaluate_typed_formula(0, 0, 0, formula)
