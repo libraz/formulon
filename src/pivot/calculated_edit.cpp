@@ -15,6 +15,7 @@
 #include "pivot/calculated.h"
 #include "pivot/calculated_internal.h"
 #include "pivot/field_lookup.h"
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_formula_host.h"
 #include "pivot/pivot_table.h"
@@ -194,30 +195,15 @@ bool renumber_field(std::uint32_t& index, std::size_t removed) {
 }
 
 void erase_field_from_table(PivotTable& table, std::size_t field) {
-  std::vector<PivotDataField>& data_fields = table.mutable_data_fields();
-  std::vector<std::size_t> removed_data_fields;
-  std::vector<PivotDataField> kept;
-  for (std::size_t d = 0; d < data_fields.size(); ++d) {
-    PivotDataField data_field = std::move(data_fields[d]);
-    if (renumber_field(data_field.field_index, field)) {
-      removed_data_fields.push_back(d);
-      continue;
-    }
+  drop_field_aggregates(table, field);
+  for (PivotDataField& data_field : table.mutable_data_fields()) {
+    renumber_field(data_field.field_index, field);
     if (data_field.show_as_base_field.has_value() && renumber_field(*data_field.show_as_base_field, field)) {
       data_field.show_as_base_field.reset();
     }
-    kept.push_back(std::move(data_field));
   }
-  data_fields = std::move(kept);
 
   for (PivotFilter& filter : table.mutable_active_filters()) {
-    std::uint32_t moved = 0;
-    for (const std::size_t d : removed_data_fields) {
-      if (filter.data_field_index > d) {
-        ++moved;
-      }
-    }
-    filter.data_field_index -= moved;
     if (filter.source.has_value() && filter.source->field_index > field) {
       filter.source.reset();
     }

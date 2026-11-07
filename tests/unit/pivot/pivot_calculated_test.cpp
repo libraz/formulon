@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "eval/eval_profile_scope.h"
@@ -557,6 +558,22 @@ PivotFilter ValueFilter(const char* field, FilterType type, double value, std::u
   filter.value = value;
   filter.data_field_index = data_field;
   return filter;
+}
+
+TEST_F(PivotCalculated, RemovingACalculatedFieldDropsTheValueFiltersScoringIt) {
+  PivotTable table = BuildTable();
+  ASSERT_TRUE(static_cast<bool>(add_calculated_field(cache_, {&table}, "Price", "Amt/Qty", host_)));
+  table.mutable_data_fields().clear();
+  table.mutable_data_fields().push_back(DataField("Price", 4));
+  table.mutable_data_fields().push_back(DataField("Sum of Amt", kAmt));
+  table.mutable_active_filters().push_back(ValueFilter("Region", FilterType::ValueGreaterThan, 1, 0));
+  table.mutable_active_filters().push_back(ValueFilter("Region", FilterType::ValueGreaterThan, 2, 1));
+
+  ASSERT_TRUE(static_cast<bool>(remove_calculated_field(cache_, {&table}, 4, host_)));
+  ASSERT_EQ(table.data_fields().size(), 1U);
+  ASSERT_EQ(table.active_filters().size(), 1U);
+  EXPECT_EQ(std::get<double>(table.active_filters()[0].value), 2.0);
+  EXPECT_EQ(table.active_filters()[0].data_field_index, 0U);
 }
 
 /// The U0b P12 report: Product on columns filtered to B, Region `showAll`,

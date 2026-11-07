@@ -66,6 +66,11 @@ inline bool is_value_filter_type(FilterType type) {
   }
 }
 
+/// Removes the data fields aggregating `field_index` from `table`. Value
+/// filters scoring a removed data field go, as do filters naming the field
+/// itself; the rest follow their data field's new position.
+void drop_field_aggregates(PivotTable& table, std::size_t field_index);
+
 /// True for the caption types, matched against an item's label.
 inline bool is_caption_filter_type(FilterType type) {
   return type == FilterType::LabelContains || type == FilterType::LabelBeginsWith ||

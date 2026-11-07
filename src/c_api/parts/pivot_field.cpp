@@ -106,35 +106,6 @@ std::string item_value_label(const formulon::Workbook& workbook, const formulon:
   return item.name;
 }
 
-// A field taken off the report leaves no data fields behind, and the value
-// filters scoring a dropped data field go with them; the others follow their
-// data field's new position. Filters naming the field itself are removed too.
-void drop_field_aggregates(formulon::pivot::PivotTable& table, std::size_t field_index) {
-  std::vector<formulon::pivot::PivotDataField>& data_fields = table.mutable_data_fields();
-  std::vector<std::size_t> new_index(data_fields.size());
-  std::size_t kept = 0;
-  for (std::size_t i = 0; i < data_fields.size(); ++i) {
-    new_index[i] = data_fields[i].field_index == field_index ? data_fields.size() : kept++;
-  }
-  const formulon::pivot::PivotField& field = table.fields()[field_index];
-  table.erase_active_filters_if([&](formulon::pivot::PivotFilter& filter) {
-    if (formulon::pivot::pivot_field_has_name(field, filter.field_name)) {
-      return true;
-    }
-    if (!formulon::pivot::is_value_filter_type(filter.type) || filter.data_field_index >= new_index.size()) {
-      return false;
-    }
-    const std::size_t moved = new_index[filter.data_field_index];
-    filter.data_field_index = static_cast<decltype(filter.data_field_index)>(moved);
-    return moved == data_fields.size();
-  });
-  data_fields.erase(std::remove_if(data_fields.begin(), data_fields.end(),
-                                   [field_index](const formulon::pivot::PivotDataField& df) {
-                                     return df.field_index == field_index;
-                                   }),
-                    data_fields.end());
-}
-
 // Resolves `field_index` on a const pivot. Returns 0 with `*out_field` (and
 // `*out_table` when non-NULL) set, or the error status with the binding error
 // populated.
@@ -357,7 +328,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, std::siz
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   if (axis == kPivotAxisNone) {
     field->axis = formulon::pivot::PivotAxis::None;
-    drop_field_aggregates(*table, field_index);
+    formulon::pivot::drop_field_aggregates(*table, field_index);
   } else {
     field->axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis));
   }

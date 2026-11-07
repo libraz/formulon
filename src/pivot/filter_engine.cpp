@@ -154,6 +154,30 @@ std::vector<bool> remap_leaf_sets(std::vector<std::vector<std::size_t>>& leaf_se
 
 }  // namespace
 
+void drop_field_aggregates(PivotTable& table, std::size_t field_index) {
+  std::vector<PivotDataField>& data_fields = table.mutable_data_fields();
+  std::vector<std::size_t> new_index(data_fields.size());
+  std::size_t kept = 0;
+  for (std::size_t i = 0; i < data_fields.size(); ++i) {
+    new_index[i] = data_fields[i].field_index == field_index ? data_fields.size() : kept++;
+  }
+  const PivotField& field = table.fields()[field_index];
+  table.erase_active_filters_if([&](PivotFilter& filter) {
+    if (pivot_field_has_name(field, filter.field_name)) {
+      return true;
+    }
+    if (!is_value_filter_type(filter.type) || filter.data_field_index >= new_index.size()) {
+      return false;
+    }
+    const std::size_t moved = new_index[filter.data_field_index];
+    filter.data_field_index = static_cast<decltype(filter.data_field_index)>(moved);
+    return moved == data_fields.size();
+  });
+  data_fields.erase(std::remove_if(data_fields.begin(), data_fields.end(),
+                                   [field_index](const PivotDataField& df) { return df.field_index == field_index; }),
+                    data_fields.end());
+}
+
 // Pulls the numeric payload of a filter when one is expected. The
 // variant carries either `int` or `double`; both coerce to double here.
 // Returns 0 for non-numeric variants (caller treats as no-op).
