@@ -129,6 +129,10 @@ export function registerFilterValidationComments(Module, test) {
       wb.setAutoFilter(0, af);
       assert.deepEqual(wb.getAutoFilter(0), af);
 
+      // An omitted `top` reads as true (the schema default).
+      wb.setAutoFilter(0, { range: af.range, columns: [{ colId: 0, kind: FilterKind.Top10, topVal: 2 }] });
+      assert.equal(wb.getAutoFilter(0).columns[0].top, true);
+
       wb.removeAutoFilter(0);
       assert.equal(wb.getAutoFilter(0), null);
     });

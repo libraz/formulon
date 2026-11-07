@@ -162,3 +162,18 @@ export function readonlyArrays(): void {
   // @ts-expect-error a returned list is read-only
   wb.listSheets().push(sheet);
 }
+
+export function autoFilterInput(): void {
+  sheet.setAutoFilter({ range: rect });
+  sheet.setAutoFilter({ range: rect, columns: [{ colId: 0 }], sort: null });
+  table.setAutoFilter({ range: rect, columns: [{ colId: 0, kind: 3, topVal: 2 }], sort: { ref: rect } });
+  // @ts-expect-error a column needs its colId
+  sheet.setAutoFilter({ range: rect, columns: [{ kind: 3 }] });
+  // @ts-expect-error the range is required
+  sheet.setAutoFilter({ columns: [] });
+  const current = sheet.getAutoFilter();
+  if (current !== null) {
+    sheet.setAutoFilter(current);
+    table.setAutoFilter(current);
+  }
+}

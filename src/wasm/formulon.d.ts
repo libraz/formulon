@@ -3380,8 +3380,7 @@ export interface AutoFilterDateGroup {
  *  fields are zero. Custom operators `op1` / `op2` are
  *  `FilterOperator`s; `dynamicType` is a `DynamicFilterType`.
  *  `dxfId` of `4294967295` means absent. `iconSet` is the conditional-format
- *  icon-set ordinal. Omitted input fields read as zero / false / empty,
- *  except `showButton` (true) and `dxfId` (absent). */
+ *  icon-set ordinal. */
 export interface AutoFilterColumn {
   colId: number;
   hiddenButton: boolean;
@@ -3444,6 +3443,81 @@ export interface AutoFilter {
   readonly range: CellRect;
   readonly columns: readonly AutoFilterColumn[];
   readonly sort: AutoFilterSortState | null;
+}
+
+/** Input form of {@link AutoFilterDateGroup}; omitted fields read as zero,
+ *  and `grouping` as `DateTimeGrouping.Year`. */
+export interface AutoFilterDateGroupInput {
+  year?: number;
+  month?: number;
+  day?: number;
+  hour?: number;
+  minute?: number;
+  second?: number;
+  grouping?: DateTimeGrouping;
+}
+
+/** Input form of {@link AutoFilterColumn}; only `colId` is required. Omitted
+ *  fields read as zero / false / empty / `null`, except `showButton` and `top`
+ *  (true) and `dxfId` (absent). */
+export interface AutoFilterColumnInput {
+  colId: number;
+  hiddenButton?: boolean;
+  showButton?: boolean;
+  kind?: FilterKind;
+  filterBlank?: boolean;
+  values?: readonly string[];
+  dateGroups?: readonly AutoFilterDateGroupInput[];
+  customAnd?: boolean;
+  customCount?: number;
+  op1?: FilterOperator;
+  val1?: string;
+  op2?: FilterOperator;
+  val2?: string;
+  top?: boolean;
+  percent?: boolean;
+  topVal?: number;
+  filterVal?: number | null;
+  dynamicType?: DynamicFilterType;
+  dynVal?: number | null;
+  dynMaxVal?: number | null;
+  valIso?: string;
+  maxValIso?: string;
+  dxfId?: number;
+  cellColor?: boolean;
+  iconSet?: number;
+  iconId?: number | null;
+}
+
+/** Input form of {@link AutoFilterSortCondition}; only `ref` is required.
+ *  Omitted fields read as false / zero / empty / `null`, and `sortBy` as `SortBy.Value`. */
+export interface AutoFilterSortConditionInput {
+  ref: CellRect;
+  descending?: boolean;
+  sortBy?: SortBy;
+  customList?: string;
+  dxfId?: number | null;
+  iconSet?: number;
+  iconId?: number | null;
+}
+
+/** Input form of {@link AutoFilterSortState}; only `ref` is required.
+ *  Omitted fields read as false / empty, and `sortMethod` as `SortMethod.None`. */
+export interface AutoFilterSortStateInput {
+  ref: CellRect;
+  columnSort?: boolean;
+  caseSensitive?: boolean;
+  sortMethod?: SortMethod;
+  conditions?: readonly AutoFilterSortConditionInput[];
+}
+
+/** Argument of `setAutoFilter`; only `range` is required. Omitted `columns`
+ *  reads as empty and omitted `sort` as none. The {@link AutoFilter} result is
+ *  assignable to it. */
+export interface AutoFilterInput {
+  range: CellRect;
+  columns?: readonly AutoFilterColumnInput[];
+  sort?: AutoFilterSortStateInput | null;
 }
 
 /** Result of `Sheet.evaluateAutoFilter` / `Table.evaluateAutoFilter`.
@@ -5116,7 +5190,7 @@ export interface Sheet {
   /** Replaces the sheet AutoFilter and its hidden `_xlnm._FilterDatabase`
    *  name. Row visibility is unchanged; call `applyAutoFilter` to hide the
    *  excluded rows. */
-  setAutoFilter(filter: AutoFilter): void;
+  setAutoFilter(filter: AutoFilterInput): void;
   /** Removes the sheet AutoFilter. Row visibility is unchanged. */
   removeAutoFilter(): void;
   /** Hides every body row the criteria exclude and shows the rest, as
@@ -5707,7 +5781,7 @@ export interface Table {
   /** Reads the table's AutoFilter; `null` when it has none. */
   getAutoFilter(): AutoFilter | null;
   /** Replaces the table's AutoFilter. Row visibility is unchanged. */
-  setAutoFilter(filter: AutoFilter): void;
+  setAutoFilter(filter: AutoFilterInput): void;
   /** Removes the table's AutoFilter. Row visibility is unchanged. */
   removeAutoFilter(): void;
   /** Hides every body row the table's criteria exclude and shows the rest. */

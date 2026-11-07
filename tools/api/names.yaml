@@ -2943,6 +2943,31 @@ entries:
     js: TableColumnTotalsInput
     surfaces: [wasm, native]
     was: { js: TableColumnTotalsInput }
+  record.auto_filter_column_input:
+    kind: record
+    role: input
+    js: AutoFilterColumnInput
+    surfaces: [wasm, native]
+  record.auto_filter_date_group_input:
+    kind: record
+    role: input
+    js: AutoFilterDateGroupInput
+    surfaces: [wasm, native]
+  record.auto_filter_input:
+    kind: record
+    role: input
+    js: AutoFilterInput
+    surfaces: [wasm, native]
+  record.auto_filter_sort_condition_input:
+    kind: record
+    role: input
+    js: AutoFilterSortConditionInput
+    surfaces: [wasm, native]
+  record.auto_filter_sort_state_input:
+    kind: record
+    role: input
+    js: AutoFilterSortStateInput
+    surfaces: [wasm, native]
   record.table_input:
     kind: record
     role: input

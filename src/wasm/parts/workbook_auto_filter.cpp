@@ -261,7 +261,7 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   c.val2 = st.val2.c_str();
   c.val_iso = st.val_iso.c_str();
   c.max_val_iso = st.max_val_iso.c_str();
-  c.top = pull_flag(v, "top", reader);
+  c.top = pull_flag(v, "top", reader, true);
   c.percent = pull_flag(v, "percent", reader);
   c.top_val = reader.number(v, "topVal", 0.0, "filterColumn.topVal");
   const emscripten::val filter_val = reader.value(v, "filterVal", "filterColumn.filterVal");

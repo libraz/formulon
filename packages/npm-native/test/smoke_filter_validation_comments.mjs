@@ -103,6 +103,10 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
     assert.equal(custom.sort.columnSort, false);
     assert.deepEqual(wb.sheet(0).evaluateAutoFilter().match, [true, false, true]);
 
+    // An omitted `top` reads as true (the schema default).
+    wb.sheet(0).setAutoFilter({ range: RANGE, columns: [{ colId: 0, kind: mod.FilterKind.Top10, topVal: 2 }] });
+    assert.equal(wb.sheet(0).getAutoFilter().columns[0].top, true);
+
     wb.sheet(0).removeAutoFilter();
     assert.equal(wb.sheet(0).getAutoFilter(), null);
     assert.throws(() => wb.sheet(0).evaluateAutoFilter(), isFormulonError);

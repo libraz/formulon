@@ -210,7 +210,7 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   std::string val2;
   reader.String(spec, "val2", &val2);
   c.val2 = in.Keep(std::move(val2));
-  c.top = reader.Bool(spec, "top", false) ? 1 : 0;
+  c.top = reader.Bool(spec, "top", true) ? 1 : 0;
   c.percent = reader.Bool(spec, "percent", false) ? 1 : 0;
   // A nullable member is absent when omitted or `null`.
   bool present = false;
