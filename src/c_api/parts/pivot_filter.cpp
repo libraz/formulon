@@ -31,7 +31,6 @@ using formulon::c_api::parts::pivot_filter_type_from_fm;
 using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate;
 
 // ---------------------------------------------------------------------------
@@ -42,8 +41,10 @@ namespace {
 
 // Stores one numeric payload slot. NaN and infinities have no spelling in a
 // saved filter, so they are refused.
-fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_double,
-                            std::variant<std::monostate, int, double, std::string>& out, const char* field) {
+using FilterPayload = std::variant<std::monostate, int, double, std::string>;
+
+fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_double, FilterPayload& out,
+                            const char* field) {
   if (kind == FM_PIVOT_FILTER_VALUE_INT) {
     out = static_cast<int>(as_int);
     return 0;
@@ -53,6 +54,22 @@ fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_do
   }
   out = as_double;
   return 0;
+}
+
+// Spells one payload slot as its kind / int / double / text fields; the text
+// view borrows from `payload`. An unset slot leaves the fields as they are.
+void payload_to_fm(const FilterPayload& payload, std::int32_t* kind, std::int32_t* as_int, double* as_double,
+                   const char** as_text) {
+  if (const auto* int_value = std::get_if<int>(&payload); int_value != nullptr) {
+    *kind = FM_PIVOT_FILTER_VALUE_INT;
+    *as_int = static_cast<std::int32_t>(*int_value);
+  } else if (const auto* double_value = std::get_if<double>(&payload); double_value != nullptr) {
+    *kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
+    *as_double = *double_value;
+  } else if (const auto* text_value = std::get_if<std::string>(&payload); text_value != nullptr) {
+    *kind = FM_PIVOT_FILTER_VALUE_TEXT;
+    *as_text = text_value->c_str();
+  }
 }
 
 fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
@@ -209,27 +226,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
   result.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   result.data_field_index = filter.data_field_index;
 
-  if (const auto* int_value = std::get_if<int>(&filter.value); int_value != nullptr) {
-    result.value_kind = FM_PIVOT_FILTER_VALUE_INT;
-    result.value_int = static_cast<std::int32_t>(*int_value);
-  } else if (const auto* double_value = std::get_if<double>(&filter.value); double_value != nullptr) {
-    result.value_kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
-    result.value_double = *double_value;
-  } else if (const auto* text_value = std::get_if<std::string>(&filter.value); text_value != nullptr) {
-    result.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
-    result.value_text = text_value->c_str();
-  }
-
-  if (const auto* int_value_high = std::get_if<int>(&filter.value_high); int_value_high != nullptr) {
-    result.value_high_kind = FM_PIVOT_FILTER_VALUE_INT;
-    result.value_high_int = static_cast<std::int32_t>(*int_value_high);
-  } else if (const auto* double_value_high = std::get_if<double>(&filter.value_high); double_value_high != nullptr) {
-    result.value_high_kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
-    result.value_high_double = *double_value_high;
-  } else if (const auto* text_value_high = std::get_if<std::string>(&filter.value_high); text_value_high != nullptr) {
-    result.value_high_kind = FM_PIVOT_FILTER_VALUE_TEXT;
-    result.value_high_text = text_value_high->c_str();
-  }
+  payload_to_fm(filter.value, &result.value_kind, &result.value_int, &result.value_double, &result.value_text);
+  payload_to_fm(filter.value_high, &result.value_high_kind, &result.value_high_int, &result.value_high_double,
+                &result.value_high_text);
   *out = result;
   return 0;
 }

@@ -23,7 +23,6 @@ using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 
 namespace {
 

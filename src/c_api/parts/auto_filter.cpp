@@ -29,12 +29,15 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
@@ -81,7 +84,7 @@ fm_status_t resolve_table(const fm_workbook_t* wb, std::size_t table_index, Targ
 // opaque because it did not parse into the model.
 fm_status_t require_typed(const Target& target) {
   if (target.filter == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "no AutoFilter");
+    return not_found("no AutoFilter");
   }
   if (target.filter->is_opaque()) {
     return set_binding_error(formulon::FormulonErrorCode::kAutoFilterInvalid,
@@ -97,14 +100,11 @@ fm_status_t require_typed(const Target& target) {
 void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_auto_filter_t* out) {
   fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
   fresh_read_scratch(wb);
-  scratch->filter_column_scratch.clear();
-  scratch->filter_value_scratch.clear();
-  scratch->date_group_scratch.clear();
-  scratch->sort_condition_scratch.clear();
-  auto keep = [scratch](const std::string& text) {
-    scratch->read_scratch.emplace_back(text);
-    return scratch->read_scratch.back().c_str();
-  };
+  fresh_arena(wb, &fm_workbook_t::filter_column_scratch);
+  fresh_arena(wb, &fm_workbook_t::filter_value_scratch);
+  fresh_arena(wb, &fm_workbook_t::date_group_scratch);
+  fresh_arena(wb, &fm_workbook_t::sort_condition_scratch);
+  auto keep = [scratch](const std::string& text) { return store_cstr(scratch->read_scratch, text); };
 
   std::vector<fm_filter_column_t> columns;
   columns.reserve(filter.columns.size());
@@ -541,7 +541,7 @@ extern "C" fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t 
                                                 int32_t* out_present) {
   clear_last_error();
   if (out == nullptr || out_present == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return null_argument("out");
   }
   Target target;
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
@@ -608,7 +608,7 @@ extern "C" fm_status_t fm_workbook_get_table_auto_filter(const fm_workbook_t* wb
                                                          fm_auto_filter_t* out, int32_t* out_present) {
   clear_last_error();
   if (out == nullptr || out_present == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return null_argument("out");
   }
   Target target;
   if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
@@ -673,7 +673,7 @@ extern "C" fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_
 extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
   clear_last_error();
   if (out_xml == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_xml is NULL");
+    return null_argument("out_xml");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -685,7 +685,7 @@ extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, siz
 extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
   clear_last_error();
   if (xml == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "xml is NULL");
+    return null_argument("xml");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

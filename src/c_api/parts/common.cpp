@@ -32,6 +32,7 @@
 #include "utils/error.h"
 #include "utils/formula_text.h"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -130,14 +131,17 @@ const char* last_error_context() {
   return g_last_error_context.c_str();
 }
 
-bool check_range_count(std::size_t n) {
+namespace {
+
+fm_status_t check_range_count(std::size_t n) {
   if (n > kMaxRangesPerCApiCall) {
-    invalid_argument("range_count exceeds per-call cap",
-                     "range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
-    return false;
+    return invalid_argument("range_count exceeds per-call cap",
+                            "range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
   }
-  return true;
+  return 0;
 }
+
+}  // namespace
 
 fm_status_t check_profile_id(const char* profile_id, formulon::ExcelProfile* out) {
   // The id is echoed into the diagnostic context, which must stay UTF-8.
@@ -171,8 +175,8 @@ fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_coun
   if (ranges == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "ranges is NULL while range_count > 0");
   }
-  if (!check_range_count(range_count)) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  if (auto rc = check_range_count(range_count); rc != 0) {
+    return rc;
   }
   for (std::size_t i = 0; i < range_count; ++i) {
     if (auto rc = check_sheet_rect(ranges[i]); rc != 0) {
@@ -288,7 +292,7 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
       return 0;
     case FM_VAL_TEXT:
       if (in.u.text == nullptr) {
-        return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "value text is NULL");
+        return null_argument("value text");
       }
       if (auto rc = check_utf8(in.u.text, "field=value"); rc != 0) {
         return rc;
@@ -314,6 +318,11 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t
                                                            std::to_string(min) + " max=" + std::to_string(max));
 }
 
+namespace {
+
+// Rejects a string that is not GUID-shaped (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`,
+// hexadecimal digits). NULL or empty passes: the entry point synthesizes an id.
+// `ST_Guid` attributes holding anything else make Excel drop the whole block.
 fm_status_t check_guid(const char* text, const char* field) {
   if (text == nullptr || text[0] == '\0') {
     return 0;
@@ -325,8 +334,7 @@ fm_status_t check_guid(const char* text, const char* field) {
   for (std::size_t i = 0; shaped && i < kShape.size(); ++i) {
     switch (kShape[i]) {
       case 'X':
-        shaped = (value[i] >= '0' && value[i] <= '9') || (value[i] >= 'a' && value[i] <= 'f') ||
-                 (value[i] >= 'A' && value[i] <= 'F');
+        shaped = formulon::strings::hex_digit_value(value[i]) >= 0;
         break;
       default:
         shaped = value[i] == kShape[i];
@@ -338,6 +346,8 @@ fm_status_t check_guid(const char* text, const char* field) {
   }
   return invalid_argument("value is not a GUID", std::string(field) + "=" + std::string(value));
 }
+
+}  // namespace
 
 namespace {
 
@@ -475,6 +485,13 @@ fm_status_t validate(const fm_data_validation_t& v) {
   return check_utf8({v.error_title, v.error_message, v.prompt_title, v.prompt_message});
 }
 
+fm_status_t validate(const fm_font_record_t& font) {
+  if (fm_status_t rc = check_finite_non_negative(font.size, "font.size"); rc != 0) {
+    return rc;
+  }
+  return check_utf8({font.name});
+}
+
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
   if (formulon::is_builtin_num_fmt_id(id)) {
     return true;
@@ -492,7 +509,7 @@ fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, st
 
   // Step 1: return a built-in slot only when that slot's effective mapping
   // matches the requested code. A custom record may override the built-in.
-  for (std::uint16_t id = 0; id < 164U; ++id) {
+  for (std::uint16_t id = 0; id < kBuiltinNumFmtIdLimit; ++id) {
     const std::optional<std::string_view> resolved = effective_num_fmt(existing_styles, id);
     if (resolved.has_value() && code == *resolved) {
       *out_id = id;
@@ -513,9 +530,9 @@ fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, st
   }
 
   // Step 3: append a new custom entry. New id is one past the largest
-  // existing custom id, with `163` as the lower bound (the last
+  // existing custom id, with `kLastBuiltinNumFmtId` as the lower bound (the last
   // built-in slot).
-  std::uint32_t next_id = 163U;
+  std::uint32_t next_id = kLastBuiltinNumFmtId;
   for (const formulon::NumFmtRecord& n : styles.num_fmts) {
     if (n.id > next_id) {
       next_id = n.id;
@@ -545,7 +562,7 @@ fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std:
     return rc;
   }
   const std::string_view text(code);
-  for (std::uint16_t id = 0; id < 164U; ++id) {
+  for (std::uint16_t id = 0; id < kBuiltinNumFmtIdLimit; ++id) {
     const std::optional<std::string_view> rendered = effective_num_fmt(wb.styles(), id, wb.excel_profile());
     if (rendered.has_value() && *rendered == text) {
       *out = std::to_string(id);
@@ -558,6 +575,14 @@ fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std:
   }
   *out = std::to_string(id);
   return 0;
+}
+
+std::optional<std::string_view> resolve_num_fmt_code(const formulon::Workbook& wb, std::uint16_t id) {
+  std::optional<std::string_view> resolved = effective_num_fmt(wb.styles(), id);
+  if (!resolved.has_value()) {
+    resolved = effective_num_fmt(wb.styles(), id, wb.excel_profile());
+  }
+  return resolved;
 }
 
 const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text) {
@@ -574,17 +599,13 @@ const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id
       return "";
     }
   }
-  const auto id16 = static_cast<std::uint16_t>(id);
-  std::optional<std::string_view> resolved = effective_num_fmt(wb.styles(), id16);
-  if (!resolved.has_value()) {
-    resolved = effective_num_fmt(wb.styles(), id16, wb.excel_profile());
-  }
+  const std::optional<std::string_view> resolved = resolve_num_fmt_code(wb, static_cast<std::uint16_t>(id));
   return resolved.has_value() ? resolved->data() : "";
 }
 
 fm_status_t validate(const fm_pivot_field_spec_t& spec) {
   if (spec.source_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec->source_name is NULL");
+    return null_argument("spec->source_name");
   }
   if (auto rc = check_utf8({spec.source_name, spec.custom_name}); rc != 0) {
     return rc;
@@ -628,9 +649,8 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
       return;
     case formulon::ValueKind::Text: {
       const std::string_view text = v.as_text();
-      store.emplace_back(text.data(), text.size());
       out->kind = FM_VAL_TEXT;
-      out->u.text = store.back().c_str();
+      out->u.text = store_cstr(store, text);
       return;
     }
     case formulon::ValueKind::Error:
@@ -663,27 +683,19 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
   out->u.number = 0.0;
 }
 
-namespace {
-
-fm_status_t check_sheet(const fm_workbook_t* wb, std::size_t sheet) {
+fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index) {
   if (wb == nullptr) {
     return null_argument("wb");
   }
   const std::size_t count = wb->workbook().sheet_count();
-  if (sheet >= count) {
+  if (sheet_index >= count) {
     return set_binding_error(formulon::FormulonErrorCode::kSheetIndexOutOfRange,
-                             ("sheet index " + std::to_string(sheet) + " is out of range (" + std::to_string(count) +
-                              (count == 1U ? " sheet)" : " sheets)"))
+                             ("sheet index " + std::to_string(sheet_index) + " is out of range (" +
+                              std::to_string(count) + (count == 1U ? " sheet)" : " sheets)"))
                                  .c_str(),
-                             "sheet_index=" + std::to_string(sheet) + " sheet_count=" + std::to_string(count));
+                             "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(count));
   }
   return 0;
-}
-
-}  // namespace
-
-fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index) {
-  return check_sheet(wb, sheet_index);
 }
 
 TextStore& fresh_read_scratch(const fm_workbook_t* wb) {
@@ -870,17 +882,13 @@ fm_status_t check_stored_formula(std::string_view formula, std::string_view cont
   }
   // The parser skips one '=' of its own, so a second one is refused here.
   if (formula.front() == '=' && formula.size() > 1U && formula[1] == '=') {
-    return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken, "formula does not parse",
-                             std::string(context));
+    return formula_does_not_parse(context);
   }
   std::string stored;
   if (auto rc = check_entered_formula_parses(formula, context, &stored); rc != 0) {
     return rc;
   }
-  if (!stored.empty() && stored.front() == '=') {
-    stored.erase(0, 1);
-  }
-  *out = std::move(stored);
+  *out = std::string(strip_formula_prefix(stored));
   return 0;
 }
 
@@ -890,10 +898,7 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula) 
   }
   std::string text(formula);
   wb->workbook().ingest_entered_formula(text);
-  if (!text.empty() && text.front() == '=') {
-    text.erase(0, 1);
-  }
-  return text;
+  return std::string(strip_formula_prefix(text));
 }
 
 fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col,

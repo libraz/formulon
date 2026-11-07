@@ -36,6 +36,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::kMaxPivotNameUnits;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_agg_from_fm;
@@ -50,13 +51,13 @@ using formulon::c_api::parts::resolve_cache;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::set_values_position;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
 
 namespace {
 
-// Longest caption or alternative text title, in UTF-16 code units.
-constexpr std::uint32_t kMaxCaptionUnits = 255U;
 // Largest `indent` and `pageWrap` the options dialog accepts.
 constexpr std::uint32_t kMaxIndent = 126U;
 constexpr std::uint32_t kMaxPageWrap = 255U;
@@ -404,32 +405,19 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
   }
   opposite.resize(kept);
   if (opposite_values_position.has_value() && removed_before_values > 0U) {
-    if (row) {
-      table->set_col_values_position(*opposite_values_position - removed_before_values);
-    } else {
-      table->set_row_values_position(*opposite_values_position - removed_before_values);
-    }
+    set_values_position(*table, !row, *opposite_values_position - removed_before_values);
   }
   target.assign(requested_order.begin(), requested_order.end());
   if (values_slot.has_value()) {
     // The Values level moves here; the other axis gives it up.
-    if (row) {
-      table->set_row_values_position(*values_slot);
-      table->set_col_values_position(std::nullopt);
-    } else {
-      table->set_col_values_position(*values_slot);
-      table->set_row_values_position(std::nullopt);
-    }
+    set_values_position(*table, row, *values_slot);
+    set_values_position(*table, !row, std::nullopt);
   } else {
     // Keep a Values marker within the new order's slots.
     const std::optional<std::size_t> values_position =
         row ? table->row_values_position() : table->col_values_position();
     if (values_position.has_value() && *values_position > requested_order.size()) {
-      if (row) {
-        table->set_row_values_position(requested_order.size());
-      } else {
-        table->set_col_values_position(requested_order.size());
-      }
+      set_values_position(*table, row, requested_order.size());
     }
   }
   return edit.commit();
@@ -464,6 +452,16 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* 
 
 namespace {
 
+// Name Excel gives a new data field of `field_index` under `agg`; `cache` is the
+// table's cache, when it has one.
+std::string default_data_field_name(const formulon::pivot::PivotTable& table, const formulon::pivot::PivotCache* cache,
+                                    formulon::pivot::Aggregation agg, std::size_t field_index,
+                                    formulon::ExcelProfile profile, std::optional<std::size_t> exclude) {
+  return cache != nullptr ? formulon::pivot::data_field_default_name(table, *cache, agg, field_index, profile, exclude)
+                          : formulon::pivot::data_field_display_name(
+                                agg, formulon::pivot::pivot_field_display_name(table.fields()[field_index]), profile);
+}
+
 // Materialises a `fm_pivot_data_field_spec_t` into a `PivotDataField`.
 // The spec is already validated by `validate(*spec, api)` at the entry
 // point; `number_format` is its format code already converted to the
@@ -495,13 +493,9 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
   }
   if (spec.name != nullptr && spec.name[0] != '\0') {
     out->name = spec.name;
-  } else if (cache != nullptr) {
-    out->name = formulon::pivot::data_field_default_name(table, *cache, out->aggregation, spec.field_index,
-                                                         workbook.excel_profile(), exclude);
   } else {
-    out->name = formulon::pivot::data_field_display_name(
-        out->aggregation, formulon::pivot::pivot_field_display_name(table.fields()[spec.field_index]),
-        workbook.excel_profile());
+    out->name =
+        default_data_field_name(table, cache, out->aggregation, spec.field_index, workbook.excel_profile(), exclude);
   }
   out->field_index = spec.field_index;
   out->number_format = std::move(number_format);
@@ -868,7 +862,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t
                 {o.alt_text, "alt_text"},
                 {o.grand_total_caption, "grand_total_caption"}};
   for (const auto& entry : capped) {
-    if (entry.text != nullptr && formulon::utf16_units_in(entry.text) > kMaxCaptionUnits) {
+    if (entry.text != nullptr && formulon::utf16_units_in(entry.text) > kMaxPivotNameUnits) {
       return invalid_argument((std::string(entry.field) + " longer than 255 UTF-16 code units").c_str());
     }
   }
@@ -900,8 +894,8 @@ extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t
   table->set_multiple_field_filters(o.multiple_field_filters != 0);
   table->set_preserve_formatting(o.preserve_formatting != 0);
   table->set_custom_list_sort(o.custom_list_sort != 0);
-  table->set_alt_text(o.alt_text != nullptr ? o.alt_text : "");
-  table->set_alt_text_summary(o.alt_text_summary != nullptr ? o.alt_text_summary : "");
+  table->set_alt_text(text_or_empty(o.alt_text));
+  table->set_alt_text_summary(text_or_empty(o.alt_text_summary));
   table->set_grand_total_caption(optional_text(o.grand_total_caption));
   table->set_auto_formatting(o.auto_formatting != 0);
   table->set_enable_drill(o.enable_drill != 0);
@@ -933,11 +927,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_default_name(const fm_workb
   const formulon::pivot::Aggregation agg = pivot_agg_from_fm(static_cast<fm_pivot_aggregation_t>(aggregation));
   const formulon::ExcelProfile profile = wb->workbook().excel_profile();
   const formulon::pivot::PivotCache* cache = find_cache(wb->workbook(), table->pivot_cache_id());
-  std::string name = cache != nullptr
-                         ? formulon::pivot::data_field_default_name(*table, *cache, agg, field_index, profile, exclude)
-                         : formulon::pivot::data_field_display_name(
-                               agg, formulon::pivot::pivot_field_display_name(table->fields()[field_index]), profile);
-  *out = publish_scratch(wb, std::move(name));
+  *out = publish_scratch(wb, default_data_field_name(*table, cache, agg, field_index, profile, exclude));
   return 0;
 }
 

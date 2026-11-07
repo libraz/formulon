@@ -44,7 +44,6 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::saturate_index;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::with_formula_prefix;
@@ -120,6 +119,13 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
   return 0;
 }
 
+/// Wraps `book` in a new handle and hands it to `*out`.
+void publish_new_handle(fm_workbook_t** out, formulon::Workbook book) {
+  auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
+  handle->wb.emplace(std::move(book));
+  *out = handle.release();
+}
+
 /// Shared body of `fm_workbook_create_default` / `fm_workbook_create_empty`.
 fm_status_t create_handle(fm_workbook_t** out, formulon::Workbook (*factory)()) {
   clear_last_error();
@@ -127,9 +133,7 @@ fm_status_t create_handle(fm_workbook_t** out, formulon::Workbook (*factory)()) 
     return null_argument("out");
   }
   *out = nullptr;
-  auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  handle->wb.emplace(factory());
-  *out = handle.release();
+  publish_new_handle(out, factory());
   return 0;
 }
 
@@ -153,9 +157,7 @@ extern "C" fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm
   if (const fm_status_t st = check_profile_id(profile_id, &profile)) {
     return st;
   }
-  auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  handle->wb.emplace(formulon::Workbook::create_for_profile(profile));
-  *out = handle.release();
+  publish_new_handle(out, formulon::Workbook::create_for_profile(profile));
   return 0;
 }
 

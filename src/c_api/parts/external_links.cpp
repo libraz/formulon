@@ -13,7 +13,6 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 
 extern "C" fm_status_t fm_workbook_get_external_link_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();

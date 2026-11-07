@@ -46,6 +46,7 @@ using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::data_bar_axis_position_from_c;
 using formulon::c_api::parts::data_bar_direction_from_c;
+using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
@@ -428,17 +429,81 @@ extern "C" fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, std::size_t
   // readable across CF mutations and across unrelated reads that recycle
   // `read_scratch`. Only a successful get reaches this point, so a rejected
   // call leaves the previous rule's storage intact.
-  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
-  mutable_wb->cf_text_scratch.clear();
-  mutable_wb->cf_range_scratch.clear();
-  mutable_wb->cfvo_scratch.clear();
-  mutable_wb->cf_color_scratch.clear();
-  mutable_wb->cf_icon_scratch.clear();
-  fill_rule(wb->workbook(), blocks[b], blocks[b].rules[r], wb->workbook().styles().dxfs.size(),
-            mutable_wb->cf_text_scratch, mutable_wb->cf_range_scratch, mutable_wb->cfvo_scratch,
-            mutable_wb->cf_color_scratch, mutable_wb->cf_icon_scratch, out);
+  auto& text_arena = fresh_arena(wb, &fm_workbook_t::cf_text_scratch);
+  auto& range_arena = fresh_arena(wb, &fm_workbook_t::cf_range_scratch);
+  auto& cfvo_arena = fresh_arena(wb, &fm_workbook_t::cfvo_scratch);
+  auto& color_arena = fresh_arena(wb, &fm_workbook_t::cf_color_scratch);
+  auto& icon_arena = fresh_arena(wb, &fm_workbook_t::cf_icon_scratch);
+  fill_rule(wb->workbook(), blocks[b], blocks[b].rules[r], wb->workbook().styles().dxfs.size(), text_arena, range_arena,
+            cfvo_arena, color_arena, icon_arena, out);
   return 0;
 }
+
+namespace {
+
+// The rule's priority: the caller's when positive, else one past the sheet's
+// highest.
+fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, formulon::cf::CFRule* out) {
+  if (rule.priority > 0) {
+    out->priority = rule.priority;
+    return 0;
+  }
+  std::int32_t max_priority = 0;
+  for (const auto& block : sheet.conditional_formats()) {
+    for (const auto& existing : block.rules) {
+      if (existing.priority > max_priority) {
+        max_priority = existing.priority;
+      }
+    }
+  }
+  if (max_priority == std::numeric_limits<std::int32_t>::max()) {
+    return invalid_argument("auto-assignment would overflow", "max_existing_priority=" + std::to_string(max_priority));
+  }
+  out->priority = max_priority + 1;
+  return 0;
+}
+
+// The rule's id: the caller's when given (unique on the sheet), else one
+// derived from the priority so add-then-list is deterministic.
+fm_status_t assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size_t sheet_index,
+                      formulon::cf::CFRule* out) {
+  if (rule.id != nullptr && rule.id[0] != '\0') {
+    // Already checked against the `ST_Guid` shape by `validate`; a GUID's hex digits match in either case.
+    for (const auto& block : sheet.conditional_formats()) {
+      for (const auto& existing : block.rules) {
+        if (formulon::strings::case_insensitive_eq(existing.id, rule.id)) {
+          return invalid_argument("CF rule id is already on the sheet", "id=" + std::string(rule.id));
+        }
+      }
+    }
+    out->id = rule.id;
+    return 0;
+  }
+  std::unordered_set<std::string> used_ids;
+  for (const auto& block : sheet.conditional_formats()) {
+    for (const auto& existing : block.rules) {
+      used_ids.insert(existing.id);
+    }
+  }
+  out->id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out->priority), used_ids);
+  return 0;
+}
+
+// The colour-scale, data-bar or icon-set payload the rule's type carries.
+fm_status_t copy_payloads(const fm_cf_rule_t& rule, formulon::cf::CFRule* out) {
+  if (out->type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(rule, out)) {
+    return invalid_argument("invalid colorScale payload");
+  }
+  if (out->type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(rule, out)) {
+    return invalid_argument("invalid dataBar payload");
+  }
+  if (out->type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(rule, out)) {
+    return invalid_argument("invalid iconSet payload");
+  }
+  return 0;
+}
+
+}  // namespace
 
 extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const fm_cf_rule_t* rule,
                                             std::size_t* out_index) {
@@ -468,23 +533,8 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   formulon::cf::CFRule out_rule;
   out_rule.type = static_cast<formulon::cf::RuleType>(rule->type);
 
-  if (rule->priority > 0) {
-    out_rule.priority = rule->priority;
-  } else {
-    // Auto-assign priority to (max_existing + 1) when caller passed <= 0.
-    std::int32_t max_priority = 0;
-    for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
-      for (const auto& existing : block.rules) {
-        if (existing.priority > max_priority) {
-          max_priority = existing.priority;
-        }
-      }
-    }
-    if (max_priority == std::numeric_limits<std::int32_t>::max()) {
-      return invalid_argument("auto-assignment would overflow",
-                              "max_existing_priority=" + std::to_string(max_priority));
-    }
-    out_rule.priority = max_priority + 1;
+  if (auto rc = assign_priority(*rule, wb->workbook().sheet(sheet_index), &out_rule); rc != 0) {
+    return rc;
   }
   out_rule.stop_if_true = rule->stop_if_true != 0;
   if (rule->dxf_id_engaged != 0) {
@@ -500,26 +550,8 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     }
     out_rule.dxf_id = rule->dxf_id;
   }
-  if (rule->id != nullptr && rule->id[0] != '\0') {
-    // Already checked against the `ST_Guid` shape by `validate` above; a GUID's hex digits match in either case.
-    for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
-      for (const auto& existing : block.rules) {
-        if (formulon::strings::case_insensitive_eq(existing.id, rule->id)) {
-          return invalid_argument("CF rule id is already on the sheet", "id=" + std::string(rule->id));
-        }
-      }
-    }
-    out_rule.id = rule->id;
-  } else {
-    // Derived from the priority so add-then-list is deterministic; skips ids
-    // already on the sheet's rules.
-    std::unordered_set<std::string> used_ids;
-    for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
-      for (const auto& existing : block.rules) {
-        used_ids.insert(existing.id);
-      }
-    }
-    out_rule.id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out_rule.priority), used_ids);
+  if (auto rc = assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule); rc != 0) {
+    return rc;
   }
   if (rule->formula1 != nullptr) {
     if (auto rc = check_stored_formula(rule->formula1, "field=formula1", &out_rule.formula1.emplace()); rc != 0) {
@@ -556,14 +588,8 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
       out_rule.formula1 = std::move(*derived);
     }
   }
-  if (out_rule.type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(*rule, &out_rule)) {
-    return invalid_argument("invalid colorScale payload");
-  }
-  if (out_rule.type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(*rule, &out_rule)) {
-    return invalid_argument("invalid dataBar payload");
-  }
-  if (out_rule.type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(*rule, &out_rule)) {
-    return invalid_argument("invalid iconSet payload");
+  if (auto rc = copy_payloads(*rule, &out_rule); rc != 0) {
+    return rc;
   }
   if (auto rc = store_cfvo_formulas(wb, &out_rule); rc != 0) {
     return rc;

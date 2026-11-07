@@ -31,14 +31,12 @@ namespace formulon {
 namespace c_api {
 namespace parts {
 
-// Mutable handle on the pivot-cache list. The accessor we have on
-// `Workbook` is const-only; the vector itself is not const because we
-// hold a non-const workbook through `fm_workbook_t::workbook()`. The
-// const_cast is therefore well-defined.
-std::vector<std::unique_ptr<formulon::pivot::PivotCache>>& mutable_pivot_caches(formulon::Workbook& wb);
-
 formulon::pivot::PivotCache* find_cache_mut(formulon::Workbook& wb, std::uint32_t cache_id);
 const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std::uint32_t cache_id);
+
+// Longest pivot caption, item caption, field name or calculated name, in
+// UTF-16 code units.
+constexpr std::uint32_t kMaxPivotNameUnits = 255U;
 
 // kInvalidArgument binding error "cache_id not found" for `cache_id`.
 fm_status_t cache_not_found(std::uint32_t cache_id);
@@ -131,6 +129,9 @@ class PivotEdit {
   formulon::pivot::PivotTable& table_;
   std::unique_ptr<formulon::pivot::PivotTable> snapshot_;
 };
+
+// Sets the Values-level position of the row (`row`) or column order.
+void set_values_position(formulon::pivot::PivotTable& table, bool row, std::optional<std::size_t> position);
 
 // Interns `utf8` in the cache's text storage and returns a Value::text
 // referencing the stable backing string.

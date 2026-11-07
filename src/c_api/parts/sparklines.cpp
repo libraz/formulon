@@ -20,16 +20,15 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::sparkline_empty_cells_from_c;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::to_c;
 
 namespace {
 
-using formulon::FormulonErrorCode;
 namespace io = formulon::io;
 
 fm_color_spec_t color_to_c(const formulon::ColorSpec& src) {
@@ -78,7 +77,7 @@ io::SparklineGroup group_from_c(const fm_sparkline_group_t& g) {
   out.manual_min = g.manual_min;
   out.manual_max = g.manual_max;
   out.date_axis = g.date_axis != 0;
-  out.date_axis_ref = g.date_axis_ref != nullptr ? g.date_axis_ref : "";
+  out.date_axis_ref = text_or_empty(g.date_axis_ref);
   out.line_weight = g.line_weight;
   out.empty_cells_as = sparkline_empty_cells_from_c(g.empty_cells_as);
   return out;
@@ -98,8 +97,7 @@ std::vector<io::SparklineItem> items_from_c(const fm_sparkline_t* items, size_t 
   std::vector<io::SparklineItem> out;
   out.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    out.push_back(
-        {items[i].formula != nullptr ? items[i].formula : "", items[i].location != nullptr ? items[i].location : ""});
+    out.push_back({text_or_empty(items[i].formula), text_or_empty(items[i].location)});
   }
   return out;
 }
@@ -144,7 +142,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_count(const fm_workbook_t* w
                                                           size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(FormulonErrorCode::kBindingNullPointer, "out_count is NULL");
+    return null_argument("out_count");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -157,7 +155,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
                                                     fm_sparkline_group_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -205,7 +203,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sh
                                               size_t idx, fm_sparkline_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -257,7 +255,7 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
                                                        size_t count) {
   clear_last_error();
   if (group == nullptr) {
-    return set_binding_error(FormulonErrorCode::kBindingNullPointer, "group is NULL");
+    return null_argument("group");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

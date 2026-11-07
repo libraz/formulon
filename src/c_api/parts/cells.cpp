@@ -422,11 +422,9 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic(const fm_workbook_t* wb, size_
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_text, "out_text", &cell); rc != 0) {
     return rc;
   }
-  TextStore& store = fresh_read_scratch(wb);
   // The ABI surfaces a bare reading, so the runs' kana concatenate: the
   // span each covers is `PHONETIC`'s business, not a furigana field's.
-  store.emplace_back(cell == nullptr ? std::string() : formulon::flatten_phonetic(cell->phonetic_runs));
-  *out_text = store.back().c_str();
+  *out_text = publish_scratch(wb, cell == nullptr ? std::string() : formulon::flatten_phonetic(cell->phonetic_runs));
   return 0;
 }
 
@@ -453,11 +451,9 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run(const fm_workbook_t* wb, s
     return rc;
   }
   const formulon::PhoneticRun& run = cell->phonetic_runs[run_index];
-  TextStore& store = fresh_read_scratch(wb);
-  store.emplace_back(run.text);
   out->sb = run.sb;
   out->eb = run.eb;
-  out->text = store.back().c_str();
+  out->text = publish_scratch(wb, run.text);
   return 0;
 }
 
@@ -509,9 +505,7 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   // Read-path scratch: cleared per call so the lambda text does not
   // accumulate across repeated reads. The returned pointer is valid until
   // the next read on this handle (see `formulon_c.h`).
-  TextStore& store = fresh_read_scratch(wb);
-  store.emplace_back(std::move(formatted));
-  *out_text = store.back().c_str();
+  *out_text = publish_scratch(wb, std::move(formatted));
   *out_present = 1;
   return 0;
 }

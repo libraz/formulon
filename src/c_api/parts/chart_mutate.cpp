@@ -35,6 +35,7 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::text_or_empty;
 
 namespace {
 
@@ -44,8 +45,7 @@ namespace {
 
 /// A C title as the model's; `NULL` strings read as empty.
 formulon::ChartTitle title_of(const fm_chart_title_t& t) {
-  return formulon::ChartTitle{chart_title_kind_from_c(t.kind), t.text != nullptr ? t.text : "",
-                              t.formula != nullptr ? t.formula : ""};
+  return formulon::ChartTitle{chart_title_kind_from_c(t.kind), text_or_empty(t.text), text_or_empty(t.formula)};
 }
 
 formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch_t& p) {
@@ -189,8 +189,8 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   model.placement.col_off = p.col_offset_emu;
   model.placement.width_emu = p.width_emu;
   model.placement.height_emu = p.height_emu;
-  model.name = opts->placement.name != nullptr ? opts->placement.name : "";
-  model.descr = opts->placement.description != nullptr ? opts->placement.description : "";
+  model.name = text_or_empty(opts->placement.name);
+  model.descr = text_or_empty(opts->placement.description);
   auto id = formulon::insert_chart(wb->workbook(), sheet_index, model);
   if (!id) {
     return set_last_error(id.error());

@@ -29,7 +29,8 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 
 namespace {
@@ -88,14 +89,10 @@ extern "C" fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_t
   }
   formulon::ThemeFonts fonts = wb->workbook().load_theme().theme.fonts;
   TextStore& store = fresh_read_scratch(wb);
-  store.emplace_back(std::move(fonts.major_latin));
-  out->major_latin = store.back().c_str();
-  store.emplace_back(std::move(fonts.major_ea));
-  out->major_east_asian = store.back().c_str();
-  store.emplace_back(std::move(fonts.minor_latin));
-  out->minor_latin = store.back().c_str();
-  store.emplace_back(std::move(fonts.minor_ea));
-  out->minor_east_asian = store.back().c_str();
+  out->major_latin = store_cstr(store, fonts.major_latin);
+  out->major_east_asian = store_cstr(store, fonts.major_ea);
+  out->minor_latin = store_cstr(store, fonts.minor_latin);
+  out->minor_east_asian = store_cstr(store, fonts.minor_ea);
   return 0;
 }
 
@@ -144,10 +141,8 @@ extern "C" fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t*
     return rc;
   }
   TextStore& store = fresh_read_scratch(wb);
-  store.emplace_back(from_part ? scripts[idx].script : formulon::office_script(idx));
-  *out_script = store.back().c_str();
-  store.emplace_back(from_part ? scripts[idx].typeface : formulon::office_script_face(idx, major != 0));
-  *out_typeface = store.back().c_str();
+  *out_script = store_cstr(store, from_part ? scripts[idx].script : formulon::office_script(idx));
+  *out_typeface = store_cstr(store, from_part ? scripts[idx].typeface : formulon::office_script_face(idx, major != 0));
   return 0;
 }
 
@@ -169,9 +164,8 @@ extern "C" fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb
   const std::size_t count = from_part ? scripts.size() : formulon::kOfficeScriptCount;
   for (std::size_t i = 0; i < count; ++i) {
     if ((from_part ? std::string_view(scripts[i].script) : formulon::office_script(i)) == script) {
-      TextStore& store = fresh_read_scratch(wb);
-      store.emplace_back(from_part ? scripts[i].typeface : formulon::office_script_face(i, major != 0));
-      *out_typeface = store.back().c_str();
+      *out_typeface = publish_scratch(
+          wb, from_part ? scripts[i].typeface : std::string(formulon::office_script_face(i, major != 0)));
       *out_present = 1;
       return 0;
     }
@@ -264,8 +258,6 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
   }
   out->locked = style.locked ? 1 : 0;
   out->hidden = style.hidden ? 1 : 0;
-  TextStore& store = fresh_read_scratch(wb);
-  store.emplace_back(std::move(style.num_fmt_code));
-  out->num_fmt_code = store.back().c_str();
+  out->num_fmt_code = publish_scratch(wb, std::move(style.num_fmt_code));
   return 0;
 }

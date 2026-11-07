@@ -23,7 +23,6 @@ using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::value_from_fm;
 
@@ -73,7 +72,7 @@ extern "C" fm_status_t fm_sheet_get_invalid_cells(const fm_workbook_t* wb, size_
                                                   uint32_t limit, fm_cell_range_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return null_argument("out");
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {

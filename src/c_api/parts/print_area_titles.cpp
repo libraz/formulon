@@ -35,10 +35,8 @@ using formulon::c_api::parts::set_last_error;
 
 namespace {
 
-// OOXML built-in defined names for the two print settings Excel stores
-// outside the worksheet part.
-constexpr std::string_view kPrintAreaName = "_xlnm.Print_Area";
-constexpr std::string_view kPrintTitlesName = "_xlnm.Print_Titles";
+using formulon::print::kPrintAreaName;
+using formulon::print::kPrintTitlesName;
 
 /// Returns the sheet-qualified prefix (`Sheet1!` / `'集計 2026'!`) for a
 /// defined-name formula, quoting per Excel's rules.

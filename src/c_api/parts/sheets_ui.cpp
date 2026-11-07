@@ -435,8 +435,7 @@ extern "C" fm_status_t fm_sheet_get_comment_visible(const fm_workbook_t* wb, std
   }
   const formulon::CellComment* note = FindNote(wb, sheet_index, row, col);
   if (note == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "no comment at cell",
-                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+    return not_found("no comment at cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   *out_visible = note->visible ? 1 : 0;
   return 0;
@@ -450,8 +449,7 @@ extern "C" fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, std::size
   }
   formulon::CellComment* note = FindNote(wb, sheet_index, row, col);
   if (note == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "no comment at cell",
-                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+    return not_found("no comment at cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   note->visible = visible != 0;
   return 0;

@@ -207,7 +207,7 @@ template <typename Read>
 fm_status_t read_workbook_flag(const fm_workbook_t* wb, std::int32_t* out, Read read) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "a required argument is NULL");
+    return null_argument();
   }
   *out = read(wb->workbook()) ? 1 : 0;
   return 0;
@@ -217,7 +217,7 @@ template <typename Write>
 fm_status_t write_workbook_flag(fm_workbook_t* wb, Write write) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "wb is NULL");
+    return null_argument("wb");
   }
   write(wb->workbook());
   return 0;

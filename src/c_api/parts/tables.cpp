@@ -19,6 +19,7 @@
 #include "parser/structured_ref_payload.h"
 #include "table.h"
 #include "utils/error.h"
+#include "utils/formula_text.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -36,6 +37,7 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::with_formula_prefix;
@@ -346,7 +348,7 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
     }
     table.columns.push_back(std::move(column));
   }
-  table.style_info = default_style_info(style_name != nullptr ? style_name : "");
+  table.style_info = default_style_info(text_or_empty(style_name));
   auto added = book.add_table(std::move(table));
   if (!added) {
     return formulon::c_api::parts::set_last_error(added.error());
@@ -531,7 +533,7 @@ extern "C" fm_status_t fm_workbook_set_table_style_info(fm_workbook_t* wb, size_
   }
   formulon::TableStyleInfo& style = tables[index].style_info;
   style.present = true;
-  style.name = style_name != nullptr ? style_name : "";
+  style.name = text_or_empty(style_name);
   style.show_first_column = show_first_column != 0;
   style.show_last_column = show_last_column != 0;
   style.show_row_stripes = show_row_stripes != 0;
@@ -628,13 +630,11 @@ extern "C" fm_status_t fm_workbook_set_table_column_totals(fm_workbook_t* wb, si
     stored_formula = book.bind_self_book_names(
         formulon::Workbook::normalize_formula_text(std::move(bound), formulon::Workbook::FormulaSource::kEntered));
     book.bind_external_books(std::string_view(stored_formula));
-    if (!stored_formula.empty() && stored_formula.front() == '=') {
-      stored_formula.erase(0, 1);
-    }
+    stored_formula = std::string(formulon::strip_formula_prefix(stored_formula));
   }
   formulon::TableColumn& col = tables[index].columns[column];
   col.totals_function = token == "none" ? std::string() : std::string(token);
-  col.totals_label = label != nullptr ? label : "";
+  col.totals_label = text_or_empty(label);
   col.totals_row_formula = std::move(stored_formula);
   const formulon::TableMetadata& table = tables[index];
   return table.totals_row ? write_totals_cell(book, table, column) : 0;

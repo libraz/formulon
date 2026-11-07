@@ -29,7 +29,9 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::resolve_num_fmt_code;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -224,7 +226,8 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
   color_to_c(f.color, &out->color);
 }
 
-void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out, fm_workbook_t* scratch) {
+void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out,
+               formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t>& stop_arena) {
   out->pattern = f.pattern;
   out->fg_argb = f.fg_argb;
   out->bg_argb = f.bg_argb;
@@ -252,7 +255,7 @@ void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out, fm_workbook
     stops.push_back(c);
   }
   out->gradient_stop_count = static_cast<std::uint32_t>(stops.size());
-  out->gradient_stops = scratch->gradient_stop_scratch.adopt(std::move(stops));
+  out->gradient_stops = stop_arena.adopt(std::move(stops));
 }
 
 void border_side_to_c(const formulon::BorderSide& src, fm_border_side_t* out) noexcept {
@@ -294,16 +297,10 @@ extern "C" fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, u
   }
   *out_present = 0;
   *out = nullptr;
-  const formulon::StylesTable& styles = wb->workbook().styles();
   // Stored ids are 16-bit, so a wider one names no format.
   std::optional<std::string_view> resolved;
   if (num_fmt_id <= std::numeric_limits<std::uint16_t>::max()) {
-    const auto id = static_cast<std::uint16_t>(num_fmt_id);
-    resolved = effective_num_fmt(styles, id);
-    // Ids with no ECMA-376 code (East Asian dates, Thai digits, currency) take the code the profile renders.
-    if (!resolved.has_value()) {
-      resolved = effective_num_fmt(styles, id, wb->workbook().excel_profile());
-    }
+    resolved = resolve_num_fmt_code(wb->workbook(), static_cast<std::uint16_t>(num_fmt_id));
   }
   if (resolved.has_value()) {
     *out = resolved->data();
@@ -321,10 +318,7 @@ extern "C" fm_status_t fm_workbook_get_fill(const fm_workbook_t* wb, size_t fill
   if (auto rc = check_index(fill_index, styles.fills.size(), "fill_index"); rc != 0) {
     return rc;
   }
-  // The gradient arena is logically internal, so a const handle may refresh it.
-  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->gradient_stop_scratch.clear();
-  fill_to_c(styles.fills[fill_index], out, scratch);
+  fill_to_c(styles.fills[fill_index], out, fresh_arena(wb, &fm_workbook_t::gradient_stop_scratch));
   return 0;
 }
 
@@ -360,8 +354,8 @@ extern "C" fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_i
     return rc;
   }
   *out = fm_dxf_record_t{};
-  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->gradient_stop_scratch.clear();
+  formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t>& stops =
+      fresh_arena(wb, &fm_workbook_t::gradient_stop_scratch);
   const formulon::DifferentialFormat& dxf = styles.dxfs[dxf_index];
   out->font_engaged = dxf.has_font ? 1 : 0;
   if (dxf.has_font) {
@@ -369,7 +363,7 @@ extern "C" fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_i
   }
   out->fill_engaged = dxf.has_fill ? 1 : 0;
   if (dxf.has_fill) {
-    fill_to_c(dxf.fill, &out->fill, scratch);
+    fill_to_c(dxf.fill, &out->fill, stops);
   }
   out->border_engaged = dxf.has_border ? 1 : 0;
   if (dxf.has_border) {

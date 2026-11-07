@@ -35,6 +35,7 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::num_fmt_id_known;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::validate;
 
 namespace {
 
@@ -345,10 +346,7 @@ extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_rec
   if (wb == nullptr || record == nullptr || out_index == nullptr) {
     return null_argument();
   }
-  if (fm_status_t rc = check_finite_non_negative(record->size, "font.size"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8({record->name}); rc != 0) {
+  if (auto rc = validate(*record); rc != 0) {
     return rc;
   }
   formulon::FontRecord candidate = cell_font_from_c(*record);
@@ -371,10 +369,7 @@ extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index
   if (auto rc = check_index(font_index, styles.fonts.size(), "font_index"); rc != 0) {
     return rc;
   }
-  if (fm_status_t rc = check_finite_non_negative(record->size, "font.size"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8({record->name}); rc != 0) {
+  if (auto rc = validate(*record); rc != 0) {
     return rc;
   }
   styles.fonts[font_index] = cell_font_from_c(*record);
@@ -386,10 +381,7 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_
   if (wb == nullptr || record == nullptr) {
     return null_argument();
   }
-  if (fm_status_t rc = check_finite_non_negative(record->size, "font.size"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8({record->name}); rc != 0) {
+  if (auto rc = validate(*record); rc != 0) {
     return rc;
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
@@ -576,10 +568,7 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
     return null_argument("non-empty array");
   }
   for (size_t i = 0; i < batch->font_count; ++i) {
-    if (fm_status_t rc = check_finite_non_negative(batch->fonts[i].size, "font.size"); rc != 0) {
-      return rc;
-    }
-    if (auto rc = check_utf8({batch->fonts[i].name}); rc != 0) {
+    if (auto rc = validate(batch->fonts[i]); rc != 0) {
       return rc;
     }
   }
@@ -641,7 +630,7 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   }
   std::unordered_map<std::string, uint16_t> num_fmts;
   num_fmts.reserve(staged.num_fmts.size() + batch->num_fmt_count);
-  std::uint32_t next_num_fmt_id = 163U;
+  std::uint32_t next_num_fmt_id = formulon::c_api::parts::kLastBuiltinNumFmtId;
   for (const formulon::NumFmtRecord& record : staged.num_fmts) {
     const std::optional<std::string_view> resolved = effective_num_fmt(staged, record.id);
     if (record.format_string_index < staged.num_fmt_strings.size() && resolved.has_value() &&
@@ -653,10 +642,10 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
     }
   }
   for (size_t i = 0; i < batch->num_fmt_count; ++i) {
-    const std::string code = batch->num_fmt_codes[i] != nullptr ? batch->num_fmt_codes[i] : "";
+    const std::string code = text_or_empty(batch->num_fmt_codes[i]);
     uint16_t builtin_id = 0U;
     bool is_builtin = false;
-    for (uint16_t id = 0U; id < 164U; ++id) {
+    for (uint16_t id = 0U; id < formulon::c_api::parts::kBuiltinNumFmtIdLimit; ++id) {
       const std::optional<std::string_view> resolved = effective_num_fmt(staged, id);
       if (resolved.has_value() && code == *resolved) {
         builtin_id = id;

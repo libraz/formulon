@@ -16,13 +16,12 @@
 using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite_non_negative;
-using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_sheet_row;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
-using formulon::c_api::parts::set_binding_error;
 
 namespace {
 
@@ -95,10 +94,7 @@ extern "C" fm_status_t fm_sheet_get_row_height_pt(const fm_workbook_t* wb, size_
   if (out_pt == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_row_index(row); rc != 0) {
+  if (auto rc = check_sheet_row(wb, sheet_index, row); rc != 0) {
     return rc;
   }
   *out_pt = formulon::print::effective_row_height_pt(wb->workbook().sheet(sheet_index), row);

@@ -25,10 +25,10 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::slicer_sort_order_from_c;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::to_c;
 
@@ -50,9 +50,9 @@ fm_status_t to_spec(const fm_slicer_t& slicer, formulon::SlicerSpec& spec) {
   if (auto rc = check_utf8({slicer.name, slicer.caption, slicer.style}); rc != 0) {
     return rc;
   }
-  spec.name = slicer.name != nullptr ? slicer.name : "";
-  spec.caption = slicer.caption != nullptr ? slicer.caption : "";
-  spec.style = slicer.style != nullptr ? slicer.style : "";
+  spec.name = text_or_empty(slicer.name);
+  spec.caption = text_or_empty(slicer.caption);
+  spec.style = text_or_empty(slicer.style);
   spec.column_count = slicer.column_count;
   spec.row_height = slicer.row_height_emu;
   spec.from =
@@ -99,7 +99,7 @@ fm_status_t require_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t
 extern "C" fm_status_t fm_sheet_get_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count is NULL");
+    return null_argument("out_count");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -116,7 +116,7 @@ extern "C" fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sh
                                               fm_slicer_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -193,7 +193,7 @@ extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_in
                                               const fm_slicer_t* spec) {
   clear_last_error();
   if (spec == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec is NULL");
+    return null_argument("spec");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

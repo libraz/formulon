@@ -26,7 +26,6 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_rects;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
@@ -133,7 +132,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range_count(const fm_workbook_t* w
                                                           size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count is NULL");
+    return null_argument("out_count");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -146,7 +145,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
                                                     fm_protected_range_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -175,7 +174,7 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
                                                     const fm_protected_range_t* range, size_t* out_index) {
   clear_last_error();
   if (range == nullptr || out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "a required argument is NULL");
+    return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -199,7 +198,7 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
                                                        const fm_protected_range_t* range) {
   clear_last_error();
   if (range == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "range is NULL");
+    return null_argument("range");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

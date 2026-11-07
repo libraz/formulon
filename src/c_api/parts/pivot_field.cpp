@@ -35,6 +35,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::kMaxPivotNameUnits;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_axis_from_fm;
@@ -48,6 +49,8 @@ using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
+using formulon::c_api::parts::set_values_position;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
 
 namespace {
@@ -64,11 +67,7 @@ void remove_from_field_order(formulon::pivot::PivotTable& table, bool row, std::
   order.erase(it);
   const std::optional<std::size_t> values_position = row ? table.row_values_position() : table.col_values_position();
   if (values_position.has_value() && index < *values_position) {
-    if (row) {
-      table.set_row_values_position(*values_position - 1U);
-    } else {
-      table.set_col_values_position(*values_position - 1U);
-    }
+    set_values_position(table, row, *values_position - 1U);
   }
 }
 
@@ -90,9 +89,6 @@ void sync_field_order(formulon::pivot::PivotTable& table, std::uint32_t field) {
 }
 
 constexpr std::int32_t kPivotAxisNone = -1;
-
-// Longest item caption or field name, in UTF-16 code units.
-constexpr std::uint32_t kMaxItemCaptionUnits = 255U;
 
 // True when `a` and `b` are one item under the profile's text collation, the
 // comparison the evaluator merges items with.
@@ -222,7 +218,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   }
   formulon::pivot::PivotField& field = fields[index];
   field.source_name = spec->source_name;
-  field.custom_name = spec->custom_name != nullptr ? spec->custom_name : "";
+  field.custom_name = text_or_empty(spec->custom_name);
   field.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
   field.subtotal_top = spec->subtotal_top != 0;
   field.number_format = std::move(number_format);
@@ -317,7 +313,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, std::siz
     return rc;
   }
   // -1 takes the field off every axis.
-  fm_status_t enum_status = axis == kPivotAxisNone ? 0 : check_enum_domain(axis, 0, 3, "axis");
+  fm_status_t enum_status = axis == kPivotAxisNone ? 0 : check_enum_domain(axis, 0, FM_PIVOT_AXIS_PAGE, "axis");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -364,7 +360,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_sort(fm_workbook_t* wb, std::siz
                               field.sort.stated = true;
                               // Manual keeps the ascending form the OOXML reader yields for it.
                               field.sort.ascending = order != FM_PIVOT_SORT_DESCENDING;
-                              field.sort.by_field = by_field != nullptr ? by_field : "";
+                              field.sort.by_field = text_or_empty(by_field);
                             });
 }
 
@@ -416,7 +412,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_custom_name(fm_workbook_t* wb, s
     return rc;
   }
   const std::string_view text = name != nullptr ? std::string_view(name) : std::string_view();
-  if (formulon::utf16_units_in(text) > kMaxItemCaptionUnits) {
+  if (formulon::utf16_units_in(text) > kMaxPivotNameUnits) {
     return invalid_argument("name longer than 255 UTF-16 code units");
   }
   // A name may repeat the field's own source name, but no other field's names
@@ -502,7 +498,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_caption(fm_workbook_t* wb, 
     return rc;
   }
   const std::string_view text = caption != nullptr ? std::string_view(caption) : std::string_view();
-  if (formulon::utf16_units_in(text) > kMaxItemCaptionUnits) {
+  if (formulon::utf16_units_in(text) > kMaxPivotNameUnits) {
     return invalid_argument("caption longer than 255 UTF-16 code units");
   }
   formulon::pivot::PivotItem& item = field->items[item_index];
@@ -645,7 +641,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_fn(fm_workbook_t* wb, s
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  fm_status_t enum_status = check_enum_domain(agg, 0, 10, "aggregation");
+  fm_status_t enum_status = check_enum_domain(agg, 0, FM_PIVOT_AGG_VARP, "aggregation");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -673,7 +669,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, st
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (fm_status_t rc = check_enum_domain(calendar, 0, 1, "calendar"); rc != 0) {
+  if (fm_status_t rc = check_enum_domain(calendar, 0, FM_PIVOT_CALENDAR_JAPANESE, "calendar"); rc != 0) {
     return rc;
   }
   const auto bound = [](double serial) { return std::isnan(serial) ? std::nullopt : std::optional<double>(serial); };

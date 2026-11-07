@@ -27,7 +27,6 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 
 struct fm_cell_nodes {
   std::vector<formulon::eval::CellNodeId> nodes;

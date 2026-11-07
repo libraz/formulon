@@ -1,6 +1,7 @@
 
 #include "c_api/parts/pivot_internal.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -41,19 +42,23 @@ void drop_derived_location(formulon::pivot::PivotTable& table) {
   }
 }
 
-}  // namespace
-
-std::vector<std::unique_ptr<formulon::pivot::PivotCache>>& mutable_pivot_caches(formulon::Workbook& wb) {
-  return const_cast<std::vector<std::unique_ptr<formulon::pivot::PivotCache>>&>(wb.pivot_caches());
-}
-
-formulon::pivot::PivotCache* find_cache_mut(formulon::Workbook& wb, std::uint32_t cache_id) {
-  for (std::unique_ptr<formulon::pivot::PivotCache>& c : mutable_pivot_caches(wb)) {
-    if (c != nullptr && c->cache_id() == cache_id) {
-      return c.get();
+// Every pivot table on every sheet, in sheet order.
+std::vector<formulon::pivot::PivotTable*> all_pivots(formulon::Workbook& wb) {
+  std::vector<formulon::pivot::PivotTable*> tables;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
+      if (table != nullptr) {
+        tables.push_back(table.get());
+      }
     }
   }
-  return nullptr;
+  return tables;
+}
+
+}  // namespace
+
+formulon::pivot::PivotCache* find_cache_mut(formulon::Workbook& wb, std::uint32_t cache_id) {
+  return const_cast<formulon::pivot::PivotCache*>(wb.find_pivot_cache(cache_id));
 }
 
 const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std::uint32_t cache_id) {
@@ -164,14 +169,12 @@ void mark_cache_pivots_pending(formulon::Workbook& wb, std::uint32_t cache_id) {
 }
 
 std::vector<formulon::pivot::PivotTable*> cache_tables(formulon::Workbook& wb, std::uint32_t cache_id) {
-  std::vector<formulon::pivot::PivotTable*> tables;
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
-      if (table != nullptr && table->pivot_cache_id() == cache_id) {
-        tables.push_back(table.get());
-      }
-    }
-  }
+  std::vector<formulon::pivot::PivotTable*> tables = all_pivots(wb);
+  tables.erase(std::remove_if(tables.begin(), tables.end(),
+                              [cache_id](const formulon::pivot::PivotTable* table) {
+                                return table->pivot_cache_id() != cache_id;
+                              }),
+               tables.end());
   return tables;
 }
 
@@ -185,14 +188,10 @@ formulon::Expected<void, formulon::Error> project_pivot(formulon::Workbook& wb, 
 }
 
 void project_pending_pivots(formulon::Workbook& wb) {
-  std::vector<formulon::pivot::PivotTable*> pending;
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
-      if (table != nullptr && table->projection_pending()) {
-        pending.push_back(table.get());
-      }
-    }
-  }
+  std::vector<formulon::pivot::PivotTable*> pending = all_pivots(wb);
+  pending.erase(std::remove_if(pending.begin(), pending.end(),
+                               [](const formulon::pivot::PivotTable* table) { return !table->projection_pending(); }),
+                pending.end());
   wb.project_pending_pivots();
   for (formulon::pivot::PivotTable* table : pending) {
     if (!table->projection_pending()) {
@@ -220,6 +219,14 @@ fm_status_t PivotEdit::commit() {
   }
   table_.set_projection_pending(true);
   return 0;
+}
+
+void set_values_position(formulon::pivot::PivotTable& table, bool row, std::optional<std::size_t> position) {
+  if (row) {
+    table.set_row_values_position(position);
+  } else {
+    table.set_col_values_position(position);
+  }
 }
 
 formulon::Value intern_cache_text(formulon::pivot::PivotCache& cache, std::string_view utf8) {

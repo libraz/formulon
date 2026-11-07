@@ -187,12 +187,6 @@ const char* last_error_context();
 // trip the cap.
 constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 
-// Returns `false` and sets the thread-local binding error if `n` is past
-// the per-call range cap. The caller threads the result back as the
-// fail-fast path so the body never starts the per-range loop with a
-// bogus reservation.
-bool check_range_count(std::size_t n);
-
 // Validates a required `const fm_cell_rect_t* ranges, size_t range_count`
 // list: at least one entry (`kInvalidArgument`), `ranges` non-NULL
 // (`kBindingNullPointer`), at most the per-call cap, and every rectangle
@@ -307,14 +301,10 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out);
 // rather than as a rejected one.
 fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t max, const char* field);
 
-// Rejects a string that is not GUID-shaped, i.e. not
-// `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` with hexadecimal digits and
-// the braces present. `text` may be NULL or empty, which passes: an
-// absent id is not a malformed one, and the entry point synthesizes one.
-// Applied wherever a caller-supplied string reaches an XML attribute
-// whose schema type is `ST_Guid` — Excel repairs (and so discards) the
-// whole block when such an attribute holds anything else.
-fm_status_t check_guid(const char* text, const char* field);
+// Built-in number-format ids occupy [0, kBuiltinNumFmtIdLimit); custom ids
+// start above the last one.
+constexpr std::uint16_t kLastBuiltinNumFmtId = 163U;
+constexpr std::uint16_t kBuiltinNumFmtIdLimit = kLastBuiltinNumFmtId + 1U;
 
 // Returns whether `id` is a built-in number-format id in some locale or one
 // registered in `styles.num_fmts`.
@@ -335,6 +325,11 @@ fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std:
 // The view is static or styles-owned, valid until the next mutation.
 const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text);
 
+// Code of number-format id `id`: the ECMA-376 / stored code, else the code
+// the workbook's profile renders for ids with none (East Asian dates, Thai
+// digits, currency). Empty optional when the id names no format.
+std::optional<std::string_view> resolve_num_fmt_code(const formulon::Workbook& wb, std::uint16_t id);
+
 // Validates a conditional-formatting rule record: sqref shape and every
 // rectangle in it, plus the `type` / `op` / `time_period` /
 // `icon_set_name` / `data_bar_axis_position` / `fm_cfvo_t::type` domains
@@ -345,6 +340,9 @@ fm_status_t validate(const fm_cf_rule_t& rule);
 // Validates a data-validation record: range shape and rectangles, the
 // `type` / `op` / `error_style` domains, and the UTF-8 of the four messages.
 fm_status_t validate(const fm_data_validation_t& v);
+
+// A font record: `size` finite and non-negative, `name` well-formed UTF-8.
+fm_status_t validate(const fm_font_record_t& font);
 
 // Validates a pivot field spec: required and UTF-8 strings and the `axis` domain.
 fm_status_t validate(const fm_pivot_field_spec_t& spec);
@@ -526,5 +524,23 @@ struct fm_workbook {
   formulon::Workbook& workbook() { return *wb; }
   const formulon::Workbook& workbook() const { return *wb; }
 };
+
+namespace formulon {
+namespace c_api {
+namespace parts {
+
+// Clears the handle's borrowed-array arena `member` and returns it. Like
+// `fresh_read_scratch`, the arena is logically internal, so a const handle
+// may refresh it.
+template <typename Arena>
+Arena& fresh_arena(const fm_workbook_t* wb, Arena fm_workbook_t::*member) {
+  Arena& arena = const_cast<fm_workbook_t*>(wb)->*member;
+  arena.clear();
+  return arena;
+}
+
+}  // namespace parts
+}  // namespace c_api
+}  // namespace formulon
 
 #endif  // FORMULON_C_API_PARTS_COMMON_H_

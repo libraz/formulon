@@ -18,6 +18,7 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
@@ -147,14 +148,13 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
     elements.push_back(c);
   }
   fresh_read_scratch(wb);
-  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->table_style_element_scratch.clear();
+  auto& element_arena = fresh_arena(wb, &fm_workbook_t::table_style_element_scratch);
   *out = fm_table_style_t{};
   out->name = style.name.c_str();
   out->pivot = style.pivot ? 1 : 0;
   out->table = style.table ? 1 : 0;
   out->element_count = static_cast<uint32_t>(elements.size());
-  out->elements = scratch->table_style_element_scratch.adopt(std::move(elements));
+  out->elements = element_arena.adopt(std::move(elements));
   return 0;
 }
 
