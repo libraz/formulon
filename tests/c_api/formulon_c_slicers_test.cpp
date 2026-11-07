@@ -146,6 +146,15 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   EXPECT_EQ(out.from_row, 0U);
   EXPECT_EQ(out.to_row, 8U);
 
+  // Ascending is the domain's upper end and must be accepted.
+  fm_slicer_t ascending = Anchored(FM_SLICER_FIELD_SORT_ORDER);
+  ascending.sort_order = FM_SLICER_SORT_ORDER_ASCENDING;
+  ascending.from_row = 0;
+  ascending.to_row = 8;
+  ASSERT_EQ(fm_sheet_update_slicer(again.handle, 0, id, &ascending), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_slicer(again.handle, 0, id, &present, &out), 0);
+  EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
+
   const std::vector<std::uint8_t> saved = Save(again.handle);
   EXPECT_TRUE(Has(ExtractZipEntry(saved, "xl/slicers/slicer1.xml"), "caption=\"Renamed\""));
   EXPECT_TRUE(Has(ExtractZipEntry(saved, "[Content_Types].xml"), "/xl/slicerCaches/slicerCache1.xml"));
