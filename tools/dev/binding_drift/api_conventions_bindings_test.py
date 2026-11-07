@@ -30,13 +30,14 @@ RECT = (
 STATIC_RULE_IDS = {
     "R0.coverage", "R1.form", "R1.scope", "R2.verb", "R3.suffix", "R3.keys", "R4.unique", "R5.derive",
     "R5.list", "R6.c", "R6.js", "R6.py", "R7.c.byptr", "R7.c.typedef", "R7.js", "R7.py", "R8.c", "R8.js",
-    "R8.py", "R10.c.doc", "R11.axis", "R11.rect", "R11.multi", "R11.sheet", "R12", "R13.enum", "R14.abbrev",
+    "R8.py", "R11.axis", "R11.rect", "R11.multi", "R11.sheet", "R12", "R13.enum", "R14.abbrev",
     "R16.js", "R17.entry",
     "R6.c.field", "R6.closed.js", "R6.closed.py", "R7.opts.js", "R7.opts.py", "R7.absent.js", "R7.absent.py",
     "R15.header", "R18.js", "R18.py", "R19.c", "R19.js", "R19.py", "R20.js", "R20.py", "R21.role", "R21.name",
     "R22.c", "R22.js", "R22.py", "R23.js", "R23.py", "R23.track", "R23.list", "R24.missing.js",
     "R24.missing.py", "R18.all", "R25.a1", "R25.rect", "R25.count", "R26.ref", "R27.sheetparam",
-    "R25.span", "R28.handles",
+    "R25.span", "R28.handles", "R29.record_a1", "R30.ooxml_namespace", "R31.color", "R32.struct_size",
+    "R33.lifetime", "R34.reads_values", "R35.trailing_default",
 }  # fmt: skip
 
 

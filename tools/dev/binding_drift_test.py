@@ -23,6 +23,13 @@ from tools.dev.binding_drift import (
     ts_decl,
 )
 
+# The fixture tests of the adoption rules (R29-R35) and the pending files run here as well.
+from tools.dev.binding_drift.api_conventions_adoption_test import (  # noqa: F401
+    AdoptionCRuleTest,
+    AdoptionLedgerRuleTest,
+    PendingFileTest,
+)
+
 # The fixture tests of the ledger-bound rules (R4, R7.js, R8.js, R12, R13, R14, R16, R17) run here as well.
 from tools.dev.binding_drift.api_conventions_bindings_test import (  # noqa: F401
     AbbreviationTest,
@@ -982,15 +989,6 @@ class ApiConventionRuleTest(unittest.TestCase):
         self.assertEqual(_rule_hits(_conventions(header), "R8.c"), [("fm_version_string", "-")])
         self.assertEqual(_rule_hits(_conventions(header, ledger), "R8.c"), [])
 
-    def test_r10_c_doc(self) -> None:
-        decl = "FM_API fm_status_t fm_workbook_get_title(const fm_workbook_t* wb, const char** out_title);\n"
-        self.assert_rule(
-            "R10.c.doc",
-            "/**\n * @brief Reads the title.\n */\n" + decl,
-            "/**\n * @brief Reads the title.\n *\n * `*out_title` is a model-backed view.\n */\n" + decl,
-            [("fm_workbook_get_title", "-")],
-        )
-
     def test_r11_axis(self) -> None:
         column = "FM_API fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last, int32_t hidden);\n"  # noqa: E501
         self.assert_rule(
@@ -1182,11 +1180,12 @@ class ApiConventionBaselineTest(unittest.TestCase):
             "R7.c.byptr",
             "R7.c.typedef",
             "R8.c",
-            "R10.c.doc",
             "R11.axis",
             "R11.rect",
             "R6.c.field",
             "R15.header",
+            "R32.struct_size",
+            "R33.lifetime",
         }
         self.assertLessEqual(expected, set(api_conventions.all_rules()))
 

@@ -11,6 +11,14 @@ files live in `tools/dev/api_convention_baseline/{c,wasm,native,py}.txt`,
 one `<rule-id>\\t<op-key>\\t<discriminator>\\t<message>` line per violation,
 no comments; a missing file reads as empty.
 
+A rule whose violations are owed by work still in progress is gated by a
+pending file, `api_convention_baseline/pending/<rule-id>.txt`, one
+`<surface>\\t<op-key>\\t<discriminator>\\t<message>` line per violation. A
+violation it lists passes; one it does not list fails. A pending line no
+longer violated does not fail, so the work can land in any order; the file is
+rewritten (and removed once empty) with `--write-pending`, and the baseline
+never absorbs the violations of a rule that has one.
+
 The op-key is the ledger key (`tools/api/names.yaml`) of the symbol, found
 through its current or former name, so a rename does not move its baseline
 lines; without a ledger entry it is the symbol itself. Rules that classify a
@@ -18,8 +26,9 @@ function by its name (verb, `_count`, `_destroy`) read the ledger's target
 name, while the naming rules read the name in the tree.
 
 Further rule modules register into the same registry: the sibling modules
-`api_conventions_bindings.py`, `api_conventions_shapes.py` and
-`api_conventions_arguments.py`, if present, are imported before rules run.
+`api_conventions_bindings.py`, `api_conventions_shapes.py`,
+`api_conventions_arguments.py` and `api_conventions_adoption.py`, if present,
+are imported before rules run.
 """
 
 from __future__ import annotations
@@ -35,6 +44,7 @@ from .c_header import _C_FUNCTION_DECL_RE, _C_STRUCT_RE, _split_c_params
 from .surface_files import CAPI_HEADER, REPO_ROOT
 
 BASELINE_DIR = Path(__file__).resolve().parents[1] / "api_convention_baseline"
+PENDING_DIR_NAME = "pending"
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
 SURFACES = ("c", "wasm", "native", "py")
 NO_DISCRIMINATOR = "-"
@@ -90,13 +100,6 @@ PROCESS_STRING_FUNCTIONS = frozenset(
 
 # Process functions allowed to return a plain numeric constant.
 PROCESS_NUMBER_FUNCTIONS = frozenset({"fm_get_version_number"})
-
-# The lifetime classes a `const char**` output's doc must name.
-LIFETIME_CLASSES = ("model-backed", "read-scratch-backed", "owned snapshot", "static", "thread-local view")
-_LIFETIME_RE = re.compile(
-    r"(?<![\w-])(?:" + "|".join(re.escape(c).replace(r"\ ", r"\s+") for c in LIFETIME_CLASSES) + r")(?![\w-])",
-    re.IGNORECASE,
-)
 
 CELL_RECT = "fm_cell_rect_t"
 CELL_RECT_FIELDS = ("first_row", "first_col", "last_row", "last_col")
@@ -665,7 +668,12 @@ class Context:
 
 RuleFn = Callable[[Context], Iterable[Violation]]
 _RULES: Dict[str, RuleFn] = {}
-_EXTENSIONS = ("api_conventions_bindings", "api_conventions_shapes", "api_conventions_arguments")
+_EXTENSIONS = (
+    "api_conventions_bindings",
+    "api_conventions_shapes",
+    "api_conventions_arguments",
+    "api_conventions_adoption",
+)
 
 
 def rule(rule_id: str) -> Callable[[RuleFn], RuleFn]:
@@ -736,34 +744,96 @@ def read_baseline(baseline_dir: Path) -> Tuple[Dict[Tuple[str, str, str, str], s
     return lines, problems
 
 
+def read_pending(baseline_dir: Path) -> Tuple[Dict[Tuple[str, str, str, str], str], List[str]]:
+    """Pending identities -> file name (`pending/<rule-id>.txt`), plus parse problems."""
+    lines: Dict[Tuple[str, str, str, str], str] = {}
+    problems: List[str] = []
+    pending_dir = baseline_dir / PENDING_DIR_NAME
+    for path in sorted(pending_dir.glob("*.txt")) if pending_dir.is_dir() else ():
+        name = f"{PENDING_DIR_NAME}/{path.name}"
+        for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            parts = raw.split("\t")
+            if len(parts) != 4 or not all(parts[:3]) or parts[0] not in SURFACES:
+                problems.append(
+                    f"api-conventions: {name}:{number} is not `<surface>\\t<op-key>\\t<discriminator>\\t<message>`: "
+                    f"{raw!r}"
+                )
+                continue
+            identity = (parts[0], path.stem, parts[1], parts[2])
+            if identity in lines:
+                problems.append(f"api-conventions: {name}:{number} repeats `{' '.join(parts[:3])}`")
+            lines[identity] = name
+    return lines, problems
+
+
+def pending_rules(baseline_dir: Path) -> List[str]:
+    """Rule-ids that have a pending file."""
+    pending_dir = baseline_dir / PENDING_DIR_NAME
+    return sorted(p.stem for p in pending_dir.glob("*.txt")) if pending_dir.is_dir() else []
+
+
 def write_baseline(violations: Sequence[Violation], baseline_dir: Path) -> Dict[str, int]:
-    """Writes all four baseline files; returns the line count per file."""
+    """Writes all four baseline files, leaving out the rules a pending file gates; returns the line count per
+    file."""
     baseline_dir.mkdir(parents=True, exist_ok=True)
+    gated = set(pending_rules(baseline_dir))
     counts: Dict[str, int] = {}
     for surface in SURFACES:
         rows = sorted(
             "\t".join((v.rule, v.op_key, v.discriminator, _clean(v.message)))
             for v in violations
-            if v.surface == surface
+            if v.surface == surface and v.rule not in gated
         )
         (baseline_dir / f"{surface}.txt").write_text("".join(row + "\n" for row in rows), encoding="utf-8")
         counts[f"{surface}.txt"] = len(rows)
     return counts
 
 
-def compare(violations: Sequence[Violation], baseline_dir: Path) -> List[str]:
-    """New violations and stale baseline lines, as problem lines."""
+def write_pending(violations: Sequence[Violation], baseline_dir: Path, rule_ids: Iterable[str]) -> Dict[str, int]:
+    """Rewrites `pending/<rule-id>.txt` from the current violations of each rule, removing a file left empty;
+    returns the line count per rule."""
+    pending_dir = baseline_dir / PENDING_DIR_NAME
+    counts: Dict[str, int] = {}
+    for rule_id in rule_ids:
+        rows = sorted(
+            "\t".join((v.surface, v.op_key, v.discriminator, _clean(v.message)))
+            for v in violations
+            if v.rule == rule_id
+        )
+        path = pending_dir / f"{rule_id}.txt"
+        if rows:
+            pending_dir.mkdir(parents=True, exist_ok=True)
+            path.write_text("".join(row + "\n" for row in rows), encoding="utf-8")
+        elif path.is_file():
+            path.unlink()
+        counts[rule_id] = len(rows)
+    return counts
+
+
+def compare(violations: Sequence[Violation], baseline_dir: Path, rule_ids: Optional[Iterable[str]] = None) -> List[str]:
+    """New violations, stale baseline lines and pending files of unknown rules, as problem lines."""
     baseline, problems = read_baseline(baseline_dir)
+    pending, pending_problems = read_pending(baseline_dir)
+    problems.extend(pending_problems)
+    if rule_ids is not None:
+        known = set(rule_ids)
+        for rule_id in pending_rules(baseline_dir):
+            if rule_id not in known:
+                problems.append(f"api-conventions: {PENDING_DIR_NAME}/{rule_id}.txt names no registered rule")
     current = {v.identity for v in violations}
     for violation in violations:
-        if violation.identity not in baseline:
+        if violation.identity not in baseline and violation.identity not in pending:
             site = f" ({violation.site})" if violation.site else ""
             problems.append(
                 f"api-conventions: {violation.rule} [{violation.surface}] {violation.op_key} "
                 f"{violation.discriminator}: {violation.message}{site}"
             )
     for identity, file_name in sorted(baseline.items()):
-        if identity not in current:
+        if identity in pending:
+            problems.append(
+                f"api-conventions: `{' '.join(identity[1:])}` is in both {file_name} and {pending[identity]}"
+            )
+        elif identity not in current:
             problems.append(
                 f"api-conventions: stale line in {file_name}: `{' '.join(identity[1:])}` is no longer "
                 "violated; delete the line"
@@ -773,14 +843,18 @@ def compare(violations: Sequence[Violation], baseline_dir: Path) -> List[str]:
 
 def counts_report(violations: Sequence[Violation], baseline_dir: Path, rule_ids: Iterable[str]) -> List[str]:
     baseline, _ = read_baseline(baseline_dir)
+    pending, _ = read_pending(baseline_dir)
     current = {v.identity for v in violations}
     out = []
     for rule_id in rule_ids:
         now = {i for i in current if i[1] == rule_id}
         base = {i for i in baseline if i[1] == rule_id}
-        out.append(
-            f"{rule_id}\tviolations={len(now)}\tbaseline={len(base)}\tnew={len(now - base)}\tstale={len(base - now)}"
-        )
+        owed = {i for i in pending if i[1] == rule_id}
+        line = f"{rule_id}\tviolations={len(now)}\tbaseline={len(base)}\tnew={len(now - base - owed)}"
+        line += f"\tstale={len(base - now)}"
+        if owed:
+            line += f"\tpending={len(owed & now)}\tpending_clear={len(owed - now)}"
+        out.append(line)
     per_file = {f"{s}.txt": 0 for s in SURFACES}
     for file_name in baseline.values():
         per_file[file_name] += 1
@@ -788,15 +862,34 @@ def counts_report(violations: Sequence[Violation], baseline_dir: Path, rule_ids:
     return out
 
 
+def violations_report(violations: Sequence[Violation], baseline_dir: Path) -> List[str]:
+    """Every current violation as `<state>\\t<rule-id>\\t<surface>\\t<op-key>\\t<discriminator>\\t<site>\\t<message>`,
+    the state being `baseline`, `pending` or `new`; a site names the file to change."""
+    baseline, _ = read_baseline(baseline_dir)
+    pending, _ = read_pending(baseline_dir)
+    out = []
+    for v in violations:
+        state = "baseline" if v.identity in baseline else "pending" if v.identity in pending else "new"
+        out.append("\t".join((state, v.rule, v.surface, v.op_key, v.discriminator, v.site or "-", _clean(v.message))))
+    return out
+
+
 def check_api_conventions(baseline_dir: Optional[Path] = None, ctx: Optional[Context] = None) -> List[str]:
-    """Drift selector entry point: violations against the baseline."""
+    """Drift selector entry point: violations against the baseline and the pending files."""
     ctx = ctx or Context.from_tree()
-    violations = collect(ctx)
-    return [*ctx.ledger.problems, *compare(violations, baseline_dir or BASELINE_DIR)]
+    rules = all_rules()
+    violations = collect(ctx, rules)
+    return [*ctx.ledger.problems, *compare(violations, baseline_dir or BASELINE_DIR, rules)]
 
 
-def run_action(action: str, baseline_dir: Optional[Path] = None, ctx: Optional[Context] = None) -> int:
-    """`list-rules`, `counts` or `write-baseline`; prints its output, returns an exit code."""
+def run_action(
+    action: str,
+    baseline_dir: Optional[Path] = None,
+    ctx: Optional[Context] = None,
+    rule_ids: Optional[Sequence[str]] = None,
+) -> int:
+    """`list-rules`, `counts`, `show-violations`, `write-baseline` or `write-pending` (of `rule_ids`, default
+    every rule with a pending file); prints its output, returns an exit code."""
     rules = all_rules()
     if action == "list-rules":
         for rule_id in rules:
@@ -813,9 +906,22 @@ def run_action(action: str, baseline_dir: Optional[Path] = None, ctx: Optional[C
         for line in counts_report(violations, baseline_dir, rules):
             print(line)
         return 0
+    if action == "show-violations":
+        for line in violations_report(violations, baseline_dir):
+            print(line)
+        return 0
     if action == "write-baseline":
         written = write_baseline(violations, baseline_dir)
         print("api-conventions: wrote " + ", ".join(f"{name}={count}" for name, count in written.items()))
+        return 0
+    if action == "write-pending":
+        targets = list(rule_ids) if rule_ids else pending_rules(baseline_dir)
+        unknown = [r for r in targets if r not in rules]
+        if unknown:
+            print(f"api-conventions: no rule {', '.join(unknown)}")
+            return 1
+        written = write_pending(violations, baseline_dir, targets)
+        print("api-conventions: pending " + ", ".join(f"{name}={count}" for name, count in written.items()))
         return 0
     raise ValueError(action)
 
@@ -978,22 +1084,6 @@ def _rule_c_returns(ctx: Context) -> Iterable[Violation]:
         yield ctx.c_violation(
             "R8.c", fn.name, NO_DISCRIMINATOR, f"{fn.name} returns `{fn.ret}`, not `fm_status_t`", fn.line
         )
-
-
-@rule("R10.c.doc")
-def _rule_lifetime_doc(ctx: Context) -> Iterable[Violation]:
-    """A function with a `const char**` output names its lifetime class in its doc:
-    model-backed, read-scratch-backed, owned snapshot, static or thread-local view.
-    """
-    for fn in ctx.functions:
-        if any(p.ctype == "const char**" for p in fn.params) and not _LIFETIME_RE.search(fn.doc):
-            yield ctx.c_violation(
-                "R10.c.doc",
-                fn.name,
-                NO_DISCRIMINATOR,
-                f"{fn.name} returns a `const char**` view whose doc names none of: {', '.join(LIFETIME_CLASSES)}",
-                fn.line,
-            )
 
 
 # Row properties whose column counterpart has a different name; a row's height,

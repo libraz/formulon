@@ -1,0 +1,112 @@
+c	record.border_side	color_argb	fm_border_side_t: `color_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
+c	record.cf_color	-	`fm_cf_color_t` is retired; use `fm_color_spec_t`
+c	record.cf_match	bar_border	fm_cf_match_t: `bar_border` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_match	bar_fill	fm_cf_match_t: `bar_fill` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_match	color	fm_cf_match_t: `color` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_rule	color_scale_colors	fm_cf_rule_t: `color_scale_colors` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_rule	data_bar_axis_color	fm_cf_rule_t: `data_bar_axis_color` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_rule	data_bar_border	fm_cf_rule_t: `data_bar_border` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_rule	data_bar_fill	fm_cf_rule_t: `data_bar_fill` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_rule	data_bar_negative_border	fm_cf_rule_t: `data_bar_negative_border` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.cf_rule	data_bar_negative_fill	fm_cf_rule_t: `data_bar_negative_fill` is a `fm_cf_color_t`; use `fm_color_spec_t`
+c	record.chart_fill	color	fm_chart_fill_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
+c	record.chart_fill	has_color	fm_chart_fill_t: `has_color` flags a colour's presence; an absent `fm_color_spec_t` is kind None
+c	record.chart_fill_patch	color	fm_chart_fill_patch_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
+c	record.chart_labels	font_color	fm_chart_labels_t: `font_color` holds a colour as a number; make it a `fm_color_spec_t`
+c	record.chart_labels	has_font_color	fm_chart_labels_t: `has_font_color` flags a colour's presence; an absent `fm_color_spec_t` is kind None
+c	record.chart_labels_patch	font_color	fm_chart_labels_patch_t: `font_color` holds a colour as a number; make it a `fm_color_spec_t`
+c	record.chart_line	color	fm_chart_line_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
+c	record.chart_line	has_color	fm_chart_line_t: `has_color` flags a colour's presence; an absent `fm_color_spec_t` is kind None
+c	record.chart_line_patch	color	fm_chart_line_patch_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
+c	record.fill_record	bg_argb	fm_fill_record_t: `bg_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
+c	record.fill_record	fg_argb	fm_fill_record_t: `fg_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
+c	record.font_record	color_argb	fm_font_record_t: `color_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
+c	record.gradient_stop	color_argb	fm_gradient_stop_t: `color_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
+c	record.shape	fill_rgb	fm_shape_t: `fill_rgb` holds a colour as a number; carry one `fm_color_spec_t` instead
+c	record.shape	line_rgb	fm_shape_t: `line_rgb` holds a colour as a number; carry one `fm_color_spec_t` instead
+native	record.border_side	BorderSide.colorArgb	BorderSide: `colorArgb` holds a colour as a number; carry one `Color` instead
+native	record.cf_color	-	`CfColor` is retired; use `Color`
+native	record.cf_match	CfMatch.barBorder	CfMatch: `barBorder` is a `CfColor`; use `Color`
+native	record.cf_match	CfMatch.barFill	CfMatch: `barFill` is a `CfColor`; use `Color`
+native	record.cf_match	CfMatch.color	CfMatch: `color` is a `CfColor`; use `Color`
+native	record.chart_fill_info	ChartFill.color	ChartFill: `color` holds a colour as a number; make it a `Color`
+native	record.chart_labels_info	ChartLabels.fontColor	ChartLabels: `fontColor` holds a colour as a number; make it a `Color`
+native	record.chart_line_info	ChartLine.color	ChartLine: `color` holds a colour as a number; make it a `Color`
+native	record.conditional_format	ConditionalFormat.colorScale	ConditionalFormat: `colorScale` is a `CfColor`; use `Color`
+native	record.conditional_format	ConditionalFormat.dataBar	ConditionalFormat: `dataBar` is a `CfColor`; use `Color`
+native	record.conditional_format_input	ConditionalFormatInput.colorScale	ConditionalFormatInput: `colorScale` is a `CfColor`; use `Color`
+native	record.conditional_format_input	ConditionalFormatInput.dataBar	ConditionalFormatInput: `dataBar` is a `CfColor`; use `Color`
+native	record.fill_record	Fill.bgArgb	Fill: `bgArgb` holds a colour as a number; carry one `Color` instead
+native	record.fill_record	Fill.fgArgb	Fill: `fgArgb` holds a colour as a number; carry one `Color` instead
+native	record.font_record	Font.colorArgb	Font: `colorArgb` holds a colour as a number; carry one `Color` instead
+native	record.gradient_stop	GradientStop.colorArgb	GradientStop: `colorArgb` holds a colour as a number; carry one `Color` instead
+native	record.shape	ShapeProperties.fillRgb	ShapeProperties: `fillRgb` holds a colour as a number; carry one `Color` instead
+native	record.shape	ShapeProperties.lineRgb	ShapeProperties: `lineRgb` holds a colour as a number; carry one `Color` instead
+native	record.shape_input	ShapeInput.fillRgb	ShapeInput: `fillRgb` holds a colour as a number; carry one `Color` instead
+native	record.shape_input	ShapeInput.lineRgb	ShapeInput: `lineRgb` holds a colour as a number; carry one `Color` instead
+native	record.sparkline_group_input	SparklineGroupInput.colorAxis	SparklineGroupInput: `colorAxis` is an input colour; take a `ColorInput`
+native	record.sparkline_group_input	SparklineGroupInput.colorFirst	SparklineGroupInput: `colorFirst` is an input colour; take a `ColorInput`
+native	record.sparkline_group_input	SparklineGroupInput.colorHigh	SparklineGroupInput: `colorHigh` is an input colour; take a `ColorInput`
+native	record.sparkline_group_input	SparklineGroupInput.colorLast	SparklineGroupInput: `colorLast` is an input colour; take a `ColorInput`
+native	record.sparkline_group_input	SparklineGroupInput.colorLow	SparklineGroupInput: `colorLow` is an input colour; take a `ColorInput`
+native	record.sparkline_group_input	SparklineGroupInput.colorMarkers	SparklineGroupInput: `colorMarkers` is an input colour; take a `ColorInput`
+native	record.sparkline_group_input	SparklineGroupInput.colorNegative	SparklineGroupInput: `colorNegative` is an input colour; take a `ColorInput`
+native	record.sparkline_group_input	SparklineGroupInput.colorSeries	SparklineGroupInput: `colorSeries` is an input colour; take a `ColorInput`
+py	record.border_side	BorderSide.color_argb	BorderSide: `color_argb` holds a colour as a number; carry one `Color` instead
+py	record.cf_color	-	`CfColor` is retired; use `Color`
+py	record.chart_fill_info	ChartFill.color	ChartFill: `color` holds a colour as a number; make it a `Color`
+py	record.chart_fill_patch	ChartFillPatch.color	ChartFillPatch: `color` holds a colour as a number; make it a `Color`
+py	record.chart_labels_info	ChartLabels.font_color	ChartLabels: `font_color` holds a colour as a number; make it a `Color`
+py	record.chart_labels_patch	ChartLabelsPatch.font_color	ChartLabelsPatch: `font_color` holds a colour as a number; make it a `Color`
+py	record.chart_line_info	ChartLine.color	ChartLine: `color` holds a colour as a number; make it a `Color`
+py	record.chart_line_patch	ChartLinePatch.color	ChartLinePatch: `color` holds a colour as a number; make it a `Color`
+py	record.color_scale	ColorScale.colors	ColorScale: `colors` is a `CfColor`; use `Color`
+py	record.data_bar	DataBar.axis_color	DataBar: `axis_color` is a `CfColor`; use `Color`
+py	record.data_bar	DataBar.border	DataBar: `border` is a `CfColor`; use `Color`
+py	record.data_bar	DataBar.fill	DataBar: `fill` is a `CfColor`; use `Color`
+py	record.data_bar	DataBar.negative_border	DataBar: `negative_border` is a `CfColor`; use `Color`
+py	record.data_bar	DataBar.negative_fill	DataBar: `negative_fill` is a `CfColor`; use `Color`
+py	record.fill_record	Fill.bg_argb	Fill: `bg_argb` holds a colour as a number; carry one `Color` instead
+py	record.fill_record	Fill.fg_argb	Fill: `fg_argb` holds a colour as a number; carry one `Color` instead
+py	record.font_record	Font.color_argb	Font: `color_argb` holds a colour as a number; carry one `Color` instead
+py	record.gradient_stop	GradientStop.color_argb	GradientStop: `color_argb` holds a colour as a number; carry one `Color` instead
+py	record.shape	ShapeProperties.fill_rgb	ShapeProperties: `fill_rgb` holds a colour as a number; carry one `Color` instead
+py	record.shape	ShapeProperties.line_rgb	ShapeProperties: `line_rgb` holds a colour as a number; carry one `Color` instead
+py	shape.add	fill_rgb	Sheet.add_shape: `fill_rgb` holds a colour as a number; carry one `Color` instead
+py	shape.add	line_rgb	Sheet.add_shape: `line_rgb` holds a colour as a number; carry one `Color` instead
+py	sparkline_group.update	color_axis	Sheet.update_sparkline_group: `color_axis` is an input colour; take a `ColorInput`
+py	sparkline_group.update	color_first	Sheet.update_sparkline_group: `color_first` is an input colour; take a `ColorInput`
+py	sparkline_group.update	color_high	Sheet.update_sparkline_group: `color_high` is an input colour; take a `ColorInput`
+py	sparkline_group.update	color_last	Sheet.update_sparkline_group: `color_last` is an input colour; take a `ColorInput`
+py	sparkline_group.update	color_low	Sheet.update_sparkline_group: `color_low` is an input colour; take a `ColorInput`
+py	sparkline_group.update	color_markers	Sheet.update_sparkline_group: `color_markers` is an input colour; take a `ColorInput`
+py	sparkline_group.update	color_negative	Sheet.update_sparkline_group: `color_negative` is an input colour; take a `ColorInput`
+py	sparkline_group.update	color_series	Sheet.update_sparkline_group: `color_series` is an input colour; take a `ColorInput`
+wasm	record.border_side	BorderSide.colorArgb	BorderSide: `colorArgb` holds a colour as a number; carry one `Color` instead
+wasm	record.cf_color	-	`CfColor` is retired; use `Color`
+wasm	record.cf_match	CfMatch.barBorder	CfMatch: `barBorder` is a `CfColor`; use `Color`
+wasm	record.cf_match	CfMatch.barFill	CfMatch: `barFill` is a `CfColor`; use `Color`
+wasm	record.cf_match	CfMatch.color	CfMatch: `color` is a `CfColor`; use `Color`
+wasm	record.chart_fill_info	ChartFill.color	ChartFill: `color` holds a colour as a number; make it a `Color`
+wasm	record.chart_labels_info	ChartLabels.fontColor	ChartLabels: `fontColor` holds a colour as a number; make it a `Color`
+wasm	record.chart_line_info	ChartLine.color	ChartLine: `color` holds a colour as a number; make it a `Color`
+wasm	record.conditional_format	ConditionalFormat.colorScale	ConditionalFormat: `colorScale` is a `CfColor`; use `Color`
+wasm	record.conditional_format	ConditionalFormat.dataBar	ConditionalFormat: `dataBar` is a `CfColor`; use `Color`
+wasm	record.conditional_format_input	ConditionalFormatInput.colorScale	ConditionalFormatInput: `colorScale` is a `CfColor`; use `Color`
+wasm	record.conditional_format_input	ConditionalFormatInput.dataBar	ConditionalFormatInput: `dataBar` is a `CfColor`; use `Color`
+wasm	record.fill_record	Fill.bgArgb	Fill: `bgArgb` holds a colour as a number; carry one `Color` instead
+wasm	record.fill_record	Fill.fgArgb	Fill: `fgArgb` holds a colour as a number; carry one `Color` instead
+wasm	record.font_record	Font.colorArgb	Font: `colorArgb` holds a colour as a number; carry one `Color` instead
+wasm	record.gradient_stop	GradientStop.colorArgb	GradientStop: `colorArgb` holds a colour as a number; carry one `Color` instead
+wasm	record.shape	ShapeProperties.fillRgb	ShapeProperties: `fillRgb` holds a colour as a number; carry one `Color` instead
+wasm	record.shape	ShapeProperties.lineRgb	ShapeProperties: `lineRgb` holds a colour as a number; carry one `Color` instead
+wasm	record.shape_input	ShapeInput.fillRgb	ShapeInput: `fillRgb` holds a colour as a number; carry one `Color` instead
+wasm	record.shape_input	ShapeInput.lineRgb	ShapeInput: `lineRgb` holds a colour as a number; carry one `Color` instead
+wasm	record.sparkline_group_input	SparklineGroupInput.colorAxis	SparklineGroupInput: `colorAxis` is an input colour; take a `ColorInput`
+wasm	record.sparkline_group_input	SparklineGroupInput.colorFirst	SparklineGroupInput: `colorFirst` is an input colour; take a `ColorInput`
+wasm	record.sparkline_group_input	SparklineGroupInput.colorHigh	SparklineGroupInput: `colorHigh` is an input colour; take a `ColorInput`
+wasm	record.sparkline_group_input	SparklineGroupInput.colorLast	SparklineGroupInput: `colorLast` is an input colour; take a `ColorInput`
+wasm	record.sparkline_group_input	SparklineGroupInput.colorLow	SparklineGroupInput: `colorLow` is an input colour; take a `ColorInput`
+wasm	record.sparkline_group_input	SparklineGroupInput.colorMarkers	SparklineGroupInput: `colorMarkers` is an input colour; take a `ColorInput`
+wasm	record.sparkline_group_input	SparklineGroupInput.colorNegative	SparklineGroupInput: `colorNegative` is an input colour; take a `ColorInput`
+wasm	record.sparkline_group_input	SparklineGroupInput.colorSeries	SparklineGroupInput: `colorSeries` is an input colour; take a `ColorInput`

@@ -151,11 +151,23 @@ Checks:
                   listed by `--list-rules`), against the per-surface
                   baseline in tools/dev/api_convention_baseline/. A
                   violation missing from the baseline fails, and so does a
-                  baseline line that is no longer violated. `--counts`
-                  prints per-rule tallies, `--write-baseline` rewrites the
-                  baseline from the current violations, `--baseline-dir`
-                  points at another baseline directory. Reading the name
-                  ledger tools/api/names.yaml, when present, needs PyYAML.
+                  baseline line that is no longer violated. A rule with a
+                  `pending/<rule-id>.txt` file is gated by that file
+                  instead: a violation it lists passes, a listed line no
+                  longer violated does not fail. `--counts` prints per-rule
+                  tallies, `--show-violations` every current violation
+                  with its state and the file to change, `--write-baseline`
+                  rewrites the baseline from the current violations,
+                  `--write-pending [RULE ...]` rewrites the pending files
+                  (removing one left empty), `--baseline-dir` points at
+                  another baseline directory. Reading the name ledger
+                  tools/api/names.yaml, when present, needs PyYAML.
+  parse-error-codes
+                  The C `fm_parse_error_code_t` values and the binding
+                  tables of `ParseErrorCode` agree with the C++ enum and
+                  its status mapping in src/parser/parse_status.h. Reports
+                  "SKIPPED" until tools/dev/binding_drift/parse_error_codes.py
+                  exists.
   all             Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -164,6 +176,8 @@ Stdlib only; no build artifacts or network access required.
 from __future__ import annotations
 
 import argparse
+import importlib
+import importlib.util
 import sys
 from pathlib import Path
 from typing import List
@@ -190,6 +204,15 @@ from binding_drift.readme_identifiers import check_readme_identifiers
 from binding_drift.shape_checks import check_dts_shared_shapes, check_style_record_fields
 from binding_drift.surface_files import _SKIPPED
 
+
+def check_parse_error_codes() -> List[str]:
+    """Runs `binding_drift.parse_error_codes.check_parse_error_codes` when that module exists."""
+    if importlib.util.find_spec("binding_drift.parse_error_codes") is None:
+        _SKIPPED.append("parse-error-codes: binding_drift/parse_error_codes.py is absent; nothing was checked")
+        return []
+    return importlib.import_module("binding_drift.parse_error_codes").check_parse_error_codes()
+
+
 CHECKS = {
     "python-exports": check_python_exports,
     "python-struct-layouts": check_python_struct_layouts,
@@ -208,6 +231,7 @@ CHECKS = {
     "abi-baseline": check_abi_baseline,
     "header-error-codes": check_header_error_codes,
     "api-conventions": api_conventions.check_api_conventions,
+    "parse-error-codes": check_parse_error_codes,
 }
 
 
@@ -225,13 +249,30 @@ def main(argv: List[str]) -> int:
     actions.add_argument("--write-baseline", action="store_true", help="api-conventions: rewrite the baseline")
     actions.add_argument("--counts", action="store_true", help="api-conventions: print per-rule tallies")
     actions.add_argument("--list-rules", action="store_true", help="api-conventions: print the rule-ids")
+    actions.add_argument(
+        "--show-violations",
+        action="store_true",
+        help="api-conventions: print every current violation with its state and site",
+    )
+    actions.add_argument(
+        "--write-pending",
+        nargs="*",
+        metavar="RULE",
+        help="api-conventions: rewrite the pending files of RULE (default: every existing one)",
+    )
     args = parser.parse_args(argv)
 
-    action = next((a for a in ("write_baseline", "counts", "list_rules") if getattr(args, a)), None)
+    flags = ("write_baseline", "counts", "list_rules", "show_violations")
+    action = next((a for a in flags if getattr(args, a)), None)
+    if args.write_pending is not None:
+        action = "write_pending"
     if (action or args.baseline_dir) and args.check != "api-conventions":
-        parser.error("--baseline-dir, --write-baseline, --counts and --list-rules apply to api-conventions only")
+        parser.error(
+            "--baseline-dir, --write-baseline, --write-pending, --counts, --show-violations and --list-rules "
+            "apply to api-conventions only"
+        )
     if action:
-        return api_conventions.run_action(action.replace("_", "-"), args.baseline_dir)
+        return api_conventions.run_action(action.replace("_", "-"), args.baseline_dir, rule_ids=args.write_pending)
 
     names = list(CHECKS.keys()) if args.check == "all" else [args.check]
     _SKIPPED.clear()

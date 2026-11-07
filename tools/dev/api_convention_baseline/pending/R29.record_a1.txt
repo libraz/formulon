@@ -1,0 +1,23 @@
+native	record.auto_filter_input	range	`AutoFilterInput.range` is a `CellRect`; it also takes `string`
+native	record.auto_filter_sort_condition_input	ref	`AutoFilterSortConditionInput.ref` is a `CellRect`; it also takes `string`
+native	record.auto_filter_sort_state_input	ref	`AutoFilterSortStateInput.ref` is a `CellRect`; it also takes `string`
+native	record.conditional_format_input	ranges	`ConditionalFormatInput.ranges` is a `CellRect`; it takes `string` elements and one `string`
+native	record.data_validation_input	ranges	`DataValidationInput.ranges` is a `CellRect`; it takes `string` elements and one `string`
+native	record.pivot_input	anchor	`PivotInput` spells the cell `anchor` as a row / column pair; take one `CellAddress` field
+native	record.reference_range_input	rect	`ReferenceRangeInput.rect` is a `CellRect`; it also takes `string`
+native	record.sheet_selection_input	active	`SheetSelectionInput` spells the cell `active` as a row / column pair; take one `CellAddress` field
+native	record.sheet_selection_input	ranges	`SheetSelectionInput.ranges` is a `CellRect`; it takes `string` elements and one `string`
+native	record.table_input	range	`TableInput.range` is a `SheetRect`; it also takes `string`
+py	record.conditional_format_input	ranges	`ConditionalFormatInput.ranges` is a `CellRect`; it takes `str` elements and one `str`
+py	record.data_validation_input	ranges	`DataValidationInput.ranges` is a `CellRect`; it takes `str` elements and one `str`
+py	record.pivot_input	anchor	`PivotInput` spells the cell `anchor` as a row / column pair; take one `CellAddress` field
+wasm	record.auto_filter_input	range	`AutoFilterInput.range` is a `CellRect`; it also takes `string`
+wasm	record.auto_filter_sort_condition_input	ref	`AutoFilterSortConditionInput.ref` is a `CellRect`; it also takes `string`
+wasm	record.auto_filter_sort_state_input	ref	`AutoFilterSortStateInput.ref` is a `CellRect`; it also takes `string`
+wasm	record.conditional_format_input	ranges	`ConditionalFormatInput.ranges` is a `CellRect`; it takes `string` elements and one `string`
+wasm	record.data_validation_input	ranges	`DataValidationInput.ranges` is a `CellRect`; it takes `string` elements and one `string`
+wasm	record.pivot_input	anchor	`PivotInput` spells the cell `anchor` as a row / column pair; take one `CellAddress` field
+wasm	record.reference_range_input	rect	`ReferenceRangeInput.rect` is a `CellRect`; it also takes `string`
+wasm	record.sheet_selection_input	active	`SheetSelectionInput` spells the cell `active` as a row / column pair; take one `CellAddress` field
+wasm	record.sheet_selection_input	ranges	`SheetSelectionInput.ranges` is a `CellRect`; it takes `string` elements and one `string`
+wasm	record.table_input	range	`TableInput.range` is a `SheetRect`; it also takes `string`

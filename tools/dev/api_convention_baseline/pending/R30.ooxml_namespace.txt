@@ -1,0 +1,252 @@
+native	auto_filter_xml.get	namespace	`Sheet.getAutoFilterXml` belongs under `Sheet.ooxml`
+native	auto_filter_xml.get	xml	`Sheet.getAutoFilterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	auto_filter_xml.set	namespace	`Sheet.setAutoFilterXml` belongs under `Sheet.ooxml`
+native	auto_filter_xml.set	xml	`Sheet.setAutoFilterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	border.add	namespace	`Workbook.addBorder` belongs under `Workbook.ooxml`
+native	border.get	namespace	`Workbook.getBorder` belongs under `Workbook.ooxml`
+native	borders.list	namespace	`Workbook.listBorders` belongs under `Workbook.ooxml`
+native	cell_style.get	namespace	`Workbook.getCellStyle` belongs under `Workbook.ooxml`
+native	cell_style.get	returns.xfId	`Workbook.getCellStyle` is a direct member, but `CellStyle.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+native	cell_style.remove	namespace	`Workbook.removeCellStyle` belongs under `Workbook.ooxml`
+native	cell_style.set	namespace	`Workbook.setCellStyle` belongs under `Workbook.ooxml`
+native	cell_style.set	record.xfId	`Workbook.setCellStyle` is a direct member, but `CellStyle.xfId` reaches it through `record`; move it under `Workbook.ooxml`
+native	cell_style_xf.add	name	`Workbook.addCellStyleXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+native	cell_style_xf.add	namespace	`Workbook.addCellStyleXf` belongs under `Workbook.ooxml`
+native	cell_style_xf.add	record.xfId	`Workbook.addCellStyleXf` is a direct member, but `CellXfInput.xfId` reaches it through `record`; move it under `Workbook.ooxml`
+native	cell_style_xf.get	cellStyleXfIndex	`Workbook.getCellStyleXf` is a direct member, but it takes `cellStyleXfIndex`; move it under `Workbook.ooxml`
+native	cell_style_xf.get	name	`Workbook.getCellStyleXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+native	cell_style_xf.get	namespace	`Workbook.getCellStyleXf` belongs under `Workbook.ooxml`
+native	cell_style_xf.get	returns.xfId	`Workbook.getCellStyleXf` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+native	cell_style_xfs.list	name	`Workbook.listCellStyleXfs` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+native	cell_style_xfs.list	namespace	`Workbook.listCellStyleXfs` belongs under `Workbook.ooxml`
+native	cell_style_xfs.list	returns.xfId	`Workbook.listCellStyleXfs` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+native	cell_styles.list	namespace	`Workbook.listCellStyles` belongs under `Workbook.ooxml`
+native	cell_styles.list	returns.xfId	`Workbook.listCellStyles` is a direct member, but `CellStyle.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+native	cell_xf.add	name	`Workbook.addCellXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+native	cell_xf.add	namespace	`Workbook.addCellXf` belongs under `Workbook.ooxml`
+native	cell_xf.add	record.xfId	`Workbook.addCellXf` is a direct member, but `CellXfInput.xfId` reaches it through `record`; move it under `Workbook.ooxml`
+native	cell_xf.get	name	`Workbook.getCellXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+native	cell_xf.get	namespace	`Workbook.getCellXf` belongs under `Workbook.ooxml`
+native	cell_xf.get	returns.xfId	`Workbook.getCellXf` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+native	cell_xf.get	xfIndex	`Workbook.getCellXf` is a direct member, but it takes `xfIndex`; move it under `Workbook.ooxml`
+native	cell_xf_index.clear	name	`Sheet.clearCellXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+native	cell_xf_index.clear	namespace	`Sheet.clearCellXfIndex` belongs under `Sheet.ooxml`
+native	cell_xf_index.get	name	`Sheet.getCellXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+native	cell_xf_index.get	namespace	`Sheet.getCellXfIndex` belongs under `Sheet.ooxml`
+native	cell_xf_index.set	name	`Sheet.setCellXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+native	cell_xf_index.set	namespace	`Sheet.setCellXfIndex` belongs under `Sheet.ooxml`
+native	cell_xf_index.set	xfIndex	`Sheet.setCellXfIndex` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+native	cell_xfs.list	name	`Workbook.listCellXfs` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+native	cell_xfs.list	namespace	`Workbook.listCellXfs` belongs under `Workbook.ooxml`
+native	cell_xfs.list	returns.xfId	`Workbook.listCellXfs` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+native	column_style.clear	namespace	`Sheet.clearColumnStyle` belongs under `Sheet.ooxml`
+native	column_style.set	namespace	`Sheet.setColumnStyle` belongs under `Sheet.ooxml`
+native	column_style.set	xfIndex	`Sheet.setColumnStyle` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+native	dxf.add	namespace	`Workbook.addDxf` belongs under `Workbook.ooxml`
+native	dxf.get	namespace	`Workbook.getDxf` belongs under `Workbook.ooxml`
+native	dxfs.list	namespace	`Workbook.listDxfs` belongs under `Workbook.ooxml`
+native	fill.add	namespace	`Workbook.addFill` belongs under `Workbook.ooxml`
+native	fill.get	namespace	`Workbook.getFill` belongs under `Workbook.ooxml`
+native	fills.list	namespace	`Workbook.listFills` belongs under `Workbook.ooxml`
+native	font.add	namespace	`Workbook.addFont` belongs under `Workbook.ooxml`
+native	font.get	namespace	`Workbook.getFont` belongs under `Workbook.ooxml`
+native	font.set	namespace	`Workbook.setFont` belongs under `Workbook.ooxml`
+native	fonts.list	namespace	`Workbook.listFonts` belongs under `Workbook.ooxml`
+native	header_footer_xml.get	namespace	`Sheet.getHeaderFooterXml` belongs under `Sheet.ooxml`
+native	header_footer_xml.get	xml	`Sheet.getHeaderFooterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	header_footer_xml.set	namespace	`Sheet.setHeaderFooterXml` belongs under `Sheet.ooxml`
+native	header_footer_xml.set	xml	`Sheet.setHeaderFooterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	num_fmt.add	namespace	`Workbook.addNumFmt` belongs under `Workbook.ooxml`
+native	num_fmt_string.get	namespace	`Workbook.getNumFmtString` belongs under `Workbook.ooxml`
+native	page_margins_xml.get	namespace	`Sheet.getPageMarginsXml` belongs under `Sheet.ooxml`
+native	page_margins_xml.get	xml	`Sheet.getPageMarginsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	page_margins_xml.set	namespace	`Sheet.setPageMarginsXml` belongs under `Sheet.ooxml`
+native	page_margins_xml.set	xml	`Sheet.setPageMarginsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	page_setup_xml.get	namespace	`Sheet.getPageSetupXml` belongs under `Sheet.ooxml`
+native	page_setup_xml.get	xml	`Sheet.getPageSetupXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	page_setup_xml.set	namespace	`Sheet.setPageSetupXml` belongs under `Sheet.ooxml`
+native	page_setup_xml.set	xml	`Sheet.setPageSetupXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	passthrough.get	namespace	`Workbook.getPassthrough` belongs under `Workbook.ooxml`
+native	passthroughs.list	namespace	`Workbook.listPassthroughs` belongs under `Workbook.ooxml`
+native	print_options_xml.get	namespace	`Sheet.getPrintOptionsXml` belongs under `Sheet.ooxml`
+native	print_options_xml.get	xml	`Sheet.getPrintOptionsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	print_options_xml.set	namespace	`Sheet.setPrintOptionsXml` belongs under `Sheet.ooxml`
+native	print_options_xml.set	xml	`Sheet.setPrintOptionsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	range_xf_index.set	name	`Sheet.setRangeXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+native	range_xf_index.set	namespace	`Sheet.setRangeXfIndex` belongs under `Sheet.ooxml`
+native	range_xf_index.set	xfIndex	`Sheet.setRangeXfIndex` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+native	row_style.clear	namespace	`Sheet.clearRowStyle` belongs under `Sheet.ooxml`
+native	row_style.set	namespace	`Sheet.setRowStyle` belongs under `Sheet.ooxml`
+native	row_style.set	xfIndex	`Sheet.setRowStyle` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+native	sheet_pr_xml.get	namespace	`Sheet.getSheetPrXml` belongs under `Sheet.ooxml`
+native	sheet_pr_xml.get	xml	`Sheet.getSheetPrXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+native	sheet_pr_xml.set	namespace	`Sheet.setSheetPrXml` belongs under `Sheet.ooxml`
+native	sheet_pr_xml.set	xml	`Sheet.setSheetPrXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	auto_filter_xml.get	namespace	`Sheet.get_auto_filter_xml` belongs under `Sheet.ooxml`
+py	auto_filter_xml.get	xml	`Sheet.get_auto_filter_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	auto_filter_xml.set	namespace	`Sheet.set_auto_filter_xml` belongs under `Sheet.ooxml`
+py	auto_filter_xml.set	xml	`Sheet.set_auto_filter_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	border.add	namespace	`Workbook.add_border` belongs under `Workbook.ooxml`
+py	border.get	namespace	`Workbook.get_border` belongs under `Workbook.ooxml`
+py	borders.list	namespace	`Workbook.list_borders` belongs under `Workbook.ooxml`
+py	cell_style.get	namespace	`Workbook.get_cell_style` belongs under `Workbook.ooxml`
+py	cell_style.get	returns.xf_id	`Workbook.get_cell_style` is a direct member, but `CellStyle.xf_id` reaches it through `returns`; move it under `Workbook.ooxml`
+py	cell_style.remove	namespace	`Workbook.remove_cell_style` belongs under `Workbook.ooxml`
+py	cell_style.set	namespace	`Workbook.set_cell_style` belongs under `Workbook.ooxml`
+py	cell_style.set	record.xf_id	`Workbook.set_cell_style` is a direct member, but `CellStyle.xf_id` reaches it through `record`; move it under `Workbook.ooxml`
+py	cell_style_xf.add	name	`Workbook.add_cell_style_xf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+py	cell_style_xf.add	namespace	`Workbook.add_cell_style_xf` belongs under `Workbook.ooxml`
+py	cell_style_xf.add	record.xf_id	`Workbook.add_cell_style_xf` is a direct member, but `CellXfInput.xf_id` reaches it through `record`; move it under `Workbook.ooxml`
+py	cell_style_xf.get	cell_style_xf_index	`Workbook.get_cell_style_xf` is a direct member, but it takes `cell_style_xf_index`; move it under `Workbook.ooxml`
+py	cell_style_xf.get	name	`Workbook.get_cell_style_xf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+py	cell_style_xf.get	namespace	`Workbook.get_cell_style_xf` belongs under `Workbook.ooxml`
+py	cell_style_xf.get	returns.xf_id	`Workbook.get_cell_style_xf` is a direct member, but `CellXf.xf_id` reaches it through `returns`; move it under `Workbook.ooxml`
+py	cell_style_xfs.list	name	`Workbook.list_cell_style_xfs` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+py	cell_style_xfs.list	namespace	`Workbook.list_cell_style_xfs` belongs under `Workbook.ooxml`
+py	cell_style_xfs.list	returns.xf_id	`Workbook.list_cell_style_xfs` is a direct member, but `CellXf.xf_id` reaches it through `returns`; move it under `Workbook.ooxml`
+py	cell_styles.list	namespace	`Workbook.list_cell_styles` belongs under `Workbook.ooxml`
+py	cell_styles.list	returns.xf_id	`Workbook.list_cell_styles` is a direct member, but `CellStyle.xf_id` reaches it through `returns`; move it under `Workbook.ooxml`
+py	cell_xf.add	name	`Workbook.add_cell_xf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+py	cell_xf.add	namespace	`Workbook.add_cell_xf` belongs under `Workbook.ooxml`
+py	cell_xf.add	record.xf_id	`Workbook.add_cell_xf` is a direct member, but `CellXfInput.xf_id` reaches it through `record`; move it under `Workbook.ooxml`
+py	cell_xf.get	name	`Workbook.get_cell_xf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+py	cell_xf.get	namespace	`Workbook.get_cell_xf` belongs under `Workbook.ooxml`
+py	cell_xf.get	returns.xf_id	`Workbook.get_cell_xf` is a direct member, but `CellXf.xf_id` reaches it through `returns`; move it under `Workbook.ooxml`
+py	cell_xf.get	xf_index	`Workbook.get_cell_xf` is a direct member, but it takes `xf_index`; move it under `Workbook.ooxml`
+py	cell_xf_index.clear	name	`Sheet.clear_cell_xf_index` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+py	cell_xf_index.clear	namespace	`Sheet.clear_cell_xf_index` belongs under `Sheet.ooxml`
+py	cell_xf_index.get	name	`Sheet.get_cell_xf_index` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+py	cell_xf_index.get	namespace	`Sheet.get_cell_xf_index` belongs under `Sheet.ooxml`
+py	cell_xf_index.set	name	`Sheet.set_cell_xf_index` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+py	cell_xf_index.set	namespace	`Sheet.set_cell_xf_index` belongs under `Sheet.ooxml`
+py	cell_xf_index.set	xf_index	`Sheet.set_cell_xf_index` is a direct member, but it takes `xf_index`; move it under `Sheet.ooxml`
+py	cell_xfs.list	name	`Workbook.list_cell_xfs` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+py	cell_xfs.list	namespace	`Workbook.list_cell_xfs` belongs under `Workbook.ooxml`
+py	cell_xfs.list	returns.xf_id	`Workbook.list_cell_xfs` is a direct member, but `CellXf.xf_id` reaches it through `returns`; move it under `Workbook.ooxml`
+py	column_style.clear	namespace	`Sheet.clear_column_style` belongs under `Sheet.ooxml`
+py	column_style.set	namespace	`Sheet.set_column_style` belongs under `Sheet.ooxml`
+py	column_style.set	xf_index	`Sheet.set_column_style` is a direct member, but it takes `xf_index`; move it under `Sheet.ooxml`
+py	dxf.add	namespace	`Workbook.add_dxf` belongs under `Workbook.ooxml`
+py	dxf.get	namespace	`Workbook.get_dxf` belongs under `Workbook.ooxml`
+py	dxfs.list	namespace	`Workbook.list_dxfs` belongs under `Workbook.ooxml`
+py	fill.add	namespace	`Workbook.add_fill` belongs under `Workbook.ooxml`
+py	fill.get	namespace	`Workbook.get_fill` belongs under `Workbook.ooxml`
+py	fills.list	namespace	`Workbook.list_fills` belongs under `Workbook.ooxml`
+py	font.add	namespace	`Workbook.add_font` belongs under `Workbook.ooxml`
+py	font.get	namespace	`Workbook.get_font` belongs under `Workbook.ooxml`
+py	font.set	namespace	`Workbook.set_font` belongs under `Workbook.ooxml`
+py	fonts.list	namespace	`Workbook.list_fonts` belongs under `Workbook.ooxml`
+py	header_footer_xml.get	namespace	`Sheet.get_header_footer_xml` belongs under `Sheet.ooxml`
+py	header_footer_xml.get	xml	`Sheet.get_header_footer_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	header_footer_xml.set	namespace	`Sheet.set_header_footer_xml` belongs under `Sheet.ooxml`
+py	header_footer_xml.set	xml	`Sheet.set_header_footer_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	num_fmt.add	namespace	`Workbook.add_num_fmt` belongs under `Workbook.ooxml`
+py	num_fmt_string.get	namespace	`Workbook.get_num_fmt_string` belongs under `Workbook.ooxml`
+py	page_margins_xml.get	namespace	`Sheet.get_page_margins_xml` belongs under `Sheet.ooxml`
+py	page_margins_xml.get	xml	`Sheet.get_page_margins_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	page_margins_xml.set	namespace	`Sheet.set_page_margins_xml` belongs under `Sheet.ooxml`
+py	page_margins_xml.set	xml	`Sheet.set_page_margins_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	page_setup_xml.get	namespace	`Sheet.get_page_setup_xml` belongs under `Sheet.ooxml`
+py	page_setup_xml.get	xml	`Sheet.get_page_setup_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	page_setup_xml.set	namespace	`Sheet.set_page_setup_xml` belongs under `Sheet.ooxml`
+py	page_setup_xml.set	xml	`Sheet.set_page_setup_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	passthrough.get	namespace	`Workbook.get_passthrough` belongs under `Workbook.ooxml`
+py	passthroughs.list	namespace	`Workbook.list_passthroughs` belongs under `Workbook.ooxml`
+py	print_options_xml.get	namespace	`Sheet.get_print_options_xml` belongs under `Sheet.ooxml`
+py	print_options_xml.get	xml	`Sheet.get_print_options_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	print_options_xml.set	namespace	`Sheet.set_print_options_xml` belongs under `Sheet.ooxml`
+py	print_options_xml.set	xml	`Sheet.set_print_options_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	range_xf_index.set	name	`Sheet.set_range_xf_index` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+py	range_xf_index.set	namespace	`Sheet.set_range_xf_index` belongs under `Sheet.ooxml`
+py	range_xf_index.set	xf_index	`Sheet.set_range_xf_index` is a direct member, but it takes `xf_index`; move it under `Sheet.ooxml`
+py	row_style.clear	namespace	`Sheet.clear_row_style` belongs under `Sheet.ooxml`
+py	row_style.set	namespace	`Sheet.set_row_style` belongs under `Sheet.ooxml`
+py	row_style.set	xf_index	`Sheet.set_row_style` is a direct member, but it takes `xf_index`; move it under `Sheet.ooxml`
+py	sheet_pr_xml.get	namespace	`Sheet.get_sheet_pr_xml` belongs under `Sheet.ooxml`
+py	sheet_pr_xml.get	xml	`Sheet.get_sheet_pr_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+py	sheet_pr_xml.set	namespace	`Sheet.set_sheet_pr_xml` belongs under `Sheet.ooxml`
+py	sheet_pr_xml.set	xml	`Sheet.set_sheet_pr_xml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	auto_filter_xml.get	namespace	`Sheet.getAutoFilterXml` belongs under `Sheet.ooxml`
+wasm	auto_filter_xml.get	xml	`Sheet.getAutoFilterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	auto_filter_xml.set	namespace	`Sheet.setAutoFilterXml` belongs under `Sheet.ooxml`
+wasm	auto_filter_xml.set	xml	`Sheet.setAutoFilterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	border.add	namespace	`Workbook.addBorder` belongs under `Workbook.ooxml`
+wasm	border.get	namespace	`Workbook.getBorder` belongs under `Workbook.ooxml`
+wasm	borders.list	namespace	`Workbook.listBorders` belongs under `Workbook.ooxml`
+wasm	cell_style.get	namespace	`Workbook.getCellStyle` belongs under `Workbook.ooxml`
+wasm	cell_style.get	returns.xfId	`Workbook.getCellStyle` is a direct member, but `CellStyle.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+wasm	cell_style.remove	namespace	`Workbook.removeCellStyle` belongs under `Workbook.ooxml`
+wasm	cell_style.set	namespace	`Workbook.setCellStyle` belongs under `Workbook.ooxml`
+wasm	cell_style.set	record.xfId	`Workbook.setCellStyle` is a direct member, but `CellStyle.xfId` reaches it through `record`; move it under `Workbook.ooxml`
+wasm	cell_style_xf.add	name	`Workbook.addCellStyleXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+wasm	cell_style_xf.add	namespace	`Workbook.addCellStyleXf` belongs under `Workbook.ooxml`
+wasm	cell_style_xf.add	record.xfId	`Workbook.addCellStyleXf` is a direct member, but `CellXfInput.xfId` reaches it through `record`; move it under `Workbook.ooxml`
+wasm	cell_style_xf.get	cellStyleXfIndex	`Workbook.getCellStyleXf` is a direct member, but it takes `cellStyleXfIndex`; move it under `Workbook.ooxml`
+wasm	cell_style_xf.get	name	`Workbook.getCellStyleXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+wasm	cell_style_xf.get	namespace	`Workbook.getCellStyleXf` belongs under `Workbook.ooxml`
+wasm	cell_style_xf.get	returns.xfId	`Workbook.getCellStyleXf` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+wasm	cell_style_xfs.list	name	`Workbook.listCellStyleXfs` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+wasm	cell_style_xfs.list	namespace	`Workbook.listCellStyleXfs` belongs under `Workbook.ooxml`
+wasm	cell_style_xfs.list	returns.xfId	`Workbook.listCellStyleXfs` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+wasm	cell_styles.list	namespace	`Workbook.listCellStyles` belongs under `Workbook.ooxml`
+wasm	cell_styles.list	returns.xfId	`Workbook.listCellStyles` is a direct member, but `CellStyle.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+wasm	cell_xf.add	name	`Workbook.addCellXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+wasm	cell_xf.add	namespace	`Workbook.addCellXf` belongs under `Workbook.ooxml`
+wasm	cell_xf.add	record.xfId	`Workbook.addCellXf` is a direct member, but `CellXfInput.xfId` reaches it through `record`; move it under `Workbook.ooxml`
+wasm	cell_xf.get	name	`Workbook.getCellXf` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+wasm	cell_xf.get	namespace	`Workbook.getCellXf` belongs under `Workbook.ooxml`
+wasm	cell_xf.get	returns.xfId	`Workbook.getCellXf` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+wasm	cell_xf.get	xfIndex	`Workbook.getCellXf` is a direct member, but it takes `xfIndex`; move it under `Workbook.ooxml`
+wasm	cell_xf_index.clear	name	`Sheet.clearCellXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+wasm	cell_xf_index.clear	namespace	`Sheet.clearCellXfIndex` belongs under `Sheet.ooxml`
+wasm	cell_xf_index.get	name	`Sheet.getCellXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+wasm	cell_xf_index.get	namespace	`Sheet.getCellXfIndex` belongs under `Sheet.ooxml`
+wasm	cell_xf_index.set	name	`Sheet.setCellXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+wasm	cell_xf_index.set	namespace	`Sheet.setCellXfIndex` belongs under `Sheet.ooxml`
+wasm	cell_xf_index.set	xfIndex	`Sheet.setCellXfIndex` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+wasm	cell_xfs.list	name	`Workbook.listCellXfs` is a direct member, but its name addresses an XF record; move it under `Workbook.ooxml`
+wasm	cell_xfs.list	namespace	`Workbook.listCellXfs` belongs under `Workbook.ooxml`
+wasm	cell_xfs.list	returns.xfId	`Workbook.listCellXfs` is a direct member, but `CellXf.xfId` reaches it through `returns`; move it under `Workbook.ooxml`
+wasm	column_style.clear	namespace	`Sheet.clearColumnStyle` belongs under `Sheet.ooxml`
+wasm	column_style.set	namespace	`Sheet.setColumnStyle` belongs under `Sheet.ooxml`
+wasm	column_style.set	xfIndex	`Sheet.setColumnStyle` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+wasm	dxf.add	namespace	`Workbook.addDxf` belongs under `Workbook.ooxml`
+wasm	dxf.get	namespace	`Workbook.getDxf` belongs under `Workbook.ooxml`
+wasm	dxfs.list	namespace	`Workbook.listDxfs` belongs under `Workbook.ooxml`
+wasm	fill.add	namespace	`Workbook.addFill` belongs under `Workbook.ooxml`
+wasm	fill.get	namespace	`Workbook.getFill` belongs under `Workbook.ooxml`
+wasm	fills.list	namespace	`Workbook.listFills` belongs under `Workbook.ooxml`
+wasm	font.add	namespace	`Workbook.addFont` belongs under `Workbook.ooxml`
+wasm	font.get	namespace	`Workbook.getFont` belongs under `Workbook.ooxml`
+wasm	font.set	namespace	`Workbook.setFont` belongs under `Workbook.ooxml`
+wasm	fonts.list	namespace	`Workbook.listFonts` belongs under `Workbook.ooxml`
+wasm	header_footer_xml.get	namespace	`Sheet.getHeaderFooterXml` belongs under `Sheet.ooxml`
+wasm	header_footer_xml.get	xml	`Sheet.getHeaderFooterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	header_footer_xml.set	namespace	`Sheet.setHeaderFooterXml` belongs under `Sheet.ooxml`
+wasm	header_footer_xml.set	xml	`Sheet.setHeaderFooterXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	num_fmt.add	namespace	`Workbook.addNumFmt` belongs under `Workbook.ooxml`
+wasm	num_fmt_string.get	namespace	`Workbook.getNumFmtString` belongs under `Workbook.ooxml`
+wasm	page_margins_xml.get	namespace	`Sheet.getPageMarginsXml` belongs under `Sheet.ooxml`
+wasm	page_margins_xml.get	xml	`Sheet.getPageMarginsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	page_margins_xml.set	namespace	`Sheet.setPageMarginsXml` belongs under `Sheet.ooxml`
+wasm	page_margins_xml.set	xml	`Sheet.setPageMarginsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	page_setup_xml.get	namespace	`Sheet.getPageSetupXml` belongs under `Sheet.ooxml`
+wasm	page_setup_xml.get	xml	`Sheet.getPageSetupXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	page_setup_xml.set	namespace	`Sheet.setPageSetupXml` belongs under `Sheet.ooxml`
+wasm	page_setup_xml.set	xml	`Sheet.setPageSetupXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	passthrough.get	namespace	`Workbook.getPassthrough` belongs under `Workbook.ooxml`
+wasm	passthroughs.list	namespace	`Workbook.listPassthroughs` belongs under `Workbook.ooxml`
+wasm	print_options_xml.get	namespace	`Sheet.getPrintOptionsXml` belongs under `Sheet.ooxml`
+wasm	print_options_xml.get	xml	`Sheet.getPrintOptionsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	print_options_xml.set	namespace	`Sheet.setPrintOptionsXml` belongs under `Sheet.ooxml`
+wasm	print_options_xml.set	xml	`Sheet.setPrintOptionsXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	range_xf_index.set	name	`Sheet.setRangeXfIndex` is a direct member, but its name addresses an XF record; move it under `Sheet.ooxml`
+wasm	range_xf_index.set	namespace	`Sheet.setRangeXfIndex` belongs under `Sheet.ooxml`
+wasm	range_xf_index.set	xfIndex	`Sheet.setRangeXfIndex` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+wasm	row_style.clear	namespace	`Sheet.clearRowStyle` belongs under `Sheet.ooxml`
+wasm	row_style.set	namespace	`Sheet.setRowStyle` belongs under `Sheet.ooxml`
+wasm	row_style.set	xfIndex	`Sheet.setRowStyle` is a direct member, but it takes `xfIndex`; move it under `Sheet.ooxml`
+wasm	sheet_pr_xml.get	namespace	`Sheet.getSheetPrXml` belongs under `Sheet.ooxml`
+wasm	sheet_pr_xml.get	xml	`Sheet.getSheetPrXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
+wasm	sheet_pr_xml.set	namespace	`Sheet.setSheetPrXml` belongs under `Sheet.ooxml`
+wasm	sheet_pr_xml.set	xml	`Sheet.setSheetPrXml` is a direct member, but it reads or writes an XML fragment; move it under `Sheet.ooxml`
