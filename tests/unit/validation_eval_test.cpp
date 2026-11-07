@@ -618,6 +618,33 @@ TEST(ValidationEval, WholeRejectsFractionAndAcceptsLargeBound) {
   EXPECT_TRUE(f.Check(Value::number(1e10)).valid);
 }
 
+// A range list compares a proposed number by its exact double, past the 15 digits and the exponent
+// range a typed literal keeps.
+TEST(ValidationEval, RangeListMatchesProposedNumberExactly) {
+  Fixture f;
+  const double seventeen_digits = 0.1 + 0.2;
+  f.wb.set_cell_value(f.sheet_index, 0, 9, Value::number(seventeen_digits));
+  f.wb.set_cell_value(f.sheet_index, 1, 9, Value::number(1.5e308));
+  f.wb.set_cell_value(f.sheet_index, 2, 9, Value::number(0.5));
+  f.AddRule(Ty::kList, Op::kNone, false, "$J$1:$J$3");
+  EXPECT_TRUE(f.Check(Value::number(seventeen_digits)).valid);
+  EXPECT_FALSE(f.Check(Value::number(0.3)).valid);
+  EXPECT_TRUE(f.Check(Value::number(1.5e308)).valid);
+  EXPECT_TRUE(f.Check(Value::number(0.5)).valid);
+  EXPECT_FALSE(f.Check(Text("0.5")).valid);
+  EXPECT_FALSE(f.Check(Value::boolean(true)).valid);
+}
+
+// List text is compared literally: `*`, `?` and `~` in the proposed value are not wildcards.
+TEST(ValidationEval, RangeListTreatsWildcardCharactersLiterally) {
+  Fixture f;
+  f.wb.set_cell_text(f.sheet_index, 0, 9, "a*c");
+  f.AddRule(Ty::kList, Op::kNone, false, "$J$1");
+  EXPECT_TRUE(f.Check(Text("A*C")).valid);
+  EXPECT_FALSE(f.Check(Text("a*")).valid);
+  EXPECT_FALSE(f.Check(Text("a?c")).valid);
+}
+
 // Relative references in a rule are shifted from the sqref's top-left cell to the checked cell.
 TEST(ValidationEval, RelativeFormulaShiftsFromSqrefAnchor) {
   Fixture f;

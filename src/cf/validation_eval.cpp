@@ -15,13 +15,13 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/name_env.h"
 #include "eval/number_parse.h"
 #include "eval/text_format/display_text.h"
 #include "sheet.h"
 #include "style_resolve.h"
 #include "styles.h"
 #include "utils/arena.h"
-#include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
@@ -81,13 +81,13 @@ struct Evaluator {
   Evaluator(const Workbook& w, const Sheet& s, CellAddress anc, CellAddress tgt, const eval::FunctionRegistry* reg)
       : wb(w), sheet(s), anchor(anc), target(tgt), eval_ctx(w, s, state), registry(reg) {}
 
-  Value run(const std::string& source) {
+  Value run(const std::string& source, const eval::EvalContext* scope = nullptr) {
     cf::CFEvalContext ctx;
     ctx.anchor = anchor;
     ctx.target = target;
     ctx.arena = &arena;
     ctx.registry = registry;
-    ctx.eval_ctx = &eval_ctx;
+    ctx.eval_ctx = scope != nullptr ? scope : &eval_ctx;
     return cf::helpers::parse_shift_evaluate(source, ctx);
   }
 
@@ -238,33 +238,27 @@ bool inline_list_matches(const std::vector<std::string>& items, const std::strin
   return false;
 }
 
-/// Renders `proposed` as a formula literal; nullopt for kinds a list cannot contain.
-std::optional<std::string> literal_of(const Value& proposed) {
-  if (proposed.is_number()) {
-    char buf[40];
-    format_general(buf, sizeof(buf), proposed.as_number(), 17);
-    return std::string(buf);
+/// The MATCH lookup value for `proposed`, or nullopt for kinds a list cannot contain. Text gets
+/// `*`, `?` and `~` escaped, since MATCH reads them as wildcards and a list entry is literal;
+/// `storage` holds the escaped bytes.
+std::optional<Value> match_operand_of(const Value& proposed, std::string* storage) {
+  if (proposed.is_number() || proposed.is_boolean()) {
+    return proposed;
   }
-  if (proposed.is_boolean()) {
-    return std::string(proposed.as_boolean() ? "TRUE" : "FALSE");
+  if (!proposed.is_text()) {
+    return std::nullopt;
   }
-  if (proposed.is_text()) {
-    // MATCH reads `*`, `?` and `~` in text as wildcards; a literal list entry must not.
-    std::string lit = "\"";
-    for (const char c : proposed.as_text()) {
-      if (c == '*' || c == '?' || c == '~') {
-        lit.push_back('~');
-      }
-      lit.push_back(c);
-      if (c == '"') {
-        lit.push_back('"');
-      }
+  for (const char c : proposed.as_text()) {
+    if (c == '*' || c == '?' || c == '~') {
+      storage->push_back('~');
     }
-    lit.push_back('"');
-    return lit;
+    storage->push_back(c);
   }
-  return std::nullopt;
+  return Value::text(*storage);
 }
+
+// Name the proposed list value is bound to while its MATCH runs.
+constexpr char kProposedName[] = "_fm_proposed";
 
 bool check_list(Evaluator& ev, const DataValidation& dv, const Value& proposed, std::uint32_t row, std::uint32_t col) {
   if (is_inline_list(dv.formula1)) {
@@ -277,11 +271,16 @@ bool check_list(Evaluator& ev, const DataValidation& dv, const Value& proposed, 
   // A range source is tested with an exact MATCH: a spilled range read at the target cell
   // would be blocked by the cells below it, and MATCH gives Excel's case-insensitive,
   // type-strict equality.
-  const std::optional<std::string> lit = literal_of(proposed);
-  if (!lit.has_value()) {
+  std::string text_storage;
+  const std::optional<Value> operand = match_operand_of(proposed, &text_storage);
+  if (!operand.has_value()) {
     return false;
   }
-  const Value found = ev.scalar("ISNUMBER(MATCH(" + *lit + "," + dv.formula1 + ",0))");
+  // The value is bound to a name rather than written as a literal, which would keep only 15
+  // digits and Excel's typed exponent range.
+  const eval::NameEnv scope = eval::NameEnv().extend(kProposedName, *operand, ev.arena);
+  const eval::EvalContext scoped_ctx = ev.eval_ctx.with_name_env(&scope);
+  const Value found = ev.run(std::string("ISNUMBER(MATCH(") + kProposedName + "," + dv.formula1 + ",0))", &scoped_ctx);
   return found.is_boolean() && found.as_boolean();
 }
 
