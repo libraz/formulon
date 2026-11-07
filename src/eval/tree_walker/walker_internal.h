@@ -40,11 +40,19 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
 Shaped read_whole_axis(const parser::Reference& lhs, const parser::Reference& rhs, Arena& arena,
                        const FunctionRegistry& registry, const EvalContext& ctx);
 
+// How a bare range standing as the formula is evaluated: whether a range
+// holding the anchor settles as a cycle, and whether a whole-axis rectangle may
+// come back as a `TailArray`.
+struct BareRangeSpillOptions {
+  bool settle_circularity = false;
+  bool allow_tail = false;
+};
+
 // Evaluates a bare range standing as the entire formula, weighing it against
 // the anchor's spill footprint. `*footprint_probed` is set when it was measured.
 Shaped evaluate_bare_range_spill(const parser::Reference& top_left, const parser::Reference& bottom_right, Arena& arena,
-                                 const FunctionRegistry& registry, const EvalContext& ctx, bool settle_circularity,
-                                 bool allow_tail, bool* footprint_probed);
+                                 const FunctionRegistry& registry, const EvalContext& ctx,
+                                 const BareRangeSpillOptions& options, bool* footprint_probed);
 
 // Evaluates the space-as-intersection operator; `spill_position` marks the
 // whole-formula position.

@@ -122,7 +122,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   //      inner levels; the optional grand-total block holds "Grand Total"
   //      on the outermost level only and is blank on inner levels.
   //   2. Optional header row: cells [0..K-1] hold the row_fields header
-  //      labels (or "Field N" synth); each physical slot holds the values
+  //      labels (or generated labels); each physical slot holds the values
   //      header labels (V cells) tiled per slot; the optional grand-
   //      total block holds the same V values-header tile.
   //   3. Optional TOP grand-total row (when row_total_depth < 0): "Grand
@@ -134,9 +134,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   //      shape as TOP.
   //
   // Reference: Mac Excel ja-JP 16.109 layouts captured via xlwings-backed
-  // oracle goldens. Known divergence from Mac Excel's localized surface:
-  // synthesized field/value labels still use English defaults
-  // ("Field N" / "Value N") rather than ja-JP labels.
+  // oracle goldens. Generated field/value labels follow the profile's locale.
 
   // -- arg 3: aggregator ----------------------------------------------------
   Aggregator agg_arg;
@@ -442,14 +440,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // field_headers == 0 leaves these blank (output_emits_header is false).
   std::vector<Value> values_header_labels(val_cols, placeholder_cell());
   if (layout.output_emits_header) {
-    if (field_headers == 3) {
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        values_header_labels[v] = values->cells[v];
-      }
-    } else {
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        values_header_labels[v] = Value::text(arena.intern(value_label(ctx, v + 1U)));
-      }
+    for (std::uint32_t v = 0; v < val_cols; ++v) {
+      values_header_labels[v] = header_label(arena, ctx, field_headers, HeaderField::kValue, values->cells, v);
     }
   }
 
@@ -496,14 +488,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   auto render_header_row = [&]() {
     std::vector<Value> row(out_cols, placeholder_cell());
     // Row-fields header labels (cells [0..K-1]).
-    if (field_headers == 3) {
-      for (std::uint32_t c = 0; c < key_cols; ++c) {
-        row[c] = row_fields->cells[c];
-      }
-    } else {
-      for (std::uint32_t c = 0; c < key_cols; ++c) {
-        row[c] = Value::text(arena.intern(row_field_label(ctx, c + 1U)));
-      }
+    for (std::uint32_t c = 0; c < key_cols; ++c) {
+      row[c] = header_label(arena, ctx, field_headers, HeaderField::kRow, row_fields->cells, c);
     }
     // Values-header labels tiled V cells per physical column slot. Subtotal
     // blocks carry the same values-header tile as their leaf siblings.
@@ -527,8 +513,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     for (std::uint32_t level = 0; level < col_levels; ++level) {
       const std::uint32_t dst = body_block_start + level * val_cols;
       if (dst < out_cols) {
-        row[dst] = field_headers == 3 ? col_fields->cells[level]
-                                      : Value::text(arena.intern(column_field_label(ctx, level + 1U)));
+        row[dst] = header_label(arena, ctx, field_headers, HeaderField::kColumn, col_fields->cells, level);
       }
     }
     return row;
@@ -685,8 +670,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // always emitted -- see the comment on merged_single_col_layout above.
     emit_row(&out_rows, render_merged_header_row());
   } else {
-    // Multi-column layout: always emit L col-axis label rows; emit a
-    // separate header row when output_emits_header is true.
+    // Multi-column layout: when output_emits_header, the column-field header
+    // row comes first and the row/value header row follows the L col-axis
+    // label rows.
     if (layout.output_emits_header) {
       emit_row(&out_rows, render_col_fields_header_row());
     }

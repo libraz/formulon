@@ -40,6 +40,7 @@
 #include <string_view>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/locale_text.h"
 #include "excel_locale.h"
 #include "utils/strings.h"
 #include "utils/subnormal_flush.h"
@@ -79,12 +80,7 @@ inline LogicalCoerce logical_coerce(const Value& v, bool* out_bool, ErrorCode* o
         return LogicalCoerce::Skip;
       }
       const LocaleFacts& facts = locale_facts(current_eval_profile());
-      if (strings::case_insensitive_eq(trimmed, facts.true_name)) {
-        *out_bool = true;
-        return LogicalCoerce::HasValue;
-      }
-      if (strings::case_insensitive_eq(trimmed, facts.false_name)) {
-        *out_bool = false;
+      if (parse_locale_bool_text(trimmed, facts, out_bool)) {
         return LogicalCoerce::HasValue;
       }
       if (facts.logical_skips_english_bool_text &&

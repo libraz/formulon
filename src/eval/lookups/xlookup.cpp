@@ -167,9 +167,6 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
       std::optional<CollateQuery> exact_text;
       if (!prepared.has_value() && lookup_value.is_text()) {
         exact_text.emplace(lookup_value.as_text(), profile, CollationStrength::kDynamic);
-        if (!exact_text->keyed()) {
-          exact_text.reset();
-        }
       }
       for (std::size_t k = 0; k < n; ++k) {
         const std::size_t i = idx_at(k);

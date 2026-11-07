@@ -21,6 +21,7 @@
 #ifndef FORMULON_EVAL_EVAL_CONTEXT_H_
 #define FORMULON_EVAL_EVAL_CONTEXT_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -84,6 +85,9 @@ struct WholeAxisExtent {
   constexpr bool any() const noexcept { return rows != 0U || cols != 0U; }
 };
 
+/// What `Workbook::sheet_index_by_name` returns when no sheet matches.
+inline constexpr std::size_t kNoSheetIndex = static_cast<std::size_t>(-1);
+
 /// A caller-owned temporary value that shadows one worksheet cell while a
 /// formula is evaluated. The pointed-to value and this descriptor must outlive
 /// every evaluation that observes the context. This is intentionally a read
@@ -101,6 +105,14 @@ struct CellValueOverlay {
 
   const Value* lookup(const Sheet& target_sheet, std::uint32_t target_row, std::uint32_t target_col) const noexcept {
     return sheet == &target_sheet && row == target_row && col == target_col ? value : nullptr;
+  }
+
+  /// True when the overlay carries a value and its cell lies inside the
+  /// inclusive rectangle on `target_sheet`.
+  bool within(const Sheet& target_sheet, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+              std::uint32_t last_col) const noexcept {
+    return value != nullptr && sheet == &target_sheet && row >= first_row && row <= last_row && col >= first_col &&
+           col <= last_col;
   }
 };
 

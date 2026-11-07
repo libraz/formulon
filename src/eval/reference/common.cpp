@@ -1,8 +1,6 @@
 //
 // Shared bodies for the reference-family lazy impls. Hosts:
 //
-//   * Small helper `apply_offset` that the OFFSET and CHOOSE expanders share
-//     with the intersection resolver.
 //   * The rectangle-construction routines `resolve_indirect_reference`,
 //     `resolve_offset_base`, and `compute_offset_rect`. These touch both
 //     the INDIRECT and OFFSET pipelines (and are reached from the
@@ -39,6 +37,11 @@ namespace eval {
 
 namespace refs_internal {
 
+namespace {
+
+// Converts a signed offset plus a non-negative base (both measured in
+// row / column units) into a 0-based grid coordinate, returning `false`
+// if the result falls outside [0, max).
 bool apply_offset(std::uint32_t base, int offset, std::uint32_t max, std::uint32_t* out) {
   const long long sum = static_cast<long long>(base) + static_cast<long long>(offset);
   if (sum < 0 || sum >= static_cast<long long>(max)) {
@@ -47,6 +50,8 @@ bool apply_offset(std::uint32_t base, int offset, std::uint32_t max, std::uint32
   *out = static_cast<std::uint32_t>(sum);
   return true;
 }
+
+}  // namespace
 
 bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                 const EvalContext& ctx, IndirectReference* out, ErrorCode* out_err) {
@@ -168,16 +173,13 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
       return false;
     }
     // Sheet agreement precedes the whole-axis branches; mirrors `expand_range`.
-    if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
-      if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
-        *out_err = ErrorCode::Ref;
-        return false;
-      }
-      out->sheet = lhs.sheet;
-    } else if (!lhs.sheet.empty()) {
-      out->sheet = lhs.sheet;
-    } else if (!rhs.sheet.empty()) {
-      out->sheet = rhs.sheet;
+    const auto merged = merge_sheet_qualifiers(lhs.sheet, rhs.sheet);
+    if (!merged) {
+      *out_err = merged.error();
+      return false;
+    }
+    if (!merged.value().empty()) {
+      out->sheet = merged.value();
     }
     // Multi-column (`A:C`) / multi-row (`1:3`) whole references: the
     // parser produces a RangeOp over two whole-column / whole-row Refs.

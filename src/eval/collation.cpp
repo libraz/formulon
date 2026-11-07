@@ -1046,18 +1046,8 @@ int collate_key_compare(std::string_view key_a, std::string_view key_b) noexcept
 }
 
 bool collate_prefix_equal(std::string_view cell, std::string_view criterion, ExcelProfile profile) {
-  std::size_t want = 0;
-  for (std::size_t i = 0; i < criterion.size(); ++want) {
-    std::size_t n = 0;
-    decode_utf8_step(criterion, i, &n);
-    i += n;
-  }
-  std::size_t end = 0;
-  for (std::size_t k = 0; k < want && end < cell.size(); ++k) {
-    std::size_t n = 0;
-    decode_utf8_step(cell, end, &n);
-    end += n;
-  }
+  const std::uint32_t want = text_index_length(criterion, TextIndexUnit::kCodePoints);
+  const std::size_t end = text_index_to_byte_offset(cell, want, TextIndexUnit::kCodePoints);
   return collate(cell.substr(0, end), criterion, profile, CollationStrength::kCompare) == 0;
 }
 

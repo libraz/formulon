@@ -1,7 +1,7 @@
 //
 // A1 and R1C1 textual reference parsers declared in `eval/a1_parse.h`:
-// `parse_a1_ref`, `parse_r1c1_ref` and `column_letters`, with the sheet
-// qualifier and endpoint lexers they share.
+// `parse_a1_ref` and `parse_r1c1_ref`, with the sheet qualifier and endpoint
+// lexers they share.
 
 #include "eval/a1_parse.h"
 
@@ -15,6 +15,7 @@
 #include "parser/parser_detail.h"
 #include "sheet.h"
 #include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -34,7 +35,7 @@ std::uint32_t parse_column_letters(std::string_view text, std::size_t* i) {
     col = col * 26u + static_cast<std::uint32_t>(ch - 'A' + 1);
     ++(*i);
     ++letters_seen;
-    if (letters_seen > 3 || col > Sheet::kMaxCols) {
+    if (letters_seen > a1::kMaxColumnLetters || col > Sheet::kMaxCols) {
       return 0;
     }
   }

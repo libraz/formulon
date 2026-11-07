@@ -290,28 +290,10 @@ std::string normalize_locale_numeric(std::string_view raw, int* percent_count) {
     if (ascii == '\0' && fold_fullwidth) {
       if (const char digit = fullwidth_digit_to_ascii(cp); digit != '\0') {
         ascii = digit;
-      } else if (cp >= 0xFF21u && cp <= 0xFF3Au) {
-        ascii = static_cast<char>('A' + (cp - 0xFF21u));
-      } else if (cp >= 0xFF41u && cp <= 0xFF5Au) {
-        ascii = static_cast<char>('a' + (cp - 0xFF41u));
-      } else if (cp == 0xFF0Eu) {
-        ascii = '.';
-      } else if (cp == 0xFF0Cu) {
-        ascii = ',';
-      } else if (cp == 0xFF0Fu) {
-        ascii = '/';
-      } else if (cp == 0xFF05u) {
-        ascii = '%';
-      } else if (cp == 0xFF0Bu) {
-        ascii = '+';
-      } else if (cp == 0xFF0Du) {
-        ascii = '-';
-      } else if (cp == 0xFF08u) {
-        ascii = '(';
-      } else if (cp == 0xFF09u) {
-        ascii = ')';
-      } else if (cp == 0xFF04u) {
-        ascii = '$';
+      } else if ((cp >= 0xFF21u && cp <= 0xFF3Au) || (cp >= 0xFF41u && cp <= 0xFF5Au) || cp == 0xFF0Eu ||
+                 cp == 0xFF0Cu || cp == 0xFF0Fu || cp == 0xFF05u || cp == 0xFF0Bu || cp == 0xFF0Du || cp == 0xFF08u ||
+                 cp == 0xFF09u || cp == 0xFF04u) {
+        ascii = fullwidth_ascii_to_ascii(cp);
       } else if (cp == 0x3000u) {
         ascii = ' ';
       }

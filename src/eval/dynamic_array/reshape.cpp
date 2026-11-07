@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/builtin_names.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
@@ -123,7 +124,7 @@ Value eval_stack(const parser::AstNode& call, Arena& arena, const FunctionRegist
   // Excel's documented HSTACK / VSTACK accept up to 254 array references;
   // reject 0-arg explicitly (no array context to spill into) and use 254
   // as the safety ceiling.
-  if (arity < 1U || arity > 254U) {
+  if (arity < 1U || arity > kMaxCallArguments - 1U) {
     return Value::error(ErrorCode::Value);
   }
 
@@ -195,9 +196,9 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Explicit empty text remains text. If `pad_with` is supplied as an array
   // (range / range literal), Excel takes the scalar at cell 0 and pads with
   // that. Errors at the argument level propagate.
-  Value pad = Value::blank();
+  Value pad_cell = Value::blank();
   Value pad_err = Value::blank();
-  if (!dynamic_array::resolve_pad_arg(arity == 4U ? &call.as_call_arg(3) : nullptr, arena, registry, ctx, pad,
+  if (!dynamic_array::resolve_pad_arg(arity == 4U ? &call.as_call_arg(3) : nullptr, arena, registry, ctx, pad_cell,
                                       pad_err)) {
     return pad_err;
   }
@@ -207,10 +208,6 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  // Generated pad cells get the direct-grid zero projection, while a source
-  // Blank copied from the input array remains untouched.
-  const Value pad_cell = pad.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
-                                        : pad.promote_reference_blank_to_value_array();
   for (std::uint32_t r = 0; r < out_rows; ++r) {
     for (std::uint32_t c = 0; c < out_cols; ++c) {
       const std::size_t dst = static_cast<std::size_t>(r) * out_cols + c;

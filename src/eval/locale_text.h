@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include "excel_locale.h"
 #include "value.h"
 
 namespace formulon {
@@ -21,6 +22,10 @@ char locale_decimal_separator() noexcept;
 
 /// Locale name of a boolean (`TRUE` / `WAHR` / `VRAI`).
 std::string_view locale_bool_text(bool value) noexcept;
+
+/// Recognises `text` as the locale TRUE / FALSE name of `facts`, ignoring ASCII
+/// letter case. On a match stores the value in `*out_bool` and returns true.
+bool parse_locale_bool_text(std::string_view text, const LocaleFacts& facts, bool* out_bool) noexcept;
 
 /// Locale name of an error value (`#N/A` / `#NV`).
 std::string_view locale_error_text(ErrorCode code) noexcept;

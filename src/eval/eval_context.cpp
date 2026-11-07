@@ -131,16 +131,7 @@ const Sheet* resolve_ref_target(const Sheet* current_sheet, const Workbook* work
 // context's own sheet.
 Expected<std::string_view, ErrorCode> effective_range_sheet(const parser::Reference& lhs,
                                                             const parser::Reference& rhs) {
-  if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
-    if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
-      return ErrorCode::Ref;
-    }
-    return lhs.sheet;
-  }
-  if (!lhs.sheet.empty()) {
-    return lhs.sheet;
-  }
-  return rhs.sheet;
+  return merge_sheet_qualifiers(lhs.sheet, rhs.sheet);
 }
 
 }  // namespace
@@ -178,20 +169,11 @@ std::optional<Sheet::PopulatedExtent> EvalContext::populated_extent(const Sheet&
     return std::nullopt;
   }
   const CellValueOverlay* overlay = cell_value_overlay_;
-  const bool in_rect = overlay != nullptr && overlay->value != nullptr && overlay->sheet == &sheet &&
-                       overlay->row >= first_row && overlay->row <= last_row && overlay->col >= first_col &&
-                       overlay->col <= last_col;
+  const bool in_rect = overlay != nullptr && overlay->within(sheet, first_row, first_col, last_row, last_col);
   if (!in_rect || !overlay->value->is_blank()) {
     std::optional<Sheet::PopulatedExtent> extent = sheet.populated_extent(first_row, first_col, last_row, last_col);
     if (in_rect) {
-      if (!extent.has_value()) {
-        extent = Sheet::PopulatedExtent{overlay->row, overlay->col, overlay->row, overlay->col};
-      } else {
-        extent->first_row = std::min(extent->first_row, overlay->row);
-        extent->first_col = std::min(extent->first_col, overlay->col);
-        extent->last_row = std::max(extent->last_row, overlay->row);
-        extent->last_col = std::max(extent->last_col, overlay->col);
-      }
+      merge(&extent, Sheet::PopulatedExtent{overlay->row, overlay->col, overlay->row, overlay->col});
     }
     return extent;
   }
@@ -552,9 +534,7 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   target_sheet->read_range(r_min, r_max, c_min, c_max, arena, out, formula_indices);
   const std::uint32_t width = c_max - c_min + 1U;
   std::optional<std::size_t> overlay_index;
-  if (cell_value_overlay_ != nullptr && cell_value_overlay_->value != nullptr &&
-      cell_value_overlay_->sheet == target_sheet && cell_value_overlay_->row >= r_min &&
-      cell_value_overlay_->row <= r_max && cell_value_overlay_->col >= c_min && cell_value_overlay_->col <= c_max) {
+  if (cell_value_overlay_ != nullptr && cell_value_overlay_->within(*target_sheet, r_min, c_min, r_max, c_max)) {
     overlay_index = static_cast<std::size_t>(cell_value_overlay_->row - r_min) * width +
                     static_cast<std::size_t>(cell_value_overlay_->col - c_min);
     out[*overlay_index] = adopt_text_into(arena, *cell_value_overlay_->value);

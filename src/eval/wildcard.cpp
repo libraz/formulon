@@ -27,6 +27,25 @@ bool scan_has_wildcard(std::string_view rhs) {
   return false;
 }
 
+bool scan_has_invalid_wildcard_escape(std::string_view rhs) {
+  for (std::size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] != '~') {
+      continue;
+    }
+    // Trailing `~` with nothing after it is also malformed under the
+    // strict "tilde escapes only `*` or `?`" rule.
+    if (i + 1 >= rhs.size()) {
+      return true;
+    }
+    const char next = rhs[i + 1];
+    if (next != '*' && next != '?') {
+      return true;
+    }
+    ++i;  // Skip the well-formed escape pair.
+  }
+  return false;
+}
+
 std::string unescape_wildcard_literal(std::string_view pattern) {
   std::string out;
   out.reserve(pattern.size());
@@ -43,18 +62,10 @@ std::string unescape_wildcard_literal(std::string_view pattern) {
 
 namespace {
 
-// Core two-pointer wildcard matcher. When `prefix_match_ok` is false the
-// pattern must consume `text` exactly (SEARCH whole-string / criteria
-// equality semantics). When `prefix_match_ok` is true the match succeeds
-// as soon as the pattern is exhausted, even if `text` has unmatched bytes
-// remaining — used by `wildcard_find` to answer "does the pattern match a
-// prefix of this suffix?". When the match succeeds in prefix mode,
-// `*out_consumed` receives the number of `text` bytes the pattern
-// consumed.
-//
 // Character comparisons are ASCII case-insensitive to match Excel's
 // criteria semantics (e.g. `*blue` matches `BLUE`). Non-ASCII bytes are
 // compared byte-for-byte, consistent with `strings::case_insensitive_eq`.
+
 // UTF-8 continuation: returns the byte length of the code point that
 // starts at `text[i]`, capped at `text.size() - i`. A leading byte with
 // an invalid continuation pattern falls back to 1 byte (mirrors Excel's
@@ -99,9 +110,11 @@ TextPos advance_unit(std::string_view text, TextPos pos) {
   return {pos.ti + (bytes == 0 ? 1 : bytes), false};
 }
 
+}  // namespace
+
 // `?` matches one UTF-16 unit, so a supplementary-plane character takes `??`
 // and a literal never matches half of one.
-bool wildcard_match_impl(std::string_view pattern, std::string_view text) {
+bool wildcard_match(std::string_view pattern, std::string_view text) {
   std::size_t pi = 0;
   TextPos pos;
   std::size_t star_pi = std::string_view::npos;
@@ -158,12 +171,6 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text) {
     ++pi;
   }
   return pi == pattern.size();
-}
-
-}  // namespace
-
-bool wildcard_match(std::string_view pattern, std::string_view text) {
-  return wildcard_match_impl(pattern, text);
 }
 
 }  // namespace eval

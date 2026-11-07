@@ -146,7 +146,8 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
   parser::Reference bare_range_bottom{};
   if (spill_position && whole_axis_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
     sv = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
-                                   /*settle_circularity=*/true, /*allow_tail=*/true, &footprint_probed);
+                                   BareRangeSpillOptions{/*settle_circularity=*/true, /*allow_tail=*/true},
+                                   &footprint_probed);
   } else if (spill_position && bounded_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
     // Excel rewrites a bounded range spanning a full grid axis into the
     // whole-axis spelling on entry, so exactly this set has a twin above
@@ -154,7 +155,8 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
     const bool full_height = spans_all_rows(bare_range_top.row, bare_range_bottom.row);
     const bool full_width = spans_all_cols(bare_range_top.col, bare_range_bottom.col);
     sv = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
-                                   /*settle_circularity=*/full_height || full_width, /*allow_tail=*/true,
+                                   BareRangeSpillOptions{/*settle_circularity=*/full_height || full_width,
+                                                         /*allow_tail=*/true},
                                    &footprint_probed);
   } else if (spill_position && node.kind() == parser::NodeKind::IntersectOp) {
     // The intersect operator names a rectangle just as `:` does, so the

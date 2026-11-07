@@ -255,8 +255,10 @@ Shaped build_declared_rect(const parser::Reference& top_left, const parser::Refe
 // the footprint is admitted. `*footprint_probed` is set when the footprint was
 // measured here, so the caller does not measure it again.
 Shaped evaluate_bare_range_spill(const parser::Reference& top_left, const parser::Reference& bottom_right, Arena& arena,
-                                 const FunctionRegistry& registry, const EvalContext& ctx, bool settle_circularity,
-                                 bool allow_tail, bool* footprint_probed) {
+                                 const FunctionRegistry& registry, const EvalContext& ctx,
+                                 const BareRangeSpillOptions& options, bool* footprint_probed) {
+  const bool settle_circularity = options.settle_circularity;
+  const bool allow_tail = options.allow_tail;
   const Sheet* sheet = ctx.current_sheet();
   if (sheet == nullptr || !ctx.has_formula_cell()) {
     return build_declared_rect(top_left, bottom_right, arena, registry, ctx, allow_tail);
@@ -351,21 +353,17 @@ Value eval_intersect_op(const parser::AstNode& node, Arena& arena, const Functio
     return Value::error(ErrorCode::Null);
   }
   parser::Reference top_left{};
-  top_left.sheet = sheet;
-  top_left.row = r1;
-  top_left.col = c1;
+  parser::Reference bottom_right{};
+  set_rect_corner_refs(sheet, r1, c1, r2, c2, &top_left, &bottom_right);
   const bool full_height = spans_all_rows(r1, r2);
   const bool full_width = spans_all_cols(c1, c2);
   if ((r1 == r2 && c1 == c2) || (!spill_position && (full_height || full_width))) {
     return ctx.resolve_ref(top_left, arena, registry);
   }
-  parser::Reference bottom_right{};
-  bottom_right.sheet = sheet;
-  bottom_right.row = r2;
-  bottom_right.col = c2;
   if (spill_position) {
-    return evaluate_bare_range_spill(top_left, bottom_right, arena, registry, ctx, /*settle_circularity=*/false,
-                                     /*allow_tail=*/false, /*footprint_probed=*/nullptr)
+    return evaluate_bare_range_spill(top_left, bottom_right, arena, registry, ctx,
+                                     BareRangeSpillOptions{/*settle_circularity=*/false, /*allow_tail=*/false},
+                                     /*footprint_probed=*/nullptr)
         .value;
   }
   return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);

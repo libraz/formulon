@@ -65,15 +65,12 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
   std::vector<std::uint32_t> kept;
   kept.reserve(mask_n);
   for (std::uint32_t i = 0; i < mask_n; ++i) {
-    const Value& cell = include->cells[i];
-    if (cell.is_error()) {
-      return cell;
+    bool keep = false;
+    Value mask_err = Value::blank();
+    if (!dynamic_array::coerce_mask_cell(include->cells[i], &keep, &mask_err)) {
+      return mask_err;
     }
-    auto coerced = coerce_to_bool(cell);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    if (coerced.value()) {
+    if (keep) {
       kept.push_back(i);
     }
   }

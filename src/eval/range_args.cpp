@@ -410,12 +410,7 @@ bool expand_resolved_rect_cells(std::string_view sheet, std::uint32_t top, std::
                                 std::uint32_t* out_rows, std::uint32_t* out_cols) {
   parser::Reference lhs{};
   parser::Reference rhs{};
-  lhs.sheet = sheet;
-  lhs.row = top;
-  lhs.col = left;
-  rhs.sheet = sheet;
-  rhs.row = bottom;
-  rhs.col = right;
+  set_rect_corner_refs(sheet, top, left, bottom, right, &lhs, &rhs);
   std::uint32_t expanded_rows = 0;
   std::uint32_t expanded_cols = 0;
   if (!assign_expanded(ctx, lhs, rhs, arena, registry, out_cells, out_err_code, expanded_rows, expanded_cols)) {
@@ -499,12 +494,11 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
       (!full_col && !full_row &&
        (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
         (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
-  if (begin_idx != static_cast<std::size_t>(-1) && end_idx == static_cast<std::size_t>(-1)) {
+  if (begin_idx != kNoSheetIndex && end_idx == kNoSheetIndex) {
     *out_err = ErrorCode::Name;
     return false;
   }
-  if (begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
-      incompatible_whole_shape || corners_out_of_bounds) {
+  if (begin_idx == kNoSheetIndex || end_idx == kNoSheetIndex || incompatible_whole_shape || corners_out_of_bounds) {
     return false;
   }
   const std::size_t lo = std::min(begin_idx, end_idx);

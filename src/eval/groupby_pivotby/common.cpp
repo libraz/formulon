@@ -129,6 +129,22 @@ std::string value_label(const EvalContext& ctx, std::uint32_t n) {
   return numbered_label(locale_facts(ctx.excel_profile()).value_field_prefix, n);
 }
 
+Value header_label(Arena& arena, const EvalContext& ctx, int field_headers, HeaderField kind,
+                   const Value* input_header_cells, std::uint32_t index) {
+  if (field_headers == 3) {
+    return input_header_cells[index];
+  }
+  switch (kind) {
+    case HeaderField::kRow:
+      return Value::text(arena.intern(row_field_label(ctx, index + 1U)));
+    case HeaderField::kColumn:
+      return Value::text(arena.intern(column_field_label(ctx, index + 1U)));
+    case HeaderField::kValue:
+      break;
+  }
+  return Value::text(arena.intern(value_label(ctx, index + 1U)));
+}
+
 std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
   return locale_facts(ctx.excel_profile()).hierarchy_grand_total;
 }
@@ -425,17 +441,11 @@ bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionR
     return false;
   }
   for (std::uint32_t i = 0; i < data_row_count; ++i) {
-    const Value& cell = mask->cells[i];
-    if (cell.is_error()) {
-      *out_err = cell;
+    bool keep = false;
+    if (!dynamic_array::coerce_mask_cell(mask->cells[i], &keep, out_err)) {
       return false;
     }
-    auto coerced = coerce_to_bool(cell);
-    if (!coerced) {
-      *out_err = Value::error(coerced.error());
-      return false;
-    }
-    (*include_row)[i] = coerced.value();
+    (*include_row)[i] = keep;
   }
   return true;
 }

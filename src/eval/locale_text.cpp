@@ -7,6 +7,7 @@
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
 #include "utils/double_format.h"
+#include "utils/strings.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -45,6 +46,18 @@ std::string locale_number_text(double value) {
 std::string_view locale_bool_text(bool value) noexcept {
   const LocaleFacts& facts = locale_facts(current_eval_profile());
   return value ? facts.true_name : facts.false_name;
+}
+
+bool parse_locale_bool_text(std::string_view text, const LocaleFacts& facts, bool* out_bool) noexcept {
+  if (strings::case_insensitive_eq(text, facts.true_name)) {
+    *out_bool = true;
+    return true;
+  }
+  if (strings::case_insensitive_eq(text, facts.false_name)) {
+    *out_bool = false;
+    return true;
+  }
+  return false;
 }
 
 std::string_view locale_error_text(ErrorCode code) noexcept {

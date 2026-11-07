@@ -170,9 +170,9 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   const std::uint32_t arity = call.as_call_arity();
   const ArrayValue* vector_arr = nullptr;
   std::uint32_t wrap_count = 0;
-  Value pad = Value::error(ErrorCode::NA);
+  Value pad_cell = Value::error(ErrorCode::NA);
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_wrap_args(call, arity, arena, registry, ctx, vector_arr, wrap_count, pad, err)) {
+  if (!resolve_wrap_args(call, arity, arena, registry, ctx, vector_arr, wrap_count, pad_cell, err)) {
     return err;
   }
   // The vector's natural flat order is row-major, which is what we want
@@ -196,11 +196,6 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  // Generated pad cells get the direct-grid zero projection, while a source
-  // cell copied out of the input vector is promoted so a blank that came from
-  // a worksheet reference counts as an occupied cell of the new array.
-  const Value pad_cell = pad.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
-                                        : pad.promote_reference_blank_to_value_array();
   for (std::uint32_t r = 0; r < out_rows; ++r) {
     for (std::uint32_t c = 0; c < out_cols; ++c) {
       // WRAPCOLS fills down each column first, so the source index walks the

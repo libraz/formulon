@@ -15,6 +15,7 @@
 #include "eval/eval_clock_scope.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/jp_fold.h"
+#include "eval/locale_text.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "utils/strings.h"
@@ -101,15 +102,7 @@ bool probe_number(std::string_view rhs, double* out_number) {
 // text.
 bool probe_bool(std::string_view rhs, bool* out_bool) {
   const LocaleFacts& facts = locale_facts(current_eval_profile());
-  if (strings::case_insensitive_eq(rhs, facts.true_name)) {
-    *out_bool = true;
-    return true;
-  }
-  if (strings::case_insensitive_eq(rhs, facts.false_name)) {
-    *out_bool = false;
-    return true;
-  }
-  return false;
+  return parse_locale_bool_text(rhs, facts, out_bool);
 }
 
 // Attempts to parse `rhs` as a date / time token, returning the Excel serial
@@ -159,31 +152,6 @@ std::string collation_prefold(std::string_view input, ExcelProfile profile) {
     return compose_jp_halfwidth_voicing(out);
   }
   return out;
-}
-
-// Scans `rhs` for a `~` that does not escape `*` or `?` (the only two
-// metacharacters Excel's wildcard dialect documents). Used by
-// `parse_criterion` to flag malformed criteria that Mac Excel 365 rejects
-// outright: e.g. `COUNTIF(range, "~~")` returns 0 even when a cell holds
-// a literal `~`. Reports `true` when the pattern contains an invalid
-// tilde-escape anywhere.
-bool scan_has_invalid_wildcard_escape(std::string_view rhs) {
-  for (std::size_t i = 0; i < rhs.size(); ++i) {
-    if (rhs[i] != '~') {
-      continue;
-    }
-    // Trailing `~` with nothing after it is also malformed under the
-    // strict "tilde escapes only `*` or `?`" rule.
-    if (i + 1 >= rhs.size()) {
-      return true;
-    }
-    const char next = rhs[i + 1];
-    if (next != '*' && next != '?') {
-      return true;
-    }
-    ++i;  // Skip the well-formed escape pair.
-  }
-  return false;
 }
 
 }  // namespace

@@ -112,7 +112,7 @@ std::string fold_jp_text_impl(std::string_view input, bool fold_fullwidth_digits
       if (is_fullwidth_digit && !fold_fullwidth_digits) {
         encode_utf8(cp, &out);
       } else {
-        encode_utf8(cp - 0xFEE0u, &out);
+        encode_utf8(static_cast<std::uint32_t>(fullwidth_ascii_to_ascii(cp)), &out);
       }
       i += n;
       continue;

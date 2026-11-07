@@ -23,6 +23,9 @@ class Arena;
 
 namespace eval {
 
+/// Most arguments a call may be written with, whatever the callee.
+inline constexpr std::uint32_t kMaxCallArguments = 255U;
+
 /// Returns the canonical UPPERCASE name of the built-in `name` refers to
 /// (ASCII case-insensitive, no storage prefix), or nullptr when `name` is
 /// not a built-in. The returned pointer has program lifetime.

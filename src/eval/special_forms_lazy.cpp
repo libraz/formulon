@@ -20,6 +20,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
+#include "eval/locale_text.h"
 #include "eval/logical_coerce.h"
 #include "eval/name_env.h"
 #include "eval/omitted_arg.h"
@@ -51,12 +52,7 @@ LogicalCoerce logical_coerce_for_host(const Value& v, const EvalContext& ctx, bo
   }
   const std::string_view text = strings::trim(raw);
   const LocaleFacts& facts = locale_facts(ctx.excel_profile());
-  if (strings::case_insensitive_eq(text, facts.true_name)) {
-    *out_bool = true;
-    return LogicalCoerce::HasValue;
-  }
-  if (strings::case_insensitive_eq(text, facts.false_name)) {
-    *out_bool = false;
+  if (parse_locale_bool_text(text, facts, out_bool)) {
     return LogicalCoerce::HasValue;
   }
   *out_err = ErrorCode::Value;

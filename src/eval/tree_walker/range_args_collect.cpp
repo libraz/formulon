@@ -10,6 +10,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
@@ -137,12 +138,7 @@ bool union_endpoint_refs(const parser::AstNode& range, Arena& arena, const Funct
   if (!resolve_range_endpoints(range, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, out_err)) {
     return false;
   }
-  out_lhs->sheet = sheet;
-  out_lhs->row = top;
-  out_lhs->col = left;
-  out_rhs->sheet = sheet;
-  out_rhs->row = bottom;
-  out_rhs->col = right;
+  set_rect_corner_refs(sheet, top, left, bottom, right, out_lhs, out_rhs);
   return true;
 }
 
@@ -392,12 +388,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     had_range_shaped_arg = true;
     parser::Reference isect_lhs{};
     parser::Reference isect_rhs{};
-    isect_lhs.sheet = isect_sheet;
-    isect_lhs.row = isect_r1;
-    isect_lhs.col = isect_c1;
-    isect_rhs.sheet = isect_sheet;
-    isect_rhs.row = isect_r2;
-    isect_rhs.col = isect_c2;
+    set_rect_corner_refs(isect_sheet, isect_r1, isect_c1, isect_r2, isect_c2, &isect_lhs, &isect_rhs);
     Value range_return = Value::blank();
     if (!append_expanded_range(def, isect_lhs, isect_rhs, arena, registry, ctx, &values, &range_return)) {
       result = range_return;

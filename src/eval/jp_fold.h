@@ -46,6 +46,12 @@ inline char fullwidth_digit_to_ascii(std::uint32_t cp) noexcept {
   return (cp >= 0xFF10u && cp <= 0xFF19u) ? static_cast<char>('0' + (cp - 0xFF10u)) : '\0';
 }
 
+/// Returns the half-width ASCII character for a full-width form
+/// U+FF01..U+FF5E (code point - 0xFEE0), or '\0' for any other code point.
+inline char fullwidth_ascii_to_ascii(std::uint32_t cp) noexcept {
+  return (cp >= 0xFF01u && cp <= 0xFF5Eu) ? static_cast<char>(cp - 0xFEE0u) : '\0';
+}
+
 /// Returns `input` rewritten to its Mac Excel ja-JP canonical form for
 /// criterion-equality comparison. See header comment for the full mapping.
 /// The result is always valid UTF-8 and never contains the half-width

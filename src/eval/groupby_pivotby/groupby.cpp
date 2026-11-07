@@ -76,10 +76,9 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // Determine header row layout. Inputs have a header row when
-  // field_headers ∈ {1, 3}; outputs emit a header row when
-  // field_headers ∈ {1, 2, 3}.
   // -- arg 6: filter_array --------------------------------------------------
+  // Resolves the header layout (inputs have a header row when field_headers
+  // is 1 or 3; outputs emit one when it is 1, 2 or 3) and reads the mask.
   HeaderLayout layout;
   std::vector<bool> include_row;
   if (!read_layout_and_mask(call, 6, arity, field_headers, row_fields->rows, arena, registry, ctx, &layout,
@@ -220,22 +219,12 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Header row (if requested).
   if (layout.output_emits_header) {
     std::vector<Value> header(out_cols, placeholder_cell());
-    if (field_headers == 3) {
-      // Inputs had a header row (row 0 of each input). Copy it verbatim.
-      for (std::uint32_t c = 0; c < key_cols; ++c) {
-        header[c] = row_fields->cells[c];
-      }
-      for (std::uint32_t c = 0; c < val_cols; ++c) {
-        header[key_cols + c] = values->cells[c];
-      }
-    } else {
-      // field_headers == 2: generated labels.
-      for (std::uint32_t c = 0; c < key_cols; ++c) {
-        header[c] = Value::text(arena.intern(row_field_label(ctx, c + 1U)));
-      }
-      for (std::uint32_t c = 0; c < val_cols; ++c) {
-        header[key_cols + c] = Value::text(arena.intern(value_label(ctx, c + 1U)));
-      }
+    // field_headers == 3 copies the inputs' header row; 2 generates labels.
+    for (std::uint32_t c = 0; c < key_cols; ++c) {
+      header[c] = header_label(arena, ctx, field_headers, HeaderField::kRow, row_fields->cells, c);
+    }
+    for (std::uint32_t c = 0; c < val_cols; ++c) {
+      header[key_cols + c] = header_label(arena, ctx, field_headers, HeaderField::kValue, values->cells, c);
     }
     emit_row(&out_rows, std::move(header));
   }

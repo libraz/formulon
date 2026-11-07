@@ -29,6 +29,11 @@ bool wildcard_match(std::string_view pattern, std::string_view text);
 /// the first unescaped metacharacter encountered.
 bool scan_has_wildcard(std::string_view rhs);
 
+/// Reports whether `rhs` holds a `~` that escapes anything other than `*` or
+/// `?` (or a trailing lone `~`). Mac Excel 365 rejects such criteria outright:
+/// `COUNTIF(range, "~~")` returns 0 even when a cell holds a literal `~`.
+bool scan_has_invalid_wildcard_escape(std::string_view rhs);
+
 /// Removes the escapes of a pattern without wildcards: `~X` becomes `X` for
 /// any `X`, and a trailing lone `~` stays. Used for the literal comparison of
 /// a criterion or lookup value whose only metacharacters are escaped.

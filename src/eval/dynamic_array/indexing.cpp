@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/builtin_names.h"
 #include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/omitted_arg.h"
@@ -53,8 +54,8 @@ Value eval_choose_lanes(const parser::AstNode& call, Arena& arena, const Functio
   // Need `(array, index1, ...)`; cap at 254 indices (Excel ceiling) +
   // 1 array slot = 255 args.
   Value err = Value::error(ErrorCode::Value);
-  const ArrayValue* array =
-      dynamic_array::resolve_array_prelude(call, 2U, 255U, /*reject_empty=*/false, arena, registry, ctx, err);
+  const ArrayValue* array = dynamic_array::resolve_array_prelude(call, 2U, kMaxCallArguments, /*reject_empty=*/false,
+                                                                 arena, registry, ctx, err);
   if (array == nullptr) {
     return err;
   }

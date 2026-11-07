@@ -21,6 +21,7 @@
 #include <string_view>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/jp_fold.h"
 #include "eval/number_parse.h"
 #include "excel_locale.h"
 #include "utils/date_time.h"
@@ -143,14 +144,14 @@ std::string fold_date_text(std::string_view s) {
       const auto b0 = static_cast<unsigned char>(scripts[i]);
       const auto b1 = static_cast<unsigned char>(scripts[i + 1]);
       const auto b2 = static_cast<unsigned char>(scripts[i + 2]);
-      if (cjk_width && b0 == 0xE3 && b1 == 0x80 && b2 == 0x80) {
+      if (cjk_width && std::string_view(scripts).substr(i, 3) == kIdeographicSpace) {
         out.push_back(' ');
         i += 3;
         continue;
       }
       if (b0 == 0xEF && ((b1 == 0xBC && b2 >= 0x81) || (b1 == 0xBD && b2 <= 0x9E))) {
         const unsigned cp = 0xF000u | ((b1 & 0x3Fu) << 6) | (b2 & 0x3Fu);
-        const char ascii = static_cast<char>(cp - 0xFEE0u);
+        const char ascii = fullwidth_ascii_to_ascii(cp);
         if (cjk_width || strings::is_ascii_alpha(ascii)) {
           out.push_back(ascii);
           i += 3;

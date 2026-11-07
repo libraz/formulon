@@ -231,10 +231,11 @@ constexpr bool carries_xlookup_result(std::uint32_t index, std::uint32_t /*arity
   return index == 2U || index == 3U;
 }
 
-// Every builtin whose result can be a reference. This table is the one list
-// the engine keeps: `is_reference_call_name` answers from it and
-// `resolve_reference_call` dispatches through it, so a name cannot be
-// reference-returning to one consumer and not to another.
+// Every builtin whose reference result this layer can resolve to a rectangle:
+// `is_reference_call_name` answers from it and `resolve_reference_call`
+// dispatches through it. `SINGLE`, `TAKE` and `DROP` are reference-returning
+// to Excel too (`kReferenceReturning` in builtin_names.cpp) but have no
+// rectangle resolver here.
 constexpr ReferenceCall kReferenceCalls[] = {
     {"INDIRECT", &resolve_indirect_call, &carries_none},
     {"OFFSET", &resolve_offset_call, &carries_none},
@@ -566,17 +567,12 @@ bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& r
                                  out_err)) {
     return false;
   }
-  if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
-    if (!sheet_names::equal(lhs_sheet, rhs_sheet)) {
-      *out_err = ErrorCode::Ref;
-      return false;
-    }
-    *out_sheet = lhs_sheet;
-  } else if (!lhs_sheet.empty()) {
-    *out_sheet = lhs_sheet;
-  } else {
-    *out_sheet = rhs_sheet;
+  const auto merged = merge_sheet_qualifiers(lhs_sheet, rhs_sheet);
+  if (!merged) {
+    *out_err = merged.error();
+    return false;
   }
+  *out_sheet = merged.value();
   const std::uint32_t r1 = std::max(lhs_top, rhs_top);
   const std::uint32_t r2 = std::min(lhs_bottom, rhs_bottom);
   const std::uint32_t c1 = std::max(lhs_left, rhs_left);

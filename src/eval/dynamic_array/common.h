@@ -60,9 +60,10 @@ using formulon::eval::eval_bool_arg;
 using formulon::eval::eval_number_arg;
 using formulon::eval::eval_truncated_number_arg;
 
-/// Resolves an optional `pad_with` argument into `pad`. A null `node` (argument
-/// absent) pads with #N/A; an array pad contributes its first cell; an empty
-/// array is #VALUE!. Returns `false` with the argument's error in `error_out`.
+/// Resolves an optional `pad_with` argument into the cell `pad` that fills
+/// generated positions. A null `node` (argument absent) pads with #N/A; an
+/// array pad contributes its first cell; an empty array is #VALUE!; a blank
+/// pad takes the direct-grid zero projection. Returns `false` with the argument's error in `error_out`.
 bool resolve_pad_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, Value& pad, Value& error_out);
 
@@ -97,6 +98,10 @@ bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std
 /// `cols`: a multi-column whole-row reference populated in one row walks as a
 /// 1-row array yet is 2-D.
 bool is_declared_vector(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols);
+
+/// Reads one include-mask cell as a boolean into `*out`. An error cell, or a
+/// cell that does not coerce, is returned in `*out_err` and the result is false.
+bool coerce_mask_cell(const Value& cell, bool* out, Value* out_err);
 
 /// Collation key of a text cell (empty for any other kind); compute once per
 /// cell and pass to `sort_lane_less_keyed`.

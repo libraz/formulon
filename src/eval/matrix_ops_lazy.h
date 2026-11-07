@@ -81,13 +81,6 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
 /// order. False with the propagating error in `out_err` on the first bad cell.
 bool coerce_matrix(const ArrayValue& src, std::vector<double>& out, Value& out_err);
 
-/// One Gauss-Jordan step on a row-major `n x w` augmented matrix, shared
-/// by MINVERSE and LINEST: swaps row `pivot` into row `k`, normalises row
-/// `k` so its diagonal is 1, and eliminates column `k` from every other
-/// row. The caller has already chosen a non-zero `pivot`.
-void gauss_jordan_eliminate(std::vector<double>& aug, std::uint32_t n, std::uint32_t w, std::uint32_t k,
-                            std::uint32_t pivot);
-
 }  // namespace eval
 }  // namespace formulon
 

@@ -414,17 +414,12 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       const std::uint32_t c2 = std::max(lhs_ref.col, rhs_ref.col);
 
       parser::Reference top_left{};
-      top_left.sheet = lhs_ref.sheet;
-      top_left.row = r1;
-      top_left.col = c1;
+      parser::Reference bottom_right{};
+      set_rect_corner_refs(lhs_ref.sheet, r1, c1, r2, c2, &top_left, &bottom_right);
       if (r1 == r2 && c1 == c2) {
         return Shaped{ctx.resolve_ref(top_left, arena, registry), nullptr};
       }
 
-      parser::Reference bottom_right{};
-      bottom_right.sheet = lhs_ref.sheet;
-      bottom_right.row = r2;
-      bottom_right.col = c2;
       return Shaped{materialize_rectangle(top_left, bottom_right, arena, registry, ctx), nullptr};
     }
 

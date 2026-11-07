@@ -58,6 +58,14 @@ std::string row_field_label(const EvalContext& ctx, std::uint32_t n);
 std::string column_field_label(const EvalContext& ctx, std::uint32_t n);
 std::string value_label(const EvalContext& ctx, std::uint32_t n);
 
+enum class HeaderField : std::uint8_t { kRow, kColumn, kValue };
+
+/// The header cell of the `index`-th (0-based) field of `kind`: copied from
+/// `input_header_cells` when the input carries its own header row
+/// (`field_headers == 3`), else the generated label.
+Value header_label(Arena& arena, const EvalContext& ctx, int field_headers, HeaderField kind,
+                   const Value* input_header_cells, std::uint32_t index);
+
 /// Returns the locale-appropriate "Grand Total" label.
 std::string_view grand_total_label(const EvalContext& ctx);
 

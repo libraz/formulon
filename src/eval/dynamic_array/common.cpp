@@ -54,25 +54,29 @@ const ArrayValue* resolve_array_prelude(const parser::AstNode& call, std::uint32
 
 bool resolve_pad_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, Value& pad, Value& error_out) {
-  pad = Value::error(ErrorCode::NA);
-  if (node == nullptr) {
-    return true;
-  }
-  const Value pad_v = eval_node(*node, arena, registry, ctx);
-  if (pad_v.is_error()) {
-    error_out = pad_v;
-    return false;
-  }
-  if (pad_v.is_array()) {
-    const ArrayValue* pa = pad_v.as_array();
-    if (pa->rows == 0U || pa->cols == 0U) {
-      error_out = Value::error(ErrorCode::Value);
+  Value value = Value::error(ErrorCode::NA);
+  if (node != nullptr) {
+    const Value pad_v = eval_node(*node, arena, registry, ctx);
+    if (pad_v.is_error()) {
+      error_out = pad_v;
       return false;
     }
-    pad = pa->cells[0];
-  } else {
-    pad = pad_v;
+    if (pad_v.is_array()) {
+      const ArrayValue* pa = pad_v.as_array();
+      if (pa->rows == 0U || pa->cols == 0U) {
+        error_out = Value::error(ErrorCode::Value);
+        return false;
+      }
+      value = pa->cells[0];
+    } else {
+      value = pad_v;
+    }
   }
+  // Generated pad cells get the direct-grid zero projection, while a pad that
+  // came from a worksheet reference is promoted so its blank counts as an
+  // occupied cell of the new array.
+  pad = value.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
+                         : value.promote_reference_blank_to_value_array();
   return true;
 }
 
@@ -159,6 +163,20 @@ std::string sort_text_key(const Value& v) {
     return std::string();
   }
   return collation_key(v.as_text(), current_eval_profile(), CollationStrength::kDynamic);
+}
+
+bool coerce_mask_cell(const Value& cell, bool* out, Value* out_err) {
+  if (cell.is_error()) {
+    *out_err = cell;
+    return false;
+  }
+  auto coerced = coerce_to_bool(cell);
+  if (!coerced) {
+    *out_err = Value::error(coerced.error());
+    return false;
+  }
+  *out = coerced.value();
+  return true;
 }
 
 bool is_declared_vector(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols) {

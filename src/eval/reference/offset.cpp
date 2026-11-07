@@ -63,12 +63,8 @@ Expected<std::vector<Value>, ErrorCode> expand_offset_rect(const OffsetRect& rec
                                                            const FunctionRegistry& registry, const EvalContext& ctx) {
   parser::Reference lhs{};
   parser::Reference rhs{};
-  lhs.sheet = rect.base.sheet;
-  lhs.row = rect.top_row;
-  lhs.col = rect.left_col;
-  rhs.sheet = rect.base.sheet;
-  rhs.row = rect.top_row + rect.height - 1U;
-  rhs.col = rect.left_col + rect.width - 1U;
+  set_rect_corner_refs(rect.base.sheet, rect.top_row, rect.left_col, rect.top_row + rect.height - 1U,
+                       rect.left_col + rect.width - 1U, &lhs, &rhs);
   return ctx.expand_range(lhs, rhs, arena, registry);
 }
 
@@ -135,19 +131,9 @@ bool expand_offset_call(const parser::AstNode& call, Arena& arena, const Functio
     *out_err_code = err;
     return false;
   }
-  auto expanded = expand_offset_rect(rect, arena, registry, ctx);
-  if (!expanded) {
-    *out_err_code = expanded.error();
-    return false;
-  }
-  *out_cells = std::move(expanded.value());
-  if (out_rows != nullptr) {
-    *out_rows = rect.height;
-  }
-  if (out_cols != nullptr) {
-    *out_cols = rect.width;
-  }
-  return true;
+  return expand_resolved_rect_cells(rect.base.sheet, rect.top_row, rect.left_col, rect.top_row + rect.height - 1U,
+                                    rect.left_col + rect.width - 1U, arena, registry, ctx, out_cells, out_err_code,
+                                    out_rows, out_cols);
 }
 
 bool expand_indirect_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

@@ -22,6 +22,7 @@
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "utils/formula_text.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
 
@@ -484,9 +485,7 @@ Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view f
   if (scope.item_field && *scope.item_field >= scope.cache->fields().size()) {
     return invalid("calculated item field out of range");
   }
-  if (!formula.empty() && formula.front() == '=') {
-    formula.remove_prefix(1);
-  }
+  formula = strip_formula_prefix(formula);
   if (utf16_units_in(formula) > kMaxFormulaUnits) {
     return invalid("pivot formula longer than 8192 characters");
   }

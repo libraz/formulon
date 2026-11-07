@@ -96,7 +96,9 @@ constexpr ReferenceParamEntry kReferenceParams[] = {
 
 // Built-ins whose call Excel takes as a reference whatever its arguments
 // (LET parses to its own node); the `_TRO_*` forms are the trim-range
-// operators `.:`, `:.` and `.:.`.
+// operators `.:`, `:.` and `.:.`. A superset of the calls
+// `resolve_reference_call` can resolve to a rectangle (`SINGLE`, `TAKE` and
+// `DROP` are taken as references without one).
 constexpr const char* kReferenceReturning[] = {
     "INDEX",     "INDIRECT", "OFFSET", "IF",   "CHOOSE",       "XLOOKUP",       "IFS",      "SWITCH",
     "TRIMRANGE", "SINGLE",   "TAKE",   "DROP", "_TRO_LEADING", "_TRO_TRAILING", "_TRO_ALL", nullptr,
@@ -124,9 +126,6 @@ bool takes_only_reference(std::string_view name, std::uint32_t index) {
   }
   return false;
 }
-
-// Most arguments a call may be written with, whatever the callee.
-constexpr std::uint32_t kMaxCallArguments = 255U;
 
 // Built-ins whose arguments come in pairs: a count within the arity range is
 // accepted when it equals `also`, or when the count after the first

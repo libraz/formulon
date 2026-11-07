@@ -18,6 +18,7 @@
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/rect_iterator.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -100,10 +101,8 @@ Expected<std::vector<Value>, ErrorCode> read_table_block(const ReferenceTable& t
     }
     std::vector<Value> cells;
     cells.reserve(static_cast<std::size_t>(total));
-    for (std::uint32_t r = row_first; r <= row_last; ++r) {
-      for (std::uint32_t c = col_first; c <= col_last; ++c) {
-        cells.push_back(read_external_cell(*table.external_book, table.external_sheet, r, c, arena));
-      }
+    for (const utils::RectCoord cell : utils::RectRange(row_first, col_first, row_last, col_last)) {
+      cells.push_back(read_external_cell(*table.external_book, table.external_sheet, cell.row, cell.col, arena));
     }
     return cells;
   }
@@ -152,10 +151,7 @@ bool prepared_text_query_matches(const Value& cell, const PreparedTextQuery& que
   if (query.has_pattern) {
     return wildcard_match(query.prepared, lookup_wildcard_key(cell.as_text(), profile));
   }
-  if (query.literal->keyed()) {
-    return query.literal->compare(cell.as_text()) == 0;
-  }
-  return collate(cell.as_text(), query.prepared, profile, query.strength) == 0;
+  return query.literal->compare(cell.as_text()) == 0;
 }
 
 }  // namespace eval

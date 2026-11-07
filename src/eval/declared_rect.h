@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <string_view>
 
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -102,6 +103,33 @@ inline Expected<DeclaredRect, ErrorCode> declared_rect(const parser::Reference& 
   }
   return DeclaredRect{std::min(lhs.row, rhs.row), std::max(lhs.row, rhs.row), std::min(lhs.col, rhs.col),
                       std::max(lhs.col, rhs.col), /*whole_axis=*/false};
+}
+
+/// The sheet qualifier a pair of endpoint qualifiers settles on: a bare side
+/// inherits the other side's, and two qualified sides must agree under
+/// Unicode simple case folding or the pair is `#REF!`. Empty means the
+/// context's own sheet.
+inline Expected<std::string_view, ErrorCode> merge_sheet_qualifiers(std::string_view lhs, std::string_view rhs) {
+  if (!lhs.empty() && !rhs.empty()) {
+    if (!sheet_names::equal(lhs, rhs)) {
+      return ErrorCode::Ref;
+    }
+    return lhs;
+  }
+  return lhs.empty() ? rhs : lhs;
+}
+
+/// Fills the corner pair of the rectangle `[top, left]..[bottom, right]` on
+/// `sheet`, the shape `EvalContext::expand_range` and `resolve_ref` take.
+inline void set_rect_corner_refs(std::string_view sheet, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
+                                 std::uint32_t right, parser::Reference* top_left,
+                                 parser::Reference* bottom_right) noexcept {
+  top_left->sheet = sheet;
+  top_left->row = top;
+  top_left->col = left;
+  bottom_right->sheet = sheet;
+  bottom_right->row = bottom;
+  bottom_right->col = right;
 }
 
 /// Recognises the two AST spellings of a declared rectangle — a bare `Ref`
