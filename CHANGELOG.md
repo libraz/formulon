@@ -201,6 +201,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IntEnum`s of the same names) and the style fields use them. The values are
   unchanged, so a caller passing the number keeps working.
 
+- **Patches (JavaScript):** `TableUpdateInput` is `TablePatch`, and its `rect`
+  is `range` (an A1 string or a `SheetRect`). `TableProperties.headerRowCount`
+  and `totalsRowCount` are the booleans `headerRow` and `totalsRow`.
+  `ChartDataSource.kind` is the number `ChartSourceKind`, not text: compare
+  with `ChartSourceKind.Ref`.
+- **Patches (JavaScript):** `updateSparklineGroup` and `updateProtectedRange`
+  are partial updates. A field left out keeps its stored value instead of
+  returning to its default; pass the field to change it.
+- **Patches (JavaScript):** an unknown key in a patch throws `TypeError` at any
+  depth, and `null` for a key that is not nullable throws `TypeError` (in
+  `Shape.update` it used to mean "do not apply"; leave the key out). An anchor
+  key given to `Shape.update` or `Slicer.update` without its trigger key
+  throws `TypeError` where it used to be dropped silently; pass the trigger
+  key with it (`anchorKind` for a shape).
+- **Patches (JavaScript):** `Slicer.update({ name })` is ignored instead of
+  failing with `InvalidArgument`, and so are record keys such as `objectId`,
+  so the record `getProperties()` returned can be passed back to `update`.
+  Use `rename()` to rename a slicer.
+- **Pivot tables (JavaScript):** `Pivot.addFieldSharedItem`'s third argument is
+  an options object. `PivotWorksheetSourceInput` has no `present` key; clear
+  the source with `setWorksheetSource(null)`. The parameter of
+  `Pivot.setAnchor` is named `range`; its type is unchanged.
+- **Python:** `Shape.update` and `Slicer.update` default every argument to the
+  `UNCHANGED` singleton (an enum member of type `Unchanged`). `None` clears
+  only in `Slicer.update(style=None)`; elsewhere it is a `TypeError`. An
+  anchor key without its trigger key is a `TypeError`.
+- **Python:** an anchor is one `DrawingAnchor` value instead of separate
+  `anchor_kind=` / `row=` / ... keyword arguments; build it with
+  `DrawingAnchor(...)` for `set_anchor`, `add_picture` and `add_chart`.
+- **Python:** `set_selection`, `set_cell_phonetic_properties`,
+  `set_theme_colors`, `set_theme_script_font` and `get_preview` take keyword
+  arguments, and `set_field_date_group` takes them keyword-only. The
+  `*Input` dataclasses behind them (`ChartPreviewOverridesInput`,
+  `PhoneticPropertiesInput`, `ThemeColorsInput`, `ThemeScriptFontInput`) are
+  removed: `ws.set_cell_phonetic_properties(r, c, font_id=1, type=0,
+  alignment=0)` replaces passing a record.
+- **Python:** the parameter that takes a cell rectangle is named `range`
+  (`get_values`, `list_cells`, `add_merge`, `remove_merge`,
+  `get_cell_rect_pt`, `get_merges_in_range`, `get_range_style_bases`,
+  `remap_range_style`, `snapshot_range_style`, `set_range_xf_index`;
+  `viewport` in `recalc_viewport`; `Table.update` and `Pivot.set_anchor`
+  likewise). Only a call that passes it by keyword breaks.
+- **Python:** `TableProperties` carries `header_row` and `totals_row` booleans
+  in place of `header_row_count` and `totals_row_count`. `ChartDataSource.kind`
+  is the `ChartSourceKind` `IntEnum`, not `"none"` / `"ref"` / `"literal"`.
+- **Python:** `update_sparkline_group` and `update_protected_range` take
+  keyword arguments and change only those given, as in JavaScript.
+  `PivotCache.set_worksheet_source(None)` clears the source and the keywords
+  `ref`, `sheet` and `name` set it.
+- **Python:** the string fields of `ProtectedRange` (`password` and the other
+  four) use `""` for "none" instead of `None`.
+- **Python:** `formulon.LIB` is no longer re-exported from the package. The
+  engine functions that used it (`get_version`, `get_status_name`,
+  `set_log_min_level`) are module-level functions of `formulon`.
+
 ### Sheet handles
 
 A sheet-scoped call moves from the workbook onto a `Sheet` handle, and the
@@ -1381,8 +1436,11 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `TableColumnEntry` | `TableColumn` |
 | `tableCount()` | removed |
 | `TableEntry` | `TableProperties` |
+| `TableProperties.headerRowCount` | `TableProperties.headerRow` |
+| `TableProperties.totalsRowCount` | `TableProperties.totalsRow` |
 | `tableStyleCount()` | removed; use `listTableStyles()` |
 | `TableStyleDefaultsResult` | `TableStyleDefaults` |
+| `TableUpdateInput` | folded into `TablePatch` |
 | `text` | `value` |
 | `ThemeResult` | removed |
 | `ThreadedCommentsResult` | removed |
@@ -1429,7 +1487,6 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `ChartMarkerInfo` | `ChartMarker` |
 | `ChartPlotInfo` | `ChartPlot` |
 | `ChartPointInfo` | `ChartPoint` |
-| `ChartPreviewOverrides` | `ChartPreviewOverridesInput` |
 | `ChartSeriesInfo` | `ChartSeries` |
 | `ChartSheetRange` | folded into `SheetRect` |
 | `ChartSourceInfo` | `ChartSource` |
@@ -1715,6 +1772,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `table_style_defaults()` | `get_table_style_defaults()` |
 | `table_update()` | `wb.table(...).update()` |
 | `Table` | `TableProperties` |
+| `TableProperties.header_row_count` | `TableProperties.header_row` |
+| `TableProperties.totals_row_count` | `TableProperties.totals_row` |
 | `Theme` | removed |
 | `update_shape()` | `ws.shape(...).update()` |
 | `update_slicer()` | `ws.slicer(...).update()` |
@@ -1823,6 +1882,15 @@ through its operation instead.
 | `fm_cell_xf_t` | `reading_order` is `int32_t` (an `fm_reading_order_t`) |
 | `fm_styles_batch_t` | `font_count`, `fill_count`, `border_count`, `cell_xf_count`, `num_fmt_count` are `uint32_t` |
 
+**Additive changes (no ABI break).** `fm_convert_civil_to_serial` and
+`fm_convert_serial_to_civil` convert between a civil time and a serial for
+either date system; see [Added](#added). `fm_sheet_update_protected_range`
+keeps the stored ranges when `ranges` is `NULL` and `range_count` is 0, which
+lets a caller change the other fields of a range whose address the engine
+cannot parse. The drawing functions for name, z-order, snapshot and restore
+accept shapes, and the z-order functions also accept slicers.
+`fm_sheet_add_slicer` and `fm_sheet_update_slicer` accept an ascending sort
+order.
 
 ### Added
 
@@ -1968,6 +2036,34 @@ through its operation instead.
   in cell formulas on every sheet, totals-row formulas, defined names and
   chart series. A column added inside a table is named with the same locale
   word.
+- `Shape.rename`, `Shape.setZOrder` and `Shape.snapshot`, and
+  `Slicer.setZOrder` (Python `rename`, `set_z_order`, `snapshot` and
+  `Slicer.set_z_order`). A snapshot restores the shape, picture fill and
+  hyperlink included. A slicer inside an
+  `mc:AlternateContent` block can be moved in z-order; a slicer still cannot
+  be removed, anchored or renamed through them.
+- `Formulon.convertCivilToSerial` and `Formulon.convertSerialToCivil`
+  (Python `convert_civil_to_serial`, `convert_serial_to_civil`; C
+  `fm_convert_civil_to_serial`, `fm_convert_serial_to_civil`) convert between
+  a calendar date and time and a serial number for the 1900 or 1904 date
+  system. Civil input is checked, not normalised: month 13 is
+  `InvalidArgument`. In the 1900 system `1900-02-29` is accepted and is
+  serial 60, as in Excel; the 1904 system refuses it and refuses years before
+  1904. A serial in `[60, 61)` converts back to `1900-02-29` in C and
+  JavaScript, and Python raises `ValueError` because `datetime` cannot hold
+  it. A fractional second rounds to the nearest second, and a serial outside
+  `[1, max)` (`[0, max)` for 1904) is `InvalidArgument`. Python takes a
+  `date` or a naive `datetime`, and a `datetime` with a time zone raises
+  `ValueError`.
+- `FormulonOptions.wasm` takes the module as bytes (`BufferSource`) or a
+  compiled `WebAssembly.Module`, for hosts that cannot fetch it by URL. The
+  native package ignores it.
+- `Workbook.dispose()` deletes the raw handle at once. A WASM workbook that is
+  dropped without `dispose()` is released when it is garbage collected, on a
+  best-effort basis: do not rely on it for timing, and call `dispose()` (or
+  `using`) when memory matters.
+- `make npm-typecheck` type-checks the README examples and the public
+  declarations with TypeScript.
 
 ### Changed
 
@@ -2015,6 +2111,13 @@ through its operation instead.
   `_set_number`, `_set_bool`, `_set_error`, `_set_blank`) renames the column
   as `fm_workbook_rename_table_column` does. Clearing it gives the default
   name instead of an empty header.
+- `Table.update` takes a `TablePatch` and moves the table with `range`, given
+  as A1 text or a `SheetRect` on the table's sheet. `getCellRectPt` and
+  `getWidthModel` (Python `get_cell_rect_pt`, `get_width_model`) use the
+  Display geometry mode when none is given.
+- `fm_sheet_update_protected_range` leaves the stored ranges alone when
+  `ranges` is `NULL` and `range_count` is 0, so a read-modify-write does not
+  lose a range the engine cannot parse.
 
 ### Fixed
 
@@ -2139,6 +2242,9 @@ through its operation instead.
   and the whole value column when its minimum is two arguments, so `XIRR` and
   `FORECAST.ETS.SEASONALITY` give Excel's results; `IF` still receives the
   group values alone.
+- Adding or updating a slicer with an ascending sort order (`fm_sheet_add_slicer`,
+  `fm_sheet_update_slicer`, `addSlicer`, `Slicer.update`) failed with
+  `InvalidArgument`; it is accepted and stored.
 
 ## [0.18.0] - 2026-10-26
 
