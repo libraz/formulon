@@ -869,13 +869,22 @@ std::int32_t first_c(const LocaleData& L, std::uint32_t cp, std::vector<Weight>&
 }
 
 void table_key(const LocaleData& L, std::string_view s, CollationStrength strength, std::string& out) {
-  std::vector<Token> toks;
+  // Per-thread working buffers, reused across keys; a key is built without re-entering this function.
+  struct Scratch {
+    std::vector<Token> toks;
+    std::vector<Weight> els;
+    std::vector<std::uint32_t> bounds;
+    std::vector<Weight> tmp;
+  };
+  static thread_local Scratch scratch;
+  std::vector<Token>& toks = scratch.toks;
+  std::vector<Weight>& els = scratch.els;
+  std::vector<std::uint32_t>& bounds = scratch.bounds;
+  std::vector<Weight>& tmp = scratch.tmp;
+  toks.clear();
+  els.clear();
+  bounds.clear();
   tokenize(L, s, strength, toks);
-  std::vector<Weight> els;
-  els.reserve(toks.size() + 4);
-  std::vector<std::uint32_t> bounds;
-  bounds.reserve(toks.size() + 1);
-  std::vector<Weight> tmp;
   const bool expand = strength != CollationStrength::kClassicExact;
   for (const Token& t : toks) {
     const std::size_t start = els.size();
