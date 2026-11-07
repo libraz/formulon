@@ -34,7 +34,7 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t*
     return ThrowStatus(env, rc);
   }
   for (std::size_t i = 0; i < count; ++i) {
-    T entry{};
+    T entry = InitOut<T>();
     rc = at_fn(handle, sheet, i, &entry);
     if (rc != 0) {
       return ThrowStatus(env, rc);
@@ -54,7 +54,7 @@ Napi::Value SheetItemResult(const Napi::CallbackInfo& info, const fm_workbook_t*
   if (handle == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  T entry{};
+  T entry = InitOut<T>();
   const fm_status_t rc = at_fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), &entry);
   if (rc != 0) {
     return ThrowStatus(env, rc);

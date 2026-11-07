@@ -62,7 +62,7 @@ Napi::Value StyleList(Napi::Env env, const fm_workbook_t* handle, fm_status_t (*
   size_t n = 0;
   fm_status_t rc = count(handle, &n);
   for (size_t i = 0; rc == 0 && i < n; ++i) {
-    Record record{};
+    Record record = InitOut<Record>();
     rc = at(handle, i, &record);
     if (rc == 0) {
       arr.Set(static_cast<uint32_t>(i), convert(env, record));

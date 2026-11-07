@@ -39,7 +39,7 @@ Napi::Value SheetLayoutList(const Napi::CallbackInfo& info, const fm_workbook_t*
   Napi::Array arr = Napi::Array::New(env, count);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
-    Entry entry{};
+    Entry entry = InitOut<Entry>();
     if (at_fn(handle, sheet, i, &entry) != 0) {
       continue;
     }
