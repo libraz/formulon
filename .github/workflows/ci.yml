@@ -224,6 +224,10 @@ jobs:
         run: |
           make CMAKE=/usr/bin/cmake npm-package
           make npm-check-dts
+          # README `js` blocks and the d.ts type tests, with the TypeScript
+          # pinned in tools/typecheck (yarn via corepack).
+          corepack enable
+          make CMAKE=/usr/bin/cmake npm-typecheck
 
       - name: Size report (human)
         run: |

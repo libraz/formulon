@@ -388,7 +388,8 @@ npm-test: npm-package
 #                         against the staged package with the pinned TypeScript in
 #                         tools/typecheck/. TYPECHECK_ARGS passes --types-only or --docs <dir>.
 npm-typecheck: npm-package
-	cd tools/typecheck && yarn install --immutable && $(NODE) typecheck.mjs $(TYPECHECK_ARGS)
+	cd tools/typecheck && yarn install --immutable
+	$(NODE) tools/typecheck/typecheck.mjs $(TYPECHECK_ARGS)
 
 npm-pack: npm-package
 	@if ! command -v npm >/dev/null 2>&1; then \
