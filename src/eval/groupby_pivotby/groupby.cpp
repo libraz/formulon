@@ -64,7 +64,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
   field_headers = resolve_auto_field_headers(field_headers, *values);
 
-  // -- arg 4: total_depth ∈ {-2,-1,0,1,2}; default 1 (grand total last) ----
+  // -- arg 4: total_depth, an integer up to the key-column count; default 1 -
   int total_depth = 1;
   if (!read_total_depth(call, 4, arity, 1, arena, registry, ctx, &total_depth, &err)) {
     return err;
@@ -89,7 +89,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t data_row_count = layout.data_row_count;
 
   // -- arg 7: field_relationship; 0 hierarchy (default), 1 flat table -------
-  // A flat table has no levels to subtotal, so it rejects |total_depth| == 2.
+  // A flat table has no levels to subtotal, and the depth cannot exceed the key columns.
   static constexpr int kFieldRelationships[] = {0, 1};
   int field_relationship = 0;
   if (!read_optional_int_in_set(call, 7, arity, 0, arena, registry, ctx, kFieldRelationships,
@@ -98,7 +98,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
   const bool flat_table = field_relationship == 1;
-  if (flat_table && (total_depth == 2 || total_depth == -2)) {
+  if (!total_depth_fits(total_depth, flat_table ? 1U : row_fields->cols)) {
     return Value::error(ErrorCode::Value);
   }
 
@@ -186,14 +186,11 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   order_groups(sort_plan, *row_fields, group_repr, group_is_error, value_keys, outer_levels, &order);
 
   // -- Compute grand total (if requested) ---------------------------------
-  // The grand total aggregates over EVERY filtered data row. It is rendered
-  // with the literal "Grand Total" label in the first key column and blank
-  // cells in the remaining key columns.
-  // A ±2 request adds one subtotal row per outer group — the first key
-  // column alone — on top of the grand total. With a single key column the
-  // outer level coincides with the groups themselves and every subtotal row
-  // would just restate its group, so that shape stays on the ±1 layout.
-  const bool emit_subtotals = has_outer_subtotals(total_depth, key_cols);
+  // The grand total aggregates over EVERY filtered data row. It is labelled in
+  // the first key column and blank in the remaining key columns.
+  // |total_depth| >= 2 adds a subtotal row per key prefix of length
+  // 1..|total_depth|-1.
+  const bool emit_subtotals = total_depth >= 2 || total_depth <= -2;
 
   std::vector<Value> grand_total_row;
   bool emit_grand_total = (total_depth != 0);
@@ -206,37 +203,12 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       grand_total_row[key_cols + vc] = totals[vc];
     }
   }
-  // -- Nested subtotals (|total_depth| == 2) -------------------------------
-  OuterGrouping hierarchy;
-  std::vector<std::vector<Value>> subtotal_rows;
-  std::vector<std::size_t> outer_order;
-  std::vector<std::vector<std::size_t>> groups_of_outer;
-  if (emit_subtotals) {
-    hierarchy = build_outer_grouping(*row_fields, group_repr, group_rows);
-    const std::size_t outer_count = hierarchy.repr_of_outer.size();
-    // The hierarchy is primary and the sort applies within it: outer groups
-    // follow the sorted order of their first member, and each outer group's
-    // members keep their relative order from the same sort.
-    order_outer_groups(hierarchy, order, &outer_order, &groups_of_outer);
-    subtotal_rows.reserve(outer_count);
-    for (std::size_t o = 0; o < outer_count; ++o) {
-      std::vector<Value> row(out_cols, placeholder_cell());
-      // The subtotal row restates its outer key verbatim in the first key
-      // column and leaves the inner key columns blank, so it reads as the
-      // roll-up of the group rows directly above or below it.
-      row[0] = row_fields->cells[static_cast<std::size_t>(hierarchy.repr_of_outer[o]) * key_cols];
-      const std::vector<Value> totals = aggregate_value_columns(*values, val_cols, hierarchy.rows_of_outer[o], agg,
-                                                                arena, registry, ctx, ErrorCode::Calc);
-      for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
-        row[key_cols + vc] = totals[vc];
-      }
-      subtotal_rows.push_back(std::move(row));
-    }
-  }
+  const AxisHierarchy hierarchy = build_axis_hierarchy(*row_fields, group_repr, group_rows, emit_subtotals);
+  const std::vector<AxisEntity> slots = plan_axis_slots(hierarchy, order, total_depth);
 
   // -- Assemble output ----------------------------------------------------
   std::vector<std::vector<Value>> out_rows;
-  out_rows.reserve(agg_rows.size() + subtotal_rows.size() + 2U);
+  out_rows.reserve(slots.size() + 2U);
 
   // Header row (if requested).
   if (layout.output_emits_header) {
@@ -256,25 +228,25 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     emit_row(&out_rows, std::move(grand_total_row));
   }
 
-  // Per-group rows in sorted order. With subtotals each outer group's rows
-  // are bracketed by its subtotal row, placed on the same side of the block
-  // as the grand total.
-  if (emit_subtotals) {
-    for (std::size_t o : outer_order) {
-      if (total_depth < 0) {
-        emit_row(&out_rows, std::move(subtotal_rows[o]));
-      }
-      for (std::size_t g : groups_of_outer[o]) {
-        emit_row(&out_rows, std::move(agg_rows[g]));
-      }
-      if (total_depth > 0) {
-        emit_row(&out_rows, std::move(subtotal_rows[o]));
-      }
+  // Group rows and subtotal rows in output order. A subtotal row restates the
+  // first `level` key cells of its prefix and leaves the rest blank.
+  for (const AxisEntity& slot : slots) {
+    if (slot.level == key_cols) {
+      emit_row(&out_rows, std::move(agg_rows[slot.index]));
+      continue;
     }
-  } else {
-    for (std::size_t i : order) {
-      emit_row(&out_rows, std::move(agg_rows[i]));
+    std::vector<Value> row(out_cols, placeholder_cell());
+    const std::uint32_t repr_row = axis_entity_repr_row(hierarchy, group_repr, slot);
+    for (std::uint32_t c = 0; c < slot.level; ++c) {
+      row[c] = row_fields->cells[static_cast<std::size_t>(repr_row) * key_cols + c];
     }
+    const std::vector<Value> totals =
+        aggregate_value_columns(*values, val_cols, axis_entity_rows(hierarchy, group_rows, all_rows, slot), agg, arena,
+                                registry, ctx, ErrorCode::Calc);
+    for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
+      row[key_cols + vc] = totals[vc];
+    }
+    emit_row(&out_rows, std::move(row));
   }
 
   // Grand total at bottom (positive total_depth).

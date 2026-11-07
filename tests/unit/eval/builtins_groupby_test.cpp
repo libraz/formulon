@@ -393,14 +393,74 @@ TEST(GroupBy, TotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
   EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y");
 }
 
-TEST(GroupBy, TotalDepthTwoWithOneKeyColumnKeepsTheGrandTotalOnlyLayout) {
-  // With a single key column every subtotal would just restate its group,
-  // so the ±1 layout stands.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 2)");
+TEST(GroupBy, TotalDepthBeyondTheKeyColumnsIsValueError) {
+  // |depth| >= 2 needs that many key columns; fractional depths are rejected.
+  const char* const formulas[] = {
+      "=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 2)",
+      "=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, -2)",
+      "=GROUPBY({\"A\",\"a\";\"B\",\"b\"}, {10;20}, SUM, 0, 3)",
+      "=GROUPBY({\"A\",\"a\";\"B\",\"b\"}, {10;20}, SUM, 0, -3)",
+      "=GROUPBY({\"A\",\"a\";\"B\",\"b\"}, {10;20}, SUM, 0, 2.5)",
+      "=GROUPBY({\"A\",\"a\";\"B\",\"b\"}, {10;20}, SUM, 0, -2.5)",
+  };
+  for (const char* formula : formulas) {
+    const Value v = EvalSrc(formula);
+    ASSERT_TRUE(v.is_error()) << formula << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
+TEST(GroupBy, TotalDepthThreeNestsPrefixSubtotalsAfterTheirBlocks) {
+  const Value v = EvalSrc(
+      "=GROUPBY({\"x\",\"p\",\"m\";\"x\",\"p\",\"n\";\"x\",\"q\",\"n\";\"y\",\"p\",\"m\"}, {1;5;2;7}, SUM, 0, 3)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  ASSERT_EQ(v.as_array_rows(), 3U);
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 30.0);
+  ASSERT_EQ(v.as_array_rows(), 10U);
+  ASSERT_EQ(v.as_array_cols(), 4U);
+  const char* const keys[10][3] = {{"x", "p", "m"}, {"x", "p", "n"}, {"x", "p", ""}, {"x", "q", "n"}, {"x", "q", ""},
+                                   {"x", "", ""},   {"y", "p", "m"}, {"y", "p", ""}, {"y", "", ""},   {"総計", "", ""}};
+  const double sums[10] = {1, 5, 6, 2, 2, 8, 7, 7, 7, 15};
+  for (std::uint32_t r = 0; r < 10U; ++r) {
+    for (std::uint32_t c = 0; c < 3U; ++c) {
+      EXPECT_EQ(std::string(Cell(v, r, c).as_text()), keys[r][c]) << "row " << r << " col " << c;
+    }
+    EXPECT_DOUBLE_EQ(Cell(v, r, 3).as_number(), sums[r]) << "row " << r;
+  }
+}
+
+TEST(GroupBy, TotalDepthNegativeThreeNestsPrefixSubtotalsBeforeTheirBlocks) {
+  const Value v = EvalSrc(
+      "=GROUPBY({\"x\",\"p\",\"m\";\"x\",\"p\",\"n\";\"x\",\"q\",\"n\";\"y\",\"p\",\"m\"}, {1;5;2;7}, SUM, 0, -3)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 10U);
+  const char* const keys[10][3] = {{"総計", "", ""}, {"x", "", ""},   {"x", "p", ""}, {"x", "p", "m"}, {"x", "p", "n"},
+                                   {"x", "q", ""},   {"x", "q", "n"}, {"y", "", ""},  {"y", "p", ""},  {"y", "p", "m"}};
+  const double sums[10] = {15, 8, 6, 1, 5, 2, 2, 7, 7, 7};
+  for (std::uint32_t r = 0; r < 10U; ++r) {
+    for (std::uint32_t c = 0; c < 3U; ++c) {
+      EXPECT_EQ(std::string(Cell(v, r, c).as_text()), keys[r][c]) << "row " << r << " col " << c;
+    }
+    EXPECT_DOUBLE_EQ(Cell(v, r, 3).as_number(), sums[r]) << "row " << r;
+  }
+}
+
+TEST(GroupBy, TotalDepthThreeWithFourKeysEmitsNoPrefixThreeRows) {
+  const Value v = EvalSrc(
+      "=GROUPBY({\"x\",\"p\",\"m\",\"a\";\"x\",\"p\",\"m\",\"b\";\"x\",\"q\",\"n\",\"a\"}, {1;2;4}, SUM, 0, 3)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  // 3 groups + prefix-1 and prefix-2 subtotals for x, prefix-2 for (x,q) + grand total.
+  ASSERT_EQ(v.as_array_rows(), 7U);
+  ASSERT_EQ(v.as_array_cols(), 5U);
+  // Rows 0-1 are the (x,p,m) leaves; the next row rolls up (x,p), not (x,p,m).
+  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "b");
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "p");
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 2))) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 3.0);
+  EXPECT_EQ(std::string(Cell(v, 4, 1).as_text()), "q");
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 4, 2))) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 4.0);
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 5, 1))) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 4).as_number(), 7.0);
+  EXPECT_EQ(std::string(Cell(v, 6, 0).as_text()), "総計");
 }
 
 TEST(GroupBy, SubtotalsKeepEachOuterGroupContiguousUnderASort) {

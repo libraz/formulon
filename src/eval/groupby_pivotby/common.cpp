@@ -150,11 +150,6 @@ std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
   return locale_facts(ctx.excel_profile()).hierarchy_grand_total;
 }
 
-OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
-                                   const std::vector<std::vector<std::uint32_t>>& group_rows) {
-  return build_prefix_grouping(keys, group_repr, group_rows, 1U);
-}
-
 OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                     const std::vector<std::vector<std::uint32_t>>& group_rows,
                                     std::uint32_t prefix_cols) {
@@ -172,6 +167,7 @@ OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<st
     const std::size_t outer = it->second;
     if (inserted) {
       out.repr_of_outer.push_back(group_repr[g]);
+      out.first_group_of_outer.push_back(g);
       out.rows_of_outer.emplace_back();
     }
     out.outer_of_group[g] = outer;
@@ -180,23 +176,104 @@ OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<st
   return out;
 }
 
-void order_outer_groups(const OuterGrouping& hierarchy, const std::vector<std::size_t>& order,
-                        std::vector<std::size_t>* outer_order, std::vector<std::vector<std::size_t>>* groups_of_outer) {
-  const std::size_t outer_count = hierarchy.repr_of_outer.size();
-  groups_of_outer->assign(outer_count, {});
-  std::vector<bool> outer_seen(outer_count, false);
-  for (const std::size_t g : order) {
-    const std::size_t outer = hierarchy.outer_of_group[g];
-    if (!outer_seen[outer]) {
-      outer_seen[outer] = true;
-      outer_order->push_back(outer);
+AxisHierarchy build_axis_hierarchy(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                   const std::vector<std::vector<std::uint32_t>>& group_rows, bool with_prefixes) {
+  AxisHierarchy out;
+  out.keys = keys.cols;
+  if (with_prefixes) {
+    for (std::uint32_t level = 1U; level < keys.cols; ++level) {
+      out.prefix.push_back(build_prefix_grouping(keys, group_repr, group_rows, level));
     }
-    (*groups_of_outer)[outer].push_back(g);
+  }
+  return out;
+}
+
+std::size_t axis_group_at(const AxisHierarchy& hierarchy, std::uint32_t level, std::size_t flat_group) {
+  if (level == 0U) {
+    return 0U;
+  }
+  return level >= hierarchy.keys ? flat_group : hierarchy.prefix[level - 1U].outer_of_group[flat_group];
+}
+
+AxisEntity axis_parent(const AxisHierarchy& hierarchy, AxisEntity e) {
+  if (e.level <= 1U) {
+    return AxisEntity{};
+  }
+  const std::size_t flat_group =
+      e.level >= hierarchy.keys ? e.index : hierarchy.prefix[e.level - 1U].first_group_of_outer[e.index];
+  return AxisEntity{e.level - 1U, axis_group_at(hierarchy, e.level - 1U, flat_group)};
+}
+
+std::uint32_t axis_entity_repr_row(const AxisHierarchy& hierarchy, const std::vector<std::uint32_t>& group_repr,
+                                   AxisEntity e) {
+  return e.level >= hierarchy.keys ? group_repr[e.index] : hierarchy.prefix[e.level - 1U].repr_of_outer[e.index];
+}
+
+const std::vector<std::uint32_t>& axis_entity_rows(const AxisHierarchy& hierarchy,
+                                                   const std::vector<std::vector<std::uint32_t>>& group_rows,
+                                                   const std::vector<std::uint32_t>& all_rows, AxisEntity e) {
+  if (e.level == 0U) {
+    return all_rows;
+  }
+  return e.level >= hierarchy.keys ? group_rows[e.index] : hierarchy.prefix[e.level - 1U].rows_of_outer[e.index];
+}
+
+namespace {
+
+// Appends the nodes of the flat groups `groups` (in output order, sharing a
+// prefix of `level - 1` keys): one block per `level`-prefix group.
+void plan_axis_block(const AxisHierarchy& hierarchy, const std::vector<std::size_t>& groups, std::uint32_t level,
+                     int depth, std::vector<AxisEntity>* out) {
+  if (level >= hierarchy.keys) {
+    for (const std::size_t g : groups) {
+      out->push_back(AxisEntity{hierarchy.keys, g});
+    }
+    return;
+  }
+  const OuterGrouping& grouping = hierarchy.prefix[level - 1U];
+  std::unordered_map<std::size_t, std::size_t> block_of;
+  std::vector<std::size_t> block_ids;
+  std::vector<std::vector<std::size_t>> blocks;
+  for (const std::size_t g : groups) {
+    const std::size_t id = grouping.outer_of_group[g];
+    const auto [it, inserted] = block_of.try_emplace(id, blocks.size());
+    if (inserted) {
+      block_ids.push_back(id);
+      blocks.emplace_back();
+    }
+    blocks[it->second].push_back(g);
+  }
+  const bool subtotal = static_cast<int>(level) < (depth < 0 ? -depth : depth);
+  for (std::size_t b = 0; b < blocks.size(); ++b) {
+    if (subtotal && depth < 0) {
+      out->push_back(AxisEntity{level, block_ids[b]});
+    }
+    plan_axis_block(hierarchy, blocks[b], level + 1U, depth, out);
+    if (subtotal && depth > 0) {
+      out->push_back(AxisEntity{level, block_ids[b]});
+    }
   }
 }
 
-bool has_outer_subtotals(int depth, std::uint32_t levels) {
-  return (depth == 2 || depth == -2) && levels >= 2U;
+}  // namespace
+
+std::vector<AxisEntity> plan_axis_slots(const AxisHierarchy& hierarchy, const std::vector<std::size_t>& order,
+                                        int depth) {
+  std::vector<AxisEntity> slots;
+  slots.reserve(order.size());
+  if (depth > -2 && depth < 2) {
+    for (const std::size_t g : order) {
+      slots.push_back(AxisEntity{hierarchy.keys, g});
+    }
+  } else {
+    plan_axis_block(hierarchy, order, 1U, depth, &slots);
+  }
+  return slots;
+}
+
+bool total_depth_fits(int depth, std::uint32_t levels) {
+  const std::int64_t magnitude = depth < 0 ? -static_cast<std::int64_t>(depth) : depth;
+  return magnitude <= 1 || magnitude <= static_cast<std::int64_t>(levels);
 }
 
 std::string_view total_label(const EvalContext& ctx, bool with_subtotals) {
@@ -291,9 +368,20 @@ bool read_field_headers(const parser::AstNode& call, std::uint32_t arg_index, st
 bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
                       Value* out_err) {
-  static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
-  return read_optional_int_in_set(call, arg_index, arity, default_value, arena, registry, ctx, kTotalDepths,
-                                  sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), out, out_err);
+  *out = default_value;
+  if (arity <= arg_index || is_omitted_arg(call.as_call_arg(arg_index))) {
+    return true;
+  }
+  double n = 0.0;
+  if (!dynamic_array::eval_number_arg(call.as_call_arg(arg_index), arena, registry, ctx, n, *out_err)) {
+    return false;
+  }
+  if (!std::isfinite(n) || n != std::trunc(n)) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  *out = truncate_saturated_int(n);
+  return true;
 }
 
 bool read_optional_sort_spec(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,

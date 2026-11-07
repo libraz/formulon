@@ -75,43 +75,77 @@ std::string_view grand_total_label(const EvalContext& ctx);
 /// `grand_total_label`.
 std::string_view hierarchy_grand_total_label(const EvalContext& ctx);
 
-/// The outer/inner hierarchy that a `|total_depth| == 2` request needs on
-/// top of the flat composite-key grouping. The outer level is the first key
-/// column alone; every group produced by the flat pass belongs to exactly
-/// one outer group. Outer groups are numbered in first-occurrence order of
-/// their key.
+/// The grouping of the flat composite-key groups by their first `prefix_cols`
+/// key columns. Prefix groups are numbered in first-occurrence order of their
+/// key.
 struct OuterGrouping {
-  /// Outer-group ordinal of each flat group, indexed by flat-group index.
+  /// Prefix-group ordinal of each flat group, indexed by flat-group index.
   std::vector<std::size_t> outer_of_group;
-  /// Every data row belonging to each outer group, for the subtotal
+  /// Every data row belonging to each prefix group, for the subtotal
   /// aggregation.
   std::vector<std::vector<std::uint32_t>> rows_of_outer;
-  /// A representative source row per outer group, for reading its key cell.
+  /// A representative source row per prefix group, for reading its key cells.
   std::vector<std::uint32_t> repr_of_outer;
+  /// The first flat group of each prefix group.
+  std::vector<std::size_t> first_group_of_outer;
 };
 
-/// Builds the outer/inner hierarchy over groups already produced by the flat
-/// composite-key pass. `group_repr` and `group_rows` are the per-flat-group
-/// representative row and member rows; `keys` is the key array they index.
-OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
-                                   const std::vector<std::vector<std::uint32_t>>& group_rows);
-
-/// `build_outer_grouping` over the first `prefix_cols` key columns instead of
-/// the first one alone.
+/// Groups the flat groups produced by the composite-key pass by their first
+/// `prefix_cols` key columns. `group_repr` and `group_rows` are the
+/// per-flat-group representative row and member rows; `keys` is the key array
+/// they index.
 OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                     const std::vector<std::vector<std::uint32_t>>& group_rows,
                                     std::uint32_t prefix_cols);
 
-/// Orders the outer groups of `hierarchy` by their first member in `order` (a
-/// sorted list of flat-group indices) and lists each outer group's members in
-/// that same order. Overwrites `*groups_of_outer`; appends to `*outer_order`.
-void order_outer_groups(const OuterGrouping& hierarchy, const std::vector<std::size_t>& order,
-                        std::vector<std::size_t>* outer_order, std::vector<std::vector<std::size_t>>* groups_of_outer);
+/// A node of an axis hierarchy: `level` is the key-prefix length it covers
+/// (0 = the whole axis, the axis's key count = a flat group) and `index`
+/// numbers it within its level.
+struct AxisEntity {
+  std::uint32_t level = 0;
+  std::size_t index = 0;
+};
 
-/// True when a total-depth request of magnitude 2 has an outer level to roll
-/// up: `levels` is the key-column count of the axis. A single level keeps the
-/// +-1 layout.
-bool has_outer_subtotals(int depth, std::uint32_t levels);
+/// The key-prefix hierarchy of one axis: `prefix[L - 1]` groups the flat
+/// groups by their first L key columns, for L in 1..keys-1. Empty when the
+/// axis needs neither subtotals nor parent totals.
+struct AxisHierarchy {
+  std::uint32_t keys = 0;
+  std::vector<OuterGrouping> prefix;
+};
+
+/// Builds the hierarchy of an axis with `keys.cols` key columns; the prefix
+/// levels only when `with_prefixes`.
+AxisHierarchy build_axis_hierarchy(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                   const std::vector<std::vector<std::uint32_t>>& group_rows, bool with_prefixes);
+
+/// The ordinal of the `level`-prefix group that flat group `flat_group` is in.
+std::size_t axis_group_at(const AxisHierarchy& hierarchy, std::uint32_t level, std::size_t flat_group);
+
+/// The parent total of `e`: the next shorter key prefix containing it. A
+/// prefix-1 group's parent, and the grand total's, is the grand total.
+AxisEntity axis_parent(const AxisHierarchy& hierarchy, AxisEntity e);
+
+/// A source row whose key cells read as `e`'s key.
+std::uint32_t axis_entity_repr_row(const AxisHierarchy& hierarchy, const std::vector<std::uint32_t>& group_repr,
+                                   AxisEntity e);
+
+/// The data rows `e` covers; `all_rows` stands for the whole axis.
+const std::vector<std::uint32_t>& axis_entity_rows(const AxisHierarchy& hierarchy,
+                                                   const std::vector<std::vector<std::uint32_t>>& group_rows,
+                                                   const std::vector<std::uint32_t>& all_rows, AxisEntity e);
+
+/// The nodes of an axis in output order, the grand total excluded. `order`
+/// lists the flat groups sorted. For |depth| >= 2 each prefix of length
+/// 1..|depth|-1 adds a subtotal node, nested block by block (blocks in
+/// first-appearance order within `order`): after its block for depth > 0, before
+/// it for depth < 0. Otherwise the nodes are the flat groups in `order`.
+std::vector<AxisEntity> plan_axis_slots(const AxisHierarchy& hierarchy, const std::vector<std::size_t>& order,
+                                        int depth);
+
+/// True when a `total_depth` request of magnitude `depth` fits an axis of
+/// `levels` key columns: |depth| <= 1 always, deeper only up to `levels`.
+bool total_depth_fits(int depth, std::uint32_t levels);
 
 /// Label of the grand-total row / column; the hierarchy form when the layout
 /// also emits subtotals.
@@ -172,7 +206,8 @@ bool read_field_headers(const parser::AstNode& call, std::uint32_t arg_index, st
                         Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
                         Value* out_err);
 
-/// Optional `total_depth` slot, a member of {-2,-1,0,1,2}.
+/// Optional `total_depth` slot: an integer (a fractional value is #VALUE!).
+/// `total_depth_fits` bounds it by the axis's key count.
 bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err);
 

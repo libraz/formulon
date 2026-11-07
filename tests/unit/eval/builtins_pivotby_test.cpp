@@ -1751,6 +1751,63 @@ TEST(PivotByRelativeTo, OmittedSlotEqualsTenArgumentForm) {
   EXPECT_EQ(eleven.debug_to_string(), ten_text);
 }
 
+TEST(PivotBy, TotalDepthBeyondTheKeyColumnsIsValueError) {
+  const char* const formulas[] = {
+      // Two row keys: depth 3 does not fit.
+      "=PIVOTBY({\"A\",\"a\";\"B\",\"b\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 3)",
+      // Three column keys fit depth 3 but not 4.
+      "=PIVOTBY({\"A\";\"B\"}, {\"c\",\"m\",\"u\";\"c\",\"m\",\"v\"}, {1;2}, SUM, 0, 0,, 4)",
+      "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 2.5)",
+  };
+  for (const char* formula : formulas) {
+    const Value v = EvalSrc(formula);
+    ASSERT_TRUE(v.is_error()) << formula << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
+TEST(PivotBy, ColTotalDepthThreeNestsPrefixSubtotalColumns) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\";\"A\";\"B\"}, {\"c\",\"m\",\"u\";\"c\",\"m\",\"v\";\"d\",\"n\",\"u\"}, {1;2;4}, SUM, 0, 0,, 3)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 5U);  // three header rows + two body rows
+  ASSERT_EQ(v.as_array_cols(), 9U);  // key + 7 column nodes + grand total
+  const char* const headers[3][8] = {{"c", "c", "c", "c", "d", "d", "d", "総計"},
+                                     {"m", "m", "m", "", "n", "n", "", ""},
+                                     {"u", "v", "", "", "u", "", "", ""}};
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    for (std::uint32_t c = 0; c < 8U; ++c) {
+      EXPECT_EQ(std::string(Cell(v, r, c + 1U).as_text()), headers[r][c]) << "header " << r << "," << c;
+    }
+  }
+  const double a_row[8] = {1, 2, 3, 3, -1, -1, -1, 3};
+  const double b_row[8] = {-1, -1, -1, -1, 4, 4, 4, 4};
+  for (std::uint32_t c = 0; c < 8U; ++c) {
+    if (a_row[c] < 0) {
+      EXPECT_TRUE(IsPlaceholder(Cell(v, 3, c + 1U))) << "A col " << c;
+    } else {
+      EXPECT_DOUBLE_EQ(Cell(v, 3, c + 1U).as_number(), a_row[c]) << "A col " << c;
+    }
+    if (b_row[c] < 0) {
+      EXPECT_TRUE(IsPlaceholder(Cell(v, 4, c + 1U))) << "B col " << c;
+    } else {
+      EXPECT_DOUBLE_EQ(Cell(v, 4, c + 1U).as_number(), b_row[c]) << "B col " << c;
+    }
+  }
+}
+
+TEST(PivotByRelativeTo, ParentRowOfALeafIsTheNextShorterPrefix) {
+  // Three row keys at depth 1: the parent of leaf (x,p,m) is (x,p), not (x).
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"x\",\"p\",\"m\";\"x\",\"p\",\"n\";\"x\",\"q\",\"m\"}, {\"c\";\"c\";\"c\"}, {1;3;4}, "
+      "PERCENTOF, 0, 1,,,,, 4)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 5U);  // col-axis row + 3 body rows + grand total
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 0.25);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 0.75);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 1.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

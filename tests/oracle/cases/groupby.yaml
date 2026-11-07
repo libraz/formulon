@@ -639,3 +639,79 @@ cases:
   - id: field_relationship_extra_005
     description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,{4,-3})'
     formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,{4,-3})'
+
+  - id: total_depth_prefix_000
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3)'
+
+  - id: total_depth_prefix_001
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,-3)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,-3)'
+
+  - id: total_depth_prefix_002
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,4)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,4)'
+
+  - id: total_depth_prefix_003
+    description: '=GROUPBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{1;2;3;4;5},SUM,0,3)'
+    formula: '=GROUPBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{1;2;3;4;5},SUM,0,3)'
+
+  - id: total_depth_prefix_004
+    description: '=GROUPBY({"x";"x";"y";"y";"x"},{1;2;3;4;5},SUM,0,2)'
+    formula: '=GROUPBY({"x";"x";"y";"y";"x"},{1;2;3;4;5},SUM,0,2)'
+
+  - id: total_depth_prefix_005
+    description: '=GROUPBY({"x";"x";"y";"y";"x"},{1;2;3;4;5},SUM,0,3)'
+    formula: '=GROUPBY({"x";"x";"y";"y";"x"},{1;2;3;4;5},SUM,0,3)'
+
+  - id: total_depth_prefix_006
+    description: '=GROUPBY({"x","p","m","s";"x","q","n","s";"y","p","m","t";"y","q","n","s";"x","p","n","t";"y","p","n","s";"x","p","m","t"},{1;2;3;4;5;6;7},SUM,0,3)'
+    formula: '=GROUPBY({"x","p","m","s";"x","q","n","s";"y","p","m","t";"y","q","n","s";"x","p","n","t";"y","p","n","s";"x","p","m","t"},{1;2;3;4;5;6;7},SUM,0,3)'
+
+  - id: total_depth_prefix_007
+    description: '=GROUPBY({"x","p","m","s";"x","q","n","s";"y","p","m","t";"y","q","n","s";"x","p","n","t";"y","p","n","s";"x","p","m","t"},{1;2;3;4;5;6;7},SUM,0,4)'
+    formula: '=GROUPBY({"x","p","m","s";"x","q","n","s";"y","p","m","t";"y","q","n","s";"x","p","n","t";"y","p","n","s";"x","p","m","t"},{1;2;3;4;5;6;7},SUM,0,4)'
+
+  - id: total_depth_prefix_008
+    description: '=GROUPBY({"x","p","m","s";"x","q","n","s";"y","p","m","t";"y","q","n","s";"x","p","n","t";"y","p","n","s";"x","p","m","t"},{1;2;3;4;5;6;7},SUM,0,-4)'
+    formula: '=GROUPBY({"x","p","m","s";"x","q","n","s";"y","p","m","t";"y","q","n","s";"x","p","n","t";"y","p","n","s";"x","p","m","t"},{1;2;3;4;5;6;7},SUM,0,-4)'
+
+  - id: total_depth_prefix_009
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,-4)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,-4)'
+
+  - id: total_depth_prefix_010
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,{-1,3})'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,{-1,3})'
+
+  - id: total_depth_prefix_011
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,,,1)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,,,1)'
+
+  - id: total_depth_prefix_012
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,,,0)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,,,0)'
+
+  - id: total_depth_prefix_013
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},PERCENTOF,0,3)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},PERCENTOF,0,3)'
+
+  - id: total_depth_prefix_014
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},COUNT,0,-3)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},COUNT,0,-3)'
+
+  - id: total_depth_prefix_015
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,3,3)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,3,3)'
+
+  - id: total_depth_prefix_016
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,2.5)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,2.5)'
+
+  - id: total_depth_prefix_017
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,-2.5)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,-2.5)'
+
+  - id: total_depth_prefix_018
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,4)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,3,4)'

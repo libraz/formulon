@@ -56,14 +56,10 @@ TEST(PivotBy, RowTotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
   EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B");
 }
 
-TEST(PivotBy, RowTotalDepthTwoWithOneRowKeyColumnKeepsTheGrandTotalOnlyLayout) {
+TEST(PivotBy, RowTotalDepthTwoWithOneRowKeyColumnIsValueError) {
   const Value v = EvalSrc("=PIVOTBY({\"A\";\"A\";\"B\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)");
-  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  // Col-axis row + 2 body rows + grand total; a single row-key column
-  // has no outer level to roll up, so ±2 degrades to the ordinary ±1
-  // grand-total-only layout.
-  ASSERT_EQ(v.as_array_rows(), 4U);
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "合計");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(PivotBy, RowTotalDepthTwoEmitsNoDiagnostic) {
@@ -242,16 +238,10 @@ TEST(PivotBy, ColSubtotalFilterAndErrorRemainLocal) {
   EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 0.125);
 }
 
-TEST(PivotBy, ColTotalDepthTwoWithOneColumnLevelKeepsOrdinaryLayout) {
-  ::formulon::test::LogRecorder log;
-  ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
+TEST(PivotBy, ColTotalDepthTwoWithOneColumnLevelIsValueError) {
   const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0,, 2)");
-  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  ASSERT_EQ(v.as_array_cols(), 4U);  // key + two leaves + ordinary grand total
-  // Row 0 is the col-axis label row; row 1 is the first body row (A).
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
-  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 2)));
-  EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(PivotBy, DefaultDepthEmitsNoDiagnostic) {
