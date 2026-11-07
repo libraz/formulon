@@ -1298,3 +1298,15 @@ cases:
   - id: fixed_blank_ref_decimals
     description: 'A blank reference as decimals is zero'
     formula: '=FIXED(1.234,A99)'
+
+  - id: textbefore_omitted_if_not_found
+    description: 'An omitted if_not_found leaves the miss as #N/A'
+    formula: '=TEXTBEFORE("abc","x",,,,)'
+
+  - id: textafter_omitted_if_not_found
+    description: 'An omitted if_not_found after explicit options is #N/A'
+    formula: '=TEXTAFTER("abc","x",1,0,0,)'
+
+  - id: textbefore_blank_ref_if_not_found
+    description: 'A blank reference as if_not_found yields empty text'
+    formula: '=TEXTBEFORE("abc","x",,,,A99)'

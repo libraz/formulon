@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-07T19:24:08Z"
+    "generated_at": "2026-11-07T22:07:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -3232,6 +3232,33 @@
       "expect": {
         "kind": "text",
         "value": "1"
+      }
+    },
+    {
+      "id": "textbefore_omitted_if_not_found",
+      "formula": "=TEXTBEFORE(\"abc\",\"x\",,,,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "textafter_omitted_if_not_found",
+      "formula": "=TEXTAFTER(\"abc\",\"x\",1,0,0,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "textbefore_blank_ref_if_not_found",
+      "formula": "=TEXTBEFORE(\"abc\",\"x\",,,,A99)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": ""
       }
     }
   ]

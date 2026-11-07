@@ -764,6 +764,13 @@ TEST(BuiltinsText3OmittedArgs, TextBeforeOmittedMiddleSlotsKeepIfNotFound) {
   ExpectTextResult(EvalSource("=TEXTBEFORE(\"xAy\",\"a\",,,,\"nf\")"), "nf", "TEXTBEFORE omitted middle slots");
 }
 
+TEST(BuiltinsText3OmittedArgs, OmittedIfNotFoundIsNaAndBlankReferenceIsEmptyText) {
+  ExpectErrorResult(EvalSource("=TEXTBEFORE(\"abc\",\"x\",,,,)"), ErrorCode::NA, "TEXTBEFORE omitted if_not_found");
+  ExpectErrorResult(EvalSource("=TEXTAFTER(\"abc\",\"x\",1,0,0,)"), ErrorCode::NA, "TEXTAFTER omitted if_not_found");
+  ExpectTextResult(EvalWithBlankA99("=TEXTBEFORE(\"abc\",\"x\",,,,A99)"), "", "TEXTBEFORE blank if_not_found");
+  ExpectTextResult(EvalWithBlankA99("=TEXTAFTER(\"abc\",\"x\",,,,A99)"), "", "TEXTAFTER blank if_not_found");
+}
+
 TEST(BuiltinsText3OmittedArgs, TextBeforeBlankReferenceInstanceIsValueError) {
   ExpectErrorResult(EvalWithBlankA99("=TEXTBEFORE(\"xAy\",\"A\",A99,0)"), ErrorCode::Value,
                     "TEXTBEFORE blank reference instance");

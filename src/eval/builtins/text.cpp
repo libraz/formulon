@@ -620,11 +620,12 @@ Value ReplaceUtf16(const Value* args, std::uint32_t arity, Arena& arena) {
 
 namespace {
 
-// instance_num, match_mode and match_end of TEXTBEFORE / TEXTAFTER.
+// instance_num, match_mode and match_end of TEXTBEFORE / TEXTAFTER; an omitted if_not_found is #N/A.
 constexpr OmittedArgDefault kTextBeforeAfterOmitted[] = {
     {2u, OmittedArgDefault::Kind::kNumber, 1.0},
     {3u, OmittedArgDefault::Kind::kNumber, 0.0},
     {4u, OmittedArgDefault::Kind::kNumber, 0.0},
+    {5u, OmittedArgDefault::Kind::kAbsent, 0.0},
 };
 
 }  // namespace

@@ -224,8 +224,9 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
     // if_not_found is a passthrough fallback value: an error value here is
     // only surfaced when the match actually fails. With propagate_errors=false
     // on the registration, the dispatcher delivers it as a raw Value.
+    // A blank cell falls back to empty text, not to 0.
     opts.has_if_not_found = true;
-    opts.if_not_found = args[5];
+    opts.if_not_found = args[5].is_blank() ? Value::text("") : args[5];
   }
   return opts;
 }
