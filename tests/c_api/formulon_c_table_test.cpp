@@ -641,6 +641,11 @@ TEST(FormulonCApiTable, AddUpdateAndRenameRefuseWhatExcelRefuses) {
             0);
   EXPECT_EQ(fm_workbook_update_table(wb.handle, index, record_arg(fm_cell_rect_t{0, 1, 2, 2}), nullptr, -1, -1),
             kInvalidArgument);
+  // A resize keeps the first row and, under a header row, one data row.
+  EXPECT_EQ(fm_workbook_update_table(wb.handle, index, record_arg(fm_cell_rect_t{1, 4, 3, 5}), nullptr, -1, -1),
+            kInvalidArgument);
+  EXPECT_EQ(fm_workbook_update_table(wb.handle, index, record_arg(fm_cell_rect_t{0, 4, 0, 5}), nullptr, -1, -1),
+            kInvalidArgument);
   EXPECT_EQ(fm_workbook_update_table(wb.handle, index, record_arg(fm_cell_rect_t{0, 4, 3, 5}), nullptr, -1, -1), 0);
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, index, "R2D2", nullptr), kInvalidArgument);
   EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 2U);

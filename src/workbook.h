@@ -750,9 +750,17 @@ class Workbook {
   /// identity or range, a column mismatch, a display name `is_valid_table_name`
   /// refuses, a name or display name any existing table (a verbatim-retained
   /// XLSB table part included) or defined name of any scope already uses, or
-  /// a range overlapping another table on the sheet. `table.style_info` is
-  /// kept as given.
+  /// a range that overlaps another table, a PivotTable, a data table or a
+  /// multi-cell array formula, or cuts through merged cells. Merges wholly
+  /// inside the range are removed. `table.style_info` is kept as given.
   Expected<std::size_t, Error> add_table(TableMetadata table);
+
+  /// Checks `rect` as the new range of table `index`, as Excel's resize does:
+  /// the first row stays, a table with a header row keeps a data row, and the
+  /// range overlaps no other table, PivotTable, data table, multi-cell array
+  /// formula or merged cell. The table's current range always passes.
+  /// Returns `kInvalidArgument` on refusal or an out-of-range `index`.
+  Expected<void, Error> check_table_resize(std::size_t index, const MergeRange& rect) const;
 
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
   /// of any table nor a defined name (compared case-insensitively), as
@@ -775,7 +783,10 @@ class Workbook {
   /// graph edges and cached values reflect the current table metadata --
   /// mirrors `set_defined_name_scoped`'s scoped reindex, since a
   /// `StructuredRef` resolves to a static rectangle at registration time
-  /// the same way a `NameRef` does. An empty `table_names` is a no-op.
+  /// the same way a `NameRef` does. Also hands every sheet its tables'
+  /// current rectangles for spill admission and dirties the spills a
+  /// rectangle that came or went blocks or releases. An empty `table_names`
+  /// is a no-op.
   void reindex_formulas_for_table_change(const std::vector<std::string>& table_names);
 
   /// Renames table `index` and rewrites every structured reference naming its

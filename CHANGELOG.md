@@ -495,7 +495,9 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   table or a multi-cell array formula, or one that cuts through merged
   cells, and unmerges the merges the range covers, as Excel does. Where
   Excel widens the range to take in a merge it cuts through, the table is
-  refused instead, because its columns are given by the caller.
+  refused instead, because its columns are given by the caller. Resizing
+  refuses the same overlaps, any merged cell in the new range, a move of
+  the first row, and a range left with no data row under a header row.
   Setting a new defined name refuses a name outside that syntax or one a
   table uses. Such workbooks were written without complaint and Excel
   refused to open them.

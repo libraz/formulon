@@ -91,15 +91,19 @@ Expected<void, Error> check_table_identity(const Workbook& wb, std::string_view 
   return Expected<void, Error>::Ok();
 }
 
-// Refusal of `rect` on `sheet_index` as a new table's range, on the first
-// structure Excel keeps a table from overlapping. A merge wholly inside is not
-// one: the table unmerges it.
+// Refusal of `rect` on `sheet_index` as the range of a table other than
+// `self`, on the first structure Excel keeps a table from overlapping. With
+// `unmerge_inside`, as on creation, a merge wholly inside is not one.
 Expected<void, Error> check_table_range_free(const Workbook& wb, std::size_t sheet_index, const MergeRange& rect,
-                                             const std::string& ref) {
-  const auto refuse = [&](const char* what) { return invalid_table(what, "ref=" + ref); };
-  for (const TableMetadata& other : wb.tables()) {
-    const std::optional<MergeRange> other_rect = detail::table_rect_on_sheet(other, sheet_index);
-    if (other_rect && intersects(rect, *other_rect)) {
+                                             std::optional<std::size_t> self, bool unmerge_inside) {
+  const auto refuse = [&](const char* what) {
+    std::string ref;
+    append_a1_rectangle(ref, rect);
+    return invalid_table(what, "ref=" + ref);
+  };
+  for (std::size_t i = 0; i < wb.tables().size(); ++i) {
+    const std::optional<MergeRange> other_rect = detail::table_rect_on_sheet(wb.tables()[i], sheet_index);
+    if (i != self && other_rect && intersects(rect, *other_rect)) {
       return refuse("table range overlaps another table");
     }
   }
@@ -134,8 +138,8 @@ Expected<void, Error> check_table_range_free(const Workbook& wb, std::size_t she
   }
   for (const MergeRange& merge : sheet.merges()) {
     const MergeRange m = normalized(merge);
-    if (intersects(m, rect) && !contains(rect, m)) {
-      return refuse("table range cuts through merged cells");
+    if (intersects(m, rect) && !(unmerge_inside && contains(rect, m))) {
+      return refuse(unmerge_inside ? "table range cuts through merged cells" : "table range overlaps merged cells");
     }
   }
   return Expected<void, Error>::Ok();
@@ -155,7 +159,7 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
                          "ref=" + table.ref + " column_count=" + std::to_string(table.columns.size()));
   }
   RETURN_IF_ERROR(check_table_identity(*this, table.name, table.display_name, std::nullopt));
-  RETURN_IF_ERROR(check_table_range_free(*this, table.sheet_index, *rect, table.ref));
+  RETURN_IF_ERROR(check_table_range_free(*this, table.sheet_index, *rect, std::nullopt, /*unmerge_inside=*/true));
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
   std::uint32_t next_id = 1;
   for (const TableMetadata& existing : tables_) {
@@ -195,6 +199,24 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   const TableMetadata& created = tables_.back();
   reindex_formulas_for_table_change({created.name, created.display_name});
   return tables_.size() - 1U;
+}
+
+Expected<void, Error> Workbook::check_table_resize(std::size_t index, const MergeRange& rect) const {
+  if (index >= tables_.size()) {
+    return invalid_table("check_table_resize: index out of range", "index=" + std::to_string(index));
+  }
+  const TableMetadata& table = tables_[index];
+  const std::optional<MergeRange> current = parse_a1_rectangle(table.ref);
+  if (current && *current == rect) {
+    return Expected<void, Error>::Ok();
+  }
+  if (current && current->first_row != rect.first_row) {
+    return invalid_table("table range must keep its first row", "ref=" + table.ref);
+  }
+  if (table.header_row && rect.first_row == rect.last_row) {
+    return invalid_table("table range has no data row", "ref=" + table.ref);
+  }
+  return check_table_range_free(*this, table.sheet_index, rect, index, /*unmerge_inside=*/false);
 }
 
 void Workbook::set_tables(std::vector<TableMetadata> tables) {

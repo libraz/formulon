@@ -163,6 +163,27 @@ TEST(WorkbookTables, AddTableRefusesWhatExcelKeepsATableOffAndUnmergesTheRest) {
   EXPECT_EQ(wb.sheet(0).merges()[0].first_row, 20U);
 }
 
+TEST(WorkbookTables, ResizeChecksWhatExcelsResizeRefuses) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(make_table("One", "A1:B4", 2)).has_value());
+  ASSERT_TRUE(wb.add_table(make_table("Two", "D1:E4", 2)).has_value());
+  ASSERT_TRUE(wb.add_merge(0, MergeRange{5U, 0U, 5U, 1U}).has_value());    // A6:B6
+  ASSERT_TRUE(wb.set_array_formula(0, 9U, 0U, 1U, 1U, "=1").has_value());  // A10
+  const auto resized = [&](std::uint32_t first_row, std::uint32_t last_row, std::uint32_t last_col) {
+    auto r = wb.check_table_resize(0, MergeRange{first_row, 0U, last_row, last_col});
+    return r.has_value() ? std::string("accepted") : r.error().message;
+  };
+  EXPECT_EQ(resized(0U, 3U, 1U), "accepted");
+  EXPECT_EQ(resized(1U, 4U, 1U), "table range must keep its first row");
+  EXPECT_EQ(resized(0U, 0U, 1U), "table range has no data row");
+  EXPECT_EQ(resized(0U, 3U, 3U), "table range overlaps another table");
+  EXPECT_EQ(resized(0U, 6U, 1U), "table range overlaps merged cells");
+  EXPECT_EQ(resized(0U, 4U, 1U), "accepted");
+  ASSERT_TRUE(wb.remove_merges_intersecting(0, MergeRange{5U, 0U, 5U, 1U}).has_value());
+  EXPECT_EQ(resized(0U, 11U, 1U), "accepted");
+  EXPECT_FALSE(wb.check_table_resize(2, MergeRange{0U, 0U, 3U, 1U}).has_value());
+}
+
 TEST(WorkbookTables, RenameTableChecksTheNewNames) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(wb.add_table(make_table("One", "A1:B4", 2)).has_value());

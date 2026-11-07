@@ -378,11 +378,9 @@ extern "C" fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index,
                             "ref=" + std::string(ref) + " column_count=" + std::to_string(table.columns.size()));
   }
 
-  const std::optional<formulon::MergeRange> next_rect = formulon::parse_a1_rectangle(ref);
-  for (std::size_t i = 0; i < tables.size() && next_rect; ++i) {
-    const std::optional<formulon::MergeRange> other = formulon::parse_a1_rectangle(tables[i].ref);
-    if (i != index && tables[i].sheet_index == table.sheet_index && other && formulon::intersects(*next_rect, *other)) {
-      return invalid_argument("table range overlaps another table", "ref=" + ref);
+  if (const std::optional<formulon::MergeRange> next_rect = formulon::parse_a1_rectangle(ref)) {
+    if (auto checked = wb->workbook().check_table_resize(index, *next_rect); !checked) {
+      return finish_status(checked);
     }
   }
 
