@@ -44,7 +44,7 @@ fm_shape_t Callout() {
   s.to_col = 4;
   s.fill_kind = FM_SHAPE_PAINT_SOLID;
   s.fill_color.kind = kFmColorRgb;
-  s.fill_color.rgb = 0xFFCC00;
+  s.fill_color.rgb = 0xFFFFCC00U;
   s.line_kind = FM_SHAPE_PAINT_NONE;
   s.line_width_emu = 12700;
   s.rotation = 300000;
@@ -84,7 +84,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   connector.height_emu = 0;
   connector.line_kind = FM_SHAPE_PAINT_SOLID;
   connector.line_color.kind = kFmColorRgb;
-  connector.line_color.rgb = 0x00FF00;
+  connector.line_color.rgb = 0xFF00FF00U;
   uint32_t line_id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &connector, &line_id), 0) << fm_get_last_error_message();
 
@@ -105,7 +105,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(out.to_col, 4U);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_SOLID);
   EXPECT_EQ(out.fill_color.kind, kFmColorRgb);
-  EXPECT_EQ(out.fill_color.rgb, 0xFFCC00U);
+  EXPECT_EQ(out.fill_color.rgb, 0xFFFFCC00U);
   EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_NONE);
   EXPECT_EQ(out.line_width_emu, 12700);
   EXPECT_EQ(out.rotation, 300000);
@@ -115,7 +115,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(out.from_col_offset_emu, 500);
   EXPECT_EQ(out.width_emu, 914400);
   EXPECT_EQ(out.line_color.kind, kFmColorRgb);
-  EXPECT_EQ(out.line_color.rgb, 0x00FF00U);
+  EXPECT_EQ(out.line_color.rgb, 0xFF00FF00U);
 
   fm_shape_t patch = FM_STRUCT_INIT(fm_shape_t);
   patch.fields = FM_SHAPE_FIELD_NAME | FM_SHAPE_FIELD_HIDDEN | FM_SHAPE_FIELD_FILL;

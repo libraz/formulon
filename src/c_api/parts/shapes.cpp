@@ -40,12 +40,16 @@ using formulon::c_api::parts::to_c;
 
 namespace {
 
+// A shape paint stores 0xRRGGBB; the C colour carries it as opaque ARGB.
+constexpr std::uint32_t kOpaque = 0xFF000000U;
+constexpr std::uint32_t kRgbMask = 0x00FFFFFFU;
+
 // The colour of a shape paint: Rgb for a solid paint, None otherwise.
 fm_color_spec_t paint_color_to_c(formulon::ShapePaint paint, std::uint32_t rgb) {
   formulon::ColorSpec spec;
   if (paint == formulon::ShapePaint::kSolid) {
     spec.kind = formulon::ColorSpec::Kind::kRgb;
-    spec.rgb = rgb;
+    spec.rgb = kOpaque | (rgb & kRgbMask);
   }
   return color_spec_to_c(spec);
 }
@@ -53,7 +57,7 @@ fm_color_spec_t paint_color_to_c(formulon::ShapePaint paint, std::uint32_t rgb) 
 std::uint32_t paint_rgb_from_c(const fm_color_spec_t& color) {
   std::uint32_t rgb = 0U;
   color_spec_from_c(color, &rgb);
-  return rgb;
+  return rgb & kRgbMask;
 }
 
 // Converts `shape` to the model spec; a non-zero return is the status to report.
