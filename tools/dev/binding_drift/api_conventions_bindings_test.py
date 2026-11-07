@@ -2886,6 +2886,39 @@ class AdoptedShapeTest(BindingRuleTestBase):
         found = [h for h in hits(self.fixture.context("", ledger, wasm=good), "R23.list") if h[1] == "collection.font"]
         self.assertEqual(found, [])
 
+    def test_python_ooxml_layer_methods_are_on_the_surface(self) -> None:
+        ledger = CollectionAccessTest().ledger()
+        for entry in ledger["entries"].values():
+            entry["surfaces"] = ["c", "py"]
+        ledger["entries"]["font.get"]["py"] = "get_font"
+        layer = "class WorkbookOoxml:\n    def get_font(self, i: int) -> Font: ...\n    def list_fonts(self) -> List[Font]: ...\n"
+        good = _py_wb("", prelude=layer)
+        bad = _py_wb("", prelude=layer.replace("WorkbookOoxml", "WorkbookStyles"))
+        found = [
+            h for h in hits(self.fixture.context("", ledger, py_workbook=bad), "R23.list") if h[1] == "collection.font"
+        ]
+        self.assertEqual(found, [("py", "collection.font", "getter"), ("py", "collection.font", "list_fonts")])
+        found = [
+            h for h in hits(self.fixture.context("", ledger, py_workbook=good), "R23.list") if h[1] == "collection.font"
+        ]
+        self.assertEqual(found, [])
+
+    def test_python_ooxml_layer_overloads(self) -> None:
+        py = api_conventions_bindings.PySurface(
+            {
+                "sheet.py": "class SheetOoxml:\n"
+                "    @overload\n    def get_cell_xf_index(self, row: int, col: int) -> int: ...\n"
+                "    @overload\n    def get_cell_xf_index(self, a1: str) -> int: ...\n"
+                "    def get_cell_xf_index(self, *args: Any) -> int: ...\n"
+            }
+        )
+        self.assertIn("get_cell_xf_index", py.callables())
+        self.assertEqual(py.symbols()["get_cell_xf_index"], "method")
+        self.assertNotIn("get_cell_xf_index", py.class_methods()["Sheet"])
+        self.assertEqual(
+            [[p for p, _ in f.params] for f in py.overloads("get_cell_xf_index")], [["row", "col"], ["a1"]]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

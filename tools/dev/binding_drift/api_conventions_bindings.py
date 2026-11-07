@@ -462,25 +462,39 @@ class PySurface:
             and not any(d.endswith("property") or d.endswith(".setter") for d in fn.decorators)
         }
 
+    @property
+    def ooxml(self) -> Dict[str, PyFunc]:
+        """Public methods of the `ooxml` layers of `Workbook` and `Sheet` (`WorkbookOoxml`, `SheetOoxml`)."""
+        out: Dict[str, PyFunc] = {}
+        for class_name in OOXML_CLASSES.values():
+            cls = self.classes.get(class_name)
+            out.update({name: fn for name, fn in (cls.methods.items() if cls else ()) if not name.startswith("_")})
+        return out
+
     def class_methods(self) -> Dict[str, Dict[str, PyFunc]]:
+        """The direct methods of `Workbook` and `Sheet`; the `ooxml` layers are not among them."""
         return {WORKBOOK_CLASS: self.workbook, SHEET_CLASS: self.sheet}
 
     def overloads(self, name: str) -> Tuple[PyFunc, ...]:
-        """The `@overload` stubs of the `Sheet` or `Workbook` method `name`, in definition order."""
-        for class_name in (SHEET_CLASS, WORKBOOK_CLASS):
+        """The `@overload` stubs of the `Sheet` or `Workbook` method `name` (or of their `ooxml` layers), in
+        definition order."""
+        for class_name in (SHEET_CLASS, WORKBOOK_CLASS, *OOXML_CLASSES.values()):
             cls = self.classes.get(class_name)
             if cls is not None and name in cls.overloads:
                 return cls.overloads[name]
         return ()
 
     def callables(self) -> Dict[str, PyFunc]:
+        """Exported free functions and instance methods, the `ooxml` layers' included, by tree name."""
         out = {name: fn for name, fn in self.functions.items() if name in self.exports}
+        out.update(self.ooxml)
         out.update(self.sheet)
         out.update(self.workbook)
         return out
 
     def symbols(self) -> Dict[str, str]:
         out = {name: "export" for name in self.exports}
+        out.update({name: "method" for name in self.ooxml})
         out.update({name: "method" for name in self.sheet if name not in FACADE_EXTRA["py"][SHEET_CLASS]})
         out.update({name: "method" for name in self.workbook})
         return out
