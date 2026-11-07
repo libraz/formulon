@@ -41,18 +41,10 @@ using builtins_detail::to_finite_value;
 
 // 1..13 are the SUBTOTAL-aligned modes; 14..19 are the AGGREGATE-only "k-
 // arg" modes. Storing the integer code rather than an enum keeps the
-// k-arg validation switch easy to read against the Excel docs.
-constexpr int kCodeAverage = 1;
+// k-arg validation switch easy to read against the Excel docs. The plain
+// numeric aggregators (1, 4..11) dispatch through `run_aggregate_code`.
 constexpr int kCodeCount = 2;
 constexpr int kCodeCountA = 3;
-constexpr int kCodeMax = 4;
-constexpr int kCodeMin = 5;
-constexpr int kCodeProduct = 6;
-constexpr int kCodeStdevS = 7;
-constexpr int kCodeStdevP = 8;
-constexpr int kCodeSum = 9;
-constexpr int kCodeVarS = 10;
-constexpr int kCodeVarP = 11;
 constexpr int kCodeMedian = 12;
 constexpr int kCodeModeSngl = 13;
 constexpr int kCodeLarge = 14;
@@ -739,34 +731,10 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
 
   switch (code) {
-    case kCodeAverage:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_average(to_numbers(cells)));
     case kCodeCount:
       return run_count(cells);
     case kCodeCountA:
       return run_counta(cells);
-    case kCodeMax:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_max(to_numbers(cells)));
-    case kCodeMin:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_min(to_numbers(cells)));
-    case kCodeProduct:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_product(to_numbers(cells)));
-    case kCodeStdevS:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/true));
-    case kCodeStdevP:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/false));
-    case kCodeSum:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_sum(to_numbers(cells)));
-    case kCodeVarS:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/true));
-    case kCodeVarP:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/false));
     case kCodeMedian:
       // The shared kernel sorts internally; do NOT pre-sort. Its empty-slice
       // code is `#NUM!`, which is what standalone MEDIAN reports.
@@ -778,8 +746,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
       return numeric_aggregate_kernels::value_from_kernel_result(
           numeric_aggregate_kernels::mode_first_occurrence(to_numbers(cells)));
     default:
-      // Unreachable: code is constrained to [1, 13] in this branch.
-      return Value::error(ErrorCode::Value);
+      return numeric_aggregate_kernels::run_aggregate_code(code, to_numbers(cells));
   }
 }
 

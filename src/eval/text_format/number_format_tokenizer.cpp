@@ -76,40 +76,164 @@ bool same_letters(const FormatLetters& a, const FormatLetters& b) noexcept {
 
 }  // namespace
 
+namespace {
+
+void push_literal_token(std::vector<Token>& toks, std::size_t b, std::size_t e, bool protected_literal = false) {
+  if (b == e) {
+    return;
+  }
+  Token t;
+  t.kind = Tok::Literal;
+  t.lit_begin = b;
+  t.lit_end = e;
+  t.protected_literal = protected_literal;
+  toks.push_back(t);
+}
+
+void push_plain_token(std::vector<Token>& toks, Tok kind, std::size_t width = 0) {
+  Token t;
+  t.kind = kind;
+  t.width = width;
+  toks.push_back(t);
+}
+
+// `digit_choice` value for th-TH's `t` letter.
+constexpr int kThaiDigitChoice = 5;
+
+// Section state the bracketed specifiers update.
+struct BracketState {
+  bool saw_color = false;
+  bool saw_tag = false;
+  FormatTag own_tag;
+  // 0, a `[DBNumN]` index, or th-TH's `t`; resolved once the section's tag is known.
+  int digit_choice = 0;
+};
+
+// Handles the bracketed specifier opening at `fmt[i]` and advances `i` past its closing bracket;
+// false when the bracket is never closed. Recognised kinds:
+//   `[h]` / `[m]` / `[s]`   -> elapsed-time tokens (any run length).
+//   `[$...]`                -> currency symbol and locale tag.
+//   `[Red]` / ...           -> named color qualifier; silently dropped (no color in text).
+//   `[ColorN]`              -> indexed color qualifier; silently dropped.
+//   `[DBNum1]` ...          -> digit style on ja-JP, inert on en-US.
+// Anything else (`[>100]`, unknown qualifiers) still trips the invalid-bracket flag and surfaces as #VALUE!.
+bool tokenize_bracket(std::string_view fmt, std::size_t& i, Section& out, BracketState& st) {
+  const std::size_t body_begin = i + 1;
+  std::size_t j = i + 1;
+  while (j < fmt.size() && fmt[j] != ']') {
+    ++j;
+  }
+  if (j == fmt.size()) {
+    out.has_invalid_bracket = true;
+    return false;
+  }
+  const std::string_view body = fmt.substr(body_begin, j - body_begin);
+  i = j + 1;
+  // Elapsed time markers: any run of `h`, `m`, or `s` (case-insensitive).
+  bool all_h = !body.empty();
+  bool all_m = !body.empty();
+  bool all_s = !body.empty();
+  for (char ch : body) {
+    const char lo = strings::ascii_to_lower(ch);
+    if (lo != 'h') {
+      all_h = false;
+    }
+    if (lo != 'm') {
+      all_m = false;
+    }
+    if (lo != 's') {
+      all_s = false;
+    }
+  }
+  if (all_h) {
+    push_plain_token(out.tokens, Tok::DateElapsedH, body.size());
+  } else if (all_m) {
+    push_plain_token(out.tokens, Tok::DateElapsedM, body.size());
+  } else if (!body.empty() && body.front() == '$') {
+    // Locale-currency marker. Form: `[$<symbol>-<lcid>]` or `[$<symbol>]`
+    // or `[$-<lcid>]`. The `<symbol>` portion (everything after `$` up
+    // to the optional `-LCID` suffix) is emitted as a literal prefix;
+    // the spec after `-` switches names, calendar and digits for the
+    // section (`FormatTag`). Mac Excel 365 emits e.g. `[$JPY-411]#,##0`
+    // -> `JPY1,234,567`.
+    //
+    // `body_begin` points at the `$` in `fmt`; the symbol bytes start
+    // at `body_begin + 1` and run until either `-` or the end of body.
+    const std::size_t sym_begin = body_begin + 1;
+    std::size_t sym_end = sym_begin + (body.size() - 1);
+    for (std::size_t k = 1; k < body.size(); ++k) {
+      if (body[k] == '-') {
+        sym_end = body_begin + k;
+        break;
+      }
+    }
+    push_literal_token(out.tokens, sym_begin, sym_end);
+    // One tag per section (locale_tokens.lcid_parse_variants).
+    if (st.saw_tag) {
+      out.has_invalid_bracket = true;
+    }
+    st.saw_tag = true;
+    if (sym_end < body_begin + body.size()) {
+      st.own_tag.present = true;
+      if (!parse_format_tag(fmt.substr(sym_end + 1, body_begin + body.size() - sym_end - 1), &st.own_tag)) {
+        out.has_invalid_bracket = true;
+      }
+    }
+  } else if (all_s) {
+    push_plain_token(out.tokens, Tok::DateElapsedS, body.size());
+  } else if (is_color_specifier(body)) {
+    // Named colour (`[Red]`) or indexed colour (`[Color12]`). Excel discards
+    // the colour inside TEXT, so the rest of the section still formats
+    // the value. A section may carry at most one colour, though: Excel
+    // rejects `[Red][Blue]0.00` with #VALUE! even though either bracket
+    // alone is inert.
+    if (st.saw_color) {
+      out.has_invalid_bracket = true;
+    }
+    st.saw_color = true;
+    out.has_color = true;
+  } else if (const int dbnum = parse_dbnum_directive(body); dbnum > 0) {
+    // `[DBNum1]`-`[DBNum4]`: digit style for the section, last write wins.
+    st.digit_choice = dbnum;
+  } else {
+    // Conditional-section directive `[>1000]`, `[<=0]`, ...
+    // Only one predicate per section; if a second one appears,
+    // last-write-wins (matches Mac Excel: the rightmost directive
+    // shadows earlier ones in the same section).
+    CondOp cop = CondOp::kNone;
+    double cval = 0.0;
+    const int rc = parse_cond_directive(body, &cop, &cval);
+    if (rc > 0) {
+      out.cond_op = cop;
+      out.cond_value = cval;
+    } else {
+      // Either the body doesn't look like a predicate (rc == 0) or it
+      // does but the numeric tail failed to parse (rc < 0). Both surface
+      // as #VALUE! through the existing invalid-bracket channel.
+      out.has_invalid_bracket = true;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
 void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters, const FormatTag* format_tag) {
   std::vector<Token>& toks = out.tokens;
   const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
   const bool invariant_letters = same_letters(letters, kInvariantFormatLetters);
   auto push_literal = [&](std::size_t b, std::size_t e, bool protected_literal = false) {
-    if (b == e) {
-      return;
-    }
-    Token t;
-    t.kind = Tok::Literal;
-    t.lit_begin = b;
-    t.lit_end = e;
-    t.protected_literal = protected_literal;
-    toks.push_back(t);
+    push_literal_token(toks, b, e, protected_literal);
   };
 
-  auto push_token = [&](Tok kind, std::size_t width = 0) {
-    Token t;
-    t.kind = kind;
-    t.width = width;
-    toks.push_back(t);
-  };
+  auto push_token = [&](Tok kind, std::size_t width = 0) { push_plain_token(toks, kind, width); };
 
-  bool saw_color = false;
-  bool saw_tag = false;
-  FormatTag own_tag;
+  BracketState bracket;
   // An unquoted digit other than 0 makes a text section invalid (locale_tokens.text_section_bare_digit).
   bool bare_digit = false;
   // Index of the first token after an unquoted colon; a digit placeholder there is #VALUE!.
   std::size_t after_colon = SIZE_MAX;
-  // 0, a `[DBNumN]` index, or th-TH's `t`; resolved once the section's tag is known.
-  constexpr int kThaiDigitChoice = 5;
   constexpr std::uint8_t kThaiNumeralSystem = 0x0D;
-  int digit_choice = 0;
   std::size_t i = 0;
   while (i < fmt.size()) {
     const char c = fmt[i];
@@ -139,110 +263,9 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       i += 1 + payload_width;
       continue;
     }
-    // Bracketed specifier. Recognised kinds:
-    //   `[h]` / `[m]` / `[s]`   -> elapsed-time tokens (any run length).
-    //   `[$...]`                -> currency symbol and locale tag.
-    //   `[Red]` / ...           -> named color qualifier; silently dropped
-    //                               (no color in text).
-    //   `[ColorN]`              -> indexed color qualifier; silently dropped.
-    //   `[DBNum1]` ...          -> digit style on ja-JP, inert on en-US.
-    // Anything else (`[>100]`, unknown qualifiers) still trips the
-    // invalid-bracket flag and surfaces as #VALUE!.
     if (c == '[') {
-      const std::size_t body_begin = i + 1;
-      std::size_t j = i + 1;
-      while (j < fmt.size() && fmt[j] != ']') {
-        ++j;
-      }
-      if (j == fmt.size()) {
-        out.has_invalid_bracket = true;
+      if (!tokenize_bracket(fmt, i, out, bracket)) {
         return;
-      }
-      const std::string_view body = fmt.substr(body_begin, j - body_begin);
-      i = j + 1;
-      // Elapsed time markers: any run of `h`, `m`, or `s` (case-insensitive).
-      bool all_h = !body.empty();
-      bool all_m = !body.empty();
-      bool all_s = !body.empty();
-      for (char ch : body) {
-        const char lo = strings::ascii_to_lower(ch);
-        if (lo != 'h') {
-          all_h = false;
-        }
-        if (lo != 'm') {
-          all_m = false;
-        }
-        if (lo != 's') {
-          all_s = false;
-        }
-      }
-      if (all_h) {
-        push_token(Tok::DateElapsedH, body.size());
-      } else if (all_m) {
-        push_token(Tok::DateElapsedM, body.size());
-      } else if (!body.empty() && body.front() == '$') {
-        // Locale-currency marker. Form: `[$<symbol>-<lcid>]` or `[$<symbol>]`
-        // or `[$-<lcid>]`. The `<symbol>` portion (everything after `$` up
-        // to the optional `-LCID` suffix) is emitted as a literal prefix;
-        // the spec after `-` switches names, calendar and digits for the
-        // section (`FormatTag`). Mac Excel 365 emits e.g. `[$JPY-411]#,##0`
-        // -> `JPY1,234,567`.
-        //
-        // `body_begin` points at the `$` in `fmt`; the symbol bytes start
-        // at `body_begin + 1` and run until either `-` or the end of body.
-        const std::size_t sym_begin = body_begin + 1;
-        std::size_t sym_end = sym_begin + (body.size() - 1);
-        for (std::size_t k = 1; k < body.size(); ++k) {
-          if (body[k] == '-') {
-            sym_end = body_begin + k;
-            break;
-          }
-        }
-        push_literal(sym_begin, sym_end);
-        // One tag per section (locale_tokens.lcid_parse_variants).
-        if (saw_tag) {
-          out.has_invalid_bracket = true;
-        }
-        saw_tag = true;
-        if (sym_end < body_begin + body.size()) {
-          own_tag.present = true;
-          if (!parse_format_tag(fmt.substr(sym_end + 1, body_begin + body.size() - sym_end - 1), &own_tag)) {
-            out.has_invalid_bracket = true;
-          }
-        }
-      } else if (all_s) {
-        push_token(Tok::DateElapsedS, body.size());
-      } else if (is_color_specifier(body)) {
-        // Named colour (`[Red]`) or indexed colour (`[Color12]`). Excel discards
-        // the colour inside TEXT, so the rest of the section still formats
-        // the value. A section may carry at most one colour, though: Excel
-        // rejects `[Red][Blue]0.00` with #VALUE! even though either bracket
-        // alone is inert.
-        if (saw_color) {
-          out.has_invalid_bracket = true;
-        }
-        saw_color = true;
-        out.has_color = true;
-      } else if (const int dbnum = parse_dbnum_directive(body); dbnum > 0) {
-        // `[DBNum1]`-`[DBNum4]`: digit style for the section, last write wins.
-        digit_choice = dbnum;
-      } else {
-        // Conditional-section directive `[>1000]`, `[<=0]`, ...
-        // Only one predicate per section; if a second one appears,
-        // last-write-wins (matches Mac Excel: the rightmost directive
-        // shadows earlier ones in the same section).
-        CondOp cop = CondOp::kNone;
-        double cval = 0.0;
-        const int rc = parse_cond_directive(body, &cop, &cval);
-        if (rc > 0) {
-          out.cond_op = cop;
-          out.cond_value = cval;
-        } else {
-          // Either the body doesn't look like a predicate (rc == 0) or it
-          // does but the numeric tail failed to parse (rc < 0). Both surface
-          // as #VALUE! through the existing invalid-bracket channel.
-          out.has_invalid_bracket = true;
-        }
       }
       continue;
     }
@@ -430,7 +453,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       continue;
     }
     if (c == 't' && facts.thai_digit_letter) {
-      digit_choice = kThaiDigitChoice;
+      bracket.digit_choice = kThaiDigitChoice;
       ++i;
       continue;
     }
@@ -566,27 +589,27 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
   }
   // The first section's tag governs every section; a later section's own tag
   // only contributes a system date or time (locale_tokens.lcid_section_scope).
-  out.tag = format_tag != nullptr ? *format_tag : own_tag;
-  out.tag.system = own_tag.system;
-  const bool tag_in_section = format_tag == nullptr && saw_tag;
+  out.tag = format_tag != nullptr ? *format_tag : bracket.own_tag;
+  out.tag.system = bracket.own_tag.system;
+  const bool tag_in_section = format_tag == nullptr && bracket.saw_tag;
   // A numeral-system tag decides the digits and silences `[DBNumN]`
   // (locale_tokens.lcid_numeral_systems); a tag language brings its own DBNum styles.
   if (out.tag.numeral != 0) {
     out.digit_style = numeral_system_style(out.tag.numeral);
     out.digit_style_from_tag = out.digit_style != nullptr;
-  } else if (digit_choice == kThaiDigitChoice) {
+  } else if (bracket.digit_choice == kThaiDigitChoice) {
     out.digit_style = numeral_system_style(kThaiNumeralSystem);
-  } else if (digit_choice > 0) {
+  } else if (bracket.digit_choice > 0) {
     const DbnumStyles* styles = facts.dbnum;
     // `[DBNum4]` keeps the profile's style in the tagged section (locale_tokens.lcid_dbnum4_sections).
     constexpr int kDbnum4 = 4;
-    const bool profile_dbnum4 = digit_choice == kDbnum4 && (tag_in_section || facts.dbnum4_keeps_profile_style);
+    const bool profile_dbnum4 = bracket.digit_choice == kDbnum4 && (tag_in_section || facts.dbnum4_keeps_profile_style);
     if (out.tag.language_set && !profile_dbnum4) {
       const TagLanguage* language = out.tag.language;
       styles = language == nullptr ? nullptr : language->dbnum;
     }
     if (styles != nullptr) {
-      out.digit_style = &(*styles)[static_cast<std::size_t>(digit_choice - 1)];
+      out.digit_style = &(*styles)[static_cast<std::size_t>(bracket.digit_choice - 1)];
     }
   }
 }

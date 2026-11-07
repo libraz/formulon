@@ -16,6 +16,7 @@ inline constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 inline constexpr double kInvSqrtPi = 0x1.20dd750429b6dp-1;
 inline constexpr double kTinyShape = 0x1p-104;
 inline constexpr double kPi = 3.141592653589793;
+inline constexpr double kTwoPi = 0x1.921fb54442d18p+2;
 inline constexpr double kInvSqrt2 = 0.7071067811865476;
 inline constexpr double kInvSqrt2Pi = 0.3989422804014327;
 
@@ -25,6 +26,11 @@ inline constexpr int kMaxTerms = 100000;
 inline constexpr double kLentzTiny = 1e-30;
 /// Largest degrees-of-freedom value the chi-squared, t and F families accept.
 inline constexpr double kMaxDegreesOfFreedom = 1.0e10;
+
+/// True when `df` lies outside `[1, kMaxDegreesOfFreedom]`; NaN is not out of range.
+inline constexpr bool df_out_of_range(double df) noexcept {
+  return df < 1.0 || df > kMaxDegreesOfFreedom;
+}
 
 }  // namespace stats
 }  // namespace eval

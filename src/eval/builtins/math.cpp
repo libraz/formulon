@@ -163,7 +163,7 @@ Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     r += pair.second;
   }
   r += 0.0;  // -0 reads as 0
-  if (r != 0.0 && std::fabs(r) < DBL_MIN) {
+  if (builtins_detail::is_subnormal(r)) {
     return Value::error(ErrorCode::Num);
   }
   return to_finite_value(r);
@@ -333,7 +333,7 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double rounded_quotient = integer_quotient + (round_up ? 1.0 : 0.0);
   // Restore the sign only after choosing the nearest magnitude quotient.
   const double r = signum(n) * rounded_quotient * abs_m;
-  if (r != 0.0 && std::fabs(r) < DBL_MIN) {
+  if (builtins_detail::is_subnormal(r)) {
     return Value::error(ErrorCode::Num);
   }
   return to_finite_value(r);

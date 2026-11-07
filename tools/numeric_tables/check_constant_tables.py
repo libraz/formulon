@@ -361,7 +361,7 @@ def build_checks() -> List[Check]:
         ),
         Check("kTemmeSeed", gam, "kTemmeSeed", "array", temme_seed, "[eta^k] (1/(lambda-1) - 1/eta), k=29..0; nearest"),
         _scalar("kPhi0", gam, "kPhi0", lambda: rn(1 / dec_sqrt(two_pi()))),
-        _scalar("kTwoPi", gam, "kTwoPi", lambda: rn(two_pi())),
+        _scalar("kTwoPi", "stats/numeric_constants.h", "kTwoPi", lambda: rn(two_pi())),
         _scalar("kNegLn2", gam, "kNegLn2", lambda: rn(-dec_ln(2))),
         _scalar("kCfTol", gam, "kCfTol", lambda: 1e-16, "nearest of 1e-16"),
         _scalar("kLog07", beta, "kLog07", lambda: rn(dec_ln(Decimal("0.7")))),

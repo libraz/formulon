@@ -502,9 +502,6 @@ Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904)
     return std::move(months_c.error());
   }
   const double canonical_input = workbook_date_serial(serial.value(), date1904);
-  if (!is_valid_date_time_serial(canonical_input, date1904)) {
-    return ErrorCode::Num;
-  }
   const double truncated_months = std::trunc(months_c.value());
   // Serial 0 is 1900-01-00; a month shift from it may not leave January 1900.
   const date_time::YMD base = date_time::legacy_1900_ymd(normal_date_serial(serial.value(), date1904));
@@ -728,22 +725,11 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   const double e = end_endpoint.serial;
   const date_time::YMD a = start_endpoint.ymd;
   const date_time::YMD b = end_endpoint.ymd;
-  switch (basis) {
-    case 0:
-      return Value::number(date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d));
-    case 1:
-      return Value::number(date_time::yearfrac_actual_actual(e - s, a.y, a.m, a.d, b.y, b.m, b.d));
-    case 2:
-      // Actual/360 -- raw day diff honours the 1900 leap-bug so we compute
-      // it from the Excel serials (not days_from_civil) for parity.
-      return Value::number((e - s) / 360.0);
-    case 3:
-      return Value::number((e - s) / 365.0);
-    case 4:
-      return Value::number(date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d));
-    default:
-      return Value::error(ErrorCode::Num);
+  if (basis < 0 || basis > 4) {
+    return Value::error(ErrorCode::Num);
   }
+  // Basis 2 / 3 use the raw serial difference, which honours the 1900 leap bug.
+  return Value::number(builtins_detail::yearfrac_by_basis(basis, s, e, a, b));
 }
 
 // Days in a month of Excel's calendar, where February 1900 has 29 days.

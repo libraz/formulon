@@ -156,10 +156,8 @@ struct ModeFrequencies {
 };
 
 // Builds the first-occurrence-ordered frequency table for MODE / MODE.SNGL
-// / MODE.MULT. O(n^2) by design: the input slices are bounded by Excel's
-// 255-arg limit for direct scalars and ~1M for ranges, but the duplicate
-// detection has to be order-preserving so a hash map would still need a
-// parallel insertion-order vector.
+// / MODE.MULT. Groups equal values by an index sort (O(n log n)), then orders the
+// groups by first occurrence.
 ModeFrequencies build_mode_frequencies(const std::vector<double>& xs);
 
 // PERCENTILE.INC / QUARTILE.INC kernel: linear interpolation across an

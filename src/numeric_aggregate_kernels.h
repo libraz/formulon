@@ -145,6 +145,11 @@ std::vector<ValueRun> group_equal_values(const std::vector<double>& xs);
 /// there can equal values differ in bits.
 void select_kth_preserving_sort_bits(std::vector<double>& xs, std::size_t target);
 
+/// Runs the SUBTOTAL / AGGREGATE function number `code` over `xs`: 1 AVERAGE, 4 MAX, 5 MIN, 6 PRODUCT,
+/// 7 STDEV.S, 8 STDEV.P, 9 SUM, 10 VAR.S, 11 VAR.P. Any other code (COUNT and COUNTA walk the cells
+/// themselves) is `#VALUE!`.
+Value run_aggregate_code(int code, const std::vector<double>& xs);
+
 /// Lifts a kernel result into the `Value` shape the dispatchers return.
 inline Value value_from_kernel_result(const Expected<double, ErrorCode>& result) {
   if (!result) {

@@ -356,6 +356,10 @@ struct Arith {
   }
 };
 
+// Offsets between the temperature scales: 0 degC in kelvin and 0 degF in rankine.
+constexpr double kCelsiusToKelvin = 273.15;
+constexpr double kFahrenheitToRankine = 459.67;
+
 // Temperature conversion: an explicit formula per (from, to) kind pair, with the
 // kelvin prefix as `from_power` / `to_power` (10^exponent). Returns false on #NUM!.
 bool convert_temperature(double v, const Resolved& from, const Resolved& to, double* out) noexcept {
@@ -373,16 +377,16 @@ bool convert_temperature(double v, const Resolved& from, const Resolved& to, dou
           r = m.div(a, m.mul(to_power, to.unit->factor));
           break;
         case kCelsius:
-          r = a - 273.15;
+          r = a - kCelsiusToKelvin;
           break;
         case kFahrenheit:
-          r = (m.mul(a - 273.15, 1.8)) + 32.0;
+          r = (m.mul(a - kCelsiusToKelvin, 1.8)) + 32.0;
           break;
         case kRankine:
           r = m.mul(v, 1.8);
           break;
         default:
-          r = m.mul(v - 273.15, 0.8);
+          r = m.mul(v - kCelsiusToKelvin, 0.8);
           break;
       }
       break;
@@ -396,10 +400,10 @@ bool convert_temperature(double v, const Resolved& from, const Resolved& to, dou
           r = m.mul(v, 1.8) + 32.0;
           break;
         case kKelvin:
-          r = m.div(273.15 + v, to_power);
+          r = m.div(kCelsiusToKelvin + v, to_power);
           break;
         case kRankine:
-          r = m.mul(v + 273.15, 1.8);
+          r = m.mul(v + kCelsiusToKelvin, 1.8);
           break;
         default:
           r = m.mul(v, 0.8);
@@ -415,10 +419,10 @@ bool convert_temperature(double v, const Resolved& from, const Resolved& to, dou
           r = m.div(v - 32.0, 1.8);
           break;
         case kKelvin:
-          r = m.div(m.div(v - 32.0, 1.8) + 273.15, to_power);
+          r = m.div(m.div(v - 32.0, 1.8) + kCelsiusToKelvin, to_power);
           break;
         case kRankine:
-          r = v + 459.67;
+          r = v + kFahrenheitToRankine;
           break;
         default:
           r = m.div(m.mul(v - 32.0, 0.8), 1.8);
@@ -431,16 +435,16 @@ bool convert_temperature(double v, const Resolved& from, const Resolved& to, dou
           r = v;
           break;
         case kCelsius:
-          r = m.div(v, 1.8) - 273.15;
+          r = m.div(v, 1.8) - kCelsiusToKelvin;
           break;
         case kFahrenheit:
-          r = v - 459.67;
+          r = v - kFahrenheitToRankine;
           break;
         case kKelvin:
           r = m.div(m.div(v, 1.8), to_power);
           break;
         default:
-          r = m.mul(m.div(v, 1.8) - 273.15, 0.8);
+          r = m.mul(m.div(v, 1.8) - kCelsiusToKelvin, 0.8);
           break;
       }
       break;
@@ -456,10 +460,10 @@ bool convert_temperature(double v, const Resolved& from, const Resolved& to, dou
           r = m.div(m.mul(v, 1.8), 0.8) + 32.0;
           break;
         case kKelvin:
-          r = m.div(v, 0.8) + 273.15;
+          r = m.div(v, 0.8) + kCelsiusToKelvin;
           break;
         default:
-          r = m.mul(m.div(v, 0.8) + 273.15, 1.8);
+          r = m.mul(m.div(v, 0.8) + kCelsiusToKelvin, 1.8);
           break;
       }
       break;

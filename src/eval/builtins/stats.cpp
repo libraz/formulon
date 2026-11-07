@@ -149,14 +149,9 @@ Value percentile_inc_sorted(const std::vector<double>& xs, double k) {
   // Delegates to the shared kernel; callers (`PercentileInc`, `QuartileInc`)
   // have already guaranteed `xs` is non-empty and `k in [0, 1]`, so the
   // kernel's domain guards are no-ops on this path. The kernel returns
-  // `Expected<double, ErrorCode>` so we lift through `to_finite_value`
-  // for the success path and propagate `#NUM!` verbatim on failure (which
-  // can still arise on a non-finite interpolated blend).
-  auto r = numeric_aggregate_kernels::percentile_sorted_inc(xs, k);
-  if (!r) {
-    return Value::error(r.error());
-  }
-  return to_finite_value(r.value());
+  // `Expected<double, ErrorCode>` so we lift through `finalize_expected`:
+  // `#NUM!` on failure or a non-finite interpolated blend.
+  return builtins_detail::finalize_expected(numeric_aggregate_kernels::percentile_sorted_inc(xs, k));
 }
 
 Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
@@ -165,11 +160,7 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
   // (matching Mac Excel 365's `#NUM!` at the open-interval boundaries),
   // so callers do not have to re-validate `k` against `1/(n+1)` or
   // `n/(n+1)` themselves.
-  auto r = numeric_aggregate_kernels::percentile_sorted_exc(xs, k);
-  if (!r) {
-    return Value::error(r.error());
-  }
-  return to_finite_value(r.value());
+  return builtins_detail::finalize_expected(numeric_aggregate_kernels::percentile_sorted_exc(xs, k));
 }
 
 ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {

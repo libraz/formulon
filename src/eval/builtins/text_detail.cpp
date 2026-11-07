@@ -48,24 +48,25 @@ int dbcs_char_bytes(std::uint32_t codepoint, DbcsCodepage codepage) noexcept {
   return 2;
 }
 
+Utf8Step next_utf8_step(std::string_view src, std::size_t i, DbcsCodepage codepage) noexcept {
+  std::size_t bytes = 0;
+  const std::uint32_t cp = decode_utf8_step(src, i, &bytes);
+  // A malformed byte decodes to U+FFFD with a 1-byte advance and costs one DBCS byte.
+  if (bytes == 1 && cp == 0xFFFDu) {
+    return {0xFFFDu, 1u, 1};
+  }
+  return {cp, bytes, dbcs_char_bytes(cp, codepage)};
+}
+
 std::uint64_t dbcs_bytes_in(std::string_view s, DbcsCodepage codepage) noexcept {
   std::uint64_t bytes = 0;
   std::size_t i = 0;
   while (i < s.size()) {
-    std::size_t step = 0;
-    const std::uint32_t cp = decode_utf8_step(s, i, &step);
-    bytes += (step == 1 && cp == 0xFFFDu) ? 1u : static_cast<std::uint64_t>(dbcs_char_bytes(cp, codepage));
-    i += step;
+    const Utf8Step step = next_utf8_step(s, i, codepage);
+    bytes += static_cast<std::uint64_t>(step.dbcs_bytes);
+    i += step.byte_len;
   }
   return bytes;
-}
-
-Expected<int, ErrorCode> read_int_arg(const Value& v) {
-  auto d = coerce_to_number(v);
-  if (!d) {
-    return std::move(d.error());
-  }
-  return truncate_saturated_int(d.value());
 }
 
 Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min) {
@@ -84,7 +85,15 @@ Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t 
   if (arity <= index) {
     return default_value;
   }
-  return read_int_arg(args[index]);
+  return coerce_to_truncated_int(args[index]);
+}
+
+Expected<int, ErrorCode> read_optional_snapped_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                       double min, int default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return read_snapped_int_arg(args[index], min);
 }
 
 bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, SearchArgs* out, Value* out_result) {
@@ -98,7 +107,7 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
     *out_result = Value::error(haystack.error());
     return false;
   }
-  auto parsed = arity > 2u ? read_snapped_int_arg(args[2], 1.0) : Expected<int, ErrorCode>(1);
+  auto parsed = read_optional_snapped_int_arg(args, arity, 2u, 1.0, 1);
   if (!parsed) {
     *out_result = Value::error(parsed.error());
     return false;
@@ -161,11 +170,11 @@ Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std
   if (!text) {
     return std::move(text.error());
   }
-  auto start = snap_start ? read_snapped_int_arg(args[1], 1.0) : read_int_arg(args[1]);
+  auto start = snap_start ? read_snapped_int_arg(args[1], 1.0) : coerce_to_truncated_int(args[1]);
   if (!start) {
     return std::move(start.error());
   }
-  auto count = read_int_arg(args[2]);
+  auto count = coerce_to_truncated_int(args[2]);
   if (!count) {
     return std::move(count.error());
   }

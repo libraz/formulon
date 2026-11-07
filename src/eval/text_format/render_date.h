@@ -13,10 +13,16 @@
 #include <string_view>
 
 #include "eval/text_format/number_format_types.h"
+#include "utils/date_time.h"
 
 namespace formulon {
 namespace text_format {
 namespace number_format_detail {
+
+// The last whole serial the calendar shows: 9999-12-31 in the workbook's date system.
+inline double max_display_serial(bool date1904) noexcept {
+  return date1904 ? date_time::kMaxSerial1900 - date_time::kDate1904EpochGap : date_time::kMaxSerial1900;
+}
 
 // Render the date/time section for the given serial. `date1904` selects the
 // workbook date epoch for the serial->calendar conversion (1462-day shift);

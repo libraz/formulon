@@ -38,7 +38,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-using text_detail::read_int_arg;
 using text_detail::read_snapped_int_arg;
 using text_detail::read_text_window_args;
 
@@ -147,7 +146,7 @@ Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::ui
   if (!text) {
     return std::move(text.error());
   }
-  auto parsed = arity > 1u ? read_snapped_int_arg(args[1], 0.0) : Expected<int, ErrorCode>(1);
+  auto parsed = text_detail::read_optional_snapped_int_arg(args, arity, 1u, 0.0, 1);
   if (!parsed) {
     return std::move(parsed.error());
   }
@@ -179,7 +178,7 @@ Value Rept(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  auto count = read_int_arg(args[1]);
+  auto count = coerce_to_truncated_int(args[1]);
   if (!count) {
     return Value::error(count.error());
   }
@@ -335,7 +334,7 @@ Value Exact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // `number`. Truncates the input to an integer. Out-of-range and surrogate
 // codepoints surface `#VALUE!`. Result is encoded as UTF-8 bytes.
 Value Unichar(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto parsed = read_int_arg(args[0]);
+  auto parsed = coerce_to_truncated_int(args[0]);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -411,7 +410,7 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   const ExcelProfile profile = current_eval_profile();
   const LocaleFacts& facts = locale_facts(profile);
-  auto parsed = facts.char_snaps_near_integer ? read_snapped_int_arg(args[0], 0.0) : read_int_arg(args[0]);
+  auto parsed = facts.char_snaps_near_integer ? read_snapped_int_arg(args[0], 0.0) : coerce_to_truncated_int(args[0]);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -457,6 +456,9 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(encoded));
 }
 
+// CODE's result for a character the code page cannot encode (ASCII underscore).
+constexpr int kCodeFallback = 95;
+
 // CODE(text) - returns the active profile's codepage value for the first
 // character in `text`. Empty text yields `#VALUE!`. Under a DBCS profile:
 //
@@ -481,7 +483,7 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const std::uint32_t cp = codepoint.value();
   if (facts.dbcs_codepage == DbcsCodepage::kNone) {
     const int encoded = sbcs_encode_codepoint(sbcs_codepage(profile), cp);
-    return Value::number(static_cast<double>(encoded < 0 ? 95 : encoded));
+    return Value::number(static_cast<double>(encoded < 0 ? kCodeFallback : encoded));
   }
   if (cp < 0x80u) {
     return Value::number(static_cast<double>(cp));
@@ -493,7 +495,7 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (mapped != 0u) {
     return Value::number(static_cast<double>(mapped + dbcs_code_bias(facts.dbcs_codepage)));
   }
-  return Value::number(95.0);
+  return Value::number(static_cast<double>(kCodeFallback));
 }
 
 // PROPER(text) - title-case `text`: a letter that follows a non-letter takes

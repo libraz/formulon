@@ -14,6 +14,7 @@
 #define FORMULON_EVAL_BUILTINS_NUMERIC_HELPERS_H_
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +26,7 @@
 
 #include "eval/coerce.h"
 #include "eval/stats/numeric_constants.h"
+#include "utils/date_time.h"
 #include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
@@ -50,6 +52,38 @@ inline Value to_finite_value(double r) noexcept {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(r);
+}
+
+/// True for a nonzero `r` below DBL_MIN in magnitude.
+inline bool is_subnormal(double r) noexcept {
+  return r != 0.0 && std::fabs(r) < DBL_MIN;
+}
+
+/// The year fraction between serials `s <= e` (civil dates `a`, `b`) under day-count `basis` in [0, 4];
+/// the caller validates the basis.
+inline double yearfrac_by_basis(int basis, double s, double e, const date_time::YMD& a,
+                                const date_time::YMD& b) noexcept {
+  switch (basis) {
+    case 0:
+      return date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d);
+    case 1:
+      return date_time::yearfrac_actual_actual(e - s, a.y, a.m, a.d, b.y, b.m, b.d);
+    case 2:
+      return (e - s) / 360.0;
+    case 3:
+      return (e - s) / 365.0;
+    default:
+      return date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d);
+  }
+}
+
+/// Lifts a computed `Expected<double, ErrorCode>` into a result `Value`: the
+/// error is propagated, a non-finite value becomes `#NUM!`.
+inline Value finalize_expected(const Expected<double, ErrorCode>& r) {
+  if (!r) {
+    return Value::error(r.error());
+  }
+  return to_finite_value(r.value());
 }
 
 /// `r` itself when finite, otherwise `#NUM!`; the `Expected` counterpart of `to_finite_value`.

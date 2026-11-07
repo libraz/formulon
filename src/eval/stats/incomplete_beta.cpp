@@ -921,7 +921,7 @@ double t_dist_2t_excel(double x, double df) noexcept {
 
 double t_dist_tail_excel(double x, double df, bool upper) noexcept {
   df = std::trunc(df);
-  if (df < 1.0 || df > kMaxDegreesOfFreedom) {
+  if (df_out_of_range(df)) {
     return kNaN;
   }
   const bool keep = (!upper) != (x >= 0.0);

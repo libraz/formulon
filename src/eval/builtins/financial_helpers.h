@@ -18,6 +18,7 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "eval/excel_math.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
@@ -27,18 +28,10 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 
+using builtins_detail::finalize_expected;
 using builtins_detail::read_optional_number;
 using builtins_detail::read_required_number;
 using builtins_detail::to_finite_value;
-
-// Lifts a computed `Expected<double, ErrorCode>` into a result `Value`: the
-// error is propagated, a non-finite value becomes `#NUM!`.
-inline Value finalize_expected(const Expected<double, ErrorCode>& r) {
-  if (!r) {
-    return Value::error(r.error());
-  }
-  return to_finite_value(r.value());
-}
 
 // Ceiling on how many periods a depreciation schedule may be stepped
 // through. `life` is an unconstrained double, and DB / VDB walk one
@@ -48,7 +41,7 @@ inline Value finalize_expected(const Expected<double, ErrorCode>& r) {
 // laid out in a worksheet — so a longer request is rejected as `#NUM!`
 // rather than accepted and never answered. DDB needs no such cap: it has a
 // closed form for the same schedule.
-inline constexpr double kMaxDepreciationPeriods = 1048576.0;
+inline constexpr double kMaxDepreciationPeriods = static_cast<double>(::formulon::a1::kMaxRows);
 
 // Reads a required date argument, truncating toward zero. Dates outside
 // Excel's supported serial range [0, 2958465] (9999-12-31) are rejected as
@@ -79,35 +72,36 @@ inline Expected<void, ErrorCode> read_required_numbers(const Value* args, const 
   return Expected<void, ErrorCode>::Ok();
 }
 
+// Largest valid day-count basis; the valid range is [0, kMaxDayCountBasis].
+inline constexpr int kMaxDayCountBasis = 4;
+
 // Reads an optional day-count basis argument. Excel truncates numeric basis
 // values toward zero and accepts only {0, 1, 2, 3, 4}.
 inline Expected<int, ErrorCode> read_day_count_basis(const Value* args, std::uint32_t arity, std::uint32_t index) {
   if (arity <= index) {
     return 0;
   }
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return std::move(raw.error());
+  auto basis = coerce_to_truncated_int(args[index]);
+  if (!basis) {
+    return std::move(basis.error());
   }
-  const int basis = truncate_saturated_int(raw.value());
-  if (basis < 0 || basis > 4) {
+  if (basis.value() < 0 || basis.value() > kMaxDayCountBasis) {
     return ErrorCode::Num;
   }
-  return basis;
+  return basis.value();
 }
 
 // Reads a required coupon frequency argument. Excel truncates the numeric
 // value and accepts annual, semi-annual, and quarterly schedules only.
 inline Expected<int, ErrorCode> read_coupon_frequency(const Value* args, std::uint32_t index) {
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return std::move(raw.error());
+  auto frequency = coerce_to_truncated_int(args[index]);
+  if (!frequency) {
+    return std::move(frequency.error());
   }
-  const int frequency = truncate_saturated_int(raw.value());
-  if (frequency != 1 && frequency != 2 && frequency != 4) {
+  if (frequency.value() != 1 && frequency.value() != 2 && frequency.value() != 4) {
     return ErrorCode::Num;
   }
-  return frequency;
+  return frequency.value();
 }
 
 // The `(settlement, maturity, amount1, amount2, [basis])` arguments shared by
@@ -181,34 +175,14 @@ inline Expected<CouponBondTail, ErrorCode> read_coupon_bond_tail(const Value* ar
 // calling workbook's date system so `start` / `end` decode to the right
 // calendar day.
 inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, int basis, bool date1904) {
-  if (basis < 0 || basis > 4) {
+  if (basis < 0 || basis > kMaxDayCountBasis) {
     return ErrorCode::Num;
   }
   const double s = std::trunc(start);
   const double e = std::trunc(end);
   const date_time::YMD a = date_time::ymd_from_serial(s, date1904);
   const date_time::YMD b = date_time::ymd_from_serial(e, date1904);
-  double yf = 0.0;
-  switch (basis) {
-    case 0:
-      yf = date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    case 1:
-      yf = date_time::yearfrac_actual_actual(e - s, a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    case 2:
-      yf = (e - s) / 360.0;
-      break;
-    case 3:
-      yf = (e - s) / 365.0;
-      break;
-    case 4:
-      yf = date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    default:
-      return ErrorCode::Num;
-  }
-  return builtins_detail::finite_or_num(yf);
+  return builtins_detail::finite_or_num(builtins_detail::yearfrac_by_basis(basis, s, e, a, b));
 }
 
 // `base^exponent` as Excel's financial kernels evaluate it: the shared IEEE
@@ -259,7 +233,7 @@ struct DayCountSpan {
 };
 
 inline Expected<DayCountSpan, ErrorCode> day_count_span(double start, double end, int basis, bool date1904) {
-  if (basis < 0 || basis > 4) {
+  if (basis < 0 || basis > kMaxDayCountBasis) {
     return ErrorCode::Num;
   }
   const double s = std::trunc(start);

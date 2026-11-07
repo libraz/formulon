@@ -24,10 +24,9 @@ using flushed::div;
 using flushed::mul;
 using flushed::two_sum;
 
-// Tables: 1/sqrt(pi), 1/sqrt(2 pi), 2 pi, -ln 2, the continued-fraction
+// Tables: 1/sqrt(pi), 1/sqrt(2 pi), -ln 2, the continued-fraction
 // tolerance; then the coefficient sets, highest degree first.
 constexpr double kPhi0 = 0x1.9884533d43651p-2;
-constexpr double kTwoPi = 0x1.921fb54442d18p+2;
 constexpr double kNegLn2 = -0x1.62e42fefa39efp-1;
 constexpr double kCfTol = 0x1.cd2b297d889bcp-54;
 constexpr double kHalfIntSeries[] = {

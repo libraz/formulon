@@ -294,6 +294,31 @@ std::vector<ValueRun> group_equal_values(const std::vector<double>& xs) {
   return runs;
 }
 
+Value run_aggregate_code(int code, const std::vector<double>& xs) {
+  switch (code) {
+    case 1:
+      return value_from_kernel_result(run_average(xs));
+    case 4:
+      return value_from_kernel_result(run_max(xs));
+    case 5:
+      return value_from_kernel_result(run_min(xs));
+    case 6:
+      return value_from_kernel_result(run_product(xs));
+    case 7:
+      return value_from_kernel_result(run_stdev(xs, /*sample=*/true));
+    case 8:
+      return value_from_kernel_result(run_stdev(xs, /*sample=*/false));
+    case 9:
+      return value_from_kernel_result(run_sum(xs));
+    case 10:
+      return value_from_kernel_result(run_variance(xs, /*sample=*/true));
+    case 11:
+      return value_from_kernel_result(run_variance(xs, /*sample=*/false));
+    default:
+      return Value::error(ErrorCode::Value);
+  }
+}
+
 void select_kth_preserving_sort_bits(std::vector<double>& xs, std::size_t target) {
   if (xs.empty() || target >= xs.size()) {
     return;

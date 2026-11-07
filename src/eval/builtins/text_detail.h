@@ -1,10 +1,9 @@
 //
 // Internal header -- do not include outside `src/eval/builtins/text*`.
 //
-// Shared helpers for the text builtin family. `read_int_arg` is referenced
-// from multiple TUs (the core text family, the DBCS family, and the modern
-// TEXTBEFORE/TEXTAFTER family) so its definition lives in a dedicated TU
-// (`text_detail.cpp`) to avoid ODR violations. `DbcsCharRec` and
+// Shared helpers for the text builtin family. The argument readers are shared
+// by the core text family, the DBCS family, and the modern TEXTBEFORE/TEXTAFTER
+// family, so their definitions live in a dedicated TU (`text_detail.cpp`). `DbcsCharRec` and
 // `build_dbcs_char_map` are declared here because the register-side in
 // `text.cpp` takes the address of `Lenb` / `Leftb` / ... to populate the
 // `FunctionRegistry`; those implementations live in `text_dbcs.cpp` and
@@ -29,16 +28,15 @@ namespace formulon {
 namespace eval {
 namespace text_detail {
 
-// Helper: read a numeric arg as an `int` via `std::trunc`. Returns `#VALUE!`
-// on coercion failure, `#NUM!` on non-finite input. Used by LEFT/RIGHT/MID/
-// REPT/FIND/SEARCH/SUBSTITUTE for their integer-typed parameters.
-Expected<int, ErrorCode> read_int_arg(const Value& v);
-
-// `read_int_arg` for the arguments Excel snaps up to the next integer
+// `coerce_to_truncated_int` for the arguments Excel snaps up to the next integer
 // within `kNearIntegerSnap` (LEFT / RIGHT / LEFTB / RIGHTB count, the
 // FIND / SEARCH / REPLACE families' start, SUBSTITUTE instance). A raw value below `min` is `#VALUE!` before the
 // snap, so `LEFT("abc",-0.0000001)` does not snap to 0.
 Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min);
+
+// `read_snapped_int_arg` for optional argument `args[index]`, `default_value` when omitted.
+Expected<int, ErrorCode> read_optional_snapped_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                       double min, int default_value);
 
 // Reads optional integer argument `args[index]`, returning `default_value`
 // when the caller omitted it. Used by LEFT/RIGHT/FIND/SEARCH and their DBCS
@@ -112,6 +110,15 @@ Value right_in(const std::string& text, int n, TextIndexUnit unit, Arena& arena)
 // see lenb_hangul and lenb_kanji_not_in_gb2312).
 int dbcs_char_bytes(std::uint32_t codepoint, DbcsCodepage codepage) noexcept;
 
+// One decoded UTF-8 character: its code point (0xFFFD for a malformed byte), the bytes it
+// spans (>= 1) and its DBCS cost; a malformed byte costs 1.
+struct Utf8Step {
+  std::uint32_t codepoint;
+  std::size_t byte_len;
+  int dbcs_bytes;
+};
+Utf8Step next_utf8_step(std::string_view src, std::size_t i, DbcsCodepage codepage) noexcept;
+
 // Sum of `dbcs_char_bytes` over `s`; a malformed UTF-8 byte costs 1.
 std::uint64_t dbcs_bytes_in(std::string_view s, DbcsCodepage codepage) noexcept;
 
@@ -127,8 +134,7 @@ struct DbcsCharRec {
 // Walks `src` once and builds the per-character map. O(n) time, one pass.
 std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, DbcsCodepage codepage);
 
-// MID / REPLACE in UTF-16 units. Defined in `text.cpp`; MIDB / REPLACEB
-// fall back to them outside a DBCS profile.
+// MID / REPLACE counted in `text_index_unit()` positions. Defined in `text.cpp`.
 Value Mid(const Value* args, std::uint32_t arity, Arena& arena);
 Value Replace_(const Value* args, std::uint32_t arity, Arena& arena);
 // The same slices counted in UTF-16 units, for MIDB / REPLACEB outside a DBCS profile.

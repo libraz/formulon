@@ -66,6 +66,9 @@ enum class FormatStatus : int {
   kOverflow = 2,
 };
 
+/// The most decimal places a TEXT() / FIXED() argument may ask for.
+constexpr int kMaxFormatDecimalPlaces = 127;
+
 /// Renders the numeric scalar `value` through `format`, appending the result
 /// to `out`. An empty `format` yields an empty result.
 ///

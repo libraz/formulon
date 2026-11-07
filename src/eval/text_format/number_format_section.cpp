@@ -169,6 +169,168 @@ bool literal_letter_at(const Token& tk, std::string_view fmt) noexcept {
   return is_letter_scalar(decode_utf8_step(fmt, at, &bytes));
 }
 
+// Detects a fraction format (`# ?/?`, `0/0`, etc.) and fills the section's fraction fields.
+//
+// Fraction structure is driven by an unquoted, unescaped slash token. A
+// slash copied from a quoted or escaped payload remains an ordinary
+// literal, even when it sits between digit placeholders. A raw denominator
+// containing a non-zero digit is fixed; all-zero and placeholder runs
+// remain variable bounded searches.
+void classify_fraction(Section& section, std::string_view fmt, bool any_date, int point_index) noexcept {
+  auto is_single_byte_literal = [&fmt](const Token& tk, char want) {
+    if (tk.kind != Tok::Literal) {
+      return false;
+    }
+    if (tk.lit_end != tk.lit_begin + 1) {
+      return false;
+    }
+    if (tk.lit_begin >= fmt.size()) {
+      return false;
+    }
+    return fmt[tk.lit_begin] == want;
+  };
+  if (!any_date && point_index < 0) {
+    // Exactly one structural slash; quoted or escaped slashes never form a fraction.
+    int slash_idx = -1;
+    int slash_count = 0;
+    for (std::size_t i = 0; i < section.tokens.size(); ++i) {
+      if (section.tokens[i].fraction_slash_candidate) {
+        slash_idx = static_cast<int>(i);
+        ++slash_count;
+      }
+    }
+    if (slash_count == 1 && slash_idx > 0 && static_cast<std::size_t>(slash_idx) + 1 < section.tokens.size()) {
+      // Walk left from slash to find the numerator group: a run of digit placeholders, or a run of
+      // literal digits (printed as written).
+      const auto is_literal_digit = [&fmt](const Token& tk) {
+        return tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 &&
+               tk.lit_begin < fmt.size() && fmt[tk.lit_begin] >= '0' && fmt[tk.lit_begin] <= '9';
+      };
+      int num_end = slash_idx - 1;
+      int num_begin = num_end;
+      const bool literal_numerator = is_literal_digit(section.tokens[static_cast<std::size_t>(num_end)]);
+      while (num_begin > 0 &&
+             (literal_numerator ? is_literal_digit(section.tokens[static_cast<std::size_t>(num_begin) - 1])
+                                : is_digit_placeholder(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind))) {
+        --num_begin;
+      }
+      // A raw run starting with 0 is variable only when all zeros (`/000`); `/08` is fixed.
+      int den_begin = slash_idx + 1;
+      int den_end = den_begin;
+      bool fixed_denominator = false;
+      std::uint64_t fixed_denominator_value = 0;
+      int fixed_den_end = den_begin;
+      int raw_den_end = den_begin;
+      bool raw_den_overflow = false;
+      bool raw_den_nonzero = false;
+      while (raw_den_end < static_cast<int>(section.tokens.size())) {
+        const Token& token = section.tokens[static_cast<std::size_t>(raw_den_end)];
+        char digit = '\0';
+        if (token.kind == Tok::DigitZero) {
+          digit = '0';
+        } else if (token.kind == Tok::Literal && !token.protected_literal && token.lit_end == token.lit_begin + 1 &&
+                   token.lit_begin < fmt.size()) {
+          const char raw = fmt[token.lit_begin];
+          if (raw >= '0' && raw <= '9') {
+            digit = raw;
+          }
+        }
+        if (digit == '\0') {
+          break;
+        }
+        raw_den_nonzero = raw_den_nonzero || digit != '0';
+        const std::uint64_t digit_value = static_cast<std::uint64_t>(digit - '0');
+        constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
+        if (fixed_denominator_value > (kMax - digit_value) / 10U) {
+          section.has_invalid_bracket = true;
+          raw_den_overflow = true;
+          break;
+        }
+        fixed_denominator_value = fixed_denominator_value * 10U + digit_value;
+        ++raw_den_end;
+      }
+      if (!raw_den_overflow && raw_den_end > den_begin && raw_den_nonzero) {
+        fixed_denominator = true;
+        fixed_den_end = raw_den_end;
+        if (fixed_denominator_value > kMaxFractionDenominator) {
+          // Denominators wider than the renderer's uint64_t bound are malformed, not partially rendered.
+          section.has_invalid_bracket = true;
+          fixed_denominator = false;
+        }
+      } else {
+        // An all-zero run is a zero-placeholder denominator, as are mixed `0?` and `?0`.
+        while (static_cast<std::size_t>(den_end) < section.tokens.size() &&
+               is_digit_placeholder(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
+          ++den_end;
+        }
+        if (den_end == den_begin && den_begin < static_cast<int>(section.tokens.size())) {
+          const Token& first = section.tokens[static_cast<std::size_t>(den_begin)];
+          if (first.kind == Tok::Literal && first.protected_literal && first.lit_begin < fmt.size() &&
+              first.lit_end > first.lit_begin && fmt[first.lit_begin] >= '1' && fmt[first.lit_begin] <= '9') {
+            // Excel rejects a quoted or escaped fixed denominator.
+            section.has_invalid_bracket = true;
+          }
+        }
+      }
+
+      if (fixed_denominator) {
+        den_end = fixed_den_end;
+      }
+
+      // Numerator and denominator both need to be at least one digit.
+      const bool has_num =
+          num_end >= num_begin &&
+          (literal_numerator || is_digit_placeholder(section.tokens[static_cast<std::size_t>(num_begin)].kind));
+      const bool has_den = fixed_denominator ? fixed_den_end > den_begin : den_end > den_begin;
+      if (has_num && has_den) {
+        // A group separator before the numerator is invalid (fr-FR `# ?/?`, text_format.text_fraction_with_integer).
+        if (num_begin > 0 && section.tokens[static_cast<std::size_t>(num_begin) - 1].kind == Tok::Comma) {
+          section.has_invalid_bracket = true;
+        }
+        // Optional integer group: one or more literal spaces immediately precede the
+        // numerator group, and a digit-placeholder run precedes them.
+        int int_begin = num_begin;
+        int int_end = num_begin;
+        int separator_begin = num_begin;
+        while (separator_begin > 0 &&
+               is_single_byte_literal(section.tokens[static_cast<std::size_t>(separator_begin) - 1], ' ')) {
+          --separator_begin;
+        }
+        if (separator_begin < num_begin && separator_begin >= 1 &&
+            is_digit_placeholder(section.tokens[static_cast<std::size_t>(separator_begin) - 1].kind)) {
+          int_end = separator_begin;  // exclusive: stops before the spaces.
+          int_begin = int_end;
+          while (int_begin > 0 && is_digit_placeholder(section.tokens[static_cast<std::size_t>(int_begin) - 1].kind)) {
+            --int_begin;
+          }
+        }
+        // A literal numerator only forms a fraction after an integer group (`0 1/8`).
+        if (!(literal_numerator && int_end == int_begin)) {
+          section.is_fraction = true;
+          section.fraction_int_begin = int_begin;
+          section.fraction_int_end = int_end;
+          section.fraction_num_begin = num_begin;
+          section.fraction_num_end = num_end + 1;  // exclusive
+          section.fraction_den_begin = den_begin;
+          section.fraction_den_end = den_end;
+          section.fraction_slash_index = slash_idx;
+          section.fraction_int_max_digits = int_end - int_begin;
+          section.fraction_den_max_digits = fixed_denominator ? 0 : den_end - den_begin;
+          section.fraction_fixed_denominator = fixed_denominator;
+          section.fraction_fixed_denominator_value = fixed_denominator ? fixed_denominator_value : 1U;
+          // A trailing comma after a fraction denominator is invalid, not a scaling marker.
+          for (std::size_t i = static_cast<std::size_t>(den_end); i < section.tokens.size(); ++i) {
+            if (section.tokens[i].kind == Tok::Comma) {
+              section.has_invalid_bracket = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 }  // namespace
 
 void classify(Section& section, std::string_view fmt) noexcept {
@@ -390,165 +552,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
     section.has_invalid_bracket = true;
   }
 
-  // --- Fraction format detection (`# ?/?`, `0/0`, etc.) ----------------
-  //
-  // Fraction structure is driven by an unquoted, unescaped slash token. A
-  // slash copied from a quoted or escaped payload remains an ordinary
-  // literal, even when it sits between digit placeholders. A raw denominator
-  // containing a non-zero digit is fixed; all-zero and placeholder runs
-  // remain variable bounded searches.
-  auto is_single_byte_literal = [&fmt](const Token& tk, char want) {
-    if (tk.kind != Tok::Literal) {
-      return false;
-    }
-    if (tk.lit_end != tk.lit_begin + 1) {
-      return false;
-    }
-    if (tk.lit_begin >= fmt.size()) {
-      return false;
-    }
-    return fmt[tk.lit_begin] == want;
-  };
-  if (!any_date && point_index < 0) {
-    // Exactly one structural slash; quoted or escaped slashes never form a fraction.
-    int slash_idx = -1;
-    int slash_count = 0;
-    for (std::size_t i = 0; i < section.tokens.size(); ++i) {
-      if (section.tokens[i].fraction_slash_candidate) {
-        slash_idx = static_cast<int>(i);
-        ++slash_count;
-      }
-    }
-    if (slash_count == 1 && slash_idx > 0 && static_cast<std::size_t>(slash_idx) + 1 < section.tokens.size()) {
-      // Walk left from slash to find the numerator group: a run of digit placeholders, or a run of
-      // literal digits (printed as written).
-      const auto is_literal_digit = [&fmt](const Token& tk) {
-        return tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 &&
-               tk.lit_begin < fmt.size() && fmt[tk.lit_begin] >= '0' && fmt[tk.lit_begin] <= '9';
-      };
-      int num_end = slash_idx - 1;
-      int num_begin = num_end;
-      const bool literal_numerator = is_literal_digit(section.tokens[static_cast<std::size_t>(num_end)]);
-      while (num_begin > 0 &&
-             (literal_numerator ? is_literal_digit(section.tokens[static_cast<std::size_t>(num_begin) - 1])
-                                : is_digit_placeholder(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind))) {
-        --num_begin;
-      }
-      // A raw run starting with 0 is variable only when all zeros (`/000`); `/08` is fixed.
-      int den_begin = slash_idx + 1;
-      int den_end = den_begin;
-      bool fixed_denominator = false;
-      std::uint64_t fixed_denominator_value = 0;
-      int fixed_den_end = den_begin;
-      int raw_den_end = den_begin;
-      bool raw_den_overflow = false;
-      bool raw_den_nonzero = false;
-      while (raw_den_end < static_cast<int>(section.tokens.size())) {
-        const Token& token = section.tokens[static_cast<std::size_t>(raw_den_end)];
-        char digit = '\0';
-        if (token.kind == Tok::DigitZero) {
-          digit = '0';
-        } else if (token.kind == Tok::Literal && !token.protected_literal && token.lit_end == token.lit_begin + 1 &&
-                   token.lit_begin < fmt.size()) {
-          const char raw = fmt[token.lit_begin];
-          if (raw >= '0' && raw <= '9') {
-            digit = raw;
-          }
-        }
-        if (digit == '\0') {
-          break;
-        }
-        raw_den_nonzero = raw_den_nonzero || digit != '0';
-        const std::uint64_t digit_value = static_cast<std::uint64_t>(digit - '0');
-        constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
-        if (fixed_denominator_value > (kMax - digit_value) / 10U) {
-          section.has_invalid_bracket = true;
-          raw_den_overflow = true;
-          break;
-        }
-        fixed_denominator_value = fixed_denominator_value * 10U + digit_value;
-        ++raw_den_end;
-      }
-      if (!raw_den_overflow && raw_den_end > den_begin && raw_den_nonzero) {
-        fixed_denominator = true;
-        fixed_den_end = raw_den_end;
-        if (fixed_denominator_value > kMaxFractionDenominator) {
-          // Denominators wider than the renderer's uint64_t bound are malformed, not partially rendered.
-          section.has_invalid_bracket = true;
-          fixed_denominator = false;
-        }
-      } else {
-        // An all-zero run is a zero-placeholder denominator, as are mixed `0?` and `?0`.
-        while (static_cast<std::size_t>(den_end) < section.tokens.size() &&
-               is_digit_placeholder(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
-          ++den_end;
-        }
-        if (den_end == den_begin && den_begin < static_cast<int>(section.tokens.size())) {
-          const Token& first = section.tokens[static_cast<std::size_t>(den_begin)];
-          if (first.kind == Tok::Literal && first.protected_literal && first.lit_begin < fmt.size() &&
-              first.lit_end > first.lit_begin && fmt[first.lit_begin] >= '1' && fmt[first.lit_begin] <= '9') {
-            // Excel rejects a quoted or escaped fixed denominator.
-            section.has_invalid_bracket = true;
-          }
-        }
-      }
-
-      if (fixed_denominator) {
-        den_end = fixed_den_end;
-      }
-
-      // Numerator and denominator both need to be at least one digit.
-      const bool has_num =
-          num_end >= num_begin &&
-          (literal_numerator || is_digit_placeholder(section.tokens[static_cast<std::size_t>(num_begin)].kind));
-      const bool has_den = fixed_denominator ? fixed_den_end > den_begin : den_end > den_begin;
-      if (has_num && has_den) {
-        // A group separator before the numerator is invalid (fr-FR `# ?/?`, text_format.text_fraction_with_integer).
-        if (num_begin > 0 && section.tokens[static_cast<std::size_t>(num_begin) - 1].kind == Tok::Comma) {
-          section.has_invalid_bracket = true;
-        }
-        // Optional integer group: one or more literal spaces immediately precede the
-        // numerator group, and a digit-placeholder run precedes them.
-        int int_begin = num_begin;
-        int int_end = num_begin;
-        int separator_begin = num_begin;
-        while (separator_begin > 0 &&
-               is_single_byte_literal(section.tokens[static_cast<std::size_t>(separator_begin) - 1], ' ')) {
-          --separator_begin;
-        }
-        if (separator_begin < num_begin && separator_begin >= 1 &&
-            is_digit_placeholder(section.tokens[static_cast<std::size_t>(separator_begin) - 1].kind)) {
-          int_end = separator_begin;  // exclusive: stops before the spaces.
-          int_begin = int_end;
-          while (int_begin > 0 && is_digit_placeholder(section.tokens[static_cast<std::size_t>(int_begin) - 1].kind)) {
-            --int_begin;
-          }
-        }
-        // A literal numerator only forms a fraction after an integer group (`0 1/8`).
-        if (!(literal_numerator && int_end == int_begin)) {
-          section.is_fraction = true;
-          section.fraction_int_begin = int_begin;
-          section.fraction_int_end = int_end;
-          section.fraction_num_begin = num_begin;
-          section.fraction_num_end = num_end + 1;  // exclusive
-          section.fraction_den_begin = den_begin;
-          section.fraction_den_end = den_end;
-          section.fraction_slash_index = slash_idx;
-          section.fraction_int_max_digits = int_end - int_begin;
-          section.fraction_den_max_digits = fixed_denominator ? 0 : den_end - den_begin;
-          section.fraction_fixed_denominator = fixed_denominator;
-          section.fraction_fixed_denominator_value = fixed_denominator ? fixed_denominator_value : 1U;
-          // A trailing comma after a fraction denominator is invalid, not a scaling marker.
-          for (std::size_t i = static_cast<std::size_t>(den_end); i < section.tokens.size(); ++i) {
-            if (section.tokens[i].kind == Tok::Comma) {
-              section.has_invalid_bracket = true;
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
+  classify_fraction(section, fmt, any_date, point_index);
 
   // A structural slash needs a neighbour on each side, and the left one may not be a literal letter
   // (locale_tokens.text_slash_letters, text_slash_alone, text_slash_after_digit, date_cyr_d_mm_yyyy; a letter on

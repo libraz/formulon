@@ -107,7 +107,9 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Defensive: if the match happens to land exactly at haystack.size()
   // (possible with wildcard on empty trailing), return the final position
   // after the last character.
-  return Value::number(static_cast<double>(dbcs_bytes_in(sargs.haystack, codepage) + 1));
+  const std::uint64_t end_position =
+      chars.empty() ? 1u : chars.back().dbcs_position + static_cast<std::uint64_t>(chars.back().dbcs_bytes);
+  return Value::number(static_cast<double>(end_position));
 }
 
 }  // namespace text_detail
@@ -126,27 +128,6 @@ namespace {
 // and stops. MIDB additionally substitutes a space when its `start_byte`
 // falls inside a 2-byte character.
 
-// Decode a single UTF-8 codepoint starting at `src[i]`. On malformed input
-// returns a 1-byte "raw" step so the caller can still make progress; such
-// steps are classified as 1 DBCS byte.
-struct Utf8Step {
-  std::uint32_t codepoint;  // Decoded codepoint (0xFFFD on malformed input).
-  std::size_t byte_len;     // Number of UTF-8 bytes consumed (>= 1).
-  int dbcs_bytes;           // DBCS byte cost under the active profile.
-};
-
-Utf8Step next_utf8_step(std::string_view src, std::size_t i, DbcsCodepage codepage) noexcept {
-  std::size_t bytes = 0;
-  const std::uint32_t cp = decode_utf8_step(src, i, &bytes);
-  // Lenient decoder reports U+FFFD on malformed input with a 1-byte
-  // advance. The DBCS cost for replacement / single-byte fallbacks is
-  // 1 (a single ASCII-equivalent byte), matching the prior contract.
-  if (bytes == 1 && cp == 0xFFFDu) {
-    return {0xFFFDu, 1u, 1};
-  }
-  return {cp, bytes, text_detail::dbcs_char_bytes(cp, codepage)};
-}
-
 // True when a character of `cost` bytes would straddle a budget with exactly one byte left.
 inline bool straddles_last_byte(std::uint64_t used, std::uint64_t budget, std::uint64_t cost) noexcept {
   return used + 1 == budget && cost >= 2;
@@ -163,7 +144,7 @@ bool read_byte_budget_args(const Value* args, std::uint32_t arity, std::string* 
     *out_early = Value::error(text.error());
     return false;
   }
-  auto byte_count = arity > 1u ? text_detail::read_snapped_int_arg(args[1], 0.0) : Expected<int, ErrorCode>(1);
+  auto byte_count = text_detail::read_optional_snapped_int_arg(args, arity, 1u, 0.0, 1);
   if (!byte_count) {
     *out_early = Value::error(byte_count.error());
     return false;

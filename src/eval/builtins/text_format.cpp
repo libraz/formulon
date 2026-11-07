@@ -158,7 +158,8 @@ Expected<int, ErrorCode> fixed_read_int(const Value& v) {
     return std::move(d.error());
   }
   const double truncated = std::trunc(snap_near_integer(d.value()));
-  if (truncated < -127.0 || truncated > 127.0) {
+  constexpr double kLimit = static_cast<double>(::formulon::text_format::kMaxFormatDecimalPlaces);
+  if (truncated < -kLimit || truncated > kLimit) {
     return ErrorCode::Value;
   }
   return static_cast<int>(truncated);
@@ -456,6 +457,14 @@ Expected<bool, ErrorCode> decode_text_format(const Value& evaluated_value) {
   return ErrorCode::Value;
 }
 
+// Decodes the optional `format` argument (`args[1]`); concise when omitted.
+Expected<bool, ErrorCode> read_text_format_arg(const Value* args, std::uint32_t arity) {
+  if (arity < 2U) {
+    return false;
+  }
+  return decode_text_format(args[1]);
+}
+
 // VALUETOTEXT(value, [format])
 //
 // Converts `value` to text, exactly as Excel 365 does when the user types
@@ -479,14 +488,11 @@ Value ValueToText_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (v.is_error()) {
     return v;
   }
-  bool strict = false;
-  if (arity >= 2) {
-    auto decoded = decode_text_format(args[1]);
-    if (!decoded) {
-      return Value::error(decoded.error());
-    }
-    strict = decoded.value();
+  auto format = read_text_format_arg(args, arity);
+  if (!format) {
+    return Value::error(format.error());
   }
+  const bool strict = format.value();
   if (strict && v.is_text()) {
     const std::string_view src = v.as_text();
     std::string out;
@@ -517,6 +523,15 @@ bool append_arraytotext_cell(const Value& v, bool strict, std::string& out, Erro
   }
   out.append(text.value());
   return true;
+}
+
+Value arraytotext_scalar(const Value& v, bool strict, Arena& arena) {
+  std::string out;
+  ErrorCode error = ErrorCode::Value;
+  if (!append_arraytotext_cell(v, strict, out, &error)) {
+    return Value::error(error);
+  }
+  return Value::text(arena.intern(out));
 }
 
 Value parse_arraytotext_format(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -591,26 +606,18 @@ Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict
 // preserve row/column shape long enough to emit Excel's concise list or
 // strict array-literal representation.
 Value ArrayToText_(const Value* args, std::uint32_t arity, Arena& arena) {
-  bool strict = false;
-  if (arity >= 2U) {
-    auto decoded = decode_text_format(args[1]);
-    if (!decoded) {
-      return Value::error(decoded.error());
-    }
-    strict = decoded.value();
+  auto format = read_text_format_arg(args, arity);
+  if (!format) {
+    return Value::error(format.error());
   }
+  const bool strict = format.value();
   if (args[0].is_array()) {
     return arraytotext_from_array(*args[0].as_array(), strict, arena);
   }
   if (args[0].is_error()) {
     return args[0];
   }
-  std::string out;
-  ErrorCode error = ErrorCode::Value;
-  if (!append_arraytotext_cell(args[0], strict, out, &error)) {
-    return Value::error(error);
-  }
-  return Value::text(arena.intern(out));
+  return arraytotext_scalar(args[0], strict, arena);
 }
 
 }  // namespace
@@ -671,12 +678,7 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (array_v.is_error()) {
     return array_v;
   }
-  std::string out;
-  ErrorCode error = ErrorCode::Value;
-  if (!append_arraytotext_cell(array_v, strict, out, &error)) {
-    return Value::error(error);
-  }
-  return Value::text(arena.intern(out));
+  return arraytotext_scalar(array_v, strict, arena);
 }
 
 void register_text_format_builtins(FunctionRegistry& registry) {

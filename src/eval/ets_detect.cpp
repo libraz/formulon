@@ -12,6 +12,7 @@
 #include "eval/ets_series.h"
 #include "eval/ets_series_internal.h"
 #include "eval/excel_math.h"
+#include "eval/stats/numeric_constants.h"
 #include "utils/index_sort.h"
 #include "value.h"
 
@@ -34,7 +35,6 @@ namespace {
 // arbitrates when both stages report a short period.
 
 constexpr double kPi = 3.141592653589793;
-constexpr double kTwoPi = 6.283185307179586;
 constexpr double kInt32Min = -2147483648.0;
 constexpr double kInt32Max = 2147483647.0;
 // Longest series considered by the detector.
@@ -118,7 +118,7 @@ std::vector<Complex> fft_pow2(const std::vector<double>& x, std::size_t count, b
   }
   std::size_t mmax = 2;
   while (true) {
-    double theta = div_zero(kTwoPi, static_cast<double>(mmax));
+    double theta = div_zero(stats::kTwoPi, static_cast<double>(mmax));
     if (inverse) {
       theta = flip_sign(theta);
     }
@@ -168,7 +168,7 @@ std::vector<Complex> fft_pow2(const std::vector<double>& x, std::size_t count, b
 // Direct transform for lengths that are not a power of two, using a twiddle
 // table built by accumulating the angle step.
 std::vector<Complex> dft_direct(const std::vector<double>& x, std::size_t count) {
-  const double step = div_zero(kTwoPi, static_cast<double>(count));
+  const double step = div_zero(stats::kTwoPi, static_cast<double>(count));
   double ang = 0.0;
   std::vector<Complex> tw(count);
   for (std::size_t k = 0; k < count; ++k) {

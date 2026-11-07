@@ -376,7 +376,7 @@ double beta_inv_excel(double p, double a, double b, double lo, double hi) noexce
 
 double t_inv_excel(double p, double df) noexcept {
   df = std::trunc(df);
-  if (df < 1.0 || df > kMaxDegreesOfFreedom || !(p < 1.0)) {
+  if (df_out_of_range(df) || !(p < 1.0)) {
     return kNaN;
   }
   if (p == 0.5) {

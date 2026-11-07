@@ -7,7 +7,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
-#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -272,9 +271,8 @@ Value text_complex(Complex z, Arena& arena) {
   if (!std::isfinite(z.re) || !std::isfinite(z.im)) {
     return Value::error(ErrorCode::Num);
   }
-  constexpr double kMin = std::numeric_limits<double>::min();
-  const double re = std::fabs(z.re) < kMin ? 0.0 : z.re;
-  const double im = std::fabs(z.im) < kMin ? 0.0 : z.im;
+  const double re = flush_subnormal(z.re);
+  const double im = flush_subnormal(z.im);
   return Value::text(arena.intern(format_complex(re, im, z.suffix)));
 }
 

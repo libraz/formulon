@@ -92,9 +92,6 @@ std::shared_ptr<const ParsedFormat> parse_format_cached(std::string_view format,
   return entry.parsed;
 }
 
-// A number format asks for at most this many decimal places in a TEXT() argument.
-constexpr int kMaxFormatDecimalPlaces = 127;
-
 // The most digit placeholders (`0`, `#`, `?`) following a decimal point in any section of a stored-dialect `format`;
 // quoted text, escaped characters and bracketed parts are skipped.
 int format_decimal_places(std::string_view format) {
@@ -367,8 +364,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
   if (section.is_date) {
     // The calendar runs from serial 0 to 9999-12-31. The 1904 system also
     // shows a negative serial, as its magnitude behind a leading minus.
-    const double max_serial =
-        date1904 ? date_time::kMaxSerial1900 - date_time::kDate1904EpochGap : date_time::kMaxSerial1900;
+    const double max_serial = number_format_detail::max_display_serial(date1904);
     // The last calendar day keeps its time fraction; the next whole day is out of range in either epoch.
     const bool out_of_range =
         date1904 ? std::fabs(render_value) >= max_serial + 1.0 : render_value < 0.0 || render_value >= max_serial + 1.0;

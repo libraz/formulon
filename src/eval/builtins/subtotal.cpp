@@ -160,34 +160,7 @@ Value run_numeric(const Value* args, std::uint32_t arity, Mode mode) {
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  switch (mode) {
-    case Mode::kAverage:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_average(xs));
-    case Mode::kMax:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_max(xs));
-    case Mode::kMin:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_min(xs));
-    case Mode::kProduct:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_product(xs));
-    case Mode::kStdev:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_stdev(xs, /*sample=*/true));
-    case Mode::kStdevP:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_stdev(xs, /*sample=*/false));
-    case Mode::kSum:
-      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_sum(xs));
-    case Mode::kVar:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_variance(xs, /*sample=*/true));
-    case Mode::kVarP:
-      return numeric_aggregate_kernels::value_from_kernel_result(
-          numeric_aggregate_kernels::run_variance(xs, /*sample=*/false));
-    case Mode::kCount:
-    case Mode::kCountA:
-      break;
-  }
-  return Value::error(ErrorCode::Value);
+  return numeric_aggregate_kernels::run_aggregate_code(static_cast<int>(mode), xs);
 }
 
 }  // namespace
