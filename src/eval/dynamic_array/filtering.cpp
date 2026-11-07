@@ -16,6 +16,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -67,7 +68,7 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
   for (std::uint32_t i = 0; i < mask_n; ++i) {
     bool keep = false;
     Value mask_err = Value::blank();
-    if (!dynamic_array::coerce_mask_cell(include->cells[i], &keep, &mask_err)) {
+    if (!bool_from_value(include->cells[i], keep, mask_err)) {
       return mask_err;
     }
     if (keep) {

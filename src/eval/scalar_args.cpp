@@ -11,9 +11,7 @@
 namespace formulon {
 namespace eval {
 
-bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, double& out, Value& error_out) {
-  const Value v = eval_node(node, arena, registry, ctx);
+bool number_from_value(const Value& v, double& out, Value& error_out) {
   if (v.is_error()) {
     error_out = v;
     return false;
@@ -27,9 +25,7 @@ bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRe
   return true;
 }
 
-bool eval_bool_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   bool& out, Value& error_out) {
-  const Value v = eval_node(node, arena, registry, ctx);
+bool bool_from_value(const Value& v, bool& out, Value& error_out) {
   if (v.is_error()) {
     error_out = v;
     return false;
@@ -41,6 +37,16 @@ bool eval_bool_arg(const parser::AstNode& node, Arena& arena, const FunctionRegi
   }
   out = coerced.value();
   return true;
+}
+
+bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, double& out, Value& error_out) {
+  return number_from_value(eval_node(node, arena, registry, ctx), out, error_out);
+}
+
+bool eval_bool_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   bool& out, Value& error_out) {
+  return bool_from_value(eval_node(node, arena, registry, ctx), out, error_out);
 }
 
 bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

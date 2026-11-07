@@ -25,6 +25,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/tree_walker_lazy_table.h"
@@ -442,7 +443,7 @@ bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionR
   }
   for (std::uint32_t i = 0; i < data_row_count; ++i) {
     bool keep = false;
-    if (!dynamic_array::coerce_mask_cell(mask->cells[i], &keep, out_err)) {
+    if (!bool_from_value(mask->cells[i], keep, *out_err)) {
       return false;
     }
     (*include_row)[i] = keep;

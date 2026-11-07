@@ -99,10 +99,6 @@ bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std
 /// 1-row array yet is 2-D.
 bool is_declared_vector(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols);
 
-/// Reads one include-mask cell as a boolean into `*out`. An error cell, or a
-/// cell that does not coerce, is returned in `*out_err` and the result is false.
-bool coerce_mask_cell(const Value& cell, bool* out, Value* out_err);
-
 /// Collation key of a text cell (empty for any other kind); compute once per
 /// cell and pass to `sort_lane_less_keyed`.
 std::string sort_text_key(const Value& v);

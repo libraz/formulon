@@ -21,6 +21,14 @@ namespace eval {
 class EvalContext;
 class FunctionRegistry;
 
+/// Coerce an evaluated value to a number. An error value or a coercion
+/// failure is written to `error_out` and yields `false`.
+bool number_from_value(const Value& v, double& out, Value& error_out);
+
+/// Coerce an evaluated value through `coerce_to_bool`. An error value or a
+/// coercion failure is written to `error_out` and yields `false`.
+bool bool_from_value(const Value& v, bool& out, Value& error_out);
+
 /// Evaluate `node` and coerce it to a number. On error or coercion failure
 /// writes the caller-visible error to `error_out` and returns `false`.
 bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

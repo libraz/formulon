@@ -165,20 +165,6 @@ std::string sort_text_key(const Value& v) {
   return collation_key(v.as_text(), current_eval_profile(), CollationStrength::kDynamic);
 }
 
-bool coerce_mask_cell(const Value& cell, bool* out, Value* out_err) {
-  if (cell.is_error()) {
-    *out_err = cell;
-    return false;
-  }
-  auto coerced = coerce_to_bool(cell);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return false;
-  }
-  *out = coerced.value();
-  return true;
-}
-
 bool is_declared_vector(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols) {
   (void)static_reference_shape(node, ctx, &rows, &cols);
   return rows == 1U || cols == 1U;

@@ -37,6 +37,7 @@
 #include "eval/holt_winters.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -96,13 +97,7 @@ bool read_double_arg(const parser::AstNode& node, Arena& arena, const FunctionRe
     *out = default_value;
     return true;
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return false;
-  }
-  *out = coerced.value();
-  return true;
+  return number_from_value(v, *out, *out_err);
 }
 
 // Reads an optional option argument that must be an integer in [lo, hi];
@@ -125,16 +120,10 @@ bool read_option(const parser::AstNode* node, Arena& arena, const FunctionRegist
 // Coerces one scalar argument value to a number; a non-finite result is
 // `non_finite_error`.
 bool finite_number(const Value& v, double* out, Value* out_err, ErrorCode non_finite_error) {
-  if (v.is_error()) {
-    *out_err = v;
+  double n = 0.0;
+  if (!number_from_value(v, n, *out_err)) {
     return false;
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return false;
-  }
-  const double n = coerced.value();
   if (!std::isfinite(n)) {
     *out_err = Value::error(non_finite_error);
     return false;
