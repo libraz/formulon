@@ -134,7 +134,9 @@ std::string spell_number_literals(std::string_view formula) {
   while (walk.advance()) {
     const std::size_t i = walk.i;
     const Token& token = tokens[i];
-    if (token.kind != TokenKind::Number || walk.brackets > 0 || is_row_number(tokens, i)) {
+    // A `$` lexeme is a row anchor (`$1`), not a literal, even where no `:` follows.
+    if (token.kind != TokenKind::Number || walk.brackets > 0 || is_row_number(tokens, i) ||
+        token.lexeme.front() == '$') {
       continue;
     }
     std::size_t from = static_cast<std::size_t>(token.lexeme.data() - formula.data());

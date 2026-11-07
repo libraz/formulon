@@ -288,6 +288,7 @@ TEST(SpellNumberLiterals, NonLiteralTextIsUntouched) {
   EXPECT_EQ(spell_number_literals("=\"1.50\"&\"-0\""), "=\"1.50\"&\"-0\"");
   EXPECT_EQ(spell_number_literals("=SUM(1:03)"), "=SUM(1:03)");
   EXPECT_EQ(spell_number_literals("=SUM($1:$3)+1.0"), "=SUM($1:$3)+1");
+  EXPECT_EQ(spell_number_literals("=$1+1.0"), "=$1+1");
   EXPECT_EQ(spell_number_literals("=Table1[[#This Row],[1.50]]+1.0"), "=Table1[[#This Row],[1.50]]+1");
   EXPECT_EQ(spell_number_literals("='2024'!A1+1.0"), "='2024'!A1+1");
   EXPECT_EQ(spell_number_literals("=LOG10(1.0E2)"), "=LOG10(100)");
