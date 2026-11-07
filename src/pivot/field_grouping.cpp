@@ -6,7 +6,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -16,13 +15,11 @@
 #include "eval/text_format/display_text.h"
 #include "num_fmt_locale.h"
 #include "pivot/date_serial.h"
+#include "pivot/field_grouping_internal.h"
 #include "pivot/pivot_cache.h"
-#include "pivot/pivot_index.h"
 #include "pivot/pivot_locale.h"
-#include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
-#include "sheet.h"
 #include "utils/checked_index.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
@@ -32,7 +29,6 @@
 #include "utils/japanese_era.h"
 #include "utils/status_macros.h"
 #include "value.h"
-#include "workbook.h"
 
 namespace formulon::pivot {
 namespace {
@@ -254,11 +250,10 @@ void materialize_group_fields(PivotCache& cache, bool date1904) {
 
 namespace {
 
-Error group_error(FormulonErrorCode code, std::string message, std::string context = {}) {
-  Error err = make_error(code, std::move(message));
-  err.context = std::move(context);
-  return err;
-}
+using detail::group_error;
+using detail::group_run;
+using detail::GroupRun;
+using detail::resolve_date_group_bounds;
 
 bool flag_at(const std::vector<bool>& flags, std::size_t i) {
   return i < flags.size() && flags[i];
@@ -291,30 +286,6 @@ std::vector<BaseValue> base_values(const PivotCache& cache, std::size_t base) {
     values.push_back({cell_value(cache, record, base), flag_at(record.cell_is_date, base)});
   }
   return values;
-}
-
-// Group items over `base` in index order, and whether they are the trailing
-// fields of the cache.
-struct GroupRun {
-  std::size_t first = 0;
-  std::size_t count = 0;
-};
-
-Expected<GroupRun, Error> group_run(const PivotCache& cache, std::size_t base) {
-  const std::vector<PivotCacheField>& fields = cache.fields();
-  GroupRun run{fields.size(), 0U};
-  for (std::size_t fi = 0; fi < fields.size(); ++fi) {
-    if (is_group_field(fields[fi]) && *fields[fi].field_group->base == base) {
-      run.first = std::min(run.first, fi);
-      ++run.count;
-    }
-  }
-  if (run.count != 0U && run.first + run.count != fields.size()) {
-    return group_error(FormulonErrorCode::kPreconditionFailed,
-                       "the group fields of a date field can be removed only while they are the last cache fields",
-                       "base=" + std::to_string(base));
-  }
-  return run;
 }
 
 // Era-year label of the day holding `serial`: "令和6年".
@@ -356,8 +327,10 @@ bool is_era_year_group(const PivotCache& cache, const PivotCacheField& field, bo
   return true;
 }
 
-// Checks `spec` against the base data and resolves the bounds the group
-// fields take.
+}  // namespace
+
+namespace detail {
+
 Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, std::size_t base,
                                                        const DateGroupSpec& spec, bool date1904) {
   if (base >= cache.fields().size() || !cache.fields()[base].is_database_field) {
@@ -424,6 +397,10 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
   }
   return bounds;
 }
+
+}  // namespace detail
+
+namespace {
 
 Value cache_text(PivotCache& cache, std::string text) {
   cache.mutable_text_storage().push_back(std::move(text));
@@ -586,182 +563,34 @@ PivotCacheField era_year_group_field(PivotCache& cache, std::size_t base, bool d
   return field;
 }
 
-// A row or column axis in document order, the Values marker included.
-std::vector<std::int64_t> axis_entries(const PivotTable& table, bool row) {
-  const std::vector<std::uint32_t>& order = row ? table.row_field_order() : table.col_field_order();
-  const std::optional<std::size_t> values = row ? table.row_values_position() : table.col_values_position();
-  std::vector<std::int64_t> entries(order.begin(), order.end());
-  if (values.has_value()) {
-    entries.insert(entries.begin() + static_cast<std::ptrdiff_t>(std::min(*values, entries.size())),
-                   kValuesFieldPosition);
-  }
-  return entries;
-}
-
-void set_axis_entries(PivotTable& table, bool row, const std::vector<std::int64_t>& entries) {
-  std::vector<std::uint32_t> order;
-  std::optional<std::size_t> values;
-  for (std::size_t i = 0; i < entries.size(); ++i) {
-    if (entries[i] == kValuesFieldPosition) {
-      values = i;
-    } else {
-      order.push_back(static_cast<std::uint32_t>(entries[i]));
-    }
-  }
-  if (row) {
-    table.mutable_row_field_order() = std::move(order);
-    table.set_row_values_position(values);
-  } else {
-    table.mutable_col_field_order() = std::move(order);
-    table.set_col_values_position(values);
-  }
-}
-
-PivotAxis axis_of(bool row) {
-  return row ? PivotAxis::Row : PivotAxis::Col;
-}
-
-// Gives `table` a pivot field for each cache field from `first` on and puts
-// them on the axis that holds the base: in its place on the grouped pivot,
-// before it on the others.
-void add_group_pivot_fields(PivotTable& table, const PivotCache& cache, std::size_t base, std::size_t first,
-                            bool replace_base) {
-  std::vector<PivotField>& fields = table.mutable_fields();
-  while (fields.size() < cache.fields().size()) {
-    const std::size_t fi = fields.size();
-    PivotField field;
-    field.source_name = cache.fields()[fi].name;
-    field.axis = PivotAxis::None;
-    if (fi >= first) {
-      // Excel lists group items in group order, with no sort stated.
-      field.sort.manual = true;
-      const std::size_t item_count = cache.fields()[fi].field_group->group_items.size();
-      for (std::size_t i = 0; i < item_count; ++i) {
-        PivotItem item;
-        item.has_cache_index = true;
-        item.cache_index = static_cast<std::uint32_t>(i);
-        field.items.push_back(std::move(item));
-      }
-    }
-    fields.push_back(std::move(field));
-  }
-  for (const bool row : {true, false}) {
-    std::vector<std::int64_t> entries = axis_entries(table, row);
-    const auto at = std::find(entries.begin(), entries.end(), static_cast<std::int64_t>(base));
-    if (at == entries.end()) {
-      continue;
-    }
-    // Coarsest outermost.
-    std::vector<std::int64_t> groups;
-    for (std::size_t fi = cache.fields().size(); fi > first; --fi) {
-      groups.push_back(static_cast<std::int64_t>(fi - 1U));
-      fields[fi - 1U].axis = axis_of(row);
-    }
-    const auto pos = entries.erase(at, replace_base ? at + 1 : at);
-    entries.insert(pos, groups.begin(), groups.end());
-    if (replace_base) {
-      fields[base].axis = PivotAxis::None;
-    }
-    set_axis_entries(table, row, entries);
-  }
-}
-
-// Drops `table`'s pivot fields from `first` on; the base takes the axis
-// position the first of them held unless it is on an axis already.
-void remove_group_pivot_fields(PivotTable& table, std::size_t base, std::size_t first) {
-  std::vector<PivotField>& fields = table.mutable_fields();
-  if (fields.size() <= first) {
-    return;
-  }
-  for (const bool row : {true, false}) {
-    std::vector<std::int64_t> entries = axis_entries(table, row);
-    std::vector<std::int64_t> kept;
-    for (const std::int64_t entry : entries) {
-      if (entry < 0 || static_cast<std::size_t>(entry) < first) {
-        kept.push_back(entry);
-        continue;
-      }
-      if (base < fields.size() && fields[base].axis == PivotAxis::None) {
-        kept.push_back(static_cast<std::int64_t>(base));
-        fields[base].axis = axis_of(row);
-      }
-    }
-    if (kept != entries) {
-      set_axis_entries(table, row, kept);
-    }
-  }
-  std::vector<PivotPageField>& pages = table.mutable_page_fields();
-  pages.erase(std::remove_if(pages.begin(), pages.end(),
-                             [first](const PivotPageField& page) { return page.field_index >= first; }),
-              pages.end());
-  std::vector<PivotDataField>& data = table.mutable_data_fields();
-  data.erase(
-      std::remove_if(data.begin(), data.end(), [first](const PivotDataField& df) { return df.field_index >= first; }),
-      data.end());
-  table.erase_active_filters_if(
-      [first](const PivotFilter& filter) { return filter.source.has_value() && filter.source->field_index >= first; });
-  fields.resize(first);
-}
-
-// Calls `fn(PivotTable&)` for every pivot table on cache `cache_id`.
-template <class Fn>
-void for_each_cache_table(Workbook& wb, std::uint32_t cache_id, Fn&& fn) {
-  for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
-    for (std::unique_ptr<PivotTable>& table : wb.sheet(si).mutable_pivot_tables()) {
-      if (table != nullptr && table->pivot_cache_id() == cache_id) {
-        fn(*table);
-      }
-    }
-  }
-}
-
-void invalidate_tables(Workbook& wb, std::uint32_t cache_id) {
-  for_each_cache_table(wb, cache_id, [](PivotTable& table) {
-    table.clear_last_result();
-    table.clear_span_authored();
-    table.mark_layout_dirty();
-  });
-  wb.mark_all_formulas_dirty();
-}
-
-// The pivot `(sheet, pivot)`, its cache and the base of its field `field`.
-struct GroupTarget {
-  PivotTable* table = nullptr;
-  PivotCache* cache = nullptr;
-  std::size_t base = 0;
-};
-
-Expected<GroupTarget, Error> resolve_group_target(Workbook& wb, std::size_t sheet, std::size_t pivot,
-                                                  std::size_t field) {
-  const std::string where =
-      "sheet=" + std::to_string(sheet) + " pivot=" + std::to_string(pivot) + " field=" + std::to_string(field);
-  if (sheet >= wb.sheet_count() || pivot >= wb.sheet(sheet).pivot_tables().size() ||
-      wb.sheet(sheet).pivot_tables()[pivot] == nullptr) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "no such pivot table", where);
-  }
-  GroupTarget target;
-  target.table = wb.sheet(sheet).mutable_pivot_tables()[pivot].get();
-  for (std::unique_ptr<PivotCache>& cache : wb.mutable_pivot_caches()) {
-    if (cache != nullptr && cache->cache_id() == target.table->pivot_cache_id()) {
-      target.cache = cache.get();
-    }
-  }
-  if (target.cache == nullptr || field >= target.table->fields().size() || field >= target.cache->fields().size()) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "no such pivot field", where);
-  }
-  target.base = group_base_index(*target.cache, field);
-  return target;
-}
-
-// Takes the group fields over `base` off every pivot on `cache` and out of
-// the cache; `run` is their checked position.
-void remove_date_group(Workbook& wb, PivotCache& cache, std::size_t base, const GroupRun& run) {
-  for_each_cache_table(wb, cache.cache_id(),
-                       [&](PivotTable& table) { remove_group_pivot_fields(table, base, run.first); });
-  (void)ungroup_cache_field(cache, base);
-}
-
 }  // namespace
+
+namespace detail {
+
+Error group_error(FormulonErrorCode code, std::string message, std::string context) {
+  Error err = make_error(code, std::move(message));
+  err.context = std::move(context);
+  return err;
+}
+
+Expected<GroupRun, Error> group_run(const PivotCache& cache, std::size_t base) {
+  const std::vector<PivotCacheField>& fields = cache.fields();
+  GroupRun run{fields.size(), 0U};
+  for (std::size_t fi = 0; fi < fields.size(); ++fi) {
+    if (is_group_field(fields[fi]) && *fields[fi].field_group->base == base) {
+      run.first = std::min(run.first, fi);
+      ++run.count;
+    }
+  }
+  if (run.count != 0U && run.first + run.count != fields.size()) {
+    return group_error(FormulonErrorCode::kPreconditionFailed,
+                       "the group fields of a date field can be removed only while they are the last cache fields",
+                       "base=" + std::to_string(base));
+  }
+  return run;
+}
+
+}  // namespace detail
 
 std::size_t group_base_index(const PivotCache& cache, std::size_t field) noexcept {
   if (field < cache.fields().size() && is_group_field(cache.fields()[field])) {
@@ -881,37 +710,6 @@ Expected<std::size_t, Error> ungroup_cache_field(PivotCache& cache, std::size_t 
     }
   }
   return run.count;
-}
-
-Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
-                                     std::uint32_t periods, CalendarSystem calendar, std::uint32_t interval_days,
-                                     std::optional<double> start, std::optional<double> end) {
-  ASSIGN_OR_RETURN(GroupTarget target, resolve_group_target(wb, sheet, pivot, field));
-  PivotCache& cache = *target.cache;
-  const std::size_t base = target.base;
-  const DateGroupSpec spec{periods, calendar, interval_days, start, end};
-  RETURN_IF_ERROR(resolve_date_group_bounds(cache, base, spec, wb.date1904()));
-  ASSIGN_OR_RETURN(GroupRun run, group_run(cache, base));
-  remove_date_group(wb, cache, base, run);
-  ASSIGN_OR_RETURN(std::size_t first, group_cache_by_date(cache, base, spec, wb.date1904(), wb.excel_profile()));
-  for_each_cache_table(wb, cache.cache_id(), [&](PivotTable& table) {
-    add_group_pivot_fields(table, cache, base, first, &table == target.table);
-    resolve_pivot_names(table, cache);
-  });
-  invalidate_tables(wb, cache.cache_id());
-  return Expected<void, Error>::Ok();
-}
-
-Expected<void, Error> clear_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field) {
-  ASSIGN_OR_RETURN(GroupTarget target, resolve_group_target(wb, sheet, pivot, field));
-  PivotCache& cache = *target.cache;
-  ASSIGN_OR_RETURN(GroupRun run, group_run(cache, target.base));
-  if (run.count == 0U) {
-    return Expected<void, Error>::Ok();
-  }
-  remove_date_group(wb, cache, target.base, run);
-  invalidate_tables(wb, cache.cache_id());
-  return Expected<void, Error>::Ok();
 }
 
 }  // namespace formulon::pivot

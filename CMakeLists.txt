@@ -307,6 +307,7 @@ set(FORMULON_CORE_SOURCES
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
   src/pivot/field_grouping.cpp
+  src/pivot/date_group_edit.cpp
   src/pivot/calculated.cpp
   src/pivot/calculated_edit.cpp
   src/pivot/pivot_layout.cpp
