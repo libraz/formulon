@@ -154,25 +154,31 @@ void emit_cell_parsed_formula(std::vector<std::uint8_t>& dst, const std::vector<
   dst.insert(dst.end(), rgcb.begin(), rgcb.end());
 }
 
-void emit_xlwidestring(std::vector<std::uint8_t>& dst, std::string_view text) {
-  // The code-unit count is patched into the prefix once the body is written.
-  const std::size_t prefix_at = dst.size();
-  emit_u32(dst, 0U);
+std::size_t emit_utf16_units(std::vector<std::uint8_t>& dst, std::string_view text) {
+  std::size_t units = 0;
   std::size_t i = 0;
   while (i < text.size()) {
     const std::uint32_t cp = DecodeUtf8(text, i);
     if (cp < 0x10000U) {
       emit_u16(dst, static_cast<std::uint16_t>(cp));
+      ++units;
     } else {
       // Surrogate pair.
       const std::uint32_t adjusted = cp - 0x10000U;
-      const std::uint16_t high = static_cast<std::uint16_t>(0xD800U + (adjusted >> 10));
-      const std::uint16_t low = static_cast<std::uint16_t>(0xDC00U + (adjusted & 0x3FFU));
-      emit_u16(dst, high);
-      emit_u16(dst, low);
+      emit_u16(dst, static_cast<std::uint16_t>(0xD800U + (adjusted >> 10)));
+      emit_u16(dst, static_cast<std::uint16_t>(0xDC00U + (adjusted & 0x3FFU)));
+      units += 2U;
     }
   }
-  store_u32(dst.data() + prefix_at, static_cast<std::uint32_t>((dst.size() - prefix_at - 4U) / 2U));
+  return units;
+}
+
+void emit_xlwidestring(std::vector<std::uint8_t>& dst, std::string_view text) {
+  // The code-unit count is patched into the prefix once the body is written.
+  const std::size_t prefix_at = dst.size();
+  emit_u32(dst, 0U);
+  const std::size_t units = emit_utf16_units(dst, text);
+  store_u32(dst.data() + prefix_at, static_cast<std::uint32_t>(units));
 }
 
 void emit_xlnullablewidestring(std::vector<std::uint8_t>& dst, std::optional<std::string_view> text) {

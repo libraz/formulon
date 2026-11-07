@@ -138,38 +138,6 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
   return view;
 }
 
-Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::uint8_t>& rels_bytes) {
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=xlsb_reader part=_rels/.rels desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "package-level rels: pugixml parse failed", std::move(ctx));
-  }
-  pugi::xml_node root = ooxml::relationship_root(doc);
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
-                      "context=xlsb_reader part=_rels/.rels");
-  }
-  for (const pugi::xml_node rel : root.children()) {
-    if (!ooxml::is_relationship_element(rel, root)) {
-      continue;
-    }
-    if (std::string_view(rel.attribute("Type").value()) == kRelOfficeDocument) {
-      std::string target = NormalisePartName(rel.attribute("Target").value());
-      if (target.empty()) {
-        return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                          "package-level rels: empty Target for OfficeDocument",
-                          "context=xlsb_reader part=_rels/.rels");
-      }
-      return target;
-    }
-  }
-  return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                    "package-level rels: no OfficeDocument relationship found", "context=xlsb_reader part=_rels/.rels");
-}
-
 Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string_view workbook_path) {
   WorkbookRels rels;
   const std::string rels_path = ooxml::rels_path_for_part(workbook_path);

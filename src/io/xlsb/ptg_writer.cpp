@@ -95,50 +95,22 @@ constexpr std::uint8_t ClassedPtg(std::uint8_t reference_class_ptg, std::uint8_t
   return static_cast<std::uint8_t>((reference_class_ptg & kPtgTypeMask) | cls);
 }
 
+Error unsupported_node(const char* kind) {
+  return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                    std::string("xlsb encoder cannot lower AST node kind: ") + kind, kCtx);
+}
+
 /// Emits a u16 code-unit count + UTF-16LE units for `text` (UTF-8 in).
-/// Mirrors `read_ptg_string` in the decoder. Code points above the BMP
-/// are emitted as a surrogate pair (so the count is in UTF-16 units).
-void emit_ptg_string_body(std::vector<std::uint8_t>& dst, std::string_view text) {
-  // First pass: decode UTF-8 into UTF-16 code units.
-  std::vector<std::uint16_t> units;
-  units.reserve(text.size());
-  std::size_t i = 0;
-  auto cont = [&text](std::size_t idx) -> std::uint32_t {
-    return static_cast<std::uint32_t>(static_cast<std::uint8_t>(text[idx]) & 0x3F);
-  };
-  while (i < text.size()) {
-    const auto b0 = static_cast<std::uint8_t>(text[i]);
-    std::uint32_t cp = 0;
-    std::size_t len = 1;
-    if (b0 < 0x80) {
-      cp = b0;
-      len = 1;
-    } else if ((b0 & 0xE0) == 0xC0 && i + 1 < text.size()) {
-      cp = (static_cast<std::uint32_t>(b0 & 0x1F) << 6) | cont(i + 1);
-      len = 2;
-    } else if ((b0 & 0xF0) == 0xE0 && i + 2 < text.size()) {
-      cp = (static_cast<std::uint32_t>(b0 & 0x0F) << 12) | (cont(i + 1) << 6) | cont(i + 2);
-      len = 3;
-    } else if ((b0 & 0xF8) == 0xF0 && i + 3 < text.size()) {
-      cp = (static_cast<std::uint32_t>(b0 & 0x07) << 18) | (cont(i + 1) << 12) | (cont(i + 2) << 6) | cont(i + 3);
-      len = 4;
-    } else {
-      cp = 0xFFFD;
-      len = 1;
-    }
-    if (cp <= 0xFFFF) {
-      units.push_back(static_cast<std::uint16_t>(cp));
-    } else {
-      cp -= 0x10000;
-      units.push_back(static_cast<std::uint16_t>(0xD800 | (cp >> 10)));
-      units.push_back(static_cast<std::uint16_t>(0xDC00 | (cp & 0x3FF)));
-    }
-    i += len;
+/// Mirrors `read_ptg_string` in the decoder; fails when the count exceeds u16.
+Expected<void, Error> emit_ptg_string_body(std::vector<std::uint8_t>& dst, std::string_view text) {
+  const std::size_t count_at = dst.size();
+  emit_u16(dst, 0);
+  const std::size_t units = emit_utf16_units(dst, text);
+  if (units > 0xFFFFU) {
+    return unsupported_node("string literal (>65535 code units)");
   }
-  emit_u16(dst, static_cast<std::uint16_t>(units.size()));
-  for (std::uint16_t u : units) {
-    emit_u16(dst, u);
-  }
+  store_u16(dst.data() + count_at, static_cast<std::uint16_t>(units));
+  return Expected<void, Error>::Ok();
 }
 
 std::uint8_t error_wire_code(ErrorCode e) {
@@ -214,11 +186,6 @@ parser::Reference OffsetFrom(parser::Reference ref, PtgBaseCell base) {
     ref.col = (ref.col - base.col) & kPtgColumnMask;
   }
   return ref;
-}
-
-Error unsupported_node(const char* kind) {
-  return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                    std::string("xlsb encoder cannot lower AST node kind: ") + kind, kCtx);
 }
 
 /// One rectangle of a precomputed reference result (`PtgMemArea`'s cache).
@@ -564,8 +531,7 @@ class Encoder {
         return Expected<void, Error>::Ok();
       case ValueKind::Text:
         emit_u8(out_, kPtgStr);  // PtgStr
-        emit_ptg_string_body(out_, v.as_text());
-        return Expected<void, Error>::Ok();
+        return emit_ptg_string_body(out_, v.as_text());
       case ValueKind::Error:
         emit_u8(out_, kPtgErr);  // PtgErr
         emit_u8(out_, error_wire_code(v.as_error()));
@@ -1144,11 +1110,7 @@ class Encoder {
   /// what the memory token covers.
   Expected<void, Error> patch_memory_cce(std::size_t cce_at) {
     const std::size_t cce = out_.size() - cce_at - 2U;
-    if (cce > 0xFFFFU) {
-      return unsupported_node("memory token (cce>65535)");
-    }
-    patch_u16(cce_at, cce);
-    return Expected<void, Error>::Ok();
+    return patch_u16(cce_at, cce, "memory token (cce>65535)");
   }
 
   /// Emits a `:` chain token by token, as Excel tokenises it: each area
@@ -1345,7 +1307,7 @@ class Encoder {
       const std::size_t attr_if = emit_attr(PtgAttrKind::If);
       RETURN_IF_ERROR(emit_call_arg(node, name, 1U));
       gotos.push_back(emit_attr(PtgAttrKind::Goto));
-      patch_u16(attr_if + 2U, out_.size() - (attr_if + 4U));
+      RETURN_IF_ERROR(patch_u16(attr_if + 2U, out_.size() - (attr_if + 4U)));
       if (arity == 3U) {
         RETURN_IF_ERROR(emit_call_arg(node, name, 2U));
         gotos.push_back(emit_attr(PtgAttrKind::Goto));
@@ -1357,16 +1319,16 @@ class Encoder {
       const std::size_t table = emit_attr(PtgAttrKind::Choose, static_cast<std::uint16_t>(arity - 1U)) + 4U;
       out_.resize(table + 2U * arity);
       for (std::uint32_t i = 1; i < arity; ++i) {
-        patch_u16(table + 2U * (i - 1U), out_.size() - table);
+        RETURN_IF_ERROR(patch_u16(table + 2U * (i - 1U), out_.size() - table));
         RETURN_IF_ERROR(emit_call_arg(node, name, i));
         gotos.push_back(emit_attr(PtgAttrKind::Goto));
       }
-      patch_u16(table + 2U * (arity - 1U), out_.size() - table);
+      RETURN_IF_ERROR(patch_u16(table + 2U * (arity - 1U), out_.size() - table));
     } else if (strings::case_insensitive_eq(name, "IFERROR") && arity == 2U) {
       RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
       const std::size_t attr_if_error = emit_attr(PtgAttrKind::IfError);
       RETURN_IF_ERROR(emit_call_arg(node, name, 1U));
-      patch_u16(attr_if_error + 2U, out_.size() - (attr_if_error + 4U));
+      RETURN_IF_ERROR(patch_u16(attr_if_error + 2U, out_.size() - (attr_if_error + 4U)));
       gotos.push_back(emit_attr(PtgAttrKind::Goto));
     } else {
       for (std::uint32_t i = 0; i < arity; ++i) {
@@ -1374,10 +1336,11 @@ class Encoder {
       }
     }
     // Each PtgAttrGoto lands on the last byte of the call token that follows.
-    const auto patch_gotos = [&]() {
+    const auto patch_gotos = [&]() -> Expected<void, Error> {
       for (const std::size_t at : gotos) {
-        patch_u16(at + 2U, out_.size() - (at + 4U) - 1U);
+        RETURN_IF_ERROR(patch_u16(at + 2U, out_.size() - (at + 4U) - 1U));
       }
+      return Expected<void, Error>::Ok();
     };
     if (arity == 0U) {
       emit_space(node, parser::WhitespaceSlot::kBeforeClose);
@@ -1405,8 +1368,7 @@ class Encoder {
       emit_u8(out_, ClassedPtg(kPtgFunc, token_class));  // PtgFunc result
       emit_u16(out_, entry->id);
     }
-    patch_gotos();
-    return Expected<void, Error>::Ok();
+    return patch_gotos();
   }
 
   /// Emits argument `i` of the call `node`; the spaces before the call's
@@ -1429,7 +1391,14 @@ class Encoder {
     return at;
   }
 
-  void patch_u16(std::size_t at, std::size_t value) { store_u16(out_.data() + at, static_cast<std::uint16_t>(value)); }
+  /// Back-fills a u16 at `at`; fails the encode when `value` does not fit.
+  Expected<void, Error> patch_u16(std::size_t at, std::size_t value, const char* what = "jump offset (>65535)") {
+    if (value > 0xFFFFU) {
+      return unsupported_node(what);
+    }
+    store_u16(out_.data() + at, static_cast<std::uint16_t>(value));
+    return Expected<void, Error>::Ok();
+  }
 
   /// Encodes a call taking the hidden-name route (see
   /// `io/future_functions.h`): `PtgName(ilbl)` naming the callee, then
@@ -1539,7 +1508,7 @@ class Encoder {
             break;
           case ValueKind::Text:
             emit_u8(extra_, 1);  // u16 count + UTF-16LE
-            emit_ptg_string_body(extra_, v.as_text());
+            RETURN_IF_ERROR(emit_ptg_string_body(extra_, v.as_text()));
             break;
           case ValueKind::Bool:
             emit_u8(extra_, 2);

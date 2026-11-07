@@ -305,6 +305,20 @@ TEST(XlsbRowLayout, OnlyTheUnsyncedFlagMakesAHeightCustom) {
   EXPECT_TRUE(layout.row_overrides[1].hidden);
 }
 
+TEST(XlsbPackage, OfficeDocumentTargetEscapingThePackageRootIsRefused) {
+  std::string rels = PackageRelsXml();
+  const std::string good = "Target=\"xl/workbook.bin\"";
+  rels.replace(rels.find(good), good.size(), "Target=\"../evil/workbook.bin\"");
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(rels)});
+  parts.push_back({"xl/workbook.bin", WorkbookBin({})});
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = io::xlsb::read_xlsb(test::span_of(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipSlip);
+}
+
 TEST(XlsbRowLayout, RealWorkbookMatchesItsOoxmlTwin) {
   // The same workbook exported by Excel to both containers. Every row of
   // the binary export carries a rendered `miyRw`; the XML export writes

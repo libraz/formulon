@@ -21,6 +21,7 @@
 #ifndef FORMULON_IO_XLSB_RECORD_WRITER_H_
 #define FORMULON_IO_XLSB_RECORD_WRITER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -59,6 +60,11 @@ void emit_double(std::vector<std::uint8_t>& dst, double value);
 /// Appends a `CellParsedFormula`: `cce` + `rgce` + `cb` + `rgcb`.
 void emit_cell_parsed_formula(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& rgce,
                               const std::vector<std::uint8_t>& rgcb);
+
+/// Appends the UTF-16LE code units of the UTF-8 `text` to `dst` (surrogate
+/// pairs above the BMP, U+FFFD per ill-formed byte) and returns the number of
+/// code units written.
+std::size_t emit_utf16_units(std::vector<std::uint8_t>& dst, std::string_view text);
 
 /// Appends an `XLWideString` ([MS-XLSB] §2.5.166) to `dst`:
 ///   * `u32` count of UTF-16 code units (cch);

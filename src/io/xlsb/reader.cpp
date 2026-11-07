@@ -80,7 +80,6 @@ using detail::FindRelationship;
 using detail::LoadContentTypes;
 using detail::LoadSheetRelationships;
 using detail::LoadWorkbookRels;
-using detail::ResolveOfficeDocumentPath;
 using detail::WorkbookRels;
 
 // ---------------------------------------------------------------------------
@@ -480,7 +479,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package", kReadXlsbContext);
   }
   ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
-  ASSIGN_OR_RETURN(auto wb_path, ResolveOfficeDocumentPath(root_rels));
+  ASSIGN_OR_RETURN(auto wb_path, ooxml::resolve_office_document_path(root_rels));
   const std::string workbook_path = wb_path;
   ASSIGN_OR_RETURN(auto package_rels, ooxml::read_unknown_package_rels(root_rels, "xlsb_reader"));
 

@@ -36,10 +36,6 @@ struct ContentTypesView {
 /// Parses `[Content_Types].xml`.
 Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_t>& ct_bytes);
 
-/// Returns the package-relative part path the package-level rels name as the
-/// OfficeDocument.
-Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::uint8_t>& rels_bytes);
-
 struct WorkbookRels {
   std::unordered_map<std::string, std::string> sheet_targets;  // rId -> resolved part path
   std::string sst_path;
