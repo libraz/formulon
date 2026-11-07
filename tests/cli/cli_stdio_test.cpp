@@ -249,6 +249,9 @@ TEST(FormulonCli, OptEqualsInvalidValuesAreStillRejected) {
   EXPECT_EQ(run_cli({"eval", "--profile=bogus", "=1"}).exit_code, 64);
   EXPECT_EQ(run_cli({"eval", "--now=yesterday", "=1"}).exit_code, 64);
   EXPECT_EQ(run_cli({"eval", "--repeat=0", "=1"}).exit_code, 64);
+  EXPECT_EQ(run_cli({"eval", "--repeat=+5", "=1"}).exit_code, 64);
+  EXPECT_EQ(run_cli({"eval", "--repeat= 5", "=1"}).exit_code, 64);
+  EXPECT_EQ(run_cli({"eval", "--repeat=2x", "=1"}).exit_code, 64);
 }
 
 TEST(FormulonCli, OptEqualsStopsAtTheOptionTerminatorAndInFormulas) {

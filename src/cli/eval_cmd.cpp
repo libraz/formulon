@@ -14,7 +14,6 @@
 // `--repeat N` re-evaluates the same formula `N` times through the ad-hoc
 // evaluator. Timing is reported on stderr without changing the stdout payload.
 
-#include <cerrno>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -56,15 +55,11 @@ long parse_repeat(const ArgList& args, std::size_t& idx) {
   if (idx >= args.size()) {
     return -1;
   }
-  const std::string s(args[idx]);
+  const std::string_view text = args[idx];
   ++idx;
-  // `std::strtol` accepts trailing junk; treat any non-empty tail as
-  // a parse failure. Also reject zero / negative counts because they
-  // would skip the `recalc` entirely.
-  char* end = nullptr;
-  errno = 0;
-  const long n = std::strtol(s.c_str(), &end, 10);
-  if (errno == ERANGE || end == nullptr || *end != '\0' || n <= 0) {
+  // Zero / negative counts would skip the `recalc` entirely.
+  long n = 0;
+  if (!parse_unsigned<long>(text, &n) || n <= 0) {
     return -1;
   }
   return n;
