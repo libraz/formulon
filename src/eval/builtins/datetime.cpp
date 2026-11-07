@@ -50,9 +50,7 @@ using date_time::kSecondsPerDay;
 
 using date_time::kDate1904EpochGap;
 
-double max_date_serial(bool date1904) noexcept {
-  return date_time::serial_from_ymd(9999, 12, 31, date1904);
-}
+using date_time::max_date_serial;
 
 bool is_valid_generated_date_serial(double serial, bool date1904) noexcept {
   return std::isfinite(serial) && serial >= 0.0 && serial <= max_date_serial(date1904);

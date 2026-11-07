@@ -208,10 +208,17 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
   if (auto rc = check_index(index, ranges.size(), "index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_rect_list(range->ranges, range->range_count); rc != 0) {
-    return rc;
+  // NULL with a zero count keeps the stored text, unparsed tokens included.
+  const bool keep_ranges = range->ranges == nullptr && range->range_count == 0;
+  if (!keep_ranges) {
+    if (auto rc = check_rect_list(range->ranges, range->range_count); rc != 0) {
+      return rc;
+    }
   }
   formulon::ProtectedRange updated = ToModel(*range);
+  if (keep_ranges) {
+    updated.sqref = ranges[index].sqref;
+  }
   if (auto rc = CheckRange(ranges, updated, index); rc != 0) {
     return rc;
   }

@@ -8266,6 +8266,18 @@ entries:
     py: get_version
     surfaces: [c, wasm, native, py]
     was: { c: fm_version_string, js: versionString, py: library_version }
+  civil_to_serial.convert:
+    kind: op
+    scope: process
+    noun: civil_to_serial
+    c: fm_convert_civil_to_serial
+    surfaces: [c]
+  serial_to_civil.convert:
+    kind: op
+    scope: process
+    noun: serial_to_civil
+    c: fm_convert_serial_to_civil
+    surfaces: [c]
   version_number.get:
     kind: op
     scope: process

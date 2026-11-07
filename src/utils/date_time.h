@@ -147,6 +147,11 @@ YMD legacy_1900_ymd(double serial) noexcept;
 /// less than the 1900 serial for the same calendar day.
 double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904 = false) noexcept;
 
+/// Serial of 9999-12-31, the last day a date serial can name.
+inline double max_date_serial(bool date1904) noexcept {
+  return serial_from_ymd(9999, 12, 31, date1904);
+}
+
 /// Converts a year/month and anchor day to a serial, clamping the day to the
 /// target month's last day before applying the normal serial rules (an
 /// Aug-31 anchor three months back is May-31, six months back Feb-28/29).

@@ -724,6 +724,8 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_set_iterative_progress",
     "fm_sheet_set_number",
     "fm_workbook_set_pinned_now",
+    "fm_convert_civil_to_serial",
+    "fm_convert_serial_to_civil",
     "fm_workbook_set_workbook_protection",
     "fm_workbook_set_ref_mode",
     "fm_sheet_set_text",

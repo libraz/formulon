@@ -241,6 +241,32 @@ TEST(FormulonCApiProtectedRanges, AnUnparsedTokenIsKeptForSave) {
   EXPECT_EQ(ranges[1].sqref, "D4");
 }
 
+TEST(FormulonCApiProtectedRanges, UpdateWithoutRangesKeepsTheStoredText) {
+  WorkbookGuard wb;
+  Create(&wb);
+  formulon::ProtectedRange stored;
+  stored.name = "Odd";
+  stored.sqref = "B2 bogus";
+  formulon::io::write_protected_ranges(wb.handle->workbook().sheet(0).mutable_raw_extensions(), {stored});
+
+  // NULL with a zero count leaves the rectangles alone, the unparsed token included.
+  const fm_protected_range_t rename = Range("Renamed", nullptr, 0);
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &rename), 0) << fm_get_last_error_message();
+  WorkbookGuard loaded;
+  RoundTrip(wb, &loaded);
+  const auto ranges = formulon::io::read_protected_ranges(loaded.handle->workbook().sheet(0).raw_extensions());
+  ASSERT_EQ(ranges.size(), 1U);
+  EXPECT_EQ(ranges[0].name, "Renamed");
+  EXPECT_EQ(ranges[0].sqref, "B2 bogus");
+
+  // An empty non-NULL list is still refused on update, and NULL with zero on add.
+  const fm_cell_rect_t sentinel{0, 0, 0, 0};
+  const fm_protected_range_t empty = Range("Empty", &sentinel, 0);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &empty), kInvalidArgument);
+  size_t index = 0;
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &rename, &index), kInvalidArgument);
+}
+
 TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   WorkbookGuard wb;
   Create(&wb);

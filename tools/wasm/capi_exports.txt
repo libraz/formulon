@@ -131,6 +131,8 @@ fm_workbook_set_date1904
 fm_workbook_get_pinned_now
 fm_workbook_set_pinned_now
 fm_workbook_clear_pinned_now
+fm_convert_civil_to_serial
+fm_convert_serial_to_civil
 fm_workbook_get_excel_profile_id
 fm_workbook_set_excel_profile_id
 fm_workbook_get_file_name

@@ -2507,6 +2507,11 @@ FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_
 /**
  * @brief Replaces protected range `protected_range_index`; the argument checks of
  *        `fm_sheet_add_protected_range` apply, with `protected_range_index` also validated.
+ *
+ * `range.ranges == NULL` with `range.range_count == 0` keeps the stored
+ * rectangles unchanged, including any stored token the reader could not
+ * parse (which `fm_sheet_get_protected_range` does not report). An empty
+ * non-NULL list is still `FM_STATUS_INVALID_ARGUMENT`.
  */
 FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t sheet_index, size_t protected_range_index,
                                                    const fm_protected_range_t* range);
@@ -3212,6 +3217,54 @@ FM_API fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`.
  */
 FM_API fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb);
+
+/* -------------------------------------------------------------------------- */
+/* Date serial conversion                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Converts a civil date and time to an Excel date serial.
+ *
+ * The result equals `=DATE(year, month, day) + TIME(hour, minute, second)`
+ * evaluated in a workbook with the same date system. Fields are not
+ * normalised: every field must lie in the ranges documented on
+ * `fm_civil_time_t`, with one exception for the 1900 date system, where
+ * `{1900, 2, 29}` is accepted and maps to serial 60 (the day Excel's 1900
+ * system counts). The 1904 system rejects 1900-02-29 and every date before
+ * 1904-01-01.
+ *
+ * @param civil      The civil reading. Must not be NULL.
+ * @param date1904   Non-zero for the 1904 date system, `0` for 1900.
+ * @param out_serial Receives the serial. Must not be NULL; untouched on failure.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `civil` or `out_serial` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if a field is out of range or the
+ *         date precedes the date system's first day.
+ */
+FM_API fm_status_t fm_convert_civil_to_serial(const fm_civil_time_t* civil, int32_t date1904, double* out_serial);
+
+/**
+ * @brief Converts an Excel date serial to a civil date and time.
+ *
+ * The fractional part is rounded to the nearest whole second, as `SECOND()`
+ * does; a rounding that reaches 86400 seconds carries into the next day. The
+ * result matches `YEAR()` through `SECOND()` of the same serial. In the 1900
+ * system the serials in `[60, 61)` give 1900-02-29.
+ *
+ * A serial is valid when it is finite, at least `1` (1900 system) or `0`
+ * (1904 system), and below the serial of 9999-12-31 plus one day. A carry
+ * past 9999-12-31 23:59:59 is out of range.
+ *
+ * @param serial    The serial to convert.
+ * @param date1904  Non-zero for the 1904 date system, `0` for 1900.
+ * @param out_civil Receives the civil fields. Must not be NULL; untouched on failure.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_civil` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if the serial is out of range.
+ */
+FM_API fm_status_t fm_convert_serial_to_civil(double serial, int32_t date1904, fm_civil_time_t* out_civil);
 
 /* -------------------------------------------------------------------------- */
 /* Excel formula compatibility profile                                        */
@@ -9808,15 +9861,16 @@ FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_i
                                                const fm_drawing_anchor_t* anchor);
 
 /**
- * @brief Renames the picture or chart `object_id` (the first one when ids
- *        repeat). Duplicate names are allowed.
+ * @brief Renames the picture, chart or shape `object_id` (the first one
+ *        when ids repeat). Duplicate names are allowed. A slicer cannot be
+ *        renamed: its name is the key that ties the frame to the slicer part.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is
- *         empty or not valid UTF-8, or the sheet has no picture or chart with
- *         that id;
+ *         empty or not valid UTF-8, or the sheet has no picture, chart or
+ *         shape with that id;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
@@ -9824,8 +9878,8 @@ FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_ind
                                              const char* name);
 
 /**
- * @brief Moves the picture or chart `object_id` so it becomes item `z_order_index`
- *        of the drawing's object list (0 is the back).
+ * @brief Moves the picture, chart, shape or slicer `object_id` so it becomes
+ *        item `z_order_index` of the drawing's object list (0 is the back).
  *
  * The unit moved is the object's top-level element, a whole
  * `mc:AlternateContent` included; other objects keep their relative order
@@ -9835,8 +9889,8 @@ FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_ind
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet
- *         has no picture or chart with that id, or `z_order_index` is not less than
- *         the object count;
+ *         has no picture, chart, shape or slicer with that id, or `z_order_index`
+ *         is not less than the object count;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
@@ -9844,7 +9898,7 @@ FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_
                                                 size_t z_order_index);
 
 /**
- * @brief Captures the picture or chart `object_id` as an opaque, versioned
+ * @brief Captures the picture, chart or shape `object_id` as an opaque, versioned
  *        byte string: its list position, its element, the relationships it
  *        names with their parts, and every part reachable from those parts'
  *        relationships (a chart's style, colors, user shapes, embeddings).
@@ -9858,7 +9912,8 @@ FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet
- *         has no picture or chart with that id;
+ *         has no picture, chart or shape with that id (a slicer's parts live
+ *         outside the drawing, so it cannot be captured);
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
