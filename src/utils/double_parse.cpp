@@ -328,16 +328,11 @@ bool parse_double_exact(std::string_view text, double* out) noexcept {
 }
 
 std::optional<double> parse_full_double(std::string_view text) {
-  if (text.empty()) {
+  const ParsedDouble parsed = parse_double_prefix(text);
+  if (parsed.consumed == 0 || parsed.consumed != text.size() || !std::isfinite(parsed.value)) {
     return std::nullopt;
   }
-  const std::string owned(text);
-  char* end = nullptr;
-  const double value = std::strtod(owned.c_str(), &end);
-  if (end != owned.c_str() + owned.size() || !std::isfinite(value)) {
-    return std::nullopt;
-  }
-  return value;
+  return parsed.value;
 }
 
 }  // namespace formulon

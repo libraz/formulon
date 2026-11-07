@@ -73,9 +73,9 @@ bool parse_excel_literal(std::string_view text, double* out) noexcept;
 /// out of range, so callers that need a finite result check it themselves.
 bool parse_double_exact(std::string_view text, double* out) noexcept;
 
-/// Parses `text` with `strtod`'s grammar (hexadecimal floats and leading white
-/// space included) and returns the value only when the whole text is consumed
-/// and the result is finite; empty text has no value.
+/// Parses `text` with the decimal grammar in the header comment (leading ASCII
+/// white space allowed) and returns the value only when the whole text is
+/// consumed and the result is finite; empty text has no value.
 std::optional<double> parse_full_double(std::string_view text);
 
 }  // namespace formulon

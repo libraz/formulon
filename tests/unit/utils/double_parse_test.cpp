@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <random>
 #include <string>
 #include <vector>
@@ -340,6 +341,16 @@ TEST(ExcelDecimal, FileParserStaysCorrectlyRounded) {
   double excel = 0.0;
   ASSERT_TRUE(parse_excel_decimal("3.35404999999997", &excel));
   EXPECT_LT(excel, value);
+}
+
+TEST(DoubleParse, FullDoubleAcceptsOnlyAWholeFiniteDecimal) {
+  EXPECT_EQ(parse_full_double("1.5"), std::optional<double>(1.5));
+  EXPECT_EQ(parse_full_double(" 5"), std::optional<double>(5.0));
+  EXPECT_FALSE(parse_full_double("0x10").has_value());
+  EXPECT_FALSE(parse_full_double("1e400").has_value());
+  EXPECT_FALSE(parse_full_double("").has_value());
+  EXPECT_FALSE(parse_full_double("1.5x").has_value());
+  EXPECT_FALSE(parse_full_double("inf").has_value());
 }
 
 }  // namespace
