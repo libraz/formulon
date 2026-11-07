@@ -26,7 +26,9 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 npm install @libraz/formulon   # browsers and Node 22+
 ```
 
-The package is ES modules only (no `require`) and ships its TypeScript declarations.
+The package is ES modules only (no `require`) and ships its TypeScript declarations, which need TypeScript 5.2 or later. It runs on Node 22+ and the current releases of the major browsers; the `threads` build also needs a cross-origin isolated page (see [Choosing a build](#choosing-a-build)). Deno and Bun are not tested.
+
+Changes between releases are listed in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md). Until 1.0 a minor release may break the API; a patch release does not.
 
 ## Quick start
 
@@ -35,7 +37,7 @@ import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
 const value = formulon.evaluateFormula('=SUM(1,2,3)');
-console.log(value.number); // 6
+if (value.kind === formulon.ValueKind.Number) console.log(value.number); // 6
 console.log(formulon.toNative(value)); // 6
 ```
 
@@ -56,7 +58,7 @@ try {
   console.log(wb.hasDirtyCells()); // true
   wb.recalc();
   console.log(wb.hasDirtyCells()); // false
-  console.log(ws.getValue('A2').number); // 84
+  console.log(formulon.toNative(ws.getValue('A2'))); // 84
 
   await writeFile('output.xlsx', wb.save());
 } finally {
@@ -64,7 +66,7 @@ try {
 }
 ```
 
-On Node 24+ and in bundlers that support explicit resource management, `using wb = formulon.Workbook.load(...)` releases the workbook at the end of the scope instead.
+On Node 24+ and in bundlers that support explicit resource management, `using wb = formulon.Workbook.load(...)` releases the workbook at the end of the scope instead. `dispose()` frees the workbook at the moment you call it. A workbook dropped without it is released when the garbage collector reclaims it, which is best effort and may never happen, so dispose workbooks you are done with.
 
 A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet('Sheet1')` finds a sheet by name (it throws `FormulonError` with `StatusCode.NotFound` when there is none), `wb.listSheets()` lists them all, and `ws.name` and `ws.index` read its current name and position. Every method that takes a cell accepts either `(row, col)` or an A1 string (`ws.setValue('A1', 42)`, `ws.getValue('A2')`), and a rectangle argument accepts `'A1:B2'`. `ws.getValues('A1:B2')` reads a block as rows of values and `ws.setValues('A1', [[1, 'x'], [true, null]])` writes one.
 
@@ -105,7 +107,7 @@ try {
 
   const chart = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
   chart.setTitle('Sales');
-  console.log(chart.getProperties().title.text); // Sales
+  console.log(chart.getProperties().title?.text); // Sales
 
   const cache = wb.addPivotCache();
   cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
@@ -118,8 +120,8 @@ try {
   }
   const pivot = ws.addPivot({ name: 'ByRegion', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
   pivot.addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Data });
-  pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
+  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Value });
+  pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: formulon.PivotAggregation.Sum });
   pivot.rename('Totals');
   console.log(ws.pivot('Totals') === pivot); // true
 
@@ -127,7 +129,7 @@ try {
   try {
     pivot.getProperties();
   } catch (e) {
-    console.log(e.code === formulon.StatusCode.NotFound); // true
+    console.log(e instanceof formulon.FormulonError && e.code === formulon.StatusCode.NotFound); // true
   }
 } finally {
   wb.dispose();
@@ -136,9 +138,9 @@ try {
 
 A handle of a removed object throws `FormulonError` with `StatusCode.NotFound`. Tables are reached with `wb.table(nameOrIndex)`, charts and the other drawings with `ws.chart(id)`, `ws.shape(id)`, `ws.slicer(id)`, `ws.picture(id)` and `ws.drawing(id)`.
 
-## Switching locale profiles
+## Switching Excel profiles
 
-New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
+New workbooks use `win-365-en_US`, the default Excel profile. Formulas are always written with English function names and the stored separators; the Excel profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
 
 ```js run
 import createFormulon from '@libraz/formulon';
@@ -151,7 +153,7 @@ try {
   ws.setFormula('A2', '=VALUE("1,5")');
   ws.setFormula('A3', '=ISEVEN(2)');
 
-  for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
+  for (const id of /** @type {const} */ (['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE'])) {
     wb.setExcelProfileId(id);
     wb.recalc(); // a profile change marks formulas dirty
     console.log(id, [1, 2, 3].map((row) => ws.getDisplayText(`A${row}`).text));

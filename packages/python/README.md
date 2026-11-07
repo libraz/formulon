@@ -27,7 +27,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 pip install formulon   # Python 3.9+
 ```
 
-`wasmtime` is the only runtime dependency; `pip` picks its platform build. Recalculation is serial in this package, with results identical to the threaded surfaces.
+`wasmtime` is the only runtime dependency; `pip` picks its platform build. Recalculation is serial in this package, with results identical to the threaded surfaces. Changes between releases are in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md); until 1.0 a minor release may break the API and a patch release does not.
 
 ## Quick start
 
@@ -47,10 +47,7 @@ Excel errors come back as values (`Value.to_python()` gives an `ExcelError`); a 
 ```python run
 from formulon import Workbook
 
-with open("input.xlsx", "rb") as f:
-    data = f.read()
-
-with Workbook.load(data) as wb:
+with Workbook.load("input.xlsx") as wb:
     ws = wb.sheet(0)  # or wb["Sheet1"]
     ws["A1"] = 42
     ws.set_formula("A2", "=A1*2")
@@ -59,19 +56,18 @@ with Workbook.load(data) as wb:
     print(wb.has_dirty_cells())  # False
     print(ws["A2"])  # 84.0
 
-    with open("output.xlsx", "wb") as f:
-        f.write(wb.save())
+    wb.save("output.xlsx")
 
     print(ws.name, ws.index)  # Sheet1 0
     ws.set_values("A1", [[1, "x"], [True, None]])
-    print(ws.get_values("A1:B2")[0][0].to_python())  # 1.0
+    print(ws["A1"])  # 1.0
 ```
 
 Every method that takes a cell accepts either `(row, col)` or an A1 string, and a rectangle argument accepts `"A1:B2"`. `ws["A1"]` and `ws[row, col]` read and write native values; `get_values` and `set_values` move a block of cells. Reads return the value as of the last full `recalc()`, and `wb.has_dirty_cells()` tells whether edits are still waiting for one. `ErrorCode.DIV0.display_name` is `"#DIV/0!"`.
 
 A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet(key)` and `wb[key]` take an index or a name and raise `NotFoundError` or `IndexOutOfRangeError` when nothing matches; `wb.list_sheets()` lists every sheet.
 
-`wb.close()` or leaving the `with` block releases the workbook; `wb.closed` reports it, and any later call raises `WorkbookClosedError`.
+`wb.close()` or leaving the `with` block releases the workbook at that moment; `wb.closed` reports it, and any later call raises `WorkbookClosedError`. A workbook dropped without closing is released when the garbage collector reclaims it, which is best effort, so close workbooks you are done with. `Workbook.load` also takes bytes or a binary stream, and `wb.save()` without a destination returns the bytes.
 
 ## Format cells
 
@@ -95,9 +91,9 @@ with formulon.Workbook.create_default() as wb:
 
 `set_cell_format` merges only the groups and keys it is given into each cell's format; a column (`"D:D"`), row (`"3:3"`) or whole-sheet range formats that axis, so cells entered there later take the format too. Equal formats share one style record.
 
-## Switching locale profiles
+## Switching Excel profiles
 
-New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
+New workbooks use `win-365-en_US`, the default Excel profile. Formulas are always written with English function names and the stored separators; the Excel profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
 
 ```python run
 import formulon

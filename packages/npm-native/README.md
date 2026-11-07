@@ -5,97 +5,28 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
-Native N-API binding for [Formulon](https://github.com/libraz/formulon),
-the Excel 365 calculation engine. This package is not distributed on npm;
-it is built from the repository, as described under
-[Building from source](#building-from-source). The badges above track the
-sibling WebAssembly and Python packages, which are published.
+**Recalculate Excel workbooks and formulas from Node on a native addon, with results checked against real Excel 365.**
+The addon is built directly against the engine's static archive and exposes the `Workbook` surface of the WebAssembly package `@libraz/formulon`, without the V8 WebAssembly runtime.
 
-The one-shot `evaluateFormula` always evaluates with the
-default `win-365-en_US` profile, and a new workbook starts on it too. The
-profile is a per-workbook setting: call `wb.setExcelProfileId()` to select any of the 28
-`{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. The
-`mac-*` profiles and `win-365-ja_JP` are measured against Excel; the other
-`win-*` profiles are estimated from the Mac measurements.
-On a `mac-*` profile, text comparison, sorting, lookups and grouping follow
-that locale's measured Mac Excel collation; `win-*` profiles add the Windows
-word-sort rules measured on Windows Excel 365 ja-JP to that locale's collation.
+📖 **[Documentation](https://formulon.libraz.net)** &nbsp;·&nbsp; **[API](https://formulon.libraz.net/api/wasm)** &nbsp;·&nbsp; **[Package surfaces](https://formulon.libraz.net/api/surfaces)**
 
-## What this is
+> This package is not distributed on npm; build it from the repository ([Build from source](#build-from-source)). The badges above track the sibling WebAssembly and Python packages, which are published.
 
-`@libraz/formulon-native` is a Node.js addon (`.node`) built directly
-against the engine's static archive. It exposes the shared Workbook
-surface of the WASM-backed `@libraz/formulon` package — see
-[Surface parity](#surface-parity) for the methods that differ — but runs
-as a native binary rather than via the V8 WASM runtime.
+## What's inside
 
-Why prefer the native build:
+- **Multithreaded recalc** — pthreads are wired in by default through the engine's parallel scheduler.
+- **No V8 / WASM heap copies** — `load` and `save`, the most expensive operations on large workbooks, marshal straight to the engine.
+- **Larger workbooks** — not bound by the WASM package's 2 GiB growth ceiling.
+- **Same surface** — the declarations and the native class table register 427 instance methods plus the four static factories. Of those instance methods, 426 are shared with WASM; zero remain WASM-only, and `getMemoryUsage()` is the one native-only helper. [Package surfaces](https://formulon.libraz.net/api/surfaces)
+- **Excel profiles** — a new workbook and the one-shot `evaluateFormula` start on the default `win-365-en_US` profile; `wb.setExcelProfileId()` selects any of the 28 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 
-- **Multithreaded recalc**: pthreads are wired in by default through
-  the engine's parallel scheduler.
-- **No V8 ↔ WASM heap copies** on `load` / `save` (the most
-  expensive operations on large workbooks).
-- **Larger workbook capacity**: not bound by the WASM package's 2 GiB
-  growth ceiling (`ALLOW_MEMORY_GROWTH` without an explicit
-  `MAXIMUM_MEMORY` caps growth at Emscripten's 2 GiB default).
+## Installation
 
-## Surface parity
+A source checkout does not include a prebuilt `.node` binary. The `prebuild` CI workflow stages one build per supported OS and architecture into `dist/prebuilds/` as a workflow artifact; it is not attached to a release page or pushed to the npm registry. `createFormulon()` rejects when the native prebuild is not available.
 
-This package exposes the shared `Workbook` surface of the WASM-backed
-`@libraz/formulon` package, all marshalling to the identical C-ABI
-functions. Its TypeScript declarations and its native class table
-register 427 instance methods plus the four static factories. Of those
-instance methods, 426 are shared with WASM; zero remain WASM-only, while
-`getMemoryUsage()` is a native-only helper.
-The shared `Workbook` methods take the same arguments, return the same values
-and throw the same `FormulonError`; switching packages still requires updating
-the module import and validating the target platform's native prebuild. The
-declarations are generated from the WASM package's, so the two cannot differ
-in any shared record, type or method.
+The package is ES modules only (no `require`); `createFormulon` is both the default export and a named export. Its TypeScript declarations need TypeScript 5.2 or later. Changes between releases are in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md).
 
-One method exists only here, because a native workbook lives outside the JS
-heap in a way the WASM build's does not: `getMemoryUsage()` reports the
-workbook's estimated native footprint. `dispose()`, also reachable as
-`[Symbol.dispose]()` for a `using` declaration, releases the handle on both
-packages without waiting for finalization. `recalcParallel(threadCount)` is
-available on both the native and WASM packages and returns the parallel SCC
-telemetry described in the API declarations. See
-[Memory accounting](#memory-accounting).
-
-The TypeScript declarations in `dist/index.d.ts` are the authoritative
-method list. The methods are the WASM package's, documented one by one in
-the [WASM API reference](https://formulon.libraz.net/api/wasm); the rows
-where the packages differ are tabulated in
-[Package surfaces](https://formulon.libraz.net/api/surfaces).
-
-`createFormulon` is both the default export and a named export.
-
-The `prebuild` CI workflow stages a build per supported OS/arch slot into
-`dist/prebuilds/` as a workflow artifact for npm-publish staging; it is not
-attached to the GitHub release page or pushed to the npm registry. From a
-source checkout, build with the steps below.
-
-## Building from source
-
-A source checkout does not include a prebuilt `.node` binary; build it
-via:
-
-```bash
-make node-native     # cmake -B build -DFM_BUILD_NODE_ADDON=ON, build
-make node-package    # stage build/bin/formulon.node into dist/
-make node-test       # node --test against the staged dist/
-```
-
-To use it directly out of a source checkout, point Node at the staged
-package:
-
-```bash
-node -e "import('./packages/npm-native/dist/index.mjs').then(async m => console.log((await m.createFormulon()).evaluateFormula('=1+2')))"
-```
-
-## Usage
-
-Like the WASM package, it is ES modules only (no `require`).
+## Quick start
 
 ```js run
 import createFormulon from '@libraz/formulon-native';
@@ -148,48 +79,51 @@ Cell methods take `(row, col)` or an A1 string, and rectangle arguments take `'A
 
 On Node 24+, `using wb = formulon.Workbook.createDefault()` releases the workbook at the end of the scope instead.
 
-`wb.recalc()` remains serial. For synchronous parallel recalculation, call
-`wb.recalcParallel(threadCount)`: `threadCount` must be a finite integer;
-`0` auto-detects up to 8 workers, `1` starts no workers, and `2..8` set the
-worker upper bound. Missing, fractional, non-finite, negative, or above-8
-values throw `RangeError` or `TypeError`. The result is a
-`ParallelRecalcStats` that reports evaluated cells, processed SCCs, parallel and
-serial steps, cycle recoveries, and started/used worker counts. The five
-64-bit engine counters are exposed as JavaScript `number` values and are exact
-through `Number.MAX_SAFE_INTEGER`.
+### Parallel recalculation
 
-Failures follow the WASM package's contract. `createFormulon()` rejects when
-the native prebuild is not available. After that, an engine operation that
-cannot complete throws `FormulonError` with `code`, `message` and `context`.
-`instanceof FormulonError` holds for the class this package exports; code that
-also loads `@libraz/formulon` should test `e.name === 'FormulonError'`.
+`wb.recalc()` remains serial. For synchronous parallel recalculation, call `wb.recalcParallel(threadCount)`; it returns a `ParallelRecalcStats` with evaluated cells, processed SCCs, parallel and serial steps, cycle recoveries, and started and used worker counts. The five 64-bit engine counters are `number` values and are exact through `Number.MAX_SAFE_INTEGER`.
 
-## Memory accounting
+`threadCount` is `0` to auto-detect up to 8 workers, `1` to start no workers, or `2..8` for the worker upper bound. Calling it without an argument or with a non-number throws `TypeError`; a fractional, non-finite or negative value throws `RangeError`; a whole number above 8 throws `FormulonError` with `StatusCode.InvalidArgument`.
 
-A workbook is one pointer on the JS heap and can be hundreds of megabytes
-in native memory, so garbage collection on its own does not feel the
-pressure of holding many of them. The addon therefore reports each
-workbook's estimated native footprint to V8 as external memory when it is
-created, loaded, recalculated or disposed.
+### Lifetime and errors
 
-How much that report influences collection is up to the runtime, and it
-is not visible through `process.getMemoryUsage().external` on current Node
-versions. Treat it as a hint, not as a substitute for releasing
-workbooks: `dispose()` is the one mechanism that frees the memory at a
-point you choose.
+`dispose()`, also reachable as `[Symbol.dispose]()` for a `using` declaration, releases a workbook when you call it. A workbook dropped without it is released when V8 finalizes the object, which is best effort, so dispose workbooks you are done with.
 
-`wb.getMemoryUsage()` returns the current estimate — the cell store, shared
-strings, passthrough parts and workbook metadata — and refreshes the
-report at the same time. That refresh matters for a long-running writer:
-between the points listed above the reported figure goes stale, because
-filling a million cells grows the workbook without V8 hearing about it.
+Failures follow the WASM package's contract. After `createFormulon()` succeeds, an engine operation that cannot complete throws `FormulonError` with `code`, `message` and `context`. `instanceof FormulonError` holds for the class this package exports; code that also loads `@libraz/formulon` should test `e.name === 'FormulonError'`.
 
-## Project
+### Memory accounting
 
-Documentation — guides, compatibility notes, and the per-runtime API
-reference — is at <https://formulon.libraz.net>. Source, design notes,
-and the oracle test suite live at <https://github.com/libraz/formulon>.
+A workbook is one pointer on the JS heap and can be hundreds of megabytes in native memory, so garbage collection on its own does not feel the pressure of holding many of them. The addon therefore reports each workbook's estimated native footprint to V8 as external memory when it is created, loaded, recalculated or disposed.
+
+How much that report influences collection is up to the runtime, and it is not visible through `process.memoryUsage().external` on current Node versions. Treat it as a hint, not as a substitute for releasing workbooks.
+
+`wb.getMemoryUsage()` returns the current estimate (the cell store, shared strings, passthrough parts and workbook metadata) and refreshes the report at the same time. Between the points listed above the reported figure goes stale, because filling a million cells grows the workbook without V8 hearing about it.
+
+## Build from source
+
+```bash
+make node-native     # cmake -B build -DFM_BUILD_NODE_ADDON=ON, build
+make node-package    # stage build/bin/formulon.node into dist/
+make node-test       # node --test against the staged dist/
+```
+
+To use it directly out of a source checkout, point Node at the staged package:
+
+```bash
+node -e "import('./packages/npm-native/dist/index.mjs').then(async m => console.log((await m.createFormulon()).evaluateFormula('=1+2')))"
+```
+
+## Documentation
+
+Guides, compatibility notes and the per-runtime API reference are at <https://formulon.libraz.net>; source and the oracle test suite are at <https://github.com/libraz/formulon>. The TypeScript declarations in `dist/index.d.ts` are the authoritative method list.
+
+- **Learn** — [Documentation](https://formulon.libraz.net) · [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
+- **Reference** — [WASM API reference](https://formulon.libraz.net/api/wasm) · [Package surfaces](https://formulon.libraz.net/api/surfaces)
+
+## Non-goals
+
+VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, pivot cache refresh from source data, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
 
 ## License
 
-Apache-2.0 — see `LICENSE` and `NOTICE`.
+[Apache-2.0](https://github.com/libraz/formulon/blob/main/LICENSE)

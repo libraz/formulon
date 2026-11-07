@@ -17,7 +17,7 @@ No Excel install, no Windows, no COM automation: one C++17 core ships as WebAsse
 - **Recalculate workbooks on a server** — load `.xlsx` or `.xlsb` in a batch job, CI run or data pipeline, change inputs, and save it with fresh values.
 - **Run spreadsheet logic in the browser** — evaluate formulas and whole workbooks client-side, so uploaded files never leave the user's machine.
 - **Keep the model in Excel** — call the workbook your team already maintains from Node or Python instead of re-implementing its formulas.
-- **Get the answer Excel gives in a given locale** — Japanese byte counting, German decimal commas and localized `TRUE` / `FALSE` follow the profile you pick.
+- **Get the answer Excel gives in a given locale** — Japanese byte counting, German decimal commas and localized `TRUE` / `FALSE` follow the Excel profile you pick.
 - **Give AI agents spreadsheet tools** — [formulon-mcp](https://github.com/libraz/formulon-mcp) exposes the engine over MCP.
 
 Known differences from Excel are listed case by case in [`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml), each with a reason and the Excel build it was last verified on.
@@ -39,7 +39,7 @@ npm install @libraz/formulon   # browsers and Node 22+
 pip install formulon            # Python 3.9+
 ```
 
-CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Releases](https://github.com/libraz/formulon/releases).
+CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Releases](https://github.com/libraz/formulon/releases). Changes between releases are in the [CHANGELOG](CHANGELOG.md); until 1.0 a minor release may break the API and a patch release does not.
 
 ## Quick start
 
@@ -89,9 +89,9 @@ formulon recalc input.xlsx -o output.xlsx
 
 Failures throw `FormulonError` in JavaScript and `FormulonError` subclasses in Python. Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
 
-## Switching locale profiles
+## Switching Excel profiles
 
-New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. `=LENB("日本")` gives `2` on `mac-365-en_US` and `4` on `mac-365-ja_JP`, and `=ISEVEN(2)` shows `WAHR` on `mac-365-de_DE`. Switch it per workbook and recalculate:
+New workbooks use `win-365-en_US`, the default Excel profile. Formulas are always written with English function names and the stored separators; the Excel profile decides how text is parsed and how results are rendered. `=LENB("日本")` gives `2` on `mac-365-en_US` and `4` on `mac-365-ja_JP`, and `=ISEVEN(2)` shows `WAHR` on `mac-365-de_DE`. Switch it per workbook and recalculate:
 
 ```js run
 import createFormulon from '@libraz/formulon';

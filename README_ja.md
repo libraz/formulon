@@ -17,7 +17,7 @@ Excel のインストールも Windows も COM 操作も要りません。1 つ�
 - **サーバーでワークブックを再計算する** — バッチ処理、CI、データパイプラインで `.xlsx` / `.xlsb` を読み込み、入力を変えて、再計算した値で保存できます。
 - **ブラウザで表計算ロジックを動かす** — 数式もワークブック全体もクライアント側で評価するので、アップロードされたファイルが利用者のマシンの外に出ません。
 - **計算モデルは Excel のまま使う** — チームが保守している既存のワークブックを Node や Python から呼び出せます。数式を別の言語で書き直す必要はありません。
-- **ロケールごとに Excel と同じ答えを得る** — 日本語のバイト数計算、ドイツ語の小数点カンマ、ローカライズされた `TRUE` / `FALSE` は、選んだプロファイルに従います。
+- **ロケールごとに Excel と同じ答えを得る** — 日本語のバイト数計算、ドイツ語の小数点カンマ、ローカライズされた `TRUE` / `FALSE` は、選んだ Excel プロファイルに従います。
 - **AI エージェントに表計算の道具を渡す** — [formulon-mcp](https://github.com/libraz/formulon-mcp) がエンジンを MCP 経由で提供します。
 
 Excel との既知の差分は [`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml) にケースごとに記録し、それぞれに理由と最後に確認した Excel ビルドを添えています。
@@ -39,7 +39,7 @@ npm install @libraz/formulon   # ブラウザと Node 22+
 pip install formulon            # Python 3.9+
 ```
 
-`darwin-arm64`、`linux-x64`、`linux-arm64` 向けの CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/releases) にあります。
+`darwin-arm64`、`linux-x64`、`linux-arm64` 向けの CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/releases) にあります。リリース間の変更は [CHANGELOG](CHANGELOG.md) にあります。1.0 までは、マイナーリリースで API が壊れることがあり、パッチリリースでは壊れません。
 
 ## クイックスタート
 
@@ -89,9 +89,9 @@ formulon recalc input.xlsx -o output.xlsx
 
 失敗時は、JavaScript では `FormulonError` が投げられ、Python では `FormulonError` のサブクラスが送出されます。ワークブックの読み込み、編集、保存は [ワークブックを再計算する](https://formulon.libraz.net/ja/start/recalculate) で説明しています。
 
-## ロケールプロファイルの切り替え
+## Excel プロファイルの切り替え
 
-新しいワークブックの既定は `win-365-en_US` です。数式は常に英語の関数名と保存形式の区切り文字で書きます。プロファイルが変えるのは、文字列の解釈と結果の表示です。`=LENB("日本")` は `mac-365-en_US` では `2`、`mac-365-ja_JP` では `4` になり、`=ISEVEN(2)` は `mac-365-de_DE` では `WAHR` と表示されます。ワークブックごとに切り替えて再計算します。
+新しいワークブックの既定は `win-365-en_US` で、これが既定の Excel プロファイルです。数式は常に英語の関数名と保存形式の区切り文字で書きます。Excel プロファイルが変えるのは、文字列の解釈と結果の表示です。`=LENB("日本")` は `mac-365-en_US` では `2`、`mac-365-ja_JP` では `4` になり、`=ISEVEN(2)` は `mac-365-de_DE` では `WAHR` と表示されます。ワークブックごとに切り替えて再計算します。
 
 ```js run
 import createFormulon from '@libraz/formulon';
