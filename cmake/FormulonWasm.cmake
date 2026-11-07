@@ -321,7 +321,12 @@ if(FM_WASM_VARIANT STREQUAL "embind")
       # PTHREAD_POOL_SIZE x 1.5 MiB (12 MiB) of the runtime heap up front,
       # which is heap, not artifact size.
       "-sDEFAULT_PTHREAD_STACK_SIZE=${_FM_WASM_STACK_SIZE}"
+      "-sBINARYEN_EXTRA_PASSES=--skip-pass=memory-packing"
     )
+    # Shared memory initialises every data segment passively, so packing
+    # them adds init code that compresses worse than the zeros it removes:
+    # skipping it measured raw +19 KB / Brotli -2.3 KB (Brotli binds).
+    set(_FM_WASM_OPT_SKIP_PASSES "--skip-pass=memory-packing")
     target_compile_options(formulon_wasm PRIVATE -pthread)
     target_compile_options(formulon_core PRIVATE -pthread)
 
@@ -518,6 +523,7 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         --enable-bulk-memory --enable-sign-ext --enable-mutable-globals
         --enable-threads --enable-nontrapping-float-to-int --enable-multivalue
         --enable-reference-types
+        ${_FM_WASM_OPT_SKIP_PASSES}
         $<TARGET_FILE_DIR:formulon_wasm>/${_FM_WASM_BASE}.wasm
         -o $<TARGET_FILE_DIR:formulon_wasm>/${_FM_WASM_BASE}.wasm
       VERBATIM
