@@ -210,8 +210,12 @@ else()
   # Workbook/sheet structural-edit, copy, table, pivot-detail and print-area
   # TUs join them: raw -55 KB, Brotli -12 KB; load, row edits, copySheet and
   # structured-reference entry within noise (measured 2026-11-06).
+  # Formula formatting / reference-shift parser TUs, pagination, CF authoring,
+  # data tables and external links join them: raw -40 KB, Brotli -7 KB; entry,
+  # recalc, save and load within noise, row edits ~1.5% slower (measured 2026-11-07).
   string(CONCAT _FM_WASM_COLD_SOURCE_REGEX
     "^src/(io|c_api|chart|drawing|pivot)/|"
+    "^src/(parser/(ast_dump|ast_format|ast_format_names|ast_format_parens|ast_format_r1c1|ast_shift|external_book_spelling|formula_prefix|literal_spelling|parse_error|ref_transforms|structured_ref_spelling)|print/(pagination|sheet_geometry)|cf/(cf_authoring|cf_x14_id)|workbook_(data_table|external_links))\\.cpp$|"
     "^src/(workbook_(copy_sheet|pivot_details|pivot_projection|tables|ref_rewrite|row_col_edit|table_loss|defined_names|merges_arrays|sheets|auto_filter)|sheet_(row_col_edit|copy_names)|threaded_comment|new_workbook_defaults|print/(page_setup|print_area))\\.cpp$|"
     "^src/eval/(stats/|builtins/(financial|engineering|complex_num|distributions|cube|web)|builtins/stats/stats_distributions|builtins/(math_combinatorics|text_dbcs|text_width)|text_format/|groupby_pivotby/)|"
     "^src/eval/(ets_series|ets_detect|ets_calendar|ets_grid|date_text_parse|regex_lazy|regex_program|regex_replacement|locale_function_names|holt_winters|forecast_ets_lazy|financial_lazy|formula_entry_r1c1|coupon_schedule|database_lazy|getpivotdata_lazy|hypothesis_lazy|linest_lazy|regression_lazy)\\.cpp$")
