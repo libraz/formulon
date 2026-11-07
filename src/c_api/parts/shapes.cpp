@@ -2,6 +2,7 @@
 // C ABI - the shapes, connectors and groups of a sheet's drawing: listing,
 // inserting, updating and removing them.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>

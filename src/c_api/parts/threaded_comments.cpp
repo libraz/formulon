@@ -2,6 +2,7 @@
 // C ABI - threaded comments (threads, replies, mentions) and the workbook
 // person list they name.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>

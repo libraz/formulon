@@ -2,6 +2,7 @@
 // Emission of one `<pivotField>` element of a pivot-table definition: its
 // attributes, items, and `<extLst>` with the x14 field extension.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>

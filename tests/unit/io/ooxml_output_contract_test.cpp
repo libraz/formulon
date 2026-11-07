@@ -11,6 +11,7 @@
 //   * A relationship and the element naming its rId must appear or
 //     disappear together with the part they point at.
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>

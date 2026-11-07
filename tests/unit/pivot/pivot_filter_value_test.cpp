@@ -1,5 +1,6 @@
 // Aggregate value filters, including axis recovery and multi-level pruning.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>

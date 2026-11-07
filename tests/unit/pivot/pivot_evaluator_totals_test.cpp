@@ -1,5 +1,6 @@
 // Grand totals and subtotal aggregation metadata for `formulon::pivot::evaluate`.
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <utility>

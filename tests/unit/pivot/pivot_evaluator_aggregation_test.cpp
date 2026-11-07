@@ -1,5 +1,6 @@
 // Aggregate functions and error handling for `formulon::pivot::evaluate`.
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
