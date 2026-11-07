@@ -290,7 +290,7 @@ the handle of a removed sheet throws `FormulonError` with
 | `getSheetIndex(name)` / `get_sheet_index(name)` | `sheet(name).index` (throws when there is no such sheet) |
 | `addSheet(name)` / `copySheet(...)` returning an index | return the new `Sheet` |
 | `getActiveSheet()` returning an index | returns a `Sheet`; `setActiveSheet`, `moveSheet`, `removeSheet` and `renameSheet` take a `Sheet`, an index or a name |
-| `showPivotDetails(sheet, pivot, row, col)` returning an index | `ws.showPivotDetails(pivot, row, col)` returns a `Sheet` |
+| `showPivotDetails(sheet, pivot, row, col)` returning an index | `ws.pivot(pivot).showDetails(row, col)` returns a `Sheet` |
 
 Every sheet method that takes a cell accepts an A1 address in place of
 `row, col` (see [A1 addresses](#a1-addresses-and-block-access)). Positional guard messages read
@@ -512,7 +512,20 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   chart titles and series, print areas) stay without it. Input accepts text
   with or without the `=`.
 - `removeDrawingObject`, `getChartData` and `getChartPreview` report
-  `NotFound` for a missing id instead of `InvalidArgument`.
+  `NotFound` for a missing id instead of `InvalidArgument`. So does every
+  pivot-cache lookup by `cacheId`, which makes a missing id `NotFound` on
+  every function.
+- A cell coordinate, row index or column index outside the sheet grid is
+  `InvalidArgument` on every function that takes one. The cell setters,
+  the phonetic, lambda-text, spill, hyperlink, comment, data-table, style
+  and trace getters, `validateValue` and `Pivot.showDetails` used to accept
+  one, and either reported nothing found or failed further in. Removing a
+  page break outside the grid was `NotFound`.
+- `setAutoFilter` takes an `AutoFilterInput`. Only `range`, each column's
+  `colId` and each sort condition's `ref` are required, and the record
+  `getAutoFilter` returns is still accepted. An omitted `top` on a top-10
+  column reads as `true` (the top items), as in Python and the file format.
+  It used to read as the bottom items.
 - `addCfRule` rejects a caller-supplied id that the sheet already uses with
   `InvalidArgument`.
 - `getPrintArea` returns `null` (Python `None`) when no print area is set,
