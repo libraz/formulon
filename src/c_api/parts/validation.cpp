@@ -19,6 +19,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::cell_range_page_size;
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
@@ -49,6 +50,9 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   formulon::Value value = formulon::Value::blank();

@@ -23,6 +23,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
@@ -87,6 +88,9 @@ fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::size_t she
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   const auto& workbook = wb->workbook();

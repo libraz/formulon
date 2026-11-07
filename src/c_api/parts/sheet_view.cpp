@@ -16,6 +16,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_limit;
@@ -155,8 +156,8 @@ extern "C" fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (!formulon::Sheet::coord_in_grid(row, col)) {
-    return invalid_argument("cell out of grid");
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
   }
   wb->workbook().sheet(sheet_index).mutable_view().top_left_cell =
       row == 0U && col == 0U ? std::string() : formulon::a1::encode_a1(row, col);
@@ -229,8 +230,8 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (!formulon::Sheet::coord_in_grid(active_row, active_col)) {
-    return invalid_argument("active cell out of grid");
+  if (auto rc = check_cell_coord(active_row, active_col); rc != 0) {
+    return rc;
   }
   std::vector<formulon::MergeRange> selected;
   for (std::size_t i = 0; i < range_count; ++i) {

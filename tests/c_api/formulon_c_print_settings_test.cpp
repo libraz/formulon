@@ -614,6 +614,20 @@ TEST(FormulonCApiPrintSettings, ClearBreaksEmptiesBothAxes) {
   EXPECT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 0U);
 }
 
+TEST(FormulonCApiPrintSettings, BreakRemovalChecksTheGridBeforeLookingUpTheBreak) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, formulon::Sheet::kMaxRows), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_column_break(wb.handle, 0, formulon::Sheet::kMaxCols), kInvalidArgument);
+
+  // The last grid row / column is addressable: added, then removed.
+  ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U, 1), 0);
+  ASSERT_EQ(fm_sheet_add_column_break(wb.handle, 0, formulon::Sheet::kMaxCols - 1U, 1), 0);
+  EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U), 0);
+  EXPECT_EQ(fm_sheet_remove_column_break(wb.handle, 0, formulon::Sheet::kMaxCols - 1U), 0);
+  EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U), FM_STATUS_NOT_FOUND);
+}
+
 TEST(FormulonCApiPrintSettings, BreaksRejectOutOfGridAndOverflow) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

@@ -266,6 +266,9 @@ fm_status_t check_column_span(std::uint32_t first, std::uint32_t last);
 // the grid is a repair prompt, not a discarded attribute.
 fm_status_t check_row_index(std::uint32_t row);
 
+// Column counterpart of `check_row_index`.
+fm_status_t check_column_index(std::uint32_t col);
+
 // Row counterpart of `check_column_span`: `first <= last` inside the grid.
 fm_status_t check_row_span(std::uint32_t first, std::uint32_t last);
 

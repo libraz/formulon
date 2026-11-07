@@ -1071,8 +1071,8 @@ TEST(FormulonCApiPivotOptions, CacheMissingItemsLimitMaxAndBoundaries) {
   EXPECT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_set_pivot_cache_options(nullptr, cache_id, &o), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_set_pivot_cache_options(wb.handle, cache_id, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id + 1U, &read), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_options(wb.handle, cache_id + 1U, &o), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id + 1U, &read), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_options(wb.handle, cache_id + 1U, &o), FM_STATUS_NOT_FOUND);
 }
 
 // ---------------------------------------------------------------------------

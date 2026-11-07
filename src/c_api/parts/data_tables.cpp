@@ -11,6 +11,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::not_found;
@@ -57,6 +58,9 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
   *out = fm_data_table_t{};
   const formulon::DataTable* table = wb->workbook().data_table_at(sheet_index, row, col);
@@ -83,6 +87,9 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
 extern "C" fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   if (wb->workbook().data_table_at(sheet_index, row, col) == nullptr) {

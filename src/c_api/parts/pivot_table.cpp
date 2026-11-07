@@ -238,6 +238,9 @@ extern "C" fm_status_t fm_sheet_show_pivot_details(fm_workbook_t* wb, std::size_
       rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   formulon::Expected<std::size_t, formulon::Error> created =
       wb->workbook().show_pivot_details(sheet_index, pivot_index, row, col);
   if (!created) {

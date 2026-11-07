@@ -261,6 +261,14 @@ fm_status_t check_row_index(std::uint32_t row) {
                           "row=" + std::to_string(row) + " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
 }
 
+fm_status_t check_column_index(std::uint32_t col) {
+  if (col < formulon::Sheet::kMaxCols) {
+    return 0;
+  }
+  return invalid_argument("column index out of range",
+                          "col=" + std::to_string(col) + " last_col=" + std::to_string(formulon::Sheet::kMaxCols - 1U));
+}
+
 fm_status_t check_finite_non_negative(double value, const char* field) {
   if (std::isfinite(value) && value >= 0.0) {
     return 0;

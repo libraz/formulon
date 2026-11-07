@@ -22,6 +22,7 @@
 #include "workbook.h"
 
 using formulon::effective_num_fmt;
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_xf_index;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
@@ -48,6 +49,9 @@ fm_status_t resolve_xf(const fm_workbook_t* wb, std::size_t sheet_index, std::ui
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);

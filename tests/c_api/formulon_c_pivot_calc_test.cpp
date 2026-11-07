@@ -468,7 +468,8 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldArgumentBoundaries) {
   EXPECT_EQ(add("P", ""), kInvalidArgument);
   EXPECT_EQ(add("\xC3", "Amt"), kBindingUtf8EncodingError);
   EXPECT_EQ(add("P", "Amt\xC3"), kBindingUtf8EncodingError);
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache + 100U, "P", "Amt", &out), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache + 100U, "P", "Amt", &out),
+            FM_STATUS_NOT_FOUND);
   // Reserved, bracketed and taken names, compared under the collation.
   for (const char* name : {"All", "Blank", "a[b", "a]b", "Amt", "amt"}) {
     EXPECT_EQ(add(name, "Qty"), kInvalidArgument) << name;
@@ -750,7 +751,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemArgumentBoundaries) {
   EXPECT_EQ(add("X", "\xC3"), kBindingUtf8EncodingError);
   EXPECT_EQ(
       fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache + 100U, kRegion, "X", "North", ignored_index()),
-      kInvalidArgument);
+      FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, 99U, "X", "North", ignored_index()),
             FM_STATUS_INDEX_OUT_OF_RANGE);
   // Reserved, bracketed and existing item names.
@@ -779,7 +780,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemArgumentBoundaries) {
   std::size_t count = 0;
   EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item_count(nullptr, cache, &count), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item_count(wb.handle, cache, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item_count(wb.handle, cache + 100U, &count), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item_count(wb.handle, cache + 100U, &count), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 0U, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_set_pivot_cache_calculated_item_formula(wb.handle, cache, 0U, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_set_pivot_cache_calculated_item_formula(wb.handle, cache, 0U, ""), kInvalidArgument);

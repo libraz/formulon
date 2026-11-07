@@ -39,7 +39,9 @@
  * `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE`); enum ordinals and limits that are out
  * of range return `FM_STATUS_INVALID_ARGUMENT`. A remove addressed by a
  * natural key (name, id or cell) that matches nothing returns
- * `FM_STATUS_NOT_FOUND`.
+ * `FM_STATUS_NOT_FOUND`, and so does any other lookup by an id that no element
+ * owns. A cell coordinate, row index or column index outside the sheet grid
+ * returns `FM_STATUS_INVALID_ARGUMENT` on every entry point that takes one.
  *
  * Last error: `fm_get_last_error_message()` and `fm_get_last_error_context()`
  * describe the most recent failing call on the calling thread. Both are

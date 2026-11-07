@@ -113,6 +113,9 @@ extern "C" fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, std::size_t 
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   auto& hls = wb->workbook().sheet(sheet_index).mutable_hyperlinks();
   const auto removed = std::remove_if(hls.begin(), hls.end(),
                                       [&](const formulon::Hyperlink& h) { return h.row == row && h.col == col; });
@@ -167,6 +170,9 @@ extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size
     return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   *out_present = 0;
@@ -318,6 +324,9 @@ extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   for (const formulon::CellComment& c : wb->workbook().sheet(sheet_index).comments()) {
     if (c.row == row && c.col == col) {
       fill_comment(c, out);
@@ -415,6 +424,9 @@ extern "C" fm_status_t fm_sheet_remove_comment(fm_workbook_t* wb, std::size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   formulon::CellComment* existing = FindNote(wb, sheet_index, row, col);
   if (existing == nullptr) {
     return not_found("no comment at that cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
@@ -433,6 +445,9 @@ extern "C" fm_status_t fm_sheet_get_comment_visible(const fm_workbook_t* wb, std
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   const formulon::CellComment* note = FindNote(wb, sheet_index, row, col);
   if (note == nullptr) {
     return not_found("no comment at cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
@@ -445,6 +460,9 @@ extern "C" fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, std::size
                                                     std::uint32_t col, std::int32_t visible) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   formulon::CellComment* note = FindNote(wb, sheet_index, row, col);

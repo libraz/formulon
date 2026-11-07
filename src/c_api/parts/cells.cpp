@@ -120,6 +120,9 @@ extern "C" fm_status_t fm_sheet_set_number(fm_workbook_t* wb, size_t sheet_index
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_finite(value, "value"); rc != 0) {
     return rc;
   }
@@ -139,6 +142,9 @@ extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, 
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, value != 0 ? "TRUE" : "FALSE");
   }
@@ -151,6 +157,9 @@ extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index,
                                           fm_error_code_t error) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   if (!is_valid_error_code(error)) {
@@ -174,6 +183,9 @@ extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, 
     return null_argument("utf8");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({utf8}); rc != 0) {
@@ -326,6 +338,9 @@ fm_status_t lookup_phonetic_cell(const fm_workbook_t* wb, size_t sheet_index, ui
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   *cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   return 0;
 }
@@ -359,6 +374,9 @@ extern "C" fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index,
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, std::string_view());
   }
@@ -375,6 +393,9 @@ extern "C" fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_inde
     return null_argument("formula");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   std::string bound;
@@ -490,6 +511,9 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   *out_present = 0;
   *out_text = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
@@ -651,6 +675,9 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::siz
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   *out = fm_spill_info_t{};

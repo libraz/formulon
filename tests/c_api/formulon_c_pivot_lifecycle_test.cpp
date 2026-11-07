@@ -155,7 +155,6 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
   // helper recorded, so a caller branching on the return value and a
   // caller reading `fm_get_last_error_message` reach the same conclusion.
   const auto null_pointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 
   const auto expect_null_handle = [&](fm_status_t status) {
     EXPECT_EQ(status, null_pointer);
@@ -175,7 +174,7 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
   expect_null_handle(fm_workbook_set_pivot_cache_record_error(nullptr, 0U, 0U, 0U, /*error=*/1));
 
   // A live handle with an out-of-range field index reports kIndexOutOfRange and
-  // an unknown cache id kInvalidArgument, through the same helpers.
+  // an unknown cache id kNotFound, through the same helpers.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
@@ -186,9 +185,33 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, field_index + 1U, 1.0),
             FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id + 100U, field_index, 1.0),
-            invalid);
+            FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, /*record_index=*/0U, field_index, 1.0),
             FM_STATUS_INDEX_OUT_OF_RANGE);
+}
+
+TEST(FormulonCApiPivot, MissingCacheIdIsNotFound) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t field_count = 0;
+  EXPECT_EQ(fm_workbook_get_pivot_cache_field_count(wb.handle, 9999U, &field_count), FM_STATUS_NOT_FOUND);
+  std::size_t field_index = 0;
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, 9999U, "F", &field_index), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_workbook_clear_pivot_cache_records(wb.handle, 9999U), FM_STATUS_NOT_FOUND);
+  std::size_t pivot_index = 0;
+  EXPECT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", 9999U, 0U, 0U, &pivot_index), FM_STATUS_NOT_FOUND);
+}
+
+TEST(FormulonCApiPivot, ShowDetailsRejectsAnOutOfGridCell) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  std::size_t created = 0;
+  EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0, pivot_index, 1'048'576U, 0U, &created), invalid);
+  EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0, pivot_index, 0U, 16'384U, &created), invalid);
 }
 
 TEST(FormulonCApiPivot, OutOfGridAnchorRejected) {

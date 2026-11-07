@@ -8,6 +8,7 @@
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
 #include "sheet.h"
+#include "utils/error.h"
 #include "workbook.h"
 
 namespace {
@@ -225,4 +226,134 @@ TEST(FormulonCApiArgumentRange, CountHelpersRejectANullHandle) {
   EXPECT_EQ(fm_pagination_get_page_count(nullptr, &count), kNullPointer);
   EXPECT_STRNE(fm_get_last_error_message(), "");
   EXPECT_EQ(count, 99U);
+}
+
+namespace {
+
+constexpr std::uint32_t kPastRow = formulon::Sheet::kMaxRows;
+constexpr std::uint32_t kPastCol = formulon::Sheet::kMaxCols;
+constexpr std::uint32_t kLastRow = formulon::Sheet::kMaxRows - 1U;
+constexpr std::uint32_t kLastCol = formulon::Sheet::kMaxCols - 1U;
+constexpr fm_error_code_t kErrorNa = static_cast<fm_error_code_t>(formulon::ErrorCode::NA);
+
+}  // namespace
+
+TEST(FormulonCApiArgumentRange, CellSettersRejectAnOutOfGridCoordinate) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  for (const auto& [row, col] : {std::pair{kPastRow, 0U}, std::pair{0U, kPastCol}, std::pair{kPastRow, kPastCol}}) {
+    EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, row, col, 1.0), kInvalidArgument) << row << "," << col;
+    EXPECT_EQ(fm_sheet_set_bool(wb.handle, 0, row, col, 1), kInvalidArgument) << row << "," << col;
+    EXPECT_EQ(fm_sheet_set_error(wb.handle, 0, row, col, kErrorNa), kInvalidArgument) << row << "," << col;
+    EXPECT_EQ(fm_sheet_set_text(wb.handle, 0, row, col, "x"), kInvalidArgument) << row << "," << col;
+    EXPECT_EQ(fm_sheet_set_blank(wb.handle, 0, row, col), kInvalidArgument) << row << "," << col;
+    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, row, col, "=1"), kInvalidArgument) << row << "," << col;
+  }
+  EXPECT_EQ(CellCount(wb), 0U);
+}
+
+TEST(FormulonCApiArgumentRange, CellSettersAcceptTheLastGridCell) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, kLastRow, kLastCol, 1.0), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_bool(wb.handle, 0, kLastRow, kLastCol, 1), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_error(wb.handle, 0, kLastRow, kLastCol, kErrorNa), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_text(wb.handle, 0, kLastRow, kLastCol, "x"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_blank(wb.handle, 0, kLastRow, kLastCol), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, kLastRow, kLastCol, "=1"), 0) << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  for (const auto& [row, col] : {std::pair{kPastRow, 0U}, std::pair{0U, kPastCol}}) {
+    const char* text = nullptr;
+    std::size_t count = 0;
+    fm_phonetic_run_t run{};
+    std::uint32_t font = 0;
+    std::uint32_t type = 0;
+    std::uint32_t alignment = 0;
+    std::int32_t flag = 0;
+    const char* lambda = nullptr;
+    fm_spill_info_t spill{};
+    fm_data_table_t table{};
+    fm_hyperlink_t link{};
+    fm_comment_t comment{};
+    std::size_t xf = 0;
+    EXPECT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, row, col, &text), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, row, col, &count), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_cell_phonetic_run(wb.handle, 0, row, col, 0, &run), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, row, col, &font, &type, &alignment),
+              kInvalidArgument);
+    EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, row, col, &flag), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, row, col, &flag), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, row, col, &flag, &lambda), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_spill_info(wb.handle, 0, row, col, &spill), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, row, col, &flag, &table), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, row, col), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, row, col, &flag, &link), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_remove_hyperlink(wb.handle, 0, row, col), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_comment(wb.handle, 0, row, col, &flag, &comment), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_remove_comment(wb.handle, 0, row, col), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, row, col, &flag), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, row, col, 1), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, row, col, &xf), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, row, col), kInvalidArgument);
+    fm_cell_nodes_t* nodes = nullptr;
+    EXPECT_EQ(fm_sheet_get_precedents(wb.handle, 0, row, col, 1U, &nodes), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_dependents(wb.handle, 0, row, col, 1U, &nodes), kInvalidArgument);
+    EXPECT_EQ(nodes, nullptr);
+    fm_value_t proposed{};
+    proposed.kind = FM_VAL_NUMBER;
+    proposed.u.number = 1.0;
+    fm_validation_outcome_t outcome{};
+    EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, row, col, &proposed, &outcome), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 0, row, col), kInvalidArgument);
+  }
+}
+
+TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const char* text = nullptr;
+  std::size_t count = 0;
+  std::uint32_t font = 0;
+  std::uint32_t type = 0;
+  std::uint32_t alignment = 0;
+  std::int32_t flag = 0;
+  const char* lambda = nullptr;
+  fm_spill_info_t spill{};
+  fm_data_table_t table{};
+  fm_hyperlink_t link{};
+  fm_comment_t comment{};
+  std::size_t xf = 0;
+  EXPECT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, kLastRow, kLastCol, &text), 0);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, kLastRow, kLastCol, &count), 0);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, kLastRow, kLastCol, &font, &type, &alignment), 0);
+  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, kLastRow, kLastCol, &flag), 0);
+  EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, kLastRow, kLastCol, &flag), 0);
+  EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, kLastRow, kLastCol, &flag, &lambda), 0);
+  EXPECT_EQ(fm_sheet_get_spill_info(wb.handle, 0, kLastRow, kLastCol, &spill), 0);
+  EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, kLastRow, kLastCol, &flag, &table), 0);
+  EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, kLastRow, kLastCol, &flag, &link), 0);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_get_comment(wb.handle, 0, kLastRow, kLastCol, &flag, &comment), 0);
+  EXPECT_EQ(fm_sheet_remove_comment(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, kLastRow, kLastCol, &flag), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, kLastRow, kLastCol, 1), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, kLastRow, kLastCol, &xf), 0);
+  EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, kLastRow, kLastCol), 0);
+  fm_cell_nodes_t* nodes = nullptr;
+  ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, kLastRow, kLastCol, 1U, &nodes), 0);
+  fm_cell_nodes_destroy(nodes);
+  nodes = nullptr;
+  ASSERT_EQ(fm_sheet_get_dependents(wb.handle, 0, kLastRow, kLastCol, 1U, &nodes), 0);
+  fm_cell_nodes_destroy(nodes);
+  fm_value_t proposed{};
+  proposed.kind = FM_VAL_NUMBER;
+  proposed.u.number = 1.0;
+  fm_validation_outcome_t outcome{};
+  EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, kLastRow, kLastCol, &proposed, &outcome), 0);
+  EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 0, kLastRow, kLastCol), 0);
 }

@@ -45,8 +45,10 @@
 #include "utils/resource_budget.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_column_index;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -331,9 +333,8 @@ fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t 
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (index >= (rows ? Sheet::kMaxRows : Sheet::kMaxCols)) {
-    return invalid_argument(rows ? "row is outside the sheet grid" : "column is outside the sheet grid",
-                            std::string(rows ? "row=" : "col=") + std::to_string(index));
+  if (auto rc = rows ? check_row_index(index) : check_column_index(index); rc != 0) {
+    return rc;
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   return rows ? upsert_break(print.manual_row_breaks, index, kWholeSheetColSpanMax, manual)
@@ -467,6 +468,9 @@ extern "C" fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_row_index(row); rc != 0) {
+    return rc;
+  }
   return erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_row_breaks, row,
                      "no row break at that row");
 }
@@ -474,6 +478,9 @@ extern "C" fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_remove_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_column_index(col); rc != 0) {
     return rc;
   }
   return erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_col_breaks, col,

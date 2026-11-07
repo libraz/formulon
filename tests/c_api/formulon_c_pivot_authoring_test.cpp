@@ -1041,14 +1041,13 @@ TEST(FormulonCApiPivot, PivotCacheDateSharedItemsReadBackAsDates) {
             FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, cache_id, 9, 0, &is_date),
             FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, 9999U, 0, 0, &is_date),
-            kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, 9999U, 0, 0, &is_date), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, cache_id, 0, 0, nullptr), kNullPointerStatus);
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(nullptr, cache_id, 0, 0, &is_date), kNullPointerStatus);
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(nullptr, cache_id, 0, 45292.0), kNullPointerStatus);
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, cache_id, 9, 45292.0),
             FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, 9999U, 0, 45292.0), kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, 9999U, 0, 45292.0), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(nullptr, cache_id, 0, 0, 45292.0), kNullPointerStatus);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, 0, 0, 45292.0), FM_STATUS_INDEX_OUT_OF_RANGE);
   size_t record = 0;
