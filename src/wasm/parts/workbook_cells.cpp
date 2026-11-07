@@ -375,8 +375,8 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   o.set("showLastColumn", info.show_last_column != 0);
   o.set("showRowStripes", info.show_row_stripes != 0);
   o.set("showColumnStripes", info.show_column_stripes != 0);
-  o.set("headerRowCount", info.header_row_count);
-  o.set("totalsRowCount", info.totals_row_count);
+  o.set("headerRow", info.header_row_count != 0);
+  o.set("totalsRow", info.totals_row_count != 0);
   o.set("columns", columns);
   return o;
 }

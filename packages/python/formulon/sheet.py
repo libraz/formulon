@@ -7,6 +7,7 @@ see :class:`Sheet`.
 
 from __future__ import annotations
 
+import builtins
 import dataclasses
 import inspect
 import math
@@ -94,6 +95,7 @@ from .workbook import (
     DataValidationInput,
     DisplayStatus,
     DisplayText,
+    DrawingAnchor,
     EffectiveStyle,
     EffectiveStyleSource,
     ErrorCode,
@@ -122,7 +124,6 @@ from .workbook import (
     Pagination,
     Paper,
     PhoneticProperties,
-    PhoneticPropertiesInput,
     PhoneticRun,
     PrintOptions,
     PrintTitles,
@@ -142,10 +143,14 @@ from .workbook import (
     SlicerCrossFilter,
     SlicerSortOrder,
     Sparkline,
+    SparklineAxisType,
+    SparklineEmptyCells,
     SparklineGroup,
+    SparklineType,
     Spill,
     ThreadedComment,
     ThreadedCommentInput,
+    Unchanged,
     UnderlineStyle,
     ValidationErrorStyle,
     ValidationOutcome,
@@ -498,6 +503,7 @@ LIST_FAMILIES = {
     "Workbook.list_fonts": ("get_font_count", "get_font"),
 }
 HANDWRITTEN = (
+    "add_data_table",
     "add_hyperlink",
     "add_hyperlink_range",
     "add_picture",
@@ -541,6 +547,8 @@ HANDWRITTEN = (
     "shape",
     "slicer",
     "table",
+    "update_protected_range",
+    "update_sparkline_group",
     "update_threaded_comment",
 )
 CELL_ARGS = {
@@ -754,6 +762,20 @@ def _geometry_mode(mode: Any) -> int:
         return int(GeometryMode(mode))
     except ValueError:
         raise ValueError(f"formulon: mode must be a GeometryMode, got {mode!r}") from None
+
+
+def _drawing_anchor_fields(anchor: DrawingAnchor) -> Dict[str, int]:
+    """The ABI fields of ``anchor``."""
+    return _image_anchor_fields(
+        anchor.anchor_kind,
+        anchor.edit_as,
+        anchor.row,
+        anchor.col,
+        anchor.row_offset_emu,
+        anchor.col_offset_emu,
+        anchor.width_emu,
+        anchor.height_emu,
+    )
 
 
 def _flag(value: Any, name: str) -> int:
@@ -1186,6 +1208,13 @@ class Sheet:
     / ``row, count``) also takes it as one A1 span string in its place:
     ``"B"`` or ``"B:D"`` for columns, ``"3"`` or ``"3:5"`` for rows
     (``set_column_width("B:D", 12)``); the whole sheet suits either axis.
+    Inserting or deleting rows or columns takes ``(start, count)``
+    (``insert_rows(row, count)``); every other row or column span is the
+    closed interval ``(first, last)``.
+
+    To read cells, use :meth:`get_values` for a dense grid of values,
+    :meth:`list_cells` to enumerate the cells that hold something, and
+    :meth:`get_cells_in_range` to page through a large range.
 
     ``sheet["A1"]`` and ``sheet[row, col]`` return the cell's value as
     :meth:`Value.to_python` converts it; ``sheet["A1"] = v`` and
@@ -1493,6 +1522,11 @@ class Sheet:
 
         ``row`` and ``col`` are 0-based. The leading ``=`` is optional. The cell keeps its previous cached
         value until the next :meth:`Workbook.recalc`.
+
+        Example::
+
+            ws.set_formula("C1", "=A1+B1")
+            wb.recalc()
         """
         row, col, formula = self._cell_args("set_formula", args, kwargs, ("formula",))
         sheet = self._index()
@@ -1534,6 +1568,12 @@ class Sheet:
             ``ARRAY``, ``REF`` or ``LAMBDA``.
           ValueError: for an integer too large to convert to a float.
           InvalidArgumentError: for a NaN or infinite number.
+
+        Example::
+
+            ws.set_value("A1", 42)
+            ws.set_value("B1", "Total")
+            ws.set_value("C1", None)
         """
         row, col, value = self._cell_args("set_value", args, kwargs, ("value",))
         setter, payload = _cell_input(value)
@@ -1647,10 +1687,10 @@ class Sheet:
 
     @overload
     @_coordinate_form
-    def set_cell_phonetic_properties(self, row: int, col: int, properties: PhoneticPropertiesInput) -> None: ...
+    def set_cell_phonetic_properties(self, row: int, col: int, *, font_id: int, type: int, alignment: int) -> None: ...
 
     @overload
-    def set_cell_phonetic_properties(self, a1: str, properties: PhoneticPropertiesInput) -> None: ...
+    def set_cell_phonetic_properties(self, a1: str, *, font_id: int, type: int, alignment: int) -> None: ...
 
     def set_cell_phonetic_properties(self, *args: Any, **kwargs: Any) -> None:
         """Set how the cell's phonetic guide renders.
@@ -1661,7 +1701,9 @@ class Sheet:
         Only observable on a cell that has runs, and every value-setting
         method clears both, so call it after the cell's text.
         """
-        row, col, properties = self._cell_args("set_cell_phonetic_properties", args, kwargs, ("properties",))
+        row, col, font_id, type, alignment = self._cell_args(
+            "set_cell_phonetic_properties", args, kwargs, ("font_id", "type", "alignment")
+        )
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -1670,9 +1712,9 @@ class Sheet:
                 _uint(sheet, "sheet_index"),
                 _uint(row, "row"),
                 _uint(col, "col"),
-                _uint(properties.font_id, "font_id"),
-                _uint(properties.type, "type"),
-                _uint(properties.alignment, "alignment"),
+                _uint(font_id, "font_id"),
+                _uint(type, "type"),
+                _uint(alignment, "alignment"),
             )
         )
 
@@ -1808,6 +1850,11 @@ class Sheet:
         Reflects the most recent recalc; mutations made after the last
         :meth:`Workbook.recalc` are not visible to dependents until you call
         :meth:`Workbook.recalc` again.
+
+        Example::
+
+            ws.set_value("A1", 42)
+            ws.get_value("A1").to_python()  # 42.0
         """
         row, col = self._cell_args("get_value", args, kwargs, ())
         sheet = self._index()
@@ -1820,8 +1867,8 @@ class Sheet:
             _check(status)
             return Value._from_wasm(value_ptr)
 
-    def get_values(self, cell_range: Union[CellRect, str]) -> List[List[Value]]:
-        """Read the cached values of ``cell_range`` as a dense row-major grid.
+    def get_values(self, range: Union[CellRect, str]) -> List[List[Value]]:
+        """Read the cached values of ``range`` as a dense row-major grid.
 
         ``result[r][c]`` is the cell ``r`` rows and ``c`` columns from the
         top-left corner; an empty cell is a ``BLANK`` :class:`Value`, and a
@@ -1831,8 +1878,13 @@ class Sheet:
         Raises:
           InvalidArgumentError: when the range holds more than 4,194,304
             (2**22) cells.
+
+        Example::
+
+            grid = ws.get_values("A1:B2")
+            grid[0][1].to_python()
         """
-        rect = self._rect(cell_range)
+        rect = self._rect(range)
         rows = rect.last_row - rect.first_row + 1
         cols = rect.last_col - rect.first_col + 1
         if rows <= 0 or cols <= 0 or rows * cols > _GET_VALUES_CELL_CAP:
@@ -1840,7 +1892,7 @@ class Sheet:
                 StatusCode.INVALID_ARGUMENT,
                 _diagnostic_override=(f"get_values reads at most {_GET_VALUES_CELL_CAP} cells, got {rows}x{cols}", ""),
             )
-        grid = [[_BLANK] * cols for _ in range(rows)]
+        grid = [[_BLANK] * cols for _ in builtins.range(rows)]  # `range` is the parameter here
         for cell in self.list_cells(rect):
             grid[cell.row - rect.first_row][cell.col - rect.first_col] = cell.value
         return grid
@@ -1872,6 +1924,10 @@ class Sheet:
           ValueError: for an integer too large to convert to a float.
           InvalidArgumentError: for a NaN or infinite number, or a grid
             reaching past the last row or column.
+
+        Example::
+
+            ws.set_values("A1", [[1, 2], [3, 4]])
         """
         row, col, values = self._cell_args("set_values", args, kwargs, ("values",))
         if isinstance(values, (str, bytes)):
@@ -1945,6 +2001,10 @@ class Sheet:
         :meth:`evaluate_formula_array` for the whole grid. A cell-level Excel
         error is returned as a :class:`Value` of kind ``ERROR``. A reference
         to the anchor cell itself reads its cached value.
+
+        Example::
+
+            ws.evaluate_formula("A1", "=SUM(B1:B3)").to_python()
         """
         row, col, formula = self._cell_args("evaluate_formula", args, kwargs, ("formula",))
         sheet = self._index()
@@ -1986,16 +2046,16 @@ class Sheet:
         return self._workbook._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False)
 
     # -- Iteration ---------------------------------------------------------
-    def list_cells(self, cell_range: Union[CellRect, str, None] = None) -> List[Cell]:
-        """Return every populated cell in ``cell_range``, or on the whole sheet when it is ``None``.
+    def list_cells(self, range: Union[CellRect, str, None] = None) -> List[Cell]:
+        """Return every populated cell in ``range``, or on the whole sheet when it is ``None``.
 
         Cells come in row-major order; each carries its stored formula and
         cached value, as :meth:`get_cells_in_range` pages them.
         """
         rect = (
             CellRect(first_row=0, first_col=0, last_row=_LAST_ROW, last_col=_LAST_COL)
-            if cell_range is None
-            else self._rect(cell_range)
+            if range is None
+            else self._rect(range)
         )
         cells: List[Cell] = []
         cursor: Optional[int] = None
@@ -2103,9 +2163,9 @@ class Sheet:
     # Note: ``fm_workbook_set_iterative_progress`` (the per-sweep callback)
     # is intentionally NOT bound -- it takes a C function pointer that the
     # wasmtime-py host cannot synthesise into the module's function table.
-    def recalc_viewport(self, rect: Union[CellRect, str]) -> int:
-        """Recalc the dependency closure for the viewport ``rect``; return cell count."""
-        rect = self._rect(rect)
+    def recalc_viewport(self, viewport: Union[CellRect, str]) -> int:
+        """Recalc the dependency closure for the viewport ``viewport``; return cell count."""
+        rect = self._rect(viewport)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -2137,18 +2197,18 @@ class Sheet:
         )
 
     # -- Merges ------------------------------------------------------------
-    def add_merge(self, merge: Union[CellRect, str]) -> None:
+    def add_merge(self, range: Union[CellRect, str]) -> None:
         """Append a merge range to the sheet."""
-        merge = self._rect(merge)
+        merge = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = _pack_cell_rect_array([merge], scope)
             _check(LIB.fm_sheet_add_merge(h, _uint(sheet, "sheet"), ptr))
 
-    def remove_merge(self, merge: Union[CellRect, str]) -> None:
-        """Remove every merge on the sheet overlapping ``merge``."""
-        merge = self._rect(merge)
+    def remove_merge(self, range: Union[CellRect, str]) -> None:
+        """Remove every merge on the sheet overlapping ``range``."""
+        merge = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -2225,15 +2285,15 @@ class Sheet:
 
     def add_hyperlink_range(
         self,
-        rect: Union[CellRect, str],
+        range: Union[CellRect, str],
         *,
         target: Optional[str],
         location: Optional[str] = None,
         display: Optional[str] = None,
         tooltip: Optional[str] = None,
     ) -> None:
-        """Append a hyperlink covering the cells of ``rect``; the arguments read as in :meth:`add_hyperlink`."""
-        rect = self._rect(rect)
+        """Append a hyperlink covering the cells of ``range``; the arguments read as in :meth:`add_hyperlink`."""
+        rect = self._rect(range)
         self._add_hyperlink(rect, target, location, display, tooltip)
 
     def _add_hyperlink(
@@ -2484,18 +2544,22 @@ class Sheet:
             )
 
     def _protected_range_call(
-        self, fn, leading: tuple, protected: ProtectedRange, *, returns_index: bool = False
+        self, fn, leading: tuple, protected: ProtectedRange, *, returns_index: bool = False, keep_ranges: bool = False
     ) -> Optional[int]:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PROTECTED_RANGE)
+            # NULL with a zero count keeps the stored rectangles; an empty list needs a non-NULL pointer to stay empty.
+            ranges_ptr = 0
+            if not keep_ranges:
+                ranges_ptr = _pack_cell_rect_array(protected.ranges, scope) or scope.struct_array(S.CELL_RECT, 1)
             S.PROTECTED_RANGE.pack(
                 LIB,
                 ptr,
                 {
                     "spin_count": _uint(protected.spin_count, "spin_count"),
-                    "ranges": _pack_cell_rect_array(protected.ranges, scope),
-                    "range_count": _uint(len(protected.ranges), "range_count"),
+                    "ranges": ranges_ptr,
+                    "range_count": 0 if keep_ranges else _uint(len(protected.ranges), "range_count"),
                 },
             )
             for fld in self._PROTECTED_RANGE_TEXT:
@@ -2527,19 +2591,56 @@ class Sheet:
             "protected range",
         )
 
-    def update_protected_range(self, protected_range: Union[int, str], protected: ProtectedRange) -> None:
-        """Replace ``protected_range``, an index or a protected range's name.
+    def update_protected_range(
+        self,
+        protected_range: Union[int, str],
+        *,
+        name: Union[str, Unchanged] = UNCHANGED,
+        ranges: Union[Sequence[CellRect], Unchanged] = UNCHANGED,
+        password: Union[str, Unchanged] = UNCHANGED,
+        algorithm_name: Union[str, Unchanged] = UNCHANGED,
+        hash_value: Union[str, Unchanged] = UNCHANGED,
+        salt_value: Union[str, Unchanged] = UNCHANGED,
+        spin_count: Union[int, Unchanged] = UNCHANGED,
+        security_descriptor: Union[str, Unchanged] = UNCHANGED,
+    ) -> None:
+        """Update ``protected_range``, an index or a protected range's name; an omitted argument keeps its value.
+
+        The arguments are the :class:`ProtectedRange` fields; an empty string
+        clears a text field. Omitting ``ranges`` keeps the stored rectangles,
+        including any the reader could not parse.
 
         Raises:
+          TypeError: for ``None`` on any argument.
           NotFoundError: when no protected range has the name ``protected_range``.
           IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
+          InvalidArgumentError: when ``ranges`` is empty.
         """
+        given = {
+            key: value
+            for key, value in (
+                ("name", name),
+                ("ranges", ranges),
+                ("password", password),
+                ("algorithm_name", algorithm_name),
+                ("hash_value", hash_value),
+                ("salt_value", salt_value),
+                ("spin_count", spin_count),
+                ("security_descriptor", security_descriptor),
+            )
+            if value is not UNCHANGED
+        }
+        for key, value in given.items():
+            if value is None:
+                raise TypeError(f"formulon: {key} cannot be None")
         index = self._protected_range_index(protected_range)
         sheet = self._index()
+        protected = dataclasses.replace(self._protected_range_at(index), **given)
         self._protected_range_call(
             LIB.fm_sheet_update_protected_range,
             (_uint(sheet, "sheet"), _uint(index, "protected_range_index")),
             protected,
+            keep_ranges="ranges" not in given,
         )
 
     def remove_protected_range(self, protected_range: Union[int, str]) -> None:
@@ -2763,11 +2864,11 @@ class Sheet:
     def set_format_defaults(
         self,
         *,
-        default_col_width: Optional[float] = UNCHANGED,
-        default_row_height: Optional[float] = UNCHANGED,
-        base_col_width: float = UNCHANGED,
-        custom_height: bool = UNCHANGED,
-        zero_height: bool = UNCHANGED,
+        default_col_width: Union[float, None, Unchanged] = UNCHANGED,
+        default_row_height: Union[float, None, Unchanged] = UNCHANGED,
+        base_col_width: Union[float, Unchanged] = UNCHANGED,
+        custom_height: Union[bool, Unchanged] = UNCHANGED,
+        zero_height: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the sheet's default column / row metrics; an omitted argument keeps its value.
 
@@ -2822,9 +2923,9 @@ class Sheet:
             _check(fn(*args, out))
             return LIB.read_f64(out)
 
-    def get_cell_rect_pt(self, cell_range: Union[CellRect, str], mode: GeometryMode = GeometryMode.DISPLAY) -> RectPt:
-        """Return the rectangle covering ``cell_range`` in points from the top-left of A1."""
-        cell_range = self._rect(cell_range)
+    def get_cell_rect_pt(self, range: Union[CellRect, str], mode: GeometryMode = GeometryMode.DISPLAY) -> RectPt:
+        """Return the rectangle covering ``range`` in points from the top-left of A1."""
+        cell_range = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -2935,17 +3036,17 @@ class Sheet:
 
     def get_cells_in_range(
         self,
-        cell_range: Union[CellRect, str],
+        range: Union[CellRect, str],
         cursor: Optional[int] = None,
         limit: Optional[int] = None,
     ) -> CellsInRange:
-        """Return one page of the populated cells in ``cell_range`` (row-major).
+        """Return one page of the populated cells in ``range`` (row-major).
 
         Pass ``next_cursor`` back to fetch the next page; it is ``None``
         when the rectangle holds no further populated cell. ``limit`` of
         ``None`` or ``0`` means the engine maximum.
         """
-        cell_range = self._rect(cell_range)
+        cell_range = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3130,9 +3231,9 @@ class Sheet:
         self,
         comment_id: str,
         *,
-        text: str = UNCHANGED,
-        mentions: Sequence[Mention] = UNCHANGED,
-        done: bool = UNCHANGED,
+        text: Union[str, Unchanged] = UNCHANGED,
+        mentions: Union[Sequence[Mention], Unchanged] = UNCHANGED,
+        done: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the text, mentions and resolved state of the comment ``comment_id``; an omitted argument is kept.
 
@@ -3308,22 +3409,17 @@ class Sheet:
         *,
         name: str = "",
         description: str = "",
-        anchor_kind: AnchorKind = AnchorKind.ONE_CELL,
-        edit_as: AnchorEditAs = AnchorEditAs.TWO_CELL,
-        row: int = 0,
-        col: int = 0,
-        row_offset_emu: int = 0,
-        col_offset_emu: int = 0,
-        width_emu: int = 0,
-        height_emu: int = 0,
+        anchor: Optional[DrawingAnchor] = None,
     ) -> Picture:
-        """Insert ``data`` as a picture anchored at ``(row, col)`` and return its handle.
+        """Insert ``data`` as a picture placed by ``anchor`` and return its handle.
 
-        An empty ``name`` becomes ``Picture <id>``. A ``width_emu`` or
-        ``height_emu`` of ``0`` means the image's pixel size times 9525.
-        ``edit_as`` is honoured for a two-cell anchor only. Existing drawing
-        content is kept.
+        An empty ``name`` becomes ``Picture <id>``. ``anchor`` ``None`` is a
+        one-cell anchor at A1. A ``width_emu`` or ``height_emu`` of ``0``
+        means the image's pixel size times 9525. ``edit_as`` is honoured for a
+        two-cell anchor only. Existing drawing content is kept.
         """
+        if anchor is None:
+            anchor = DrawingAnchor()
         sheet = self._index()
         h = self._workbook._require()
         raw = bytes(data)
@@ -3331,10 +3427,7 @@ class Sheet:
             out = scope.out_ptr()
             buf = scope.buffer(raw)
             ptr = scope.struct_array(S.IMAGE_INSERT, 1)
-            anchor = _image_anchor_fields(
-                anchor_kind, edit_as, row, col, row_offset_emu, col_offset_emu, width_emu, height_emu
-            )
-            S.IMAGE_INSERT.pack(LIB, ptr, {"anchor": anchor})
+            S.IMAGE_INSERT.pack(LIB, ptr, {"anchor": _drawing_anchor_fields(anchor)})
             S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "name", name, scope)
             S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "description", description, scope)
             _check(LIB.fm_sheet_add_image(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out))
@@ -3499,25 +3592,35 @@ class Sheet:
 
     def add_data_table(
         self,
-        rect: CellRect,
+        rect: Union[CellRect, str],
         *,
-        row_input: Optional[Tuple[int, int]] = None,
-        col_input: Optional[Tuple[int, int]] = None,
+        row_input: Union[Tuple[int, int], DataTableInputCell, str, None] = None,
+        col_input: Union[Tuple[int, int], DataTableInputCell, str, None] = None,
     ) -> None:
         """Create a data table whose result range is ``rect``.
 
         The formulas sit in the row above the range and the substitution values in the column left of it (a
         one-variable table), or the other way round; ``row_input`` / ``col_input`` are the ``(row, col)`` input
         cells that receive the values of the row above / the column left. Give one for a one-variable table, both
-        for a two-variable one. The result cells read 0 until the next recalc and refuse writes until the table
-        is removed.
+        for a two-variable one. ``rect`` is a :class:`CellRect` or an unqualified A1 range; an input cell is a
+        ``(row, col)`` pair, a :class:`DataTableInputCell` or one A1 cell string. The result cells read 0 until the
+        next recalc and refuse writes until the table is removed.
         """
+        rect = self._rect(rect)
+        inputs = [
+            self._cell(cell)
+            if isinstance(cell, str)
+            else (cell.row, cell.col)
+            if isinstance(cell, DataTableInputCell)
+            else cell
+            for cell in (row_input, col_input)
+        ]
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.DATA_TABLE, 1)
             values: Dict[str, object] = {"rect": _cell_rect_fields(rect)}
-            for prefix, cell in (("row_input", row_input), ("col_input", col_input)):
+            for prefix, cell in (("row_input", inputs[0]), ("col_input", inputs[1])):
                 if cell is not None:
                     values["has_" + prefix] = 1
                     values[prefix + "_row"] = _uint(cell[0], prefix + "_row")
@@ -3655,22 +3758,92 @@ class Sheet:
             )
             return LIB.read_u32(out)
 
-    def update_sparkline_group(self, group_index: int, group: SparklineGroup) -> None:
-        """Rewrite the modelled attributes, colours, date range and sparklines of group ``group_index`` from ``group``.
+    def update_sparkline_group(
+        self,
+        group_index: int,
+        *,
+        type: Union[SparklineType, Unchanged] = UNCHANGED,
+        color_series: Union[Color, Unchanged] = UNCHANGED,
+        color_negative: Union[Color, Unchanged] = UNCHANGED,
+        color_axis: Union[Color, Unchanged] = UNCHANGED,
+        color_markers: Union[Color, Unchanged] = UNCHANGED,
+        color_first: Union[Color, Unchanged] = UNCHANGED,
+        color_last: Union[Color, Unchanged] = UNCHANGED,
+        color_high: Union[Color, Unchanged] = UNCHANGED,
+        color_low: Union[Color, Unchanged] = UNCHANGED,
+        markers: Union[bool, Unchanged] = UNCHANGED,
+        high: Union[bool, Unchanged] = UNCHANGED,
+        low: Union[bool, Unchanged] = UNCHANGED,
+        first: Union[bool, Unchanged] = UNCHANGED,
+        last: Union[bool, Unchanged] = UNCHANGED,
+        negative: Union[bool, Unchanged] = UNCHANGED,
+        display_x_axis: Union[bool, Unchanged] = UNCHANGED,
+        display_hidden: Union[bool, Unchanged] = UNCHANGED,
+        min_axis_type: Union[SparklineAxisType, Unchanged] = UNCHANGED,
+        max_axis_type: Union[SparklineAxisType, Unchanged] = UNCHANGED,
+        manual_min: Union[float, None, Unchanged] = UNCHANGED,
+        manual_max: Union[float, None, Unchanged] = UNCHANGED,
+        date_axis: Union[bool, Unchanged] = UNCHANGED,
+        date_axis_ref: Union[str, None, Unchanged] = UNCHANGED,
+        line_weight: Union[float, Unchanged] = UNCHANGED,
+        empty_cells_as: Union[SparklineEmptyCells, Unchanged] = UNCHANGED,
+        sparklines: Union[Sequence[Sparkline], Unchanged] = UNCHANGED,
+    ) -> None:
+        """Update group ``group_index``; an omitted argument keeps the group's value.
 
-        Every attribute or child outside the model is kept;
-        ``dataclasses.replace(sheet.list_sparkline_groups()[i], sparklines=...)``
-        replaces the sparklines alone.
+        The arguments are the :class:`SparklineGroup` fields. ``None`` clears
+        ``manual_min``, ``manual_max`` and ``date_axis_ref`` and is a
+        ``TypeError`` for any other argument. Every attribute or child outside
+        the model is kept.
 
         Raises:
-          InvalidArgumentError: when ``group.sparklines`` is empty (a group
-            holds at least one sparkline; remove the group instead).
+          TypeError: for ``None`` on an argument that is not clearable.
+          InvalidArgumentError: when ``sparklines`` is empty (a group holds at
+            least one sparkline; remove the group instead).
         """
+        given = {
+            key: value
+            for key, value in (
+                ("type", type),
+                ("color_series", color_series),
+                ("color_negative", color_negative),
+                ("color_axis", color_axis),
+                ("color_markers", color_markers),
+                ("color_first", color_first),
+                ("color_last", color_last),
+                ("color_high", color_high),
+                ("color_low", color_low),
+                ("markers", markers),
+                ("high", high),
+                ("low", low),
+                ("first", first),
+                ("last", last),
+                ("negative", negative),
+                ("display_x_axis", display_x_axis),
+                ("display_hidden", display_hidden),
+                ("min_axis_type", min_axis_type),
+                ("max_axis_type", max_axis_type),
+                ("manual_min", manual_min),
+                ("manual_max", manual_max),
+                ("date_axis", date_axis),
+                ("date_axis_ref", date_axis_ref),
+                ("line_weight", line_weight),
+                ("empty_cells_as", empty_cells_as),
+                ("sparklines", sparklines),
+            )
+            if value is not UNCHANGED
+        }
+        for key, value in given.items():
+            if value is None and key not in ("manual_min", "manual_max", "date_axis_ref"):
+                raise TypeError(f"formulon: {key} cannot be None")
+        group = dataclasses.replace(self._sparkline_group_at(group_index), **given)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = _pack_sparkline_group(scope, group)
-            items = _pack_sparklines(scope, group.sparklines)
+            # A NULL list keeps the stored sparklines.
+            items = _pack_sparklines(scope, group.sparklines) if sparklines is not UNCHANGED else 0
+            count = len(group.sparklines) if sparklines is not UNCHANGED else 0
             _check(
                 LIB.fm_sheet_update_sparkline_group(
                     h,
@@ -3678,7 +3851,7 @@ class Sheet:
                     _uint(group_index, "idx"),
                     ptr,
                     items,
-                    _uint(len(group.sparklines), "count"),
+                    _uint(count, "count"),
                 )
             )
 
@@ -3701,14 +3874,7 @@ class Sheet:
         legend: Optional[ChartLegendPosition] = ChartLegendPosition.BOTTOM,
         name: str = "",
         description: str = "",
-        anchor_kind: AnchorKind = AnchorKind.TWO_CELL,
-        edit_as: AnchorEditAs = AnchorEditAs.TWO_CELL,
-        row: int = 0,
-        col: int = 0,
-        row_offset_emu: int = 0,
-        col_offset_emu: int = 0,
-        width_emu: int = 0,
-        height_emu: int = 0,
+        anchor: Optional[DrawingAnchor] = None,
     ) -> Chart:
         """Create a chart over the A1 rectangle ``source`` and return its handle.
 
@@ -3719,8 +3885,14 @@ class Sheet:
         for no legend. The placement reads as
         for :meth:`add_picture` (an empty ``name`` becomes ``Chart <id>``),
         except that a zero ``width_emu`` or ``height_emu`` means Excel's default
-        360 x 216 pt frame and the anchor defaults to two-cell.
+        360 x 216 pt frame and ``anchor`` ``None`` is a two-cell anchor at A1.
+
+        Example::
+
+            chart = ws.add_chart(ChartInsertKind.COLUMN, "A1:B5", title="Sales")
         """
+        if anchor is None:
+            anchor = DrawingAnchor(anchor_kind=AnchorKind.TWO_CELL)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3729,9 +3901,7 @@ class Sheet:
             placement = {
                 "name": scope.nonempty_cstr(name),
                 "description": scope.nonempty_cstr(description),
-                "anchor": _image_anchor_fields(
-                    anchor_kind, edit_as, row, col, row_offset_emu, col_offset_emu, width_emu, height_emu
-                ),
+                "anchor": _drawing_anchor_fields(anchor),
             }
             S.CHART_INSERT.pack(
                 LIB,
@@ -3752,9 +3922,9 @@ class Sheet:
             object_id = LIB.read_u32(out)
         return cast("Chart", self._drawing_handle(object_id))
 
-    def get_merges_in_range(self, cell_range: Union[CellRect, str]) -> List[CellRect]:
-        """Return every merge range on the sheet that intersects ``cell_range``."""
-        cell_range = self._rect(cell_range)
+    def get_merges_in_range(self, range: Union[CellRect, str]) -> List[CellRect]:
+        """Return every merge range on the sheet that intersects ``range``."""
+        cell_range = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3773,7 +3943,7 @@ class Sheet:
                 )
             )
             out: List[CellRect] = []
-            for i in range(min(total, LIB.read_u32(count_ptr))):
+            for i in builtins.range(min(total, LIB.read_u32(count_ptr))):  # `range` is the parameter here
                 out.append(_decode_cell_rect_at(buf + i * size))
             return out
 
@@ -3785,7 +3955,12 @@ class Sheet:
     def get_display_text(self, a1: str) -> DisplayText: ...
 
     def get_display_text(self, *args: Any, **kwargs: Any) -> DisplayText:
-        """Return the text Excel displays for the cell and the rendering outcome."""
+        """Return the text Excel displays for the cell and the rendering outcome.
+
+        Example::
+
+            ws.get_display_text("A1").text  # "1,234.50" under a #,##0.00 format
+        """
         row, col = self._cell_args("get_display_text", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
@@ -3921,24 +4096,24 @@ class Sheet:
     def set_view(
         self,
         *,
-        zoom_scale: int = UNCHANGED,
-        freeze_rows: int = UNCHANGED,
-        freeze_cols: int = UNCHANGED,
-        split_x: float = UNCHANGED,
-        split_y: float = UNCHANGED,
-        top_left_row: int = UNCHANGED,
-        top_left_col: int = UNCHANGED,
-        pane_top_left_row: int = UNCHANGED,
-        pane_top_left_col: int = UNCHANGED,
-        visibility: SheetVisibility = UNCHANGED,
-        show_grid_lines: bool = UNCHANGED,
-        show_row_col_headers: bool = UNCHANGED,
-        show_zeros: bool = UNCHANGED,
-        show_formulas: bool = UNCHANGED,
-        show_outline_symbols: bool = UNCHANGED,
-        right_to_left: bool = UNCHANGED,
-        tab_selected: bool = UNCHANGED,
-        view_mode: SheetViewMode = UNCHANGED,
+        zoom_scale: Union[int, Unchanged] = UNCHANGED,
+        freeze_rows: Union[int, Unchanged] = UNCHANGED,
+        freeze_cols: Union[int, Unchanged] = UNCHANGED,
+        split_x: Union[float, Unchanged] = UNCHANGED,
+        split_y: Union[float, Unchanged] = UNCHANGED,
+        top_left_row: Union[int, Unchanged] = UNCHANGED,
+        top_left_col: Union[int, Unchanged] = UNCHANGED,
+        pane_top_left_row: Union[int, Unchanged] = UNCHANGED,
+        pane_top_left_col: Union[int, Unchanged] = UNCHANGED,
+        visibility: Union[SheetVisibility, Unchanged] = UNCHANGED,
+        show_grid_lines: Union[bool, Unchanged] = UNCHANGED,
+        show_row_col_headers: Union[bool, Unchanged] = UNCHANGED,
+        show_zeros: Union[bool, Unchanged] = UNCHANGED,
+        show_formulas: Union[bool, Unchanged] = UNCHANGED,
+        show_outline_symbols: Union[bool, Unchanged] = UNCHANGED,
+        right_to_left: Union[bool, Unchanged] = UNCHANGED,
+        tab_selected: Union[bool, Unchanged] = UNCHANGED,
+        view_mode: Union[SheetViewMode, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the sheet view; an omitted argument keeps its value.
 
@@ -4106,11 +4281,10 @@ class Sheet:
             ranges = [_decode_cell_rect_at(array_ptr + i * size) for i in range(total)]
             return SheetSelection(active_row=LIB.read_u32(row_ptr), active_col=LIB.read_u32(col_ptr), ranges=ranges)
 
-    def set_selection(self, selection: SheetSelection) -> None:
+    def set_selection(self, *, active_row: int, active_col: int, ranges: Sequence[CellRect] = ()) -> None:
         """Replace the active pane's selection; empty ``ranges`` selects the active cell alone."""
         sheet = self._index()
         h = self._workbook._require()
-        active_row, active_col, ranges = selection.active_row, selection.active_col, selection.ranges
         with _ArgScope() as scope:
             ptr = _pack_cell_rect_array(list(ranges), scope)
             _check(
@@ -4374,12 +4548,12 @@ class Sheet:
     def set_page_setup(
         self,
         *,
-        orientation: Optional[PageOrientation] = UNCHANGED,
-        paper_size: int = UNCHANGED,
-        scale: int = UNCHANGED,
-        fit_to_width: int = UNCHANGED,
-        fit_to_height: int = UNCHANGED,
-        fit_to_page: bool = UNCHANGED,
+        orientation: Union[PageOrientation, None, Unchanged] = UNCHANGED,
+        paper_size: Union[int, Unchanged] = UNCHANGED,
+        scale: Union[int, Unchanged] = UNCHANGED,
+        fit_to_width: Union[int, Unchanged] = UNCHANGED,
+        fit_to_height: Union[int, Unchanged] = UNCHANGED,
+        fit_to_page: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<pageSetup>``; an omitted argument keeps its attribute.
 
@@ -4434,12 +4608,12 @@ class Sheet:
     def set_page_margins(
         self,
         *,
-        left: float = UNCHANGED,
-        right: float = UNCHANGED,
-        top: float = UNCHANGED,
-        bottom: float = UNCHANGED,
-        header: float = UNCHANGED,
-        footer: float = UNCHANGED,
+        left: Union[float, Unchanged] = UNCHANGED,
+        right: Union[float, Unchanged] = UNCHANGED,
+        top: Union[float, Unchanged] = UNCHANGED,
+        bottom: Union[float, Unchanged] = UNCHANGED,
+        header: Union[float, Unchanged] = UNCHANGED,
+        footer: Union[float, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<pageMargins>``, in inches; an omitted argument keeps its margin.
 
@@ -4472,10 +4646,10 @@ class Sheet:
     def set_print_options(
         self,
         *,
-        grid_lines: bool = UNCHANGED,
-        headings: bool = UNCHANGED,
-        horizontal_centered: bool = UNCHANGED,
-        vertical_centered: bool = UNCHANGED,
+        grid_lines: Union[bool, Unchanged] = UNCHANGED,
+        headings: Union[bool, Unchanged] = UNCHANGED,
+        horizontal_centered: Union[bool, Unchanged] = UNCHANGED,
+        vertical_centered: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<printOptions>``; an omitted argument keeps its attribute.
 
@@ -4504,16 +4678,16 @@ class Sheet:
     def set_header_footer(
         self,
         *,
-        odd_header: Optional[str] = UNCHANGED,
-        odd_footer: Optional[str] = UNCHANGED,
-        even_header: Optional[str] = UNCHANGED,
-        even_footer: Optional[str] = UNCHANGED,
-        first_header: Optional[str] = UNCHANGED,
-        first_footer: Optional[str] = UNCHANGED,
-        different_odd_even: bool = UNCHANGED,
-        different_first: bool = UNCHANGED,
-        scale_with_doc: bool = UNCHANGED,
-        align_with_margins: bool = UNCHANGED,
+        odd_header: Union[str, None, Unchanged] = UNCHANGED,
+        odd_footer: Union[str, None, Unchanged] = UNCHANGED,
+        even_header: Union[str, None, Unchanged] = UNCHANGED,
+        even_footer: Union[str, None, Unchanged] = UNCHANGED,
+        first_header: Union[str, None, Unchanged] = UNCHANGED,
+        first_footer: Union[str, None, Unchanged] = UNCHANGED,
+        different_odd_even: Union[bool, Unchanged] = UNCHANGED,
+        different_first: Union[bool, Unchanged] = UNCHANGED,
+        scale_with_doc: Union[bool, Unchanged] = UNCHANGED,
+        align_with_margins: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<headerFooter>``; an omitted argument keeps its value.
 
@@ -4942,21 +5116,21 @@ class Sheet:
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")))
 
-    def get_range_style_bases(self, rect: Union[CellRect, str]) -> List[int]:
+    def get_range_style_bases(self, range: Union[CellRect, str]) -> List[int]:
         """List, ascending, every cell XF some cell of the selection resolves to.
 
-        ``rect`` is a selection: full height is a column selection, full
+        ``range`` is a selection: full height is a column selection, full
         width a row selection, both the whole sheet, neither a cell range. It
         is the first step of an attribute patch (for example a font size over a selection): read the
         bases, build a patched XF for each with :meth:`Workbook.add_font` /
         :meth:`Workbook.add_cell_xf`, then apply them with :meth:`remap_range_style`.
         """
-        rect = self._rect(rect)
+        rect = self._rect(range)
         return self.get_range_style_bases_excluding(rect, ())
 
     def get_range_style_bases_excluding(
         self,
-        rect: Union[CellRect, str],
+        range: Union[CellRect, str],
         excluded: Sequence[Tuple[int, int]],
     ) -> List[int]:
         """:meth:`get_range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
@@ -4965,7 +5139,7 @@ class Sheet:
         or default style beneath it. Cells outside the selection and repeats are
         ignored; excluding every cell yields an empty list.
         """
-        rect = self._rect(rect)
+        rect = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         cells = list(excluded)
@@ -5012,7 +5186,7 @@ class Sheet:
             n = min(total, LIB.read_u32(len_ptr))
             return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
 
-    def remap_range_style(self, rect: Union[CellRect, str], mapping: Dict[int, int]) -> None:
+    def remap_range_style(self, range: Union[CellRect, str], mapping: Dict[int, int]) -> None:
         """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
 
         An XF absent from ``mapping`` is kept. Each target must be a valid cell
@@ -5021,7 +5195,7 @@ class Sheet:
         and passing ``{base: patched}``. Undo with :meth:`snapshot_range_style`
         taken beforehand and :meth:`restore_range_style`.
         """
-        rect = self._rect(rect)
+        rect = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         pairs = list(mapping.items())
@@ -5044,14 +5218,14 @@ class Sheet:
                 )
             )
 
-    def snapshot_range_style(self, rect: Union[CellRect, str]) -> bytes:
+    def snapshot_range_style(self, range: Union[CellRect, str]) -> bytes:
         """Capture the style state of a selection as opaque bytes for :meth:`restore_range_style`.
 
         The capture holds the covered column styles (column selection), row
         styles (row selection) and every stored cell's XF and explicit mark.
         Take it before :meth:`remap_range_style` to be able to undo the edit.
         """
-        rect = self._rect(rect)
+        rect = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5103,14 +5277,13 @@ class Sheet:
 
     def evaluate_cf_range(
         self,
-        rect: Union[CellRect, str],
+        range: Union[CellRect, str],
         today_serial: float = float("nan"),
     ) -> List[CfCell]:
-        """Evaluate every CF block on the sheet against the cells of ``rect``.
+        """Evaluate every CF block on the sheet against the cells of ``range``.
 
         Args:
-          sheet: 0-based sheet index.
-          rect: the cells to evaluate.
+          range: the cells to evaluate.
           today_serial: date basis pinned for ``timePeriod`` rules, as an
             Excel serial date. The default ``float("nan")`` disables them:
             no ``timePeriod`` rule can match, so pass a serial date to use
@@ -5118,7 +5291,9 @@ class Sheet:
             serial for 1899-12-30 and would evaluate those rules against
             that date.
         """
-        rect = self._rect(rect)
+        return self._evaluate_cf_rect(self._rect(range), today_serial)
+
+    def _evaluate_cf_rect(self, rect: CellRect, today_serial: float) -> List[CfCell]:
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5486,16 +5661,16 @@ class Sheet:
 
     def set_cell_format(
         self,
-        rect: Union[CellRect, str],
+        range: Union[CellRect, str],
         *,
-        number_format: str = UNCHANGED,
-        font: Union[FontPatch, Font] = UNCHANGED,
-        fill: Union[FillPatch, Fill] = UNCHANGED,
-        border: Union[BorderPatch, Border] = UNCHANGED,
-        alignment: Union[AlignmentPatch, Alignment] = UNCHANGED,
-        protection: Union[CellProtectionPatch, CellProtection] = UNCHANGED,
+        number_format: Union[str, Unchanged] = UNCHANGED,
+        font: Union[FontPatch, Font, Unchanged] = UNCHANGED,
+        fill: Union[FillPatch, Fill, Unchanged] = UNCHANGED,
+        border: Union[BorderPatch, Border, Unchanged] = UNCHANGED,
+        alignment: Union[AlignmentPatch, Alignment, Unchanged] = UNCHANGED,
+        protection: Union[CellProtectionPatch, CellProtection, Unchanged] = UNCHANGED,
     ) -> None:
-        """Merge the given groups into the format of every cell of ``rect``; an omitted group or key is kept.
+        """Merge the given groups into the format of every cell of ``range``; an omitted group or key is kept.
 
         A group is a patch mapping (:class:`FontPatch`, ...) or the record
         :meth:`get_cell_format` reads, so passing every field of a
@@ -5503,7 +5678,7 @@ class Sheet:
         clears a key the read record reports as nullable (``bold``, ``size``,
         ``family``, ...). A colour is ``"#RRGGBB"``, ``"#AARRGGBB"`` or a
         :class:`Color`; a fill colour without a pattern makes the fill solid.
-        A whole-column, whole-row or whole-sheet ``rect`` (``"B:B"``,
+        A whole-column, whole-row or whole-sheet ``range`` (``"B:B"``,
         ``"3:3"``, ``"A:XFD"``) formats the column, row or sheet, so cells
         entered there later take the format too. Equal formats share one
         style record.
@@ -5520,6 +5695,10 @@ class Sheet:
           InvalidArgumentError: for an empty ``number_format``, an enum value
             outside its table, ``indent`` above 255, or ``text_rotation``
             outside 0..180 and 255.
+
+        Example::
+
+            ws.set_cell_format("A1:B2", number_format="0.00", font={"bold": True})
         """
         patch = _check_cell_format_patch(
             {
@@ -5531,7 +5710,7 @@ class Sheet:
                 "protection": protection,
             }
         )
-        rect = self._rect(rect)
+        rect = self._rect(range)
         bases = self.get_range_style_bases(rect)
         if not patch:
             return
@@ -5605,14 +5784,14 @@ class Sheet:
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
 
-    def set_range_xf_index(self, rect: Union[CellRect, str], xf_index: int) -> None:
-        """Store ``xf_index`` on every cell of ``rect``.
+    def set_range_xf_index(self, range: Union[CellRect, str], xf_index: int) -> None:
+        """Store ``xf_index`` on every cell of ``range``.
 
         Cells that do not exist yet are materialised as blanks carrying only
         the style, so an empty ruled box renders. Ruling a report this way
         costs one call instead of one per cell.
         """
-        rect = self._rect(rect)
+        rect = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5713,7 +5892,13 @@ class Sheet:
 
     def add_pivot(self, *, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> Pivot:
         """Create an empty pivot table over cache ``cache_id`` with its top-left cell at
-        ``(anchor_row, anchor_col)``; return its handle."""
+        ``(anchor_row, anchor_col)``; return its handle.
+
+        Example::
+
+            cache = wb.add_pivot_cache()
+            pivot = ws.add_pivot(name="Sales", cache_id=cache.cache_id, anchor_row=0, anchor_col=4)
+        """
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:

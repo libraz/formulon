@@ -307,9 +307,11 @@ Napi::Object ProtectedRangeToJs(Napi::Env env, const fm_protected_range_t& r) {
 }
 
 // Reads the range spec at `info[idx]` and returns what `edit` makes of it.
-// `handle` aliases the wrapper's member, as in `InvokeMergeEdit`.
+// `handle` aliases the wrapper's member, as in `InvokeMergeEdit`. With `optional_ranges`, an absent `ranges`
+// leaves the list NULL (the stored ranges are kept) and an empty array yields a non-NULL empty list.
 template <typename Edit>
-Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::CallbackInfo& info, size_t idx, Edit edit) {
+Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::CallbackInfo& info, size_t idx, Edit edit,
+                               bool optional_ranges = false) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
     return ThrowInvalidHandle(env);
@@ -320,7 +322,9 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   (void)reader.String(in, "name", &text[0]);
   std::vector<fm_cell_rect_t> ranges;
   Napi::Array ranges_array;
-  if (reader.RequiredArray(in, "ranges", &ranges_array)) {
+  const bool ranges_given =
+      optional_ranges ? reader.Array(in, "ranges", &ranges_array) : reader.RequiredArray(in, "ranges", &ranges_array);
+  if (ranges_given) {
     (void)ReadCellRects(reader, ranges_array, "ranges", &ranges);
   }
   (void)reader.String(in, "password", &text[1]);
@@ -334,7 +338,8 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
     return env.Undefined();
   }
   r.name = text[0].c_str();
-  r.ranges = ranges.data();
+  const fm_cell_rect_t empty_sentinel{};
+  r.ranges = ranges_given && optional_ranges && ranges.empty() ? &empty_sentinel : ranges.data();
   r.range_count = ranges.size();
   r.password = text[1].c_str();
   r.algorithm_name = text[2].c_str();
@@ -363,10 +368,13 @@ Napi::Value Workbook::AddProtectedRange(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::UpdateProtectedRange(const Napi::CallbackInfo& info) {
-  return EditProtectedRange(handle_, info, 2, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
-    return ValueOrThrow(info.Env(), fm_sheet_update_protected_range(handle, ArgU32(info, 0), ArgU32(info, 1), &r),
-                        info.Env().Undefined());
-  });
+  return EditProtectedRange(
+      handle_, info, 2,
+      [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
+        return ValueOrThrow(info.Env(), fm_sheet_update_protected_range(handle, ArgU32(info, 0), ArgU32(info, 1), &r),
+                            info.Env().Undefined());
+      },
+      /*optional_ranges=*/true);
 }
 
 Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {

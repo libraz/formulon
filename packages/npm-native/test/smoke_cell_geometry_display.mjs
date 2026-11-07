@@ -147,11 +147,14 @@ test('geometry accessors agree with each other', async () => {
   assert.equal(rect.y, 0);
   assert.ok(Math.abs(rect.width - (c0 + c1)) < 1e-9);
   assert.equal(rect.height, 50);
+  // The mode is optional and defaults to Display.
+  assert.deepEqual(wb.sheet(0).getCellRectPt(A1_B2), rect);
+  assert.deepEqual(wb.sheet(0).getWidthModel(), model);
   assert.throws(
     () => wb.sheet(0).getCellRectPt({ firstRow: 1, firstCol: 0, lastRow: 0, lastCol: 0 }, 0),
     isFormulonError,
   );
-  assert.throws(() => wb.sheet(0).getCellRectPt(A1_B2, 7), isFormulonError);
+  assert.throws(() => wb.sheet(0).getCellRectPt(A1_B2, 7), RangeError);
   wb.sheet(0).getColumnWidthPt(0, 1);
 
   const pt = wb.sheet(0).convertColumnCharsToPt(2340 / 256, 0);

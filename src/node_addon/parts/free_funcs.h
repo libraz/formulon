@@ -64,6 +64,12 @@ Napi::Value ListLocaleErrorNames(const Napi::CallbackInfo& info);
 /// `compareText(a, b, strength, profileId)`: the profile's collation order.
 Napi::Value CompareText(const Napi::CallbackInfo& info);
 
+/// `convertCivilToSerial(civil, date1904)`: the Excel serial of a civil date and time.
+Napi::Value ConvertCivilToSerial(const Napi::CallbackInfo& info);
+
+/// `convertSerialToCivil(serial, date1904)`: the civil date and time of an Excel serial.
+Napi::Value ConvertSerialToCivil(const Napi::CallbackInfo& info);
+
 /// `getCollationClasses(values, strength, profileId)`: equal-under-collation
 /// class ids of `values`.
 Napi::Value CollationClasses(const Napi::CallbackInfo& info);

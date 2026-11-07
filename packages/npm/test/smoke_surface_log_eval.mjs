@@ -198,7 +198,7 @@ function makePivotWorkbook(Workbook) {
   const cacheId = cache.cacheId;
   // A cache without a worksheet source cannot be saved, so the fixture
   // declares the range its two fields and two records occupy.
-  wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
   wb.pivotCache(cacheId).addField('Region');
   wb.pivotCache(cacheId).addField('Amount');
   for (const [region, amount] of [
@@ -485,7 +485,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(east.cacheIndex, null);
     assert.equal(east.visible, true);
     assert.equal(wb.sheet(0).pivot(pivot).getFieldItem(0, 1).visible, false);
-    wb.sheet(0).pivot(pivot).addFieldSharedItem(0, 5, true);
+    wb.sheet(0).pivot(pivot).addFieldSharedItem(0, 5, { visible: true });
     const bound = wb.sheet(0).pivot(pivot).getFieldItem(0, 2);
     assert.equal(bound.cacheIndex, 5);
     assert.equal(bound.name, '');
@@ -740,7 +740,7 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
   try {
     const cache = wb.addPivotCache();
     const cacheId = cache.cacheId;
-    wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:D3', sheet: 'Sheet1' });
+    wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:D3', sheet: 'Sheet1' });
     for (const name of ['Region', 'Product', 'Sales', 'Qty']) wb.pivotCache(cacheId).addField(name);
     for (const sales of [100, 200]) {
       const rec = wb.pivotCache(cacheId).addRecord();

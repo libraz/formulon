@@ -6,7 +6,7 @@ pointing at the same table as the table list changes; see :class:`Table`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple, Union
 
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
@@ -18,6 +18,7 @@ from .workbook import (
     CellRect,
     SheetRect,
     TableColumn,
+    Unchanged,
     _ArgScope,
     _check,
     _decode_cell_rect_at,
@@ -28,7 +29,12 @@ from .workbook import (
 if TYPE_CHECKING:
     from .workbook import TableProperties, Workbook
 
-__all__ = ["Table"]
+__all__ = ["Table", "TableTotalsRowFunction"]
+
+#: The ``ST_TotalsRowFunction`` tokens :meth:`Table.set_column_totals` accepts.
+TableTotalsRowFunction = Literal[
+    "none", "sum", "min", "max", "average", "count", "countNums", "stdDev", "var", "custom"
+]
 
 
 class Table:
@@ -163,28 +169,30 @@ class Table:
                 show_last_column=info["show_last_column"] != 0,
                 show_row_stripes=info["show_row_stripes"] != 0,
                 show_column_stripes=info["show_column_stripes"] != 0,
-                header_row_count=info["header_row_count"],
-                totals_row_count=info["totals_row_count"],
+                header_row=info["header_row_count"] != 0,
+                totals_row=info["totals_row_count"] != 0,
                 columns=columns,
             )
 
     def update(
         self,
         *,
-        rect: CellRect = UNCHANGED,
-        style_name: Optional[str] = UNCHANGED,
-        header_row: bool = UNCHANGED,
-        totals_row: bool = UNCHANGED,
-        name: str = UNCHANGED,
-        display_name: str = UNCHANGED,
-        show_first_column: bool = UNCHANGED,
-        show_last_column: bool = UNCHANGED,
-        show_row_stripes: bool = UNCHANGED,
-        show_column_stripes: bool = UNCHANGED,
+        range: Union[SheetRect, str, Unchanged] = UNCHANGED,
+        name: Union[str, Unchanged] = UNCHANGED,
+        display_name: Union[str, Unchanged] = UNCHANGED,
+        style_name: Union[str, None, Unchanged] = UNCHANGED,
+        show_first_column: Union[bool, Unchanged] = UNCHANGED,
+        show_last_column: Union[bool, Unchanged] = UNCHANGED,
+        show_row_stripes: Union[bool, Unchanged] = UNCHANGED,
+        show_column_stripes: Union[bool, Unchanged] = UNCHANGED,
+        header_row: Union[bool, Unchanged] = UNCHANGED,
+        totals_row: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the table's range, flags, names and style; an omitted argument keeps its setting.
 
-        A new ``rect`` must keep the width the table's column list already
+        ``range`` is an A1 range (``"A1:C5"``, optionally sheet-qualified) or
+        a :class:`SheetRect`; its sheet must be the table's sheet. A new
+        ``range`` must keep the width the table's column list already
         describes. A new ``style_name`` keeps the four toggles, and ``None``
         (or ``""``) removes ``<tableStyleInfo>`` -- unless a ``show_*`` toggle
         is also given, which writes the element back without a style name.
@@ -196,14 +204,25 @@ class Table:
         used as a reference is not). The update is all-or-nothing.
 
         Raises:
-          TypeError: when a flag is not a ``bool``.
+          TypeError: when a flag is not a ``bool``, or ``range``, ``name`` or
+            ``display_name`` has the wrong type (``None`` included).
+          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``range``
+            names another sheet or is not an A1 range.
         """
         index = self._index()
         flags = (header_row, totals_row, show_first_column, show_last_column, show_row_stripes, show_column_stripes)
         for flag in flags:
             if flag is not UNCHANGED and not isinstance(flag, bool):
                 raise TypeError(f"formulon: a table flag must be a bool, got {type(flag).__name__}")
+        for key, text in (("name", name), ("display_name", display_name)):
+            if text is not UNCHANGED and not isinstance(text, str):
+                raise TypeError(f"formulon: {key} must be a str, got {type(text).__name__}")
+        if style_name is not UNCHANGED and style_name is not None and not isinstance(style_name, str):
+            raise TypeError(f"formulon: style_name must be a str or None, got {type(style_name).__name__}")
+        if range is not UNCHANGED and not isinstance(range, (SheetRect, str)):
+            raise TypeError(f"formulon: range must be an A1 string or a SheetRect, got {type(range).__name__}")
         current = self._properties(index)
+        rect = current.range.rect if range is UNCHANGED else self._range_rect(range, current.range.sheet)
         renaming = name is not UNCHANGED or display_name is not UNCHANGED
         if renaming:
             next_name = current.name if name is UNCHANGED else name
@@ -215,7 +234,7 @@ class Table:
         try:
             self._update(
                 index,
-                current.range.rect if rect is UNCHANGED else rect,
+                rect,
                 None if style_name is UNCHANGED else (style_name or ""),
                 header_row=None if header_row is UNCHANGED else header_row,
                 totals_row=None if totals_row is UNCHANGED else totals_row,
@@ -227,6 +246,25 @@ class Table:
             if renaming:
                 self._rename(index, current.name, current.display_name)
             raise
+
+    def _range_rect(self, range: Union[SheetRect, str], sheet: int) -> CellRect:
+        """The rectangle ``range`` names, which must lie on sheet index ``sheet``."""
+        if isinstance(range, SheetRect):
+            target, rect = range.sheet, range.rect
+        else:
+            ref = self._workbook.parse_reference(range)
+            if ref is None:
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{range!r} is not an A1 range", "")
+                )
+            rect = ref.rect
+            target = sheet if ref.sheet_name is None else self._workbook.sheet(ref.sheet_name)._index()
+        if target != sheet:
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _diagnostic_override=("the range is on a different sheet than the table", ""),
+            )
+        return rect
 
     def _rename(self, index: int, name: str, display_name: str) -> None:
         h = self._workbook._require()
@@ -319,7 +357,7 @@ class Table:
         self,
         column: int,
         *,
-        function: Optional[str] = None,
+        function: Optional[TableTotalsRowFunction] = None,
         label: Optional[str] = None,
         formula: Optional[str] = None,
     ) -> None:

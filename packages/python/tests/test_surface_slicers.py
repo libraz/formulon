@@ -75,7 +75,7 @@ class SlicerTests(unittest.TestCase):
                 self.assertEqual((s.from_row, s.from_col, s.to_row, s.to_col), (4, 3, 14, 5))
 
                 loaded.sheet(0).slicer(object_id).update(
-                    caption="Renamed", style="", column_count=1, from_row=0, from_col=3, to_row=8, to_col=5
+                    caption="Renamed", style=None, column_count=1, from_row=0, from_col=3, to_row=8, to_col=5
                 )
                 found = loaded.sheet(0).slicer(object_id).get_properties()
                 self.assertIsNotNone(found)

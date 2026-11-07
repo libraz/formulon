@@ -61,6 +61,7 @@ test('chart enums keep their C ordinals', async () => {
   assert.equal(mod.ChartAxisCrosses.At, 3);
   assert.equal(mod.ChartTitleKind.Auto, 3);
   assert.equal(mod.ChartSeriesDirection.Rows, 2);
+  assert.deepEqual({ ...mod.ChartSourceKind }, { None: 0, Ref: 1, Literal: 2 });
   assert.equal(mod.ChartLegendPosition.TopRight, 4);
   assert.equal(mod.ChartAxisPosition.Right, 3);
   assert.equal(mod.ChartBarDirection.Bar, 1);
@@ -102,11 +103,11 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(plot.axisIds.length, 2);
     assert.equal(plot.series.length, 3);
     const s0 = plot.series[0];
-    assert.equal(s0.name.kind, 'ref');
+    assert.equal(s0.name.kind, mod.ChartSourceKind.Ref);
     assert.equal(s0.name.formula, 'Sheet1!$B$1');
     assert.equal(s0.categories.formula, 'Sheet1!$A$2:$A$5');
     assert.equal(s0.values.formula, 'Sheet1!$B$2:$B$5');
-    assert.equal(s0.x.kind, 'none');
+    assert.equal(s0.x.kind, mod.ChartSourceKind.None);
     assert.equal(typeof s0.fill.color, 'number');
     assert.equal(s0.marker, null);
     assert.equal(s0.labels, null);
@@ -329,7 +330,7 @@ test('typed chart edits are visible through getChart', async () => {
     wb.sheet(0).chart(id).setSeries(0, 0, { values: 'Sheet1!$D$2:$D$5', name: '' });
     series = chartOf(wb, id).plots[0].series[0];
     assert.equal(series.values.formula, 'Sheet1!$D$2:$D$5');
-    assert.equal(series.name.kind, 'none');
+    assert.equal(series.name.kind, mod.ChartSourceKind.None);
     assert.deepEqual([...dataOf(wb, id).series[0].values], [4, 8, 12, 16]);
 
     // A line point takes no fill; its line carries the colour.

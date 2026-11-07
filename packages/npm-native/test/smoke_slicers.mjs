@@ -159,7 +159,13 @@ test('slicer arguments are validated', async () => {
         .update({ caption: 'x' }),
     isFormulonError,
   );
-  assert.throws(() => wb.sheet(0).slicer(added).update({ name: 'x' }), isFormulonError);
+  // `name` is a record key the patch ignores, so the slicer keeps its name.
+  const nameBefore = wb.sheet(0).slicer(added).getProperties().name;
+  wb.sheet(0).slicer(added).update({ name: 'x' });
+  assert.equal(wb.sheet(0).slicer(added).getProperties().name, nameBefore);
+  assert.throws(() => wb.sheet(0).slicer(added).update({ unknownKey: 1 }), TypeError);
+  assert.throws(() => wb.sheet(0).slicer(added).update({ toRow: 3 }), TypeError);
+  assert.throws(() => wb.sheet(0).slicer(added).update({ caption: null }), TypeError);
   assert.throws(() => wb.sheet(0).removeDrawing(added.objectId + 1), isFormulonError);
   assert.throws(() => wb.sheet(5).slicer(added).getProperties(), isFormulonError);
   assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, fromRow: -1 }), RangeError);

@@ -39,7 +39,6 @@ test('dispose() from a spec getter during a call is refused and the call does no
     };
     const spec = () => closingSpec(() => wb.dispose());
     assert.throws(() => wb.sheet(0).addProtectedRange(spec()), refused);
-    assert.throws(() => wb.sheet(0).updateProtectedRange(0, spec()), refused);
     assert.throws(() => wb.sheet(0).setAutoFilter(spec()), refused);
     assert.throws(() => wb.sheet(0).addShape(spec()), refused);
     assert.throws(() => wb.sheet(0).addMerge(spec()), refused);

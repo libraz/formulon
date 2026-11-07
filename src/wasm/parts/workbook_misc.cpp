@@ -257,6 +257,43 @@ double compare_text(const std::string& a, const std::string& b, int32_t strength
   return order;
 }
 
+double convert_civil_to_serial(emscripten::val civil, bool date1904) {
+  JsNarrowNumericReader reader("convertCivilToSerial");
+  if (!reader.require_object(civil, "civil")) {
+    return 0.0;
+  }
+  fm_civil_time_t value{};
+  value.year = reader.i32(civil, "year", 0, "civil.year");
+  value.month = reader.i32(civil, "month", 0, "civil.month");
+  value.day = reader.i32(civil, "day", 0, "civil.day");
+  value.hour = reader.i32(civil, "hour", 0, "civil.hour");
+  value.minute = reader.i32(civil, "minute", 0, "civil.minute");
+  value.second = reader.i32(civil, "second", 0, "civil.second");
+  if (!reader.ok()) {
+    return 0.0;
+  }
+  double serial = 0.0;
+  if (!succeeded(fm_convert_civil_to_serial(&value, date1904 ? 1 : 0, &serial))) {
+    return 0.0;
+  }
+  return serial;
+}
+
+emscripten::val convert_serial_to_civil(double serial, bool date1904) {
+  fm_civil_time_t value{};
+  if (!succeeded(fm_convert_serial_to_civil(serial, date1904 ? 1 : 0, &value))) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val civil = emscripten::val::object();
+  civil.set("year", value.year);
+  civil.set("month", value.month);
+  civil.set("day", value.day);
+  civil.set("hour", value.hour);
+  civil.set("minute", value.minute);
+  civil.set("second", value.second);
+  return civil;
+}
+
 emscripten::val collation_classes(emscripten::val values, int32_t strength, const std::string& profile_id) {
   JsNarrowNumericReader reader("getCollationClasses");
   if (!reader.is_array(values, "values")) {

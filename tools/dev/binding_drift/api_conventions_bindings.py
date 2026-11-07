@@ -1114,6 +1114,16 @@ def _mentions(text: str, name: str) -> bool:
     return re.search(rf"(?<![\w$]){re.escape(name)}(?![\w$])", text) is not None
 
 
+def _without_unchanged(annotation: str) -> str:
+    """`Union[T, Unchanged]` (a partial-update argument defaulting to `UNCHANGED`) as `T`."""
+    union = re.fullmatch(r"(?:typing\.)?Union\[(.*)\]", annotation.strip())
+    if union is None:
+        return annotation
+    parts = [a.strip() for a in _split_top(union.group(1), ",")]
+    kept = [a for a in parts if a.rpartition(".")[2] != "Unchanged"]
+    return kept[0] if len(kept) == 1 else annotation
+
+
 _OPTIONAL_BOOL_RE = re.compile(r"(?:typing\.)?Optional\[bool\]|bool\s*\|\s*None|None\s*\|\s*bool")
 
 
@@ -1150,6 +1160,8 @@ def _scalar_type_problems(
         actual = params.get(_camel(param) if field == "js" else param)
         if actual is None:
             continue
+        if field == "py" and (defaults.get(param) or "").rpartition(".")[2] == "UNCHANGED":
+            actual = _without_unchanged(actual)
         optional_default = (
             field == "py" and _OPTIONAL_BOOL_RE.fullmatch(actual) is not None and defaults.get(param) == "None"
         )

@@ -6,7 +6,7 @@ A :class:`~formulon.Workbook` hands out one :class:`PivotCache` per cache id; se
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Union
 
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint, fm_value_t_size
@@ -18,6 +18,7 @@ from .workbook import (
     PivotCacheSharedItem,
     PivotCalculatedItem,
     PivotWorksheetSource,
+    Unchanged,
     Value,
     _ArgScope,
     _check,
@@ -97,13 +98,35 @@ class PivotCache:
                 LIB.read_cstr(LIB.read_u32(out_name)) if LIB.read_u32(out_name) else None,
             )
 
-    def set_worksheet_source(self, source: Optional[PivotWorksheetSource]) -> None:
-        """Set the cache's worksheet-source metadata; pass ``None`` to clear it."""
+    def set_worksheet_source(
+        self,
+        source: None = UNCHANGED,
+        /,
+        *,
+        ref: Optional[str] = None,
+        sheet: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> None:
+        """Set the cache's worksheet-source metadata, or clear it.
+
+        ``set_worksheet_source(None)`` clears it. Otherwise the keywords set
+        it: an attribute not given is left out of the source, so a call
+        without arguments writes a source that has no attributes.
+
+        Raises:
+          TypeError: when the first argument is not ``None``, or is ``None``
+            together with a keyword argument.
+        """
+        clearing = source is not UNCHANGED
+        if clearing:
+            if source is not None:
+                raise TypeError(f"formulon: the source argument clears the source and must be None, got {source!r}")
+            if ref is not None or sheet is not None or name is not None:
+                raise TypeError("formulon: clearing the worksheet source takes no keyword arguments")
         h, cache_id = self._call()
         with _ArgScope() as scope:
-            values = () if source is None else (source.ref, source.sheet, source.name)
-            pointers = [scope.opt_cstr(value) for value in values] if source is not None else [0, 0, 0]
-            _check(LIB.fm_workbook_set_pivot_cache_worksheet_source(h, cache_id, 0 if source is None else 1, *pointers))
+            pointers = [0, 0, 0] if clearing else [scope.opt_cstr(value) for value in (ref, sheet, name)]
+            _check(LIB.fm_workbook_set_pivot_cache_worksheet_source(h, cache_id, 0 if clearing else 1, *pointers))
 
     def get_options(self) -> PivotCacheOptions:
         """Read the options of the cache; see :class:`PivotCacheOptions`."""
@@ -121,9 +144,9 @@ class PivotCache:
     def set_options(
         self,
         *,
-        save_data: bool = UNCHANGED,
-        missing_items_limit: int = UNCHANGED,
-        refresh_on_load: bool = UNCHANGED,
+        save_data: Union[bool, Unchanged] = UNCHANGED,
+        missing_items_limit: Union[int, Unchanged] = UNCHANGED,
+        refresh_on_load: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the options of the cache; an omitted argument keeps its setting.
 

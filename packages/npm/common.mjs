@@ -370,6 +370,7 @@ export const ChartAxisKind = Object.freeze({ Category: 0, Value: 1, Date: 2, Ser
 export const ChartAxisCrosses = Object.freeze({ AutoZero: 0, Min: 1, Max: 2, At: 3 });
 export const ChartTitleKind = Object.freeze({ Text: 1, Ref: 2, Auto: 3 });
 export const ChartSeriesDirection = Object.freeze({ Auto: 0, Columns: 1, Rows: 2 });
+export const ChartSourceKind = Object.freeze({ None: 0, Ref: 1, Literal: 2 });
 export const ChartLegendPosition = Object.freeze({ Bottom: 0, Top: 1, Left: 2, Right: 3, TopRight: 4 });
 export const ChartAxisPosition = Object.freeze({ Bottom: 0, Top: 1, Left: 2, Right: 3 });
 export const ChartBarDirection = Object.freeze({ Col: 0, Bar: 1 });
@@ -671,6 +672,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'ChartAxisCrosses',
   'ChartTitleKind',
   'ChartSeriesDirection',
+  'ChartSourceKind',
   'ChartLegendPosition',
   'ChartLineDash',
   'ChartMarkerSymbol',
@@ -702,6 +704,8 @@ export const FORMULON_MEMBERS = Object.freeze([
   'PIVOT_VALUES_FIELD',
   'mergeFunctionMetadata',
   'toNative',
+  'convertCivilToSerial',
+  'convertSerialToCivil',
   'evaluateFormula',
   'getVersion',
   'getStatusName',
@@ -744,19 +748,55 @@ const RUNTIME_MEMBERS = new Set([
 
 const FORWARDED_OPTIONS = ['locateFile', 'print', 'printErr'];
 
+function int32Field(value, where) {
+  requireInteger(value, where);
+  if (value > INT32_MAX || value < -INT32_MAX - 1) throw new RangeError(`${where} is outside int32 range`);
+  return value;
+}
+
+function dateSystem(date1904, where) {
+  return date1904 === undefined ? false : requireBoolean(date1904, `${where} argument 2`);
+}
+
+const CIVIL_FIELDS = Object.freeze(['year', 'month', 'day', 'hour', 'minute', 'second']);
+
+// Members built over the runtime function of the same name, which takes a fixed argument count: the wrapper
+// defaults `date1904` and refuses what the fields cannot represent; the engine judges the calendar.
+const RUNTIME_WRAPPERS = Object.freeze({
+  convertCivilToSerial: (convert) =>
+    function convertCivilToSerial(civil, date1904) {
+      const where = 'Formulon.convertCivilToSerial';
+      requireObject(civil, `${where} argument 1`);
+      const fields = {};
+      for (const field of CIVIL_FIELDS) fields[field] = int32Field(civil[field], `${where} ${field}`);
+      return convert(fields, dateSystem(date1904, where));
+    },
+  convertSerialToCivil: (convert) =>
+    function convertSerialToCivil(serial, date1904) {
+      const where = 'Formulon.convertSerialToCivil';
+      requireNumber(serial, `${where} argument 1`);
+      if (!Number.isFinite(serial)) throw new RangeError(`${where} argument 1 must be finite`);
+      return convert(serial, dateSystem(date1904, where));
+    },
+});
+
 /**
  * Builds the frozen `Formulon` object from an engine runtime.
  *
  * @param {object} runtime The Emscripten module or the native addon.
  * @param {object} shared This module's namespace object.
+ * @param {FinalizationRegistry} [registry] Where each workbook registers its raw object; `dispose()`
+ *   unregisters it and deletes the raw object, so only a runtime whose raw objects have `delete()` passes one.
  * @returns {object} The object `createFormulon()` resolves to.
  */
-export function buildFormulon(runtime, shared) {
+export function buildFormulon(runtime, shared, registry) {
   const formulon = {};
   for (const name of FORMULON_MEMBERS) {
     let value;
     if (name === 'Workbook') {
-      value = runtime.Workbook === undefined ? undefined : makeFacade(runtime.Workbook);
+      value = runtime.Workbook === undefined ? undefined : makeFacade(runtime.Workbook, registry);
+    } else if (Object.hasOwn(RUNTIME_WRAPPERS, name)) {
+      value = typeof runtime[name] === 'function' ? RUNTIME_WRAPPERS[name](runtime[name]) : undefined;
     } else {
       value = RUNTIME_MEMBERS.has(name) ? runtime[name] : shared[name];
     }
@@ -768,24 +808,54 @@ export function buildFormulon(runtime, shared) {
   return Object.freeze(formulon);
 }
 
+function isBufferSource(value) {
+  return ArrayBuffer.isView(value) || value instanceof ArrayBuffer;
+}
+
+/**
+ * The factory options `FormulonOptions.wasm` adds: a `BufferSource` as `wasmBinary`, a `WebAssembly.Module`
+ * as an `instantiateWasm` that instantiates it, whose failure `fail` reports.
+ */
+function wasmOptions(wasm, fail) {
+  if (wasm === undefined || wasm === null) return {};
+  if (typeof WebAssembly === 'object' && wasm instanceof WebAssembly.Module) {
+    return {
+      instantiateWasm(imports, receive) {
+        WebAssembly.instantiate(wasm, imports).then((instance) => receive(instance, wasm), fail);
+        return {};
+      },
+    };
+  }
+  if (!isBufferSource(wasm)) throw new TypeError('FormulonOptions.wasm must be a BufferSource or a WebAssembly.Module');
+  if (wasm.byteLength === 0) throw new TypeError('FormulonOptions.wasm must not be empty');
+  return { wasmBinary: wasm };
+}
+
 /**
  * Instantiates an Emscripten module factory and builds the `Formulon` object.
- * Only `locateFile`, `print` and `printErr` reach the factory.
+ * Only `locateFile`, `print`, `printErr` and `wasm` reach the factory.
  *
  * @param {Function} factory The Emscripten module factory.
  * @param {object} [options] `FormulonOptions`.
  * @param {object} shared This module's namespace object.
+ * @param {FinalizationRegistry} [registry] See `buildFormulon`.
  * @returns {Promise<object>} The `Formulon` object.
  */
-export async function loadFormulon(factory, options, shared) {
+export async function loadFormulon(factory, options, shared, registry) {
   const moduleOptions = { FormulonError };
+  // The glue awaits `instantiateWasm` without a rejection path, so a failed instantiation settles here.
+  let fail;
+  const failed = new Promise((_resolve, reject) => {
+    fail = reject;
+  });
   if (options !== undefined && options !== null) {
     for (const key of FORWARDED_OPTIONS) {
       if (options[key] !== undefined) moduleOptions[key] = options[key];
     }
+    Object.assign(moduleOptions, wasmOptions(options.wasm, fail));
   }
-  const module = await factory(moduleOptions);
-  return buildFormulon(module, shared);
+  const module = await Promise.race([factory(moduleOptions), failed]);
+  return buildFormulon(module, shared, registry);
 }
 
 // <facade-tables>
@@ -1102,6 +1172,7 @@ const LIST_FAMILIES = Object.freeze({
   'Workbook.listFonts': ['getFontCount', 'getFont'],
 });
 const HANDWRITTEN = Object.freeze([
+  'addDataTable',
   'addHyperlink',
   'addHyperlinkRange',
   'addPicture',
@@ -1145,6 +1216,8 @@ const HANDWRITTEN = Object.freeze([
   'shape',
   'slicer',
   'table',
+  'updateProtectedRange',
+  'updateSparklineGroup',
   'updateThreadedComment',
 ]);
 const HANDLE_FORWARDERS = Object.freeze({
@@ -1176,7 +1249,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.addDataField': 'addPivotDataField',
   'Pivot.addField': 'addPivotField',
   'Pivot.addFieldItem': 'addPivotFieldItem',
-  'Pivot.addFieldSharedItem': 'addPivotFieldSharedItem',
+  'Pivot.addFieldSharedItem': null,
   'Pivot.addFieldSubtotalFn': 'addPivotFieldSubtotalFn',
   'Pivot.addFilter': 'addPivotFilter',
   'Pivot.clearDataFields': 'clearPivotDataFields',
@@ -1240,13 +1313,17 @@ const HANDLE_FORWARDERS = Object.freeze({
   'PivotCache.setCalculatedItemFormula': 'setPivotCacheCalculatedItemFormula',
   'PivotCache.setOptions': 'setPivotCacheOptions',
   'PivotCache.setRecordValue': null,
-  'PivotCache.setWorksheetSource': 'setPivotCacheWorksheetSource',
+  'PivotCache.setWorksheetSource': null,
   'Shape.getProperties': 'getShape',
-  'Shape.update': 'updateShape',
+  'Shape.rename': 'setDrawingName',
+  'Shape.setZOrder': 'setDrawingZOrder',
+  'Shape.snapshot': 'snapshotDrawing',
+  'Shape.update': null,
   'Sheet.move': null,
   'Sheet.rename': null,
   'Slicer.getProperties': 'getSlicer',
-  'Slicer.update': 'updateSlicer',
+  'Slicer.setZOrder': 'setDrawingZOrder',
+  'Slicer.update': null,
   'Table.applyAutoFilter': 'applyTableAutoFilter',
   'Table.clearAutoFilter': 'clearTableAutoFilter',
   'Table.evaluateAutoFilter': 'evaluateTableAutoFilter',
@@ -1256,7 +1333,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Table.renameColumn': 'renameTableColumn',
   'Table.setAutoFilter': 'setTableAutoFilter',
   'Table.setColumnTotals': 'setTableColumnTotals',
-  'Table.update': 'updateTable',
+  'Table.update': null,
 });
 const HANDLE_PROPERTIES = Object.freeze({
   'Pivot.name': 'getPivotName',
@@ -1423,6 +1500,36 @@ const PATCH_KEYS = Object.freeze({
   ],
   'Pivot.updateItem': [2, ['cacheIndex', 'caption', 'name', 'showDetail', 'visible']],
   'PivotCache.setOptions': [0, ['missingItemsLimit', 'refreshOnLoad', 'saveData']],
+  'Shape.update': [
+    0,
+    [
+      'anchorKind',
+      'editAs',
+      'fillKind',
+      'fillRgb',
+      'fromCol',
+      'fromColOffsetEmu',
+      'fromRow',
+      'fromRowOffsetEmu',
+      'heightEmu',
+      'hidden',
+      'kind',
+      'lineKind',
+      'lineRgb',
+      'lineWidthEmu',
+      'name',
+      'objectId',
+      'presetGeometry',
+      'rotation',
+      'text',
+      'textBox',
+      'toCol',
+      'toColOffsetEmu',
+      'toRow',
+      'toRowOffsetEmu',
+      'widthEmu',
+    ],
+  ],
   'Sheet.setCellFormat': [1, ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection']],
   'Sheet.setFormatDefaults': [
     0,
@@ -1525,9 +1632,85 @@ const PATCH_KEYS = Object.freeze({
       'zoomScale',
     ],
   ],
+  'Sheet.updateProtectedRange': [
+    1,
+    ['algorithmName', 'hashValue', 'name', 'password', 'ranges', 'saltValue', 'securityDescriptor', 'spinCount'],
+  ],
+  'Sheet.updateSparklineGroup': [
+    1,
+    [
+      'colorAxis',
+      'colorFirst',
+      'colorHigh',
+      'colorLast',
+      'colorLow',
+      'colorMarkers',
+      'colorNegative',
+      'colorSeries',
+      'dateAxis',
+      'dateAxisRef',
+      'displayHidden',
+      'displayXAxis',
+      'emptyCellsAs',
+      'first',
+      'high',
+      'last',
+      'lineWeight',
+      'low',
+      'manualMax',
+      'manualMin',
+      'markers',
+      'maxAxisType',
+      'minAxisType',
+      'negative',
+      'sparklines',
+      'type',
+    ],
+  ],
   'Sheet.updateThreadedComment': [
     1,
     ['col', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'row', 'text'],
+  ],
+  'Slicer.update': [
+    0,
+    [
+      'anchorKind',
+      'cacheName',
+      'caption',
+      'columnCount',
+      'columnName',
+      'crossFilter',
+      'fromCol',
+      'fromColOffsetEmu',
+      'fromRow',
+      'fromRowOffsetEmu',
+      'name',
+      'objectId',
+      'rowHeightEmu',
+      'sortOrder',
+      'style',
+      'tableName',
+      'toCol',
+      'toColOffsetEmu',
+      'toRow',
+      'toRowOffsetEmu',
+    ],
+  ],
+  'Table.update': [
+    0,
+    [
+      'columns',
+      'displayName',
+      'headerRow',
+      'name',
+      'range',
+      'showColumnStripes',
+      'showFirstColumn',
+      'showLastColumn',
+      'showRowStripes',
+      'styleName',
+      'totalsRow',
+    ],
   ],
   'Workbook.setIterative': [0, ['enabled', 'maxChange', 'maxIterations']],
   'Workbook.setTableStyleDefaults': [0, ['pivotStyle', 'tableStyle']],
@@ -1572,6 +1755,16 @@ const PATCH_NESTED_KEYS = Object.freeze({
     ],
     protection: ['hidden', 'locked'],
   },
+  'Sheet.updateSparklineGroup': {
+    colorAxis: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+    colorFirst: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+    colorHigh: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+    colorLast: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+    colorLow: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+    colorMarkers: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+    colorNegative: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+    colorSeries: ['indexed', 'kind', 'rgb', 'theme', 'tint'],
+  },
 });
 // </facade-tables>
 // Arguments the declarations type `T | null` (or optional) where the raw method
@@ -1599,6 +1792,8 @@ const ABSENT_ARGS = Object.freeze({
 // are `PATCH_KEYS`.
 const bools = (...fields) => Object.fromEntries(fields.map((f) => [f, 'boolean']));
 const numbers = (...fields) => Object.fromEntries(fields.map((f) => [f, 'number']));
+const strings = (...fields) => Object.fromEntries(fields.map((f) => [f, 'string']));
+const objects = (...fields) => Object.fromEntries(fields.map((f) => [f, 'object']));
 const PATCH_FIELDS = Object.freeze({
   'Workbook.setIterative': { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') },
   'PivotCache.setOptions': bools('saveData', 'refreshOnLoad'),
@@ -1659,7 +1854,173 @@ const PATCH_FIELDS = Object.freeze({
     ...numbers('indent', 'pageWrap'),
   },
   'Chart.setLegend': { position: 'number', overlay: 'boolean', hiddenSeries: 'array' },
+  // `range` takes a `SheetRect` or an A1 string, checked by `tableRange`.
+  'Table.update': {
+    ...strings('name', 'displayName'),
+    ...bools('showFirstColumn', 'showLastColumn', 'showRowStripes', 'showColumnStripes', 'headerRow', 'totalsRow'),
+  },
+  'Shape.update': {
+    ...strings('name', 'presetGeometry', 'text'),
+    ...bools('textBox', 'hidden'),
+    ...numbers(
+      'anchorKind',
+      'editAs',
+      'fromRow',
+      'fromCol',
+      'fromRowOffsetEmu',
+      'fromColOffsetEmu',
+      'toRow',
+      'toCol',
+      'toRowOffsetEmu',
+      'toColOffsetEmu',
+      'widthEmu',
+      'heightEmu',
+      'fillRgb',
+      'lineRgb',
+      'lineWidthEmu',
+      'rotation',
+    ),
+  },
+  'Slicer.update': {
+    ...strings('caption'),
+    ...numbers(
+      'columnCount',
+      'rowHeightEmu',
+      'fromRow',
+      'fromCol',
+      'fromRowOffsetEmu',
+      'fromColOffsetEmu',
+      'toRow',
+      'toCol',
+      'toRowOffsetEmu',
+      'toColOffsetEmu',
+      'sortOrder',
+      'crossFilter',
+    ),
+  },
+  'Sheet.updateSparklineGroup': {
+    ...numbers('type', 'minAxisType', 'maxAxisType', 'lineWeight', 'emptyCellsAs'),
+    ...objects(
+      'colorSeries',
+      'colorNegative',
+      'colorAxis',
+      'colorMarkers',
+      'colorFirst',
+      'colorLast',
+      'colorHigh',
+      'colorLow',
+    ),
+    ...bools('markers', 'high', 'low', 'first', 'last', 'negative', 'displayXAxis', 'displayHidden', 'dateAxis'),
+    sparklines: 'array',
+  },
+  'Sheet.updateProtectedRange': {
+    ...strings('name', 'password', 'algorithmName', 'hashValue', 'saltValue', 'securityDescriptor'),
+    spinCount: 'number',
+    ranges: 'array',
+  },
 });
+
+// The nullable keys of the hand-written patches the read-modify-write and drawing setters take. A `ShapePatch`
+// `fillKind` / `lineKind` of `null` is the value the getter returns for a paint the engine cannot write, and
+// leaves the paint unchanged.
+const PATCH_NULLABLE = Object.freeze({
+  'Shape.update': numbers('fillKind', 'lineKind'),
+  'Slicer.update': strings('style'),
+  'Sheet.updateSparklineGroup': { ...numbers('manualMin', 'manualMax'), ...strings('dateAxisRef') },
+  'Sheet.updateProtectedRange': {},
+});
+
+// The anchor keys of a drawing patch, which apply only together with the trigger key that carries the anchor.
+const ANCHOR_PATCH_KEYS = Object.freeze({
+  'Shape.update': [
+    'anchorKind',
+    [
+      'editAs',
+      'fromRow',
+      'fromCol',
+      'fromRowOffsetEmu',
+      'fromColOffsetEmu',
+      'toRow',
+      'toCol',
+      'toRowOffsetEmu',
+      'toColOffsetEmu',
+      'widthEmu',
+      'heightEmu',
+    ],
+  ],
+  'Slicer.update': [
+    'fromRow',
+    ['fromCol', 'fromRowOffsetEmu', 'fromColOffsetEmu', 'toRow', 'toCol', 'toRowOffsetEmu', 'toColOffsetEmu'],
+  ],
+});
+
+/** Checks a drawing patch of `where`: its types and nulls, and no anchor key without the trigger key. */
+function checkDrawingPatch(where, patch) {
+  checkPatch(where, patch, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
+  const [trigger, anchorKeys] = ANCHOR_PATCH_KEYS[where];
+  if (patch[trigger] !== undefined) return;
+  const stray = anchorKeys.find((key) => patch[key] !== undefined);
+  if (stray !== undefined) throw new TypeError(`${where} ${stray} needs ${trigger} in the same patch`);
+}
+
+const COLOR_KEYS = Object.freeze(['indexed', 'kind', 'rgb', 'theme', 'tint']);
+const SPARKLINE_KEYS = Object.freeze(['formula', 'location']);
+
+/**
+ * Refuses an unknown key inside the records a `SparklineGroupPatch` nests: each `Color` and each element of
+ * `sparklines`. A patch that is not an object is left to `checkPatch`.
+ */
+function checkSparklinePatch(where, patch) {
+  if (!isObject(patch)) return;
+  const refuse = (value, accepted, path) => {
+    if (!isObject(value)) return;
+    for (const [key, item] of Object.entries(value)) {
+      if (item !== undefined && !accepted.includes(key)) {
+        throw new TypeError(`${where} argument 2 has no field ${path}.${key}`);
+      }
+    }
+  };
+  for (const [key, value] of Object.entries(patch)) {
+    if (PATCH_FIELDS[where][key] === 'object') refuse(value, COLOR_KEYS, key);
+  }
+  if (Array.isArray(patch.sparklines)) {
+    for (const [i, item] of patch.sparklines.entries()) refuse(item, SPARKLINE_KEYS, `sparklines[${i}]`);
+  }
+}
+
+/**
+ * A `TablePatch.range` as the table's new `CellRect`: an A1 string, unqualified or naming the table's sheet, or
+ * a `SheetRect` on that sheet. Another sheet is `InvalidArgument`.
+ */
+function tableRange(raw, sheet, range, where) {
+  let onSheet;
+  let rect;
+  if (typeof range === 'string') {
+    const ref = raw.parseReference(range);
+    if (ref === null) {
+      throw new FormulonError(
+        StatusCode.InvalidArgument,
+        `${JSON.stringify(range)} is not an A1 range`,
+        `address=${range}`,
+      );
+    }
+    onSheet = ref.sheetName === null ? sheet : raw.getSheetIndex(ref.sheetName);
+    rect = ref.rect;
+  } else if (isObject(range)) {
+    onSheet = requireIndex(range.sheet, `${where} range.sheet`);
+    rect = requireObject(range.rect, `${where} range.rect`);
+  } else {
+    throw new TypeError(`${where} range must be a SheetRect or an A1 string`);
+  }
+  if (onSheet !== sheet) {
+    throw new FormulonError(
+      StatusCode.InvalidArgument,
+      `${where} range is not on the table's sheet`,
+      `sheet_index=${sheet}`,
+    );
+  }
+  return rect;
+}
 
 // How a string key of each `*Ref` kind is matched: the element count, the key
 // of element `i`, the wording of the errors, and the handle class that also
@@ -1926,23 +2287,29 @@ function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
 }
 
 /**
- * Throws `TypeError: <where> argument <n> has no field <key>` for a key that
+ * Throws `TypeError: <where> argument <n> has no field <path>` for a key that
  * neither the patch type of `where` (`Class.method`) nor its getter's record
- * declares (`PATCH_KEYS`); `undefined` is ignored.
+ * declares (`PATCH_KEYS`), and, at each path `PATCH_NESTED_KEYS` lists, for a
+ * key of the object there outside its list; `undefined` is ignored.
  */
 function refuseUnknownKeys(where, patch) {
   const [position, keys] = PATCH_KEYS[where];
-  for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined && !keys.includes(key)) {
-      throw new TypeError(`${where} argument ${position + 1} has no field ${key}`);
+  const nested = PATCH_NESTED_KEYS[where] ?? {};
+  const visit = (value, accepted, prefix) => {
+    for (const [key, item] of Object.entries(value)) {
+      if (item === undefined) continue;
+      const path = `${prefix}${key}`;
+      if (!accepted.includes(key)) throw new TypeError(`${where} argument ${position + 1} has no field ${path}`);
+      if (Object.hasOwn(nested, path) && isObject(item)) visit(item, nested[path], `${path}.`);
     }
-  }
+  };
+  visit(patch, keys, '');
 }
 
 /**
  * Checks a hand-written patch of `where` (`Class.method`): an object whose keys
  * are in `PATCH_KEYS`, where a field of `fields` refuses `null`, one of
- * `nullable` takes `null` to clear, and each typed value has its type.
+ * `nullable` takes `null`, and each typed value has its type.
  */
 function checkPatch(where, patch, fields, nullable = {}) {
   requireObject(patch, `${where} argument ${PATCH_KEYS[where][0] + 1}`);
@@ -1951,11 +2318,23 @@ function checkPatch(where, patch, fields, nullable = {}) {
     const type = fields[key] ?? nullable[key];
     if (value === undefined || type === undefined) continue;
     if (value === null && Object.hasOwn(nullable, key)) continue;
-    if (type === 'array' ? !Array.isArray(value) : typeof value !== type) {
-      throw new TypeError(`${where} ${key} must be ${type === 'array' ? 'an array' : `a ${type}`}`);
+    const mismatch =
+      type === 'array' ? !Array.isArray(value) : type === 'object' ? !isObject(value) : typeof value !== type;
+    if (mismatch) {
+      const noun = type === 'array' || type === 'object' ? `an ${type}` : `a ${type}`;
+      throw new TypeError(`${where} ${key} must be ${noun}`);
     }
   }
   return patch;
+}
+
+/** The keys of `patch` a hand-written setter applies: those of `fields` and `nullable` it gives. */
+function appliedFields(patch, fields, nullable = {}) {
+  const out = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value !== undefined && (Object.hasOwn(fields, key) || Object.hasOwn(nullable, key))) out[key] = value;
+  }
+  return out;
 }
 
 /**
@@ -2201,16 +2580,14 @@ function formatValue(spec, value, label) {
   return value;
 }
 
-// One group of a `CellFormatPatch`, checked: its defined keys, colours as `Color` records.
+// One group of a `CellFormatPatch`, checked: its defined keys, colours as `Color` records. Its keys were
+// checked against `PATCH_NESTED_KEYS` with the whole patch.
 function formatGroup(group, value, label) {
   requireObject(value, label);
-  const path = label.slice(label.indexOf(' ') + 1);
-  const accepted = PATCH_NESTED_KEYS['Sheet.setCellFormat'][path];
   const fields = FORMAT_FIELDS[group];
   const out = {};
   for (const [key, item] of Object.entries(value)) {
     if (item === undefined) continue;
-    if (!accepted.includes(key)) throw new TypeError(`Sheet.setCellFormat argument 2 has no field ${path}.${key}`);
     out[key] = fields[key] === undefined ? item : formatValue(fields[key], item, `${label}.${key}`);
   }
   return out;
@@ -2425,9 +2802,10 @@ function resolveRuntimeId(resolve, message) {
  * `installArgumentForms`).
  *
  * @param {Function} Raw The runtime's raw `Workbook` class.
+ * @param {FinalizationRegistry} [registry] See `buildFormulon`.
  * @returns {Function} The public `Workbook` class.
  */
-function makeFacade(Raw) {
+function makeFacade(Raw, registry) {
   const token = Symbol('formulon.facade');
   let rawOf;
   let liveRaw;
@@ -2481,6 +2859,20 @@ function makeFacade(Raw) {
     get displayName() {
       const [raw, index] = this.#locate();
       return raw.getTable(index).displayName;
+    }
+
+    // `range` reaches the raw method as its `rect`; a `styleName` of `null` as the empty name that removes it.
+    update(patch) {
+      const where = 'Table.update';
+      const fields = PATCH_FIELDS[where];
+      const nullable = { styleName: 'string' };
+      checkPatch(where, patch, fields, nullable);
+      if (patch.range === null) throw new TypeError(`${where} range must be a SheetRect or an A1 string`);
+      const [raw, index] = this.#locate();
+      const input = appliedFields(patch, fields, nullable);
+      if (input.styleName === null) input.styleName = '';
+      if (patch.range !== undefined) input.rect = tableRange(raw, raw.getTable(index).range.sheet, patch.range, where);
+      raw.updateTable(index, input);
     }
   }
 
@@ -2598,6 +2990,17 @@ function makeFacade(Raw) {
       return raw.addPivotFieldItem(sheet, pivot, field, name, visible);
     }
 
+    addFieldSharedItem(field, cacheIndex, options) {
+      const where = 'Pivot.addFieldSharedItem';
+      let visible = true;
+      if (options !== undefined && options !== null) {
+        requireObject(options, `${where} argument 3`);
+        if (options.visible !== undefined) visible = requireBoolean(options.visible, `${where} visible`);
+      }
+      const [raw, sheet, pivot] = this.#locate();
+      return raw.addPivotFieldSharedItem(sheet, pivot, field, cacheIndex, visible);
+    }
+
     setGrandTotals(patch) {
       const where = 'Pivot.setGrandTotals';
       requireObject(patch, `${where} argument 1`);
@@ -2694,6 +3097,22 @@ function makeFacade(Raw) {
       const [kind, args] = cacheValue('PivotCache.setRecordValue', 3, value, options);
       this.#raw()[`setPivotCacheRecord${kind}`](this.#cacheId, record, field, ...args);
     }
+
+    // `null` removes the source; an object writes one with the attributes it gives (`null` is one left off).
+    setWorksheetSource(source) {
+      const where = 'PivotCache.setWorksheetSource';
+      if (source === null) return this.#raw().setPivotCacheWorksheetSource(this.#cacheId, { present: false });
+      requireObject(source, `${where} argument 1`);
+      const keys = ['ref', 'sheet', 'name'];
+      const input = { present: true };
+      // Each value is read once.
+      for (const [key, value] of Object.entries(source)) {
+        if (value === undefined) continue;
+        if (!keys.includes(key)) throw new TypeError(`${where} argument 1 has no field ${key}`);
+        if (value !== null) input[key] = requireString(value, `${where} ${key}`);
+      }
+      this.#raw().setPivotCacheWorksheetSource(this.#cacheId, input);
+    }
   }
 
   class Drawing {
@@ -2766,7 +3185,9 @@ function makeFacade(Raw) {
           : requireBoolean(source[field], `${where} ${field}`);
       const args = [
         requireString(source.source, `${where} source`),
-        requireInteger(source.direction, `${where} direction`),
+        source.direction === undefined
+          ? ChartSeriesDirection.Auto
+          : requireInteger(source.direction, `${where} direction`),
       ];
       const headerRow = flag('headerRow');
       const headerColumn = flag('headerColumn');
@@ -2776,9 +3197,27 @@ function makeFacade(Raw) {
     }
   }
 
-  class Shape extends Drawing {}
+  // The raw update applies exactly the keys it is given; the record keys it cannot set are dropped first.
+  class Shape extends Drawing {
+    update(patch) {
+      const where = 'Shape.update';
+      checkDrawingPatch(where, patch);
+      const input = appliedFields(patch, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
+      for (const key of ['fillKind', 'lineKind']) if (input[key] === null) delete input[key];
+      const [raw, sheet, id] = drawingState.locate(this);
+      raw.updateShape(sheet, id, input);
+    }
+  }
 
-  class Slicer extends Drawing {}
+  class Slicer extends Drawing {
+    update(patch) {
+      const where = 'Slicer.update';
+      checkDrawingPatch(where, patch);
+      const input = appliedFields(patch, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
+      const [raw, sheet, id] = drawingState.locate(this);
+      raw.updateSlicer(sheet, id, input);
+    }
+  }
 
   // The handle class of a drawing object, from its `DrawingProperties` record.
   function drawingClass(raw, sheet, record) {
@@ -3283,6 +3722,74 @@ function makeFacade(Raw) {
       return rawOf(this.#workbook).convertColumnPtToChars(this.#current(), mode, pt);
     }
 
+    getCellRectPt(range, mode) {
+      mode = geometryMode(mode, 'Sheet.getCellRectPt', 2);
+      return rawOf(this.#workbook).getCellRectPt(this.#current(), range, mode);
+    }
+
+    getWidthModel(mode) {
+      mode = geometryMode(mode, 'Sheet.getWidthModel', 1);
+      return rawOf(this.#workbook).getWidthModel(this.#current(), mode);
+    }
+
+    // The raw update writes every field, so the patch lands on the group read back; without `sparklines` the
+    // raw call keeps the group's own.
+    updateSparklineGroup(groupIndex, patch) {
+      const where = 'Sheet.updateSparklineGroup';
+      checkSparklinePatch(where, patch);
+      this.#patchOver(
+        where,
+        patch,
+        'sparklines',
+        (raw, sheet) => raw.getSparklineGroup(sheet, groupIndex),
+        (raw, sheet, group) => raw.updateSparklineGroup(sheet, groupIndex, group),
+      );
+    }
+
+    // As `updateSparklineGroup`; without `ranges` the raw call keeps the stored ranges, unparsed ones included.
+    updateProtectedRange(protectedRange, patch) {
+      const where = 'Sheet.updateProtectedRange';
+      this.#patchOver(
+        where,
+        patch,
+        'ranges',
+        (raw, sheet) => raw.getProtectedRange(sheet, protectedRange),
+        (raw, sheet, range) => raw.updateProtectedRange(sheet, protectedRange, range),
+      );
+    }
+
+    // Lays the checked patch of `where` over the record `read` returns and hands it to `write`; the record's
+    // `list` key reaches `write` only when the patch gives it. An empty patch writes nothing.
+    #patchOver(where, patch, list, read, write) {
+      const fields = PATCH_FIELDS[where];
+      const nullable = PATCH_NULLABLE[where];
+      checkPatch(where, patch, fields, nullable);
+      const given = appliedFields(patch, fields, nullable);
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const record = { ...read(raw, sheet), ...given };
+      if (Object.keys(given).length === 0) return;
+      if (given[list] === undefined) delete record[list];
+      write(raw, sheet, record);
+    }
+
+    addDataTable(input) {
+      const where = 'Sheet.addDataTable';
+      requireObject(input, `${where} argument 1`);
+      const raw = rawOf(this.#workbook);
+      const spec = { rect: typeof input.rect === 'string' ? rangeAddress(raw, input.rect) : input.rect };
+      for (const key of ['rowInput', 'colInput']) {
+        const cell = input[key];
+        if (typeof cell === 'string') {
+          const { firstRow, firstCol } = cellAddress(raw, cell);
+          spec[key] = { row: firstRow, col: firstCol };
+        } else if (present(cell)) {
+          spec[key] = cell;
+        }
+      }
+      raw.addDataTable(this.#current(), spec);
+    }
+
     setValue(row, col, value) {
       if (value === null) return this.setBlank(row, col);
       switch (typeof value) {
@@ -3398,11 +3905,14 @@ function makeFacade(Raw) {
   }
 
   class Workbook {
-    #raw;
+    #handle;
     #sheets;
     #tables = new Map();
     #pivotCaches = new Map();
     #disposed = false;
+    #deleted = false;
+    // The registry's unregister token: an object of its own, so whoever sees the token cannot reach the workbook.
+    #registration = {};
 
     constructor(key, raw) {
       if (key !== token) {
@@ -3410,8 +3920,9 @@ function makeFacade(Raw) {
           'Workbook has no public constructor; use Workbook.load, createDefault, createEmpty or createForProfile',
         );
       }
-      this.#raw = raw;
+      this.#handle = raw;
       this.#sheets = [];
+      registry?.register(this, raw, this.#registration);
       const count = raw.getSheetCount();
       for (let i = 0; i < count; i++) this.#sheets.push(sheetState.create(this, i, raw.getSheetName(i)));
     }
@@ -3448,9 +3959,23 @@ function makeFacade(Raw) {
       return this.#disposed;
     }
 
+    // With a registry (the WASM entries), the raw object is deleted here as a collection would delete it.
     dispose() {
-      this.#raw.dispose();
+      if (this.#disposed) return;
+      this.#handle.dispose();
       this.#disposed = true;
+      if (registry !== undefined) {
+        registry.unregister(this.#registration);
+        this.#handle.delete();
+        this.#deleted = true;
+      }
+    }
+
+    // The raw workbook. Once `dispose()` has deleted it, every access throws `BindingInvalidHandle`; a raw
+    // object that survives its disposal answers for itself.
+    get #raw() {
+      if (this.#deleted) this.#alive();
+      return this.#handle;
     }
 
     #alive() {

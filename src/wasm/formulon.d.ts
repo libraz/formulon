@@ -283,7 +283,7 @@ export class FormulonError extends Error {
 }
 
 /** Per-call telemetry returned by `Workbook.recalcParallel`. The five
- * scheduler counters are `uint64_t` in the C ABI but are exposed as
+ * scheduler counters are 64-bit counters exposed as
  * JavaScript `number` values. They are exact through
  * `Number.MAX_SAFE_INTEGER` (2^53 - 1). */
 export interface ParallelRecalcStats {
@@ -474,7 +474,8 @@ export interface TableColumn {
 
 /** Return type of `Table.getProperties()`. `styleName` is `null` without a named
  *  style and may name a custom style (`getTableStyle`); the toggles read false when the table has no
- *  `<tableStyleInfo>`. The row counts are 0 or 1. */
+ *  `<tableStyleInfo>`. `headerRow` and `totalsRow` say whether the table has a header row and a
+ *  totals row. */
 export interface TableProperties {
   readonly name: string;
   readonly displayName: string;
@@ -485,8 +486,8 @@ export interface TableProperties {
   readonly showLastColumn: boolean;
   readonly showRowStripes: boolean;
   readonly showColumnStripes: boolean;
-  readonly headerRowCount: number;
-  readonly totalsRowCount: number;
+  readonly headerRow: boolean;
+  readonly totalsRow: boolean;
   readonly columns: readonly TableColumn[];
 }
 
@@ -511,23 +512,21 @@ export interface TableInput {
   totalsRow?: boolean;
 }
 
-/** Partial table metadata update. Omitted fields preserve their existing
- * values; an empty `styleName` explicitly removes the table style, while a
- * new name keeps the four toggles. When omitted, `rect` also preserves the
- * current range. `headerRow` and
- * `totalsRow` update their flags only when supplied; turning `totalsRow` on
- * writes each column's totals cell on the last row of the range (see
- * `Table.setColumnTotals`). `name` renames the table
- * (`displayName` follows it unless supplied), with `addTable`'s
- * uniqueness rule, and rewrites structured references to the old name in
- * cell, defined-name, conditional-format, validation and chart formulas; a
- * bare table name used as a reference is not rewritten. The update is
- * all-or-nothing. */
-export interface TableUpdateInput {
-  rect?: CellRect;
+/** Partial table metadata update (`Table.update`). An omitted key leaves the field unchanged; `styleName: null`
+ * removes the table style (the only key that accepts `null`), and a new `name` keeps the four toggles.
+ * `range` takes a {@link SheetRect} or an A1 string and resizes the table; its `sheet` must be the table's
+ * own sheet, otherwise the call fails with `StatusCode.InvalidArgument`. `headerRow` and `totalsRow` update
+ * their flags only when supplied; turning `totalsRow` on writes each column's totals cell on the last row
+ * of the range (see `Table.setColumnTotals`). `name` renames the table (`displayName` follows it unless
+ * supplied), with `addTable`'s uniqueness rule, and rewrites structured references to the old name in
+ * cell, defined-name, conditional-format, validation and chart formulas; a bare table name used as a
+ * reference is not rewritten. The update is all-or-nothing. The record `Table.getProperties()` returns is
+ * also accepted: `columns` is ignored. */
+export interface TablePatch {
+  range?: SheetRect | string;
   name?: string;
   displayName?: string;
-  styleName?: string;
+  styleName?: string | null;
   showFirstColumn?: boolean;
   showLastColumn?: boolean;
   showRowStripes?: boolean;
@@ -883,9 +882,10 @@ export const PivotReportLayout: Readonly<{
 /** Union of the {@link PivotReportLayout} ordinals. */
 export type PivotReportLayout = 0 | 1 | 2;
 
-/** Worksheet source metadata for a pivot cache. */
+/** Worksheet source metadata for a pivot cache (`PivotCache.setWorksheetSource`). Omitted keys leave the
+ *  attribute off; an empty object writes a source with no attributes. Pass `null` to
+ *  `setWorksheetSource` to remove the source. */
 export interface PivotWorksheetSourceInput {
-  present: boolean;
   ref?: string;
   sheet?: string;
   name?: string;
@@ -927,7 +927,7 @@ export interface PivotFieldInput {
  *  `Pivot.setDataField`. A `showAsBaseField` / `showAsBaseItem` that is omitted or `null` is unset. */
 export interface PivotDataFieldInput {
   /** Display name (key for GETPIVOTDATA). Omit it to let the
-   *  engine name the data field from the workbook profile's pivot wording,
+   *  engine name the data field from the Excel profile's pivot wording,
    *  e.g. `"Sum of Sales"` (en-US) or `"合計 / Sales"` (ja-JP). That needs
    *  `fieldIndex` to be in range. */
   readonly name?: string;
@@ -1295,7 +1295,7 @@ export const CollationStrength: Readonly<{
 export type CollationStrength = 0 | 1 | 2;
 
 /**
- * Full formula-behaviour profile id: `mac` or `win` combined with one of
+ * Excel profile id (the full formula-behaviour profile): `mac` or `win` combined with one of
  * `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR`, `th_TH`, `es_ES`,
  * `es_MX`, `pt_BR`, `ru_RU`, `zh_TW`, `it_IT`, `nl_NL`
  * (for example `win-365-en_US`). New workbooks default to `win-365-en_US`.
@@ -1334,8 +1334,9 @@ export type ExcelProfileId =
   | 'win-365-nl_NL';
 
 /**
- * A wall-clock reading in local civil fields, as read back from
- * {@link Workbook.getPinnedNow}. `month` is 1-12 and `day` is 1-31; the other
+ * A wall-clock reading in local civil fields: read back from {@link Workbook.getPinnedNow}, passed to
+ * `setPinnedNow`, and the argument and result of `Formulon.convertCivilToSerial` /
+ * `convertSerialToCivil`. `month` is 1-12 and `day` is 1-31; the other
  * fields follow the usual 24-hour ranges.
  */
 export interface CivilTime {
@@ -1800,6 +1801,13 @@ export interface ProtectedRange {
   readonly securityDescriptor: string;
 }
 
+/** Argument of `updateProtectedRange`: every {@link ProtectedRange} key, each optional. A key left out is
+ *  unchanged and no key accepts `null` (a `TypeError`); the empty string clears `password`,
+ *  `algorithmName`, `hashValue`, `saltValue` and `securityDescriptor`. Leaving `ranges` out keeps the stored
+ *  ranges, including any the engine cannot parse; an empty `ranges` fails with `StatusCode.InvalidArgument`.
+ *  A `ProtectedRange` read back passes as is; any unknown key fails with a `TypeError`. */
+export type ProtectedRangePatch = Patch<ProtectedRange>;
+
 /** Sheet-wide comment entry returned by `listComments(sheet)`. Extends
  *  `Comment` with the anchor cell so comments on otherwise-empty
  *  cells can be discovered without already knowing their `(row, col)`. */
@@ -1874,7 +1882,7 @@ export interface CellNode {
   readonly col: number;
 }
 
-/** One error value's spelling under a profile: the canonical (en-invariant)
+/** One error value's spelling under an Excel profile: the canonical (en-invariant)
  *  text and the profile's Excel spelling. `measured` is `false` when the
  *  localized spelling is assumed rather than captured from Excel. */
 export interface LocaleErrorName {
@@ -3610,7 +3618,7 @@ export interface ShapeProperties {
   readonly hidden: boolean;
 }
 
-/** Fields `Sheet.addShape` / `Shape.update` apply; a key left out (or `null`) is not applied.
+/** Fields `Sheet.addShape` applies and the keys {@link ShapePatch} takes; a key left out is not applied.
  *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`; a
  *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with
  *  `fillRgb` / `lineRgb`) or `None`. An insert needs `anchorKind`, defaults `presetGeometry` to
@@ -3642,6 +3650,14 @@ export interface ShapeInput {
   hidden?: boolean;
 }
 
+/** Argument of `Shape.update`: every {@link ShapeInput} key, each optional. A key left out is unchanged and
+ *  no key accepts `null` to clear, except `fillKind` / `lineKind`, where `null` also means unchanged so that
+ *  the value {@link ShapeProperties} returns can be passed back as is. Any other `null` fails with a
+ *  `TypeError`. The anchor keys (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`) need `anchorKind` in the
+ *  same patch, otherwise the call fails with a `TypeError`. `objectId` and `kind` of a
+ *  {@link ShapeProperties} are ignored; any other unknown key fails with a `TypeError`. */
+export type ShapePatch = Patch<ShapeInput>;
+
 /** Return type of `Slicer.getProperties()`: a table slicer of a worksheet. `objectId` is the slicer's frame in
  *  the sheet's drawing; the anchor fields read as in {@link DrawingProperties}, with `to*` zero unless the
  *  anchor is two-cell. `cacheName`, `tableName` and `columnName`
@@ -3670,13 +3686,35 @@ export interface SlicerProperties {
   readonly toColOffsetEmu: number;
 }
 
-/** Fields `Sheet.addSlicer` / `Slicer.update` apply; a key left out (or `null`) is not applied.
- *  Giving `fromRow` applies the whole two-cell anchor (`from*`, `to*`). `addSlicer` needs the
- *  anchor and defaults `name` and `caption` to the column name (the name is made unique),
- *  `rowHeightEmu` to 241300 and `columnCount` to 1; `name` cannot be updated. A `null` (or empty)
- *  `style` removes the style. */
+/** Fields `Sheet.addSlicer` applies; a key left out is not applied. Giving `fromRow` applies the whole
+ *  two-cell anchor (`from*`, `to*`). `addSlicer` needs the anchor and defaults `name` and `caption` to the
+ *  column name (the name is made unique), `rowHeightEmu` to 241300 and `columnCount` to 1; `name`
+ *  cannot be updated (see {@link SlicerPatch}). A `null` (or empty) `style` removes the style. */
 export interface SlicerInput {
   name?: string;
+  caption?: string;
+  style?: string | null;
+  columnCount?: number;
+  rowHeightEmu?: number;
+  fromRow?: number;
+  fromCol?: number;
+  fromRowOffsetEmu?: number;
+  fromColOffsetEmu?: number;
+  toRow?: number;
+  toCol?: number;
+  toRowOffsetEmu?: number;
+  toColOffsetEmu?: number;
+  sortOrder?: SlicerSortOrder;
+  crossFilter?: SlicerCrossFilter;
+}
+
+/** Argument of `Slicer.update`: every {@link SlicerInput} key except `name`, each optional. A key left out is
+ *  unchanged and `style: null` removes the style (the only key that accepts `null`; any other `null` fails
+ *  with a `TypeError`). Giving `fromRow` applies the whole two-cell anchor (`from*`, `to*`); `to*` or an offset
+ *  without `fromRow` fails with a `TypeError`. The keys of a {@link SlicerProperties} that cannot be updated
+ *  (`name`, `objectId`, `cacheName`, `tableName`, `columnName`, `anchorKind`) are ignored; any other unknown key
+ *  fails with a `TypeError`. */
+export interface SlicerPatch {
   caption?: string;
   style?: string | null;
   columnCount?: number;
@@ -3714,11 +3752,12 @@ export interface DataTable {
 }
 
 /** Argument of `addDataTable`: the result range plus the input cells (`{ row, col }`). Give `rowInput`
- *  or `colInput` for a one-variable table, both for a two-variable one. */
+ *  or `colInput` for a one-variable table, both for a two-variable one. `rect` and each input cell also take
+ *  an A1 string (`'B2:D6'`, `'A1'`); an input cell string names a single cell. */
 export interface DataTableInput {
-  rect: CellRect;
-  rowInput?: DataTableInputCell | null;
-  colInput?: DataTableInputCell | null;
+  rect: CellRect | string;
+  rowInput?: DataTableInputCell | string | null;
+  colInput?: DataTableInputCell | string | null;
 }
 
 /** One sparkline: the data `formula` (a sheet-qualified range without `=`) and the
@@ -3760,10 +3799,8 @@ export interface SparklineGroup {
   readonly sparklines: readonly Sparkline[];
 }
 
-/** Input of `addSparklineGroup` / `updateSparklineGroup`: every modelled field, each
- *  defaulting as a new line group does when left out. `sparklines` is required by an add; on an update it
- *  replaces the group's sparklines when present and keeps them when absent, and must not be empty. A
- *  `SparklineGroup` read back passes as is. */
+/** Input of `addSparklineGroup`: every modelled field, each defaulting as a new line group does when left
+ *  out. `sparklines` is required by an add. A `SparklineGroup` read back passes as is. */
 export interface SparklineGroupInput {
   readonly type?: SparklineType;
   readonly colorSeries?: Color;
@@ -3793,9 +3830,25 @@ export interface SparklineGroupInput {
   readonly sparklines?: readonly Sparkline[];
 }
 
+/** Argument of `updateSparklineGroup`: every {@link SparklineGroupInput} key, each optional. A key left out is
+ *  unchanged; `manualMin`, `manualMax` and `dateAxisRef` accept `null` to clear them and no other key does
+ *  (a `TypeError`). `sparklines` replaces the group's sparklines when present, keeps them when absent and
+ *  must not be empty (`StatusCode.InvalidArgument`). A `SparklineGroup` read back passes as is; any
+ *  unknown key fails with a `TypeError`. */
+export type SparklineGroupPatch = Patch<SparklineGroupInput>;
+
+/** Kind of a {@link ChartDataSource}. */
+export const ChartSourceKind: Readonly<{
+  None: 0;
+  Ref: 1;
+  Literal: 2;
+}>;
+/** Union of the {@link ChartSourceKind} ordinals. */
+export type ChartSourceKind = 0 | 1 | 2;
+
 /** One series input: nothing, a range reference, or literal points. */
 export interface ChartDataSource {
-  readonly kind: 'none' | 'ref' | 'literal';
+  readonly kind: ChartSourceKind;
   readonly formula: string;
   readonly literal: readonly (number | string)[];
 }
@@ -3999,11 +4052,11 @@ export interface ChartInsertInput {
   placement?: PictureInput;
 }
 
-/** Argument of `Chart.setSource`: the source range text and its series direction. A header flag that is
- *  omitted or `null` follows Excel's detection. */
+/** Argument of `Chart.setSource`: the source range text and its series direction (default `Auto`). A header
+ *  flag that is omitted or `null` follows Excel's detection. */
 export interface ChartSourceInput {
   source: string;
-  direction: ChartSeriesDirection;
+  direction?: ChartSeriesDirection;
   headerRow?: boolean | null;
   headerColumn?: boolean | null;
 }
@@ -4111,7 +4164,7 @@ export interface ChartPreviewOverridesInput {
 }
 
 /** Options of `Sheet.restoreDrawing`. With `newId` the capture is added on top as a
- *  copy with a fresh id; otherwise a picture with the same id is replaced. */
+ *  copy with a fresh id; otherwise the object with the same id is replaced. */
 export interface RestoreDrawingOptions {
   newId?: boolean;
 }
@@ -4321,15 +4374,26 @@ export type ProtectedRangeRef = number | string;
 
 /** Workbook handle: the workbook-scope operations, the `Sheet` handles that carry the sheet-scope ones, and the
  *  `Table` and `PivotCache` handles of its tables and pivot caches.
- *  Release it with `dispose()` (or a `using` declaration) when finished. Create one with the static factories of
+ *  Release it with `dispose()` (or a `using` declaration) when finished: `dispose()` frees the handle at once. A
+ *  workbook that is dropped without it may be freed when the garbage collector reclaims it, in both packages;
+ *  that is best-effort, so rely on `dispose()` for a timely release. Create one with the static factories of
  *  `Formulon.Workbook`; `new Workbook()` throws `TypeError`.
  *
  *  Rows, columns and every index are 0-based; a row / column pair is `(row, col)`.
  *
  *  A method that cannot complete throws {@link FormulonError}, whose `code` is a `StatusCode`; a
  *  "fails with" note below names that code by its `StatusCode` key. An argument of the wrong type or outside its
- *  integer range throws `TypeError` / `RangeError` before any engine work. A method that looks
- *  something up returns `null` when nothing has that key.
+ *  integer range throws `TypeError` / `RangeError` before any engine work; an argument that is well formed
+ *  but that the engine rejects fails with `StatusCode.InvalidArgument`.
+ *
+ *  Lookups follow one rule. A getter keyed by a natural key (`getDefinedName`, ...) returns `null` when nothing
+ *  has that key. An entry to a handle or a result (`sheet()`, `table()`, `pivot()`, `pivotCache()`, the
+ *  `drawing()` family, `Chart.getData`) fails with `StatusCode.NotFound`. An index past the end fails with
+ *  `StatusCode.IndexOutOfRange`.
+ *
+ *  An `update<X>` method is always a partial update: it takes an `<X>Patch`, and a key left out is unchanged.
+ *  A `set<X>` method follows its argument type: `R` replaces the whole value, `<R>Patch` updates part of it, and
+ *  `<R>Input` is an input with defaults.
  *
  *  Reads return the values as of the last full recalc (`recalc` / `recalcParallel`); after a change, call one
  *  first. `hasDirtyCells()` tells whether a change is pending.
@@ -4357,7 +4421,13 @@ export interface Workbook {
 
   /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`).
    *  An archive or writer failure throws with one of the `StatusCode.Io*` codes; an unknown `format`
-   *  value with `StatusCode.InvalidArgument`. */
+   *  value with `StatusCode.InvalidArgument`.
+   *
+   *  @example
+   *  ```ts
+   *  const xlsx = wb.save(); // Uint8Array; write it to a file or upload it
+   *  const xlsb = wb.save(formulon.WorkbookFormat.Xlsb);
+   *  ``` */
   save(format?: WorkbookFormat): Uint8Array;
   /** Serialises like `save` and reports the loss / defer counters of the write. */
   saveWithDiagnostics(format?: WorkbookFormat): SaveDiagnostics;
@@ -4365,7 +4435,12 @@ export interface Workbook {
   getDiagnostics(): ReadDiagnostics;
   /** The handle of one sheet, by `SheetRef`. The workbook keeps one `Sheet` per sheet, so every lookup of the same
    *  sheet returns the same object. A name no sheet has fails with `StatusCode.NotFound`, an index past the last
-   *  sheet with `StatusCode.SheetIndexOutOfRange`; a negative or fractional index throws `RangeError`. */
+   *  sheet with `StatusCode.SheetIndexOutOfRange`; a negative or fractional index throws `RangeError`.
+   *
+   *  @example
+   *  ```ts
+   *  const ws = wb.sheet('Sheet1'); // or wb.sheet(0)
+   *  ``` */
   sheet(key: SheetRef): Sheet;
   /** Every sheet's handle, in sheet order; a new array on each call. */
   listSheets(): readonly Sheet[];
@@ -4402,17 +4477,25 @@ export interface Workbook {
   /** Recalculates all dirty cells serially on the caller thread.
    *
    *  When an installed `IterativeProgressCallback` throws, the pass stops and this call rethrows
-   *  that same exception. */
+   *  that same exception.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setFormula('B1', '=SUM(A1:A3)');
+   *  wb.recalc();
+   *  const total = ws.getValue('B1'); // read after the recalc
+   *  ``` */
   recalc(): void;
   /**
    * Recalculates all dirty cells using the parallel SCC scheduler and returns
    * per-call telemetry. This call is synchronous: it returns after all
-   * workers have joined. `threadCount` must be a finite integer: 0 selects
+   * workers have joined. `threadCount` is an integer: 0 selects
    * automatic detection (capped at 8), 1 keeps evaluation on the caller and
-   * starts no workers, and 2..8 set the worker upper bound. Missing,
-   * fractional, non-finite, negative, or above-8 values fail with
+   * starts no workers, and 2..8 set the worker upper bound. A missing or
+   * non-number argument throws `TypeError`; a fractional, non-finite or
+   * negative one throws `RangeError`; a value above 8 fails with
    * `StatusCode.InvalidArgument`.
-   * The `uint64_t` counters in `stats` are JavaScript numbers and are exact
+   * The 64-bit counters in `stats` are JavaScript numbers and are exact
    * through `Number.MAX_SAFE_INTEGER` (2^53 - 1).
    * As with `recalc`, an exception thrown by an `IterativeProgressCallback` is
    * rethrown from this call.
@@ -4502,11 +4585,11 @@ export interface Workbook {
    *  releases the pin so the clock follows the host again; releasing an unpinned workbook does nothing. */
   setPinnedNow(time: CivilTime | null): void;
 
-  /** Full formula-behaviour profile id. Defaults to `win-365-en_US`.
+  /** The workbook's Excel profile id. Defaults to `win-365-en_US`.
    * Pick another locale or host with any {@link ExcelProfileId}.
    */
   getExcelProfileId(): ExcelProfileId;
-  /** Selects the formula-behaviour profile; `StatusCode.InvalidArgument` for an id that is not an {@link ExcelProfileId}.
+  /** Selects the Excel profile; `StatusCode.InvalidArgument` for an id that is not an {@link ExcelProfileId}.
    *  Cached formula values are not recomputed until the next `recalc()`. */
   setExcelProfileId(profileId: ExcelProfileId): void;
   /** File name the workbook is shown under, extension included and without a directory; `null` when unset.
@@ -4538,7 +4621,17 @@ export interface Workbook {
    *  table with `StatusCode.IndexOutOfRange`. */
   table(table: TableRef): Table;
   /** Creates a worksheet table and returns its handle.
-   *  `input.columns` must hold one unique, non-empty header per column of `input.range`. */
+   *  `input.columns` must hold one unique, non-empty header per column of `input.range`.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setValues('A1', [['Item', 'Qty'], ['Apple', 3]]);
+   *  const table = wb.addTable({
+   *    range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
+   *    name: 'Sales',
+   *    columns: ['Item', 'Qty'],
+   *  });
+   *  ``` */
   addTable(input: TableInput): Table;
   /** Removes the table `table`; its handle then fails with `StatusCode.NotFound`. */
   removeTable(table: TableRef): void;
@@ -4706,8 +4799,8 @@ export interface Workbook {
    *  element. */
   setWorkbookProtection(protection: WorkbookProtection | null): void;
 
-  /** Parses `text` as `INDIRECT` reads a reference under the workbook's profile: A1, or R1C1 with the
-   *  profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
+  /** Parses `text` as `INDIRECT` reads a reference under the workbook's Excel profile: A1, or R1C1 with the
+   *  Excel profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
    *  range in either order and whole columns / rows. Returns `null` for anything else
    *  (3D, external, named, structured or multi-area references, surrounding whitespace, a sheet name over 31
    *  characters, an R1C1 relative axis without a base). Throws `TypeError` when only one of `baseRow` /
@@ -4735,7 +4828,13 @@ export interface Workbook {
  *  or one cell as 1 x 1) read the same way. A row or column span (`first, last`, or a start and a `count`) also
  *  takes one A1 span string read the same way: columns as `B` or `B:D`, rows as `3` or `3:5`, `$` allowed. A
  *  string that does not parse, names a sheet, or is not whole columns (for a column method) or whole rows (for
- *  a row method) fails with `StatusCode.InvalidArgument`; the whole sheet (`A:XFD`, `1:1048576`) is both. */
+ *  a row method) fails with `StatusCode.InvalidArgument`; the whole sheet (`A:XFD`, `1:1048576`) is both.
+ *
+ *  Spans come in two forms. A method that inserts or deletes rows or columns takes `(start, count)`; every other
+ *  row or column span is the closed interval `(first, last)`. The parameter names say which form a method uses.
+ *
+ *  To read cells, pick by shape: `getValues` for a dense grid of values, `listCells` for the populated cells of a
+ *  range, and `getCellsInRange` to page through a large range with a cursor. */
 export interface Sheet {
   /** The workbook this sheet belongs to. */
   readonly workbook: Workbook;
@@ -4789,7 +4888,13 @@ export interface Sheet {
   /** `setBlank` at the A1 address `a1`. */
   setBlank(a1: string): void;
   /** Stores a formula at `(row, col)`. Fails with `StatusCode.ParserUnexpectedToken` and changes nothing when the
-   *  text does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier. */
+   *  text does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setFormula('C1', '=A1*B1'); // or ws.setFormula(0, 2, '=A1*B1')
+   *  wb.recalc();
+   *  ``` */
   setFormula(row: number, col: number, formula: string): void;
   /** `setFormula` at the A1 address `a1`. */
   setFormula(a1: string, formula: string): void;
@@ -4798,7 +4903,14 @@ export interface Sheet {
    *  text; use `setFormula` for formulas), a `boolean` through `setBool` and `null` through `setBlank`. A
    *  {@link Value} is stored by its `kind`; an `ErrorValue` goes through `setError`. `undefined`, a
    *  `bigint`, a symbol, an array, any other object, and an `ArrayValue` / `RefValue` / `LambdaValue`
-   *  throw `TypeError`. The value `getValue` returns stores back unchanged for every scalar kind. */
+   *  throw `TypeError`. The value `getValue` returns stores back unchanged for every scalar kind.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setValue('A1', 42);
+   *  ws.setValue('A2', 'text');
+   *  ws.setValue('A3', null); // blank
+   *  ``` */
   setValue(row: number, col: number, value: number | string | boolean | null | Value): void;
   /** `setValue` at the A1 address `a1`. */
   setValue(a1: string, value: number | string | boolean | null | Value): void;
@@ -4806,19 +4918,38 @@ export interface Sheet {
   /** Writes `values` (rows of `setValue` values, row-major) into the block whose top-left cell is `(row, col)`.
    *  Every element's type, NaN / infinity, equal row lengths and the block's fit in the sheet are checked first,
    *  and a violation writes nothing. A cell the engine refuses (inside an array formula or a data table) throws
-   *  with the cells before it already written. An empty `values` or empty rows write nothing. */
+   *  with the cells before it already written. An empty `values` or empty rows write nothing.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setValues('A1', [
+   *    ['Item', 'Qty'],
+   *    ['Apple', 3],
+   *  ]);
+   *  ``` */
   setValues(row: number, col: number, values: readonly (readonly (number | string | boolean | null | Value)[])[]): void;
   /** `setValues` at the A1 address `a1`. */
   setValues(a1: string, values: readonly (readonly (number | string | boolean | null | Value)[])[]): void;
 
   /** Reads the cell's cached value, as of the last full recalc. Fails with `StatusCode.InvalidArgument` when
-   *  `row` or `col` is out of range. */
+   *  `row` or `col` is out of range.
+   *
+   *  @example
+   *  ```ts
+   *  const v = ws.getValue('A1');
+   *  if (v.kind === formulon.ValueKind.Number) console.log(v.number);
+   *  ``` */
   getValue(row: number, col: number): Value;
   /** `getValue` at the A1 address `a1`. */
   getValue(a1: string): Value;
   /** Reads the cached values of `range` as a dense row-major grid, as of the last full recalc: an empty cell is
    *  Blank and a spilled cell holds its spilled value. A range over 4,194,304 (2^22) cells fails with
-   *  `StatusCode.InvalidArgument`. */
+   *  `StatusCode.InvalidArgument`.
+   *
+   *  @example
+   *  ```ts
+   *  const grid = ws.getValues('A1:B2'); // grid[row][col] is a Value
+   *  ``` */
   getValues(range: CellRect | string): readonly (readonly Value[])[];
 
   /** The stored A1 formula (leading `=` included), or `null` for a cell that holds none. The text is
@@ -4842,7 +4973,14 @@ export interface Sheet {
    *  whole sheet when `range` is omitted, row-major. */
   listCells(range?: CellRect | string): readonly RangeCell[];
   /** The text Excel displays for the cell, from its value (as of the last full recalc) and number format under
-   *  the workbook's date system. */
+   *  the workbook's date system.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setNumber('A1', 0.256);
+   *  ws.setCellFormat('A1', { numberFormat: '0.0%' });
+   *  ws.getDisplayText('A1').text; // '25.6%'
+   *  ``` */
   getDisplayText(row: number, col: number): DisplayText;
   /** `getDisplayText` at the A1 address `a1`. */
   getDisplayText(a1: string): DisplayText;
@@ -4854,7 +4992,12 @@ export interface Sheet {
    *  top-left element (not Excel implicit intersection or spilling; use
    *  `evaluateFormulaArray` for the whole multi-cell result).
    *  Note: a self-reference reads the target cell's cached value rather than
-   *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
+   *  raising `#REF!`, since the ad-hoc formula never joins the dep graph.
+   *
+   *  @example
+   *  ```ts
+   *  const v = ws.evaluateFormula('A1', '=SUM(1,2,3)'); // { kind: ValueKind.Number, number: 6 }
+   *  ``` */
   evaluateFormula(row: number, col: number, formula: string): Value;
   /** `evaluateFormula` at the A1 address `a1`. */
   evaluateFormula(a1: string, formula: string): Value;
@@ -5040,8 +5183,8 @@ export interface Sheet {
   /** Adds a slicer over column `column` (0-based) of table `table` and returns its handle. It creates the slicer
    *  and cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. */
   addSlicer(table: TableRef, column: number, spec: SlicerInput): Slicer;
-  /** Puts a `snapshot` capture back and returns the object's handle: in place of an object with the same id at
-   *  its recorded position, where a handle of that id addresses it again, or as a copy on top with `newId`. */
+  /** Puts a `snapshot` capture of a picture, chart or shape back and returns the object's handle: in place of
+   *  an object with the same id at its recorded position, where a handle of that id addresses it again, or as a copy on top with `newId`. */
   restoreDrawing(bytes: Uint8Array, opts?: RestoreDrawingOptions): Drawing;
   /** Removes the drawing object `objectId` and the parts only it reaches; other drawing content is kept. A
    *  shape, connector or group goes with its children; a slicer with its frame, and its cache when no other
@@ -5064,14 +5207,20 @@ export interface Sheet {
   addSparklineGroup(spec: SparklineGroupInput): number;
   /** Lists the sheet's sparkline groups; a group's position is its `sparklineGroupIndex`. */
   listSparklineGroups(): readonly SparklineGroup[];
-  /** Rewrites the modelled attributes, colours and date range of group `sparklineGroupIndex`, and its sparklines
-   *  when `spec.sparklines` is present; unmodelled XML is kept. `{ ...listSparklineGroups()[i], sparklines }`
-   *  replaces the sparklines alone. An empty `sparklines` fails with `StatusCode.InvalidArgument`. */
-  updateSparklineGroup(sparklineGroupIndex: number, spec: SparklineGroupInput): void;
+  /** Updates the attributes, colours and date range of group `sparklineGroupIndex` that `patch` names, and its
+   *  sparklines when `patch.sparklines` is present; unmodelled XML is kept. `{ sparklines }` replaces the
+   *  sparklines alone. See {@link SparklineGroupPatch} for the `null` rules. An empty `sparklines` fails with
+   *  `StatusCode.InvalidArgument`. */
+  updateSparklineGroup(sparklineGroupIndex: number, patch: SparklineGroupPatch): void;
   /** Removes group `sparklineGroupIndex`. */
   removeSparklineGroup(sparklineGroupIndex: number): void;
 
-  /** Creates a chart with filled caches and returns its handle. */
+  /** Creates a chart with filled caches and returns its handle.
+   *
+   *  @example
+   *  ```ts
+   *  const chart = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!A1:B5' });
+   *  ``` */
   addChart(options: ChartInsertInput): Chart;
 
   /** Lists the handles of the PivotTables anchored on the sheet; a pivot's position is its index. A new array on
@@ -5080,7 +5229,14 @@ export interface Sheet {
   /** The handle of the pivot table `pivot`. A name no pivot has fails with `StatusCode.NotFound`, an index past
    *  the last pivot with `StatusCode.IndexOutOfRange`. */
   pivot(pivot: PivotRef): Pivot;
-  /** Creates a new empty pivot table and returns its handle. */
+  /** Creates a new empty pivot table and returns its handle.
+   *
+   *  @example
+   *  ```ts
+   *  const cache = wb.addPivotCache();
+   *  // ... bind the cache to its source and add fields ...
+   *  const pivot = ws.addPivot({ name: 'ByItem', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+   *  ``` */
   addPivot(input: PivotInput): Pivot;
   /** Removes the pivot table `pivot`; its handle then fails with `StatusCode.NotFound`. */
   removePivot(pivot: PivotRef): void;
@@ -5318,14 +5474,15 @@ export interface Sheet {
   setFormatDefaults(defaults: SheetFormatDefaultsPatch): void;
 
   /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
-   *  Hidden rows and columns contribute zero extent. */
-  getCellRectPt(range: CellRect | string, mode: GeometryMode): RectPt;
+   *  Hidden rows and columns contribute zero extent. `mode` defaults to `Display`. */
+  getCellRectPt(range: CellRect | string, mode?: GeometryMode): RectPt;
   /** Effective column width in points under `mode` (default `Display`); zero when hidden. */
   getColumnWidthPt(col: number, mode?: GeometryMode): number;
   /** Effective row height in points; zero when hidden. */
   getRowHeightPt(row: number): number;
-  /** The character-unit to point conversion model for the workbook's Normal font. */
-  getWidthModel(mode: GeometryMode): WidthModel;
+  /** The character-unit to point conversion model for the workbook's Normal font under `mode` (default
+   *  `Display`). */
+  getWidthModel(mode?: GeometryMode): WidthModel;
   /** Converts a stored column width (padding included) to points under `mode` (default `Display`), snapped to
    *  whole screen pixels. A `mode` outside `GeometryMode` throws `RangeError`. */
   convertColumnCharsToPt(chars: number, mode?: GeometryMode): number;
@@ -5345,7 +5502,12 @@ export interface Sheet {
    *  anything is written; the sheet changes in one step at the end, but an engine failure on the way can leave
    *  unused style records behind (`listCellXfs()`). Fails with `StatusCode.InvalidArgument` for an empty
    *  `numberFormat`, an enum value outside its table, `indent` above 255, or `textRotation` outside 0..180 and
-   *  255. */
+   *  255.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setCellFormat('A1:C1', { font: { bold: true }, numberFormat: '#,##0.00' });
+   *  ``` */
   setCellFormat(range: CellRect | string, patch: CellFormatPatch): void;
 
   /** Returns the cell XF index of the cell at `(row, col)`. */
@@ -5417,8 +5579,9 @@ export interface Sheet {
   listProtectedRanges(): readonly ProtectedRange[];
   /** Appends a protected range. `name` must be non-empty and unique on the sheet; `ranges` must hold at least one rectangle. */
   addProtectedRange(range: ProtectedRange): number;
-  /** Replaces the protected range `protectedRange`. */
-  updateProtectedRange(protectedRange: ProtectedRangeRef, range: ProtectedRange): void;
+  /** Updates the protected range `protectedRange` with the keys `patch` names; the others keep their value.
+   *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. */
+  updateProtectedRange(protectedRange: ProtectedRangeRef, patch: ProtectedRangePatch): void;
   /** Removes the protected range `protectedRange`. */
   removeProtectedRange(protectedRange: ProtectedRangeRef): void;
 
@@ -5528,11 +5691,11 @@ export interface Table {
   /** Reads the table's name, range, style, toggles and columns. */
   getProperties(): TableProperties;
   /** Partially updates the table, its `name` / `displayName` included. Omitted fields preserve their current
-   *  values. A supplied `rect` must keep the table's existing column count; an empty `styleName` clears the
+   *  values. A supplied `range` must keep the table's existing column count; `styleName: null` clears the
    *  style. */
-  update(input: TableUpdateInput): void;
+  update(patch: TablePatch): void;
   /** Renames column `column` (0-based), as typing over its header cell does, and returns the final name. An empty
-   *  `name` takes the profile's `Column<N>` (`列<N>`) with the lowest unused N, a name another column already has
+   *  `name` takes the Excel profile's `Column<N>` (`列<N>`) with the lowest unused N, a name another column already has
    *  (ASCII case-insensitively) gains the lowest unused N >= 2, and anything else is kept verbatim. Every
    *  structured reference to the column through this table follows: cell, totals-row and defined-name formulas
    *  and chart series. Writing a value to a header cell (`setText`, `setNumber`, ...) renames the same way. */
@@ -5577,7 +5740,7 @@ export interface Pivot {
   /** Evaluates and projects the pivot into concrete grid cells. */
   getLayout(): PivotLayout;
   /** Sets the rectangle the pivot reserves (`<location ref>`); its top-left cell is the anchor. */
-  setAnchor(rect: CellRect | string): void;
+  setAnchor(range: CellRect | string): void;
   /** Reads the row / column grand total flags `setGrandTotals` writes. */
   getGrandTotals(): PivotGrandTotals;
   /** Toggles the row / column grand total bands; an omitted key keeps its band. */
@@ -5656,8 +5819,8 @@ export interface Pivot {
    *  shared item, which makes this the form that can express the blank
    *  item. `cacheIndex` is not validated: the cache field may be filled in
    *  after the pivot definition, and an index that resolves to nothing
-   *  yields an item with an empty label that filters nothing. */
-  addFieldSharedItem(fieldIndex: number, cacheIndex: number, visible: boolean): number;
+   *  yields an item with an empty label that filters nothing. `options.visible` defaults to `true`. */
+  addFieldSharedItem(fieldIndex: number, cacheIndex: number, options?: { visible?: boolean }): number;
   /** Drops every manual-filter item from pivot field `fieldIndex`. */
   clearFieldItems(fieldIndex: number): void;
   /** Appends a subtotal-fn entry to pivot field `fieldIndex`. */
@@ -5698,7 +5861,7 @@ export interface Pivot {
   /** Lists the pivot's data fields; a data field's position is its `dataFieldIndex`. */
   listDataFields(): readonly PivotDataField[];
   /** Appends a new data-field entry. An omitted or empty `spec.name` is
-   *  derived from the workbook profile; see {@link PivotDataFieldInput}. */
+   *  derived from the Excel profile; see {@link PivotDataFieldInput}. */
   addDataField(spec: PivotDataFieldInput): number;
   /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
    *  or empty `spec.name` is derived as in `addDataField`. */
@@ -5732,8 +5895,9 @@ export interface PivotCache {
   /** Reads the cache's worksheet source range / defined-name metadata; `null` when the cache has no worksheet
    *  source. */
   getWorksheetSource(): PivotWorksheetSource | null;
-  /** Sets or clears the cache's worksheet source metadata. */
-  setWorksheetSource(source: PivotWorksheetSourceInput): void;
+  /** Sets the cache's worksheet source metadata, or removes the source with `null`. An empty object writes a
+   *  source with no attributes. */
+  setWorksheetSource(source: PivotWorksheetSourceInput | null): void;
   /** Reads the cache's options. */
   getOptions(): PivotCacheOptions;
   /** Writes the cache's options; members the object omits keep their current value. */
@@ -5877,23 +6041,46 @@ export interface Chart extends Drawing {
 export interface Shape extends Drawing {
   /** Reads the shape's anchor, geometry, text and paint. */
   getProperties(): ShapeProperties;
-  /** Applies the fields `spec` names, the name and anchor included; every other part of its XML is kept. */
-  update(spec: ShapeInput): void;
+  /** Applies the fields `patch` names, the name and anchor included; every other part of its XML is kept. See
+   *  {@link ShapePatch} for the `null` and anchor-key rules. */
+  update(patch: ShapePatch): void;
+  /** Renames the shape; duplicate names are allowed. */
+  rename(name: string): void;
+  /** Makes the shape item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
+   *  back). */
+  setZOrder(zOrderIndex: number): void;
+  /** Captures the shape with its list position and element as opaque bytes for `Sheet.restoreDrawing`. */
+  snapshot(): Uint8Array;
 }
 
 /** A table slicer, through its drawing frame; also has the members of {@link Drawing}. Add one with
- *  `Sheet.addSlicer`. Removing its table or sheet removes the slicer. */
+ *  `Sheet.addSlicer`. Removing its table or sheet removes the slicer.
+ *
+ *  Unlike {@link Shape}, a slicer has no `rename` and no `snapshot`. Its name is the key that ties the drawing
+ *  frame to the slicer part and cannot change, and a snapshot would have to capture the slicer cache and
+ *  extension parts that live outside the drawing part. */
 export interface Slicer extends Drawing {
   /** Reads the slicer's caption, cache, table column, layout and anchor. */
   getProperties(): SlicerProperties;
-  /** Applies the fields `spec` names, the anchor included; every other part of its XML is kept. */
-  update(spec: SlicerInput): void;
+  /** Applies the fields `patch` names, the anchor included; every other part of its XML is kept. See
+   *  {@link SlicerPatch} for the `null` and anchor-key rules. */
+  update(patch: SlicerPatch): void;
+  /** Makes the slicer item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
+   *  back). */
+  setZOrder(zOrderIndex: number): void;
 }
 
 /** Static factories on the Workbook class, the only way to create one. Each returns a new workbook or throws
  *  `FormulonError`. */
 export interface WorkbookCtor {
-  /** Workbook with a single default sheet (`"Sheet1"`). */
+  /** Workbook with a single default sheet (`"Sheet1"`).
+   *
+   *  @example
+   *  ```ts
+   *  const wb = formulon.Workbook.createDefault();
+   *  wb.sheet(0).setNumber('A1', 1);
+   *  wb.dispose();
+   *  ``` */
   createDefault(): Workbook;
   /** Workbook with no sheets. */
   createEmpty(): Workbook;
@@ -5912,11 +6099,19 @@ export interface WorkbookCtor {
    *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
    *  to route on). Empty input fails with `StatusCode.InvalidArgument`, a damaged archive with one of
    *  the `StatusCode.Io*` codes (`StatusCode.IoZipCorrupt` for bytes that are not a ZIP archive), and a
-   *  value that is not a `Uint8Array` throws `TypeError`. */
+   *  value that is not a `Uint8Array` throws `TypeError`.
+   *
+   *  @example
+   *  ```ts
+   *  const wb = formulon.Workbook.load(new Uint8Array(await (await fetch('book.xlsx')).arrayBuffer()));
+   *  console.log(wb.sheet(0).getDisplayText('A1').text);
+   *  wb.dispose();
+   *  ``` */
   load(bytes: Uint8Array): Workbook;
 }
 
-/** Options for {@link createFormulon}. Keys other than these three are ignored.
+/** Options for {@link createFormulon}. Keys other than these four are ignored, and a key set to `null` is
+ *  treated as omitted.
  *
  *  `@libraz/formulon` (WASM) passes them to the module loader. `@libraz/formulon-native` accepts them and
  *  does not use them: the addon loads no files at run time and writes nothing to stdout or stderr. */
@@ -5928,6 +6123,11 @@ export interface FormulonOptions {
   print?: (msg: string) => void;
   /** WASM: receives each line the runtime writes to stderr, instead of `console.error`. */
   printErr?: (msg: string) => void;
+  /** WASM: the module to run, for hosts that cannot fetch or locate `formulon.wasm` (a Worker, an edge
+   *  runtime, a bundler that inlines assets). A `BufferSource` holds the module bytes and is compiled here; a
+   *  `WebAssembly.Module` is instantiated as is, which lets one compiled module serve several instances. An
+   *  empty `BufferSource`, or a value that is neither, fails with a `TypeError`. */
+  wasm?: BufferSource | WebAssembly.Module;
 }
 
 /** The engine surface {@link createFormulon} resolves to: a frozen object with the same members on both
@@ -5991,6 +6191,7 @@ export interface Formulon {
   ChartAxisCrosses: typeof ChartAxisCrosses;
   ChartTitleKind: typeof ChartTitleKind;
   ChartSeriesDirection: typeof ChartSeriesDirection;
+  ChartSourceKind: typeof ChartSourceKind;
   ChartLegendPosition: typeof ChartLegendPosition;
   ChartLineDash: typeof ChartLineDash;
   ChartMarkerSymbol: typeof ChartMarkerSymbol;
@@ -6028,8 +6229,35 @@ export interface Formulon {
    *  and no recalc runs, so an anchor-referencing formula such as `=A1`
    *  or `=COUNTA(A1)` reads the blank anchor rather than becoming a
    *  self-reference. An array result is reduced to its top-left element;
-   *  use `Sheet.evaluateFormulaArray` for the whole grid. */
+   *  use `Sheet.evaluateFormulaArray` for the whole grid.
+   *
+   *  @example
+   *  ```ts
+   *  formulon.toNative(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
+   *  ``` */
   evaluateFormula(formula: string): Value;
+
+  /** Converts a civil date and time to a serial number, as `=DATE(y,m,d)+TIME(h,mi,s)` computes it.
+   *  `date1904` (default `false`) selects the 1904 date system. No field is normalized: `year` must be
+   *  1900-9999 (1904-9999 in the 1904 system), `month` 1-12, `day` within the month, `hour` 0-23, `minute` and
+   *  `second` 0-59. The one exception is 1900-02-29, which the 1900 system accepts as serial 60. A non-integer
+   *  or out-of-`int32` field throws `RangeError`, a non-object `civil` or a non-boolean `date1904` throws
+   *  `TypeError`, and any other invalid date fails with `StatusCode.InvalidArgument`.
+   *
+   *  ```ts
+   *  formulon.convertCivilToSerial({ year: 2024, month: 3, day: 1, hour: 12, minute: 0, second: 0 }); // 45352.5
+   *  ``` */
+  convertCivilToSerial(civil: CivilTime, date1904?: boolean): number;
+  /** Converts a serial number to civil fields, as `YEAR` ... `SECOND` read it. The fraction is rounded to the
+   *  nearest whole second, carrying into the next day. `serial` must be finite, at least 1 (0 in the 1904
+   *  system) and below the last serial of the date system plus one; otherwise the call fails with
+   *  `StatusCode.InvalidArgument` (a non-finite number throws `RangeError`, a non-number `TypeError`). In the
+   *  1900 system serial 60 is Excel's 1900-02-29. `date1904` defaults to `false`.
+   *
+   *  ```ts
+   *  formulon.convertSerialToCivil(45352.5); // { year: 2024, month: 3, day: 1, hour: 12, minute: 0, second: 0 }
+   *  ``` */
+  convertSerialToCivil(serial: number, date1904?: boolean): CivilTime;
 
   /** Library version string (UTF-8). */
   getVersion(): string;
@@ -6100,7 +6328,11 @@ export interface Formulon {
    *  - Feed it kind-preserving values (cell getters, paged range reads);
    *    `evaluateFormulaArray` returns range blanks as 0, losing the
    *    blank/zero distinction. */
-  getCollationClasses(values: Value[], strength: CollationStrength, profileId: ExcelProfileId): CollationClasses;
+  getCollationClasses(
+    values: readonly Value[],
+    strength: CollationStrength,
+    profileId: ExcelProfileId,
+  ): CollationClasses;
 
   /** Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes. */
   getImageInfo(bytes: Uint8Array): ImageInfo;

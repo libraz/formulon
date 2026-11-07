@@ -218,6 +218,20 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
     sparklines: [{ formula: 'Sheet1!B1:B5', location: 'H1' }],
   });
   assert.deepEqual(loaded.sheet(0).listSparklineGroups()[0].sparklines, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  expectFailure(() => loaded.sheet(0).updateSparklineGroup(0, { sparklines: [] }));
+  loaded.sheet(0).updateSparklineGroup(0, { high: false });
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines.length, 1);
+  // A patch is partial: omitted keys stay, null clears only the nullable keys, unknown keys are refused.
+  loaded.sheet(0).updateSparklineGroup(0, { manualMin: null });
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].manualMin, null);
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].lineWeight, 1.25);
+  assert.throws(() => loaded.sheet(0).updateSparklineGroup(0, { lineWeight: null }), TypeError);
+  assert.throws(() => loaded.sheet(0).updateSparklineGroup(0, { noSuchKey: 1 }), TypeError);
+  assert.throws(
+    () =>
+      loaded.sheet(0).updateSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1', extra: 1 }] }),
+    TypeError,
+  );
   loaded.sheet(0).removeSparklineGroup(0);
   assert.equal(loaded.sheet(0).listSparklineGroups().length, 1);
   assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[0].location, 'G11');

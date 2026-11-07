@@ -28,7 +28,7 @@ function buildPivot(mod) {
   wb.setExcelProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
   const cacheId = cache.cacheId;
-  wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:D5', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:D5', sheet: 'Sheet1' });
   for (const name of ['Region', 'Product', 'Amount', 'Date']) wb.pivotCache(cacheId).addField(name);
   for (const item of ['East', 'West']) wb.pivotCache(cacheId).addFieldSharedItem(0, item);
   for (const item of ['Apple', 'Pear']) wb.pivotCache(cacheId).addFieldSharedItem(1, item);
@@ -239,7 +239,7 @@ const PIVOT_MUTATORS = [
   [
     'PivotCache.setWorksheetSource',
     {
-      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ present: true, ref: 'B2:E6', sheet: 'Data' }),
+      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ ref: 'B2:E6', sheet: 'Data' }),
       expect: (b) => {
         const source = b.wb.pivotCache(b.cacheId).getWorksheetSource();
         assert.equal(source.ref, 'B2:E6');
@@ -699,7 +699,7 @@ const PIVOT_MUTATORS = [
         b.wb.pivotCache(b.cacheId).addFieldSharedItem(0, null);
         b.wb.pivotCache(b.cacheId).setRecordValue(0, 0, null);
       },
-      act: (b) => b.wb.sheet(0).pivot(b.pivot).addFieldSharedItem(b.region, 2, false),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).addFieldSharedItem(b.region, 2, { visible: false }),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|5', 'West|37', '総計|42']),
     },
   ],
@@ -1118,6 +1118,11 @@ const MODULE_FUNCTIONS = [
   ['canonicalizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],
   ['listFunctionNames', [], null],
   ['listLocaleErrorNames', ['win-365-en_US'], ['nope']],
+  [
+    'convertCivilToSerial',
+    [{ year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0 }],
+    [{ year: 2026, month: 13, day: 1, hour: 0, minute: 0, second: 0 }],
+  ],
 ];
 
 // Calls a STATUS_ACCESSORS row on the workbook, or on the sheet its first argument names.
@@ -1614,5 +1619,23 @@ test('pivot filters take the full type range and an upper text bound', async () 
     assert.deepEqual(pivotGrid(wb), ['\u884c\u30e9\u30d9\u30eb|Sum of Amount', 'East|15', '\u7dcf\u8a08|15']);
   } finally {
     b.wb.dispose();
+  }
+});
+
+test('setWorksheetSource(null) clears the source and an empty source is still a present one', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const cache = wb.addPivotCache(0);
+    cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+    assert.equal(cache.getWorksheetSource().present, true);
+    assert.equal(cache.getWorksheetSource().ref, 'A1:B3');
+    cache.setWorksheetSource(null);
+    assert.equal(cache.getWorksheetSource(), null);
+    cache.setWorksheetSource({});
+    assert.equal(cache.getWorksheetSource().present, true);
+    assert.equal(cache.getWorksheetSource().ref, null);
+  } finally {
+    wb.dispose();
   }
 });

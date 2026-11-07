@@ -281,12 +281,11 @@ val fields_to_val(const void* base, const RdField* f) {
 constexpr const char* kRoleKeys[] = {"name", "categories", "values", "x", "y", "size"};
 constexpr int32_t kRoleCount = FM_CHART_ROLE_SIZE + 1;
 static_assert(sizeof(kRoleKeys) / sizeof(kRoleKeys[0]) == kRoleCount, "role keys must cover every fm_chart_role_t");
-constexpr const char* kSourceKinds[] = {"none", "ref", "literal"};
 
 val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t role, const fm_chart_data_source_t& src,
                   fm_status_t& rc) {
   val o = val::object();
-  o.set("kind", val(std::string(kSourceKinds[src.kind])));
+  o.set("kind", src.kind);
   o.set("formula", val(string_from_cstr(src.formula)));
   val literal = val::array();
   for (size_t i = 0; i < src.literal_count; ++i) {

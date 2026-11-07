@@ -8,7 +8,6 @@ from pathlib import Path
 
 import formulon
 from formulon import (
-    LIB,
     FormulonError,
     IndexOutOfRangeError,
     InvalidArgumentError,
@@ -16,6 +15,7 @@ from formulon import (
     StatusCode,
     Workbook,
 )
+from formulon._c import LIB
 
 _STATUS_HEADER = Path(__file__).resolve().parents[3] / "src" / "c_api" / "formulon_status.h"
 

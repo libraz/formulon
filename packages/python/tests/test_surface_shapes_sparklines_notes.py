@@ -6,7 +6,6 @@ import io
 import re
 import unittest
 import zipfile
-from dataclasses import replace
 
 from formulon import (
     AnchorKind,
@@ -162,27 +161,23 @@ class SparklineGroupTests(unittest.TestCase):
                     Sparkline("Sheet1!A4:D4", "F4"),
                 )
 
-                first = loaded.sheet(0).list_sparkline_groups()[0]
-                first = replace(
-                    first, type=SparklineType.STACKED, high=True, date_axis=True, date_axis_ref="Sheet1!A4:D4"
+                loaded.sheet(0).update_sparkline_group(
+                    0, type=SparklineType.STACKED, high=True, date_axis=True, date_axis_ref="Sheet1!A4:D4"
                 )
-                loaded.sheet(0).update_sparkline_group(0, first)
                 updated = loaded.sheet(0).list_sparkline_groups()[0]
+                # A partial update leaves every omitted field as it was.
+                self.assertEqual((updated.markers, updated.negative, updated.manual_min), (True, True, -1.5))
                 self.assertEqual((updated.type, updated.high, updated.date_axis), (SparklineType.STACKED, True, True))
                 self.assertEqual(updated.date_axis_ref, "Sheet1!A4:D4")
                 self.assertEqual(len(updated.sparklines), 2)
 
-                loaded.sheet(0).update_sparkline_group(
-                    0, replace(loaded.sheet(0).list_sparkline_groups()[0], sparklines=[Sparkline("Sheet1!B1:B5", "H1")])
-                )
+                loaded.sheet(0).update_sparkline_group(0, sparklines=[Sparkline("Sheet1!B1:B5", "H1")])
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines,
                     [Sparkline("Sheet1!B1:B5", "H1")],
                 )
                 with self.assertRaises(InvalidArgumentError):
-                    loaded.sheet(0).update_sparkline_group(
-                        0, replace(loaded.sheet(0).list_sparkline_groups()[0], sparklines=[])
-                    )
+                    loaded.sheet(0).update_sparkline_group(0, sparklines=[])
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines,
                     [Sparkline("Sheet1!B1:B5", "H1")],
@@ -208,9 +203,9 @@ class SparklineGroupTests(unittest.TestCase):
                 wb.sheet(4).add_sparkline_group(SparklineGroup(sparklines=good))
             self.assertEqual(wb.sheet(0).list_sparkline_groups(), [])
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_sparkline_group(0, SparklineGroup())
+                wb.sheet(0).update_sparkline_group(0, markers=True)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_sparkline_group(0, SparklineGroup(sparklines=good))
+                wb.sheet(0).update_sparkline_group(0, sparklines=good)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).remove_sparkline_group(0)
 

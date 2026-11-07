@@ -59,10 +59,10 @@ from .surface_files import NPM_COMMON_MJS, PYTHON_SHEET, REPO_ROOT
 # Arguments that address something rather than carry a value; they stay positional (R7.opts) and are not the
 # value argument of a setter (R18).
 _JS_COORDINATES = frozenset(
-    {"sheet", "row", "col", "first", "last", "firstRow", "lastRow", "firstCol", "lastCol", "rect"}
+    {"sheet", "row", "col", "first", "last", "firstRow", "lastRow", "firstCol", "lastCol", "rect", "range"}
 )
 _PY_COORDINATES = frozenset(
-    {"sheet", "row", "col", "first", "last", "first_row", "last_row", "first_col", "last_col", "rect"}
+    {"sheet", "row", "col", "first", "last", "first_row", "last_row", "first_col", "last_col", "rect", "range"}
 )
 
 
@@ -586,8 +586,9 @@ def _py_dataclasses(ctx: Context) -> Dict[str, Set[str]]:
 @_owned("R18.py")
 def _rule_py_symmetry(ctx: Context) -> Iterable[Violation]:
     """When `get_<x>` returns a dataclass `R` and `set_<x>` exists, `set_<x>` takes one value argument typed
-    `R` / `<R>Input` / `<R>Patch`, or keyword-only arguments named after `R`'s fields that default to
-    `UNCHANGED`.
+    `R` / `<R>Input` / `<R>Patch`, keyword-only arguments named after `R`'s fields that default to
+    `UNCHANGED`, or keyword-only arguments named after `R`'s fields (a full replacement spelled as keywords,
+    the way `<R>Input` may carry a subset of `R`'s fields on the JS side).
     """
     pool = _public_pool(ctx, "py")
     records = _py_dataclasses(ctx)
@@ -604,7 +605,8 @@ def _rule_py_symmetry(ctx: Context) -> Iterable[Violation]:
         partial = bool(values) and all(
             p in fn.kwonly and p in records[record] and defaults.get(p) in _UNCHANGED_DEFAULTS for p, _ in values
         )
-        if not (whole or partial):
+        full = bool(values) and all(p in fn.kwonly and p in records[record] for p, _ in values)
+        if not (whole or partial or full):
             shown = ", ".join(p for p, _ in values) or "nothing"
             yield _violation(
                 ctx,

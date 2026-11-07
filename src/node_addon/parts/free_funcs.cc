@@ -125,6 +125,43 @@ Napi::Value EvaluateFormula(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Value ConvertCivilToSerial(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  CheckedSpecReader reader(env);
+  const Napi::Object civil = info[0].As<Napi::Object>();
+  fm_civil_time_t value{};
+  value.year = reader.I32(civil, "year", 0);
+  value.month = reader.I32(civil, "month", 0);
+  value.day = reader.I32(civil, "day", 0);
+  value.hour = reader.I32(civil, "hour", 0);
+  value.minute = reader.I32(civil, "minute", 0);
+  value.second = reader.I32(civil, "second", 0);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  double serial = 0.0;
+  const fm_status_t rc = fm_convert_civil_to_serial(&value, info[1].ToBoolean().Value() ? 1 : 0, &serial);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, serial));
+}
+
+Napi::Value ConvertSerialToCivil(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_civil_time_t value{};
+  const fm_status_t rc =
+      fm_convert_serial_to_civil(info[0].As<Napi::Number>().DoubleValue(), info[1].ToBoolean().Value() ? 1 : 0, &value);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Object civil = Napi::Object::New(env);
+  civil.Set("year", Napi::Number::New(env, value.year));
+  civil.Set("month", Napi::Number::New(env, value.month));
+  civil.Set("day", Napi::Number::New(env, value.day));
+  civil.Set("hour", Napi::Number::New(env, value.hour));
+  civil.Set("minute", Napi::Number::New(env, value.minute));
+  civil.Set("second", Napi::Number::New(env, value.second));
+  return civil;
+}
+
 Napi::Value Version(const Napi::CallbackInfo& info) {
   return JsString(info.Env(), fm_get_version());
 }

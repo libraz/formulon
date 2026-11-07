@@ -60,7 +60,7 @@ function newBook(mod) {
 
 function addCache(wb, sheetName = 'Sheet1', ref = 'A1:B3') {
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ present: true, ref, sheet: sheetName });
+  cache.setWorksheetSource({ ref, sheet: sheetName });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [

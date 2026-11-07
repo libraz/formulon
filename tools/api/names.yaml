@@ -1006,8 +1006,7 @@ entries:
     kind: record
     role: input
     js: ThemeColorsInput
-    py: ThemeColorsInput
-    surfaces: [wasm, native, py]
+    surfaces: [wasm, native]
   record.theme_fonts:
     kind: record
     role: result
@@ -1499,9 +1498,10 @@ entries:
     role: input
     c: fm_drawing_anchor_t
     js: DrawingAnchor
-    surfaces: [c, wasm, native]
+    py: DrawingAnchor
+    surfaces: [c, wasm, native, py]
     was: { c: fm_drawing_anchor }
-    exception: "one anchor shape for ImageInsertInput, ChartInsertInput and setDrawingAnchor; no result carries it"
+    exception: "one anchor shape for ImageInsertInput, ChartInsertInput and setDrawingAnchor; Python passes it as an input dataclass, and no result carries it"
   enum.shape_paint:
     kind: enum
     c: fm_shape_paint_t
@@ -1755,7 +1755,9 @@ entries:
   enum.chart_source_kind:
     kind: enum
     c: fm_chart_source_kind_t
-    surfaces: [c]
+    js: ChartSourceKind
+    py: ChartSourceKind
+    surfaces: [c, wasm, native, py]
     was: { c: fm_chart_source_kind_t }
   record.chart_data_source:
     kind: record
@@ -1801,8 +1803,7 @@ entries:
     role: input
     c: fm_chart_preview_overrides_t
     js: ChartPreviewOverridesInput
-    py: ChartPreviewOverridesInput
-    surfaces: [c, wasm, native, py]
+    surfaces: [c, wasm, native]
     was: { c: fm_chart_preview_overrides, js: ChartPreviewOverrides, py: ChartPreviewOverrides }
   record.chart_data_info:
     kind: record
@@ -2975,6 +2976,33 @@ entries:
     js: TableUpdateInput
     surfaces: [wasm, native]
     was: { js: TableUpdateInput }
+    replaced_by: record.table_patch
+    closes: R18.all
+  record.table_patch:
+    kind: record
+    role: patch
+    js: TablePatch
+    surfaces: [wasm, native]
+  record.sparkline_group_patch:
+    kind: record
+    role: patch
+    js: SparklineGroupPatch
+    surfaces: [wasm, native]
+  record.protected_range_patch:
+    kind: record
+    role: patch
+    js: ProtectedRangePatch
+    surfaces: [wasm, native]
+  record.shape_patch:
+    kind: record
+    role: patch
+    js: ShapePatch
+    surfaces: [wasm, native]
+  record.slicer_patch:
+    kind: record
+    role: patch
+    js: SlicerPatch
+    surfaces: [wasm, native]
   record.theme_result:
     kind: record
     role: result
@@ -2993,8 +3021,7 @@ entries:
     kind: record
     role: input
     js: ThemeScriptFontInput
-    py: ThemeScriptFontInput
-    surfaces: [wasm, native, py]
+    surfaces: [wasm, native]
   enum.theme_source:
     kind: enum
     js: ThemeSource
@@ -3915,9 +3942,12 @@ entries:
     js: updateTable
     py: update_table
     params: { header_row: bool, totals_row: bool, show_first_column: bool, show_last_column: bool, show_row_stripes: bool, show_column_stripes: bool }
+    patch: true
+    patch_record: TableProperties
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_update, js: updateTable, py: table_update }
     handle: { class: Table, supplies: [table] }
+    facade: handwritten
   table.remove:
     kind: op
     scope: workbook
@@ -4276,9 +4306,12 @@ entries:
     c: fm_sheet_update_protected_range
     js: updateProtectedRange
     py: update_protected_range
+    patch: true
+    patch_record: ProtectedRange
     ref_args: [0, protectedRange]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_protected_range, js: updateProtectedRange, py: update_protected_range }
+    facade: handwritten
   protected_range.remove:
     kind: op
     scope: sheet
@@ -5352,6 +5385,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_set_worksheet_source, js: pivotCacheSetWorksheetSource, py: set_pivot_cache_worksheet_source }
     handle: { class: PivotCache, supplies: [cache_id] }
+    facade: handwritten
   pivot_cache_field.get_count:
     kind: op
     scope: workbook
@@ -5985,6 +6019,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_item_at, js: pivotFieldAddItemAt, py: pivot_field_add_item_at }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+    facade: handwritten
   pivot_field_items.clear:
     kind: op
     scope: sheet
@@ -7711,7 +7746,7 @@ entries:
     py: set_drawing_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_drawing_name, js: setDrawingName, py: set_drawing_name }
-    handle: { class: [Picture, Chart], js: rename, py: rename, supplies: [sheet, object_id] }
+    handle: { class: [Picture, Chart, Shape], js: rename, py: rename, supplies: [sheet, object_id] }
   drawing_z_order.set:
     kind: op
     scope: sheet
@@ -7721,7 +7756,7 @@ entries:
     py: set_drawing_z_order
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_drawing_z_order, js: setDrawingZOrder, py: set_drawing_z_order }
-    handle: { class: [Picture, Chart], supplies: [sheet, object_id] }
+    handle: { class: [Picture, Chart, Shape, Slicer], supplies: [sheet, object_id] }
   drawing.snapshot:
     kind: op
     scope: sheet
@@ -7731,7 +7766,7 @@ entries:
     py: snapshot_drawing
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_snapshot_drawing, js: snapshotDrawing, py: snapshot_drawing }
-    handle: { class: [Picture, Chart], js: snapshot, py: snapshot, supplies: [sheet, object_id] }
+    handle: { class: [Picture, Chart, Shape], js: snapshot, py: snapshot, supplies: [sheet, object_id] }
   drawing.restore:
     kind: op
     scope: sheet
@@ -7774,9 +7809,12 @@ entries:
     js: updateShape
     py: update_shape
     params: { anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as", text_box: bool, fill_kind: "enum:shape_paint", line_kind: "enum:shape_paint", hidden: bool }
+    patch: true
+    patch_record: ShapeProperties
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_shape, js: updateShape, py: update_shape }
     handle: { class: Shape, supplies: [sheet, object_id] }
+    facade: handwritten
   shape.remove:
     kind: op
     scope: sheet
@@ -7822,9 +7860,12 @@ entries:
     js: updateSlicer
     py: update_slicer
     params: { sort_order: "enum:slicer_sort", cross_filter: "enum:slicer_cross_filter" }
+    patch: true
+    patch_record: SlicerProperties
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_slicer, js: updateSlicer, py: update_slicer }
     handle: { class: Slicer, supplies: [sheet, object_id] }
+    facade: handwritten
   slicer.remove:
     kind: op
     scope: sheet
@@ -7880,8 +7921,12 @@ entries:
     c: fm_sheet_update_sparkline_group
     js: updateSparklineGroup
     py: update_sparkline_group
+    patch: true
+    patch_record: SparklineGroup
+    patch_nested: { colorSeries: Color, colorNegative: Color, colorAxis: Color, colorMarkers: Color, colorFirst: Color, colorLast: Color, colorHigh: Color, colorLow: Color }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_sparkline_group, js: updateSparklineGroup, py: update_sparkline_group }
+    facade: handwritten
   sparkline_group_sparklines.set:
     kind: op
     scope: sheet
@@ -8227,6 +8272,7 @@ entries:
     py: add_data_table
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_data_table, js: addDataTable, py: add_data_table }
+    facade: handwritten
   data_table.get:
     kind: op
     scope: sheet
@@ -8271,13 +8317,17 @@ entries:
     scope: process
     noun: civil_to_serial
     c: fm_convert_civil_to_serial
-    surfaces: [c]
+    js: convertCivilToSerial
+    py: convert_civil_to_serial
+    surfaces: [c, wasm, native, py]
   serial_to_civil.convert:
     kind: op
     scope: process
     noun: serial_to_civil
     c: fm_convert_serial_to_civil
-    surfaces: [c]
+    js: convertSerialToCivil
+    py: convert_serial_to_civil
+    surfaces: [c, wasm, native, py]
   version_number.get:
     kind: op
     scope: process
@@ -12444,8 +12494,7 @@ entries:
     kind: record
     role: input
     js: PhoneticPropertiesInput
-    py: PhoneticPropertiesInput
-    surfaces: [wasm, native, py]
+    surfaces: [wasm, native]
   record.pivot_style_info_input:
     kind: record
     role: patch
@@ -12503,6 +12552,10 @@ entries:
   constant.unchanged:
     kind: constant
     py: UNCHANGED
+    surfaces: [py]
+  type.unchanged:
+    kind: typedef
+    py: Unchanged
     surfaces: [py]
   field.status_code:
     kind: field
@@ -12609,6 +12662,34 @@ entries:
     py: columns
     surfaces: [py]
     was: { py: cols }
+    closes: R8.py
+  field.table_properties_header_row:
+    kind: field
+    record: record.table
+    js: headerRow
+    surfaces: [wasm, native]
+    was: { js: headerRowCount }
+    closes: R8.js
+  field.table_properties_header_row_py:
+    kind: field
+    record: record.table
+    py: header_row
+    surfaces: [py]
+    was: { py: header_row_count }
+    closes: R8.py
+  field.table_properties_totals_row:
+    kind: field
+    record: record.table
+    js: totalsRow
+    surfaces: [wasm, native]
+    was: { js: totalsRowCount }
+    closes: R8.js
+  field.table_properties_totals_row_py:
+    kind: field
+    record: record.table
+    py: totals_row
+    surfaces: [py]
+    was: { py: totals_row_count }
     closes: R8.py
   field.pagination_row_breaks:
     kind: field

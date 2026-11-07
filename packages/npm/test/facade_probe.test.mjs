@@ -214,6 +214,8 @@ function buildFacade(surface = 'wasm') {
     getImageInfo: () => null,
     setLogMinLevel: () => {},
     setLogSink: () => {},
+    convertCivilToSerial: () => 0,
+    convertSerialToCivil: () => null,
   };
   const formulon = common.buildFormulon(runtime, common);
   return { formulon, Workbook: formulon.Workbook, instances };

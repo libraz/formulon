@@ -44,6 +44,7 @@ from .workbook import (
     PivotShowValuesAs,
     PivotSortOrder,
     PivotStyle,
+    Unchanged,
     Value,
     _ArgScope,
     _check,
@@ -233,12 +234,12 @@ class Pivot:
                 if handle:
                     LIB.fm_pivot_cells_destroy(handle)
 
-    def set_anchor(self, rect: Union[CellRect, str]) -> None:
+    def set_anchor(self, range: Union[CellRect, str]) -> None:
         """Set the rectangle the pivot reserves (``<location ref>``); its top-left cell is the anchor.
 
-        ``rect`` is a :class:`CellRect` or an unqualified A1 range.
+        ``range`` is a :class:`CellRect` or an unqualified A1 range.
         """
-        rect = self._sheet._rect(rect)
+        rect = self._sheet._rect(range)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             rp = scope.struct(S.CELL_RECT)
@@ -258,7 +259,9 @@ class Pivot:
             )
             return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, columns=LIB.read_i32(cols) != 0)
 
-    def set_grand_totals(self, *, rows: bool = UNCHANGED, columns: bool = UNCHANGED) -> None:
+    def set_grand_totals(
+        self, *, rows: Union[bool, Unchanged] = UNCHANGED, columns: Union[bool, Unchanged] = UNCHANGED
+    ) -> None:
         """Toggle the row / column grand-total bands; an omitted argument keeps its band.
 
         Raises:
@@ -307,12 +310,12 @@ class Pivot:
     def set_style_info(
         self,
         *,
-        name: Optional[str] = UNCHANGED,
-        show_row_headers: bool = UNCHANGED,
-        show_col_headers: bool = UNCHANGED,
-        show_row_stripes: bool = UNCHANGED,
-        show_col_stripes: bool = UNCHANGED,
-        show_last_column: bool = UNCHANGED,
+        name: Union[str, None, Unchanged] = UNCHANGED,
+        show_row_headers: Union[bool, Unchanged] = UNCHANGED,
+        show_col_headers: Union[bool, Unchanged] = UNCHANGED,
+        show_row_stripes: Union[bool, Unchanged] = UNCHANGED,
+        show_col_stripes: Union[bool, Unchanged] = UNCHANGED,
+        show_last_column: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the pivot's table style, making the style element present; an omitted argument keeps its value.
 
@@ -425,32 +428,32 @@ class Pivot:
     def set_options(
         self,
         *,
-        show_error: bool = UNCHANGED,
-        error_caption: Optional[str] = UNCHANGED,
-        show_missing: bool = UNCHANGED,
-        missing_caption: Optional[str] = UNCHANGED,
-        show_headers: bool = UNCHANGED,
-        show_drill: bool = UNCHANGED,
-        show_data_tips: bool = UNCHANGED,
-        grid_drop_zones: bool = UNCHANGED,
-        show_empty_row: bool = UNCHANGED,
-        show_empty_col: bool = UNCHANGED,
-        show_data_drop_down: bool = UNCHANGED,
-        print_drill: bool = UNCHANGED,
-        field_print_titles: bool = UNCHANGED,
-        item_print_titles: bool = UNCHANGED,
-        merge_item: bool = UNCHANGED,
-        indent: int = UNCHANGED,
-        page_over_then_down: bool = UNCHANGED,
-        page_wrap: int = UNCHANGED,
-        multiple_field_filters: bool = UNCHANGED,
-        preserve_formatting: bool = UNCHANGED,
-        custom_list_sort: bool = UNCHANGED,
-        alt_text: Optional[str] = UNCHANGED,
-        alt_text_summary: Optional[str] = UNCHANGED,
-        grand_total_caption: Optional[str] = UNCHANGED,
-        auto_formatting: bool = UNCHANGED,
-        enable_drill: bool = UNCHANGED,
+        show_error: Union[bool, Unchanged] = UNCHANGED,
+        error_caption: Union[str, None, Unchanged] = UNCHANGED,
+        show_missing: Union[bool, Unchanged] = UNCHANGED,
+        missing_caption: Union[str, None, Unchanged] = UNCHANGED,
+        show_headers: Union[bool, Unchanged] = UNCHANGED,
+        show_drill: Union[bool, Unchanged] = UNCHANGED,
+        show_data_tips: Union[bool, Unchanged] = UNCHANGED,
+        grid_drop_zones: Union[bool, Unchanged] = UNCHANGED,
+        show_empty_row: Union[bool, Unchanged] = UNCHANGED,
+        show_empty_col: Union[bool, Unchanged] = UNCHANGED,
+        show_data_drop_down: Union[bool, Unchanged] = UNCHANGED,
+        print_drill: Union[bool, Unchanged] = UNCHANGED,
+        field_print_titles: Union[bool, Unchanged] = UNCHANGED,
+        item_print_titles: Union[bool, Unchanged] = UNCHANGED,
+        merge_item: Union[bool, Unchanged] = UNCHANGED,
+        indent: Union[int, Unchanged] = UNCHANGED,
+        page_over_then_down: Union[bool, Unchanged] = UNCHANGED,
+        page_wrap: Union[int, Unchanged] = UNCHANGED,
+        multiple_field_filters: Union[bool, Unchanged] = UNCHANGED,
+        preserve_formatting: Union[bool, Unchanged] = UNCHANGED,
+        custom_list_sort: Union[bool, Unchanged] = UNCHANGED,
+        alt_text: Union[str, None, Unchanged] = UNCHANGED,
+        alt_text_summary: Union[str, None, Unchanged] = UNCHANGED,
+        grand_total_caption: Union[str, None, Unchanged] = UNCHANGED,
+        auto_formatting: Union[bool, Unchanged] = UNCHANGED,
+        enable_drill: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the PivotTable Options; an omitted argument keeps its value.
 
@@ -640,13 +643,13 @@ class Pivot:
         self,
         field_index: int,
         *,
-        custom_name: Optional[str] = UNCHANGED,
-        number_format: Optional[str] = UNCHANGED,
-        default_subtotal: bool = UNCHANGED,
-        insert_blank_row: bool = UNCHANGED,
-        fill_down_labels: bool = UNCHANGED,
-        show_all: bool = UNCHANGED,
-        subtotal_top: bool = UNCHANGED,
+        custom_name: Union[str, None, Unchanged] = UNCHANGED,
+        number_format: Union[str, None, Unchanged] = UNCHANGED,
+        default_subtotal: Union[bool, Unchanged] = UNCHANGED,
+        insert_blank_row: Union[bool, Unchanged] = UNCHANGED,
+        fill_down_labels: Union[bool, Unchanged] = UNCHANGED,
+        show_all: Union[bool, Unchanged] = UNCHANGED,
+        subtotal_top: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update pivot field ``field_index``; an omitted argument keeps its value.
 
@@ -755,6 +758,7 @@ class Pivot:
     def set_field_date_group(
         self,
         field_index: int,
+        *,
         periods: PivotDatePeriod,
         calendar: PivotCalendar = PivotCalendar.GREGORIAN,
         interval_days: int = 1,
@@ -855,9 +859,9 @@ class Pivot:
         field_index: int,
         item_index: int,
         *,
-        visible: bool = UNCHANGED,
-        show_detail: bool = UNCHANGED,
-        caption: Optional[str] = UNCHANGED,
+        visible: Union[bool, Unchanged] = UNCHANGED,
+        show_detail: Union[bool, Unchanged] = UNCHANGED,
+        caption: Union[str, None, Unchanged] = UNCHANGED,
     ) -> None:
         """Update item ``item_index`` of pivot field ``field_index``; an omitted argument keeps its value.
 
@@ -920,7 +924,7 @@ class Pivot:
             )
             return LIB.read_u32(out)
 
-    def add_field_shared_item(self, field_index: int, cache_index: int, *, visible: bool) -> int:
+    def add_field_shared_item(self, field_index: int, cache_index: int, *, visible: bool = True) -> int:
         """Append a manual-filter item addressed by its cache shared-item index; return its index.
 
         ``cache_index`` selects ``shared_items[cache_index]`` of the bound

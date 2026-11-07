@@ -73,7 +73,7 @@ def _pivot_report_book(wb: Workbook, ws: Sheet) -> None:
     ws.set_text(0, 0, "Region")
     ws.set_text(0, 1, "Amount")
     cache = wb.add_pivot_cache().cache_id
-    wb.pivot_cache(cache).set_worksheet_source(formulon.PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
+    wb.pivot_cache(cache).set_worksheet_source(ref="A1:B3", sheet="Sheet1")
     wb.pivot_cache(cache).add_field("Region")
     wb.pivot_cache(cache).add_field("Amount")
     for row, (region, amount) in enumerate((("East", 10.0), ("West", 30.0)), start=1):
@@ -161,7 +161,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.set_blank": Case(),
     "Sheet.set_bool": Case(tail=lambda: (True,)),
     "Sheet.set_cell_phonetic": Case(tail=lambda: ("kana",)),
-    "Sheet.set_cell_phonetic_properties": Case(tail=lambda: (formulon.PhoneticPropertiesInput(),)),
+    "Sheet.set_cell_phonetic_properties": Case(kw=lambda: {"font_id": 0, "type": 1, "alignment": 1}),
     "Sheet.set_cell_phonetic_runs": Case(tail=_runs),
     "Sheet.set_cell_show_phonetic": Case(tail=lambda: (True,)),
     "Sheet.set_cell_xf_index": Case(tail=lambda: (0,)),
@@ -741,6 +741,9 @@ class NoCountNamesTests(unittest.TestCase):
         visible = inspect.signature(formulon.Pivot.add_field_item).parameters["visible"]
         self.assertIs(visible.kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertIs(visible.default, True)
+        shared_visible = inspect.signature(formulon.Pivot.add_field_shared_item).parameters["visible"]
+        self.assertIs(shared_visible.kind, inspect.Parameter.KEYWORD_ONLY)
+        self.assertIs(shared_visible.default, True)
         grouping = inspect.signature(formulon.Chart.set_type).parameters["grouping"]
         self.assertEqual(grouping.default, formulon.ChartGrouping.CLUSTERED)
 
@@ -906,7 +909,9 @@ class ChartLegendPatchTests(unittest.TestCase):
             ws.set_text(r + 1, 0, "abc"[r])
             ws.set_number(r + 1, 1, float(r + 1))
         ws.set_text(0, 1, "S")
-        return ws.add_chart(formulon.ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$4", row=6, **options)
+        return ws.add_chart(
+            formulon.ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$4", anchor=formulon.DrawingAnchor(row=6), **options
+        )
 
     def test_position_keeps_overlay(self) -> None:
         with _open() as wb:
@@ -1373,7 +1378,7 @@ class PlatformOnlyRemovalTests(unittest.TestCase):
             ws = wb.sheet(0)
             ws.set_text(0, 0, "x")
             self.assertFalse(ws.get_cell_phonetic_properties(0, 0).present)
-            ws.set_cell_phonetic_properties(0, 0, formulon.PhoneticPropertiesInput(font_id=0, type=1, alignment=1))
+            ws.set_cell_phonetic_properties(0, 0, font_id=0, type=1, alignment=1)
             self.assertTrue(ws.get_cell_phonetic_properties(0, 0).present)
 
     def test_unset_pivot_option_strings_read_none(self) -> None:

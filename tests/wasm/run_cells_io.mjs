@@ -255,6 +255,9 @@ export function registerCellsIo(Module, test) {
       });
       const before = wb.getTable(created);
       assert.deepEqual(before.range.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 });
+      assert.equal(before.headerRow, false);
+      assert.equal(before.totalsRow, true);
+      assert.equal('headerRowCount' in before, false);
 
       const beforeSaved = wb.save();
       const beforeXml = readZipEntryText(beforeSaved, 'xl/tables/table1.xml');
@@ -604,6 +607,28 @@ export function registerCellsIo(Module, test) {
     expectFailure(() => Module.compareText('a', 'b', 0, 'nope'), StatusCode.InvalidArgument);
     assert.throws(() => Module.compareText('a', 'b', -1, profile), RangeError);
     expectFailure(() => Module.compareText('a', 'b', 3, profile));
+  });
+
+  test('convertCivilToSerial and convertSerialToCivil map the engine date rules', () => {
+    const civil = (year, month, day, hour = 0, minute = 0, second = 0) => ({ year, month, day, hour, minute, second });
+    assert.equal(Module.convertCivilToSerial(civil(1900, 1, 1), false), 1);
+    assert.equal(Module.convertCivilToSerial(civil(1900, 2, 29), false), 60);
+    assert.equal(Module.convertCivilToSerial(civil(1900, 3, 1), false), 61);
+    assert.equal(Module.convertCivilToSerial(civil(1904, 1, 1), true), 0);
+    assert.equal(Module.convertCivilToSerial(civil(2024, 1, 1, 12), false), 45292.5);
+    assert.deepEqual(Module.convertSerialToCivil(60, false), civil(1900, 2, 29));
+    assert.deepEqual(Module.convertSerialToCivil(45292.5, false), civil(2024, 1, 1, 12));
+    assert.deepEqual(Module.convertSerialToCivil(0, true), civil(1904, 1, 1));
+    expectFailure(() => Module.convertCivilToSerial(civil(1900, 2, 29), true), StatusCode.InvalidArgument);
+    expectFailure(() => Module.convertCivilToSerial(civil(2024, 13, 1), false), StatusCode.InvalidArgument);
+    expectFailure(() => Module.convertCivilToSerial(civil(1903, 12, 31), true), StatusCode.InvalidArgument);
+    expectFailure(() => Module.convertSerialToCivil(0.5, false), StatusCode.InvalidArgument);
+    expectFailure(() => Module.convertSerialToCivil(1e9, false), StatusCode.InvalidArgument);
+    assert.throws(() => Module.convertCivilToSerial(civil(2024, 1.5, 1), false), RangeError);
+    assert.throws(() => Module.convertCivilToSerial(civil(2 ** 31, 1, 1), false), RangeError);
+    assert.throws(() => Module.convertCivilToSerial('2024-01-01', false), TypeError);
+    assert.throws(() => Module.convertSerialToCivil('1', false), TypeError);
+    expectFailure(() => Module.convertSerialToCivil(Number.NaN, false), StatusCode.InvalidArgument);
   });
 
   test('getCollationClasses orders by kind, folds text by strength, and copies its output', () => {

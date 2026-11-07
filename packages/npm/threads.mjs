@@ -7,14 +7,18 @@
 import * as common from './common.js';
 import createModule from './formulon_threads_core.js';
 
+// A workbook dropped without `dispose()` frees its engine object once collected (best-effort). The held
+// value is the raw object alone, which holds no reference back to its facade.
+const registry = new FinalizationRegistry((raw) => raw.delete());
+
 /**
  * Loads the engine and resolves to the frozen `Formulon` object.
  *
- * @param {object} [options] `FormulonOptions`: `locateFile`, `print`, `printErr`.
+ * @param {object} [options] `FormulonOptions`: `locateFile`, `print`, `printErr`, `wasm`.
  * @returns {Promise<object>}
  */
 export function createFormulon(options) {
-  return common.loadFormulon(createModule, options, common);
+  return common.loadFormulon(createModule, options, common, registry);
 }
 export default createFormulon;
 
@@ -42,6 +46,7 @@ export {
   ChartPlotType,
   ChartPointState,
   ChartSeriesDirection,
+  ChartSourceKind,
   ChartTitleKind,
   CollationStrength,
   ColorContext,

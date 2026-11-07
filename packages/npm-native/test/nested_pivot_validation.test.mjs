@@ -5,7 +5,7 @@ function makePivot(Workbook) {
   const wb = Workbook.createDefault();
   wb.setExcelProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
-  cache.setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -218,7 +218,7 @@ test('pivot cache source snapshots each nested getter once before mutation', asy
   try {
     const cache = wb.addPivotCache(0);
     let reads = 0;
-    const source = { present: true, sheet: 'Sheet1' };
+    const source = { sheet: 'Sheet1' };
     Object.defineProperty(source, 'ref', {
       enumerable: true,
       get() {
@@ -249,4 +249,22 @@ test('pivot optional strings and nullish numeric defaults keep the valid contrac
     });
     assert.equal(pivot.listDataFields().length, 2);
   });
+});
+
+test('setWorksheetSource(null) clears the source and an empty source is still a present one', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const cache = wb.addPivotCache(0);
+    cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+    assert.equal(cache.getWorksheetSource().present, true);
+    assert.equal(cache.getWorksheetSource().ref, 'A1:B3');
+    cache.setWorksheetSource(null);
+    assert.equal(cache.getWorksheetSource(), null);
+    cache.setWorksheetSource({});
+    assert.equal(cache.getWorksheetSource().present, true);
+    assert.equal(cache.getWorksheetSource().ref, null);
+  } finally {
+    wb.dispose();
+  }
 });

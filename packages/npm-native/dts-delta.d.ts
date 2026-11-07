@@ -1,6 +1,9 @@
 // Members declared only by @libraz/formulon-native. tools/codegen/gen_native_dts.py
 // splices the members of `Workbook` below into the shared `Workbook` interface of
 // src/wasm/formulon.d.ts when it generates index.d.ts.
+//
+// `FormulonOptions` is shared as declared there: the native package ignores `wasm` like
+// the other option keys, so it needs no delta of its own.
 
 export interface Workbook {
   /** Estimated heap bytes the native workbook occupies.

@@ -74,7 +74,7 @@ function pivotWorkbook(wb, formulon) {
   ws.setText(0, 0, 'Region');
   ws.setText(0, 1, 'Amount');
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -425,6 +425,14 @@ test('edge: addMerge accepts an A1 range and a single A1 cell as 1x1', async () 
     assert.deepEqual(plain(ws.getMergesInRange(rect(0, 0, 9, 9))), [rect(0, 0, 1, 1)]);
     ws.addMerge('D4');
     assert.deepEqual(plain(ws.getMergesInRange(rect(3, 3, 3, 3))), [rect(3, 3, 3, 3)]);
+  });
+});
+
+test('criterion 2: getCellRectPt and getWidthModel default their mode to Display', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    assert.deepEqual(ws.getCellRectPt(R), ws.getCellRectPt(R, f.GeometryMode.Display));
+    assert.deepEqual(ws.getWidthModel(), ws.getWidthModel(f.GeometryMode.Display));
   });
 });
 

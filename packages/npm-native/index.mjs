@@ -75,6 +75,7 @@ export {
   ChartPlotType,
   ChartPointState,
   ChartSeriesDirection,
+  ChartSourceKind,
   ChartTitleKind,
   CollationStrength,
   ColorContext,

@@ -80,13 +80,18 @@ class ProtectedRangeTests(unittest.TestCase):
                     reloaded.sheet(0).list_protected_ranges()[0].ranges,
                     [CellRect(3, 1, 4, 2), CellRect(6, 4, 6, 4)],
                 )
-                reloaded.sheet(0).update_protected_range(
-                    0, ProtectedRange(name="Renamed", ranges=[CellRect(3, 3, 3, 3)])
-                )
+                reloaded.sheet(0).update_protected_range(0, name="Renamed", ranges=[CellRect(3, 3, 3, 3)])
+                renamed = reloaded.sheet(0).list_protected_ranges()[0]
+                self.assertEqual((renamed.name, renamed.ranges), ("Renamed", [CellRect(3, 3, 3, 3)]))
+                # A partial update keeps the fields it does not name.
+                self.assertEqual(renamed.password, "CC1A")
+                reloaded.sheet(0).update_protected_range(0, password="")
+                cleared = reloaded.sheet(0).list_protected_ranges()[0]
                 self.assertEqual(
-                    reloaded.sheet(0).list_protected_ranges()[0].password,
-                    "",
+                    (cleared.name, cleared.ranges, cleared.password), ("Renamed", [CellRect(3, 3, 3, 3)], "")
                 )
+                reloaded.sheet(0).update_protected_range(0, name="Again")
+                self.assertEqual(reloaded.sheet(0).list_protected_ranges()[0].ranges, [CellRect(3, 3, 3, 3)])
                 reloaded.sheet(0).remove_protected_range(0)
                 self.assertEqual(
                     [r.name for r in reloaded.sheet(0).list_protected_ranges()],
@@ -106,7 +111,9 @@ class ProtectedRangeTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.sheet(9).add_protected_range(ProtectedRange(name="Other", ranges=[CellRect(0, 1, 0, 1)]))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_protected_range(5, ProtectedRange(name="Other", ranges=[CellRect(0, 1, 0, 1)]))
+                wb.sheet(0).update_protected_range(5, name="Other", ranges=[CellRect(0, 1, 0, 1)])
+            with self.assertRaises(FormulonError):
+                wb.sheet(0).update_protected_range(0, ranges=())
             with self.assertRaises(FormulonError):
                 wb.sheet(0).remove_protected_range(5)
             self.assertEqual(len(wb.sheet(0).list_protected_ranges()), 1)

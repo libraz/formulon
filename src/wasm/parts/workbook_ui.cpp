@@ -285,17 +285,21 @@ emscripten::val JsWorkbook::getProtectedRange(uint32_t sheet, uint32_t protected
 namespace {
 
 // Reads the protected range described by `range` into `*out`, with `text` owning its strings and
-// `ranges` its rectangles. False after the reader has recorded its rejection.
+// `ranges` its rectangles. With `optional_ranges`, an absent `ranges` leaves the list NULL (the stored ranges
+// are kept) and an empty array yields the non-NULL `empty_sentinel`. False after the reader has recorded its
+// rejection.
 bool pull_protected_range(const emscripten::val& range, const char* operation, std::string (&text)[6],
-                          std::vector<fm_cell_rect_t>& ranges, fm_protected_range_t* out) {
+                          std::vector<fm_cell_rect_t>& ranges, fm_protected_range_t* out, bool optional_ranges = false,
+                          const fm_cell_rect_t* empty_sentinel = nullptr) {
   JsNarrowNumericReader reader(operation);
   out->spin_count = reader.u32(range, "spinCount", 0U, "range.spinCount");
   out->name = reader.optional_string(range, "name", text[0], "range.name");
   const emscripten::val ranges_value = reader.value(range, "ranges", "range.ranges");
-  if (reader.require_array(ranges_value, "range.ranges")) {
+  const bool ranges_given = !optional_ranges || js_value_present(ranges_value);
+  if (ranges_given && reader.require_array(ranges_value, "range.ranges")) {
     ranges = js_pull_range_array(ranges_value, "range.ranges", &reader);
   }
-  out->ranges = ranges.data();
+  out->ranges = ranges_given && optional_ranges && ranges.empty() ? empty_sentinel : ranges.data();
   out->range_count = ranges.size();
   out->password = reader.optional_string(range, "password", text[1], "range.password");
   out->algorithm_name = reader.optional_string(range, "algorithmName", text[2], "range.algorithmName");
@@ -333,7 +337,8 @@ void JsWorkbook::updateProtectedRange(uint32_t sheet, uint32_t index, emscripten
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
   fm_protected_range_t r{};
-  if (!pull_protected_range(range, "updateProtectedRange", text, ranges, &r)) {
+  const fm_cell_rect_t empty_sentinel{};
+  if (!pull_protected_range(range, "updateProtectedRange", text, ranges, &r, true, &empty_sentinel)) {
     return;
   }
   succeeded(fm_sheet_update_protected_range(handle_, sheet, index, &r));

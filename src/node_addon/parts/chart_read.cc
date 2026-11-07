@@ -109,9 +109,7 @@ Napi::Object LabelsToJs(Napi::Env env, const fm_chart_labels_t& l) {
 Napi::Object DataSourceToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
                             const fm_chart_data_source_t& src, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("kind", JsString(env, src.kind == FM_CHART_SOURCE_REF       ? "ref"
-                              : src.kind == FM_CHART_SOURCE_LITERAL ? "literal"
-                                                                    : "none"));
+  o.Set("kind", JsNumber(env, src.kind));
   o.Set("formula", JsString(env, src.formula));
   Napi::Array literal = Napi::Array::New(env);
   for (size_t i = 0; i < src.literal_count && rc == 0; ++i) {

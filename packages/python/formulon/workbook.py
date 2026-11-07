@@ -26,6 +26,7 @@ plumbing.
 from __future__ import annotations
 
 import datetime
+import enum
 import math
 import numbers
 import operator
@@ -136,13 +137,13 @@ __all__ = [
     "ChartPoint",
     "ChartPointPatch",
     "ChartPointState",
-    "ChartPreviewOverridesInput",
     "ChartProperties",
     "ChartSeries",
     "ChartSeriesDirection",
     "ChartSeriesPatch",
     "ChartSeriesRanges",
     "ChartSource",
+    "ChartSourceKind",
     "ChartTitle",
     "ChartTitleKind",
     "ChartUnresolved",
@@ -170,6 +171,7 @@ __all__ = [
     "DifferentialFormat",
     "DisplayStatus",
     "DisplayText",
+    "DrawingAnchor",
     "DrawingObjectKind",
     "DrawingProperties",
     "DynamicFilterType",
@@ -228,7 +230,6 @@ __all__ = [
     "PassthroughPart",
     "Person",
     "PhoneticProperties",
-    "PhoneticPropertiesInput",
     "PhoneticRun",
     "PictureProperties",
     "PIVOT_SHOW_AS_BASE_NEXT",
@@ -302,14 +303,13 @@ __all__ = [
     "TableStyleDefaults",
     "TableStyleElement",
     "ThemeColors",
-    "ThemeColorsInput",
     "ThemeFonts",
     "ThemeScriptFont",
-    "ThemeScriptFontInput",
     "ThemeSource",
     "ThreadedComment",
     "ThreadedCommentInput",
     "UNCHANGED",
+    "Unchanged",
     "UnderlineStyle",
     "ValidationErrorStyle",
     "ValidationOutcome",
@@ -334,34 +334,26 @@ _STATUS_NOT_FOUND = 6
 _CELL_RANGE_NO_CURSOR = (1 << 64) - 1
 
 
-#: Excel formula profile id accepted by `Workbook.set_excel_profile_id`.
-class _Unchanged:
-    """The type of :data:`UNCHANGED`; there is exactly one instance."""
+class _UnchangedType(enum.Enum):
+    """The type of :data:`UNCHANGED`; an enum so copies and pickles keep the one instance."""
 
-    __slots__ = ()
-    _instance: "Optional[_Unchanged]" = None
-
-    def __new__(cls) -> "_Unchanged":
-        if cls._instance is None:
-            cls._instance = object.__new__(cls)
-        return cls._instance
+    UNCHANGED = "UNCHANGED"
 
     def __repr__(self) -> str:
         return "formulon.UNCHANGED"
 
-    def __reduce__(self) -> str:
-        # Pickling and copying resolve the module attribute, so the singleton survives a round trip.
-        return "UNCHANGED"
 
+#: Default of a partial-update keyword argument: the field keeps its current value.
+UNCHANGED: Literal[_UnchangedType.UNCHANGED] = _UnchangedType.UNCHANGED
 
-#: Default of a partial-update keyword argument: the field keeps its current value. Typed ``Any`` so it
-#: defaults a keyword argument of any type.
-UNCHANGED: Any = _Unchanged()
+#: Annotation type of :data:`UNCHANGED`; write a partial-update argument as ``Union[T, Unchanged]``.
+Unchanged = Literal[_UnchangedType.UNCHANGED]
 
 
 #: A sheet argument: a :class:`Sheet` of the same workbook, a 0-based sheet index, or a sheet name.
 SheetRef = Union["Sheet", int, str]
 
+#: Excel formula profile id accepted by `Workbook.set_excel_profile_id`.
 ExcelProfileId = Literal[
     "mac-365-ja_JP",
     "win-365-ja_JP",
@@ -633,7 +625,7 @@ class DefinedName:
     hidden: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass
 class DefinedNameInput:
     """A defined name :meth:`Workbook.set_defined_name` writes; ``local_sheet_id`` ``None`` is workbook scope."""
 
@@ -664,7 +656,7 @@ class TableProperties:
 
     ``style_name`` is ``None`` without a named style and may name a custom
     style (:meth:`Workbook.get_table_style`); the four toggles read false
-    without ``<tableStyleInfo>``. The row counts are 0 or 1.
+    without ``<tableStyleInfo>``. ``header_row`` and ``totals_row`` say whether the table has those rows.
     """
 
     name: str
@@ -676,8 +668,8 @@ class TableProperties:
     show_last_column: bool = False
     show_row_stripes: bool = False
     show_column_stripes: bool = False
-    header_row_count: int = 1
-    totals_row_count: int = 0
+    header_row: bool = True
+    totals_row: bool = False
     columns: List[TableColumn] = field(default_factory=list)
 
 
@@ -903,6 +895,27 @@ class AnchorEditAs(IntEnum):
     ONE_CELL = 0
     TWO_CELL = 1
     ABSOLUTE = 2
+
+
+@dataclass
+class DrawingAnchor:
+    """The placement of a picture or chart frame (``set_anchor``, ``add_picture``, ``add_chart``).
+
+    ``row`` / ``col`` / ``row_offset_emu`` / ``col_offset_emu`` are the top-left marker of the anchor
+    box; ``width_emu`` / ``height_emu`` the object's own unrotated size. A zero size is the picture's
+    pixel size times 9525 on insert, Excel's default frame for a chart, and keeps the current size on
+    ``set_anchor``. ``edit_as`` applies to a two-cell anchor only. ``DrawingAnchor()`` is a one-cell
+    anchor at A1.
+    """
+
+    anchor_kind: AnchorKind = AnchorKind.ONE_CELL
+    edit_as: AnchorEditAs = AnchorEditAs.TWO_CELL
+    row: int = 0
+    col: int = 0
+    row_offset_emu: int = 0
+    col_offset_emu: int = 0
+    width_emu: int = 0
+    height_emu: int = 0
 
 
 class ShapePaint(IntEnum):
@@ -1735,7 +1748,7 @@ class ThreadedComment:
     mentions: List[Mention]
 
 
-@dataclass(frozen=True)
+@dataclass
 class ThreadedCommentInput:
     """A threaded comment :meth:`Sheet.add_threaded_comment` adds.
 
@@ -2112,11 +2125,19 @@ class ChartLabelPosition(IntEnum):
     RIGHT = 8
 
 
+class ChartSourceKind(IntEnum):
+    """What a chart series input holds."""
+
+    NONE = 0
+    REF = 1
+    LITERAL = 2
+
+
 @dataclass(frozen=True)
 class ChartDataSource:
-    """One series input: ``kind`` is ``"none"``, ``"ref"`` (``formula`` set) or ``"literal"`` (``literal`` set)."""
+    """One series input: ``kind`` is ``NONE``, ``REF`` (``formula`` set) or ``LITERAL`` (``literal`` set)."""
 
-    kind: Literal["none", "ref", "literal"]
+    kind: ChartSourceKind
     formula: str = ""
     literal: List[Union[float, str]] = field(default_factory=list)
 
@@ -2482,19 +2503,6 @@ class ChartAxisPatch(TypedDict, total=False):
     tick_label_position: Optional[Literal["nextTo", "low", "high", "none"]]
 
 
-@dataclass
-class ChartPreviewOverridesInput:
-    """Overrides for :meth:`Chart.get_preview`; a field left ``None`` keeps the chart's own value."""
-
-    source: Optional[str] = None
-    direction: Optional[ChartSeriesDirection] = None
-    header_row: Optional[bool] = None
-    header_column: Optional[bool] = None
-    blanks_as: Optional[ChartBlanksAs] = None
-    plot_visible_only: Optional[bool] = None
-    na_as_blank: Optional[bool] = None
-
-
 class ChartDisplayPatch(TypedDict, total=False):
     """Display patch for :meth:`Chart.set_display`; an omitted key is kept, ``None`` removes the element."""
 
@@ -2531,12 +2539,12 @@ class ProtectedRange:
 
     name: str
     ranges: List[CellRect]
-    password: Optional[str] = None
-    algorithm_name: Optional[str] = None
-    hash_value: Optional[str] = None
-    salt_value: Optional[str] = None
+    password: str = ""
+    algorithm_name: str = ""
+    hash_value: str = ""
+    salt_value: str = ""
     spin_count: int = 0
-    security_descriptor: Optional[str] = None
+    security_descriptor: str = ""
 
 
 @dataclass(frozen=True)
@@ -3221,7 +3229,7 @@ class CellXf:
     hidden: Optional[bool] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class CellXfInput:
     """An ``<xf>`` record :meth:`Workbook.add_cell_xf` and :meth:`Workbook.add_cell_style_xf` write.
 
@@ -3301,27 +3309,9 @@ class PhoneticRun:
     text: str = ""
 
 
-@dataclass
-class PhoneticPropertiesInput:
-    """How a cell's phonetic guide renders (OOXML ``<phoneticPr>``).
-
-    ``font_id`` indexes the workbook's font table for the ruby text.
-    ``type`` is the kana form: 0 half-width katakana, 1 full-width
-    katakana, 2 hiragana, 3 no conversion. ``alignment`` is how the kana
-    is distributed: 0 no control, 1 left, 2 center, 3 distributed.
-
-    The all-zero default is the state Excel infers for a guide written
-    with no ``<phoneticPr>`` element at all.
-    """
-
-    font_id: int = 0
-    type: int = 0
-    alignment: int = 0
-
-
 @dataclass(frozen=True)
 class PhoneticProperties:
-    """Result of :meth:`Sheet.get_cell_phonetic_properties`; fields as in :class:`PhoneticPropertiesInput`.
+    """Result of :meth:`Sheet.get_cell_phonetic_properties`; the fields are those of ``set_cell_phonetic_properties``.
 
     ``present`` is true when the properties are explicit (a ``<phoneticPr>``
     element or :meth:`Sheet.set_cell_phonetic_properties`, an all-zero triple
@@ -3791,15 +3781,6 @@ class ThemeScriptFont:
 
 
 @dataclass(frozen=True)
-class ThemeScriptFontInput:
-    """One script's typeface in the major (``major`` true, heading) or minor (body) font set."""
-
-    major: bool
-    script: str
-    typeface: str
-
-
-@dataclass(frozen=True)
 class ThemeColors:
     """The theme's 12 scheme colours as ``0xFFRRGGBB`` values in ``a:clrScheme`` order.
 
@@ -3808,13 +3789,6 @@ class ThemeColors:
     """
 
     source: ThemeSource
-    colors: List[int]
-
-
-@dataclass(frozen=True)
-class ThemeColorsInput:
-    """The 12 scheme colours :meth:`Workbook.set_theme_colors` writes, in ``a:clrScheme`` order."""
-
     colors: List[int]
 
 
@@ -3890,7 +3864,7 @@ class PivotWorksheetSource:
     name: Optional[str] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class PivotInput:
     """A pivot table :meth:`Sheet.add_pivot` creates: its name, its cache and its 0-based top-left cell."""
 
@@ -4070,7 +4044,7 @@ class PivotCalculatedItem:
     scoped: bool
 
 
-@dataclass(frozen=True)
+@dataclass
 class PivotDataFieldInput:
     """Argument shape for ``pivot_data_field_add`` / ``pivot_data_field_set``.
 
@@ -4089,7 +4063,7 @@ class PivotDataFieldInput:
     show_as_base_item: Optional[int] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class PivotFilterInput:
     """Argument shape for :meth:`Pivot.add_filter`; an operand whose kind is ``None`` is absent."""
 
@@ -4615,7 +4589,6 @@ _PATCH_SET = 2
 # The C "no title" / "no legend" members; the binding reports them as a ``None`` record.
 _CHART_TITLE_NONE = 0
 _CHART_LEGEND_NONE = -1
-_CHART_SOURCE_KINDS = {0: "none", 1: "ref", 2: "literal"}
 # `fm_chart_role_t` order, which is also the order of `fm_chart_data_series_t.range_count`.
 _CHART_ROLES = ("name", "categories", "values", "x", "y", "size")
 
@@ -4762,9 +4735,9 @@ def _read_chart_labels(d: Dict[str, object]) -> ChartLabels:
 
 
 def _read_chart_data_source(chart: int, plot: int, series: int, role: int, d: Dict[str, object]) -> ChartDataSource:
-    kind = _CHART_SOURCE_KINDS.get(d["kind"], "none")
+    kind = _enum(ChartSourceKind, d["kind"])
     literal: List[Union[float, str]] = []
-    if kind == "literal":
+    if kind == ChartSourceKind.LITERAL:
         for i in range(d["literal_count"]):
             point = _read_struct(LIB.fm_chart_get_series_literal_at, S.CHART_LITERAL, chart, plot, series, role, i)
             literal.append(LIB.read_cstr(point["text"]) if point["is_text"] else point["number"])
@@ -5652,6 +5625,13 @@ class Workbook:
       ``len(wb)`` is the sheet count and iterating yields the handles in
       sheet order.
 
+    Lookups:
+      A handle or result entry point (:meth:`sheet`, ``table``, ``pivot``,
+      ``pivot_cache``, the ``drawing`` family, ``get_chart_data``) raises
+      :class:`NotFoundError` when nothing matches and
+      :class:`IndexOutOfRangeError` for an index past the end. A getter keyed
+      by a natural name (:meth:`get_defined_name`) returns ``None`` instead.
+
     Recalculation:
       Recalculation is explicit. A read returns the value as of the last
       :meth:`recalc`; :meth:`has_dirty_cells` reports whether a change has
@@ -5697,7 +5677,13 @@ class Workbook:
     # -- Factories ---------------------------------------------------------
     @classmethod
     def create_default(cls) -> "Workbook":
-        """Build a default workbook (a single sheet named ``Sheet1``)."""
+        """Build a default workbook (a single sheet named ``Sheet1``).
+
+        Example::
+
+            with Workbook.create_default() as wb:
+                wb[0].set_number("A1", 42.0)
+        """
         wb = cls._new()
         with _ArgScope() as scope:
             out_ptr = scope.out_ptr()
@@ -5772,6 +5758,11 @@ class Workbook:
           InvalidArgumentError: when the input is empty.
           FormulonError: when the input cannot be parsed as a valid
             OOXML or XLSB archive.
+
+        Example::
+
+            with Workbook.load("book.xlsx") as wb:
+                print(wb[0].get_value(0, 0).to_python())
         """
         if isinstance(source, (bytes, bytearray, memoryview)):
             buf = bytes(source)
@@ -5928,6 +5919,11 @@ class Workbook:
           ValueError: when ``key`` is a negative index or does not fit 64 bits.
           TypeError: when ``key`` is none of the above, or a :class:`Sheet` of
             another workbook.
+
+        Example::
+
+            ws = wb.sheet("Sheet1")
+            ws.set_text("A1", "Total")
         """
         from .sheet import Sheet
 
@@ -6072,6 +6068,11 @@ class Workbook:
         The wheel exposes only the serial recalc contract. Thread-capable
         bindings may opt in to the parallel scheduler, but this method
         always runs serially.
+
+        Example::
+
+            wb[0].set_formula("B1", "=A1*2")
+            wb.recalc()
         """
         h = self._require()
         status = LIB.fm_workbook_recalc(h)
@@ -6096,9 +6097,9 @@ class Workbook:
     def set_iterative(
         self,
         *,
-        enabled: bool = UNCHANGED,
-        max_iterations: int = UNCHANGED,
-        max_change: float = UNCHANGED,
+        enabled: Union[bool, Unchanged] = UNCHANGED,
+        max_iterations: Union[int, Unchanged] = UNCHANGED,
+        max_change: Union[float, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the iterative-calculation settings; an omitted argument keeps its setting.
 
@@ -6194,6 +6195,11 @@ class Workbook:
             that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
           TypeError: when ``dest`` is none of the above.
           OSError: when writing ``dest`` fails.
+
+        Example::
+
+            wb.save("out.xlsx")
+            data = wb.save()  # bytes
         """
         fmt = _save_format(dest, format)
         h = self._require()
@@ -6381,6 +6387,16 @@ class Workbook:
         element). With ``header_row`` set, the caller still owns the header
         cells: Excel expects the first row of the range to hold exactly these
         names.
+
+        Example::
+
+            ws.set_text("A1", "Item")
+            ws.set_text("B1", "Qty")
+            table = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 3, 1)),
+                name="Orders",
+                columns=["Item", "Qty"],
+            )
         """
         h = self._require()
         sheet = range.sheet
@@ -7323,8 +7339,8 @@ class Workbook:
     def set_table_style_defaults(
         self,
         *,
-        table_style: Optional[str] = UNCHANGED,
-        pivot_style: Optional[str] = UNCHANGED,
+        table_style: Union[str, Unchanged, None] = UNCHANGED,
+        pivot_style: Union[str, Unchanged, None] = UNCHANGED,
     ) -> None:
         """Set the default style names; an omitted argument keeps its name and ``None`` (or ``""``) removes it."""
         h = self._require()
@@ -7367,10 +7383,10 @@ class Workbook:
                 colors=list(struct.unpack("<12I", LIB.read_bytes(colors_ptr, S.THEME_COLORS.size))),
             )
 
-    def set_theme_colors(self, colors: ThemeColorsInput) -> None:
+    def set_theme_colors(self, *, colors: Sequence[int]) -> None:
         """Replace the theme's 12 scheme colours (``a:clrScheme`` order; alpha ignored)."""
         h = self._require()
-        values = [_uint(c, "colors") for c in colors.colors]
+        values = [_uint(c, "colors") for c in colors]
         if len(values) != 12:
             raise ValueError(f"formulon: colors must hold 12 entries, got {len(values)}")
         with _ArgScope() as scope:
@@ -7399,11 +7415,11 @@ class Workbook:
                 return None
             return ThemeScriptFont(major=major, script=script, typeface=LIB.read_cstr(LIB.read_u32(face_ptr)))
 
-    def set_theme_script_font(self, font: ThemeScriptFontInput) -> None:
+    def set_theme_script_font(self, *, major: bool, script: str, typeface: str) -> None:
         """Set the typeface of one script in the major (heading) or minor (body) font set.
 
-        ``font.script`` is an ISO 15924 code of exactly four ASCII letters
-        (``Jpan``, ``Hang``); ``font.typeface`` must be non-empty. Other
+        ``major`` picks the heading set, else the body set. ``script`` is an ISO 15924 code
+        of exactly four ASCII letters (``Jpan``, ``Hang``); ``typeface`` must be non-empty. Other
         scripts are unchanged and an unlisted script is appended. Setting
         ``Jpan`` also changes ``ThemeFonts.*_east_asian``. A workbook without a
         theme part first gets one carrying the full default set. Invalid
@@ -7411,9 +7427,9 @@ class Workbook:
         """
         h = self._require()
         with _ArgScope() as scope:
-            script_ptr = scope.cstr(font.script)
-            face_ptr = scope.cstr(font.typeface)
-            _check(LIB.fm_workbook_set_theme_script_font(h, 1 if font.major else 0, script_ptr, face_ptr))
+            script_ptr = scope.cstr(script)
+            face_ptr = scope.cstr(typeface)
+            _check(LIB.fm_workbook_set_theme_script_font(h, 1 if major else 0, script_ptr, face_ptr))
 
     def clear_theme(self) -> None:
         """Remove the theme part so the workbook reports the default theme.

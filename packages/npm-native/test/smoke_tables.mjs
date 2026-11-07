@@ -34,8 +34,8 @@ test('tableAt reads the style toggles, row counts and columns', async () => {
     assert.equal(table.styleName, 'TableStyleLight9');
     assert.equal(table.showRowStripes, true);
     assert.equal(table.showFirstColumn, false);
-    assert.equal(table.headerRowCount, 1);
-    assert.equal(table.totalsRowCount, 0);
+    assert.equal(table.headerRow, true);
+    assert.equal(table.totalsRow, false);
     assert.deepEqual(
       table.columns.map((c) => [c.name, c.totalsRowFunction, c.totalsRowLabel, c.totalsRowFormula]),
       [
@@ -110,7 +110,10 @@ test('updateTable renames the table and its structured references', async () => 
     });
     // A clash is refused and leaves the rest of the update unapplied.
     assert.throws(
-      () => wb.table(other).update({ name: 'revenue', rect: { firstRow: 0, firstCol: 5, lastRow: 4, lastCol: 5 } }),
+      () =>
+        wb
+          .table(other)
+          .update({ name: 'revenue', range: { sheet: 0, rect: { firstRow: 0, firstCol: 5, lastRow: 4, lastCol: 5 } } }),
       isFormulonError,
     );
     assert.deepEqual(other.getProperties().range.rect, { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 });

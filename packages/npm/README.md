@@ -108,7 +108,7 @@ try {
   console.log(chart.getProperties().title.text); // Sales
 
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [['East', 10], ['West', 30]]) {

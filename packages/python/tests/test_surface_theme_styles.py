@@ -13,10 +13,8 @@ from formulon import (
     EffectiveStyleSource,
     Font,
     FormulonError,
-    ThemeColorsInput,
     ThemeFonts,
     ThemeScriptFont,
-    ThemeScriptFontInput,
     ThemeSource,
     Workbook,
 )
@@ -50,10 +48,10 @@ class ThemeTests(unittest.TestCase):
     def test_set_theme_colors_roundtrip(self) -> None:
         colors = [0xFF000000 | (0x112233 * (i + 1) & 0xFFFFFF) for i in range(12)]
         with Workbook.create_default() as wb:
-            wb.set_theme_colors(ThemeColorsInput(colors))
+            wb.set_theme_colors(colors=colors)
             theme = wb.get_theme_colors()
             with self.assertRaises(ValueError):
-                wb.set_theme_colors(ThemeColorsInput(colors[:11]))
+                wb.set_theme_colors(colors=colors[:11])
         self.assertEqual(theme.source, ThemeSource.PART)
         self.assertEqual(theme.colors, colors)
 
@@ -68,7 +66,7 @@ class ThemeTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.clear_theme()
             self.assertEqual(wb.get_theme_colors().source, ThemeSource.DEFAULT)
-            wb.set_theme_colors(ThemeColorsInput(colors))
+            wb.set_theme_colors(colors=colors)
             self.assertEqual(wb.get_theme_colors().source, ThemeSource.PART)
             wb.clear_theme()
             theme = wb.get_theme_colors()
@@ -83,7 +81,7 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual(rgb.resolution, ColorResolution.EXACT)
 
             colors = [0xFF000000 + i * 0x010101 for i in range(12)]
-            wb.set_theme_colors(ThemeColorsInput(colors))
+            wb.set_theme_colors(colors=colors)
             # Theme index 1 is dk1, which is clrScheme slot 0.
             theme = wb.resolve_color(Color(kind=_THEME_KIND, theme=1))
             self.assertEqual(theme.argb, colors[0])
@@ -214,7 +212,7 @@ class ThemeScriptFontTests(unittest.TestCase):
     def test_set_script_font_roundtrip(self) -> None:
         with Workbook.create_for_profile("mac-365-en_US") as wb:
             jpan = wb.get_theme_script_font(major=False, script="Jpan")
-            wb.set_theme_script_font(ThemeScriptFontInput(False, "Hang", "Test Face"))
+            wb.set_theme_script_font(major=False, script="Hang", typeface="Test Face")
             data = wb.save()
         with Workbook.load(data) as wb2:
             self.assertEqual(
@@ -226,9 +224,9 @@ class ThemeScriptFontTests(unittest.TestCase):
     def test_invalid_script_raises(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_theme_script_font(ThemeScriptFontInput(True, "Jp", "Face"))
+                wb.set_theme_script_font(major=True, script="Jp", typeface="Face")
             with self.assertRaises(FormulonError):
-                wb.set_theme_script_font(ThemeScriptFontInput(True, "Jpan", ""))
+                wb.set_theme_script_font(major=True, script="Jpan", typeface="")
 
 
 if __name__ == "__main__":

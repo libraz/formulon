@@ -16,7 +16,6 @@ import unittest
 
 import formulon
 from formulon import (
-    LIB,
     CellRect,
     Comment,
     DefinedNameInput,
@@ -27,6 +26,7 @@ from formulon import (
     ValueKind,
     Workbook,
 )
+from formulon._c import LIB
 
 # Excel error code ordinals, mirrored from src/value.h ``ErrorCode``.
 ERROR_DIV0 = 1

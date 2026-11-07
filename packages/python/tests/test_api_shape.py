@@ -843,7 +843,7 @@ def _workbook_with_pivot() -> "tuple[Workbook, int, int]":
     """A default workbook with one two-field pivot on sheet 0: ``(wb, pivot_index, cache_id)``."""
     wb = Workbook.create_default()
     cache_id = wb.add_pivot_cache().cache_id
-    wb.pivot_cache(cache_id).set_worksheet_source(formulon.PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
+    wb.pivot_cache(cache_id).set_worksheet_source(ref="A1:B3", sheet="Sheet1")
     wb.pivot_cache(cache_id).add_field("Region")
     wb.pivot_cache(cache_id).add_field("Amount")
     for region, amount in (("East", 10.0), ("West", 30.0)):
@@ -924,8 +924,9 @@ class SetterRoundTripTests(unittest.TestCase):
         self.assertEqual(self.ws.get_print_titles(), titles)
 
         selection = formulon.SheetSelection(2, 3, [formulon.CellRect(2, 3, 4, 5)])
-        self.ws.set_selection(selection)
-        self.ws.set_selection(self.ws.get_selection())
+        self.ws.set_selection(active_row=2, active_col=3, ranges=selection.ranges)
+        got = self.ws.get_selection()
+        self.ws.set_selection(active_row=got.active_row, active_col=got.active_col, ranges=got.ranges)
         self.assertEqual(self.ws.get_selection(), selection)
 
         protection = formulon.SheetProtection(enabled=True, sheet=True, hash_value="abc")
@@ -965,13 +966,11 @@ class SetterRoundTripTests(unittest.TestCase):
         self.assertEqual(self.wb.get_defined_name("Rate"), got)
 
         colors = self.wb.get_theme_colors()
-        self.wb.set_theme_colors(_input_of(formulon.ThemeColorsInput, colors))
+        self.wb.set_theme_colors(colors=colors.colors)
         self.assertEqual(self.wb.get_theme_colors().colors, colors.colors)
 
         script = self.wb.get_theme_script_font(major=True, script="Jpan")
-        self.wb.set_theme_script_font(
-            formulon.ThemeScriptFontInput(major=True, script=script.script, typeface=script.typeface)
-        )
+        self.wb.set_theme_script_font(major=True, script=script.script, typeface=script.typeface)
         self.assertEqual(self.wb.get_theme_script_font(major=True, script="Jpan"), script)
 
         style = self.ws.pivot(self.pivot).get_style_info()

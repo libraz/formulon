@@ -28,7 +28,6 @@ from formulon import (
     PivotCache,
     PivotDataFieldInput,
     PivotFieldInput,
-    PivotWorksheetSource,
     Sheet,
     SheetRect,
     Sparkline,
@@ -55,7 +54,7 @@ def fill_source(sheet: Sheet) -> None:
 def add_cache(wb: Workbook, source_sheet: str) -> PivotCache:
     """A cache over ``source_sheet``'s A1:B3 with the two records filled in."""
     cache = wb.add_pivot_cache()
-    cache.set_worksheet_source(PivotWorksheetSource(ref="A1:B3", sheet=source_sheet))
+    cache.set_worksheet_source(ref="A1:B3", sheet=source_sheet)
     cache.add_field("Region")
     cache.add_field("Amount")
     for region, amount in (("East", 10), ("West", 30)):
@@ -700,35 +699,28 @@ class SparklineUpdateTests(HandleTestCase):
             ws.add_sparkline_group(
                 SparklineGroup(sparklines=[Sparkline("Sheet1!A1:D1", "F1"), Sparkline("Sheet1!A2:D2", "F2")])
             )
-            group = ws.list_sparkline_groups()[0]
-            original = list(group.sparklines)
+            original = list(ws.list_sparkline_groups()[0].sparklines)
             self.assertEqual(len(original), 2)
 
-            # Writing the group read back keeps the sparklines, whatever else changes.
-            ws.update_sparkline_group(0, _replace(group, markers=True))
+            # A partial update keeps the sparklines, whatever else changes.
+            ws.update_sparkline_group(0, markers=True)
             self.assertTrue(ws.list_sparkline_groups()[0].markers)
             self.assertEqual(ws.list_sparkline_groups()[0].sparklines, original)
 
             # A new list replaces them.
             replacement = [Sparkline("Sheet1!B1:B5", "H1")]
-            ws.update_sparkline_group(0, _replace(ws.list_sparkline_groups()[0], sparklines=replacement))
+            ws.update_sparkline_group(0, sparklines=replacement)
             self.assertEqual(ws.list_sparkline_groups()[0].sparklines, replacement)
             self.assertTrue(ws.list_sparkline_groups()[0].markers)
 
             # An empty list is refused and the group is untouched.
             self.assertCode(
                 InvalidArgumentError,
-                lambda: ws.update_sparkline_group(0, _replace(ws.list_sparkline_groups()[0], sparklines=[])),
+                lambda: ws.update_sparkline_group(0, sparklines=[]),
                 StatusCode.INVALID_ARGUMENT,
             )
             self.assertEqual(ws.list_sparkline_groups()[0].sparklines, replacement)
             self.assertFalse(hasattr(Sheet, "set_sparkline_group_sparklines"))
-
-
-def _replace(group: SparklineGroup, **changes: Any) -> SparklineGroup:
-    import dataclasses
-
-    return dataclasses.replace(group, **changes)
 
 
 if __name__ == "__main__":

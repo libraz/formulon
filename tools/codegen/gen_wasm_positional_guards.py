@@ -68,6 +68,8 @@ FREE_FUNCTION_GUARDS = {
     "canonicalizeFormula": {"string": 0x3},
     "canonicalizeFunctionName": {"string": 0x3},
     "compareText": {"u32": 0x4, "string": 0xB},
+    "convertCivilToSerial": {"object": 0x1},
+    "convertSerialToCivil": {"double": 0x1},
     "getCollationClasses": {"u32": 0x2, "string": 0x4, "object": 0x1},
     "getFunctionMetadata": {"string": 0x1},
     "getImageInfo": {"object": 0x1},

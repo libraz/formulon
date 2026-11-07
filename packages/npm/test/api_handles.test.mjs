@@ -65,7 +65,7 @@ function fillSource(sheet) {
 // A cache over `sourceSheet`'s A1:B3 with the two records filled in.
 function addCache(wb, sourceSheet) {
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ present: true, ref: 'A1:B3', sheet: sourceSheet });
+  cache.setWorksheetSource({ ref: 'A1:B3', sheet: sourceSheet });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [

@@ -84,7 +84,14 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
     name: 'Renamed',
     ranges: [{ firstRow: 3, firstCol: 3, lastRow: 3, lastCol: 3 }],
   });
+  // A partial update leaves the keys it omits as they were.
+  assert.equal(loaded.sheet(0).listProtectedRanges()[0].name, 'Renamed');
+  assert.equal(loaded.sheet(0).listProtectedRanges()[0].password, 'CC1A');
+  loaded.sheet(0).updateProtectedRange(0, { password: '' });
   assert.equal(loaded.sheet(0).listProtectedRanges()[0].password, '');
+  assert.deepEqual(loaded.sheet(0).listProtectedRanges()[0].ranges, [
+    { firstRow: 3, firstCol: 3, lastRow: 3, lastCol: 3 },
+  ]);
   loaded.sheet(0).removeProtectedRange(0);
   assert.deepEqual(
     loaded

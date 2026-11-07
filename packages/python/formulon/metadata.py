@@ -1,4 +1,9 @@
-"""Host-injected function-metadata provider seam.
+"""Engine metadata: version, status names, logging, date-serial conversion and the function-metadata seam.
+
+:func:`get_version`, :func:`get_status_name`, :func:`set_log_min_level`,
+:func:`convert_civil_to_serial` and :func:`convert_serial_to_civil` are
+process-level calls into the engine. The rest of this module is the
+host-injected function-metadata provider seam.
 
 The calculation engine ships no human-readable function documentation:
 :func:`get_function_metadata` returns only structural data (name,
@@ -15,18 +20,175 @@ used for formula-language input localization.
 
 from __future__ import annotations
 
+import datetime
+import math
+import numbers
 from dataclasses import dataclass
 from typing import Dict, Mapping, Optional, TypedDict, Union
 
-from .workbook import FunctionMetadata
+from . import _structs as S
+from ._c import LIB, _sint
+from ._c import decode_cstr as _decode_cstr
+from ._status import StatusCode
+from .workbook import FunctionMetadata, LogLevel, _ArgScope, _check
 
 __all__ = [
     "FunctionMetadataEntry",
     "FunctionMetadataLocalized",
     "FunctionMetadataProvider",
     "MergedFunctionMetadata",
+    "convert_civil_to_serial",
+    "convert_serial_to_civil",
+    "get_status_name",
+    "get_version",
     "merge_function_metadata",
+    "set_log_min_level",
 ]
+
+
+def get_version() -> str:
+    """Return the version string of the bundled engine.
+
+    Always non-empty.
+    """
+    return _decode_cstr(LIB.fm_get_version())
+
+
+def get_status_name(status: StatusCode) -> str:
+    """Return the name of a status code (``"INVALID_ARGUMENT"``).
+
+    An unknown code returns ``"UNRECOGNIZED_STATUS"``.
+    """
+    return _decode_cstr(LIB.fm_get_status_name(_sint(status, "status")))
+
+
+def set_log_min_level(level: LogLevel) -> None:
+    """Set the engine's minimum structured-log severity.
+
+    This is **process-wide** state, not per :class:`Workbook`, so it is a
+    module-level function rather than a method.
+
+    The default is :attr:`LogLevel.OFF`, under which the engine writes
+    nothing: an embedded library must not write to the host's stderr
+    unless the host asks it to. Raising the threshold to
+    :attr:`LogLevel.WARN` or below makes the engine emit one JSON record
+    per line on stderr, including the per-cell XLSB downgrade diagnostics.
+
+    Args:
+      level: a :class:`LogLevel` member.
+
+    Raises:
+      FormulonError: when ``level`` is outside :class:`LogLevel`.
+    """
+    _check(LIB.fm_set_log_min_level(_sint(level, "level")))
+
+
+def _check_date1904(date1904: object) -> None:
+    if not isinstance(date1904, bool):
+        raise TypeError(f"formulon: date1904 must be a bool, got {type(date1904).__name__}")
+
+
+def convert_civil_to_serial(value: Union[datetime.date, datetime.datetime], *, date1904: bool = False) -> float:
+    """Convert a calendar date and time to an Excel serial number.
+
+    The engine's own date rules apply, so the result equals
+    ``=DATE(y,m,d)+TIME(h,mi,s)``. A ``datetime`` is rounded to the nearest
+    second (half up); a plain ``date`` is midnight. The 1900 date system
+    accepts only years 1900 to 9999 and the 1904 system only 1904 to 9999.
+
+    Args:
+      value: a naive ``datetime.datetime`` or a ``datetime.date``.
+      date1904: ``True`` for the 1904 date system.
+
+    Returns:
+      The serial number, with the time of day as the fraction.
+
+    Raises:
+      TypeError: when ``value`` is not a ``date`` or ``datetime`` (a
+        ``datetime.time`` included), or ``date1904`` is not a ``bool``.
+      ValueError: when ``value`` carries a time zone, or rounding carries
+        it past the largest ``datetime``.
+      InvalidArgumentError: when the date lies outside the date system.
+
+    Example::
+
+        convert_civil_to_serial(datetime.datetime(2024, 1, 15, 12, 0))  # 45306.5
+    """
+    _check_date1904(date1904)
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is not None:
+            raise ValueError("formulon: value must be naive; it is a wall-clock reading")
+        rounded = value.replace(microsecond=0)
+        if value.microsecond >= 500000:
+            try:
+                rounded += datetime.timedelta(seconds=1)
+            except OverflowError:
+                raise ValueError("formulon: value rounds past the largest datetime") from None
+        civil = rounded
+    elif isinstance(value, datetime.date):
+        civil = datetime.datetime(value.year, value.month, value.day)
+    else:
+        raise TypeError(f"formulon: value must be a datetime.date or datetime.datetime, got {type(value).__name__}")
+    with _ArgScope() as scope:
+        civil_ptr = scope.struct(S.CIVIL_TIME)
+        S.CIVIL_TIME.pack(
+            LIB,
+            civil_ptr,
+            {
+                "year": _sint(civil.year, "year"),
+                "month": _sint(civil.month, "month"),
+                "day": _sint(civil.day, "day"),
+                "hour": _sint(civil.hour, "hour"),
+                "minute": _sint(civil.minute, "minute"),
+                "second": _sint(civil.second, "second"),
+            },
+        )
+        out = scope.alloc(8)
+        _check(LIB.fm_convert_civil_to_serial(civil_ptr, 1 if date1904 else 0, out))
+        return LIB.read_f64(out)
+
+
+def convert_serial_to_civil(serial: float, *, date1904: bool = False) -> datetime.datetime:
+    """Convert an Excel serial number to a calendar date and time.
+
+    The fraction is rounded to the nearest whole second (half up), carrying
+    into the next day when it reaches 86400. In the 1900 date system serials
+    ``[60, 61)`` are Excel's 1900-02-29, which ``datetime`` cannot represent.
+
+    Args:
+      serial: a finite serial number.
+      date1904: ``True`` for the 1904 date system.
+
+    Returns:
+      A naive ``datetime.datetime``.
+
+    Raises:
+      TypeError: when ``serial`` is not a number or ``date1904`` is not a ``bool``.
+      ValueError: when ``serial`` is NaN or infinite, or lies in ``[60, 61)`` of
+        the 1900 date system.
+      InvalidArgumentError: when ``serial`` lies outside the date system.
+
+    Example::
+
+        convert_serial_to_civil(45306.5)  # datetime.datetime(2024, 1, 15, 12, 0)
+    """
+    _check_date1904(date1904)
+    if isinstance(serial, bool) or not isinstance(serial, numbers.Real):
+        raise TypeError(f"formulon: serial must be a number, got {type(serial).__name__}")
+    number = float(serial)
+    if not math.isfinite(number):
+        raise ValueError(f"formulon: serial must be finite, got {serial!r}")
+    if not date1904 and 60.0 <= number < 61.0:
+        raise ValueError(
+            "formulon: serial 60 is Excel's 1900-02-29 in the 1900 date system, which datetime cannot represent"
+        )
+    with _ArgScope() as scope:
+        out_ptr = scope.struct(S.CIVIL_TIME)
+        _check(LIB.fm_convert_serial_to_civil(number, 1 if date1904 else 0, out_ptr))
+        civil = S.CIVIL_TIME.unpack(LIB, out_ptr)
+    return datetime.datetime(
+        civil["year"], civil["month"], civil["day"], civil["hour"], civil["minute"], civil["second"]
+    )
 
 
 class FunctionMetadataLocalized(TypedDict, total=False):

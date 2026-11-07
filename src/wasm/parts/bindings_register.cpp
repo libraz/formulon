@@ -658,6 +658,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("canonicalizeFormula", &canonicalize_formula);
   function("canonicalizeFunctionName", &canonicalize_function_name);
   function("compareText", &compare_text);
+  function("convertCivilToSerial", &convert_civil_to_serial);
+  function("convertSerialToCivil", &convert_serial_to_civil);
   function("getCollationClasses", &collation_classes);
   function("getFunctionMetadata", &function_metadata);
   function("getImageInfo", &probe_image);

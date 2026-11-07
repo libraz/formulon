@@ -819,6 +819,12 @@ emscripten::val list_locale_error_names(const std::string& profile_id);
 /// The profile's collation order of `a` and `b`. See `fm_compare_text`.
 double compare_text(const std::string& a, const std::string& b, int32_t strength, const std::string& profile_id);
 
+/// The Excel serial of `civil` ({year, month, day, hour, minute, second}). See `fm_convert_civil_to_serial`.
+double convert_civil_to_serial(emscripten::val civil, bool date1904);
+
+/// The civil date and time of `serial` as an object. See `fm_convert_serial_to_civil`.
+emscripten::val convert_serial_to_civil(double serial, bool date1904);
+
 /// Equal-under-collation class ids of `values`. See `fm_get_collation_classes`.
 emscripten::val collation_classes(emscripten::val values, int32_t strength, const std::string& profile_id);
 

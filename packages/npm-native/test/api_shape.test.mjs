@@ -33,6 +33,8 @@ const NON_TABLE_MEMBERS = new Set([
   'FormulonError',
   'mergeFunctionMetadata',
   'toNative',
+  'convertCivilToSerial',
+  'convertSerialToCivil',
   'evaluateFormula',
   'getVersion',
   'getStatusName',
@@ -1208,7 +1210,7 @@ function pivotWorkbook(formulon) {
   ws.setText(0, 1, 'Amount');
   const cache = wb.addPivotCache();
   const { cacheId } = cache;
-  wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
   wb.pivotCache(cacheId).addField('Region');
   wb.pivotCache(cacheId).addField('Amount');
   for (const [region, amount] of [

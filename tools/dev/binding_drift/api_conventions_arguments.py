@@ -56,6 +56,9 @@ PATCH_RECORD_NONE = "none"
 _A1_NAMES = ("a1", "anchor")
 _PY_RECT = frozenset({"CellRect", "str"})
 _JS_RECT = frozenset({"CellRect", "string"})
+_RECT_RECORDS = frozenset({"CellRect", "SheetRect"})
+_JS_UPDATE_RE = re.compile(r"update(?:[A-Z]\w*)?")
+_PY_UPDATE_RE = re.compile(r"update(?:_\w+)?")
 
 # Collection index arguments R26.ref replaces, by the reference argument and type that replace them.
 _JS_REFS = {
@@ -333,9 +336,12 @@ def _patch_keys(decls: Dict[str, TsDecl], raw: str, text: str) -> Optional[Dict[
 
 
 def _same_type(patch_type: str, record_type: str) -> bool:
-    """The patch key's type is the record field's, `null` aside, or the patch of a nested record."""
+    """The patch key's type is the record field's, `null` aside, the patch of a nested record, or a rectangle
+    field that also takes its A1 string."""
     patch = sorted(_strip_null(patch_type, True))
     record = sorted(_strip_null(record_type, True))
+    if len(record) == 1 and record[0] in _RECT_RECORDS and patch == sorted([record[0], "string"]):
+        return True
     return patch == record or (len(record) == 1 and patch == [f"{record[0]}Patch"])
 
 
@@ -382,8 +388,21 @@ def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
     """An op with `patch: true` takes a declared `<X>Patch` last in JS, whose keys are fields of the
     `patch_record` interface with the same types (`null` added, a nested record as its patch); in Python it takes
     keyword-only arguments defaulting to `UNCHANGED`, named after fields of the `patch_record` dataclass. Every
-    patch reads back through a getter: `patch_record: none` is a violation.
+    patch reads back through a getter: `patch_record: none` is a violation. An op named `update` / `update<X>` is
+    always a patch. A rectangle field may take its A1 string as well in the patch.
     """
+    for key, entry in sorted(ctx.ledger.entries.items()):
+        if not isinstance(entry, dict) or entry.get("kind") != "op" or entry.get("internal") is True:
+            continue
+        if entry.get("patch") is True:
+            continue
+        js, py = entry.get("js"), entry.get("py")
+        if (isinstance(js, str) and _JS_UPDATE_RE.fullmatch(js)) or (
+            isinstance(py, str) and _PY_UPDATE_RE.fullmatch(py)
+        ):
+            yield _violation(
+                ctx, "R18.all", "c", key, "update", f"`{js or py}` is an update; it is a partial update, `patch: true`"
+            )
     found = surfaces(ctx)
     for key, entry in _ledger_ops(ctx, "patch"):
         if entry.get("patch") is not True:

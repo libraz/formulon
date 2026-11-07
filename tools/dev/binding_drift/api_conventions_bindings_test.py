@@ -684,6 +684,45 @@ class ScalarTypeTest(BindingRuleTestBase):
             [("py", "page_setup.set_orientation", "orientation"), ("py", "workbook.get_date1904", "return")],
         )
 
+    def test_r6_py_accepts_the_unchanged_union_on_an_unchanged_default(self) -> None:
+        ledger = {
+            "entries": {
+                "full_precision.set": {
+                    "kind": "op",
+                    "js": "setFullPrecision",
+                    "py": "set_full_precision",
+                    "params": {"enabled": "bool"},
+                },
+                "page_setup.set_orientation": {
+                    "kind": "op",
+                    "js": "setOrientation",
+                    "py": "set_orientation",
+                    "params": {"orientation": "enum:page_orientation"},
+                },
+                "enum.page_orientation": {"kind": "enum", "js": "PageOrientation", "py": "PageOrientation"},
+            }
+        }
+        js = self.GOOD_JS
+        good = _py_wb(
+            "    def set_orientation(self, *, orientation: Union[PageOrientation, Unchanged] = UNCHANGED)"
+            " -> None: ...\n"
+            "    def set_full_precision(self, *, enabled: Union[bool, Unchanged] = UNCHANGED) -> None: ...\n"
+        )
+        # The union is accepted only with the UNCHANGED default, and only around the ledger's type.
+        no_default = _py_wb(
+            "    def set_orientation(self, *, orientation: Union[PageOrientation, Unchanged]) -> None: ...\n"
+            "    def set_full_precision(self, *, enabled: Union[bool, Unchanged] = None) -> None: ...\n"
+        )
+        wrong_type = _py_wb(
+            "    def set_orientation(self, *, orientation: Union[int, Unchanged] = UNCHANGED) -> None: ...\n"
+            "    def set_full_precision(self, *, enabled: Union[int, Unchanged] = UNCHANGED) -> None: ...\n"
+        )
+        context = lambda py: self.fixture.context("", ledger, wasm=js, native=js, py_workbook=py)  # noqa: E731
+        self.assertEqual(hits(context(good), "R6.py"), [])
+        flagged = [("py", "full_precision.set", "enabled"), ("py", "page_setup.set_orientation", "orientation")]
+        self.assertEqual(hits(context(no_default), "R6.py"), [("py", "full_precision.set", "enabled")])
+        self.assertEqual(hits(context(wrong_type), "R6.py"), flagged)
+
 
 class OptionalBoolTest(BindingRuleTestBase):
     LEDGER = {
@@ -1752,6 +1791,23 @@ class SetterSymmetryTest(BindingRuleTestBase):
             [("py", "set_iterative", "shape")],
         )
 
+    def test_r18_py_full_keywords(self) -> None:
+        records = "@dataclass(frozen=True)\nclass IterativeSettings:\n    enabled: bool\n    max_iterations: int\n\n"
+        bad = records + _py_wb(
+            "    def get_iterative(self) -> IterativeSettings: ...\n"
+            "    def set_iterative(self, *, enabled: bool, iterations: int) -> None: ...\n"
+        )
+        good = records + _py_wb(
+            "    def get_iterative(self) -> IterativeSettings: ...\n"
+            "    def set_iterative(self, *, enabled: bool, max_iterations: int) -> None: ...\n"
+        )
+        self.assert_rule(
+            "R18.py",
+            self.fixture.context("", None, py_workbook=bad),
+            self.fixture.context("", None, py_workbook=good),
+            [("py", "set_iterative", "shape")],
+        )
+
 
 class AbsentValueTest(BindingRuleTestBase):
     LEDGER = {
@@ -2392,6 +2448,64 @@ class PatchShapeTest(BindingRuleTestBase):
             self.fixture.context("", ledger, wasm=good),
             [("wasm", "comment.update", "key:size")],
         )
+
+    def test_r18_all_requires_an_update_to_be_a_patch(self) -> None:
+        def ledger(patch: bool) -> dict:
+            base = {"kind": "op", "scope": "sheet", "surfaces": ["wasm"]}
+            return {
+                "entries": {
+                    "table.update": {**base, "js": "update", **({"patch": True, "patch_record": "PivotStyle"} if patch else {})},
+                    "group.update": {**base, "js": "updateGroup", **({"patch": True, "patch_record": "PivotStyle"} if patch else {})},
+                    "view.set": {**base, "js": "setView"},
+                    "updated.get": {**base, "js": "updatedAt"},
+                }
+            }  # fmt: skip
+
+        js = self.RECORDS + _sheet(
+            "  update(patch: PivotStylePatch): void;\n  updateGroup(patch: PivotStylePatch): void;\n"
+            "  setView(view: number): void;\n  updatedAt(): number;\n"
+        )
+        self.assert_rule(
+            "R18.all",
+            self.fixture.context("", ledger(False), wasm=js),
+            self.fixture.context("", ledger(True), wasm=js),
+            [("c", "group.update", "update"), ("c", "table.update", "update")],
+        )
+
+    def test_r18_all_accepts_the_a1_alternative_of_a_rectangle_field(self) -> None:
+        records = (
+            "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+            "export interface TableProperties {\n  readonly range: SheetRect;\n  readonly area: CellRect;\n"
+            "  readonly name: string;\n}\n"
+        )
+        ledger = {
+            "entries": {
+                "table.update": {"kind": "op", "scope": "sheet", "js": "update", "surfaces": ["wasm"],
+                                 "patch": True, "patch_record": "TableProperties"},
+            }
+        }  # fmt: skip
+        good = (
+            records
+            + (
+                "export interface TablePatch {\n  range?: SheetRect | string;\n  area?: string | CellRect | null;\n"
+                "  name?: string;\n}\n"
+            )
+            + _sheet("  update(patch: TablePatch): void;\n")
+        )
+        bad = (
+            records
+            + (
+                "export interface TablePatch {\n  range?: number | string;\n  area?: string;\n  name?: string | number;\n}\n"
+            )
+            + _sheet("  update(patch: TablePatch): void;\n")
+        )
+        self.assert_rule(
+            "R18.all",
+            self.fixture.context("", ledger, wasm=bad),
+            self.fixture.context("", ledger, wasm=good),
+            [("wasm", "table.update", "type:area"), ("wasm", "table.update", "type:name"),
+             ("wasm", "table.update", "type:range")],
+        )  # fmt: skip
 
 
 class HandleRuleTest(BindingRuleTestBase):

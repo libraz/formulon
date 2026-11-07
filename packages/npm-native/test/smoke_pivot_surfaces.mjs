@@ -9,7 +9,7 @@ function makePivotWorkbook(Workbook) {
   const { cacheId } = cache;
   // A cache with no declared source cannot be saved: Excel offers to repair
   // any package containing one, so the writer refuses rather than emit it.
-  cache.setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -174,7 +174,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(east.cacheIndex, null);
     assert.equal(east.visible, true);
     assert.equal(pivot.getFieldItem(0, 1).visible, false);
-    pivot.addFieldSharedItem(0, 5, true);
+    pivot.addFieldSharedItem(0, 5, { visible: true });
     const bound = pivot.getFieldItem(0, 2);
     assert.equal(bound.cacheIndex, 5);
     assert.equal(bound.name, '');
@@ -291,7 +291,7 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
   try {
     const cache = wb.addPivotCache(0);
     const { cacheId } = cache;
-    cache.setWorksheetSource({ present: true, ref: 'A1:D3', sheet: 'Sheet1' });
+    cache.setWorksheetSource({ ref: 'A1:D3', sheet: 'Sheet1' });
     for (const name of ['Region', 'Product', 'Sales', 'Qty']) cache.addField(name);
     for (const sales of [100, 200]) {
       const rec = cache.addRecord();

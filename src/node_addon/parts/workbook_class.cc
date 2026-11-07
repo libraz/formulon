@@ -859,6 +859,8 @@ void RegisterModuleFunctions(Napi::Env env, Napi::Object exports) {
   SetGuardedModuleFunction<&CanonicalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "canonicalizeFormula");
   SetGuardedModuleFunction<&CanonicalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "canonicalizeFunctionName");
   SetGuardedModuleFunction<&CompareText, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xBULL>(env, exports, "compareText");
+  SetGuardedModuleFunction<&ConvertCivilToSerial, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "convertCivilToSerial");
+  SetGuardedModuleFunction<&ConvertSerialToCivil, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "convertSerialToCivil");
   SetGuardedModuleFunction<&CollationClasses, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getCollationClasses");
   SetGuardedModuleFunction<&FunctionMetadata, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getFunctionMetadata");
   SetGuardedModuleFunction<&ProbeImage, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getImageInfo");

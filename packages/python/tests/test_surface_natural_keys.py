@@ -14,7 +14,6 @@ from formulon import (
     NotFoundError,
     Person,
     ThemeScriptFont,
-    ThemeScriptFontInput,
     ThreadedCommentInput,
     Workbook,
 )
@@ -98,7 +97,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
             self.assertIsNotNone(jpan)
             assert jpan is not None
             self.assertTrue(jpan.typeface)
-            wb.set_theme_script_font(ThemeScriptFontInput(False, "Zzzz", "Test Face"))
+            wb.set_theme_script_font(major=False, script="Zzzz", typeface="Test Face")
             self.assertEqual(
                 wb.get_theme_script_font(major=False, script="Zzzz"),
                 ThemeScriptFont(major=False, script="Zzzz", typeface="Test Face"),

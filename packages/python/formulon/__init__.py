@@ -28,14 +28,12 @@ from importlib.metadata import version as _dist_version
 from pathlib import Path
 
 from ._c import (
-    LIB,
     IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
     ValueKind,
     WorkbookClosedError,
 )
-from ._c import decode_cstr as _decode_cstr
 from ._status import StatusCode
 from .drawing import Chart, Drawing, Picture, Shape, Slicer
 from .metadata import (
@@ -43,7 +41,12 @@ from .metadata import (
     FunctionMetadataLocalized,
     FunctionMetadataProvider,
     MergedFunctionMetadata,
+    convert_civil_to_serial,
+    convert_serial_to_civil,
+    get_status_name,
+    get_version,
     merge_function_metadata,
+    set_log_min_level,
 )
 from .pivot import Pivot
 from .pivot_cache import PivotCache
@@ -123,13 +126,13 @@ from .workbook import (
     ChartPoint,
     ChartPointPatch,
     ChartPointState,
-    ChartPreviewOverridesInput,
     ChartProperties,
     ChartSeries,
     ChartSeriesDirection,
     ChartSeriesPatch,
     ChartSeriesRanges,
     ChartSource,
+    ChartSourceKind,
     ChartTitle,
     ChartTitleKind,
     ChartUnresolved,
@@ -156,6 +159,7 @@ from .workbook import (
     DifferentialFormat,
     DisplayStatus,
     DisplayText,
+    DrawingAnchor,
     DrawingObjectKind,
     DrawingProperties,
     DynamicFilterType,
@@ -207,7 +211,6 @@ from .workbook import (
     PassthroughPart,
     Person,
     PhoneticProperties,
-    PhoneticPropertiesInput,
     PhoneticRun,
     PictureProperties,
     PivotAggregation,
@@ -278,13 +281,12 @@ from .workbook import (
     TableStyleDefaults,
     TableStyleElement,
     ThemeColors,
-    ThemeColorsInput,
     ThemeFonts,
     ThemeScriptFont,
-    ThemeScriptFontInput,
     ThemeSource,
     ThreadedComment,
     ThreadedCommentInput,
+    Unchanged,
     UnderlineStyle,
     ValidationErrorStyle,
     ValidationOutcome,
@@ -351,7 +353,7 @@ def _resolve_version() -> str:
                     break
 
     # Last resort: the version baked into the loaded WASM module.
-    return _decode_cstr(LIB.fm_get_version())
+    return get_version()
 
 
 __version__ = _resolve_version()
@@ -430,13 +432,13 @@ __all__ = [
     "ChartPoint",
     "ChartPointPatch",
     "ChartPointState",
-    "ChartPreviewOverridesInput",
     "ChartProperties",
     "ChartSeries",
     "ChartSeriesDirection",
     "ChartSeriesPatch",
     "ChartSeriesRanges",
     "ChartSource",
+    "ChartSourceKind",
     "ChartTitle",
     "ChartTitleKind",
     "ChartUnresolved",
@@ -465,6 +467,7 @@ __all__ = [
     "DisplayStatus",
     "DisplayText",
     "Drawing",
+    "DrawingAnchor",
     "DrawingObjectKind",
     "DrawingProperties",
     "DynamicFilterType",
@@ -472,6 +475,8 @@ __all__ = [
     "EffectiveStyleSource",
     "ErrorCode",
     "ErrorName",
+    "convert_civil_to_serial",
+    "convert_serial_to_civil",
     "evaluate_formula",
     "ExcelError",
     "ExcelProfileId",
@@ -535,7 +540,6 @@ __all__ = [
     "PassthroughPart",
     "Person",
     "PhoneticProperties",
-    "PhoneticPropertiesInput",
     "PhoneticRun",
     "Picture",
     "PictureProperties",
@@ -618,14 +622,13 @@ __all__ = [
     "TableStyleDefaults",
     "TableStyleElement",
     "ThemeColors",
-    "ThemeColorsInput",
     "ThemeFonts",
     "ThemeScriptFont",
-    "ThemeScriptFontInput",
     "ThemeSource",
     "ThreadedComment",
     "ThreadedCommentInput",
     "UNCHANGED",
+    "Unchanged",
     "UnderlineStyle",
     "ValidationErrorStyle",
     "ValidationOutcome",
@@ -638,48 +641,6 @@ __all__ = [
     "WorkbookFormat",
     "WorkbookProtection",
 ]
-
-
-def get_version() -> str:
-    """Return the version string of the bundled engine.
-
-    Always non-empty.
-    """
-    return _decode_cstr(LIB.fm_get_version())
-
-
-def get_status_name(status: StatusCode) -> str:
-    """Return the name of a status code without the ``FM_STATUS_`` prefix (``"INVALID_ARGUMENT"``).
-
-    An unknown code returns ``"UNRECOGNIZED_STATUS"``.
-    """
-    from ._c import _sint
-
-    return _decode_cstr(LIB.fm_get_status_name(_sint(status, "status")))
-
-
-def set_log_min_level(level: LogLevel) -> None:
-    """Set the engine's minimum structured-log severity.
-
-    This is **process-wide** state, not per :class:`Workbook`, so it is a
-    module-level function rather than a method.
-
-    The default is :attr:`LogLevel.OFF`, under which the engine writes
-    nothing: an embedded library must not write to the host's stderr
-    unless the host asks it to. Raising the threshold to
-    :attr:`LogLevel.WARN` or below makes the engine emit one JSON record
-    per line on stderr, including the per-cell XLSB downgrade diagnostics.
-
-    Args:
-      level: a :class:`LogLevel` member.
-
-    Raises:
-      FormulonError: when ``level`` is outside :class:`LogLevel`.
-    """
-    from ._c import _sint
-    from .workbook import _check
-
-    _check(LIB.fm_set_log_min_level(_sint(level, "level")))
 
 
 def evaluate_formula(formula: str) -> Value:
@@ -697,6 +658,10 @@ def evaluate_formula(formula: str) -> Value:
 
     Returns:
       The scalar :class:`Value` at the formula's top-left result cell.
+
+    Example::
+
+        evaluate_formula("=SUM(1,2,3)").to_python()  # 6.0
     """
     with Workbook.create_default() as wb:
         return wb._evaluate_formula_top_left(0, 0, 0, formula)

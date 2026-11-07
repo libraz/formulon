@@ -251,8 +251,8 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
         out.Set("showLastColumn", JsBool(env, table.show_last_column));
         out.Set("showRowStripes", JsBool(env, table.show_row_stripes));
         out.Set("showColumnStripes", JsBool(env, table.show_column_stripes));
-        out.Set("headerRowCount", Napi::Number::New(env, table.header_row_count));
-        out.Set("totalsRowCount", Napi::Number::New(env, table.totals_row_count));
+        out.Set("headerRow", JsBool(env, table.header_row_count != 0));
+        out.Set("totalsRow", JsBool(env, table.totals_row_count != 0));
         Napi::Array list = Napi::Array::New(env, columns.size());
         for (std::size_t i = 0; i < columns.size(); ++i) {
           Napi::Object c = Napi::Object::New(env);

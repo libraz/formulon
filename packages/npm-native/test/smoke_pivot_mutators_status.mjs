@@ -19,7 +19,7 @@ function buildPivot(mod) {
   wb.setExcelProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
   const { cacheId } = cache;
-  wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:D5', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:D5', sheet: 'Sheet1' });
   for (const name of ['Region', 'Product', 'Amount', 'Date']) wb.pivotCache(cacheId).addField(name);
   for (const item of ['East', 'West']) wb.pivotCache(cacheId).addFieldSharedItem(0, item);
   for (const item of ['Apple', 'Pear']) wb.pivotCache(cacheId).addFieldSharedItem(1, item);
@@ -150,7 +150,7 @@ const PIVOT_MUTATORS = [
   [
     'PivotCache.setWorksheetSource',
     {
-      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ present: true, ref: 'B2:E6', sheet: 'Data' }),
+      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ ref: 'B2:E6', sheet: 'Data' }),
       expect: (b) => {
         const source = b.wb.pivotCache(b.cacheId).getWorksheetSource();
         assert.equal(source.ref, 'B2:E6');
@@ -481,7 +481,7 @@ const PIVOT_MUTATORS = [
         b.wb.pivotCache(b.cacheId).addFieldSharedItem(0, null);
         b.wb.pivotCache(b.cacheId).setRecordValue(0, 0, null);
       },
-      act: (b) => b.pivot.addFieldSharedItem(b.region, 2, false),
+      act: (b) => b.pivot.addFieldSharedItem(b.region, 2, { visible: false }),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|5', 'West|37', '総計|42']),
     },
   ],
