@@ -125,7 +125,7 @@ Expected<UIntPair, ErrorCode> read_selection_pair(const Value* args) {
   if (!pair) {
     return std::move(pair.error());
   }
-  if (pair.value().second > pair.value().first) {
+  if (pair.value().second > pair.value().first || pair.value().first > kMaxCombinatorialN) {
     return ErrorCode::Num;
   }
   return std::move(pair.value());
@@ -217,9 +217,6 @@ Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
-  if (n > kMaxCombinatorialN) {
-    return Value::error(ErrorCode::Num);
-  }
   return to_finite_value(combin_pairwise(n, k));
 }
 
@@ -258,9 +255,6 @@ Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
-  if (n > kMaxCombinatorialN) {
-    return Value::error(ErrorCode::Num);
-  }
   // Ascending running product (n-k+1) * ... * n; bail out as soon as it
   // overflows to infinity.
   double result = 1.0;

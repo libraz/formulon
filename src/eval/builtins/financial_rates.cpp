@@ -90,6 +90,9 @@ Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args, bool date1904)
   if (!dsm) {
     return std::move(dsm.error());
   }
+  if (value.value() <= 0.0) {
+    return ErrorCode::Num;
+  }
   return TBillArgs{value.value(), dsm.value()};
 }
 
@@ -190,9 +193,6 @@ Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
     return Value::error(parsed.error());
   }
   const auto [discount, dsm] = parsed.value();
-  if (discount <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   const double result = 100.0 * (1.0 - discount * dsm / kTBillYear);
   if (result <= 0.0) {
     return Value::error(ErrorCode::Num);
@@ -218,9 +218,6 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
     return Value::error(parsed.error());
   }
   const auto [pr, dsm] = parsed.value();
-  if (pr <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   const double result = ((100.0 - pr) / pr) * (kTBillYear / dsm);
   return to_finite_value(result);
 }
@@ -255,9 +252,6 @@ Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool
     return Value::error(parsed.error());
   }
   const auto [discount, dsm] = parsed.value();
-  if (discount <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   if (dsm <= kHalfYearDays) {
     const double denom = kTBillYear - discount * dsm;
     if (denom == 0.0) {

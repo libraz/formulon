@@ -90,7 +90,8 @@ Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arit
   return VdbArgs{v[0], v[1], v[2], v[3], v[4], factor.value(), no_switch.value() != 0.0};
 }
 
-// Reads the AMORDEGRC / AMORLINC arguments and applies their shared domain checks.
+// Reads the AMORDEGRC / AMORLINC arguments and applies their shared domain checks
+// (including basis 2 and a first period before the purchase date being #NUM!).
 // `salvage_may_equal_cost` admits a salvage equal to the cost (AMORDEGRC returns 0 there).
 Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t arity, bool salvage_may_equal_cost) {
   double v[6];
@@ -107,6 +108,9 @@ Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t ar
   const double rate = v[5];
   if (cost <= 0.0 || rate <= 0.0 || (salvage_may_equal_cost ? salvage > cost : salvage >= cost) || period < 0.0 ||
       period > kMaxDepreciationPeriods) {
+    return ErrorCode::Num;
+  }
+  if (basis.value() == 2 || std::trunc(v[2]) < std::trunc(v[1])) {
     return ErrorCode::Num;
   }
   return AmorArgs{cost, v[1], v[2], salvage, period, rate, basis.value()};
@@ -447,9 +451,6 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   const int basis = parsed.value().basis;
   const double purchased = std::trunc(parsed.value().date_purchased);
   const double first_period = std::trunc(parsed.value().first_period);
-  if (basis == 2 || first_period < purchased) {
-    return Value::error(ErrorCode::Num);
-  }
   double life = std::ceil(1.0 / rate);
   if (life < 3.0) {
     return Value::error(ErrorCode::Num);
@@ -519,9 +520,6 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   const int basis = parsed.value().basis;
   const double purchased = std::trunc(parsed.value().date_purchased);
   const double first_period = std::trunc(parsed.value().first_period);
-  if (basis == 2 || first_period < purchased) {
-    return Value::error(ErrorCode::Num);
-  }
 
   const date_time::YMD dp = date_time::ymd_from_serial(purchased, date1904);
   // Actual-day bases clip a February 29 to the 28th on both ends.
