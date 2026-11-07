@@ -328,6 +328,21 @@ TEST(EvalLetReference, SingleCellBindingValueIsScalar) {
   ExpectNumber("=LET(r,OFFSET(A1,4,0),r*2)", 10.0);
 }
 
+// An omitted LET value binds a blank.
+TEST(EvalLet, OmittedValueBindsBlank) {
+  const Value shown = EvalSource("=LET(x,,x)");
+  ASSERT_TRUE(shown.is_blank() || shown.is_number()) << shown.debug_to_string();
+  if (shown.is_number()) {
+    EXPECT_EQ(shown.as_number(), 0.0);
+  }
+  const Value is_blank = EvalSource("=LET(x,,ISBLANK(x))");
+  ASSERT_TRUE(is_blank.is_boolean()) << is_blank.debug_to_string();
+  EXPECT_TRUE(is_blank.as_boolean());
+  const Value sum = EvalSource("=LET(x,,y,2,x+y)");
+  ASSERT_TRUE(sum.is_number()) << sum.debug_to_string();
+  EXPECT_EQ(sum.as_number(), 2.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

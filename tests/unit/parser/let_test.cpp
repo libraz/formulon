@@ -226,6 +226,32 @@ TEST(ParserLet, EvenArityWithTrailingCommaIsArityError) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LetWrongArity));
 }
 
+TEST(ParserLet, BindingNameCapCountsUtf16Units) {
+  // 86 kanji are 258 UTF-8 bytes but 86 UTF-16 units; 255 ASCII letters fit, 256 do not.
+  std::string kanji;
+  for (int k = 0; k < 86; ++k) {
+    kanji += "\xE6\xBC\xA2";
+  }
+  Arena a;
+  const std::string kanji_src = "=LET(" + kanji + ",1," + kanji + ")";
+  Parser p(kanji_src, a);
+  EXPECT_NE(p.parse(), nullptr);
+  EXPECT_TRUE(p.errors().empty());
+
+  const std::string fits(255, 'a');
+  const std::string too_long(256, 'a');
+  Arena a2;
+  const std::string fits_src = "=LET(" + fits + ",1," + fits + ")";
+  Parser fits_parser(fits_src, a2);
+  (void)fits_parser.parse();
+  EXPECT_TRUE(fits_parser.errors().empty());
+  Arena a3;
+  const std::string long_src = "=LET(" + too_long + ",1," + too_long + ")";
+  Parser long_parser(long_src, a3);
+  (void)long_parser.parse();
+  EXPECT_FALSE(long_parser.errors().empty());
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

@@ -62,10 +62,10 @@ inline constexpr std::uint32_t kMaxColumn = a1::kMaxCols;
 inline constexpr std::uint32_t kMaxRow = a1::kMaxRows;
 
 // Longest column-letter run (`XFD`), longest row digit run (`1048576`) and the
-// byte cap on a defined or LET binding name.
+// UTF-16 unit cap on a defined or LET binding name.
 inline constexpr std::size_t kMaxColumnLetters = a1::kMaxColumnLetters;
 inline constexpr std::size_t kMaxRowDigits = 7;
-inline constexpr std::size_t kMaxDefinedNameBytes = 255;
+inline constexpr std::size_t kMaxDefinedNameUnits = 255;
 
 // UTF-8 spellings of U+3000 (ideographic space) and U+FEFF (byte-order mark).
 inline constexpr std::string_view kIdeographicSpace = "\xE3\x80\x80";

@@ -14,6 +14,8 @@
 #include "parser/reference.h"
 #include "parser/token.h"
 #include "utils/strings.h"
+#include "utils/utf8_length.h"
+#include "value.h"
 
 namespace formulon {
 namespace parser {
@@ -24,14 +26,14 @@ namespace {
 
 // Returns true iff `name` starts with `[A-Za-z_\]` or any non-ASCII byte, and
 // continues with `[A-Za-z0-9_.?]` plus non-ASCII bytes. Length must be non-zero
-// and within kMaxDefinedNameBytes. This mirrors the
+// and within kMaxDefinedNameUnits UTF-16 units. This mirrors the
 // tokenizer's identifier rule (`Tokenizer::is_ident_start_byte` /
 // `formula_prefix_is_ident_byte`) and matches the identifier shape Excel accepts for
 // LET bindings and defined names, including hiragana / katakana / kanji and
 // other locale-specific scripts. The shape is still stricter than the
 // tokenizer's Ident rule because it forbids a leading ASCII digit.
 bool IsLetNameShape(std::string_view name) noexcept {
-  if (name.empty() || name.size() > detail::kMaxDefinedNameBytes) {
+  if (name.empty() || utf16_units_in(name) > detail::kMaxDefinedNameUnits) {
     return false;
   }
   const auto first = static_cast<unsigned char>(name[0]);
@@ -126,7 +128,16 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
       const std::string_view name = peek().lexeme;
       advance();  // Ident
       advance();  // Comma
-      AstNode* expr = parse_expression(0, SyncContext::CallArg);
+      // An omitted value (`LET(x,,x)`) binds a blank, as an empty call argument does.
+      AstNode* expr = nullptr;
+      if (peek_kind() == TokenKind::Comma) {
+        expr = make_literal(arena_, Value::blank());
+        if (expr != nullptr) {
+          expr->set_range(peek().range);
+        }
+      } else {
+        expr = parse_expression(0, SyncContext::CallArg);
+      }
       if (expr == nullptr) {
         return nullptr;  // hard arena failure
       }

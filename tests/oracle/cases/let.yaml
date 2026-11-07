@@ -146,3 +146,19 @@ cases:
     description: "Body is a bare range — spill anchor reads first element"
     setup: { A1: 42, A2: 99 }
     formula: "=LET(r, A1:A2, r)"
+
+  - id: omitted_value_is_blank
+    description: 'An omitted binding value is blank'
+    formula: '=LET(x,,x)'
+
+  - id: omitted_value_isblank
+    description: 'An omitted binding value tests as blank'
+    formula: '=LET(x,,ISBLANK(x))'
+
+  - id: omitted_value_in_arithmetic
+    description: 'An omitted binding value is zero in arithmetic'
+    formula: '=LET(x,,y,2,x+y)'
+
+  - id: name_of_86_kanji
+    description: 'A binding name of 86 kanji (258 UTF-8 bytes) is accepted'
+    formula: '=LET(漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢,1,漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢)'

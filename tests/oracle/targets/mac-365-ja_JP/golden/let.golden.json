@@ -2,11 +2,11 @@
   "suite": "let",
   "description": "LET(name, expr, [name, expr, ...], body) lexical-scope special form",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-11-07T19:49:51Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -361,6 +361,42 @@
           2,
           1
         ]
+      }
+    },
+    {
+      "id": "omitted_value_is_blank",
+      "formula": "=LET(x,,x)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "omitted_value_isblank",
+      "formula": "=LET(x,,ISBLANK(x))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "omitted_value_in_arithmetic",
+      "formula": "=LET(x,,y,2,x+y)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "name_of_86_kanji",
+      "formula": "=LET(漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢,1,漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     }
   ]
