@@ -895,23 +895,14 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
       } else if (df == 0 && !result.grand_total.is_blank()) {
         v = result.grand_total;
       } else if (!total_is_derived(table, df)) {
-        double sum = 0.0;
-        bool numeric = true;
-        bool any_number = false;
-        for (std::size_t r_leaf = 0; r_leaf < row_leaves.size(); ++r_leaf) {
-          for (std::size_t c_leaf = 0; c_leaf < col_leaves.size(); ++c_leaf) {
-            const Value& cell = result.values[r_leaf][c_leaf][df];
-            if (cell.is_number()) {
-              sum += cell.as_number();
-              any_number = true;
-            } else if (!cell.is_blank()) {
-              numeric = false;
-            }
+        StripTotal strip;
+        bool open = true;
+        for (std::size_t r_leaf = 0; open && r_leaf < row_leaves.size(); ++r_leaf) {
+          for (std::size_t c_leaf = 0; open && c_leaf < col_leaves.size(); ++c_leaf) {
+            open = strip.add(result.values[r_leaf][c_leaf][df]);
           }
         }
-        if (numeric && any_number) {
-          v = Value::number(sum);
-        }
+        v = strip.value();
       }
       append_value_cell(cells, total_row, total_left + static_cast<std::uint32_t>(s), v, PivotCellKind::GrandTotal,
                         table, df);
