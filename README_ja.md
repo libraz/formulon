@@ -54,7 +54,7 @@ console.log(formulon.toNative(value)); // 6
 ```python run
 import formulon
 
-print(formulon.evaluate_formula("=SUM(1,2,3)").to_python())  # 6.0
+print(formulon.evaluate_formula("=SUM(1,2,3)"))  # 6.0
 ```
 
 ```js run
@@ -101,7 +101,7 @@ const wb = formulon.Workbook.createDefault();
 try {
   const ws = wb.sheet(0);
   ws.setFormula('A1', '=LENB("日本")');
-  wb.setExcelProfileId('mac-365-ja_JP'); // Python: set_excel_profile_id
+  wb.setProfileId('mac-365-ja_JP'); // Python: set_profile_id
   wb.recalc(); // プロファイルを変えると数式が再計算の対象になる
   console.log(ws.getDisplayText('A1').text); // 4
 } finally {

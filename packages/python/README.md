@@ -34,13 +34,13 @@ pip install formulon   # Python 3.9+
 ```python run
 import formulon
 
-print(formulon.evaluate_formula("=SUM(1,2,3)").to_python())  # 6.0
+print(formulon.evaluate_formula("=SUM(1,2,3)"))  # 6.0
 
 v = formulon.evaluate_formula("=1/0")
-print(v.kind.name, v.error_code.name)  # ERROR DIV0
+print(type(v).__name__, v.code.name)  # ExcelError DIV0
 ```
 
-Excel errors come back as values (`Value.to_python()` gives an `ExcelError`); a host-side failure raises `FormulonError`. Its subclasses are `IndexOutOfRangeError`, `NotFoundError`, `InvalidArgumentError` and `WorkbookClosedError`. See [Errors](https://formulon.libraz.net/compatibility/errors).
+Excel errors come back as `ExcelError` values; a host-side failure raises `FormulonError`. Its subclasses are `IndexOutOfRangeError`, `NotFoundError`, `InvalidArgumentError` and `WorkbookClosedError`. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 
@@ -105,7 +105,7 @@ with formulon.Workbook.create_default() as wb:
     ws.set_formula("A3", "=ISEVEN(2)")
 
     for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
-        wb.set_excel_profile_id(profile)
+        wb.set_profile_id(profile)
         wb.recalc()
         print(profile, [ws.get_display_text(f"A{row}").text for row in (1, 2, 3)])
 # mac-365-en_US ['2', '#VALUE!', 'TRUE']
