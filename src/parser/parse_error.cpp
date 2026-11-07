@@ -67,6 +67,22 @@ const char* default_message(ParseErrorCode code) noexcept {
       return "LAMBDA requires at least a body expression";
     case ParseErrorCode::LambdaDuplicateParam:
       return "LAMBDA parameter names must be unique";
+    case ParseErrorCode::EntryWrongArity:
+      return "wrong number of arguments for this function";
+    case ParseErrorCode::EntryReferenceRequired:
+      return "this argument must be a reference";
+    case ParseErrorCode::EntryQualifiedBuiltin:
+      return "a built-in function cannot be qualified with a sheet or workbook name";
+    case ParseErrorCode::EntryRefusedWhitespace:
+      return "whitespace not allowed here";
+    case ParseErrorCode::EntryParamShapedName:
+      return "name is reserved for LAMBDA parameters";
+    case ParseErrorCode::EntryDoubleEquals:
+      return "formula cannot start with '=='";
+    case ParseErrorCode::EntryBomNotSupported:
+      return "byte order mark not allowed in a formula";
+    case ParseErrorCode::StructuredRefInvalid:
+      return "invalid structured reference";
   }
   return "parse error";
 }

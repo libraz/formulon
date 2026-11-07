@@ -17,6 +17,7 @@
 #include <string_view>
 
 #include "parser/ast.h"
+#include "parser/parse_status.h"
 
 namespace formulon {
 class Arena;
@@ -73,6 +74,12 @@ const parser::AstNode* find_wrong_arity_call(const parser::AstNode& root);
 /// The returned AST is owned by `arena`, or nullptr when parsing fails or the
 /// AST contains a qualified built-in call.
 parser::AstNode* parse_formula_entry(std::string_view src, Arena& arena);
+
+/// `parse_formula_entry` that reports why it failed: the parse diagnostic, or
+/// `EntryQualifiedBuiltin` over the offending callee. Returns the root
+/// exactly when `parse_formula_entry` would. `out` must not be null and is
+/// left untouched on success.
+parser::AstNode* parse_formula_entry_with_diagnostics(std::string_view src, Arena& arena, parser::ParseFailure* out);
 
 }  // namespace eval
 }  // namespace formulon

@@ -28,8 +28,9 @@ namespace parser {
 /// Error catalogue for the Pratt parser.
 ///
 /// Codes 0..7 mirror `LexerErrorCode` so callers see a single enum after
-/// promotion. Codes 8.. are parser-level. Numeric values are stable; do
-/// not reorder, append-only.
+/// promotion. Codes 8..28 are parser-level, 29..35 entry refusals. Numeric
+/// values are stable and mirrored by the C ABI's `fm_parse_error_code_t`;
+/// do not reorder, append-only. `parse_status.h` maps each to a status.
 enum class ParseErrorCode : std::uint16_t {
   // Lexer-level (promoted from LexerErrorCode).
   LexerInvalidCharacter = 0,
@@ -65,6 +66,16 @@ enum class ParseErrorCode : std::uint16_t {
   LambdaInvalidParam,    // LAMBDA parameter slot is not a bare identifier, or has a cell-ref shape
   LambdaEmpty,           // LAMBDA was invoked with an empty argument list (the body is mandatory)
   LambdaDuplicateParam,  // Two LAMBDA parameters share the same name
+  // Entry refusals: formulas that parse but that Excel refuses at entry.
+  // Produced at the public formula-entry boundary, never by the Pratt parser.
+  EntryWrongArity,         // `=ROWS()`: argument count the callee does not take
+  EntryReferenceRequired,  // `=SUBTOTAL(9,1)`: reference-only parameter given a non-reference
+  EntryQualifiedBuiltin,   // `=Sheet1!SUM(1)`: built-in qualified with a sheet or book
+  EntryRefusedWhitespace,  // whitespace Excel refuses at entry
+  EntryParamShapedName,    // `_xlpm.` typed before a cell-shaped name
+  EntryDoubleEquals,       // `==1`
+  EntryBomNotSupported,    // leading byte-order mark
+  StructuredRefInvalid,    // malformed structured-reference payload
 };
 
 /// Diagnostic severity. The parser currently emits only `Error`; `Warning`

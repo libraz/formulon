@@ -23,6 +23,10 @@ class Arena;
 class Sheet;
 class Workbook;
 
+namespace parser {
+class AstNode;
+}  // namespace parser
+
 namespace eval {
 
 class FunctionRegistry;
@@ -79,6 +83,21 @@ Value evaluate_formula_text_array(const Workbook& workbook, const Sheet& sheet, 
 bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
                          std::uint32_t anchor_row, std::uint32_t anchor_col, std::string_view formula, Arena& arena,
                          const FunctionRegistry& registry);
+
+/// `evaluate_formula_text` over an already-parsed `root` (from
+/// `parse_formula_entry_with_diagnostics`), so an entry point can report a
+/// parse failure before evaluating. `root` must be owned by `arena`.
+Value evaluate_parsed_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                              const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry);
+
+/// `evaluate_formula_text_array` over an already-parsed `root`.
+Value evaluate_parsed_formula_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                                    const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry);
+
+/// `evaluate_cf_formula` over an already-parsed, unshifted `root`.
+bool evaluate_parsed_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                                std::uint32_t anchor_row, std::uint32_t anchor_col, const parser::AstNode& root,
+                                Arena& arena, const FunctionRegistry& registry);
 
 /// Coerces `v` to a conditional-formatting rule outcome per Excel: error →
 /// false (rule does not fire), blank → false, text → false, numeric zero →

@@ -47,11 +47,13 @@
 #include "parser/ast.h"
 #include "parser/lexer_error.h"
 #include "parser/parse_error.h"
+#include "parser/parse_status.h"
 #include "parser/parser_detail.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace parser {
@@ -613,6 +615,27 @@ AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts) {
     return nullptr;
   }
   return root;
+}
+
+AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseFailure* out) {
+  Parser parser(src, arena);
+  AstNode* root = parser.parse();
+  if (root != nullptr && parser.errors().empty()) {
+    return root;
+  }
+  ParseFailure failure;
+  if (src.empty()) {
+    failure.code = ParseErrorCode::ExpectedExpression;
+  } else if (!parser.errors().empty()) {
+    failure.code = parser.errors().front().code;
+    failure.range = parser.errors().front().range;
+  } else {
+    // Arena exhaustion before any diagnostic: blame the whole text.
+    failure.range.end = utf16_units_in(src);
+  }
+  failure.message = default_message(failure.code);
+  *out = failure;
+  return nullptr;
 }
 
 bool formula_references_other_sheet(std::string_view formula, std::string_view own_sheet) {

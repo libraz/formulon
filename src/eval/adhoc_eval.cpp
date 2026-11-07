@@ -63,10 +63,7 @@ Value parse_and_evaluate(const Workbook& workbook, const Sheet& sheet, std::uint
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-
-  EvalState state;
-  const EvalContext ctx = make_readonly_context(workbook, sheet, state, row, col);
-  return evaluate(*root, arena, registry, ctx);
+  return evaluate_parsed_formula_array(workbook, sheet, row, col, *root, arena, registry);
 }
 
 }  // namespace
@@ -91,13 +88,30 @@ bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint
     // A malformed rule formula does not fire (coerces to false).
     return false;
   }
+  return evaluate_parsed_cf_formula(workbook, sheet, row, col, anchor_row, anchor_col, *root, arena, registry);
+}
 
+Value evaluate_parsed_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                              const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry) {
+  return implicit_intersect_value(evaluate_parsed_formula_array(workbook, sheet, row, col, root, arena, registry));
+}
+
+Value evaluate_parsed_formula_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                                    const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry) {
+  EvalState state;
+  const EvalContext ctx = make_readonly_context(workbook, sheet, state, row, col);
+  return evaluate(root, arena, registry, ctx);
+}
+
+bool evaluate_parsed_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                                std::uint32_t anchor_row, std::uint32_t anchor_col, const parser::AstNode& root,
+                                Arena& arena, const FunctionRegistry& registry) {
   // Relative refs in a CF rule formula are authored relative to the
   // applied range's top-left (`anchor`); shift them to the target cell so
   // they resolve exactly as Excel does for `(row, col)`.
   const std::int32_t row_delta = static_cast<std::int32_t>(row) - static_cast<std::int32_t>(anchor_row);
   const std::int32_t col_delta = static_cast<std::int32_t>(col) - static_cast<std::int32_t>(anchor_col);
-  const parser::AstNode* shifted = parser::shift_relative_refs(*root, arena, row_delta, col_delta);
+  const parser::AstNode* shifted = parser::shift_relative_refs(root, arena, row_delta, col_delta);
   if (shifted == nullptr) {
     return false;
   }

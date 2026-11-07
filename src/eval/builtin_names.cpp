@@ -295,5 +295,19 @@ AstNode* parse_formula_entry(std::string_view src, Arena& arena) {
   return root;
 }
 
+AstNode* parse_formula_entry_with_diagnostics(std::string_view src, Arena& arena, parser::ParseFailure* out) {
+  AstNode* root = parser::parse_entry_with_diagnostics(src, arena, out);
+  if (root == nullptr) {
+    return nullptr;
+  }
+  if (const AstNode* callee = find_qualified_builtin_call(*root); callee != nullptr) {
+    out->code = parser::ParseErrorCode::EntryQualifiedBuiltin;
+    out->range = callee->range();
+    out->message = parser::default_message(out->code);
+    return nullptr;
+  }
+  return root;
+}
+
 }  // namespace eval
 }  // namespace formulon

@@ -46,6 +46,7 @@
 #include "parser/ast.h"
 #include "parser/lexer_error.h"
 #include "parser/parse_error.h"
+#include "parser/parse_status.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
 #include "utils/arena.h"
@@ -354,6 +355,13 @@ AstNode* parse_strict(std::string_view src, Arena& arena);
 
 /// `parse_strict` under explicit parser options.
 AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts);
+
+/// `parse_strict` that reports why it failed. Returns the root exactly when
+/// `parse_strict` would; otherwise returns nullptr and writes the first
+/// recorded diagnostic to `*out` (lexer errors precede parser errors). An
+/// empty `src` fails as `ExpectedExpression` at 0..0. `out` must not be null
+/// and is left untouched on success.
+AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseFailure* out);
 
 /// True when `formula` (no leading `=`) parses cleanly and holds a reference
 /// into a sheet other than `own_sheet` (see `references_other_sheet`). An
