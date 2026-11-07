@@ -65,6 +65,13 @@ void AppendOverride(std::string& out, std::string_view path, std::string_view ct
   out.append("\"/>\n");
 }
 
+void AppendDefault(std::string& out, std::string_view extension, std::string_view ct) {
+  out.append("  <Default");
+  append_xml_attr(out, "Extension", extension);
+  append_xml_attr(out, "ContentType", ct);
+  out.append("/>\n");
+}
+
 void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
                         bool target_external, bool escape_target) {
   out.append("  <Relationship");

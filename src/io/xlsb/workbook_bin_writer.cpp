@@ -37,6 +37,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/formula_text.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -80,9 +81,7 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
                              std::vector<std::string>& names, std::unordered_set<std::string>& seen,
                              std::vector<std::string>& invisible, std::unordered_set<std::string>& invisible_seen,
                              std::vector<std::pair<std::string, std::string>>& qualified) {
-  if (!formula.empty() && formula.front() == '=') {
-    formula.remove_prefix(1);
-  }
+  formula = strip_formula_prefix(formula);
   Arena arena;
   parser::Parser p(formula, arena);
   parser::AstNode* root = p.parse();
@@ -140,10 +139,7 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
   for (const std::uint32_t row : rows) {
     for (const auto& [col, cell] : sheet.rows().at(row)) {
       (void)col;
-      std::string_view body(cell.formula_text);
-      if (!body.empty() && body.front() == '=') {
-        body.remove_prefix(1);
-      }
+      const std::string_view body = strip_formula_prefix(cell.formula_text);
       if (!body.empty()) {
         visit(body);
       }
@@ -412,7 +408,7 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
         if (!xti) {
           return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
                             "retained XLSB sheet records reference an external sheet no link carries",
-                            "context=write_xlsb sheet=" + wb.sheet(i).name() + " ref=" + entry.first);
+                            std::string(kWriteXlsbContext) + " sheet=" + wb.sheet(i).name() + " ref=" + entry.first);
         }
         seed.xti.push_back(*xti);
         continue;
@@ -426,7 +422,7 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
       if (entry.unresolved || first >= wb.sheet_count() || last >= wb.sheet_count()) {
         return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
                           "retained XLSB sheet records reference a sheet this workbook no longer has",
-                          "context=write_xlsb sheet=" + wb.sheet(i).name() + " ref=" + entry.first);
+                          std::string(kWriteXlsbContext) + " sheet=" + wb.sheet(i).name() + " ref=" + entry.first);
       }
       seed.xti.push_back(XtiEntry{0U, static_cast<std::int32_t>(first), static_cast<std::int32_t>(last)});
     }

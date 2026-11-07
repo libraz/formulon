@@ -33,9 +33,6 @@ namespace xlsb {
 /// dropping its records and the container once it is empty.
 void take_sparkline_groups(XlsbSheetTail& tail, const FeatureFormulaReadContext& ctx, std::string& ext_lst_xml);
 
-/// True when `tail` still retains sparkline records.
-bool has_retained_sparkline_groups(const XlsbSheetTail& tail);
-
 /// Writes the sparkline groups of `ext_lst_xml` into the tail slot `records`
 /// (the slot after the hyperlinks): inside a retained container, or as a new
 /// container after the x14 conditional formats and data validations. A

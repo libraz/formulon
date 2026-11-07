@@ -289,11 +289,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   }
   if (ftype != "shared") {
     // Plain formula (or an unhandled variant we treat as plain).
-    formula_out.clear();
-    AppendOoxmlTextUnescaped(formula_out, f_node.text().get());
-    if (!formula_out.empty() && formula_out.front() == '=') {
-      formula_out.erase(0, 1);
-    }
+    ReadFormulaElementText(formula_out, f_node);
     return Expected<void, Error>::Ok();
   }
 
@@ -306,10 +302,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   ASSIGN_OR_RETURN(const std::uint32_t si, ParseSharedFormulaSi(si_attr.value()));
 
   std::string body;
-  AppendOoxmlTextUnescaped(body, f_node.text().get());
-  if (!body.empty() && body.front() == '=') {
-    body.erase(0, 1);
-  }
+  ReadFormulaElementText(body, f_node);
   if (!body.empty()) {
     // Master occurrence: register and use as formula text.
     shared[si] = SharedFormulaMaster{body, row, col, nullptr, false};

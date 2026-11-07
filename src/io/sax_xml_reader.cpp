@@ -673,7 +673,7 @@ void DecodeTextRunInto(std::string_view src, TextRunKind kind, std::string* out)
 /// not self-closing). `*p` is at the byte after `>`. The skip is
 /// depth-counted so nested elements are walked in O(content) time
 /// without decoding their children.
-bool SkipUntilClose(const char* begin, const char* end, const char** p, std::string_view name, Error* err) {
+bool SkipUntilClose(const char* begin, const char* end, const char** p, std::string_view /*name*/, Error* err) {
   std::size_t depth = 1;
   while (*p < end && depth > 0) {
     // Scan to next '<'.
@@ -701,12 +701,10 @@ bool SkipUntilClose(const char* begin, const char* end, const char** p, std::str
       // We do not validate name nesting strictly; the well-formed
       // assumption is good enough for Excel-emitted output. We still
       // stop when we see a close at depth 1 with the matching name.
+      // A close tag whose name differs from `name` is tolerated, as pugixml
+      // does for foreign nesting; the outer scanner only needs to return to
+      // the surrounding context.
       --depth;
-      if (depth == 0 && header.name != name) {
-        // Tolerated: pugixml does the same for foreign nesting. We
-        // continue rather than failing because the outer scanner only
-        // cares about returning to the surrounding context.
-      }
       continue;
     }
     if (!header.self_closing) {
@@ -1038,11 +1036,9 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       record->phonetic = &scratch->inline_string_phonetic;
       record->phonetic_props = scratch->inline_string_phonetic_props;
       record->phonetic_pr_present = scratch->inline_string_phonetic_pr_present;
-    } else if (!child.self_closing) {
+    } else if (!SkipChildElement(begin, end, p, child, err)) {
       // Unrecognised child of <c>: skip it.
-      if (!SkipUntilClose(begin, end, p, child.name, err)) {
-        return false;
-      }
+      return false;
     }
   }
   *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated <c>");
@@ -1119,11 +1115,9 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
           return false;
         }
       }
-    } else if (!child.self_closing) {
+    } else if (!SkipChildElement(begin, end, p, child, err)) {
       // Unrecognised <row> child: skip.
-      if (!SkipUntilClose(begin, end, p, child.name, err)) {
-        return false;
-      }
+      return false;
     }
   }
   *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated <row>");
@@ -1151,10 +1145,8 @@ bool ScanSheetData(const char* begin, const char* end, const char** p, const Tag
       if (!ScanRow(begin, end, p, child, cb, scratch, err)) {
         return false;
       }
-    } else if (!child.self_closing) {
-      if (!SkipUntilClose(begin, end, p, child.name, err)) {
-        return false;
-      }
+    } else if (!SkipChildElement(begin, end, p, child, err)) {
+      return false;
     }
   }
   *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated <sheetData>");
@@ -1231,11 +1223,8 @@ Expected<void, Error> scan_sheet_data(ByteSpan xml, const SheetSaxCallbacks& cal
       continue;
     }
     // A non-sheetData sibling of <sheetData>: opaquely skip past it.
-    if (header.self_closing) {
-      continue;
-    }
     Error sub{};
-    if (!SkipUntilClose(begin, end, &p, header.name, &sub)) {
+    if (!SkipChildElement(begin, end, &p, header, &sub)) {
       return sub;
     }
   }

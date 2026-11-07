@@ -221,14 +221,10 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     AppendXmlAttrEscaped(out, col.name);
     out.push_back('"');
     if (!col.totals_label.empty()) {
-      out.append(" totalsRowLabel=\"");
-      AppendXmlAttrEscaped(out, col.totals_label);
-      out.push_back('"');
+      append_xml_attr(out, "totalsRowLabel", col.totals_label);
     }
     if (!col.totals_function.empty()) {
-      out.append(" totalsRowFunction=\"");
-      AppendXmlAttrEscaped(out, col.totals_function);
-      out.push_back('"');
+      append_xml_attr(out, "totalsRowFunction", col.totals_function);
     }
     out.append(col.extra_attrs);
     // CT_TableColumn children: calculatedColumnFormula, totalsRowFormula,
@@ -263,9 +259,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     const TableStyleInfo& info = t.style_info;
     out.append("  <tableStyleInfo");
     if (!info.name.empty()) {
-      out.append(" name=\"");
-      AppendXmlAttrEscaped(out, info.name);
-      out.push_back('"');
+      append_xml_attr(out, "name", info.name);
     }
     out.append(info.show_first_column ? " showFirstColumn=\"1\"" : " showFirstColumn=\"0\"");
     out.append(info.show_last_column ? " showLastColumn=\"1\"" : " showLastColumn=\"0\"");

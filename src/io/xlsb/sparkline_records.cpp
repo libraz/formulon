@@ -16,6 +16,7 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xml_utils.h"
 #include "parser/ast_format.h"
 
 namespace formulon {
@@ -23,7 +24,6 @@ namespace io {
 namespace xlsb {
 namespace {
 
-constexpr std::uint16_t kBeginDVals14 = 1054;
 // The BrtACBegin Excel writes around a sparkline group's BrtUid: one
 // ACProductVersion, version 0x1002, fileExtension set.
 constexpr std::array<std::uint8_t, 6> kGroupUidVersion = {0x01, 0x00, 0x02, 0x10, 0x00, 0x80};
@@ -57,8 +57,7 @@ std::optional<ColorSpec> DecodeSpec(const std::uint8_t* p) {
   }
   ColorSpec rgb;
   rgb.kind = ColorSpec::Kind::kRgb;
-  rgb.rgb = (static_cast<std::uint32_t>(c->a) << 24U) | (static_cast<std::uint32_t>(c->r) << 16U) |
-            (static_cast<std::uint32_t>(c->g) << 8U) | static_cast<std::uint32_t>(c->b);
+  rgb.rgb = pack_argb(c->a, c->r, c->g, c->b);
   return rgb;
 }
 
@@ -95,7 +94,7 @@ bool DecodeGroupHead(ByteSpan p, const FeatureFormulaReadContext& ctx, Sparkline
     return false;
   }
   const std::uint8_t* d = p.data;
-  const auto bits = static_cast<std::uint16_t>(d[0] | (d[1] << 8U));
+  const std::uint16_t bits = load_u16(d);
   const std::uint32_t empty = (bits >> 1U) & 0x3U;
   if (empty > 2U || ((bits & kIndividualAutoMax) != 0U && (bits & kGroupAutoMax) != 0U) ||
       ((bits & kIndividualAutoMin) != 0U && (bits & kGroupAutoMin) != 0U)) {
@@ -412,16 +411,6 @@ void take_sparkline_groups(XlsbSheetTail& tail, const FeatureFormulaReadContext&
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     TakeSlot(*slot, ctx, ext_lst_xml);
   }
-}
-
-bool has_retained_sparkline_groups(const XlsbSheetTail& tail) {
-  for (const std::vector<std::uint8_t>* slot :
-       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    if (contains_record_type(*slot, kBeginSparklineGroups)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 Expected<void, Error> add_sparkline_groups(std::vector<std::uint8_t>& records, std::string_view ext_lst_xml,

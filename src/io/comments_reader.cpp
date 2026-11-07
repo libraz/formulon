@@ -89,6 +89,9 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
 
 namespace {
 
+constexpr std::string_view kShapeOpen = "<v:shape ";
+constexpr std::string_view kShapeClose = "</v:shape>";
+
 /// The text between `<tag ...>` and `</tag>` inside `block`, or empty.
 std::string_view ElementText(std::string_view block, std::string_view open_tag, std::string_view close_tag) {
   const std::size_t open = block.find(open_tag);
@@ -139,8 +142,6 @@ bool ParseInt(std::string_view text, std::int64_t& out) {
 }  // namespace
 
 void apply_vml_note_shapes(std::string_view vml, std::vector<CellComment>& comments) {
-  constexpr std::string_view kShapeOpen = "<v:shape ";
-  constexpr std::string_view kShapeClose = "</v:shape>";
   // The first comment at a cell takes its shape.
   std::unordered_map<std::uint64_t, std::size_t> by_cell;
   by_cell.reserve(comments.size());
@@ -206,8 +207,6 @@ void apply_vml_note_shapes(std::string_view vml, std::vector<CellComment>& comme
 std::string vml_non_note_shapes(std::string_view vml) {
   constexpr std::string_view kTypeOpen = "<v:shapetype";
   constexpr std::string_view kTypeClose = "</v:shapetype>";
-  constexpr std::string_view kShapeOpen = "<v:shape ";
-  constexpr std::string_view kShapeClose = "</v:shape>";
   std::string out;
   for (std::size_t at = vml.find("<v:shape"); at != std::string_view::npos; at = vml.find("<v:shape", at)) {
     const bool is_type = vml.compare(at, kTypeOpen.size(), kTypeOpen) == 0;

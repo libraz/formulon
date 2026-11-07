@@ -38,6 +38,7 @@
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/metadata_bin.h"
+#include "io/xlsb/part_paths.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_writer.h"
@@ -84,9 +85,6 @@ namespace {
 // (a) it's what the reader's primary fixture uses and (b) it's the
 // content type Excel for Mac actually writes — the other variant is
 // accepted for compatibility on input only.
-constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
-constexpr std::string_view kCtXml = "application/xml";
-constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
 // Worksheet part content type. This is the worksheet data part, NOT the
 // binary-index part (`application/vnd.ms-excel.binIndexWs`); mislabelling it as
 // the index type makes Excel treat the package as having zero worksheets and
@@ -152,7 +150,7 @@ Expected<void, Error> CheckRetainedPartFreshness(const Workbook& workbook, const
   if (!current.has_value() || !part.model_fingerprint.has_value() || *current != *part.model_fingerprint) {
     return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
                       "retained XLSB part no longer matches the model state it was loaded from",
-                      "context=write_xlsb part=" + part.path);
+                      std::string(kWriteXlsbContext) + " part=" + part.path);
   }
   return Expected<void, Error>::Ok();
 }
@@ -318,7 +316,7 @@ std::string ExternalLinkRelsPath(std::size_t position) {
 /// The retained source `xl/styles.bin`, or null when the workbook has none.
 const PassthroughPart* FindRawStylesPart(const Workbook& wb) {
   for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.path == "xl/styles.bin")
+    if (part.path == kStylesBinPath)
       return &part;
   }
   return nullptr;
@@ -362,7 +360,7 @@ DynamicArrayMetadataPlan BuildDynamicArrayMetadataPlan(const Workbook& wb) {
   // later duplicate, so that is the one whose numbering ships.
   const PassthroughPart* retained = nullptr;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.path == "xl/metadata.bin") {
+    if (part.path == kMetadataBinPath) {
       retained = &part;
       break;
     }
@@ -385,20 +383,20 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
-  paths.insert("xl/workbook.bin");
-  paths.insert("xl/_rels/workbook.bin.rels");
+  paths.insert(std::string(kWorkbookBinPath));
+  paths.insert(std::string(kWorkbookBinRelsPath));
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     paths.insert(sheet_part_path(i + 1U));
     paths.insert(sheet_rels_part_path(i + 1U));
   }
   if (emit_sst_part) {
-    paths.insert("xl/sharedStrings.bin");
+    paths.insert(std::string(kSharedStringsBinPath));
   }
   if (emit_styles_part) {
-    paths.insert("xl/styles.bin");
+    paths.insert(std::string(kStylesBinPath));
   }
   if (emit_dynamic_metadata_part) {
-    paths.insert("xl/metadata.bin");
+    paths.insert(std::string(kMetadataBinPath));
   }
   for (std::size_t i = 1; i <= external_link_count; ++i) {
     paths.insert(external_link_part_path(i));
@@ -441,7 +439,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     if (!inserted && it->second != source.content_type) {
       return make_error(FormulonErrorCode::kIoContentTypeInvalid,
                         "workbook has conflicting Default content types for extension " + extension,
-                        "context=write_xlsb extension=" + extension);
+                        std::string(kWriteXlsbContext) + " extension=" + extension);
     }
   }
 
@@ -449,7 +447,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (!ooxml::is_safe_part_name(part.path)) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
-                        "context=write_xlsb part=" + part.path);
+                        std::string(kWriteXlsbContext) + " part=" + part.path);
     }
     if (generated.count(part.path) != 0U) {
       StructuredLog("xlsb.writer.passthrough_collision")
@@ -498,7 +496,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
       if (extension.empty() || (!always_registered && source_defaults.count(extension) == 0U)) {
         return make_error(FormulonErrorCode::kIoContentTypeInvalid,
                           "Default-typed passthrough part has no matching Default registration",
-                          "context=write_xlsb part=" + part.path + " extension=" + extension);
+                          std::string(kWriteXlsbContext) + " part=" + part.path + " extension=" + extension);
       }
     }
     plan.passthrough_kept.push_back(&part);
@@ -527,12 +525,6 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.append("<Types");
   append_xml_ns_decl(out, "", kNsContentTypes);
   out.append(">\n");
-  auto append_default = [&out](std::string_view extension, std::string_view content_type) {
-    out.append("  <Default");
-    append_xml_attr(out, "Extension", extension);
-    append_xml_attr(out, "ContentType", content_type);
-    out.append("/>\n");
-  };
   std::string_view rels_default = kCtPackageRels;
   std::string_view xml_default = kCtXml;
   // `bin` is commonly registered as the workbook type, but a real package
@@ -549,17 +541,17 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       bin_default = def.content_type;
     }
   }
-  append_default("rels", rels_default);
-  append_default("xml", xml_default);
-  append_default("bin", bin_default);
+  AppendDefault(out, "rels", rels_default);
+  AppendDefault(out, "xml", xml_default);
+  AppendDefault(out, "bin", bin_default);
   for (const DefaultContentType& def : plan.default_content_types) {
     if (def.extension == "rels" || def.extension == "xml" || def.extension == "bin") {
       continue;
     }
-    append_default(def.extension, def.content_type);
+    AppendDefault(out, def.extension, def.content_type);
   }
   if (plan.workbook_bin_override) {
-    AppendOverride(out, "xl/workbook.bin", kCtWorkbookXlsb);
+    AppendOverride(out, kWorkbookBinPath, kCtWorkbookXlsb);
   }
   // A source `rels` Default may use a vendor-specific type. Generated
   // relationship parts still need their canonical OPC semantics, so pin
@@ -570,7 +562,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // that part would change the source registry's meaning.
   if (rels_default != kCtPackageRels) {
     AppendOverride(out, "_rels/.rels", kCtPackageRels);
-    AppendOverride(out, "xl/_rels/workbook.bin.rels", kCtPackageRels);
+    AppendOverride(out, kWorkbookBinRelsPath, kCtPackageRels);
     for (std::size_t i = 1; i <= plan.external_link_count; ++i) {
       AppendOverride(out, ExternalLinkRelsPath(i), kCtPackageRels);
     }
@@ -601,13 +593,13 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     AppendOverride(out, sheet_part_path(i + 1U), kCtWorksheetXlsb);
   }
   if (plan.has_text_cells) {
-    AppendOverride(out, "xl/sharedStrings.bin", kCtSharedStringsXlsb);
+    AppendOverride(out, kSharedStringsBinPath, kCtSharedStringsXlsb);
   }
   if (plan.has_generated_dynamic_metadata) {
-    AppendOverride(out, "xl/metadata.bin", kCtSheetMetadataXlsb);
+    AppendOverride(out, kMetadataBinPath, kCtSheetMetadataXlsb);
   }
   if (plan.has_generated_styles) {
-    AppendOverride(out, "xl/styles.bin", kCtStylesXlsb);
+    AppendOverride(out, kStylesBinPath, kCtStylesXlsb);
   }
   for (std::size_t i = 1; i <= plan.external_link_count; ++i) {
     AppendOverride(out, external_link_part_path(i), kCtExternalLinkXlsb);
@@ -730,7 +722,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   // Without them a styled cell's iStyleRef dangles against an empty style
   // table, and the theme / metadata parts are treated as orphans. Emit a rel
   // for each part that is actually present in the package.
-  if (plan.has_generated_styles || plan.passthrough_path_index.contains(plan.passthrough_kept, "xl/styles.bin")) {
+  if (plan.has_generated_styles || plan.passthrough_path_index.contains(plan.passthrough_kept, kStylesBinPath)) {
     AppendRelationship(out, next_rid++, kRelStyles, "styles.bin", /*target_external=*/false, /*escape_target=*/true);
   }
   if (plan.passthrough_path_index.contains(plan.passthrough_kept, "xl/theme/theme1.xml")) {
@@ -738,7 +730,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
                        /*escape_target=*/true);
   }
   if (plan.has_generated_dynamic_metadata ||
-      plan.passthrough_path_index.contains(plan.passthrough_kept, "xl/metadata.bin")) {
+      plan.passthrough_path_index.contains(plan.passthrough_kept, kMetadataBinPath)) {
     AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.bin", /*target_external=*/false,
                        /*escape_target=*/true);
   }
@@ -764,7 +756,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
       continue;
     }
     if (!rel.target_external && ((rel.type == kRelTheme && rel.target == "xl/theme/theme1.xml") ||
-                                 (rel.type == kRelSheetMetadata && rel.target == "xl/metadata.bin"))) {
+                                 (rel.type == kRelSheetMetadata && rel.target == kMetadataBinPath))) {
       continue;
     }
     const std::string target = rel.target_external ? rel.target : TargetRelativeToWorkbook(rel.target);
@@ -832,8 +824,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   for (const TableMetadata& table : workbook.tables()) {
     if (table.sheet_index >= sheet_count) {
       return make_error(FormulonErrorCode::kIoWriteFailed, "table references a missing worksheet",
-                        "context=write_xlsb table=" + table.name + " sheet_index=" + std::to_string(table.sheet_index) +
-                            " sheet_count=" + std::to_string(sheet_count));
+                        std::string(kWriteXlsbContext) + " table=" + table.name + " sheet_index=" +
+                            std::to_string(table.sheet_index) + " sheet_count=" + std::to_string(sheet_count));
     }
   }
   std::unordered_set<std::string> taken_paths;
@@ -907,89 +899,64 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
 
   // 1. [Content_Types].xml
-  if (auto r = AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(workbook, plan)); !r) {
-    return std::move(r.error());
-  }
+  RETURN_IF_ERROR(AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(workbook, plan)));
   // 2. _rels/.rels
-  if (auto r = AddPart(writer.get(), "_rels/.rels",
-                       BuildPackageRels(workbook, "xl/workbook.bin", plan.passthrough_kept, plan.passthrough_path_index,
-                                        "xlsb.writer.package_rel_skipped", &diagnostics));
-      !r) {
-    return std::move(r.error());
-  }
+  RETURN_IF_ERROR(
+      AddPart(writer.get(), "_rels/.rels",
+              BuildPackageRels(workbook, kWorkbookBinPath, plan.passthrough_kept, plan.passthrough_path_index,
+                               "xlsb.writer.package_rel_skipped", &diagnostics)));
   // 3. xl/_rels/workbook.bin.rels
   // Passthrough parts (styles.bin, theme, metadata, sharedStrings) are only
   // discoverable through workbook relationships; BuildWorkbookRels emits a rel
   // for each part actually present so none dangle on reload.
   std::vector<std::pair<std::string, std::string>> workbook_rel_ids;
-  if (auto r = AddPart(
-          writer.get(), "xl/_rels/workbook.bin.rels",
-          BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, link_rel_ids, &diagnostics, &workbook_rel_ids));
-      !r) {
-    return std::move(r.error());
-  }
+  RETURN_IF_ERROR(AddPart(
+      writer.get(), kWorkbookBinRelsPath,
+      BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, link_rel_ids, &diagnostics, &workbook_rel_ids)));
   // 4. xl/workbook.bin
   {
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
     splice_book_slicer_cache_ids(wb_bytes, workbook.xlsb_book_frt(), workbook_rel_ids);
-    if (auto r = AddPartBytes(writer.get(), "xl/workbook.bin", wb_bytes); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), kWorkbookBinPath, wb_bytes));
   }
   // 4b. xl/styles.bin, when the source was not already an XLSB package with
   // an opaque style payload to preserve.  Its relationship is emitted above
   // in lockstep with this part.
   if (plan.has_generated_styles) {
     const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles());
-    if (auto r = AddPartBytes(writer.get(), "xl/styles.bin", styles_bytes); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), kStylesBinPath, styles_bytes));
   }
   // 4c. xl/metadata.bin for dynamic-array spill anchors. The worksheet
   // BrtCellMeta records and workbook relationship are emitted in lockstep.
   if (plan.has_generated_dynamic_metadata) {
     const std::vector<std::uint8_t> metadata_bytes = build_dynamic_array_metadata_bin();
-    if (auto r = AddPartBytes(writer.get(), "xl/metadata.bin", metadata_bytes); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), kMetadataBinPath, metadata_bytes));
   }
   // 5. xl/worksheets/sheet<N>.bin, plus its rels when the sheet's retained
   // records reference other parts (hyperlinks, drawings, table definitions).
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    if (auto r = AddPartBytes(writer.get(), sheet_part_path(i + 1U), sheet_bodies[i]); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), sheet_part_path(i + 1U), sheet_bodies[i]));
     for (const XlsbTablePart& table : plan.sheet_tables[i]) {
-      if (auto r = AddPartBytes(writer.get(), table.path, table.bytes); !r) {
-        return std::move(r.error());
-      }
+      RETURN_IF_ERROR(AddPartBytes(writer.get(), table.path, table.bytes));
     }
     const std::string sheet_rels =
         BuildSheetRels(workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i],
                        plan.sheet_owns_drawing[i], plan.sheet_drawing_rids[i], &diagnostics);
     if (!sheet_rels.empty()) {
-      if (auto r = AddPart(writer.get(), sheet_rels_part_path(i + 1U), sheet_rels); !r) {
-        return std::move(r.error());
-      }
+      RETURN_IF_ERROR(AddPart(writer.get(), sheet_rels_part_path(i + 1U), sheet_rels));
     }
   }
   // 5b. xl/externalLinks/externalLink<N>.bin and its rels, one per link, in
   // the order `BrtSupBookSrc` lists them.
   for (std::size_t i = 0; i < links.size(); ++i) {
     const std::vector<std::uint8_t> link_bytes = build_external_link_bin(*links[i], sheet_ranges.links[i]);
-    if (auto r = AddPartBytes(writer.get(), external_link_part_path(i + 1U), link_bytes); !r) {
-      return std::move(r.error());
-    }
-    if (auto r = AddPart(writer.get(), ExternalLinkRelsPath(i + 1U), build_external_link_rels(*links[i])); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), external_link_part_path(i + 1U), link_bytes));
+    RETURN_IF_ERROR(AddPart(writer.get(), ExternalLinkRelsPath(i + 1U), build_external_link_rels(*links[i])));
   }
   // 6. xl/sharedStrings.bin (conditional)
   if (emit_sst_part) {
     ASSIGN_OR_RETURN(auto sst_body, emit_sst(sst));
-    if (auto r = AddPartBytes(writer.get(), "xl/sharedStrings.bin", sst_body); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), kSharedStringsBinPath, sst_body));
   }
   // 7. Passthrough parts. Chart caches are refreshed into replacement bytes;
   // the model is untouched.
@@ -1000,7 +967,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     // through a path other than the reader (which already rejects them).
     if (!ooxml::is_safe_part_name(part->path)) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
-                        "context=write_xlsb part=" + part->path);
+                        std::string(kWriteXlsbContext) + " part=" + part->path);
     }
     // Retained bytes must not silently drop a mutation made since load.
     if (auto fresh = CheckRetainedPartFreshness(workbook, *part); !fresh) {
@@ -1008,9 +975,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
     const PassthroughPart* replacement = refreshed_index.find(part->path);
     const auto& part_bytes = replacement != nullptr ? replacement->bytes : part->bytes;
-    if (auto r = AddPartBytes(writer.get(), part->path, part_bytes); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), part->path, part_bytes));
   }
 
   ASSIGN_OR_RETURN(auto bytes, FinalizeArchive(writer, kWriteXlsbContext));

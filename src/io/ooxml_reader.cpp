@@ -78,6 +78,8 @@ namespace formulon {
 namespace io {
 namespace {
 
+constexpr const char* kReaderContext = "context=ooxml_reader";
+
 // Content type for the binary printer-settings part; the orchestrator
 // stamps it onto the passthrough record when it captures a sheet's
 // printer-settings bytes (the sheet aux-rels reader only resolves the
@@ -230,9 +232,9 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
   // with no text-via-SST cells legally omits it.
   SharedStringTable sst;
   if (!wb_rels.sst_path.empty()) {
-    ASSIGN_OR_RETURN(auto sst_bytes, ReadRequiredPart(zip, wb_rels.sst_path, FormulonErrorCode::kIoRelationshipBroken,
-                                                      "sharedStrings: rel target missing from package",
-                                                      "context=ooxml_reader", "sst_path"));
+    ASSIGN_OR_RETURN(auto sst_bytes,
+                     ReadRequiredPart(zip, wb_rels.sst_path, FormulonErrorCode::kIoRelationshipBroken,
+                                      "sharedStrings: rel target missing from package", kReaderContext, "sst_path"));
     auto sst_or = read_shared_strings(std::move(sst_bytes), result_text_storage);
     if (!sst_or) {
       return std::move(sst_or.error());
@@ -276,10 +278,9 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
   // 4b. Styles. Mark consumed regardless of whether the rel was present,
   // mirroring the SST treatment above.
   if (!wb_rels.styles_path.empty()) {
-    ASSIGN_OR_RETURN(
-        auto styles_bytes,
-        ReadRequiredPart(zip, wb_rels.styles_path, FormulonErrorCode::kIoRelationshipBroken,
-                         "styles: rel target missing from package", "context=ooxml_reader", "styles_path"));
+    ASSIGN_OR_RETURN(auto styles_bytes,
+                     ReadRequiredPart(zip, wb_rels.styles_path, FormulonErrorCode::kIoRelationshipBroken,
+                                      "styles: rel target missing from package", kReaderContext, "styles_path"));
     ASSIGN_OR_RETURN(auto styles, read_styles(styles_bytes));
     wb.set_styles(std::move(styles));
     consumed_parts.insert(wb_rels.styles_path);
@@ -713,7 +714,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // CDFV2 container as a corrupt archive.
   if (IsCdfv2Container(bytes)) {
     return make_error(FormulonErrorCode::kIoZipEncrypted,
-                      "package is an encrypted OLE/CDFV2 container; decrypt before loading", "context=ooxml_reader");
+                      "package is an encrypted OLE/CDFV2 container; decrypt before loading", kReaderContext);
   }
   ZipReader zip;
   {
@@ -726,7 +727,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // 1. [Content_Types].xml — sanity check + listing for unknown_parts.
   if (!zip.has_entry("[Content_Types].xml")) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing from package",
-                      "context=ooxml_reader");
+                      kReaderContext);
   }
   auto ct_bytes_or = zip.read_entry("[Content_Types].xml");
   if (!ct_bytes_or) {
@@ -744,8 +745,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package",
-                      "context=ooxml_reader");
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package", kReaderContext);
   }
   ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
   ASSIGN_OR_RETURN(const std::string workbook_path, ooxml::resolve_office_document_path(root_rels));
@@ -764,7 +764,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // 4. xl/workbook.xml — the <sheets> list (in document order).
   auto wb_bytes_or =
       ReadRequiredPart(zip, workbook_path, FormulonErrorCode::kIoSheetCorrupt,
-                       "workbook.xml: part not found at relationship target", "context=ooxml_reader", "workbook_path");
+                       "workbook.xml: part not found at relationship target", kReaderContext, "workbook_path");
   if (!wb_bytes_or) {
     return std::move(wb_bytes_or.error());
   }
@@ -861,7 +861,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     // A relationship resolving to a path the package does not contain is a
     // structural error, not a skip: a missing sheet part is data loss.
     auto sheet_bytes_or = ReadRequiredPart(zip, sheet_path, FormulonErrorCode::kIoSheetCorrupt,
-                                           "sheet part missing from package", "context=ooxml_reader", "sheet_path");
+                                           "sheet part missing from package", kReaderContext, "sheet_path");
     if (!sheet_bytes_or) {
       return std::move(sheet_bytes_or.error());
     }

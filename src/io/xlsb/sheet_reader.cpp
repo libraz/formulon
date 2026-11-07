@@ -234,6 +234,19 @@ void ApplyDecodedRowHeaders(Sheet& sheet, const std::vector<SheetDecodeState::De
   }
 }
 
+/// Workbook-level tables a worksheet record decodes against.
+struct SheetDecodeInputs {
+  const std::vector<std::string_view>& sst_entries;
+  const std::vector<std::vector<PhoneticRun>>& sst_phonetic;
+  const std::vector<PhoneticProperties>& sst_phonetic_props;
+  std::deque<std::string>& text_storage;
+  const std::vector<std::string>& sheet_names;
+  const std::vector<XlsbName>& name_table;
+  const std::vector<XlsbSheetRange>& sheet_ranges;
+  const XlsbExternalBooks& external_books;
+  std::uint32_t* undecoded_formula_count;
+};
+
 /// Classifies and decodes one worksheet record.
 ///
 /// The switch below has no fall-through exit: every arm ends in a
@@ -242,14 +255,10 @@ void ApplyDecodedRowHeaders(Sheet& sheet, const std::vector<SheetDecodeState::De
 /// every path, an arm that ends without producing a disposition does not
 /// compile, which is what keeps "decoded, retained, regenerated or
 /// counted" exhaustive as records are added.
-Expected<RecordDisposition, Error> DispatchSheetRecord(
-    const XlsbRecord& rec, XlsbRecordType type, const std::uint8_t* framed, std::size_t framed_size,
-    SheetDecodeState& state, std::size_t sheet_index, Workbook& wb, const std::vector<std::string_view>& sst_entries,
-    const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
-    const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
-    const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
-    const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count) {
+Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, XlsbRecordType type,
+                                                       const std::uint8_t* framed, std::size_t framed_size,
+                                                       SheetDecodeState& state, std::size_t sheet_index, Workbook& wb,
+                                                       const SheetDecodeInputs& in) {
   switch (type) {
     case XlsbRecordType::BrtBeginWsView: {
       // The first view is the modelled one; each later one is another
@@ -325,8 +334,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         return std::move(row_or.error());
       }
       if (row_or.value() >= Sheet::kMaxRows) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtRowHdr row out of range",
-                          "context=xlsb_reader");
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtRowHdr row out of range", kReadXlsbContext);
       }
       state.current_row = row_or.value();
       state.row_seen = true;
@@ -338,7 +346,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         auto skip_phonetic_show = read_u8(p);
         if (!row_style_xf_or || !height_or || !flags1_or || !flags2_or || !skip_phonetic_show) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtRowHdr layout truncated",
-                            "context=xlsb_reader");
+                            kReadXlsbContext);
         }
         const std::uint8_t flags = flags2_or.value();
         const bool has_style = (flags & kRowGhostDirty) != 0U;
@@ -376,13 +384,12 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       auto style_xf_or = read_u32(p);
       auto flags_or = read_u16(p);
       if (!first_or || !last_or || !width_or || !style_xf_or || !flags_or) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtColInfo truncated",
-                          "context=xlsb_reader");
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtColInfo truncated", kReadXlsbContext);
       }
       if (first_or.value() >= Sheet::kMaxCols || last_or.value() >= Sheet::kMaxCols ||
           first_or.value() > last_or.value()) {
         return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtColInfo range out of bounds",
-                          "context=xlsb_reader");
+                          kReadXlsbContext);
       }
       ColumnLayout layout;
       layout.first = first_or.value();
@@ -410,13 +417,12 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       ByteSpan p = rec.payload;
       auto rfx_or = read_rfx(p);
       if (!rfx_or) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtMergeCell truncated",
-                          "context=xlsb_reader");
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtMergeCell truncated", kReadXlsbContext);
       }
       const MergeRange& rfx = rfx_or.value();
       if (!in_grid(rfx)) {
         return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtMergeCell range out of bounds",
-                          "context=xlsb_reader");
+                          kReadXlsbContext);
       }
       wb.sheet(sheet_index).mutable_merges().push_back(rfx);
       return RecordDisposition::kModelled;
@@ -435,8 +441,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
     case XlsbRecordType::BrtCellError:
     case XlsbRecordType::BrtCellSt:
     case XlsbRecordType::BrtCellIsst:
-      return DecodeLiteralCell(rec, type, state, sheet_index, wb, sst_entries, sst_phonetic, sst_phonetic_props,
-                               text_storage);
+      return DecodeLiteralCell(rec, type, state, sheet_index, wb, in.sst_entries, in.sst_phonetic,
+                               in.sst_phonetic_props, in.text_storage);
     case XlsbRecordType::BrtFmlaNum:
     case XlsbRecordType::BrtFmlaString:
     case XlsbRecordType::BrtFmlaBool:
@@ -464,7 +470,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         case XlsbRecordType::BrtFmlaNum: {
           if (p.size < 8) {
             return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtFmlaNum value truncated",
-                              "context=xlsb_reader");
+                              kReadXlsbContext);
           }
           double v;
           std::memcpy(&v, p.data, sizeof(v));
@@ -478,8 +484,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
           if (!s) {
             return std::move(s.error());
           }
-          text_storage.push_back(std::move(s.value()));
-          cached = Value::text(text_storage.back());
+          in.text_storage.push_back(std::move(s.value()));
+          cached = Value::text(in.text_storage.back());
           break;
         }
         case XlsbRecordType::BrtFmlaBool: {
@@ -504,8 +510,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       }
       // grbitFlags (u16).
       if (p.size < 2) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula flags truncated",
-                          "context=xlsb_reader");
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula flags truncated", kReadXlsbContext);
       }
       p.data += 2;
       p.size -= 2;
@@ -517,8 +522,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       ByteSpan rgcb;
       RETURN_IF_ERROR(ReadCellParsedFormula(p, "formula", &rgce, &rgcb));
       const std::string formula_text =
-          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, external_books, sheet_index,
-                            state.current_row, col.col, undecoded_formula_count, &wb.tables());
+          DecodeFormulaText(rgce, rgcb, in.sheet_names, in.name_table, in.sheet_ranges, in.external_books, sheet_index,
+                            state.current_row, col.col, in.undecoded_formula_count, &wb.tables());
       if (!formula_text.empty()) {
         // Register the real formula via the workbook-level entry so the
         // dep graph tracks it (matching the OOXML reader). The cached
@@ -580,11 +585,11 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       if (rw_first >= Sheet::kMaxRows || rw_last >= Sheet::kMaxRows || col_first >= Sheet::kMaxCols ||
           col_last >= Sheet::kMaxCols || rw_last < rw_first || col_last < col_first) {
         return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtArrFmla range out of bounds",
-                          "context=xlsb_reader");
+                          kReadXlsbContext);
       }
       if (p.size < 1) {
         return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla flag truncated",
-                          "context=xlsb_reader");
+                          kReadXlsbContext);
       }
       p.data += 1;
       p.size -= 1;
@@ -592,8 +597,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       ByteSpan rgcb;
       RETURN_IF_ERROR(ReadCellParsedFormula(p, "BrtArrFmla", &rgce, &rgcb));
       const std::string formula_text =
-          DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, external_books, sheet_index, rw_first,
-                            col_first, undecoded_formula_count, &wb.tables());
+          DecodeFormulaText(rgce, rgcb, in.sheet_names, in.name_table, in.sheet_ranges, in.external_books, sheet_index,
+                            rw_first, col_first, in.undecoded_formula_count, &wb.tables());
       if (formula_text.empty()) {
         return RecordDisposition::kModelled;
       }
@@ -649,6 +654,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     std::uint32_t* undecoded_formula_count) {
   SheetDecodeState state;
   const FeatureFormulaReadContext feature_ctx{sheet_names, name_table, sheet_ranges, external_books, sheet_index};
+  const SheetDecodeInputs inputs{sst_entries, sst_phonetic, sst_phonetic_props, text_storage,           sheet_names,
+                                 name_table,  sheet_ranges, external_books,     undecoded_formula_count};
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
     const std::uint8_t* const framed = cursor.data;
@@ -674,9 +681,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     // Every record resolves to a disposition; the result is consumed rather
     // than discarded so that no record can pass through unclassified.
     ASSIGN_OR_RETURN(auto disposition,
-                     DispatchSheetRecord(rec, type, framed, framed_size, state, sheet_index, wb, sst_entries,
-                                         sst_phonetic, sst_phonetic_props, text_storage, sheet_names, name_table,
-                                         sheet_ranges, external_books, undecoded_formula_count));
+                     DispatchSheetRecord(rec, type, framed, framed_size, state, sheet_index, wb, inputs));
     if (disposition == RecordDisposition::kAccounted) {
       ++state.dropped_records;
     }

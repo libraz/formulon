@@ -55,34 +55,36 @@ bool AppendA1Range(std::string& out, const cf::CFCellRange& r) {
       r.last.col >= cf::kCfMaxCols) {
     return false;
   }
-  std::string encoded;
+  const std::size_t mark = out.size();
+  const auto fail = [&out, mark]() {
+    out.resize(mark);
+    return false;
+  };
   if (r.is_full_col()) {
-    if (!a1::append_column_letters(encoded, r.first.col)) {
-      return false;
+    if (!a1::append_column_letters(out, r.first.col)) {
+      return fail();
     }
-    encoded.push_back(':');
-    if (!a1::append_column_letters(encoded, r.last.col)) {
-      return false;
+    out.push_back(':');
+    if (!a1::append_column_letters(out, r.last.col)) {
+      return fail();
     }
   } else if (r.is_full_row()) {
-    encoded = std::to_string(r.first.row + 1U);
-    encoded.push_back(':');
-    encoded.append(std::to_string(r.last.row + 1U));
+    out.append(std::to_string(r.first.row + 1U));
+    out.push_back(':');
+    out.append(std::to_string(r.last.row + 1U));
   } else {
-    encoded = a1::encode_a1(r.first.row, r.first.col);
-    if (encoded.empty()) {
-      return false;
+    if (!a1::append_column_letters(out, r.first.col)) {
+      return fail();
     }
+    out.append(std::to_string(r.first.row + 1U));
     if (r.first != r.last) {
-      const std::string last = a1::encode_a1(r.last.row, r.last.col);
-      if (last.empty()) {
-        return false;
+      out.push_back(':');
+      if (!a1::append_column_letters(out, r.last.col)) {
+        return fail();
       }
-      encoded.push_back(':');
-      encoded.append(last);
+      out.append(std::to_string(r.last.row + 1U));
     }
   }
-  out.append(encoded);
   return true;
 }
 
@@ -104,8 +106,7 @@ std::string EncodeSqref(const std::vector<cf::CFCellRange>& ranges) {
 /// Emits the colour attributes: `theme` / `indexed` / `auto` as written, else
 /// the literal `rgb`.
 void AppendColorAttrs(std::string& out, const cf::Color& c) {
-  const std::uint32_t argb = (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
-                             (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
+  const std::uint32_t argb = pack_argb(c.a, c.r, c.g, c.b);
   ColorSpec spec = c.spec;
   if (spec.kind == ColorSpec::Kind::kRgb) {
     spec.kind = ColorSpec::Kind::kNone;  // The literal channels are authoritative for rgb.
@@ -150,11 +151,8 @@ void AppendDataBar(std::string& out, const cf::DataBarSpec& d, bool linked,
                    const parser::ExternalBookIndexer* indexer) {
   out.append("<dataBar");
   if (!linked) {
-    out.append(" minLength=\"");
-    out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
-    out.append("\" maxLength=\"");
-    out.append(std::to_string(static_cast<unsigned>(d.max_length_pct)));
-    out.push_back('"');
+    append_xml_attr_uint(out, "minLength", d.min_length_pct);
+    append_xml_attr_uint(out, "maxLength", d.max_length_pct);
   }
   if (!d.show_value) {
     out.append(" showValue=\"0\"");
@@ -367,11 +365,9 @@ void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v, const parser::E
 /// element, so its `showValue` and fill colour are stated here too.
 void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::ExternalBookIndexer* indexer,
                       bool standalone) {
-  out.append("<x14:dataBar minLength=\"");
-  out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
-  out.append("\" maxLength=\"");
-  out.append(std::to_string(static_cast<unsigned>(d.max_length_pct)));
-  out.push_back('"');
+  out.append("<x14:dataBar");
+  append_xml_attr_uint(out, "minLength", d.min_length_pct);
+  append_xml_attr_uint(out, "maxLength", d.max_length_pct);
   if (standalone && !d.show_value) {
     out.append(" showValue=\"0\"");
   }

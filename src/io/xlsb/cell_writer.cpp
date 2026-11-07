@@ -22,6 +22,7 @@
 #include "parser/parser.h"
 #include "phonetic.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/structured_log.h"
 #include "value.h"
 
@@ -111,10 +112,7 @@ StoredScalar StoreScalar(const Value& v) {
 Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::vector<std::string>& sheet_names,
                                                   const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                   bool array_formula, const NameShapes& name_shapes) {
-  std::string_view body(cell.formula_text);
-  if (!body.empty() && body.front() == '=') {
-    body.remove_prefix(1);
-  }
+  const std::string_view body = strip_formula_prefix(cell.formula_text);
   Arena arena;
   parser::Parser parser(body, arena);
   parser::AstNode* root = parser.parse();

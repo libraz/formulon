@@ -22,11 +22,13 @@
 #include <utility>
 #include <vector>
 
+#include "io/xml_escape.h"
 #include "io/xsd_double.h"
 #include "phonetic.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/formula_text.h"
 
 namespace formulon {
 namespace io {
@@ -84,6 +86,27 @@ std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::st
 /// `value` rendered via `std::to_string`. No escaping pass is required
 /// because the rendered digits are always XML-safe.
 void append_xml_attr_uint(std::string& out, std::string_view name, std::uint64_t value);
+
+/// As `append_xml_attr_uint`, but emits nothing when `value == absent`.
+inline void append_xml_attr_uint_if(std::string& out, std::string_view name, std::uint32_t value,
+                                    std::uint32_t absent) {
+  if (value != absent) {
+    append_xml_attr_uint(out, name, value);
+  }
+}
+
+/// As `append_xml_attr_uint`, but emits nothing for an empty optional.
+inline void append_xml_attr_uint_if(std::string& out, std::string_view name, std::optional<std::uint32_t> value) {
+  if (value.has_value()) {
+    append_xml_attr_uint(out, name, *value);
+  }
+}
+
+/// Packs the four channels into the `0xAARRGGBB` word colour models carry.
+inline constexpr std::uint32_t pack_argb(std::uint8_t a, std::uint8_t r, std::uint8_t g, std::uint8_t b) noexcept {
+  return (static_cast<std::uint32_t>(a) << 24U) | (static_cast<std::uint32_t>(r) << 16U) |
+         (static_cast<std::uint32_t>(g) << 8U) | static_cast<std::uint32_t>(b);
+}
 
 /// Signed counterpart of `append_xml_attr_uint`.
 void append_xml_attr_int(std::string& out, std::string_view name, std::int64_t value);
@@ -384,6 +407,16 @@ void append_phonetic_runs(const pugi::xml_node& node, std::vector<PhoneticRun>& 
 /// Reads the `<phoneticPr>` child of a string item. An absent element
 /// leaves the defaults, which is the state Excel would have inferred.
 PhoneticProperties read_phonetic_properties(const pugi::xml_node& node);
+
+/// Replaces `out` with the unescaped text of a formula element, minus a
+/// single leading `=`.
+inline void ReadFormulaElementText(std::string& out, const pugi::xml_node& node) {
+  out.clear();
+  AppendOoxmlTextUnescaped(out, node.text().get());
+  if (!out.empty() && out.front() == '=') {
+    out.erase(0, 1);
+  }
+}
 
 }  // namespace io
 }  // namespace formulon

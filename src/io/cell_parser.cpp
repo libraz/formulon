@@ -310,10 +310,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   std::string formula;
   pugi::xml_node f_node = node.child("f");
   if (f_node) {
-    AppendOoxmlTextUnescaped(formula, f_node.text().get());
-    if (!formula.empty() && formula.front() == '=') {
-      formula.erase(0, 1);
-    }
+    ReadFormulaElementText(formula, f_node);
   }
 
   // <v> / <is> — value. Inline-string concatenation is done eagerly

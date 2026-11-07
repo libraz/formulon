@@ -3,7 +3,7 @@
 // Only the namespace and relationship type URIs that more than one reader / writer
 // (OOXML or XLSB) needs are hoisted here, plus the XLSB workbook content types
 // shared by format detection and the XLSB reader. Content-type strings needed by
-// exactly one side (e.g. the writer-only `kCtPackageRels` / `kCtComments`) stay in
+// exactly one side (e.g. the writer-only `kCtComments`) stay in
 // the consuming `.cpp` so this header tracks the minimum shared surface.
 //
 // Header-only, `<string_view>`-only, `inline constexpr` — no
@@ -69,6 +69,8 @@ inline constexpr std::string_view kRelVmlDrawing =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 inline constexpr std::string_view kRelDrawing =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+inline constexpr std::string_view kRelChart =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
 inline constexpr std::string_view kRelPrinterSettings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
 inline constexpr std::string_view kRelExternalLink =
@@ -95,6 +97,11 @@ inline constexpr std::string_view kRelExtendedProperties =
 inline constexpr std::string_view kRelCustomProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
+// Content types of the package-level parts both container writers declare as
+// `<Default>` entries.
+inline constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
+inline constexpr std::string_view kCtXml = "application/xml";
+
 // XLSB workbook content types ([Content_Types].xml). Either form marks the
 // package as MS-XLSB.
 inline constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
@@ -106,6 +113,9 @@ inline bool is_xlsb_workbook_content_type(std::string_view content_type) {
 
 // Worksheet drawing part content type; an XML part in both package formats.
 inline constexpr std::string_view kCtDrawing = "application/vnd.openxmlformats-officedocument.drawing+xml";
+
+// Chart part content type.
+inline constexpr std::string_view kCtChart = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 
 }  // namespace io
 }  // namespace formulon

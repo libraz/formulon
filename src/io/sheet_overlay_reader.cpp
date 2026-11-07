@@ -38,10 +38,7 @@ namespace {
 /// canonicalises the text.
 std::string ReadValidationFormula(const pugi::xml_node& formula) {
   std::string text;
-  AppendOoxmlTextUnescaped(text, formula.text().get());
-  if (!text.empty() && text.front() == '=') {
-    text.erase(0, 1);
-  }
+  ReadFormulaElementText(text, formula);
   return canonical_feature_formula(text);
 }
 

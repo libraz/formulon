@@ -216,14 +216,10 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
       AppendXmlAttrEscaped(out, name.name);
       out.push_back('"');
       if (name.exists) {
-        out.append(" refersTo=\"");
-        AppendXmlAttrEscaped(out, RefersTo(book, name));
-        out.push_back('"');
+        append_xml_attr(out, "refersTo", RefersTo(book, name));
       }
       if (name.scope_sheet != ExternalBook::kNoSheet) {
-        out.append(" sheetId=\"");
-        out.append(std::to_string(name.scope_sheet));
-        out.push_back('"');
+        append_xml_attr_uint(out, "sheetId", name.scope_sheet);
       }
       out.append("/>");
     }

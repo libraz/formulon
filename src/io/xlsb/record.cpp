@@ -20,9 +20,9 @@ namespace xlsb {
 namespace {
 
 /// Reads up to `max_bytes` MSB-continuation bytes into `out`, where each
-/// byte contributes 7 bits in little-endian order. Returns the actual
-/// number of bytes consumed in `bytes_consumed`. Used for both the
-/// record-type and payload-size variable-length integers.
+/// byte contributes 7 bits in little-endian order, and returns the value.
+/// Fails on truncation or when every byte carries the continuation bit.
+/// Used for both the record-type and payload-size variable-length integers.
 Expected<std::uint32_t, Error> ReadVarInt(ByteSpan& cursor, std::size_t max_bytes, const char* what) {
   std::uint32_t value = 0;
   for (std::size_t i = 0; i < max_bytes; ++i) {
@@ -105,14 +105,12 @@ void append_utf16le_as_utf8(const std::uint8_t* data, std::uint32_t units, std::
   out->reserve(out->size() + static_cast<std::size_t>(units) * 3U);
   for (std::uint32_t i = 0; i < units; ++i) {
     const std::size_t offset = static_cast<std::size_t>(i) * 2U;
-    const std::uint32_t cu =
-        static_cast<std::uint32_t>(data[offset]) | (static_cast<std::uint32_t>(data[offset + 1U]) << 8);
+    const std::uint32_t cu = load_u16(data + offset);
     std::uint32_t cp = cu;
     // Surrogate pair: high surrogate followed by low surrogate; a lone unit passes through.
     if (cu >= 0xD800U && cu <= 0xDBFFU && i + 1U < units) {
       const std::size_t low_offset = offset + 2U;
-      const std::uint32_t low =
-          static_cast<std::uint32_t>(data[low_offset]) | (static_cast<std::uint32_t>(data[low_offset + 1U]) << 8);
+      const std::uint32_t low = load_u16(data + low_offset);
       if (low >= 0xDC00U && low <= 0xDFFFU) {
         cp = 0x10000U + ((cu - 0xD800U) << 10) + (low - 0xDC00U);
         ++i;

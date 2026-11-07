@@ -127,7 +127,7 @@ Expected<bool, Error> decode_pane(const XlsbRecord& rec, SheetView& view) {
   // a split's are twips.
   ByteSpan p = rec.payload;
   if (p.size < 29U) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", "context=xlsb_reader");
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", kReadXlsbContext);
   }
   const double cols = load_f64(p.data);
   const double rows = load_f64(p.data + sizeof(double));
@@ -138,8 +138,7 @@ Expected<bool, Error> decode_pane(const XlsbRecord& rec, SheetView& view) {
   auto active_pane_or = read_u32(p);
   auto flags_or = read_u8(p);
   if (!top_row_or || !left_col_or || !active_pane_or || !flags_or) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane fields truncated",
-                      "context=xlsb_reader");
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane fields truncated", kReadXlsbContext);
   }
   const bool valid = std::isfinite(rows) && std::isfinite(cols) && rows >= 0.0 && cols >= 0.0;
   if ((flags_or.value() & kPaneFrozen) == 0U) {
@@ -152,7 +151,7 @@ Expected<bool, Error> decode_pane(const XlsbRecord& rec, SheetView& view) {
     if (!valid || std::trunc(rows) != rows || std::trunc(cols) != cols || rows >= Sheet::kMaxRows ||
         cols >= Sheet::kMaxCols) {
       return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtPane frozen counts invalid",
-                        "context=xlsb_reader");
+                        kReadXlsbContext);
     }
     view.freeze_rows = static_cast<std::uint32_t>(rows);
     view.freeze_cols = static_cast<std::uint32_t>(cols);
@@ -247,8 +246,7 @@ Expected<void, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std
   auto zoom_or = read_u16(p);
   if (!flags_or || !mode_or || !top_row_or || !left_col_or || !color_or || !skip_reserved8 || !skip_reserved16 ||
       !zoom_or) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtBeginWsView truncated",
-                      "context=xlsb_reader");
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtBeginWsView truncated", kReadXlsbContext);
   }
   if ((top_row_or.value() != 0U || left_col_or.value() != 0U) && top_row_or.value() < Sheet::kMaxRows &&
       left_col_or.value() < Sheet::kMaxCols) {

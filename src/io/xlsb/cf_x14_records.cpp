@@ -559,10 +559,12 @@ std::optional<Rule14Head> ParseRule14Head(ByteSpan p, cf::CFRule& rule) {
       if (p.size < 12U) {
         return std::nullopt;
       }
-      const std::size_t size = 12U + std::size_t{load_u32(p.data + 4)} + std::size_t{load_u32(p.data + 8)};
-      if (size > p.size) {
+      const std::size_t cce = load_u32(p.data + 4);
+      const std::size_t cb = load_u32(p.data + 8);
+      if (p.size - 12U < cce || p.size - 12U - cce < cb) {
         return std::nullopt;
       }
+      const std::size_t size = 12U + cce + cb;
       head.formulas.push_back(ByteSpan{p.data, size});
       p.data += size;
       p.size -= size;

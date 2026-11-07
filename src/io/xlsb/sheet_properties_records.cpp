@@ -57,9 +57,7 @@ void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb)
         // Shortest round-trip spelling, matching the styles writer: the
         // same tint must not be spelled two ways depending on whether the
         // sheet came in as XLSB or XLSX.
-        out.append(" tint=\"");
-        append_xml_number(out, spec.tint);
-        out.push_back('"');
+        append_xml_attr_number(out, "tint", spec.tint);
       }
       out.append("/>");
       break;
@@ -176,33 +174,16 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
     return std::move(code_name_or.error());
   }
 
-  const std::uint32_t argb =
-      (static_cast<std::uint32_t>(alpha_or.value()) << 24U) | (static_cast<std::uint32_t>(red_or.value()) << 16U) |
-      (static_cast<std::uint32_t>(green_or.value()) << 8U) | static_cast<std::uint32_t>(blue_or.value());
+  const std::uint32_t argb = pack_argb(alpha_or.value(), red_or.value(), green_or.value(), blue_or.value());
   ColorSpec tab;
-  switch (static_cast<std::uint32_t>(color_flags_or.value() >> 1U)) {
-    case 1U:
-      tab.kind = ColorSpec::Kind::kIndexed;
-      tab.indexed = color_index_or.value();
-      break;
-    case 2U:
-      tab.kind = ColorSpec::Kind::kRgb;
-      tab.rgb = argb;
-      break;
-    case 3U:
-      tab.kind = ColorSpec::Kind::kTheme;
-      tab.theme = color_index_or.value();
-      tab.tint = static_cast<double>(static_cast<std::int16_t>(color_tint_or.value())) / kBrtColorTintScale;
-      break;
-    default:
-      tab.kind = ColorSpec::Kind::kAuto;
-      break;
+  if (!decode_brt_color_selector(static_cast<std::uint8_t>(color_flags_or.value() >> 1U), color_index_or.value(),
+                                 color_tint_or.value(), argb, tab)) {
+    tab.kind = ColorSpec::Kind::kAuto;
   }
   // Excel marks the default tab with the automatic palette slot rather
   // than the automatic colour type, so both spellings mean "no tab
   // colour" and neither produces a `<tabColor>` element.
-  constexpr std::uint8_t kAutomaticPaletteIndex = 0x40U;
-  if (tab.kind == ColorSpec::Kind::kIndexed && color_index_or.value() == kAutomaticPaletteIndex) {
+  if (tab.kind == ColorSpec::Kind::kIndexed && color_index_or.value() == kBrtColorAutoIndex) {
     tab.kind = ColorSpec::Kind::kAuto;
   }
 
@@ -213,9 +194,7 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
   if (!code_name.empty() || !body.empty()) {
     sheet_pr.append("<sheetPr");
     if (!code_name.empty()) {
-      sheet_pr.append(" codeName=\"");
-      AppendXmlAttrEscaped(sheet_pr, code_name);
-      sheet_pr.push_back('"');
+      append_xml_attr(sheet_pr, "codeName", code_name);
     }
     if (body.empty()) {
       sheet_pr.append("/>");

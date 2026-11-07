@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -183,12 +184,19 @@ std::string PatchNoteShape(const CommentShape& shape) {
 }
 
 /// The numeric part of a `_x0000_s<N>` shape id in the opening tag of `xml`, or 0.
-std::uint64_t ShapeNumber(const std::string& xml) {
-  const std::size_t at = xml.find(" id=\"_x0000_s");
-  if (at == std::string::npos || at > xml.find('>')) {
+std::uint64_t ShapeNumber(std::string_view xml) {
+  constexpr std::string_view kIdPrefix = " id=\"_x0000_s";
+  const std::size_t at = xml.find(kIdPrefix);
+  if (at == std::string_view::npos || at > xml.find('>')) {
     return 0;
   }
-  return std::strtoull(xml.c_str() + at + 13U, nullptr, 10);
+  constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
+  std::uint64_t number = 0;
+  for (std::size_t i = at + kIdPrefix.size(); i < xml.size() && xml[i] >= '0' && xml[i] <= '9'; ++i) {
+    const std::uint64_t digit = static_cast<std::uint64_t>(xml[i] - '0');
+    number = number > (kMax - digit) / 10U ? kMax : number * 10U + digit;
+  }
+  return number;
 }
 
 }  // namespace
@@ -200,7 +208,7 @@ std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint
   std::vector<std::uint64_t> blocks{drawing_id};
   for (std::size_t at = other_shapes.find("<v:shape "); at != std::string_view::npos;
        at = other_shapes.find("<v:shape ", at + 1U)) {
-    const std::uint64_t number = ShapeNumber(std::string(other_shapes.substr(at, other_shapes.find('>', at) - at)));
+    const std::uint64_t number = ShapeNumber(other_shapes.substr(at, other_shapes.find('>', at) - at));
     if (number == 0U || !used.insert(number).second) {
       continue;
     }

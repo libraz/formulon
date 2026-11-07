@@ -13,6 +13,7 @@
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/rich_str.h"
 #include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -22,9 +23,6 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
-
-/// `RichStr` flag bit announcing the phonetic tail ([MS-XLSB] §2.5.87).
-constexpr std::uint8_t kRichStrPhonetic = 0x02U;
 
 /// The constant high bits of the phonetic tail's closing flags word.
 ///

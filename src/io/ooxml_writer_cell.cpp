@@ -34,6 +34,7 @@
 #include "io/data_table_xml.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
+#include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/phonetic_pr.h"
@@ -47,6 +48,7 @@
 #include "parser/parser.h"
 #include "phonetic.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "style_resolve.h"
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
@@ -236,7 +238,7 @@ void AppendFormulaValue(std::string& out, const Value& cv) {
 void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col, std::uint32_t xf_index,
                           bool force_style, const Value& value, bool always_calculates) {
   out.append("<c r=\"");
-  out.append(a1::encode_a1(row, col));
+  AppendCellRefForRef(out, row, col);
   out.append("\"");
   AppendStyleAttr(out, xf_index, force_style);
   AppendFormulaValueType(out, value);
@@ -268,7 +270,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // other result cells are plain values.
   if (const DataTable* table = has_formula ? nullptr : sheet.data_table_anchored_at(row, col)) {
     out.append("<c r=\"");
-    out.append(a1::encode_a1(row, col));
+    AppendCellRefForRef(out, row, col);
     out.append("\"");
     AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
     AppendFormulaValueType(out, cell.cached_value);
@@ -279,16 +281,15 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     return true;
   }
 
+  const std::string addr = a1::encode_a1(row, col);
+
   // Pre-screen NaN/Inf number literals so we never half-emit a cell tag.
   // Formula cells with non-finite cached values still emit the <f>; only
   // the <v> is downgraded.
   if (!has_formula && cell.cached_value.is_number() && !std::isfinite(cell.cached_value.as_number())) {
-    const std::string addr = a1::encode_a1(row, col);
     AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index, ForcesDefaultStyle(cell), cell.show_phonetic);
     return true;
   }
-
-  const std::string addr = a1::encode_a1(row, col);
 
   // Style-only cells (blank value, formatting attached) round-trip as a
   // bare `<c r="..." s="N"/>` shape — Excel preserves these so empty
@@ -541,16 +542,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
-  // Index the per-row overrides by row index. The vector is small in
-  // practice (rarely more than a few dozen entries even for hand-crafted
-  // sheets), so a flat scan would also be fine; the map keeps the merge
-  // O(rows + overrides).
-  std::unordered_map<std::uint32_t, const RowLayout*> overrides_by_row;
   const auto& row_overrides = sheet.layout().row_overrides;
-  overrides_by_row.reserve(row_overrides.size());
-  for (const RowLayout& ro : row_overrides) {
-    overrides_by_row.emplace(ro.row, &ro);
-  }
 
   // Spilled cells live in the spill table, not in the rows; gather their
   // columns per row so each is written where Excel writes it.
@@ -592,9 +584,8 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
   std::unordered_map<std::uint64_t, bool> always_by_anchor;
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
-    auto override_it = overrides_by_row.find(row);
-    if (override_it != overrides_by_row.end()) {
-      AppendRowOverrideAttrs(override_attrs, *override_it->second, sheet.format_defaults().zero_height);
+    if (const RowLayout* row_layout = find_row_override(sheet.layout(), row); row_layout != nullptr) {
+      AppendRowOverrideAttrs(override_attrs, *row_layout, sheet.format_defaults().zero_height);
     }
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;

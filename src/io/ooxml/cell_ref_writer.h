@@ -15,8 +15,7 @@ struct MergeRange;
 namespace io {
 
 /// Bijective base-26 column letters (`0 -> A`, `25 -> Z`, `26 -> AA`,
-/// ...). Mirrors `cli/render.cpp`'s helper; kept inline here so the
-/// writer side has no cross-package dependency.
+/// ...).
 void AppendColumnLettersForRef(std::string& out, std::uint32_t col);
 
 /// Appends the Excel A1-style cell reference for the given 0-based

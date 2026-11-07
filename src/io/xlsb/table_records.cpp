@@ -157,12 +157,6 @@ std::optional<std::string_view> NullableAttr(const Attrs& attrs, std::string_vie
   return std::string_view(*value);
 }
 
-void AppendDxf(std::string& out, std::string_view name, std::uint32_t dxf) {
-  if (dxf != kNoDxf) {
-    append_xml_attr_uint(out, name, dxf);
-  }
-}
-
 void AppendText(std::string& out, std::string_view name, const std::string& value) {
   if (!value.empty()) {
     append_xml_attr(out, name, value);
@@ -323,7 +317,7 @@ Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table, bool
     append_xml_attr(extra, "published", "1");
   }
   for (const std::size_t i : kTableDxfSchemaOrder) {
-    AppendDxf(extra, kTableDxfAttrs[i], dxfs[i]);
+    append_xml_attr_uint_if(extra, kTableDxfAttrs[i], dxfs[i], kNoDxf);
   }
   for (std::size_t i = 0; i < 3U; ++i) {
     AppendText(extra, kTableStyleAttrs[i], styles[i]);
@@ -365,7 +359,7 @@ Expected<TableColumn, Error> ReadBeginListCol(ByteSpan payload) {
     append_xml_attr_uint(extra, "queryTableFieldId", qsi_field);
   }
   for (std::size_t i = 0; i < 3U; ++i) {
-    AppendDxf(extra, kColumnDxfAttrs[i], dxfs[i]);
+    append_xml_attr_uint_if(extra, kColumnDxfAttrs[i], dxfs[i], kNoDxf);
   }
   for (std::size_t i = 0; i < 3U; ++i) {
     AppendText(extra, kTableStyleAttrs[i], styles[i]);

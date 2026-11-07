@@ -49,6 +49,7 @@
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/xf_flags.h"
+#include "io/xml_utils.h"
 #include "utils/status_macros.h"
 
 namespace formulon {
@@ -62,12 +63,8 @@ namespace {
 // dropped rather than misattributed.
 enum class XfTarget { kNone, kCellStyleXfs, kCellXfs };
 
-/// The palette slot Excel writes for "no colour of my own". Paired with
-/// the automatic `XColorType` it is how a `BrtColor` field spells an
-/// absent `<color>` element, which OOXML expresses by omitting the
-/// element altogether.
-constexpr std::uint8_t kAutomaticPaletteIndex = 0x40U;
-/// The `<bgColor>` half of the same idiom: a fill that specifies neither
+/// The `<bgColor>` half of the absent-`<color>` idiom (`kBrtColorAutoIndex`
+/// paired with the automatic `XColorType`): a fill that specifies neither
 /// colour carries the system-foreground / system-background pair.
 constexpr std::uint8_t kBackgroundPaletteIndex = 0x41U;
 
@@ -103,35 +100,24 @@ Expected<void, Error> DecodeColor(ByteSpan& p, std::uint32_t unset_argb, std::ui
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtColor truncated",
                       "context=xlsb_styles_reader");
   }
-  argb = (static_cast<std::uint32_t>(alpha_or.value()) << 24U) | (static_cast<std::uint32_t>(red_or.value()) << 16U) |
-         (static_cast<std::uint32_t>(green_or.value()) << 8U) | static_cast<std::uint32_t>(blue_or.value());
+  argb = pack_argb(alpha_or.value(), red_or.value(), green_or.value(), blue_or.value());
   switch (static_cast<std::uint32_t>(flags_or.value() >> 1U)) {
     case 0U:
-      if (index_or.value() == kAutomaticPaletteIndex) {
+      if (index_or.value() == kBrtColorAutoIndex) {
         spec.kind = ColorSpec::Kind::kNone;
         argb = unset_argb;
       } else {
         spec.kind = ColorSpec::Kind::kAuto;
       }
       break;
-    case 1U:
-      spec.kind = ColorSpec::Kind::kIndexed;
-      spec.indexed = index_or.value();
-      break;
-    case 2U:
-      spec.kind = ColorSpec::Kind::kRgb;
-      spec.rgb = argb;
-      break;
-    case 3U:
-      spec.kind = ColorSpec::Kind::kTheme;
-      spec.theme = index_or.value();
-      spec.tint = static_cast<double>(static_cast<std::int16_t>(tint_or.value())) / kBrtColorTintScale;
-      break;
     default:
       // A selector outside the four defined values names no colour this
       // model can reproduce; leave the spec unset so the writer emits no
       // `<color>` element rather than an invented one.
-      spec.kind = ColorSpec::Kind::kNone;
+      if (!decode_brt_color_selector(static_cast<std::uint8_t>(flags_or.value() >> 1U), index_or.value(),
+                                     tint_or.value(), argb, spec)) {
+        spec.kind = ColorSpec::Kind::kNone;
+      }
       break;
   }
   return Expected<void, Error>::Ok();
@@ -324,7 +310,7 @@ Expected<void, Error> DecodeFill(ByteSpan payload, StylesTable& table) {
     // patterned fill says it chose neither colour; Excel writes no
     // `<fgColor>` / `<bgColor>` for it. A fill the user did colour keeps
     // its own foreground, so the pair is unambiguous.
-    if (rec.fg.kind == ColorSpec::Kind::kIndexed && rec.fg.indexed == kAutomaticPaletteIndex &&
+    if (rec.fg.kind == ColorSpec::Kind::kIndexed && rec.fg.indexed == kBrtColorAutoIndex &&
         rec.bg.kind == ColorSpec::Kind::kIndexed && rec.bg.indexed == kBackgroundPaletteIndex) {
       rec.fg = ColorSpec{};
       rec.bg = ColorSpec{};

@@ -178,7 +178,7 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
                       "context=xlsb_reader rels_path=" + rels_path);
   }
   const std::string base_dir = ooxml::dir_of(workbook_path);
-  auto visit_status = ooxml::visit_relationship_nodes(
+  RETURN_IF_ERROR(ooxml::visit_relationship_nodes(
       zip, rels_path, "workbook rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
         const std::string_view type = rel.attribute("Type").value();
         const std::string_view target = rel.attribute("Target").value();
@@ -190,46 +190,20 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          rels.sheet_targets.emplace(id, std::move(resolved).value());
+          ASSIGN_OR_RETURN(auto resolved, ResolveRelativePath(base_dir, target));
+          rels.sheet_targets.emplace(id, std::move(resolved));
         } else if (type == kRelSharedStrings) {
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          rels.sst_path = std::move(resolved).value();
+          ASSIGN_OR_RETURN(rels.sst_path, ResolveRelativePath(base_dir, target));
         } else if (type == kRelStyles) {
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          rels.styles_path = std::move(resolved).value();
+          ASSIGN_OR_RETURN(rels.styles_path, ResolveRelativePath(base_dir, target));
         } else {
-          UnknownRelationship unknown;
-          unknown.id.assign(rel.attribute("Id").value());
-          unknown.type.assign(type);
-          unknown.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
-          if (unknown.target_external) {
-            unknown.target.assign(target);
-          } else {
-            auto resolved = ResolveRelativePath(base_dir, target);
-            if (!resolved) {
-              return std::move(resolved.error());
-            }
-            unknown.target = std::move(resolved).value();
-          }
+          ASSIGN_OR_RETURN(UnknownRelationship unknown, ooxml::make_unknown_relationship(rel, base_dir));
           if (!unknown.type.empty()) {
             rels.unknown_rels.push_back(std::move(unknown));
           }
         }
         return Expected<void, Error>::Ok();
-      });
-  if (!visit_status) {
-    return std::move(visit_status.error());
-  }
+      }));
   return rels;
 }
 
@@ -241,31 +215,15 @@ Expected<std::vector<UnknownRelationship>, Error> LoadSheetRelationships(const Z
                                                                          std::string_view rels_path,
                                                                          std::string_view sheet_dir) {
   std::vector<UnknownRelationship> out;
-  auto status =
-      ooxml::visit_relationship_nodes(zip, rels_path, "sheet rels", "xlsb_reader", [&](const pugi::xml_node& rel) {
-        UnknownRelationship entry;
-        entry.id = rel.attribute("Id").value();
-        if (entry.id.empty()) {
+  RETURN_IF_ERROR(ooxml::visit_relationship_nodes(
+      zip, rels_path, "sheet rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+        if (std::string_view(rel.attribute("Id").value()).empty()) {
           return Expected<void, Error>::Ok();
         }
-        entry.type = rel.attribute("Type").value();
-        const std::string_view target = rel.attribute("Target").value();
-        entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
-        if (entry.target_external) {
-          entry.target = std::string(target);
-        } else {
-          auto resolved = ResolveRelativePath(sheet_dir, target);
-          if (!resolved) {
-            return Expected<void, Error>(std::move(resolved.error()));
-          }
-          entry.target = std::move(resolved).value();
-        }
+        ASSIGN_OR_RETURN(UnknownRelationship entry, ooxml::make_unknown_relationship(rel, sheet_dir));
         out.push_back(std::move(entry));
         return Expected<void, Error>::Ok();
-      });
-  if (!status) {
-    return std::move(status.error());
-  }
+      }));
   return out;
 }
 

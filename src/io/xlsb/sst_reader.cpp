@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "io/xlsb/record.h"
+#include "io/xlsb/rich_str.h"
 #include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -22,11 +23,6 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
-
-/// `RichStr` flag bits ([MS-XLSB] §2.5.87): rich-text runs follow the
-/// string when the first is set, a phonetic guide when the second is.
-constexpr std::uint8_t kRichStrRichRuns = 0x01U;
-constexpr std::uint8_t kRichStrPhonetic = 0x02U;
 
 /// One `StrRun` ([MS-XLSB] §2.5.94) is `(u16 ich, u16 ifnt)`.
 constexpr std::size_t kStrRunSize = 4U;

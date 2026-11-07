@@ -39,6 +39,9 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 
+/// Error context string shared by every XLSB reader failure.
+inline constexpr const char* kReadXlsbContext = "context=xlsb_reader";
+
 /// One framed XLSB record.
 ///
 ///   * `type`     — decoded record-type id (`BrtCellReal`, etc.). The

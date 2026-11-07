@@ -190,7 +190,7 @@ std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs
     return std::nullopt;
   }
   const std::uint32_t name = load_u32(set.data + 4);
-  const auto flags = static_cast<std::uint16_t>(set.data[8] | (set.data[9] << 8U));
+  const std::uint16_t flags = load_u16(set.data + 8);
   if (name > static_cast<std::uint32_t>(cf::IconSetName::Five_Quarters) || (flags & kIconCustom) == 0U ||
       (flags & ~0x7FU) != 0U) {
     return std::nullopt;

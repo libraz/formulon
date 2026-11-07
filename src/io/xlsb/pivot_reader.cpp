@@ -411,12 +411,6 @@ pivot::PivotStyleInfo DecodeStyleClient(ByteSpan payload) {
   return info;
 }
 
-void AppendIndexAttr(std::string& out, const char* name, std::uint32_t value) {
-  if (value != kNoIndex) {
-    append_xml_attr_uint(out, name, value);
-  }
-}
-
 /// Spells one SXFILTER (BrtBeginSXFILTER, payload `begin`, just read) as its
 /// OOXML `<filter>` element, consuming through BrtEndSXFilter.
 Expected<void, Error> AppendFilterXml(ByteSpan& cursor, ByteSpan begin, std::string& out) {
@@ -434,12 +428,12 @@ Expected<void, Error> AppendFilterXml(ByteSpan& cursor, ByteSpan begin, std::str
   }
   out.append("<filter");
   append_xml_attr_uint(out, "fld", fld);
-  AppendIndexAttr(out, "mpFld", mp_fld);
+  append_xml_attr_uint_if(out, "mpFld", mp_fld, kNoIndex);
   append_xml_attr(out, "type", kPivotFilterTypes[type]);
   append_xml_attr_int(out, "evalOrder", static_cast<std::int32_t>(eval_order));
   append_xml_attr_uint(out, "id", id);
-  AppendIndexAttr(out, "iMeasureHier", measure_hier);
-  AppendIndexAttr(out, "iMeasureFld", measure_fld);
+  append_xml_attr_uint_if(out, "iMeasureHier", measure_hier, kNoIndex);
+  append_xml_attr_uint_if(out, "iMeasureFld", measure_fld, kNoIndex);
   const char* const string_attrs[] = {"name", "description", "stringValue1", "stringValue2"};
   for (std::uint32_t bit = 0; bit < 4U; ++bit) {
     if ((flags & (1U << bit)) != 0U) {

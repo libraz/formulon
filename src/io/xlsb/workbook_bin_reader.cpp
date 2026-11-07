@@ -61,7 +61,7 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
       // BrtWbProp ([MS-XLSB] 2.4.868): flags, dwThemeVersion, CodeName.
       if (!decode_wb_prop(rec.payload, info.workbook_pr_xml, info.date1904)) {
         return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "workbook.bin: BrtWbProp truncated",
-                          "context=xlsb_reader");
+                          kReadXlsbContext);
       }
       continue;
     }
@@ -209,13 +209,13 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
     BrtNameHeader header;
     if (!ReadBrtNameHeader(p, header)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "workbook.bin: BrtName header truncated",
-                        "context=xlsb_reader");
+                        kReadXlsbContext);
     }
     ASSIGN_OR_RETURN(auto cch, read_u32(p));
     std::string name;
     if (!read_utf16_units(p, cch, &name)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb fixed-length wide string truncated",
-                        "context=xlsb_reader");
+                        kReadXlsbContext);
     }
     XlsbName entry;
     entry.itab = static_cast<std::int32_t>(header.itab);
@@ -389,13 +389,13 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     BrtNameHeader header;
     if (!ReadBrtNameHeader(p, header)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                        "workbook.bin: BrtName header truncated (defined-name pass)", "context=xlsb_reader");
+                        "workbook.bin: BrtName header truncated (defined-name pass)", kReadXlsbContext);
     }
     ASSIGN_OR_RETURN(auto cch, read_u32(p));
     // Divide first: `cch * 2` wraps on wasm32.
     if (cch > p.size / 2U) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                        "workbook.bin: BrtName name truncated (defined-name pass)", "context=xlsb_reader");
+                        "workbook.bin: BrtName name truncated (defined-name pass)", kReadXlsbContext);
     }
     const std::size_t name_bytes = static_cast<std::size_t>(cch) * 2U;
     p.data += name_bytes;
@@ -403,7 +403,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     ASSIGN_OR_RETURN(const std::uint32_t cce, read_u32(p));
     if (cce > p.size) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                        "workbook.bin: BrtName formula rgce length exceeds payload", "context=xlsb_reader");
+                        "workbook.bin: BrtName formula rgce length exceeds payload", kReadXlsbContext);
     }
     if (cce == 0) {
       continue;
@@ -418,7 +418,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     ASSIGN_OR_RETURN(const std::uint32_t cb, read_u32(p));
     if (cb > p.size) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                        "workbook.bin: BrtName formula rgcb length exceeds payload", "context=xlsb_reader");
+                        "workbook.bin: BrtName formula rgcb length exceeds payload", kReadXlsbContext);
     }
     ByteSpan rgcb{p.data, cb};
     p.data += cb;

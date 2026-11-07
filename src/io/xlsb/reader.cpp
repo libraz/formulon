@@ -39,6 +39,7 @@
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/package_loader.h"
+#include "io/xlsb/part_paths.h"
 #include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
@@ -243,7 +244,7 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
     ExternalLinkRecord record;
     record.index = sup.external_book;
     record.rel_id = sup.rel_id;
-    auto path_or = FindRelationship(zip, "xl/workbook.bin", "Id", sup.rel_id, "external link rels");
+    auto path_or = FindRelationship(zip, kWorkbookBinPath, "Id", sup.rel_id, "external link rels");
     if (path_or && !path_or.value().empty() && zip.has_entry(path_or.value())) {
       record.part_path = path_or.value();
       auto bytes_or = zip.read_entry(record.part_path);
@@ -465,7 +466,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // 1. [Content_Types].xml — gate + Override list.
   if (!zip.has_entry("[Content_Types].xml")) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing from package",
-                      "context=xlsb_reader");
+                      kReadXlsbContext);
   }
   ASSIGN_OR_RETURN(auto ct_bytes, zip.read_entry("[Content_Types].xml"));
   auto ct_view_or = LoadContentTypes(ct_bytes);
@@ -476,8 +477,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package",
-                      "context=xlsb_reader");
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package", kReadXlsbContext);
   }
   ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
   ASSIGN_OR_RETURN(auto wb_path, ResolveOfficeDocumentPath(root_rels));
@@ -533,7 +533,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   for (const SheetBundleEntry& b : bundle) {
     if (b.name.empty()) {
       return make_error(FormulonErrorCode::kIoXlsbCorrupt, "workbook.bin: BrtBundleSh with empty name",
-                        "context=xlsb_reader");
+                        kReadXlsbContext);
     }
     if (b.rid.empty()) {
       return make_error(FormulonErrorCode::kIoXlsbCorrupt, "workbook.bin: BrtBundleSh with empty rId",
@@ -669,8 +669,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // A formula is a dynamic-array formula exactly when a `BrtCellMeta`
   // naming this entry of `xl/metadata.bin` precedes it.
   std::uint32_t dynamic_array_ifmd = 0U;
-  if (zip.has_entry("xl/metadata.bin")) {
-    auto metadata_or = zip.read_entry("xl/metadata.bin");
+  if (zip.has_entry(kMetadataBinPath)) {
+    auto metadata_or = zip.read_entry(kMetadataBinPath);
     if (metadata_or) {
       dynamic_array_ifmd =
           find_dynamic_array_cell_meta_index(ByteSpan{metadata_or.value().data(), metadata_or.value().size()});

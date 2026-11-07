@@ -60,16 +60,6 @@ std::string EncodeA1Range(std::uint32_t row, std::uint32_t col, std::uint32_t sp
   return out;
 }
 
-/// Appends ` name="value"` for a present optional `<location>` offset
-/// attribute, or nothing when the optional is empty. The values are
-/// non-negative integers, so no XML escaping is required.
-void AppendOptionalLocationAttr(std::string& out, std::string_view name, std::optional<std::uint32_t> value) {
-  if (!value.has_value()) {
-    return;
-  }
-  append_xml_attr_uint(out, name, *value);
-}
-
 /// Appends the `<ext>` holding the x14 `<pivotTableDefinition>`: the table's
 /// alternative text and, when `hide_values_row`, the hidden caption row of the
 /// Values field.
@@ -297,9 +287,7 @@ void AppendStyleInfo(std::string& out, const pivot::PivotStyleInfo& info) {
   const auto flag = [](bool on) { return on ? "1" : "0"; };
   out.append("<pivotTableStyleInfo");
   if (!info.name.empty()) {
-    out.append(" name=\"");
-    AppendXmlAttrEscaped(out, info.name);
-    out.push_back('"');
+    append_xml_attr(out, "name", info.name);
   }
   out.append(" showRowHeaders=\"");
   out.append(flag(info.show_row_headers));
@@ -583,17 +571,15 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol. Preserve
   // authored values, including explicit zero, while supplying the schema's
   // independent fallback for a model built without those attributes.
-  AppendOptionalLocationAttr(out, "firstHeaderRow",
-                             table.location_first_header_row().value_or(loc_defaults.first_header_row));
-  AppendOptionalLocationAttr(out, "firstDataRow",
-                             table.location_first_data_row().value_or(loc_defaults.first_data_row));
-  AppendOptionalLocationAttr(out, "firstDataCol",
-                             table.location_first_data_col().value_or(loc_defaults.first_data_col));
+  append_xml_attr_uint_if(out, "firstHeaderRow",
+                          table.location_first_header_row().value_or(loc_defaults.first_header_row));
+  append_xml_attr_uint_if(out, "firstDataRow", table.location_first_data_row().value_or(loc_defaults.first_data_row));
+  append_xml_attr_uint_if(out, "firstDataCol", table.location_first_data_col().value_or(loc_defaults.first_data_col));
   // rowPageCount / colPageCount are optional: a table without page fields omits them.
-  AppendOptionalLocationAttr(
+  append_xml_attr_uint_if(
       out, "rowPageCount",
       table.location_row_page_count() ? table.location_row_page_count() : loc_defaults.row_page_count);
-  AppendOptionalLocationAttr(
+  append_xml_attr_uint_if(
       out, "colPageCount",
       table.location_col_page_count() ? table.location_col_page_count() : loc_defaults.col_page_count);
   out.append("/>");

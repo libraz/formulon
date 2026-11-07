@@ -57,8 +57,6 @@ namespace {
 //
 // Relationship type URIs live in `io/ooxml_defs.h`.
 
-constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
-constexpr std::string_view kCtXml = "application/xml";
 constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 constexpr std::string_view kCtSharedStrings =
@@ -200,15 +198,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // Track which extensions we have already declared so the captured
   // source `<Default>` entries below do not duplicate the fixed ones.
   std::unordered_set<std::string> emitted_default_extensions;
-  out.append("  <Default");
-  append_xml_attr(out, "Extension", "rels");
-  append_xml_attr(out, "ContentType", kCtPackageRels);
-  out.append("/>\n");
+  AppendDefault(out, "rels", kCtPackageRels);
   emitted_default_extensions.insert("rels");
-  out.append("  <Default");
-  append_xml_attr(out, "Extension", "xml");
-  append_xml_attr(out, "ContentType", kCtXml);
-  out.append("/>\n");
+  AppendDefault(out, "xml", kCtXml);
   emitted_default_extensions.insert("xml");
   // VML drawings are referenced by extension via a Default; this lets
   // the per-sheet VML stub avoid an Override entry. Emitted only when
@@ -221,10 +213,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     }
   }
   if (any_comments) {
-    out.append("  <Default");
-    append_xml_attr(out, "Extension", "vml");
-    append_xml_attr(out, "ContentType", kCtVmlDrawing);
-    out.append("/>\n");
+    AppendDefault(out, "vml", kCtVmlDrawing);
     emitted_default_extensions.insert("vml");
   }
   // Round-trip the source `<Default>` registrations. Binary and media
@@ -247,10 +236,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     if (!emitted_default_extensions.insert(def.extension).second) {
       continue;
     }
-    out.append("  <Default");
-    append_xml_attr(out, "Extension", def.extension);
-    append_xml_attr(out, "ContentType", def.content_type);
-    out.append("/>\n");
+    AppendDefault(out, def.extension, def.content_type);
   }
   AppendOverride(out, kWorkbookPartPath, workbook_kind_content_type(wb.kind()));
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {

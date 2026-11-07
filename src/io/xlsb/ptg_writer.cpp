@@ -26,6 +26,7 @@
 #include "io/xlsb/ptg_space.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_whitespace.h"
+#include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "parser/ast_format.h"
 #include "parser/formula_prefix.h"
@@ -42,6 +43,8 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
+
+constexpr const char* kCtx = "context=xlsb_ptg_writer";
 
 /// The record name a reference spelled `name` resolves to: a cell-shaped name
 /// held as `_xlnm.<cell>` is the plain `<cell>` record.
@@ -215,7 +218,7 @@ parser::Reference OffsetFrom(parser::Reference ref, PtgBaseCell base) {
 
 Error unsupported_node(const char* kind) {
   return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                    std::string("xlsb encoder cannot lower AST node kind: ") + kind, "context=xlsb_ptg_writer");
+                    std::string("xlsb encoder cannot lower AST node kind: ") + kind, kCtx);
 }
 
 /// One rectangle of a precomputed reference result (`PtgMemArea`'s cache).
@@ -604,7 +607,7 @@ class Encoder {
     const auto it = name_table_.find(std::string(RecordName(name)));
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
-                        std::string("context=xlsb_ptg_writer name=") + std::string(name));
+                        std::string(kCtx) + std::string(" name=") + std::string(name));
     }
     emit_u8(out_, ClassedPtg(kPtgName, cls));  // PtgName
     emit_u32(out_, it->second);
@@ -621,7 +624,7 @@ class Encoder {
     const int itab = resolve_ixti(sheet_names_, sheet);
     if (itab < 0) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet-qualified name names no sheet",
-                        std::string("context=xlsb_ptg_writer sheet=") + std::string(sheet));
+                        std::string(kCtx) + std::string(" sheet=") + std::string(sheet));
     }
     name = RecordName(name);
     auto it = name_table_.find(sheet_scoped_name_key(itab, name));
@@ -630,7 +633,7 @@ class Encoder {
     }
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
-                        std::string("context=xlsb_ptg_writer name=") + std::string(name));
+                        std::string(kCtx) + std::string(" name=") + std::string(name));
     }
     return emit_name_x(it->second, cls);
   }
@@ -649,7 +652,7 @@ class Encoder {
     }
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
-                        std::string("context=xlsb_ptg_writer name=") + std::string(name));
+                        std::string(kCtx) + std::string(" name=") + std::string(name));
     }
     return emit_name_x(it->second, cls);
   }
@@ -889,7 +892,7 @@ class Encoder {
     const int itab_end = resolve_ixti(sheet_names_, end);
     if (itab_begin < 0 || itab_end < 0) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet not found for 3-D range",
-                        std::string("context=xlsb_ptg_writer sheets=") + std::string(begin) + ":" + std::string(end));
+                        std::string(kCtx) + std::string(" sheets=") + std::string(begin) + ":" + std::string(end));
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(itab_begin, itab_end));
     // A value/array-class 3-D reference used as a function
@@ -921,7 +924,7 @@ class Encoder {
     if (position == 0U) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                         "xlsb encoder: cross-workbook reference names no saved link",
-                        std::string("context=xlsb_ptg_writer book=") + std::string(node.as_external_ref_book()));
+                        std::string(kCtx) + std::string(" book=") + std::string(node.as_external_ref_book()));
     }
     const XlsbLinkTables& link = sheet_ranges_.links[position - 1U];
     const std::string_view name =
@@ -931,7 +934,7 @@ class Encoder {
       if (ilbl == 0U) {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                           "xlsb encoder: external name not in its link's name list",
-                          std::string("context=xlsb_ptg_writer name=") + std::string(name));
+                          std::string(kCtx) + std::string(" name=") + std::string(name));
       }
       return emit_name_x(ilbl, cls, position);
     }
@@ -941,7 +944,7 @@ class Encoder {
     if (first < 0 || last < 0) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                         "xlsb encoder: external sheet not in its link's sheet list",
-                        std::string("context=xlsb_ptg_writer sheet=") + std::string(node.as_external_ref_sheet()));
+                        std::string(kCtx) + std::string(" sheet=") + std::string(node.as_external_ref_sheet()));
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(first, last, position));
     if (!sheet_end.empty()) {
@@ -975,7 +978,7 @@ class Encoder {
     const int itab = resolve_ixti(sheet_names_, sheet);
     if (itab < 0) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet not found for 3-D ref",
-                        std::string("context=xlsb_ptg_writer sheet=") + std::string(sheet));
+                        std::string(kCtx) + std::string(" sheet=") + std::string(sheet));
     }
     return resolve_range_ixti(itab, itab);
   }
@@ -983,8 +986,7 @@ class Encoder {
   Expected<std::uint16_t, Error> resolve_range_ixti(int itab_first, int itab_last, std::uint32_t book = 0U) {
     const int ixti = try_resolve_range_ixti(itab_first, itab_last, book);
     if (ixti < 0) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet range not pre-registered",
-                        "context=xlsb_ptg_writer");
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet range not pre-registered", kCtx);
     }
     return static_cast<std::uint16_t>(ixti);
   }
@@ -1332,7 +1334,7 @@ class Encoder {
       // fails instead. A callee Excel really has no id for takes that route
       // only by being enumerated in `io::xlsb_uses_hidden_name`.
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: no XLSB function id known for callee",
-                        std::string("context=xlsb_ptg_writer fn=") + std::string(name));
+                        std::string(kCtx) + std::string(" fn=") + std::string(name));
     }
     const std::uint8_t token_class = reference_result ? kPtgReferenceClass : result_class;
     const ArrayScope scope(in_array_operand_, measured_calls_ && token_class == kPtgArrayClass);
@@ -1398,7 +1400,7 @@ class Encoder {
     } else {
       if (arity != entry->arg_min) {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: fixed-arity function arity mismatch",
-                          std::string("context=xlsb_ptg_writer fn=") + std::string(name));
+                          std::string(kCtx) + std::string(" fn=") + std::string(name));
       }
       emit_u8(out_, ClassedPtg(kPtgFunc, token_class));  // PtgFunc result
       emit_u16(out_, entry->id);
@@ -1427,10 +1429,7 @@ class Encoder {
     return at;
   }
 
-  void patch_u16(std::size_t at, std::size_t value) {
-    out_[at] = static_cast<std::uint8_t>(value & 0xFFU);
-    out_[at + 1U] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
-  }
+  void patch_u16(std::size_t at, std::size_t value) { store_u16(out_.data() + at, static_cast<std::uint16_t>(value)); }
 
   /// Encodes a call taking the hidden-name route (see
   /// `io/future_functions.h`): `PtgName(ilbl)` naming the callee, then
@@ -1465,7 +1464,7 @@ class Encoder {
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                         "xlsb encoder: hidden-name callee has no BrtName registered",
-                        std::string("context=xlsb_ptg_writer fn=") + std::string(name));
+                        std::string(kCtx) + std::string(" fn=") + std::string(name));
     }
     emit_u8(out_, kPtgName);  // PtgName (reference-class): the callee name-ref
     emit_u32(out_, it->second);

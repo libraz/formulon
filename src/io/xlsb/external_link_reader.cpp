@@ -45,7 +45,7 @@ void DecodeNameFormula(ByteSpan rgce, ExternalBookName* out) {
   const std::uint8_t opcode = rgce.data[0];
   const auto field = [&rgce](std::size_t index) -> std::uint32_t {
     const std::size_t offset = 1U + index * 2U;
-    return static_cast<std::uint32_t>(rgce.data[offset]) | (static_cast<std::uint32_t>(rgce.data[offset + 1U]) << 8U);
+    return load_u16(rgce.data + offset);
   };
   if (opcode == kPtgRef3d && rgce.size == kExternRef3dBytes) {
     if (field(0) != field(1)) {

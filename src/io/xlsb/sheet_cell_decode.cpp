@@ -106,12 +106,12 @@ Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor) {
   ASSIGN_OR_RETURN(auto col, read_u32(cursor));
   if (col >= Sheet::kMaxCols) {
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb cell header column out of range",
-                      "context=xlsb_reader");
+                      kReadXlsbContext);
   }
   // iStyleRef (3 bytes, little-endian) + fPhShow (1 byte) = 4 bytes.
   if (cursor.size < 4) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb cell header truncated (style/phonetic)",
-                      "context=xlsb_reader");
+                      kReadXlsbContext);
   }
   const std::uint32_t xf_index = static_cast<std::uint32_t>(cursor.data[0]) |
                                  (static_cast<std::uint32_t>(cursor.data[1]) << 8) |
@@ -161,7 +161,7 @@ Expected<void, Error> ReadCellParsedFormula(ByteSpan& p, const char* what, ByteS
   ASSIGN_OR_RETURN(const std::uint32_t cce, read_u32(p));
   if (cce > p.size) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                      std::string("xlsb ") + what + " rgce length exceeds payload", "context=xlsb_reader");
+                      std::string("xlsb ") + what + " rgce length exceeds payload", kReadXlsbContext);
   }
   *rgce = ByteSpan{p.data, cce};
   p.data += cce;
@@ -171,7 +171,7 @@ Expected<void, Error> ReadCellParsedFormula(ByteSpan& p, const char* what, ByteS
     ASSIGN_OR_RETURN(const std::uint32_t cb, read_u32(p));
     if (cb > p.size) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                        std::string("xlsb ") + what + " rgcb length exceeds payload", "context=xlsb_reader");
+                        std::string("xlsb ") + what + " rgcb length exceeds payload", kReadXlsbContext);
     }
     *rgcb = ByteSpan{p.data, cb};
   }
@@ -203,7 +203,7 @@ Expected<RecordDisposition, Error> DecodeLiteralCell(const XlsbRecord& rec, Xlsb
     case XlsbRecordType::BrtCellReal: {
       if (p.size < 8) {
         return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtCellReal payload truncated",
-                          "context=xlsb_reader");
+                          kReadXlsbContext);
       }
       double v;
       std::memcpy(&v, p.data, sizeof(v));

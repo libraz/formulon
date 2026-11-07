@@ -8,6 +8,7 @@
 
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml_defs.h"
+#include "io/xlsb/part_paths.h"
 #include "io/zip_reader.h"
 
 namespace formulon {
@@ -21,7 +22,7 @@ WorkbookFormat detect_workbook_format(ByteSpan bytes) {
 
   // Primary signal: the binary workbook part. Excel always emits the
   // workbook at `xl/workbook.bin` (xlsb) or `xl/workbook.xml` (xlsx).
-  const bool has_bin = zip.has_entry("xl/workbook.bin");
+  const bool has_bin = zip.has_entry(xlsb::kWorkbookBinPath);
   const bool has_xml = zip.has_entry("xl/workbook.xml");
   if (has_bin && !has_xml) {
     return WorkbookFormat::Xlsb;

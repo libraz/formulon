@@ -17,6 +17,7 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/guid_text.h"
 #include "io/xlsb/record.h"
+#include "io/xml_utils.h"
 #include "utils/number_text.h"
 
 namespace formulon {
@@ -53,16 +54,9 @@ inline std::optional<cf::Color> DecodeColor(ByteSpan p) {
         return std::nullopt;
       }
       return cf::Color{p.data[4], p.data[5], p.data[6], p.data[7]};
-    case kBrtColorTypeTheme: {
-      out.spec.kind = ColorSpec::Kind::kTheme;
-      out.spec.theme = index;
-      const auto raw = static_cast<std::int16_t>(load_u16(p.data + 2));
-      out.spec.tint = static_cast<double>(raw) / kBrtColorTintScale;
-      return out;
-    }
+    case kBrtColorTypeTheme:
     case kBrtColorTypeIndexed:
-      out.spec.kind = ColorSpec::Kind::kIndexed;
-      out.spec.indexed = index;
+      decode_brt_color_selector(type, index, load_u16(p.data + 2), 0U, out.spec);
       return out;
     case kBrtColorTypeAuto:
       out.spec.kind = ColorSpec::Kind::kAuto;
@@ -73,9 +67,7 @@ inline std::optional<cf::Color> DecodeColor(ByteSpan p) {
 }
 
 inline std::array<std::uint8_t, 8> EncodeColor(const cf::Color& c) {
-  const std::uint32_t argb = (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
-                             (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
-  return encode_brt_color(argb, c.spec);
+  return encode_brt_color(pack_argb(c.a, c.r, c.g, c.b), c.spec);
 }
 
 }  // namespace xlsb

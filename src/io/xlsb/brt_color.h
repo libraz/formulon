@@ -36,6 +36,32 @@ inline std::int16_t encode_brt_tint(double tint) {
       std::clamp(std::round(tint * kBrtColorTintScale), -kBrtColorTintScale, kBrtColorTintScale));
 }
 
+/// Decodes the indexed (1), literal-RGB (2) and theme (3) `XColorType`
+/// selectors of a BrtColor into `spec`; `argb` is the literal RGBA word and
+/// `tint_raw` the stored tint. Returns false, leaving `spec` untouched, for
+/// the automatic selector and for any undefined one, which readers spell
+/// differently.
+inline bool decode_brt_color_selector(std::uint8_t type, std::uint8_t index, std::uint16_t tint_raw, std::uint32_t argb,
+                                      ColorSpec& spec) {
+  switch (type) {
+    case kBrtColorTypeIndexed:
+      spec.kind = ColorSpec::Kind::kIndexed;
+      spec.indexed = index;
+      return true;
+    case kBrtColorTypeRgb:
+      spec.kind = ColorSpec::Kind::kRgb;
+      spec.rgb = argb;
+      return true;
+    case kBrtColorTypeTheme:
+      spec.kind = ColorSpec::Kind::kTheme;
+      spec.theme = index;
+      spec.tint = static_cast<double>(static_cast<std::int16_t>(tint_raw)) / kBrtColorTintScale;
+      return true;
+    default:
+      return false;
+  }
+}
+
 /// Encodes `spec`, keeping a theme / indexed / auto selector; the RGBA
 /// bytes are `argb`, literal for an RGB selector and a fallback otherwise.
 /// Bit 7 of the flags byte stays clear: the reserved type 0x41 it would

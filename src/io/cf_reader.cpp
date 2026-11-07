@@ -530,10 +530,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
       // slot (`AppendXmlEscaped` in cf_writer.cpp), matching every other
       // element-text reader.
       std::string body;
-      AppendOoxmlTextUnescaped(body, child.text().get());
-      if (!body.empty() && body[0] == '=') {
-        body.erase(body.begin());
-      }
+      ReadFormulaElementText(body, child);
       if (formula_idx == 0) {
         out.formula1 = canonical_feature_formula(body);
       } else if (formula_idx == 1) {

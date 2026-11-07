@@ -197,7 +197,7 @@ void drop_thread_stubs(std::vector<CellComment>& notes, const std::vector<Thread
   for (CellComment& note : notes) {
     const std::string_view author(note.author);
     bool stub = false;
-    if (author.substr(0, kStubAuthorPrefix.size()) == kStubAuthorPrefix) {
+    if (is_thread_stub_author(author)) {
       const auto found = first_index_by_id.find(author.substr(kStubAuthorPrefix.size()));
       if (found != first_index_by_id.end()) {
         const ThreadedComment& root = threads[found->second];

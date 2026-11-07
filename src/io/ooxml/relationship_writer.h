@@ -61,6 +61,11 @@ void EndRelationships(std::string& out);
 void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path = false,
                     bool escape_content_type = false);
 
+/// Appends a single `<Default Extension="<extension>"
+/// ContentType="<ct>"/>` entry plus its trailing newline; both values are
+/// attribute-escaped.
+void AppendDefault(std::string& out, std::string_view extension, std::string_view ct);
+
 /// Appends a single `<Relationship Id="<id>" Type="<type>"
 /// Target="<target>"/>` entry plus its trailing newline. `id` and `type` are
 /// always attribute-escaped; `target` only with `escape_target`.
