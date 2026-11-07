@@ -425,6 +425,11 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
     return resolve_name_endpoint(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
                                  out_right_col, out_err);
   }
+  // A sheet-span reference cannot anchor a `:` chain, like a whole-axis reference.
+  if (node.kind() == parser::NodeKind::Ref3D) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
   // Anything else (BinaryOp, ArrayLiteral, etc.) is not a recognized range
   // endpoint shape.
   *out_err = ErrorCode::Ref;

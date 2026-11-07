@@ -487,19 +487,7 @@ AstNode* Parser::parse_3d_ref(std::string_view sheet1, TextRange sheet1_range) {
   if (!parse_3d_ref_tail(&r, &r2, &has_range_tail, &tail_range)) {
     return nullptr;
   }
-  // Range tail (`Sheet1:Sheet2!A1:B2`): a 3-D range over the sheet span,
-  // built as a range `Ref3D`. Without this the outer Pratt `:` rule would
-  // otherwise mis-assemble `RangeOp(Ref3D(A1), Ref(B2))`.
-  if (!has_range_tail && peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
-    advance();  // Colon
-    const Token& tail = advance();
-    if (!decode_cellref_lexeme(tail.lexeme, &r2)) {
-      record_error_with_token(ParseErrorCode::InvalidReference, tail.range, tail.lexeme);
-      return nullptr;
-    }
-    tail_range = tail.range;
-    has_range_tail = true;
-  }
+  // A range tail (`Sheet1:Sheet2!A1:B2`) builds a range `Ref3D`; a further `:` stays a range-operator chain.
   if (has_range_tail) {
     AstNode* range_node = make_ref3d_range(arena_, sheet1, sheet2, r, r2);
     if (range_node == nullptr) {

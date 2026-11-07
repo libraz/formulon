@@ -119,3 +119,190 @@ cases:
       'Sheet2!A1': '=SEQUENCE(3,2,7)'
       'Sheet3!A1': '=SEQUENCE(3,2,13)'
     formula: '=SUM(Sheet1:Sheet3!B:B)'
+
+  - id: ref3d_whole_column_then_cell
+    description: 'A 3-D whole-column reference continued by a cell is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A:A:B2)'
+
+  - id: ref3d_cell_then_whole_column
+    description: 'A 3-D cell range continued by a whole column is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!B2:A:A)'
+
+  - id: ref3d_whole_row_then_cell
+    description: 'A 3-D whole-row reference continued by a cell is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!1:1:B3)'
+
+  - id: ref3d_column_span_then_cell
+    description: 'A 3-D column span continued by a cell is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A:B:C1)'
+
+  - id: ref3d_cell_range_chain
+    description: 'A 3-D cell range continued by a cell is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A1:B2:C3)'
+
+  - id: ref3d_column_chain
+    description: 'A 3-D whole-column range continued by another column is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A:A:B:B)'
+
+  - id: ref3d_row_chain
+    description: 'A 3-D whole-row range continued by another row is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!1:1:2:2)'
+
+  - id: ref3d_chain_into_sheet_ref
+    description: 'A 3-D range continued by a sheet reference is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A1:B2:Sheet2!C3)'
+
+  - id: ref3d_chain_rows
+    description: 'ROWS over a 3-D chain is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ROWS(Sheet2:Sheet3!A:A:B2)'
+
+  - id: ref3d_cell_range_sum
+    description: 'A 3-D cell range sums over the sheet span'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A1:B2)'
+
+  - id: ref3d_whole_column_sum
+    description: 'A 3-D whole-column reference sums over the sheet span'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A:A)'
+
+  - id: sheet_whole_column_then_cell
+    description: 'A one-sheet whole-column reference continued by a cell is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2!A:A:B2)'
+
+  - id: ref3d_intersect_ref3d
+    description: 'Intersecting two 3-D references is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A1:B2 Sheet2:Sheet3!B2)'
+
+  - id: ref3d_intersect_cell
+    description: 'Intersecting a 3-D reference with a cell is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A1:B2 B2)'
+
+  - id: cell_intersect_ref3d
+    description: 'Intersecting a cell with a 3-D reference is #VALUE!'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(B2 Sheet2:Sheet3!A1:B2)'
+
+  - id: ref3d_intersect_isref
+    description: 'ISREF of an intersection of 3-D references is FALSE'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ISREF(Sheet2:Sheet3!A1 Sheet2:Sheet3!A1)'
+
+  - id: ref3d_single_cell_range
+    description: 'A one-cell 3-D range sums over the sheet span'
+    setup:
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!B2:B2)'

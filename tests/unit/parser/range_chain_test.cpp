@@ -149,6 +149,16 @@ TEST(RangeChain, DeletingAnAreaTokenShrinksIt) {
   EXPECT_EQ(format_formula(*shifted), "SUM(A1:A2:C4)");
 }
 
+TEST(RangeChain, ThreeDReferenceContinuedByColonStaysARangeChain) {
+  for (const char* src : {"=SUM(Sheet2:Sheet3!A:A:B2)", "=SUM(Sheet2:Sheet3!A1:B2:C3)", "=SUM(Sheet2:Sheet3!A:A:B:B)",
+                          "=SUM(Sheet2:Sheet3!1:1:2:2)", "=ROWS(Sheet2:Sheet3!A:A:B2)"}) {
+    Arena arena;
+    const AstNode* root = ParseClean(src, arena);
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ("=" + format_formula(*root), src);
+  }
+}
+
 TEST(RangeChain, LongChainIsOneNode) {
   std::string text = "=A1";
   for (std::uint32_t i = 1; i < 2000U; ++i) {

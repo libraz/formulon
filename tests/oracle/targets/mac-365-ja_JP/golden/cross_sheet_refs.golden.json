@@ -2,11 +2,11 @@
   "suite": "cross_sheet_refs",
   "description": "Cross-sheet and 3-D references. The case formula sits at Sheet1!Z1 (the oracle driver convention) and reaches into other sheets via direct Sheet2!A1 references, INDIRECT(\"Sheet2!A1\") runtime resolution, and Excel's 3-D-range syntax (Sheet1:Sheet3!A1). Setup keys carry the Sheet!Addr form; the driver creates the referenced sheet inside the per-case workbook on first use, and the C++ verifier mirrors that inside a single Workbook by adding sheets via add_sheet on first occurrence.\n",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-04T13:32:47Z"
+    "generated_at": "2026-11-07T19:53:32Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -171,6 +171,584 @@
       "expect": {
         "kind": "number",
         "value": 90.0
+      }
+    },
+    {
+      "id": "ref3d_whole_column_then_cell",
+      "formula": "=SUM(Sheet2:Sheet3!A:A:B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_cell_then_whole_column",
+      "formula": "=SUM(Sheet2:Sheet3!B2:A:A)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_whole_row_then_cell",
+      "formula": "=SUM(Sheet2:Sheet3!1:1:B3)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_column_span_then_cell",
+      "formula": "=SUM(Sheet2:Sheet3!A:B:C1)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_cell_range_chain",
+      "formula": "=SUM(Sheet2:Sheet3!A1:B2:C3)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_column_chain",
+      "formula": "=SUM(Sheet2:Sheet3!A:A:B:B)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_row_chain",
+      "formula": "=SUM(Sheet2:Sheet3!1:1:2:2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_chain_into_sheet_ref",
+      "formula": "=SUM(Sheet2:Sheet3!A1:B2:Sheet2!C3)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_chain_rows",
+      "formula": "=ROWS(Sheet2:Sheet3!A:A:B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_cell_range_sum",
+      "formula": "=SUM(Sheet2:Sheet3!A1:B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "ref3d_whole_column_sum",
+      "formula": "=SUM(Sheet2:Sheet3!A:A)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1001.0
+      }
+    },
+    {
+      "id": "sheet_whole_column_then_cell",
+      "formula": "=SUM(Sheet2!A:A:B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_intersect_ref3d",
+      "formula": "=SUM(Sheet2:Sheet3!A1:B2 Sheet2:Sheet3!B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_intersect_cell",
+      "formula": "=SUM(Sheet2:Sheet3!A1:B2 B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "cell_intersect_ref3d",
+      "formula": "=SUM(B2 Sheet2:Sheet3!A1:B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ref3d_intersect_isref",
+      "formula": "=ISREF(Sheet2:Sheet3!A1 Sheet2:Sheet3!A1)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "ref3d_single_cell_range",
+      "formula": "=SUM(Sheet2:Sheet3!B2:B2)",
+      "setup": {
+        "Sheet2!A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "Sheet3!A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "Sheet3!B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
       }
     }
   ]

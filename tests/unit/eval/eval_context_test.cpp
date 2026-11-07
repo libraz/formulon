@@ -304,6 +304,52 @@ TEST(EvalContextRecursive, ReadOnlyThreeDRangeUsesScalarFormulaAnchors) {
   EXPECT_DOUBLE_EQ(explicit_spill.as_array_cells()[5].as_number(), 6.0);
 }
 
+TEST(EvalContextRecursive, ThreeDReferenceContinuedByColonIsValueError) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  Arena arena;
+  for (const char* formula :
+       {"=SUM(Sheet2:Sheet3!A:A:B2)", "=SUM(Sheet2:Sheet3!A1:B2:C3)", "=SUM(Sheet2:Sheet3!A:A:B:B)",
+        "=SUM(Sheet2:Sheet3!1:1:2:2)", "=SUM(Sheet2:Sheet3!A1:B2:Sheet2!C3)", "=ROWS(Sheet2:Sheet3!A:A:B2)"}) {
+    arena.reset();
+    const Value v = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, formula, arena, default_registry());
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+  arena.reset();
+  const Value plain =
+      evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=SUM(Sheet2:Sheet3!A1:B2)", arena, default_registry());
+  ASSERT_TRUE(plain.is_number());
+}
+
+TEST(EvalContextRecursive, ThreeDReferenceOperandOfIntersectionIsValueError) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  Sheet& s2 = wb.sheet(1);
+  Sheet& s3 = wb.sheet(2);
+  s2.set_cell_value(4U, 0U, Value::number(1.0));
+  s2.set_cell_value(0U, 1U, Value::number(10.0));
+  s2.set_cell_value(2U, 1U, Value::number(100.0));
+  s3.set_cell_value(6U, 0U, Value::number(1000.0));
+  s3.set_cell_value(1U, 1U, Value::number(5.0));
+  s3.set_cell_value(0U, 2U, Value::number(7.0));
+  Arena arena;
+  for (const char* formula :
+       {"=SUM(Sheet2:Sheet3!A1:B2 Sheet2:Sheet3!B2)", "=SUM(Sheet2:Sheet3!A1:B2 B2)", "=SUM(B2 Sheet2:Sheet3!A1:B2)"}) {
+    arena.reset();
+    const Value v = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, formula, arena, default_registry());
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+  arena.reset();
+  const Value isref = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=ISREF(Sheet2:Sheet3!A1 Sheet2:Sheet3!A1)",
+                                            arena, default_registry());
+  ASSERT_TRUE(isref.is_boolean());
+  EXPECT_FALSE(isref.as_boolean());
+}
+
 TEST(EvalContextRecursive, MutableThreeDRangeUsesScalarFormulaAnchors) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

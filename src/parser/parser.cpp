@@ -125,7 +125,7 @@ bool is_range_endpoint_kind(NodeKind kind) noexcept {
   // shape the project's own reader can construct.
   return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::StructuredRef ||
          kind == NodeKind::RangeOp || kind == NodeKind::Call || kind == NodeKind::ErrorPlaceholder ||
-         kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp;
+         kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp || kind == NodeKind::Ref3D;
 }
 
 // Decrements the parse depth counter when it leaves scope.
