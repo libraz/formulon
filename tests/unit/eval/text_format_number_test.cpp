@@ -491,7 +491,9 @@ TEST(NumberFormatJaJpFullWidth, EscapesQuotesAndMultibytePayloads) {
   EXPECT_EQ(Render(5.0, "\\円0"), "円5");
   EXPECT_EQ(Render(5.0, "＼０"), "０");
   EXPECT_EQ(Render(5.0, "＿円0"), " 5");
-  EXPECT_EQ(Render(5.0, "＊円0"), "5");
+  // A wide fill character is no valid TEXT() format.
+  std::string wide_fill;
+  EXPECT_EQ(apply_format(5.0, "＊円0", wide_fill), FormatStatus::kValueError);
 }
 
 TEST(NumberFormatJaJpFullWidth, ScientificAndMalformedUtf8) {
@@ -541,6 +543,49 @@ TEST(NumberFormatSections, TextSectionIsReachableThroughPublicFormatter) {
   std::string out;
   EXPECT_EQ(apply_text_format("abc", "0.0;(0.0);\"z\";\"text: \"@", out), FormatStatus::kOk);
   EXPECT_EQ(out, "text: abc");
+}
+
+TEST(NumberFormatSections, UnderscoreSkipConsumesWholeMultibyteScalar) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
+  const struct {
+    const char* format;
+    const char* expected;
+  } cases[] = {{"_\xEF\xBC\x88@", " ab"}, {"_\xC3\xA9@", " ab"}, {"_\xE3\x81\x82@_\xE3\x81\x82", " ab "}};
+  for (const auto& c : cases) {
+    std::string out;
+    EXPECT_EQ(apply_text_format("ab", c.format, out), FormatStatus::kOk) << c.format;
+    EXPECT_EQ(out, c.expected) << c.format;
+  }
+}
+
+TEST(NumberFormatSections, TextSectionFillIsSkipped) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
+  for (const char* format : {"*x@", "@*-", "@*\xC3\xA9", "@*\xE2\x82\xAC", "@*\xEF\xBD\xB1", "@*\xEF\xBF\xA5"}) {
+    std::string out;
+    EXPECT_EQ(apply_text_format("ab", format, out), FormatStatus::kOk) << format;
+    EXPECT_EQ(out, "ab") << format;
+  }
+  std::string out;
+  EXPECT_EQ(apply_text_format("ab", "@*", out), FormatStatus::kValueError);
+}
+
+TEST(NumberFormatSections, WideFillCharacterIsInvalidInTextButNotInStoredDisplay) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
+  std::string out;
+  EXPECT_EQ(apply_text_format("ab", "@*\xE3\x81\x82", out), FormatStatus::kValueError);
+  for (const char* format : {"0*\xE3\x81\x82",
+                             "*\xE3\x81\x82"
+                             "0",
+                             "0;-0*\xE3\x81\x82"}) {
+    out.clear();
+    EXPECT_EQ(apply_format(5.0, format, out), FormatStatus::kValueError) << format;
+  }
+  out.clear();
+  EXPECT_EQ(apply_format(-5.0, "0;-0*\xE3\x81\x82", out), FormatStatus::kValueError);
+  // A stored cell code renders; the fill has no width to occupy.
+  out.clear();
+  EXPECT_EQ(apply_format(5.0, "0*\xE3\x81\x82", out, false, FormatDialect::kStored), FormatStatus::kOk);
+  EXPECT_EQ(out, "5");
 }
 
 TEST(NumberFormatSections, EmptyTextTakesTheTextSection) {

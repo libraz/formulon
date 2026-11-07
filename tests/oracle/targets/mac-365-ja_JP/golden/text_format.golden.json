@@ -2,11 +2,11 @@
   "suite": "text_format",
   "description": "TEXT format-string engine (number + date/time formatting)",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-25T17:12:04Z"
+    "generated_at": "2026-11-07T19:53:18Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2945,6 +2945,204 @@
       "expect": {
         "kind": "text",
         "value": "1 234 1/2"
+      }
+    },
+    {
+      "id": "text_skip_multibyte_char",
+      "formula": "=TEXT(\"ab\",\"_（@\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " ab"
+      }
+    },
+    {
+      "id": "text_skip_two_byte_char",
+      "formula": "=TEXT(\"ab\",\"_é@\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " ab"
+      }
+    },
+    {
+      "id": "text_skip_both_sides",
+      "formula": "=TEXT(\"ab\",\"_あ@_あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " ab "
+      }
+    },
+    {
+      "id": "text_fill_before_text",
+      "formula": "=TEXT(\"ab\",\"*x@\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "text_fill_after_text",
+      "formula": "=TEXT(\"ab\",\"@*-\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "text_fill_latin_char",
+      "formula": "=TEXT(\"ab\",\"@*é\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "text_fill_halfwidth_kana",
+      "formula": "=TEXT(\"ab\",\"@*ｱ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "text_fill_ambiguous_width",
+      "formula": "=TEXT(\"ab\",\"@*α\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "text_fill_fullwidth_yen",
+      "formula": "=TEXT(\"ab\",\"@*￥\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "text_fill_wide_kana_error",
+      "formula": "=TEXT(\"ab\",\"@*あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_fill_wide_kanji_error",
+      "formula": "=TEXT(\"ab\",\"@*漢\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_fill_fullwidth_letter_error",
+      "formula": "=TEXT(\"ab\",\"@*Ａ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_fill_ideographic_space_error",
+      "formula": "=TEXT(\"ab\",\"@*　\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_fill_wide_after_error",
+      "formula": "=TEXT(5,\"0*あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_fill_wide_before_error",
+      "formula": "=TEXT(5,\"*あ0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_fill_wide_negative_section_error",
+      "formula": "=TEXT(-5,\"0;-0*あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_fill_ascii",
+      "formula": "=TEXT(5,\"0*-\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "number_fill_fullwidth_star_wide_error",
+      "formula": "=TEXT(5,\"＊円0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_fill_wide_yen_kanji_error",
+      "formula": "=TEXT(5,\"*円0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_fill_fullwidth_star_ascii",
+      "formula": "=TEXT(5,\"＊-0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "text_fill_fullwidth_star_wide_error",
+      "formula": "=TEXT(\"ab\",\"@＊あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_skip_fullwidth_underscore",
+      "formula": "=TEXT(5,\"＿円0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 5"
       }
     }
   ]

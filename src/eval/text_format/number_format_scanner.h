@@ -35,6 +35,10 @@ std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_
 // multibyte literal is never split into independent escape tokens.
 std::size_t utf8_scalar_width(std::string_view fmt, std::size_t i) noexcept;
 
+// Returns true iff the scalar at `i` is East Asian Wide or Fullwidth, excluding the
+// fullwidth sign block U+FFE0..U+FFE6. Such a scalar cannot be an `*X` fill character in TEXT().
+bool is_wide_fill_scalar(std::string_view fmt, std::size_t i) noexcept;
+
 // Returns true iff `c` is one of `yYmMdDhHsS`. Used to detect date-family
 // tokens; AM/PM handled separately because they span multiple characters.
 bool is_date_letter(char c) noexcept;

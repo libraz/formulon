@@ -23,6 +23,7 @@
 #include <utility>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
 #include "eval/text_format/rounding.h"
@@ -259,9 +260,14 @@ void render_text_section(const Section& /*section*/, std::string_view fmt, std::
       continue;
     }
     if (c == '_' && i + 1 < fmt.size()) {
-      // `_X` underscore-skip: emit a single space and consume both bytes.
+      // `_X` underscore-skip: one space for the whole next scalar.
       out.push_back(' ');
-      i += 2;
+      i += 1 + utf8_scalar_width(fmt, i + 1);
+      continue;
+    }
+    if (c == '*' && i + 1 < fmt.size()) {
+      // `*X` fill has no width to fill in TEXT(); both are dropped.
+      i += 1 + utf8_scalar_width(fmt, i + 1);
       continue;
     }
     out.push_back(c);

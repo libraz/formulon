@@ -997,3 +997,91 @@ cases:
     formula: "=TEXT(1234.5, \"# ##0 ?/?\")"
   - id: tf_fraction_nbsp_inside_integer
     formula: "=TEXT(1234.5, \"# ##0 ?/?\")"
+
+  - id: text_skip_multibyte_char
+    description: 'Underscore skip consumes a multibyte character and leaves one space'
+    formula: '=TEXT("ab","_（@")'
+
+  - id: text_skip_two_byte_char
+    description: 'Underscore skip of a two-byte UTF-8 character'
+    formula: '=TEXT("ab","_é@")'
+
+  - id: text_skip_both_sides
+    description: 'Underscore skips before and after the text placeholder'
+    formula: '=TEXT("ab","_あ@_あ")'
+
+  - id: text_fill_before_text
+    description: 'A fill pair before the text placeholder is dropped'
+    formula: '=TEXT("ab","*x@")'
+
+  - id: text_fill_after_text
+    description: 'A fill pair after the text placeholder is dropped'
+    formula: '=TEXT("ab","@*-")'
+
+  - id: text_fill_latin_char
+    description: 'A narrow non-ASCII fill character is dropped'
+    formula: '=TEXT("ab","@*é")'
+
+  - id: text_fill_halfwidth_kana
+    description: 'A halfwidth katakana fill character is dropped'
+    formula: '=TEXT("ab","@*ｱ")'
+
+  - id: text_fill_ambiguous_width
+    description: 'An ambiguous-width fill character is dropped'
+    formula: '=TEXT("ab","@*α")'
+
+  - id: text_fill_fullwidth_yen
+    description: 'The fullwidth yen sign as fill character is dropped'
+    formula: '=TEXT("ab","@*￥")'
+
+  - id: text_fill_wide_kana_error
+    description: 'A wide fill character makes TEXT #VALUE!'
+    formula: '=TEXT("ab","@*あ")'
+
+  - id: text_fill_wide_kanji_error
+    description: 'A kanji fill character makes TEXT #VALUE!'
+    formula: '=TEXT("ab","@*漢")'
+
+  - id: text_fill_fullwidth_letter_error
+    description: 'A fullwidth letter fill character makes TEXT #VALUE!'
+    formula: '=TEXT("ab","@*Ａ")'
+
+  - id: text_fill_ideographic_space_error
+    description: 'An ideographic space fill character makes TEXT #VALUE!'
+    formula: '=TEXT("ab","@*　")'
+
+  - id: number_fill_wide_after_error
+    description: 'A wide fill character in a number section makes TEXT #VALUE!'
+    formula: '=TEXT(5,"0*あ")'
+
+  - id: number_fill_wide_before_error
+    description: 'A wide fill character before the digits makes TEXT #VALUE!'
+    formula: '=TEXT(5,"*あ0")'
+
+  - id: number_fill_wide_negative_section_error
+    description: 'A wide fill character in the negative section'
+    formula: '=TEXT(-5,"0;-0*あ")'
+
+  - id: number_fill_ascii
+    description: 'An ASCII fill pair in a number section is dropped'
+    formula: '=TEXT(5,"0*-")'
+
+  - id: number_fill_fullwidth_star_wide_error
+    description: 'A fullwidth fill operator with a wide fill character is #VALUE!'
+    formula: '=TEXT(5,"＊円0")'
+
+  - id: number_fill_wide_yen_kanji_error
+    description: 'A kanji fill character before the digits is #VALUE!'
+    formula: '=TEXT(5,"*円0")'
+
+  - id: number_fill_fullwidth_star_ascii
+    description: 'A fullwidth fill operator with an ASCII fill character is dropped'
+    formula: '=TEXT(5,"＊-0")'
+
+  - id: text_fill_fullwidth_star_wide_error
+    description: 'A fullwidth fill operator in a text section with a wide fill character'
+    formula: '=TEXT("ab","@＊あ")'
+
+  - id: number_skip_fullwidth_underscore
+    description: 'A fullwidth skip operator leaves one space'
+    formula: '=TEXT(5,"＿円0")'

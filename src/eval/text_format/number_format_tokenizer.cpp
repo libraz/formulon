@@ -281,6 +281,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // fill the column width. TEXT() has no column width, so Mac Excel 365
     // emits this as a no-op (both `*` and the fill char are skipped).
     if (c == '*' && i + 1 < fmt.size()) {
+      out.has_wide_fill = out.has_wide_fill || is_wide_fill_scalar(fmt, i + 1);
       i += 1 + utf8_scalar_width(fmt, i + 1);
       continue;
     }

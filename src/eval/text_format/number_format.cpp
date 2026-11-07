@@ -124,13 +124,14 @@ int format_decimal_places(std::string_view format) {
   return most;
 }
 
-bool valid_format(const ParsedFormat& parsed) noexcept {
+bool valid_format(const ParsedFormat& parsed, FormatDialect dialect) noexcept {
   if (!parsed.spelling_valid || parsed.sections.size() > 4U) {
     return false;
   }
   for (std::size_t i = 0; i < parsed.sections.size(); ++i) {
     const Section& section = parsed.sections[i];
-    if (section.has_invalid_bracket || (i >= 2U && section.cond_op != CondOp::kNone)) {
+    if (section.has_invalid_bracket || (section.has_wide_fill && dialect == FormatDialect::kLocalized) ||
+        (i >= 2U && section.cond_op != CondOp::kNone)) {
       return false;
     }
   }
@@ -321,7 +322,8 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
   }
   const std::shared_ptr<const ParsedFormat> held = parse_format_cached(format, dialect);
   const ParsedFormat& parsed = *held;
-  if (!valid_format(parsed) || (cap_decimals && format_decimal_places(parsed.normalized) > kMaxFormatDecimalPlaces)) {
+  if (!valid_format(parsed, dialect) ||
+      (cap_decimals && format_decimal_places(parsed.normalized) > kMaxFormatDecimalPlaces)) {
     return FormatStatus::kValueError;
   }
   const std::vector<std::string_view>& sections_raw = parsed.raw;
@@ -393,7 +395,7 @@ FormatStatus apply_text_format(std::string_view text, std::string_view format, s
   // original bytes through unchanged, Excel validates every section first.
   // This matters for text/bool TEXT values with a malformed numeric sibling
   // section (for example `@;[invalid]0`).
-  if (!valid_format(parsed)) {
+  if (!valid_format(parsed, dialect)) {
     return FormatStatus::kValueError;
   }
   std::size_t chosen = 0;

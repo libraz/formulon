@@ -211,6 +211,27 @@ std::size_t utf8_scalar_width(std::string_view fmt, std::size_t i) noexcept {
   return decode_utf8(fmt, i).width;
 }
 
+bool is_wide_fill_scalar(std::string_view fmt, std::size_t i) noexcept {
+  struct Range {
+    std::uint32_t lo;
+    std::uint32_t hi;
+  };
+  static constexpr Range kWide[] = {
+      {0x1100, 0x115F}, {0x2E80, 0x303E}, {0x3041, 0x33FF}, {0x3400, 0x4DBF}, {0x4E00, 0x9FFF},   {0xA000, 0xA4CF},
+      {0xAC00, 0xD7A3}, {0xF900, 0xFAFF}, {0xFE30, 0xFE4F}, {0xFF01, 0xFF60}, {0x20000, 0x3FFFD},
+  };
+  const Utf8Scalar scalar = decode_utf8(fmt, i);
+  if (!scalar.valid) {
+    return false;
+  }
+  for (const Range& range : kWide) {
+    if (scalar.codepoint >= range.lo && scalar.codepoint <= range.hi) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_view literal_glyphs) {
   std::string out;
   out.reserve(fmt.size());

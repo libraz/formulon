@@ -155,6 +155,9 @@ struct Section {
   // have rendered.
   bool has_invalid_bracket = false;
 
+  // Set when an `*X` fill uses a wide character. TEXT() rejects such a format; cell display ignores it.
+  bool has_wide_fill = false;
+
   // Set when the section carries a colour qualifier in the parse dialect.
   bool has_color = false;
 
