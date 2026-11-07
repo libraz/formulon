@@ -280,6 +280,29 @@ class AdoptionLedgerRuleTest(BindingRuleTestBase):
         }
         self.assertEqual(sites["gate"], "src/c_api/parts/cells.cpp:1")
 
+    def test_r34_operators_do_not_end_a_body(self) -> None:
+        header = (
+            "FM_API fm_status_t fm_sheet_get_value(const fm_workbook_t* wb, size_t sheet_index, fm_value_t* out);\n"
+            "FM_API fm_status_t fm_sheet_get_formula(const fm_workbook_t* wb, size_t sheet_index, const char** out);\n"
+        )
+        ledger = {
+            "entries": {
+                "value.get": {"kind": "op", "c": "fm_sheet_get_value", "reads_values": True},
+                "formula.get": {"kind": "op", "c": "fm_sheet_get_formula"},
+            }
+        }
+        body = (
+            'extern "C" fm_status_t fm_sheet_get_formula(const fm_workbook_t* wb, size_t sheet_index, const char** out) {\n'
+            "  if (wb->count < sheet_index || out->size > 2) return bad();\n  return formula(wb, out);\n}\n"
+            'extern "C" fm_status_t fm_sheet_get_value(const fm_workbook_t* wb, size_t sheet_index, fm_value_t* out) {\n'
+            "  if (auto st = parts::ensure_calculated(wb); st != FM_STATUS_OK) return st;\n  return read(wb, out);\n}\n"
+        )
+        ctx = self._parts(self.fixture.context(header, ledger), body)
+        self.assertEqual(
+            [v.discriminator for v in api_conventions.collect(ctx, {"R34.reads_values": _rule("R34.reads_values")})],
+            [],
+        )
+
     def test_r35_a_trailing_default_may_be_omitted(self) -> None:
         ledger = {
             "entries": {

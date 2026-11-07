@@ -562,6 +562,23 @@ def _blank(text: str) -> str:
     return _BLANKED_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
 
 
+def _c_scan(clean: str, start: int, stop: str) -> int:
+    """Index of the first `stop` at bracket depth 0 from `start` in blanked C++, or `len(clean)`.
+
+    Unlike `_scan`, angle brackets are not brackets here: `->`, `<` and `>` are operators in a body.
+    """
+    depth = 0
+    for i in range(start, len(clean)):
+        char = clean[i]
+        if depth == 0 and char == stop:
+            return i
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+    return len(clean)
+
+
 def c_definitions(root: Path) -> Dict[str, Tuple[str, int, str]]:
     """`{fm_* name: (path, line, body)}` of the `extern "C"` definitions under src/c_api of `root`."""
     out: Dict[str, Tuple[str, int, str]] = {}
@@ -570,12 +587,12 @@ def c_definitions(root: Path) -> Dict[str, Tuple[str, int, str]]:
         raw = path.read_text(encoding="utf-8")
         clean = _blank(raw)
         for match in _DEFINITION_RE.finditer(raw):
-            brace = _scan(clean, match.end(), ")") + 1
+            brace = _c_scan(clean, match.end(), ")") + 1
             while brace < len(clean) and clean[brace].isspace():
                 brace += 1
             if brace >= len(clean) or clean[brace] != "{":
                 continue
-            end = _scan(clean, brace + 1, "}")
+            end = _c_scan(clean, brace + 1, "}")
             line = raw.count("\n", 0, match.start()) + 1
             out.setdefault(match.group(1), (str(path.relative_to(root)), line, clean[brace : end + 1]))
     return out
