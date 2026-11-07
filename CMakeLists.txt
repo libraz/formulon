@@ -270,6 +270,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/workbook_bin_writer.cpp
   src/io/xlsb/workbook_props_records.cpp
   src/io/xlsb/writer.cpp
+  src/io/xlsb/emission_plan.cpp
   src/cf/auto_filter_eval.cpp
   src/cf/cf_authoring.cpp
   src/cf/cf_evaluator.cpp
