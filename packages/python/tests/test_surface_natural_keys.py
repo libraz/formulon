@@ -103,9 +103,9 @@ class NaturalKeyLookupTests(unittest.TestCase):
                 ThemeScriptFont(major=False, script="Zzzz", typeface="Test Face"),
             )
             self.assertIsNone(wb.get_theme_script_font(major=True, script="Zzzz"))
-            path = wb.list_passthroughs()[0].path
-            self.assertEqual(wb.get_passthrough(path), path)
-            self.assertIsNone(wb.get_passthrough("/" + path))
+            path = wb.ooxml.list_passthroughs()[0].path
+            self.assertEqual(wb.ooxml.get_passthrough(path), path)
+            self.assertIsNone(wb.ooxml.get_passthrough("/" + path))
 
 
 class IndexKeyedAddTests(unittest.TestCase):

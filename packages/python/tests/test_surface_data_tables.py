@@ -32,7 +32,7 @@ def _squares() -> Workbook:
 
 
 def _number(wb: Workbook, row: int, col: int) -> float:
-    value = wb.sheet(0).get_value(row, col)
+    value = wb.sheet(0).get_typed_value(row, col)
     assert value.kind is ValueKind.NUMBER, (row, col, value)
     return value.number
 
@@ -92,7 +92,7 @@ class DataTableTests(unittest.TestCase):
             self.assertFalse(table.col_input.deleted)
             self.assertEqual(table.rect.first_row, 2)
             wb.recalc()
-            self.assertIs(wb.sheet(0).get_value(2, 3).kind, ValueKind.ERROR)
+            self.assertIs(wb.sheet(0).get_typed_value(2, 3).kind, ValueKind.ERROR)
 
     def test_save_load_remove_and_auto_no_table(self) -> None:
         with _squares() as wb:
@@ -115,7 +115,7 @@ class DataTableTests(unittest.TestCase):
 
             wb.sheet(0).remove_data_table(3, 1)
             self.assertIsNone(wb.sheet(0).get_data_table(3, 1))
-            self.assertIs(wb.sheet(0).get_value(3, 1).kind, ValueKind.BLANK)
+            self.assertIs(wb.sheet(0).get_typed_value(3, 1).kind, ValueKind.BLANK)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).remove_data_table(3, 1)
             wb.sheet(0).set_number(3, 1, 7.0)

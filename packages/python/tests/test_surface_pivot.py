@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Tuple
 
 from formulon import (
     PIVOT_VALUES_FIELD,
+    CellAddress,
     CellRect,
     ErrorCode,
     ExcelError,
@@ -26,6 +27,7 @@ from formulon import (
     PivotFilterInput,
     PivotFilterType,
     PivotGrandTotals,
+    PivotInput,
     PivotReportLayout,
     PivotSortOrder,
     Sheet,
@@ -47,7 +49,7 @@ class PivotTests(unittest.TestCase):
                 wb.pivot_cache(cache_id).set_record_value(rec, 1, amount)
             self.assertEqual(wb.pivot_cache(cache_id).get_record_count(), 3)
 
-            pivot = wb.sheet(0).add_pivot(name="Pivot1", cache_id=cache_id, anchor_row=0, anchor_col=4)
+            pivot = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=cache_id, anchor=CellAddress(0, 4)))
             region_field = wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
             amount_field = (
                 wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
@@ -114,7 +116,7 @@ class PivotTests(unittest.TestCase):
             cache = wb.add_pivot_cache().cache_id
             wb.pivot_cache(cache).set_worksheet_source(ref="A1:B9", sheet="Sheet1")
             self.assertEqual(wb.pivot_cache(cache).get_worksheet_source().sheet, "Sheet1")
-            pivot = wb.sheet(0).add_pivot(name="Layout", cache_id=cache, anchor_row=0, anchor_col=0)
+            pivot = wb.sheet(0).add_pivot(PivotInput(name="Layout", cache_id=cache, anchor=CellAddress(0, 0)))
             wb.sheet(0).pivot(pivot).set_report_layout(PivotReportLayout.TABULAR)
             self.assertEqual(wb.sheet(0).pivot(pivot).get_report_layout(), PivotReportLayout.TABULAR)
             wb.pivot_cache(cache).set_worksheet_source(None)
@@ -127,7 +129,7 @@ class _PivotFixture:
 
     def __init__(self, wb: Workbook) -> None:
         self.wb = wb
-        wb.set_excel_profile_id("win-365-ja_JP")
+        wb.set_profile_id("win-365-ja_JP")
         self.cache = wb.add_pivot_cache().cache_id
         wb.pivot_cache(self.cache).set_worksheet_source(ref="A1:D5", sheet="Sheet1")
         for name in ("Region", "Product", "Amount", "Date"):
@@ -140,7 +142,7 @@ class _PivotFixture:
             rec = wb.pivot_cache(self.cache).add_record()
             for field, value in enumerate(values):
                 wb.pivot_cache(self.cache).set_record_value(rec, field, value)
-        self.pivot = wb.sheet(0).add_pivot(name="Pivot1", cache_id=self.cache, anchor_row=0, anchor_col=6)
+        self.pivot = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=self.cache, anchor=CellAddress(0, 6)))
         self.region = wb.sheet(0).pivot(self.pivot).add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
         wb.sheet(0).pivot(self.pivot).add_field_item(self.region, "East", visible=True)
         wb.sheet(0).pivot(self.pivot).add_field_item(self.region, "West", visible=True)
@@ -740,7 +742,9 @@ class PivotMutatorTableTests(unittest.TestCase):
             ),
             "Sheet.add_pivot": (
                 None,
-                lambda f: f.wb.sheet(0).add_pivot(name="Pivot2", cache_id=f.cache, anchor_row=20, anchor_col=1),
+                lambda f: f.wb.sheet(0).add_pivot(
+                    PivotInput(name="Pivot2", cache_id=f.cache, anchor=CellAddress(20, 1))
+                ),
                 None,
                 pivot_create,
             ),
@@ -1224,7 +1228,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             _package_part(data, "xl/pivotTables/pivotTable1.xml"),
         )
         with Workbook.load(data) as loaded:
-            loaded.set_excel_profile_id("win-365-ja_JP")
+            loaded.set_profile_id("win-365-ja_JP")
             self.assertEqual(len(loaded.sheet(0).pivot(0).list_filters()), 1)
             spec = loaded.sheet(0).pivot(0).list_filters()[0]
             self.assertEqual((spec.type, spec.field_name, spec.value_double), (_GREATER_THAN_20.type, "Region", 20.0))
@@ -1257,7 +1261,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             for name in ("", None):
                 with Workbook.create_default() as wb:
                     f = _PivotFixture(wb)
-                    wb.set_excel_profile_id(profile)
+                    wb.set_profile_id(profile)
                     wb.sheet(0).pivot(f.pivot).clear_data_fields()
                     self.assertEqual(
                         wb.sheet(0).pivot(f.pivot).get_data_field_default_name(f.amount, PivotAggregation.SUM), expected
@@ -1372,7 +1376,7 @@ class PivotFieldBindingTests(unittest.TestCase):
             rec = wb.pivot_cache(cache).add_record()
             for col, value in enumerate((0, 0, sales, 1)):
                 wb.pivot_cache(cache).set_record_value(rec, col, value)
-        return wb.sheet(0).add_pivot(name="PT", cache_id=cache, anchor_row=0, anchor_col=6)
+        return wb.sheet(0).add_pivot(PivotInput(name="PT", cache_id=cache, anchor=CellAddress(0, 6)))
 
     def test_field_add_binds_to_the_cache_column_by_name(self) -> None:
         with Workbook.create_default() as wb:

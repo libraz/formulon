@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from formulon import CellRect, FormulonError, ParsedReference, Workbook
+from formulon import CellRect, FormulaSyntaxError, FormulonError, ParsedReference, StatusCode, Workbook
 
 MAX_ROW = 1048575
 MAX_COL = 16383
@@ -28,10 +28,13 @@ class ParseReferenceTests(unittest.TestCase):
         self.assertEqual(self.wb.parse_reference("売上!A1"), ParsedReference("売上", CellRect(0, 0, 0, 0)))
         self.assertEqual(self.wb.parse_reference("Sheet.1!A1").sheet_name, "Sheet.1")
 
-    def test_invalid_text_is_none(self) -> None:
+    def test_invalid_text_raises_invalid_reference(self) -> None:
         for text in ("", " A1", "A1 ", "XFE1", "A1048577", "A0", "MyName", "A1,B2", "Sheet1:Sheet2!A1"):
-            self.assertIsNone(self.wb.parse_reference(text), text)
-        self.assertIsNone(self.wb.parse_reference("'" + "a" * 32 + "'!A1"))
+            with self.assertRaises(FormulaSyntaxError, msg=text) as caught:
+                self.wb.parse_reference(text)
+            self.assertEqual(caught.exception.code, StatusCode.PARSER_INVALID_REFERENCE, text)
+        with self.assertRaises(FormulaSyntaxError):
+            self.wb.parse_reference("'" + "a" * 32 + "'!A1")
 
     def test_r1c1(self) -> None:
         self.assertEqual(self.wb.parse_reference("R2C3", r1c1=True), ParsedReference(None, CellRect(1, 2, 1, 2)))
@@ -39,7 +42,8 @@ class ParseReferenceTests(unittest.TestCase):
             self.wb.parse_reference("R[-1]C", r1c1=True, base_row=5, base_col=5),
             ParsedReference(None, CellRect(4, 5, 4, 5)),
         )
-        self.assertIsNone(self.wb.parse_reference("R[-1]C", r1c1=True))
+        with self.assertRaises(FormulaSyntaxError):
+            self.wb.parse_reference("R[-1]C", r1c1=True)
 
     def test_base_needs_both_axes(self) -> None:
         with self.assertRaises(ValueError):

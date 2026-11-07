@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import formulon
 from formulon import (
     UNCHANGED,
+    CellAddress,
     CellRect,
     ErrorCode,
     ExcelError,
@@ -31,6 +32,7 @@ from formulon import (
     IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
+    PivotInput,
     Sheet,
     Value,
     ValueKind,
@@ -65,7 +67,7 @@ def _pivot_book(wb: Workbook, ws: Sheet) -> None:
         rec = wb.pivot_cache(cache).add_record()
         wb.pivot_cache(cache).set_record_value(rec, 0, region)
         wb.pivot_cache(cache).set_record_value(rec, 1, amount)
-    ws.add_pivot(name="Pivot1", cache_id=cache, anchor_row=0, anchor_col=4)
+    ws.add_pivot(PivotInput(name="Pivot1", cache_id=cache, anchor=CellAddress(0, 4)))
 
 
 def _pivot_report_book(wb: Workbook, ws: Sheet) -> None:
@@ -82,7 +84,7 @@ def _pivot_report_book(wb: Workbook, ws: Sheet) -> None:
         rec = wb.pivot_cache(cache).add_record()
         wb.pivot_cache(cache).set_record_value(rec, 0, region)
         wb.pivot_cache(cache).set_record_value(rec, 1, amount)
-    pivot = ws.add_pivot(name="Pivot1", cache_id=cache, anchor_row=0, anchor_col=4)
+    pivot = ws.add_pivot(PivotInput(name="Pivot1", cache_id=cache, anchor=CellAddress(0, 4)))
     ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
     amount_field = ws.pivot(pivot).add_field(
         formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE)
@@ -135,6 +137,8 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.evaluate_cf_formula": Case(tail=lambda: ("=TRUE",)),
     "Sheet.evaluate_formula": Case(tail=lambda: ("=A1+1",)),
     "Sheet.evaluate_formula_array": Case(tail=lambda: ("=1+1",)),
+    "Sheet.evaluate_typed_formula": Case(tail=lambda: ("=A1+1",)),
+    "Sheet.evaluate_typed_formula_array": Case(tail=lambda: ("=1+1",)),
     "Sheet.get_array_formula": Case(),
     "Sheet.get_cell_format": Case(),
     "Sheet.get_cell_phonetic": Case(),
@@ -145,6 +149,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.get_comment": Case(),
     "Sheet.get_comment_visible": Case(),
     "Sheet.get_data_table": Case(),
+    "Sheet.get_date": Case(),
     "Sheet.get_dependents": Case(),
     "Sheet.get_display_text": Case(),
     "Sheet.get_effective_style": Case(),
@@ -155,6 +160,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.get_precedents": Case(),
     "Sheet.get_spill_info": Case(),
     "Sheet.get_value": Case(),
+    "Sheet.get_typed_value": Case(),
     "Sheet.remove_comment": Case(),
     "Sheet.remove_data_table": Case(),
     "Sheet.remove_hyperlink": Case(),
@@ -186,9 +192,11 @@ RECT_TABLE: Dict[str, Case] = {
     "Sheet.get_cell_rect_pt": Case(),
     "Sheet.get_cells_in_range": Case(),
     "Sheet.get_merges_in_range": Case(setup=_merged),
+    "Sheet.iter_rows": Case(),
     "Sheet.list_cells": Case(),
     "Sheet.get_range_style_bases": Case(),
     "Sheet.get_values": Case(),
+    "Sheet.get_typed_values": Case(),
     "Sheet.get_range_style_bases_excluding": Case(tail=lambda: ([(1, 1)],)),
     "Sheet.recalc_viewport": Case(),
     "Sheet.remap_range_style": Case(tail=lambda: ({0: 0},)),
@@ -230,9 +238,23 @@ def _a1(row: int, col: int) -> str:
     return f"{letters}{row + 1}"
 
 
+def _member(recv: Any, name: str) -> Callable[..., Any]:
+    """The bound method ``name`` of ``recv``, or of its ``ooxml`` layer when the facade keeps it there."""
+    return getattr(recv if hasattr(recv, name) else recv.ooxml, name)
+
+
+def _has_member(cls: type, name: str) -> bool:
+    return hasattr(cls, name) or hasattr(_OOXML_LAYERS.get(cls), name)
+
+
+_OOXML_LAYERS: Dict[type, type] = {Sheet: formulon.SheetOoxml, Workbook: formulon.WorkbookOoxml}
+
+
 def _norm(result: Any) -> Any:
     if isinstance(result, Sheet):
         return ("sheet", result.name)
+    if inspect.isgenerator(result):
+        return list(result)
     return result
 
 
@@ -272,7 +294,7 @@ class CellArgumentsTests(unittest.TestCase):
                 continue
             cls, name = key.split(".")
             with self.subTest(method=key):
-                self.assertTrue(hasattr(_CLASSES[cls], name), f"{key} is missing")
+                self.assertTrue(_has_member(_CLASSES[cls], name), f"{key} is missing")
                 self.assertEqual(positions[0][0], len(case.lead), "the table's lead does not match the ledger position")
                 pairs = [case.cell] if len(positions) == 1 else [(1, 1), (0, 0)][: len(positions)]
                 coords: List[Any] = []
@@ -281,11 +303,11 @@ class CellArgumentsTests(unittest.TestCase):
                     coords += [r, c]
                     texts.append(_a1(r, c))
                 coordinate = _outcome(
-                    case, lambda recv: getattr(recv, name)(*case.lead, *coords, *case.tail(), **case.kw())
+                    case, lambda recv: _member(recv, name)(*case.lead, *coords, *case.tail(), **case.kw())
                 )
                 self.assertNotEqual(coordinate, ("type-error",), "the coordinate form must be accepted by the table")
                 spelled = _outcome(
-                    case, lambda recv: getattr(recv, name)(*case.lead, *texts, *case.tail(), **case.kw())
+                    case, lambda recv: _member(recv, name)(*case.lead, *texts, *case.tail(), **case.kw())
                 )
                 self.assertEqual(spelled, coordinate)
 
@@ -296,7 +318,7 @@ class CellArgumentsTests(unittest.TestCase):
             for text in ("A1", "a1", "$A$1", "A01"):
                 with self.subTest(text=text):
                     self.assertEqual(ws.get_value(text), ws.get_value(0, 0))
-            self.assertEqual(ws.get_value("XFD1048576"), BLANK)
+            self.assertEqual(ws.get_typed_value("XFD1048576"), BLANK)
 
     def test_rejected_texts(self) -> None:
         with _open() as wb:
@@ -308,7 +330,7 @@ class CellArgumentsTests(unittest.TestCase):
     def test_set_number_with_text(self) -> None:
         with _open() as wb:
             wb.sheet(0).set_number("A1", 5)
-            self.assertEqual(wb.sheet(0).get_value(0, 0), _number(5))
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 0), _number(5))
 
     def test_two_pairs_do_not_mix(self) -> None:
         with _open() as wb:
@@ -324,7 +346,7 @@ class CellArgumentsTests(unittest.TestCase):
                 ws = wb.sheet(0)
                 _pivot_report_book(wb, ws)
                 sheet = call(ws)
-                return sheet.index, sheet.get_values("A1:B3")
+                return sheet.index, sheet.get_typed_values("A1:B3")
 
         expected = details(lambda ws: ws.pivot(0).show_details(1, 5))
         self.assertEqual(expected[1][1][1].number, 10.0)
@@ -337,14 +359,14 @@ class CellArgumentsTests(unittest.TestCase):
             ws = wb.sheet(0)
             ws.set_number(0, 0, 3.0)
             ws.set_value(0, 0, None)
-            self.assertEqual(ws.get_value(0, 0), BLANK)
+            self.assertEqual(ws.get_typed_value(0, 0), BLANK)
             for args in ((0, 0), (0,), ("A1",)):
                 with self.subTest(args=args), self.assertRaises(TypeError):
                     ws.set_value(*args)  # type: ignore[call-overload]
             with self.assertRaises(TypeError):
                 ws.set_value(row=0, col=0, value=1)  # type: ignore[call-overload]
             ws.set_value("A1", value=1)
-            self.assertEqual(ws.get_value(0, 0), _number(1))
+            self.assertEqual(ws.get_typed_value(0, 0), _number(1))
 
     def test_signature_of_set_value(self) -> None:
         sig = inspect.signature(Sheet.set_value)
@@ -360,12 +382,11 @@ class CellArgumentsTests(unittest.TestCase):
         self.assertEqual(list(a1_forms[0].parameters)[:3], ["self", "a1", "formula"])
 
     def test_non_coordinate_methods(self) -> None:
-        """Methods dropped from the coordinate set: the view setters are gone and ``add_pivot`` takes keywords."""
+        """Methods dropped from the coordinate set: the view setters are gone and ``add_pivot`` takes one record."""
         for name in ("set_top_left", "set_pane_top_left"):
             self.assertFalse(hasattr(Sheet, name), name)
         params = inspect.signature(Sheet.add_pivot).parameters
-        self.assertEqual([p for p in params if p != "self"], ["name", "cache_id", "anchor_row", "anchor_col"])
-        self.assertTrue(all(p.kind is inspect.Parameter.KEYWORD_ONLY for n, p in params.items() if n != "self"))
+        self.assertEqual([p for p in params if p != "self"], ["input"])
 
 
 class RectArgumentsTests(unittest.TestCase):
@@ -388,10 +409,10 @@ class RectArgumentsTests(unittest.TestCase):
                 sequence = key in RECT_SEQUENCE
                 as_rect: Any = [rect] if sequence else rect
                 as_text: Any = ["B2:C3"] if sequence else "B2:C3"
-                typed = _outcome(case, lambda recv: getattr(recv, name)(*case.lead, as_rect, *case.tail(), **case.kw()))
+                typed = _outcome(case, lambda recv: _member(recv, name)(*case.lead, as_rect, *case.tail(), **case.kw()))
                 self.assertNotEqual(typed, ("type-error",))
                 spelled = _outcome(
-                    case, lambda recv: getattr(recv, name)(*case.lead, as_text, *case.tail(), **case.kw())
+                    case, lambda recv: _member(recv, name)(*case.lead, as_text, *case.tail(), **case.kw())
                 )
                 self.assertEqual(spelled, typed)
 
@@ -427,15 +448,16 @@ class SubscriptTests(unittest.TestCase):
             self.assertIs(ws[2, 0], True)
             self.assertIsNone(ws["A4"])
             ws["B1"] = "=1+1"
-            self.assertEqual(ws["B1"], "=1+1")
-            self.assertEqual(ws.get_value("B1"), Value(kind=ValueKind.TEXT, text="=1+1"))
+            self.assertEqual(ws["B1"], 2.0)
+            self.assertEqual(ws.get_formula("B1"), "=1+1")
 
-    def test_range_key_is_invalid_argument(self) -> None:
+    def test_range_key_is_a_grid(self) -> None:
         with _open() as wb:
-            with self.assertRaises(InvalidArgumentError):
-                wb.sheet(0)["A1:B2"]
-            with self.assertRaises(InvalidArgumentError):
+            self.assertEqual(wb.sheet(0)["A1:B2"], [[None, None], [None, None]])
+            with self.assertRaises(TypeError):
                 wb.sheet(0)["A1:B2"] = 1
+            with self.assertRaises(InvalidArgumentError):
+                wb.sheet(0)["A1:B2"] = [[1]]
 
     def test_int_and_slice_keys_are_type_errors(self) -> None:
         with _open() as wb:
@@ -456,8 +478,8 @@ class SubscriptTests(unittest.TestCase):
 class BulkValuesTests(unittest.TestCase):
     def test_blank_range_is_dense(self) -> None:
         with _open() as wb:
-            self.assertEqual(wb.sheet(0).get_values("A1:B2"), [[BLANK, BLANK], [BLANK, BLANK]])
-            self.assertEqual(wb.sheet(0).get_values(CellRect(0, 0, 1, 1)), [[BLANK, BLANK], [BLANK, BLANK]])
+            self.assertEqual(wb.sheet(0).get_typed_values("A1:B2"), [[BLANK, BLANK], [BLANK, BLANK]])
+            self.assertEqual(wb.sheet(0).get_values(CellRect(0, 0, 1, 1)), [[None, None], [None, None]])
 
     def test_range_over_one_page(self) -> None:
         with _open() as wb:
@@ -467,16 +489,16 @@ class BulkValuesTests(unittest.TestCase):
             values = ws.get_values("A1:A70000")
             self.assertEqual(len(values), 70000)
             for row in (0, 65535, 65536, 69999):
-                self.assertEqual(values[row], [_number(row + 1)])
-            self.assertEqual(values[1], [BLANK])
-            self.assertEqual(values[65537], [BLANK])
+                self.assertEqual(values[row], [float(row + 1)])
+            self.assertEqual(values[1], [None])
+            self.assertEqual(values[65537], [None])
 
     def test_spill_values_are_read(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             ws.set_formula(0, 0, "=SEQUENCE(3)")
             wb.recalc()
-            self.assertEqual(ws.get_values("A1:A3"), [[_number(1)], [_number(2)], [_number(3)]])
+            self.assertEqual(ws.get_typed_values("A1:A3"), [[_number(1)], [_number(2)], [_number(3)]])
 
     def test_whole_row_range_is_rejected(self) -> None:
         with _open() as wb:
@@ -496,10 +518,10 @@ class BulkValuesTests(unittest.TestCase):
             ws.set_values("A1", [[1, "x"], [True, None]])
             self.assertEqual(
                 ws.get_values("A1:B2"),
-                [[_number(1), Value(kind=ValueKind.TEXT, text="x")], [Value(kind=ValueKind.BOOL, boolean=True), BLANK]],
+                [[1.0, "x"], [True, None]],
             )
             ws.set_values(3, 0, [[2.5]])
-            self.assertEqual(ws.get_value(3, 0), _number(2.5))
+            self.assertEqual(ws.get_value(3, 0), 2.5)
 
     def test_invalid_input_writes_nothing(self) -> None:
         bad_inputs: List[Tuple[str, Any, Any]] = [
@@ -507,7 +529,11 @@ class BulkValuesTests(unittest.TestCase):
             ("A1", [[float("nan")]], (TypeError, InvalidArgumentError)),
             ("A1", [[float("inf")]], (TypeError, InvalidArgumentError)),
             ("A1", [[1, object()]], TypeError),
-            ("A1", [[Value(kind=ValueKind.ARRAY)]], (TypeError, InvalidArgumentError)),
+            (
+                "A1",
+                [[Value(kind=ValueKind.ARRAY, array=((Value(kind=ValueKind.NUMBER, number=1.0),),))]],
+                (TypeError, InvalidArgumentError),
+            ),
             ("XFD1", [[1, 2]], InvalidArgumentError),
         ]
         for anchor, rows, expected in bad_inputs:
@@ -516,8 +542,8 @@ class BulkValuesTests(unittest.TestCase):
                 ws.set_text(0, 0, "keep")
                 with self.assertRaises(expected):
                     ws.set_values(anchor, rows)
-                self.assertEqual(ws.get_value(0, 0), Value(kind=ValueKind.TEXT, text="keep"))
-                self.assertEqual(ws.get_value(0, 16383), BLANK)
+                self.assertEqual(ws.get_value(0, 0), "keep")
+                self.assertIsNone(ws.get_value(0, 16383))
 
     def test_empty_values_succeed(self) -> None:
         with _open() as wb:
@@ -525,13 +551,16 @@ class BulkValuesTests(unittest.TestCase):
             ws.set_number(0, 0, 4.0)
             ws.set_values("A1", [])
             ws.set_values("A1", [[]])
-            self.assertEqual(ws.get_value(0, 0), _number(4))
+            self.assertEqual(ws.get_typed_value(0, 0), _number(4))
 
-    def test_equals_prefix_is_text(self) -> None:
+    def test_equals_prefix_is_a_formula_unless_the_value_is_typed_text(self) -> None:
         with _open() as wb:
-            wb.sheet(0).set_values("A1", [["=1+1"]])
-            self.assertEqual(wb.sheet(0).get_value(0, 0), Value(kind=ValueKind.TEXT, text="=1+1"))
-            self.assertIsNone(wb.sheet(0).get_formula(0, 0))
+            ws = wb.sheet(0)
+            ws.set_values("A1", [["=1+1", Value(kind=ValueKind.TEXT, text="=1+1")]])
+            self.assertEqual(ws.get_formula(0, 0), "=1+1")
+            self.assertEqual(ws.get_value(0, 0), 2.0)
+            self.assertEqual(ws.get_typed_value(0, 1), Value(kind=ValueKind.TEXT, text="=1+1"))
+            self.assertIsNone(ws.get_formula(0, 1))
 
     def test_overlap_with_data_table_keeps_earlier_cells(self) -> None:
         with _open() as wb:
@@ -544,7 +573,7 @@ class BulkValuesTests(unittest.TestCase):
             ws.add_data_table(CellRect(2, 1, 3, 1), col_input=(0, 0))
             with self.assertRaises(FormulonError):
                 ws.set_values("A3", [[7, 8]])
-            self.assertEqual(ws.get_value(2, 0), _number(7))
+            self.assertEqual(ws.get_typed_value(2, 0), _number(7))
             self.assertIsNotNone(ws.get_data_table(2, 1))
 
 
@@ -601,7 +630,7 @@ class DirtyCellsTests(unittest.TestCase):
             wb.remove_sheet(1)
 
         def other_profile(wb: Workbook) -> None:
-            wb.set_excel_profile_id("mac-365-ja_JP")
+            wb.set_profile_id("mac-365-ja_JP")
 
         for label, edit in (
             ("set_number", set_number),
@@ -618,7 +647,7 @@ class DirtyCellsTests(unittest.TestCase):
         with _open() as wb:
             wb.sheet(0).set_formula(0, 0, "=1+1")
             wb.recalc()
-            wb.set_excel_profile_id(wb.get_excel_profile_id())
+            wb.set_profile_id(wb.get_profile_id())
             self.assertFalse(wb.has_dirty_cells())
 
     def test_volatile_only_workbook_is_clean_after_recalc(self) -> None:
@@ -694,7 +723,7 @@ class NoCountNamesTests(unittest.TestCase):
             "list_cell_style_xfs",
             "list_dxfs",
         ):
-            self.assertTrue(hasattr(Workbook, name), name)
+            self.assertTrue(hasattr(formulon.WorkbookOoxml, name), name)
         for name in ("list_fields", "list_field_shared_items"):
             self.assertTrue(hasattr(formulon.PivotCache, name), name)
 
@@ -948,16 +977,16 @@ class PrintPatchTests(unittest.TestCase):
             with self.subTest(cleared=cleared), _open() as wb:
                 ws = wb.sheet(0)
                 ws.set_header_footer(odd_header="&Ctitle")
-                self.assertIn("title", ws.get_header_footer_xml() or "")
+                self.assertIn("title", ws.ooxml.get_header_footer_xml() or "")
                 ws.set_header_footer(odd_header=cleared)
-                self.assertNotIn("title", ws.get_header_footer_xml() or "")
+                self.assertNotIn("title", ws.ooxml.get_header_footer_xml() or "")
 
     def test_omitted_keys_are_kept(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             ws.set_header_footer(odd_header="&Ctitle", odd_footer="&Cfoot")
             ws.set_header_footer(odd_header="&Cnew")
-            xml = ws.get_header_footer_xml() or ""
+            xml = ws.ooxml.get_header_footer_xml() or ""
             self.assertIn("new", xml)
             self.assertIn("foot", xml)
 
@@ -967,7 +996,7 @@ class PrintPatchTests(unittest.TestCase):
                 wb.sheet(0).set_print_options(grid_lines=None)  # type: ignore[arg-type]
             wb.sheet(0).set_print_options(grid_lines=True)
             wb.sheet(0).set_print_options(headings=True)
-            xml = wb.sheet(0).get_print_options_xml() or ""
+            xml = wb.sheet(0).ooxml.get_print_options_xml() or ""
             self.assertIn("gridLines", xml)
             self.assertIn("headings", xml)
 
@@ -1099,18 +1128,18 @@ class RefTests(unittest.TestCase):
             with self.assertRaises(NotFoundError):
                 ws.remove_cf_rule(rule_id)
 
-    def test_duplicate_cf_id_is_rejected(self) -> None:
+    def test_colliding_cf_id_gets_a_fresh_one(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             ws.add_cf_rule(formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, op=3, formula1="5"))
             rule_id = ws.list_cf_rules()[0].id
-            with self.assertRaises(InvalidArgumentError):
-                ws.add_cf_rule(
-                    formulon.ConditionalFormatInput(
-                        ranges=[CellRect(0, 1, 2, 1)], type=1, op=3, formula1="6", id=rule_id
-                    )
-                )
-            self.assertEqual(len(ws.list_cf_rules()), 1)
+            ws.add_cf_rule(
+                formulon.ConditionalFormatInput(ranges=[CellRect(0, 1, 2, 1)], type=1, op=3, formula1="6", id=rule_id)
+            )
+            ids = [rule.id for rule in ws.list_cf_rules()]
+            self.assertEqual(len(ids), 2)
+            self.assertEqual(ids[0], rule_id)
+            self.assertNotEqual(ids[1], rule_id)
 
     def test_cf_round_trip_keeps_one_equals_sign(self) -> None:
         with _open() as wb:
@@ -1131,8 +1160,8 @@ class RefTests(unittest.TestCase):
             ws = wb.sheet(0)
             first = wb.add_pivot_cache().cache_id
             second = wb.add_pivot_cache().cache_id
-            ws.add_pivot(name="Dup", cache_id=first, anchor_row=0, anchor_col=0)
-            ws.add_pivot(name="Dup", cache_id=second, anchor_row=0, anchor_col=10)
+            ws.add_pivot(PivotInput(name="Dup", cache_id=first, anchor=CellAddress(0, 0)))
+            ws.add_pivot(PivotInput(name="Dup", cache_id=second, anchor=CellAddress(0, 10)))
             ws.remove_pivot("Dup")
             self.assertEqual([(p.name, p.get_cache().cache_id) for p in ws.list_pivots()], [("Dup", second)])
 
@@ -1267,7 +1296,9 @@ class SaveTests(unittest.TestCase):
         self.assertEqual(self._save("o.xlsb"), "xlsb")
         self.assertEqual(self._save("O.XLSB"), "xlsb")
         self.assertEqual(self._save("o.xlsx"), "xlsx")
-        self.assertEqual(self._save("o.bin"), "xlsx")
+        with self.assertRaises(ValueError):
+            self._save("o.bin")
+        self.assertEqual(self._save("o.bin", format=formulon.WorkbookFormat.XLSX), "xlsx")
 
     def test_path_like(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, _open() as wb:

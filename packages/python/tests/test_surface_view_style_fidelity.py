@@ -8,6 +8,8 @@ from formulon import (
     CellRect,
     CfIcon,
     Cfvo,
+    Color,
+    ColorKind,
     ConditionalFormatInput,
     DefinedNameInput,
     DifferentialFormat,
@@ -21,7 +23,6 @@ from formulon import (
     RefMode,
     Workbook,
 )
-from formulon.workbook import Color
 
 
 class OutlineTests(unittest.TestCase):
@@ -76,16 +77,16 @@ class FontToggleTests(unittest.TestCase):
         record = Font(
             name="Arial",
             size=12.0,
-            color_argb=0xFF000000,
+            color=Color(ColorKind.RGB, rgb=0xFF000000),
             outline=True,
             shadow=False,
             condense=True,
             extend=True,
         )
         with Workbook.create_default() as wb:
-            index = wb.add_font(record)
-            self.assertEqual(wb.add_font(record), index)
-            back = wb.get_font(index)
+            index = wb.ooxml.add_font(record)
+            self.assertEqual(wb.ooxml.add_font(record), index)
+            back = wb.ooxml.get_font(index)
             self.assertIs(back.outline, True)
             self.assertIs(back.shadow, False)
             self.assertTrue(back.condense and back.extend)
@@ -103,35 +104,35 @@ class GradientFillTests(unittest.TestCase):
                 top=0.25,
                 bottom=0.75,
                 stops=[
-                    GradientStop(0.0, 0xFFFF0000, Color(kind=1, rgb=0xFFFF0000)),
-                    GradientStop(1.0, 0, Color(kind=2, theme=4, tint=0.5)),
+                    GradientStop(0.0, Color(kind=1, rgb=0xFFFF0000)),
+                    GradientStop(1.0, Color(kind=2, theme=4, tint=0.5)),
                 ],
             )
         )
 
     def test_add_get_and_dedup(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_fill(self._fill())
-            self.assertEqual(wb.add_fill(self._fill()), index)
-            back = wb.get_fill(index)
+            index = wb.ooxml.add_fill(self._fill())
+            self.assertEqual(wb.ooxml.add_fill(self._fill()), index)
+            back = wb.ooxml.get_fill(index)
             self.assertIsNotNone(back.gradient)
             assert back.gradient is not None
             self.assertEqual(back.gradient.type, 1)
             self.assertEqual((back.gradient.left, back.gradient.top, back.gradient.bottom), (0.5, 0.25, 0.75))
             self.assertEqual(len(back.gradient.stops), 2)
-            self.assertEqual(back.gradient.stops[0].color_argb, 0xFFFF0000)
+            self.assertEqual(back.gradient.stops[0].color, Color(kind=1, rgb=0xFFFF0000))
             self.assertEqual(back.gradient.stops[1].color.theme, 4)
-            self.assertIsNone(wb.get_fill(0).gradient)
+            self.assertIsNone(wb.ooxml.get_fill(0).gradient)
 
     def test_survives_save_load_in_cells_and_dxfs(self) -> None:
         with Workbook.create_default() as wb:
-            fill_index = wb.add_fill(self._fill())
-            dxf_index = wb.add_dxf(DifferentialFormat(fill=self._fill()))
+            fill_index = wb.ooxml.add_fill(self._fill())
+            dxf_index = wb.ooxml.add_dxf(DifferentialFormat(fill=self._fill()))
             with Workbook.load(wb.save()) as reloaded:
-                gradient = reloaded.get_fill(fill_index).gradient
+                gradient = reloaded.ooxml.get_fill(fill_index).gradient
                 assert gradient is not None
                 self.assertEqual(len(gradient.stops), 2)
-                dxf_fill = reloaded.get_dxf(dxf_index).fill
+                dxf_fill = reloaded.ooxml.get_dxf(dxf_index).fill
                 assert dxf_fill is not None and dxf_fill.gradient is not None
                 self.assertEqual(dxf_fill.gradient.type, 1)
 

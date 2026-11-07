@@ -65,12 +65,12 @@ class VersionTests(unittest.TestCase):
 
 class EvalFormulaTests(unittest.TestCase):
     def test_sum_returns_number_six(self) -> None:
-        v = formulon.evaluate_formula("=SUM(1,2,3)")
+        v = formulon.evaluate_typed_formula("=SUM(1,2,3)")
         self.assertEqual(v.kind, ValueKind.NUMBER)
         self.assertEqual(v.to_python(), 6.0)
 
     def test_division_by_zero_surfaces_as_value(self) -> None:
-        v = formulon.evaluate_formula("=1/0")
+        v = formulon.evaluate_typed_formula("=1/0")
         self.assertEqual(v.kind, ValueKind.ERROR)
         # to_python returns an ExcelError for ERROR; callers inspect
         # the code rather than catching an exception.
@@ -79,17 +79,17 @@ class EvalFormulaTests(unittest.TestCase):
         self.assertEqual(v.error_code, formulon.ErrorCode.DIV0)
 
     def test_intersection_uses_read_only_evaluation(self) -> None:
-        v = formulon.evaluate_formula("=A1 B1")
+        v = formulon.evaluate_typed_formula("=A1 B1")
         self.assertEqual(v.kind, ValueKind.ERROR)
         self.assertEqual(v.error_code, 0)  # ErrorCode::Null / #NULL!
 
     def test_text_concat(self) -> None:
-        v = formulon.evaluate_formula('="hello "&"world"')
+        v = formulon.evaluate_typed_formula('="hello "&"world"')
         self.assertEqual(v.kind, ValueKind.TEXT)
         self.assertEqual(v.to_python(), "hello world")
 
     def test_boolean_literal(self) -> None:
-        v = formulon.evaluate_formula("=TRUE()")
+        v = formulon.evaluate_typed_formula("=TRUE()")
         self.assertEqual(v.kind, ValueKind.BOOL)
         self.assertIs(v.to_python(), True)
 
@@ -181,7 +181,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
             try:
                 for _ in range(200):
                     barrier.wait()
-                    main.sheet(0).get_value(0, 0)
+                    main.sheet(0).get_typed_value(0, 0)
                     barrier.wait()
             finally:
                 for thread in threads:
@@ -224,7 +224,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
 
         def read_value() -> None:
             try:
-                result.append(wb.sheet(0).get_value(0, 0))
+                result.append(wb.sheet(0).get_typed_value(0, 0))
             except BaseException as error:  # pragma: no cover - assertion aid
                 errors.append(error)
 
@@ -291,7 +291,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_number(0, 0, 42.0)
             wb.recalc()
-            v = wb.sheet(0).get_value(0, 0)
+            v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.NUMBER)
             self.assertEqual(v.to_python(), 42.0)
 
@@ -299,7 +299,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "hello")
             wb.recalc()
-            v = wb.sheet(0).get_value(0, 0)
+            v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.TEXT)
             self.assertEqual(v.to_python(), "hello")
 
@@ -307,7 +307,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_bool(0, 0, True)
             wb.recalc()
-            v = wb.sheet(0).get_value(0, 0)
+            v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.BOOL)
             self.assertIs(v.to_python(), True)
 
@@ -316,7 +316,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
             wb.sheet(0).set_number(0, 0, 1.0)
             wb.sheet(0).set_blank(0, 0)
             wb.recalc()
-            v = wb.sheet(0).get_value(0, 0)
+            v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.BLANK)
             self.assertIsNone(v.to_python())
 
@@ -325,14 +325,14 @@ class WorkbookRoundtripTests(unittest.TestCase):
             wb.sheet(0).set_number(0, 0, 21.0)
             wb.sheet(0).set_formula(0, 1, "=A1*2")
             wb.recalc()
-            v = wb.sheet(0).get_value(0, 1)
+            v = wb.sheet(0).get_typed_value(0, 1)
             self.assertEqual(v.kind, ValueKind.NUMBER)
             self.assertEqual(v.to_python(), 42.0)
 
             # Mutate, recalc, observe.
             wb.sheet(0).set_number(0, 0, 100.0)
             wb.recalc()
-            v = wb.sheet(0).get_value(0, 1)
+            v = wb.sheet(0).get_typed_value(0, 1)
             self.assertEqual(v.to_python(), 200.0)
 
 
@@ -350,10 +350,10 @@ class WorkbookSaveLoadTests(unittest.TestCase):
 
         with Workbook.load(blob) as wb2:
             wb2.recalc()
-            v0 = wb2.sheet(0).get_value(0, 0)
+            v0 = wb2.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v0.kind, ValueKind.NUMBER)
             self.assertEqual(v0.to_python(), 7.5)
-            v1 = wb2.sheet(0).get_value(0, 1)
+            v1 = wb2.sheet(0).get_typed_value(0, 1)
             self.assertEqual(v1.kind, ValueKind.TEXT)
             self.assertEqual(v1.to_python(), "world")
 
@@ -398,7 +398,7 @@ class IterationTests(unittest.TestCase):
 
     def test_list_passthroughs_empty_workbook(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.list_passthroughs(), [])
+            self.assertEqual(wb.ooxml.list_passthroughs(), [])
 
 
 class IteratorHandleLivenessTests(unittest.TestCase):

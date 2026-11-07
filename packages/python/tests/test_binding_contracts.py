@@ -26,17 +26,20 @@ from formulon import (
     Border,
     BorderSide,
     CalcMode,
+    CellAddress,
     CellRect,
     CellStyle,
     CellXfInput,
-    CfColor,
     Cfvo,
+    Color,
+    ColorKind,
     Comment,
     ConditionalFormatInput,
     DataBar,
     DefinedNameInput,
     DifferentialFormat,
     ErrorCode,
+    ExcelError,
     ExternalLinkKind,
     Fill,
     Font,
@@ -53,6 +56,7 @@ from formulon import (
     PivotFilterType,
     PivotFilterValueKind,
     PivotGrandTotals,
+    PivotInput,
     Sheet,
     SheetRect,
     SheetSelection,
@@ -73,11 +77,15 @@ from formulon import (
 )
 
 
+def _rgb(red: int, green: int, blue: int) -> Color:
+    return Color(ColorKind.RGB, rgb=0xFF000000 | (red << 16) | (green << 8) | blue)
+
+
 class IndexGetterTests(unittest.TestCase):
     def test_an_out_of_range_index_raises(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.get_font(len(wb.list_fonts()))
+                wb.ooxml.get_font(len(wb.ooxml.list_fonts()))
 
     def test_empty_collections_list_as_empty(self) -> None:
         with Workbook.create_default() as wb:
@@ -257,8 +265,8 @@ class NamedConstantTableTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_error(0, 0, ErrorCode.DIV0)
             value = wb.sheet(0).get_value(0, 0)
-        self.assertEqual(value.kind, ValueKind.ERROR)
-        self.assertEqual(value.error_code, ErrorCode.DIV0)
+        self.assertEqual(value, ExcelError(ErrorCode.DIV0))
+        self.assertEqual(value.code, ErrorCode.DIV0)
 
 
 class StyleAndCalcAccessorTests(unittest.TestCase):
@@ -278,15 +286,15 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
 
     def test_named_style_xf_writer_round_trips_through_its_reader(self) -> None:
         with Workbook.create_default() as wb:
-            xf_id = wb.add_cell_style_xf(self._xf())
-            read_back = wb.get_cell_style_xf(xf_id)
+            xf_id = wb.ooxml.add_cell_style_xf(self._xf())
+            read_back = wb.ooxml.get_cell_style_xf(xf_id)
         self.assertEqual(read_back.num_fmt_id, 0)
         self.assertEqual(read_back.vertical_align, 2)
 
     def test_named_style_xf_writer_deduplicates(self) -> None:
         with Workbook.create_default() as wb:
-            first = wb.add_cell_style_xf(self._xf())
-            second = wb.add_cell_style_xf(self._xf())
+            first = wb.ooxml.add_cell_style_xf(self._xf())
+            second = wb.ooxml.add_cell_style_xf(self._xf())
         self.assertEqual(first, second)
 
     def test_iterative_settings_read_back_what_was_set(self) -> None:
@@ -325,11 +333,13 @@ class StyleSeedingTests(unittest.TestCase):
     def test_empty_workbook_style_records_append_after_the_reserved_slots(self) -> None:
         with Workbook.create_empty() as wb:
             wb.add_sheet("Sheet1")
-            font_index = wb.add_font(Font(name="Arial", size=12.0))
+            font_index = wb.ooxml.add_font(Font(name="Arial", size=12.0))
             # Excel reserves fill 0 for `none` and fill 1 for `gray125`.
-            fill_index = wb.add_fill(Fill(pattern=1, fg_argb=0xFFFF0000))
-            border_index = wb.add_border(Border(left=BorderSide(style=1, color_argb=0xFF000000)))
-            xf_index = wb.add_cell_xf(
+            fill_index = wb.ooxml.add_fill(Fill(pattern=1, fg=Color(ColorKind.RGB, rgb=0xFFFF0000)))
+            border_index = wb.ooxml.add_border(
+                Border(left=BorderSide(style=1, color=Color(ColorKind.RGB, rgb=0xFF000000)))
+            )
+            xf_index = wb.ooxml.add_cell_xf(
                 CellXfInput(
                     font_index=font_index,
                     fill_index=fill_index,
@@ -552,26 +562,26 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_default_font_replaces_what_an_unstyled_cell_saves_as(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_font(0).name, "Calibri")
+            self.assertEqual(wb.ooxml.get_font(0).name, "Calibri")
             # add_font can only ever append beside the seeded default.
-            self.assertGreater(wb.add_font(Font(name="游ゴシック", size=11.0)), 0)
-            self.assertEqual(wb.get_font(0).name, "Calibri")
+            self.assertGreater(wb.ooxml.add_font(Font(name="游ゴシック", size=11.0)), 0)
+            self.assertEqual(wb.ooxml.get_font(0).name, "Calibri")
 
             wb.set_default_font(Font(name="游ゴシック", size=11.0, charset=128))
-            self.assertEqual(wb.get_font(0).name, "游ゴシック")
-            self.assertEqual(wb.get_font(0).charset, 128)
+            self.assertEqual(wb.ooxml.get_font(0).name, "游ゴシック")
+            self.assertEqual(wb.ooxml.get_font(0).charset, 128)
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_font(0).name, "游ゴシック")
+            self.assertEqual(reloaded.ooxml.get_font(0).name, "游ゴシック")
 
     def test_set_font_overwrites_an_existing_slot(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_font(Font(name="Meiryo", size=12.0))
-            wb.set_font(index, Font(name="MS Gothic", size=9.0))
-            self.assertEqual(wb.get_font(index).name, "MS Gothic")
-            self.assertEqual(len(wb.list_fonts()), index + 1)
+            index = wb.ooxml.add_font(Font(name="Meiryo", size=12.0))
+            wb.ooxml.set_font(index, Font(name="MS Gothic", size=9.0))
+            self.assertEqual(wb.ooxml.get_font(index).name, "MS Gothic")
+            self.assertEqual(len(wb.ooxml.list_fonts()), index + 1)
             with self.assertRaises(FormulonError):
-                wb.set_font(len(wb.list_fonts()), Font(name="MS Gothic"))
+                wb.ooxml.set_font(len(wb.ooxml.list_fonts()), Font(name="MS Gothic"))
 
     def test_table_create_update_remove(self) -> None:
         with Workbook.create_default() as wb:
@@ -638,7 +648,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.table(index).set_column_totals(1, function="sum")
             self.assertEqual(wb.sheet(0).get_formula(3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
-            self.assertEqual(wb.sheet(0).get_value(3, 1).number, 30.0)
+            self.assertEqual(wb.sheet(0).get_value(3, 1), 30.0)
             with self.assertRaises(FormulonError):
                 wb.table(index).set_column_totals(1, function="median")
             with Workbook.load(wb.save()) as reloaded:
@@ -665,7 +675,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_custom_table_style_round_trips(self) -> None:
         with Workbook.create_default() as wb:
-            dxf = wb.add_dxf(DifferentialFormat())
+            dxf = wb.ooxml.add_dxf(DifferentialFormat())
             style = TableStyle(
                 name="Corporate",
                 pivot=False,
@@ -737,25 +747,25 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_auto_filter_xml_round_trips(self) -> None:
         fragment = '<autoFilter ref="A1:B3"/>'
         with Workbook.create_default() as wb:
-            self.assertIsNone(wb.sheet(0).get_auto_filter_xml())
-            wb.sheet(0).set_auto_filter_xml(fragment)
-            self.assertEqual(wb.sheet(0).get_auto_filter_xml(), fragment)
-            wb.sheet(0).set_auto_filter_xml("")
-            self.assertIsNone(wb.sheet(0).get_auto_filter_xml())
+            self.assertIsNone(wb.sheet(0).ooxml.get_auto_filter_xml())
+            wb.sheet(0).ooxml.set_auto_filter_xml(fragment)
+            self.assertEqual(wb.sheet(0).ooxml.get_auto_filter_xml(), fragment)
+            wb.sheet(0).ooxml.set_auto_filter_xml("")
+            self.assertIsNone(wb.sheet(0).ooxml.get_auto_filter_xml())
 
     def test_named_cell_style_registration_reaches_the_reader(self) -> None:
         with Workbook.create_default() as wb:
-            xf_id = wb.add_cell_style_xf(StyleAndCalcAccessorTests._xf())
-            before = len(wb.list_cell_styles())
-            wb.set_cell_style(CellStyle("MyStyle", xf_id))
-            names = [style.name for style in wb.list_cell_styles()]
+            xf_id = wb.ooxml.add_cell_style_xf(StyleAndCalcAccessorTests._xf())
+            before = len(wb.ooxml.list_cell_styles())
+            wb.ooxml.set_cell_style(CellStyle("MyStyle", xf_id))
+            names = [style.name for style in wb.ooxml.list_cell_styles()]
         self.assertGreater(len(names), before)
         self.assertIn("MyStyle", names)
 
     def test_named_cell_style_rejects_an_unregistered_xf_id(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_cell_style(CellStyle("Bogus", 9999))
+                wb.ooxml.set_cell_style(CellStyle("Bogus", 9999))
 
 
 class OneShotEvaluationTests(unittest.TestCase):
@@ -772,39 +782,34 @@ class OneShotEvaluationTests(unittest.TestCase):
         ("=COUNTA(A1)", ValueKind.NUMBER, 0.0),
         ("=ISBLANK(A1)", ValueKind.BOOL, True),
         ("=SUM(A1:A3)", ValueKind.NUMBER, 0.0),
-        ("=SEQUENCE(3)", ValueKind.NUMBER, 1.0),
+        ("=SEQUENCE(3)", ValueKind.ARRAY, [[1.0], [2.0], [3.0]]),
         ("=ROWS(SEQUENCE(3))", ValueKind.NUMBER, 3.0),
     )
 
     def test_values_match_the_shared_one_shot_table(self) -> None:
         for formula, kind, payload in self.CASES:
             with self.subTest(formula=formula):
-                value = formulon.evaluate_formula(formula)
+                self.assertEqual(formulon.evaluate_formula(formula), payload)
+                value = formulon.evaluate_typed_formula(formula)
                 self.assertEqual(value.kind, kind)
-                if kind is ValueKind.BOOL:
-                    self.assertEqual(value.boolean, payload)
-                else:
-                    self.assertEqual(value.number, payload)
+                self.assertEqual(value.to_python(), payload)
                 # Writing into the anchor and recalcing would make the
                 # anchor-referencing cases #REF!.
                 self.assertIsNone(value.error_code)
 
     def test_the_anchor_is_left_blank_rather_than_written(self) -> None:
         """The distinguishing observation between the two semantics."""
-        self.assertEqual(formulon.evaluate_formula("=ISBLANK(A1)").boolean, True)
+        self.assertIs(formulon.evaluate_formula("=ISBLANK(A1)"), True)
 
-    def test_array_results_reduce_to_their_top_left_element(self) -> None:
-        self.assertEqual(formulon.evaluate_formula("=SEQUENCE(3)").number, 1.0)
-        self.assertEqual(formulon.evaluate_formula("=SEQUENCE(2,3)").number, 1.0)
+    def test_array_results_keep_their_shape(self) -> None:
+        self.assertEqual(formulon.evaluate_formula("=SEQUENCE(3)"), [[1.0], [2.0], [3.0]])
+        self.assertEqual(formulon.evaluate_formula("=SEQUENCE(2,3)"), [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
 
-    def test_one_shot_reads_one_cell_whatever_the_result_size(self) -> None:
-        real = _c.LIB.fm_value_array_get_value_at
-        for formula, expected in (("=1+2", 3.0), ("=SEQUENCE(1000)", 1.0), ("=SEQUENCE(100,100,7)", 7.0)):
-            with self.subTest(formula=formula):
-                with mock.patch.object(_c.LIB, "fm_value_array_get_value_at", wraps=real, create=True) as cell:
-                    value = formulon.evaluate_formula(formula)
-                self.assertEqual(cell.call_count, 1)
-                self.assertEqual((value.kind, value.number), (ValueKind.NUMBER, expected))
+    def test_a_one_by_one_result_collapses_and_larger_ones_return_every_cell(self) -> None:
+        self.assertEqual(formulon.evaluate_formula("=1+2"), 3.0)
+        big = formulon.evaluate_formula("=SEQUENCE(100,100,7)")
+        self.assertEqual((len(big), len(big[0])), (100, 100))
+        self.assertEqual((big[0][0], big[99][99]), (7.0, 10006.0))
 
 
 class PivotFilterPersistenceTests(unittest.TestCase):
@@ -828,7 +833,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             rec = wb.pivot_cache(cache_id).add_record()
             wb.pivot_cache(cache_id).set_record_value(rec, 0, region)
             wb.pivot_cache(cache_id).set_record_value(rec, 1, amount)
-        pivot = wb.sheet(0).add_pivot(name="Pivot1", cache_id=cache_id, anchor_row=0, anchor_col=4)
+        pivot = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=cache_id, anchor=CellAddress(0, 4)))
         wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
         amount_field = wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
         wb.sheet(0).pivot(pivot).add_data_field(
@@ -1122,7 +1127,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
 
     def test_evaluate_cf_range_allocation_count_is_flat(self) -> None:
         def populate(wb, n):
-            dxf_index = wb.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
             for r in range(n):
                 wb.sheet(0).set_number(r, 0, float(r + 100))
             wb.sheet(0).add_cf_rule(
@@ -1244,7 +1249,7 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
     def test_default_today_serial_disables_time_period_rules(self) -> None:
         """Omitting ``today_serial`` must not pin the basis to 1899-12-30."""
         with Workbook.create_default() as wb:
-            dxf_index = wb.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
             wb.sheet(0).set_number(0, 0, 0.0)
             wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
@@ -1354,8 +1359,8 @@ class LoneSurrogateTests(unittest.TestCase):
     """A lone surrogate is stored as U+FFFD, as the JavaScript bindings store it."""
 
     def _assert_normalised(self, wb: Workbook) -> None:
-        self.assertEqual(wb.sheet(0).get_value(0, 0).text, "a\ufffdb")
-        self.assertEqual(wb.sheet(0).get_value(2, 0).text, "\U0001f600")
+        self.assertEqual(wb.sheet(0).get_value(0, 0), "a\ufffdb")
+        self.assertEqual(wb.sheet(0).get_value(2, 0), "\U0001f600")
         self.assertEqual(wb.sheet(0).name, "S\ufffd")
         self.assertEqual(wb.sheet(0).get_formula(1, 0), '="x\ufffd"')
         formula = next(n.formula for n in wb.list_defined_names() if n.name == "Lone")
@@ -1438,7 +1443,7 @@ class PackedIntegerGuardTests(unittest.TestCase):
                     rule = ConditionalFormatInput(
                         ranges=[CellRect(0, 0, 2, 0)],
                         type=3,
-                        data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255), min_length_pct=bad),
+                        data_bar=DataBar(Cfvo(3), Cfvo(4), _rgb(0, 0, 255), min_length_pct=bad),
                     )
                     with self.assertRaises(ValueError):
                         wb.sheet(0).add_cf_rule(rule)

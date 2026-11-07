@@ -25,7 +25,7 @@ from formulon import (
     Value,
     ValueKind,
     Workbook,
-    evaluate_formula,
+    evaluate_typed_formula,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -133,14 +133,14 @@ class CellFormatCaseTests(unittest.TestCase):
             return {cell: copy.deepcopy(ws.get_cell_format(cell)) for cell in cells}
 
         before = snapshot()
-        xf_count = len(wb.list_cell_xfs())
+        xf_count = len(wb.ooxml.list_cell_xfs())
 
         if "throws" in case:
             expected = EXCEPTIONS[case["throws"]["py"]]
             with self.assertRaises(expected):
                 ws.set_cell_format(case["range"], **patch)
             self.assertEqual(snapshot(), before, "a failed call changed a cell")
-            self.assertEqual(len(wb.list_cell_xfs()), xf_count, "a failed call added a cell format")
+            self.assertEqual(len(wb.ooxml.list_cell_xfs()), xf_count, "a failed call added a cell format")
             return
 
         ws.set_cell_format(case["range"], **patch)
@@ -148,7 +148,7 @@ class CellFormatCaseTests(unittest.TestCase):
         for cell, fmt in case.get("expect", {}).items():
             _assert_subset(self, ws.get_cell_format(cell), fmt, f"{case['id']} {cell}")
         for cell, fields in case.get("expect_xf", {}).items():
-            xf = wb.get_cell_xf(ws.get_effective_style(cell).xf_index)
+            xf = wb.ooxml.get_cell_xf(ws.get_effective_style(cell).xf_index)
             for field, want in fields.items():
                 actual = getattr(xf, _snake(field))
                 if isinstance(want, str) and field in ENUM_KEYS:
@@ -157,9 +157,9 @@ class CellFormatCaseTests(unittest.TestCase):
         for cell in case.get("unchanged", []):
             self.assertEqual(after[cell], before[cell], f"{cell} changed")
         if case.get("idempotent"):
-            count = len(wb.list_cell_xfs())
+            count = len(wb.ooxml.list_cell_xfs())
             ws.set_cell_format(case["range"], **patch)
-            self.assertEqual(len(wb.list_cell_xfs()), count, "a second application added a cell format")
+            self.assertEqual(len(wb.ooxml.list_cell_xfs()), count, "a second application added a cell format")
 
 
 class CellFormatShapeTests(unittest.TestCase):
@@ -258,18 +258,16 @@ class ToNativeCaseTests(unittest.TestCase):
             label = case.get("formula") or f"cell {case.get('cell')}"
             with self.subTest(case=index, source=label):
                 if "formula" in case:
-                    value = evaluate_formula(case["formula"])
+                    value = evaluate_typed_formula(case["formula"])
                 else:
                     with Workbook.create_default() as wb:
-                        value = wb.sheet(0).get_value(case["cell"])
+                        value = wb.sheet(0).get_typed_value(case["cell"])
                 native = value.to_python()
                 want = case["native"]
                 if isinstance(want, dict) and "error" in want:
                     self.assertIsInstance(native, ExcelError)
                     self.assertEqual(native.code, ErrorCode[want["error"].upper()])
                     self.assertEqual(value.kind, ValueKind.ERROR)
-                elif isinstance(want, dict) and want.get("passthrough"):
-                    self.assertIs(native, value)
                 elif want is None:
                     self.assertIsNone(native)
                 elif isinstance(want, bool):
@@ -290,9 +288,10 @@ class ToNativeCaseTests(unittest.TestCase):
         self.assertEqual(Value(kind=ValueKind.TEXT, text="").to_python(), "")
         astral = "\U0001f600x￿"
         self.assertEqual(Value(kind=ValueKind.TEXT, text=astral).to_python(), astral)
-        for kind in (ValueKind.ARRAY, ValueKind.REF, ValueKind.LAMBDA):
-            value = Value(kind=kind)
-            self.assertIs(value.to_python(), value, kind.name)
+        array = Value(
+            kind=ValueKind.ARRAY, array=((Value(kind=ValueKind.NUMBER, number=1.0), Value(kind=ValueKind.BLANK)),)
+        )
+        self.assertEqual(array.to_python(), [[1.0, None]])
         error = Value(kind=ValueKind.ERROR, error_code=ErrorCode.NA)
         self.assertEqual(error.to_python(), ExcelError(ErrorCode.NA))
 
@@ -305,7 +304,7 @@ SPAN_ARGS: Dict[str, List[List[Any]]] = _read_json("tools/api/address_args.json"
 
 
 def _xf_of(ws: Sheet) -> int:
-    return ws._workbook.add_cell_xf(
+    return ws._workbook.ooxml.add_cell_xf(
         formulon.CellXfInput(
             font_index=0,
             fill_index=0,
@@ -340,7 +339,7 @@ SPAN_METHODS: Dict[str, _Row] = {
     "Sheet.set_column_outline": _Row(lambda ws: (2,)),
     "Sheet.set_column_collapsed": _Row(lambda ws: (True,)),
     "Sheet.set_column_style": _Row(lambda ws: (_xf_of(ws),)),
-    "Sheet.clear_column_style": _Row(pre=lambda ws: ws.set_column_style(1, 3, _xf_of(ws))),
+    "Sheet.clear_column_style": _Row(pre=lambda ws: ws.ooxml.set_column_style(1, 3, _xf_of(ws))),
     "Sheet.clear_column_width": _Row(pre=lambda ws: ws.set_column_width(1, 3, 12)),
     "Sheet.set_row_height": _Row(lambda ws: (30,)),
     "Sheet.set_row_auto_height": _Row(lambda ws: (30,)),
@@ -348,7 +347,7 @@ SPAN_METHODS: Dict[str, _Row] = {
     "Sheet.set_row_outline": _Row(lambda ws: (2,)),
     "Sheet.set_row_collapsed": _Row(lambda ws: (True,)),
     "Sheet.set_row_style": _Row(lambda ws: (_xf_of(ws),)),
-    "Sheet.clear_row_style": _Row(pre=lambda ws: ws.set_row_style(2, 4, _xf_of(ws))),
+    "Sheet.clear_row_style": _Row(pre=lambda ws: ws.ooxml.set_row_style(2, 4, _xf_of(ws))),
     "Sheet.clear_row_height": _Row(pre=lambda ws: ws.set_row_height(2, 4, 30)),
     "Sheet.insert_rows": _Row(),
     "Sheet.delete_rows": _Row(),
@@ -405,7 +404,7 @@ class SpanCaseTests(unittest.TestCase):
                             args = (first, last - first + 1, *rest)
                         else:
                             args = (first, last, *rest)
-                        getattr(ws, name)(*args)
+                        getattr(ws if hasattr(ws, name) else ws.ooxml, name)(*args)
                         return before, _state(ws)
 
                 _, numeric_after = run(False)
@@ -475,22 +474,22 @@ class SpanCaseTests(unittest.TestCase):
             _seed(ws)
             ws.insert_rows("3:5")
             # Rows 3..5 (1-based) are three new blank rows; the old row 3 moved to row 6.
-            self.assertEqual(ws.get_value(2, 0).kind, ValueKind.BLANK)
-            self.assertEqual(ws.get_value(4, 0).kind, ValueKind.BLANK)
-            self.assertEqual(ws.get_value(5, 0).number, 20)
+            self.assertEqual(ws.get_typed_value(2, 0).kind, ValueKind.BLANK)
+            self.assertEqual(ws.get_typed_value(4, 0).kind, ValueKind.BLANK)
+            self.assertEqual(ws.get_value(5, 0), 20)
             ws.delete_rows("3:5")
-            self.assertEqual(ws.get_value(2, 0).number, 20)
+            self.assertEqual(ws.get_value(2, 0), 20)
             ws.insert_columns("B")
-            self.assertEqual(ws.get_value(0, 1).kind, ValueKind.BLANK)
-            self.assertEqual(ws.get_value(0, 2).number, 1)
+            self.assertEqual(ws.get_typed_value(0, 1).kind, ValueKind.BLANK)
+            self.assertEqual(ws.get_value(0, 2), 1)
             ws.delete_columns("B:B")
-            self.assertEqual(ws.get_value(0, 1).number, 1)
+            self.assertEqual(ws.get_value(0, 1), 1)
 
-    def test_status_of_a_rejected_span_is_invalid_argument(self) -> None:
+    def test_status_of_a_rejected_span_is_invalid_reference(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError) as caught:
                 wb.sheet(0).set_column_width("XFE", 9)
-            self.assertEqual(caught.exception.code, StatusCode.INVALID_ARGUMENT)
+            self.assertEqual(caught.exception.code, StatusCode.PARSER_INVALID_REFERENCE)
 
 
 if __name__ == "__main__":

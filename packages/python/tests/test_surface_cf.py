@@ -6,8 +6,9 @@ import unittest
 
 from formulon import (
     CellRect,
-    CfColor,
     Cfvo,
+    Color,
+    ColorKind,
     ColorScale,
     ConditionalFormatInput,
     DataBar,
@@ -17,13 +18,17 @@ from formulon import (
 )
 
 
+def _rgb(red: int, green: int, blue: int) -> Color:
+    return Color(ColorKind.RGB, rgb=0xFF000000 | (red << 16) | (green << 8) | blue)
+
+
 class ConditionalFormatTests(unittest.TestCase):
     def test_cf_add_get_evaluate_clear(self) -> None:
         with Workbook.create_default() as wb:
             for r in range(3):
                 wb.sheet(0).set_number(r, 0, float(r * 5))  # A1=0, A2=5, A3=10
             # A rule's dxf_id must resolve against a registered dxf.
-            dxf_index = wb.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
             wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 2, 0)],
@@ -70,7 +75,7 @@ class ConditionalFormatTests(unittest.TestCase):
 
     def test_get_then_add_reproduces_engaged_fields(self) -> None:
         with Workbook.create_default() as wb:
-            dxf_index = wb.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
             sqref = [CellRect(0, 0, 2, 0)]
             wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=1, op=0, formula1="1", dxf_id=dxf_index))
             wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=5, rank=0, dxf_id=dxf_index))
@@ -112,13 +117,13 @@ class ConditionalFormatTests(unittest.TestCase):
                     type=2,
                     color_scale=ColorScale(
                         [Cfvo(3), Cfvo(4)],
-                        [CfColor(255, 0, 0), CfColor(0, 255, 0)],
+                        [_rgb(255, 0, 0), _rgb(0, 255, 0)],
                     ),
                 ),
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 1, 2, 1)],
                     type=3,
-                    data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255)),
+                    data_bar=DataBar(Cfvo(3), Cfvo(4), _rgb(0, 0, 255)),
                 ),
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 2, 2, 2)],
@@ -129,8 +134,8 @@ class ConditionalFormatTests(unittest.TestCase):
             for rule in rules:
                 wb.sheet(0).add_cf_rule(rule)
             got = wb.sheet(0).list_cf_rules()
-            self.assertEqual(got[0].color_scale.colors[1], CfColor(0, 255, 0))
-            self.assertEqual(got[1].data_bar.fill, CfColor(0, 0, 255))
+            self.assertEqual(got[0].color_scale.colors[1], _rgb(0, 255, 0))
+            self.assertEqual(got[1].data_bar.fill, _rgb(0, 0, 255))
             self.assertEqual(got[2].icon_set.thresholds[1].value, "67")
 
     # `Cfvo.type`: 0 num, 1 percent, 2 percentile, 3 min, 4 max,
@@ -147,13 +152,13 @@ class ConditionalFormatTests(unittest.TestCase):
                 type=2,
                 color_scale=ColorScale(
                     [Cfvo(0, "0"), Cfvo(1, "50"), Cfvo(0, "100")],
-                    [CfColor(248, 105, 107), CfColor(255, 235, 132), CfColor(99, 190, 123)],
+                    [_rgb(248, 105, 107), _rgb(255, 235, 132), _rgb(99, 190, 123)],
                 ),
             ),
             ConditionalFormatInput(
                 ranges=[CellRect(0, 1, 4, 1)],
                 type=3,
-                data_bar=DataBar(Cfvo(0, "5"), Cfvo(0, "95"), CfColor(0, 112, 192)),
+                data_bar=DataBar(Cfvo(0, "5"), Cfvo(0, "95"), _rgb(0, 112, 192)),
             ),
             ConditionalFormatInput(
                 ranges=[CellRect(0, 2, 4, 2)],
@@ -193,8 +198,8 @@ class ConditionalFormatTests(unittest.TestCase):
             # back as type 0 would mean an absolute number instead.
             self.assertEqual([t.type for t in by_type[2].color_scale.thresholds], [0, 1, 0])
             self.assertEqual([t.type for t in by_type[4].icon_set.thresholds], [1, 1, 1])
-            self.assertEqual(by_type[2].color_scale.colors[2], CfColor(99, 190, 123))
-            self.assertEqual(by_type[3].data_bar.fill, CfColor(0, 112, 192))
+            self.assertEqual(by_type[2].color_scale.colors[2], _rgb(99, 190, 123))
+            self.assertEqual(by_type[3].data_bar.fill, _rgb(0, 112, 192))
             saved = wb.save()
 
         with Workbook.load(saved) as reloaded:
@@ -211,13 +216,13 @@ class ConditionalFormatTests(unittest.TestCase):
         bar = DataBar(
             Cfvo(3),
             Cfvo(4),
-            CfColor(0, 0, 255),
+            _rgb(0, 0, 255),
             gradient=False,
             axis_position=1,
-            negative_fill=CfColor(255, 0, 0),
-            border=CfColor(9, 9, 9),
-            negative_border=CfColor(8, 8, 8),
-            axis_color=CfColor(1, 2, 3),
+            negative_fill=_rgb(255, 0, 0),
+            border=_rgb(9, 9, 9),
+            negative_border=_rgb(8, 8, 8),
+            axis_color=_rgb(1, 2, 3),
             direction=2,
         )
         with Workbook.create_default() as wb:
@@ -228,10 +233,10 @@ class ConditionalFormatTests(unittest.TestCase):
             got = reloaded.sheet(0).list_cf_rules()[0].data_bar
             self.assertIs(got.gradient, False)
             self.assertEqual(got.axis_position, 1)
-            self.assertEqual(got.negative_fill, CfColor(255, 0, 0))
-            self.assertEqual(got.border, CfColor(9, 9, 9))
-            self.assertEqual(got.negative_border, CfColor(8, 8, 8))
-            self.assertEqual(got.axis_color, CfColor(1, 2, 3))
+            self.assertEqual(got.negative_fill, _rgb(255, 0, 0))
+            self.assertEqual(got.border, _rgb(9, 9, 9))
+            self.assertEqual(got.negative_border, _rgb(8, 8, 8))
+            self.assertEqual(got.axis_color, _rgb(1, 2, 3))
             self.assertEqual(got.direction, 2)
             # Feeding the decoded bar straight back must reproduce it.
             reloaded.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=[CellRect(4, 0, 6, 0)], type=3, data_bar=got))
@@ -252,7 +257,7 @@ class ConditionalFormatTests(unittest.TestCase):
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 2, 0)],
                     type=3,
-                    data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255)),
+                    data_bar=DataBar(Cfvo(3), Cfvo(4), _rgb(0, 0, 255)),
                 ),
             )
             got = wb.sheet(0).list_cf_rules()[0].data_bar
@@ -260,7 +265,7 @@ class ConditionalFormatTests(unittest.TestCase):
             # rather than as `None`.
             self.assertIs(got.gradient, True)
             self.assertEqual(got.axis_position, 0)
-            self.assertEqual(got.negative_fill, CfColor(0, 0, 255))
+            self.assertEqual(got.negative_fill, _rgb(0, 0, 255))
 
 
 if __name__ == "__main__":

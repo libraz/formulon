@@ -273,7 +273,7 @@ class ValidationCheckTests(unittest.TestCase):
                 got = wb.sheet(0).get_invalid_cells(cursor, 2)
                 page, cursor = got.cells, got.next_cursor
                 pages += 1
-                seen += [(c.row, c.value.text) for c in page]
+                seen += [(c.row, c.value) for c in page]
                 if cursor is None:
                     break
             self.assertEqual(seen, [(1, "bad1"), (3, "bad2"), (4, "bad3")])

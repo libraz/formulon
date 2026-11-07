@@ -30,6 +30,8 @@ from formulon import (
     ChartSourceKind,
     ChartTitle,
     ChartTitleKind,
+    Color,
+    ColorKind,
     DrawingAnchor,
     DrawingObjectKind,
     FormulonError,
@@ -65,6 +67,10 @@ def _chart(kind: int = ChartInsertKind.COLUMN, source: str = SOURCE, **options) 
 
 def _axis_id(info: Chart, kind: ChartAxisKind) -> int:
     return next(a.id for a in info.axes if a.kind == kind)
+
+
+def _rgb(value: int) -> Color:
+    return Color(ColorKind.RGB, rgb=value)
 
 
 class ChartEnumTests(unittest.TestCase):
@@ -181,8 +187,8 @@ class ChartReadTests(unittest.TestCase):
     def test_scatter_is_the_xy_domain(self) -> None:
         wb, oid = _chart(ChartInsertKind.SCATTER, "Sheet1!$F$1:$G$5")
         with wb:
-            wb.sheet(0).set_range_xf_index(
-                CellRect(1, 5, 4, 5), wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=2))
+            wb.sheet(0).ooxml.set_range_xf_index(
+                CellRect(1, 5, 4, 5), wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=2))
             )
             info = wb.sheet(0).chart(oid).get_properties()
             self.assertEqual(info.plots[0].type, ChartPlotType.SCATTER)
@@ -350,20 +356,20 @@ class ChartEditTests(unittest.TestCase):
                 0,
                 1,
                 name="Sheet1!$D$1",
-                fill={"color": 0xFFFF0000, "transparency": 25.0},
-                line={"color": 0xFF00FF00, "width_pt": 2.5, "dash": ChartLineDash.DASH},
+                fill={"color": "#FFFF0000", "transparency": 25.0},
+                line={"color": "#FF00FF00", "width_pt": 2.5, "dash": ChartLineDash.DASH},
             )
             s = wb.sheet(0).chart(oid).get_properties().plots[0].series[1]
             self.assertEqual(s.name.formula, "Sheet1!$D$1")
-            self.assertEqual((s.fill.color, s.fill.transparency), (0xFFFF0000, 25.0))
-            self.assertEqual((s.line.color, s.line.width_pt, s.line.dash), (0xFF00FF00, 2.5, ChartLineDash.DASH))
+            self.assertEqual((s.fill.color, s.fill.transparency), (_rgb(0xFFFF0000), 25.0))
+            self.assertEqual((s.line.color, s.line.width_pt, s.line.dash), (_rgb(0xFF00FF00), 2.5, ChartLineDash.DASH))
             self.assertEqual(wb.sheet(0).chart(oid).get_data().series[1].name, "S3")
 
             wb.sheet(0).chart(oid).set_series(0, 1, fill={"transparency": None}, name="")
             s = wb.sheet(0).chart(oid).get_properties().plots[0].series[1]
             self.assertEqual(s.name.kind, ChartSourceKind.NONE)
             self.assertIsNone(s.fill.transparency)
-            self.assertEqual(s.fill.color, 0xFFFF0000)
+            self.assertEqual(s.fill.color, _rgb(0xFFFF0000))
 
             wb.sheet(0).chart(oid).set_series(
                 0, 0, labels={"show_value": True, "separator": "; ", "position": ChartLabelPosition.OUTSIDE_END}
@@ -398,7 +404,7 @@ class ChartEditTests(unittest.TestCase):
                 marker={
                     "symbol": ChartMarkerSymbol.DIAMOND,
                     "size": 9.0,
-                    "fill": {"color": 0xFF112233},
+                    "fill": {"color": "#FF112233"},
                     "line": {"none": True},
                 },
                 smooth=True,
@@ -406,7 +412,7 @@ class ChartEditTests(unittest.TestCase):
             s = wb.sheet(0).chart(oid).get_properties().plots[0].series[0]
             self.assertIsNotNone(s.marker)
             self.assertEqual((s.marker.symbol, s.marker.size), (ChartMarkerSymbol.DIAMOND, 9))
-            self.assertEqual(s.marker.fill.color, 0xFF112233)
+            self.assertEqual(s.marker.fill.color, _rgb(0xFF112233))
             self.assertTrue(s.marker.line.none)
             self.assertIs(s.smooth, True)
             wb.sheet(0).chart(oid).set_series(0, 0, marker=None)
@@ -417,9 +423,9 @@ class ChartEditTests(unittest.TestCase):
     def test_point_patch_and_removal(self) -> None:
         wb, oid = _chart()
         with wb:
-            wb.sheet(0).chart(oid).set_point(0, 0, 2, fill={"color": 0xFF0000FF})
+            wb.sheet(0).chart(oid).set_point(0, 0, 2, fill={"color": "#FF0000FF"})
             points = wb.sheet(0).chart(oid).get_properties().plots[0].series[0].points
-            self.assertEqual([(p.index, p.fill.color) for p in points], [(2, 0xFF0000FF)])
+            self.assertEqual([(p.index, p.fill.color) for p in points], [(2, _rgb(0xFF0000FF))])
             self.assertIsNone(points[0].marker)
             wb.sheet(0).chart(oid).set_point(0, 0, 2)
             self.assertEqual(wb.sheet(0).chart(oid).get_properties().plots[0].series[0].points, [])
@@ -632,7 +638,7 @@ class ChartErrorTests(unittest.TestCase):
         with wb:
             before = wb.sheet(0).chart(oid).get_properties()
             with self.assertRaises(FormulonError):
-                wb.sheet(0).chart(oid).set_series(0, 0, fill={"color": 0xFF000000}, values="not a range")
+                wb.sheet(0).chart(oid).set_series(0, 0, fill={"color": "#FF000000"}, values="not a range")
             self.assertEqual(wb.sheet(0).chart(oid).get_properties(), before)
 
 

@@ -264,6 +264,8 @@ class RectArgumentNameTests(unittest.TestCase):
                 js_class, js_name = js_key.split(".")
                 py_class, py_name = py_key.split(".")
                 self.assertEqual(js_class, py_class)
+                if js_name not in declared.get(js_class, {}):
+                    js_class = py_class = js_class + "Ooxml"
                 self.assertIn(js_name, declared.get(js_class, {}), f"{js_key} is not declared in the d.ts")
                 js_params = declared[js_class][js_name]
                 method = getattr(getattr(formulon, py_class), py_name)

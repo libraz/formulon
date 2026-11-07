@@ -32,127 +32,127 @@ class StructLayoutTests(unittest.TestCase):
     # stops a new struct from opting out by simply not being listed.
     EXPECTED_SIZES = {
         "CELL_RECT": 16,
-        "HYPERLINK": 32,
-        "COMMENT": 16,
-        "DATA_VALIDATION": 52,
-        "SHEET_PROTECTION": 88,
-        "WORKBOOK_PROTECTION": 52,
-        "PROTECTED_RANGE": 36,
-        "CELL_NODE": 12,
+        "HYPERLINK": 36,
+        "COMMENT": 20,
+        "DATA_VALIDATION": 56,
+        "SHEET_PROTECTION": 92,
+        "WORKBOOK_PROTECTION": 56,
+        "PROTECTED_RANGE": 40,
+        "CELL_NODE": 16,
         "PHONETIC_RUN": 12,
         "CFVO": 12,
-        "CF_COLOR": 4,
-        "CF_MATCH": 72,
-        "CF_RULE": 248,
-        "PIVOT_CELL": 40,
-        "PIVOT_FIELD_SPEC": 20,
-        "PIVOT_DATA_FIELD_SPEC": 28,
+        "CF_MATCH": 144,
+        "CF_RULE": 368,
+        "PIVOT_CELL": 48,
+        "PIVOT_FIELD_SPEC": 24,
+        "PIVOT_DATA_FIELD_SPEC": 32,
         "PIVOT_FILTER_SPEC": 64,
-        "PIVOT_FIELD_INFO": 64,
-        "PIVOT_ITEM_INFO": 20,
-        "PIVOT_STYLE_INFO": 28,
-        "PIVOT_OPTIONS": 104,
-        "PIVOT_CACHE_OPTIONS": 12,
-        "PIVOT_CALCULATED_ITEM": 16,
-        "TABLE_INFO": 36,
-        "TABLE_COLUMN_INFO": 16,
+        "PIVOT_FIELD_INFO": 68,
+        "PIVOT_ITEM_INFO": 24,
+        "PIVOT_STYLE_INFO": 32,
+        "PIVOT_OPTIONS": 108,
+        "PIVOT_CACHE_OPTIONS": 16,
+        "PIVOT_CALCULATED_ITEM": 20,
+        "TABLE_INFO": 40,
+        "TABLE_COLUMN_INFO": 20,
         "TABLE_STYLE_ELEMENT": 16,
-        "TABLE_STYLE": 20,
-        "READ_DIAGNOSTICS": 20,
-        "SAVE_DIAGNOSTICS": 20,
-        "SPILL_INFO": 24,
-        "ARRAY_FORMULA": 24,
-        "FUNCTION_METADATA": 24,
-        "LOCALE_FACTS": 56,
+        "TABLE_STYLE": 24,
+        "READ_DIAGNOSTICS": 24,
+        "SAVE_DIAGNOSTICS": 24,
+        "SPILL_INFO": 28,
+        "ARRAY_FORMULA": 28,
+        "FUNCTION_METADATA": 28,
+        "LOCALE_FACTS": 60,
         "CIVIL_TIME": 24,
-        "SHEET_VIEW": 80,
-        "COLUMN_LAYOUT": 40,
+        "SHEET_VIEW": 88,
+        "COLUMN_LAYOUT": 48,
         "ROW_LAYOUT": 40,
         "CELL_XF": 128,
         "COLOR_SPEC": 24,
         "FONT_RECORD": 120,
-        "FILL_RECORD": 120,
+        "FILL_RECORD": 112,
         # A gradient stop and a custom-icon entry of a conditional-format rule.
-        "GRADIENT_STOP": 40,
+        "GRADIENT_STOP": 32,
         "CF_ICON": 8,
         "BORDER_SIDE": 32,
         "BORDER_RECORD": 168,
-        "DXF_RECORD": 456,
+        "DXF_RECORD": 448,
         # Fifteen pointer-or-`size_t` fields; both are four bytes on
         # wasm32, so the whole record is 15 x 4.
         "CELL_STYLE_RECORD": 24,
-        "EXTERNAL_LINK_RECORD": 24,
-        "PAGE_BREAK": 16,
-        "PAGE_SETUP": 48,
+        "EXTERNAL_LINK_RECORD": 28,
+        "PAGE_BREAK": 20,
+        "PAGE_SETUP": 52,
         # Six `double`s, each preceded by an `int32` flag: the flag's four
         # bytes of tail padding are what makes this 96 rather than 72.
         "PAGE_MARGINS": 96,
-        "PRINT_OPTIONS": 32,
-        "HEADER_FOOTER": 56,
-        "SHEET_FORMAT_DEFAULTS": 56,
-        "RECT_PT": 32,
-        "WIDTH_MODEL": 40,
-        "PAPER_INFO": 24,
-        "MARGINS_PT": 48,
-        "PRINT_TITLES": 24,
+        "PRINT_OPTIONS": 36,
+        "HEADER_FOOTER": 60,
+        "SHEET_FORMAT_DEFAULTS": 64,
+        "RECT_PT": 40,
+        "WIDTH_MODEL": 48,
+        "PAPER_INFO": 32,
+        "MARGINS_PT": 56,
+        "PRINT_TITLES": 28,
         # A `uint32` and an inline `fm_cell_rect_t`, then four tail-aligned `double`s.
         "PAGE_LAYOUT": 56,
-        "THEME_COLORS": 48,
-        "THEME_FONTS": 16,
-        "EFFECTIVE_STYLE": 96,
+        "THEME_COLORS": 52,
+        "THEME_FONTS": 20,
+        "EFFECTIVE_STYLE": 100,
         "DATE_GROUP_ITEM": 8,
         "FILTER_COLUMN": 152,
         # An inline `fm_cell_rect_t` (16 bytes) leads the record.
         "SORT_CONDITION": 48,
-        "AUTO_FILTER": 64,
-        "VALIDATION_OUTCOME": 16,
+        "AUTO_FILTER": 68,
+        "VALIDATION_OUTCOME": 20,
         "MENTION": 16,
-        "THREADED_COMMENT": 40,
-        "PERSON": 16,
-        "IMAGE_INFO": 12,
-        "DRAWING_OBJECT": 96,
+        "THREADED_COMMENT": 44,
+        "PERSON": 20,
+        "IMAGE_INFO": 16,
+        "DRAWING_OBJECT": 104,
         "IMAGE_INSERT": 56,
         "DRAWING_ANCHOR": 48,
-        "SHAPE": 136,
-        "DATA_TABLE": 56,
-        "SLICER": 104,
+        "SHAPE": 192,
+        "DATA_TABLE": 60,
+        "SLICER": 112,
         "SPARKLINE": 8,
-        "SPARKLINE_GROUP": 288,
+        "SPARKLINE_GROUP": 296,
         "CHART_TITLE": 12,
-        "CHART_FILL": 16,
-        "CHART_LINE": 40,
-        "CHART_MARKER": 72,
-        "CHART_LABELS": 64,
-        "CHART_INFO": 176,
-        "CHART_PLOT": 64,
+        "CHART_FILL": 32,
+        "CHART_LINE": 56,
+        "CHART_MARKER": 104,
+        "CHART_LABELS": 80,
+        "CHART_INFO": 184,
+        "CHART_PLOT": 68,
         "CHART_DATA_SOURCE": 12,
-        "CHART_SERIES": 304,
-        "CHART_LITERAL": 24,
-        "CHART_POINT": 144,
-        "CHART_AXIS": 112,
-        "CHART_PREVIEW_OVERRIDES": 52,
-        "CHART_DATA_INFO": 44,
-        "CHART_DATA_SERIES": 56,
-        "CHART_DATA_POINTS": 20,
+        "CHART_SERIES": 384,
+        "CHART_LITERAL": 32,
+        "CHART_POINT": 208,
+        "CHART_AXIS": 120,
+        "CHART_PREVIEW_OVERRIDES": 56,
+        "CHART_DATA_INFO": 48,
+        "CHART_DATA_SERIES": 60,
+        "CHART_DATA_POINTS": 24,
         "SHEET_RECT": 20,
-        "CHART_AXIS_TITLE_TEXT": 8,
-        "CHART_UNRESOLVED": 12,
-        "CHART_INSERT": 88,
-        "CHART_FILL_PATCH": 24,
-        "CHART_LINE_PATCH": 56,
-        "CHART_MARKER_PATCH": 104,
-        "CHART_LABELS_PATCH": 88,
-        "CHART_SERIES_PATCH": 320,
-        "CHART_POINT_PATCH": 192,
-        "CHART_PLOT_PATCH": 40,
+        "CHART_AXIS_TITLE_TEXT": 12,
+        "CHART_UNRESOLVED": 16,
+        "CHART_INSERT": 96,
+        "CHART_FILL_PATCH": 48,
+        "CHART_LINE_PATCH": 80,
+        "CHART_MARKER_PATCH": 152,
+        "CHART_LABELS_PATCH": 112,
+        "CHART_SERIES_PATCH": 448,
+        "CHART_POINT_PATCH": 296,
+        "CHART_PLOT_PATCH": 44,
         "CHART_AXIS_PATCH": 136,
-        "CHART_LEGEND_PATCH": 20,
-        "CHART_DISPLAY_PATCH": 24,
-        "REFERENCE": 28,
-        "ITERATIVE_SETTINGS_PATCH": 16,
-        "DEFINED_NAME_INPUT": 20,
-        "DEFINED_NAME": 20,
-        "THREADED_COMMENT_PATCH": 20,
+        "CHART_LEGEND_PATCH": 24,
+        "CHART_DISPLAY_PATCH": 28,
+        "REFERENCE": 32,
+        "ITERATIVE_SETTINGS_PATCH": 24,
+        "DEFINED_NAME_INPUT": 24,
+        "DEFINED_NAME": 24,
+        "THREADED_COMMENT_PATCH": 24,
+        "PARSE_ERROR": 24,
     }
 
     def test_struct_sizes(self) -> None:
@@ -177,7 +177,7 @@ class StructLayoutTests(unittest.TestCase):
         )
 
     def test_pivot_cell_value_offset(self) -> None:
-        self.assertEqual(S.PIVOT_CELL_VALUE_OFFSET, 8)
+        self.assertEqual(S.PIVOT_CELL_VALUE_OFFSET, 16)
 
     # Records the wrapper marshals without a `Struct` entry, so they are
     # invisible to `EXPECTED_SIZES` above. `fm_value_t` is passed around as
@@ -213,7 +213,7 @@ class StructLayoutTests(unittest.TestCase):
 class AdHocArrayEvalTests(unittest.TestCase):
     def test_sequence_matrix_preserves_all_cells(self) -> None:
         with Workbook.create_default() as wb:
-            grid = wb.sheet(0).evaluate_formula_array(0, 0, "=SEQUENCE(2,3)")
+            grid = wb.sheet(0).evaluate_typed_formula_array(0, 0, "=SEQUENCE(2,3)")
             self.assertEqual(len(grid), 2)
             self.assertEqual(len(grid[0]), 3)
             # Row-major 1..6.
@@ -222,7 +222,7 @@ class AdHocArrayEvalTests(unittest.TestCase):
 
     def test_scalar_reported_as_one_by_one(self) -> None:
         with Workbook.create_default() as wb:
-            grid = wb.sheet(0).evaluate_formula_array(0, 0, "=1+2")
+            grid = wb.sheet(0).evaluate_typed_formula_array(0, 0, "=1+2")
             self.assertEqual(len(grid), 1)
             self.assertEqual(len(grid[0]), 1)
             self.assertEqual(grid[0][0].kind, ValueKind.NUMBER)
@@ -280,7 +280,7 @@ class CalcPolicyTests(unittest.TestCase):
             wb.set_pinned_now(datetime.datetime(2026, 4, 23, 15, 30, 45))
             self.assertEqual(wb.get_pinned_now(), datetime.datetime(2026, 4, 23, 15, 30, 45))
             # 2026-04-23 is serial 46135 under the 1900 date system.
-            grid = wb.sheet(0).evaluate_formula_array(0, 0, "=TODAY()")
+            grid = wb.sheet(0).evaluate_typed_formula_array(0, 0, "=TODAY()")
             self.assertEqual(grid[0][0].number, 46135.0)
             wb.set_pinned_now(None)
             self.assertIsNone(wb.get_pinned_now())
@@ -298,9 +298,9 @@ class CalcPolicyTests(unittest.TestCase):
 
     def test_excel_profile_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertTrue(wb.get_excel_profile_id())
-            wb.set_excel_profile_id("mac-365-ja_JP")
-            self.assertEqual(wb.get_excel_profile_id(), "mac-365-ja_JP")
+            self.assertTrue(wb.get_profile_id())
+            wb.set_profile_id("mac-365-ja_JP")
+            self.assertEqual(wb.get_profile_id(), "mac-365-ja_JP")
 
     def test_excel_profile_switches_live_workbook(self) -> None:
         # mac-365-* values are the oracle captures of DOLLAR(-1234.567); the
@@ -338,18 +338,18 @@ class CalcPolicyTests(unittest.TestCase):
             "nl_NL",
         )
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_excel_profile_id(), "win-365-en_US")
+            self.assertEqual(wb.get_profile_id(), "win-365-en_US")
             wb.sheet(0).set_formula(0, 0, "=DOLLAR(-1234.567)")
             for host in ("mac", "win"):
                 for locale in locales:
                     profile_id = f"{host}-365-{locale}"
-                    wb.set_excel_profile_id(profile_id)
-                    self.assertEqual(wb.get_excel_profile_id(), profile_id)
+                    wb.set_profile_id(profile_id)
+                    self.assertEqual(wb.get_profile_id(), profile_id)
                     wb.recalc()
                     if profile_id in dollar:
-                        self.assertEqual(wb.sheet(0).get_value(0, 0).to_python(), dollar[profile_id], profile_id)
+                        self.assertEqual(wb.sheet(0).get_typed_value(0, 0).to_python(), dollar[profile_id], profile_id)
             with self.assertRaises(FormulonError):
-                wb.set_excel_profile_id("mac-365-xx_XX")
+                wb.set_profile_id("mac-365-xx_XX")
 
 
 class PartialRecalcTests(unittest.TestCase):
@@ -359,7 +359,7 @@ class PartialRecalcTests(unittest.TestCase):
             wb.sheet(0).set_formula(0, 1, "=A1*2")  # B1
             recomputed = wb.sheet(0).recalc_viewport(CellRect(0, 1, 0, 1))
             self.assertGreater(recomputed, 0)
-            self.assertEqual(wb.sheet(0).get_value(0, 1).to_python(), 20.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 1).to_python(), 20.0)
             with self.assertRaises(TypeError):
                 wb.sheet(0).recalc_viewport((0, 1, 0, 1))  # type: ignore[arg-type]
 
@@ -413,7 +413,7 @@ class ArrayFormulaTests(unittest.TestCase):
                 assert found is not None
                 self.assertEqual(found.rect, CellRect(0, 2, 2, 2))
                 self.assertIn("A1:A3", found.formula)
-            self.assertEqual(wb.sheet(0).get_value(2, 2).to_python(), 6.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(2, 2).to_python(), 6.0)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).set_array_formula(ArrayFormula(CellRect(1, 2, 2, 2), "=1"))
             with self.assertRaises(FormulonError):

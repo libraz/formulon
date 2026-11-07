@@ -159,8 +159,8 @@ class SurfaceParityTests(unittest.TestCase):
         "recalc_data_tables",
         "get_pinned_now",
         "set_pinned_now",
-        "get_excel_profile_id",
-        "set_excel_profile_id",
+        "get_profile_id",
+        "set_profile_id",
         "recalc_viewport",
         "get_lambda_text",
         "evaluate_formula_array",
@@ -292,11 +292,12 @@ class SurfaceParityTests(unittest.TestCase):
                 owner, member = name.split(".")
                 self.assertTrue(hasattr(handles[owner], member), f"missing method: {name}")
             else:
-                self.assertTrue(hasattr(Workbook, name) or hasattr(Sheet, name), f"missing method: {name}")
+                owners = (Workbook, Sheet, formulon.WorkbookOoxml, formulon.SheetOoxml)
+                self.assertTrue(any(hasattr(owner, name) for owner in owners), f"missing method: {name}")
 
     def test_default_workbook_uses_english_profile(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_excel_profile_id(), "win-365-en_US")
+            self.assertEqual(wb.get_profile_id(), "win-365-en_US")
 
     def test_public_types_exported(self) -> None:
         for name in (

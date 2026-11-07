@@ -89,14 +89,12 @@ class ExceptionFamilyTest(unittest.TestCase):
         self.assertIs(type(FormulonError(StatusCode.BINDING_INVALID_HANDLE)), formulon.WorkbookClosedError)
 
     def test_file_not_found_codes_stay_on_the_base(self) -> None:
-        for member in (StatusCode.IO_FILE_NOT_FOUND, StatusCode.CLI_FILE_NOT_FOUND):
-            with self.subTest(member=member.name):
-                self.assertIs(type(FormulonError(member)), FormulonError)
+        self.assertIs(type(FormulonError(StatusCode.IO_FILE_NOT_FOUND)), FormulonError)
 
     def test_every_not_found_suffix_maps_to_not_found_error(self) -> None:
         for member in StatusCode:
             expected_not_found = member.name == "NOT_FOUND" or (
-                member.name.endswith("_NOT_FOUND") and member.name not in ("IO_FILE_NOT_FOUND", "CLI_FILE_NOT_FOUND")
+                member.name.endswith("_NOT_FOUND") and member.name != "IO_FILE_NOT_FOUND"
             )
             with self.subTest(member=member.name):
                 self.assertEqual(isinstance(FormulonError(member), NotFoundError), expected_not_found)

@@ -10,6 +10,7 @@ import zipfile
 from formulon import (
     AnchorKind,
     Color,
+    ColorKind,
     Comment,
     DrawingObjectKind,
     FormulonError,
@@ -37,7 +38,7 @@ def _box(**overrides):
         preset_geometry="roundRect",
         text="Hello\nWorld",
         fill_kind=ShapePaint.SOLID,
-        fill_rgb=0xFF0000,
+        fill_color="#FF0000",
         line_kind=ShapePaint.NONE,
         rotation=900000,
     )
@@ -58,7 +59,7 @@ class ShapeTests(unittest.TestCase):
                 height_emu=0,
                 preset_geometry="line",
                 line_kind=ShapePaint.SOLID,
-                line_rgb=0x00FF00,
+                line_color="#00FF00",
                 line_width_emu=19050,
             )
             self.assertIsInstance(rect, Shape)
@@ -73,13 +74,17 @@ class ShapeTests(unittest.TestCase):
                 self.assertEqual(
                     (shapes[0].name, shapes[0].preset_geometry, shapes[0].text), ("Box", "roundRect", "Hello\nWorld")
                 )
-                self.assertEqual((shapes[0].fill_kind, shapes[0].fill_rgb), (ShapePaint.SOLID, 0xFF0000))
+                self.assertEqual(
+                    (shapes[0].fill_kind, shapes[0].fill_color),
+                    (ShapePaint.SOLID, Color(ColorKind.RGB, rgb=0xFFFF0000)),
+                )
                 self.assertEqual(shapes[0].line_kind, ShapePaint.NONE)
                 self.assertEqual((shapes[0].rotation, shapes[0].hidden, shapes[0].text_box), (900000, False, False))
                 self.assertEqual((shapes[0].from_row, shapes[0].to_row, shapes[0].to_col), (1, 5, 4))
                 self.assertEqual(shapes[1].kind, DrawingObjectKind.CONNECTOR)
                 self.assertEqual(
-                    (shapes[1].from_col_offset_emu, shapes[1].width_emu, shapes[1].line_rgb), (500, 914400, 0x00FF00)
+                    (shapes[1].from_col_offset_emu, shapes[1].width_emu, shapes[1].line_color),
+                    (500, 914400, Color(ColorKind.RGB, rgb=0xFF00FF00)),
                 )
                 self.assertEqual(shapes[1].line_width_emu, 19050)
 

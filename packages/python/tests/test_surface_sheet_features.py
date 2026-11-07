@@ -42,7 +42,7 @@ class SheetStructureTests(unittest.TestCase):
             self.assertEqual(wb.sheet(0).name, "Archive")
             self.assertEqual(len(wb), 3)
             wb.recalc()
-            self.assertEqual(wb.sheet(0).get_value(0, 1).number, 10.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 1).number, 10.0)
             with self.assertRaises(FormulonError):
                 wb.copy_sheet(3, 0)
             with self.assertRaises(FormulonError):
@@ -61,8 +61,8 @@ class MatrixEditTests(unittest.TestCase):
             wb.sheet(0).insert_rows(0, 1)
             wb.recalc()
             # A1 is now blank; the value moved to A2.
-            self.assertEqual(wb.sheet(0).get_value(0, 0).kind, ValueKind.BLANK)
-            self.assertEqual(wb.sheet(0).get_value(1, 0).to_python(), 11.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 0).kind, ValueKind.BLANK)
+            self.assertEqual(wb.sheet(0).get_typed_value(1, 0).to_python(), 11.0)
 
     def test_delete_col_shifts_value_left(self) -> None:
         with Workbook.create_default() as wb:
@@ -71,7 +71,7 @@ class MatrixEditTests(unittest.TestCase):
             wb.sheet(0).delete_columns(0, 1)
             wb.recalc()
             # The old B1 collapses into A1.
-            self.assertEqual(wb.sheet(0).get_value(0, 0).to_python(), 2.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 0).to_python(), 2.0)
 
 
 class MergeCommentHyperlinkTests(unittest.TestCase):
@@ -114,9 +114,9 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
                 with self.assertRaises(InvalidArgumentError):
                     wb.sheet(0).add_merge(bad)
                 with self.assertRaises(InvalidArgumentError):
-                    wb.sheet(0).set_range_xf_index(bad, 0)
+                    wb.sheet(0).ooxml.set_range_xf_index(bad, 0)
                 with self.assertRaises(InvalidArgumentError):
-                    wb.sheet(0).get_range_style_bases(bad)
+                    wb.sheet(0).ooxml.get_range_style_bases(bad)
             self.assertEqual(wb.sheet(0).list_merges(), [])
 
     def test_hyperlink_range_roundtrip_at_nonzero_coordinate(self) -> None:
@@ -226,14 +226,14 @@ class SheetViewProtectionTests(unittest.TestCase):
             wb.sheet(0).set_column_width(0, 2, 18.5)
             cols = wb.sheet(0).list_column_overrides()
             explicit = next(c for c in cols if c.width is not None and abs(c.width - 18.5) < 1e-9)
-            self.assertIsNone(explicit.style_xf)
+            self.assertIsNone(wb.sheet(0).ooxml.get_column_style(explicit.first))
             wb.sheet(0).set_column_width(4, 4, 0.0)
             zero = next(c for c in wb.sheet(0).list_column_overrides() if c.first == 4 and c.last == 4)
             self.assertEqual(zero.width, 0.0)
             wb.sheet(0).set_row_height(0, 0, 30.0)
             rows = wb.sheet(0).list_row_overrides()
             explicit_row = next(r for r in rows if r.height is not None and abs(r.height - 30.0) < 1e-9)
-            self.assertIsNone(explicit_row.style_xf)
+            self.assertIsNone(wb.sheet(0).ooxml.get_row_style(explicit_row.row))
 
     def test_protection_roundtrip(self) -> None:
         with Workbook.create_default() as wb:

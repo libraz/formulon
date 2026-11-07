@@ -20,10 +20,10 @@ class PrintSettingsTests(unittest.TestCase):
     def test_raw_xml_roundtrip_and_removal(self) -> None:
         with Workbook.create_default() as wb:
             # An absent element reads back as "" rather than raising.
-            self.assertIsNone(wb.sheet(0).get_page_setup_xml())
+            self.assertIsNone(wb.sheet(0).ooxml.get_page_setup_xml())
             fragment = '<pageSetup paperSize="9" orientation="portrait" scale="85"/>'
-            wb.sheet(0).set_page_setup_xml(fragment)
-            self.assertEqual(wb.sheet(0).get_page_setup_xml(), fragment)
+            wb.sheet(0).ooxml.set_page_setup_xml(fragment)
+            self.assertEqual(wb.sheet(0).ooxml.get_page_setup_xml(), fragment)
 
             setup = wb.sheet(0).get_page_setup()
             self.assertEqual(setup.paper_size, 9)
@@ -31,8 +31,8 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertTrue(setup.scale_stated)
 
             # Empty removes the element and restores the defaults.
-            wb.sheet(0).set_page_setup_xml("")
-            self.assertIsNone(wb.sheet(0).get_page_setup_xml())
+            wb.sheet(0).ooxml.set_page_setup_xml("")
+            self.assertIsNone(wb.sheet(0).ooxml.get_page_setup_xml())
             cleared = wb.sheet(0).get_page_setup()
             self.assertEqual(cleared.scale, 100)
             self.assertFalse(cleared.scale_stated)
@@ -41,14 +41,14 @@ class PrintSettingsTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             for bad in ("<pageSetup/><pageSetup/>", '<pageMargins left="1"/>', '<pageSetup orientation="p"'):
                 with self.assertRaises(FormulonError, msg=bad):
-                    wb.sheet(0).set_page_setup_xml(bad)
-            self.assertIsNone(wb.sheet(0).get_page_setup_xml())
+                    wb.sheet(0).ooxml.set_page_setup_xml(bad)
+            self.assertIsNone(wb.sheet(0).ooxml.get_page_setup_xml())
 
     def test_fit_to_page_keeps_the_rest_of_sheet_pr(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_sheet_pr_xml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>')
+            wb.sheet(0).ooxml.set_sheet_pr_xml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>')
             wb.sheet(0).set_page_setup(fit_to_page=True)
-            xml = wb.sheet(0).get_sheet_pr_xml()
+            xml = wb.sheet(0).ooxml.get_sheet_pr_xml()
             # A VBA binding and a tab colour are not print settings, and
             # toggling fit-to-page must not be how they get lost.
             self.assertIn('codeName="Sheet1"', xml)
@@ -58,11 +58,11 @@ class PrintSettingsTests(unittest.TestCase):
 
     def test_typed_patch_preserves_unmodelled_attributes(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_page_setup_xml(
+            wb.sheet(0).ooxml.set_page_setup_xml(
                 '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>'
             )
             wb.sheet(0).set_page_setup(orientation=PageOrientation.LANDSCAPE)
-            xml = wb.sheet(0).get_page_setup_xml()
+            xml = wb.sheet(0).ooxml.get_page_setup_xml()
             self.assertIn('orientation="landscape"', xml)
             self.assertIn('horizontalDpi="600"', xml)
             self.assertIn('copies="3"', xml)
@@ -102,14 +102,14 @@ class PrintSettingsTests(unittest.TestCase):
             # `&` introduces Excel's codes but lives in XML element text, so
             # it reaches the file escaped and decodes back to `&C...`.
             self.assertEqual(
-                wb.sheet(0).get_header_footer_xml(),
+                wb.sheet(0).ooxml.get_header_footer_xml(),
                 "<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader>"
                 "<oddFooter>&amp;R&amp;P / &amp;N</oddFooter></headerFooter>",
             )
             # Omitting a section leaves it; "" clears it.
             wb.sheet(0).set_header_footer(odd_footer="")
             self.assertEqual(
-                wb.sheet(0).get_header_footer_xml(),
+                wb.sheet(0).ooxml.get_header_footer_xml(),
                 "<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>",
             )
 
@@ -117,7 +117,7 @@ class PrintSettingsTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_print_options(grid_lines=True, horizontal_centered=True)
             self.assertEqual(
-                wb.sheet(0).get_print_options_xml(),
+                wb.sheet(0).ooxml.get_print_options_xml(),
                 '<printOptions gridLines="true" horizontalCentered="true"/>',
             )
 
@@ -129,8 +129,11 @@ class PrintSettingsTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.sheet(0).set_print_area([CellRect(5, 0, 4, 0)])
             with self.assertRaises(TypeError):
-                wb.sheet(0).set_print_area("A1:F8")  # type: ignore[arg-type]
+                wb.sheet(0).set_print_area(5)  # type: ignore[arg-type]
             self.assertEqual(wb.sheet(0).get_print_area(), area)
+            # One A1 string is one rectangle.
+            wb.sheet(0).set_print_area("A1:F8")
+            self.assertEqual(wb.sheet(0).get_print_area(), [CellRect(0, 0, 7, 5)])
             wb.sheet(0).set_print_area([])
             self.assertIsNone(wb.sheet(0).get_print_area())
 
@@ -202,7 +205,7 @@ class PrintSettingsTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             # Something other than the seeded default xf, so the range
             # write is observable rather than deduping to index 0.
-            xf = wb.add_cell_xf(
+            xf = wb.ooxml.add_cell_xf(
                 CellXfInput(
                     font_index=0,
                     fill_index=0,
@@ -213,10 +216,10 @@ class PrintSettingsTests(unittest.TestCase):
                     wrap_text=True,
                 )
             )
-            wb.sheet(0).set_range_xf_index(CellRect(0, 0, 2, 2), xf)
+            wb.sheet(0).ooxml.set_range_xf_index(CellRect(0, 0, 2, 2), xf)
             for row, col in ((0, 0), (1, 1), (2, 2)):
-                self.assertEqual(wb.sheet(0).get_cell_xf_index(row, col), xf)
-            self.assertEqual(wb.sheet(0).get_cell_xf_index(3, 3), 0)
+                self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(row, col), xf)
+            self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(3, 3), 0)
 
 
 if __name__ == "__main__":

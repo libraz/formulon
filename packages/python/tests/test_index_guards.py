@@ -651,7 +651,7 @@ class IndexRangeTests(unittest.TestCase):
             wb.sheet(0).set_number(5, 0, 1.0)
             with self.assertRaises(ValueError):
                 wb.sheet(0).set_number(2**32 + 5, 0, 99.0)
-            self.assertEqual(wb.sheet(0).get_value(5, 0).number, 1.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(5, 0).number, 1.0)
 
     def test_wrapping_sheet_index_is_rejected(self) -> None:
         with Workbook.create_default() as wb:
@@ -660,7 +660,7 @@ class IndexRangeTests(unittest.TestCase):
                 wb.sheet(2**32).set_number(0, 0, 99.0)
             with self.assertRaises(IndexError):
                 wb.sheet(2**32).get_value(0, 0)
-            self.assertEqual(wb.sheet(0).get_value(0, 0).number, 7.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 0).number, 7.0)
 
     def test_negative_indices_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
@@ -668,7 +668,7 @@ class IndexRangeTests(unittest.TestCase):
             for sheet, row, col in ((0, -1, 0), (0, 0, -1), (-1, 0, 0)):
                 with self.assertRaises(ValueError):
                     wb.sheet(sheet).set_number(row, col, 99.0)
-            self.assertEqual(wb.sheet(0).get_value(0, 0).number, 3.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 0).number, 3.0)
 
     def test_huge_indices_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
@@ -719,7 +719,7 @@ class IndexRangeTests(unittest.TestCase):
         # ``struct.pack`` is the only thing that used to notice.
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
-                wb.add_font(formulon.Font(name="Calibri", size=11.0, underline=256))
+                wb.ooxml.add_font(formulon.Font(name="Calibri", size=11.0, underline=256))
             self.assertIn("underline", str(ctx.exception))
 
     def test_in_range_extremes_still_reach_the_engine(self) -> None:

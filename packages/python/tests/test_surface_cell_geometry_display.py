@@ -57,52 +57,58 @@ class GeometryTests(unittest.TestCase):
 
     def test_axis_styles_reach_entered_cells(self) -> None:
         with Workbook.create_default() as wb:
-            col_xf = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=1))
-            row_xf = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=2))
+            col_xf = wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=1))
+            row_xf = wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=2))
             wb.sheet(0).set_column_width(1, 1, 20.0)
-            wb.sheet(0).set_column_style(1, 1, col_xf)
-            wb.sheet(0).set_row_style(2, 2, row_xf)
+            wb.sheet(0).ooxml.set_column_style(1, 1, col_xf)
+            wb.sheet(0).ooxml.set_row_style(2, 2, row_xf)
             self.assertEqual(wb.sheet(0).get_effective_style(4, 1).xf_index, col_xf)
             wb.sheet(0).set_text(4, 1, "column")
             wb.sheet(0).set_text(2, 1, "both")
-            self.assertEqual(wb.sheet(0).get_cell_xf_index(4, 1), col_xf)
-            self.assertEqual(wb.sheet(0).get_cell_xf_index(2, 1), row_xf)
+            self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(4, 1), col_xf)
+            self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(2, 1), row_xf)
 
-            wb.sheet(0).clear_column_style(1, 1)
-            wb.sheet(0).clear_row_style(2, 2)
+            wb.sheet(0).ooxml.clear_column_style(1, 1)
+            wb.sheet(0).ooxml.clear_row_style(2, 2)
             cols = wb.sheet(0).list_column_overrides()
-            self.assertEqual([(c.first, c.last, c.width is not None, c.style_xf) for c in cols], [(1, 1, True, None)])
+            self.assertEqual(
+                [(c.first, c.last, c.width is not None, wb.sheet(0).ooxml.get_column_style(c.first)) for c in cols],
+                [(1, 1, True, None)],
+            )
             self.assertEqual(wb.sheet(0).list_row_overrides(), [])
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_column_style(0, 0, 1000)
+                wb.sheet(0).ooxml.set_column_style(0, 0, 1000)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_row_style(0, 0, 1000)
+                wb.sheet(0).ooxml.set_row_style(0, 0, 1000)
 
     def test_row_style_span(self) -> None:
         with Workbook.create_default() as wb:
-            xf = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=2))
-            wb.sheet(0).set_row_style(0, 999, xf)
+            xf = wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=2))
+            wb.sheet(0).ooxml.set_row_style(0, 999, xf)
             self.assertEqual(len(wb.sheet(0).list_row_overrides()), 1000)
-            wb.sheet(0).clear_row_style(0, 999)
+            wb.sheet(0).ooxml.clear_row_style(0, 999)
             self.assertEqual(wb.sheet(0).list_row_overrides(), [])
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_row_style(5, 3, xf)
+                wb.sheet(0).ooxml.set_row_style(5, 3, xf)
 
     def test_range_style_remap_and_restore(self) -> None:
         last_row = 1048575
         with Workbook.create_default() as wb:
-            r = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=1))
-            a = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=2))
-            b = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=3))
-            wb.sheet(0).set_row_style(2, 2, r)
-            self.assertEqual(wb.sheet(0).get_range_style_bases(CellRect(0, 1, last_row, 1)), [0, r])
+            r = wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=1))
+            a = wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=2))
+            b = wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=3))
+            wb.sheet(0).ooxml.set_row_style(2, 2, r)
+            self.assertEqual(wb.sheet(0).ooxml.get_range_style_bases(CellRect(0, 1, last_row, 1)), [0, r])
             # Row 2 of a one-column selection is a single cell; excluding it hides the row style.
             self.assertEqual(
-                wb.sheet(0).get_range_style_bases_excluding(CellRect(0, 1, last_row, 1), [(2, 1), (2, 1), (9, 9)]), [0]
+                wb.sheet(0).ooxml.get_range_style_bases_excluding(
+                    CellRect(0, 1, last_row, 1), [(2, 1), (2, 1), (9, 9)]
+                ),
+                [0],
             )
 
             snap = wb.sheet(0).snapshot_range_style(CellRect(0, 1, last_row, 1))
-            wb.sheet(0).remap_range_style(CellRect(0, 1, last_row, 1), {0: a, r: b})
+            wb.sheet(0).ooxml.remap_range_style(CellRect(0, 1, last_row, 1), {0: a, r: b})
             e = wb.sheet(0).get_effective_style(2, 1)
             self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.CELL, b))
             e = wb.sheet(0).get_effective_style(2, 2)
@@ -115,7 +121,7 @@ class GeometryTests(unittest.TestCase):
             self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.ROW, r))
 
             with self.assertRaises(FormulonError):
-                wb.sheet(0).remap_range_style(CellRect(0, 1, last_row, 1), {0: 100000})
+                wb.sheet(0).ooxml.remap_range_style(CellRect(0, 1, last_row, 1), {0: 100000})
 
     def test_effective_format_defaults(self) -> None:
         with Workbook.create_default() as wb:
@@ -211,7 +217,7 @@ class FormulaAndRangeTests(unittest.TestCase):
             self.assertIsNone(nxt)
             self.assertEqual([(c.row, c.col) for c in cells], [(0, 0), (1, 0), (2, 0), (2, 1), (3, 0), (4, 0)])
             self.assertEqual(cells[3].formula, "=A3*2")
-            self.assertEqual(cells[3].value.number, 4.0)
+            self.assertEqual(cells[3].value, 4.0)
             self.assertIsNone(cells[0].formula)
 
             seen = []
@@ -246,8 +252,8 @@ class FormulaAndRangeTests(unittest.TestCase):
 class DisplayTextTests(unittest.TestCase):
     def test_display_text_uses_number_format(self) -> None:
         with Workbook.create_default() as wb:
-            nf = wb.add_num_fmt("0.00")
-            xf = wb.add_cell_xf(
+            nf = wb.ooxml.add_num_fmt("0.00")
+            xf = wb.ooxml.add_cell_xf(
                 CellXfInput(
                     font_index=0,
                     fill_index=0,
@@ -259,7 +265,7 @@ class DisplayTextTests(unittest.TestCase):
                 )
             )
             wb.sheet(0).set_number(0, 0, 3.14159)
-            wb.sheet(0).set_cell_xf_index(0, 0, xf)
+            wb.sheet(0).ooxml.set_cell_xf_index(0, 0, xf)
             self.assertEqual(wb.sheet(0).get_display_text(0, 0), DisplayText("3.14", DisplayStatus.OK))
             self.assertEqual(wb.sheet(0).get_display_text(9, 9), DisplayText("", DisplayStatus.OK))
             with self.assertRaises(FormulonError):
@@ -284,7 +290,7 @@ class DisplayTextTests(unittest.TestCase):
 class CellXfFlagTests(unittest.TestCase):
     def test_apply_and_protection_flags_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            xf = wb.add_cell_xf(
+            xf = wb.ooxml.add_cell_xf(
                 CellXfInput(
                     font_index=0,
                     fill_index=0,
@@ -301,7 +307,7 @@ class CellXfFlagTests(unittest.TestCase):
                     hidden=True,
                 )
             )
-            got = wb.get_cell_xf(xf)
+            got = wb.ooxml.get_cell_xf(xf)
             self.assertTrue(got.apply_number_format)
             self.assertTrue(got.apply_font)
             self.assertFalse(got.apply_fill)

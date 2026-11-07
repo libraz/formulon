@@ -13,6 +13,7 @@ from typing import Any, Tuple
 
 import formulon
 from formulon import (
+    CellAddress,
     CellRect,
     ChartInsertKind,
     ChartLegendPosition,
@@ -28,6 +29,7 @@ from formulon import (
     PivotCache,
     PivotDataFieldInput,
     PivotFieldInput,
+    PivotInput,
     Sheet,
     SheetRect,
     Sparkline,
@@ -66,7 +68,7 @@ def add_cache(wb: Workbook, source_sheet: str) -> PivotCache:
 
 def add_pivot(sheet: Sheet, cache: PivotCache, name: str, anchor_row: int, anchor_col: int) -> Tuple[Pivot, int]:
     """A pivot of ``cache`` on ``sheet``: Region on rows, Sum of Amount as the data field."""
-    pivot = sheet.add_pivot(name=name, cache_id=cache.cache_id, anchor_row=anchor_row, anchor_col=anchor_col)
+    pivot = sheet.add_pivot(PivotInput(name=name, cache_id=cache.cache_id, anchor=CellAddress(anchor_row, anchor_col)))
     pivot.add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
     amount = pivot.add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
     pivot.add_data_field(
@@ -581,7 +583,7 @@ def _pivot_part(wb: Workbook) -> str:
 class PivotNumberFormatTests(unittest.TestCase):
     def test_number_format_is_a_format_code_and_the_builtin_id_27_survives_a_round_trip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_excel_profile_id("win-365-ja_JP")
+            wb.set_profile_id("win-365-ja_JP")
             ws = wb.sheet(0)
             fill_source(ws)
             cache = add_cache(wb, "Sheet1")
@@ -589,7 +591,7 @@ class PivotNumberFormatTests(unittest.TestCase):
             self.assertIsNone(pivot.list_fields()[amount].number_format)
 
             # The profile's code for id 27 maps back to id 27, and its read-back writes id 27 again.
-            code27 = wb.get_num_fmt_string(27)
+            code27 = wb.ooxml.get_num_fmt_string(27)
             self.assertTrue(code27, "the profile has a code for numFmtId 27")
             pivot.update_field(amount, number_format=code27)
             self.assertRegex(_pivot_part(wb), r'<pivotField [^>]*numFmtId="27"')

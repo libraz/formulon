@@ -20,6 +20,7 @@ import unittest
 
 import formulon
 from formulon import (
+    CellAddress,
     Comment,
     ErrorCode,
     ExcelError,
@@ -27,6 +28,7 @@ from formulon import (
     IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
+    PivotInput,
     Sheet,
     StatusCode,
     Value,
@@ -68,7 +70,7 @@ class ExceptionClassTests(unittest.TestCase):
     def test_collection_index_out_of_range_is_index_error(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(IndexOutOfRangeError) as cm:
-                wb.get_font(len(wb.list_fonts()))
+                wb.ooxml.get_font(len(wb.ooxml.list_fonts()))
             self.assertEqual(cm.exception.code, StatusCode.INDEX_OUT_OF_RANGE)
 
     def test_missing_natural_key_remove_is_key_error(self) -> None:
@@ -111,7 +113,7 @@ class ExcelErrorTests(unittest.TestCase):
         self.assertEqual(str(ExcelError(ErrorCode.NA)), "#N/A")
 
     def test_to_python_returns_excel_error(self) -> None:
-        v = formulon.evaluate_formula("=1/0")
+        v = formulon.evaluate_typed_formula("=1/0")
         self.assertIs(v.kind, ValueKind.ERROR)
         self.assertIs(v.error_code, ErrorCode.DIV0)
         self.assertEqual(v.to_python(), ExcelError(ErrorCode.DIV0))
@@ -119,9 +121,9 @@ class ExcelErrorTests(unittest.TestCase):
     def test_value_error_code_is_error_code(self) -> None:
         self.assertIs(Value(kind=ValueKind.ERROR, error_code=6).error_code, ErrorCode.NA)
 
-    def test_payloadless_kinds_return_value(self) -> None:
-        v = Value(kind=ValueKind.ARRAY)
-        self.assertIs(v.to_python(), v)
+    def test_array_value_converts_to_nested_lists(self) -> None:
+        v = Value(kind=ValueKind.ARRAY, array=((Value(kind=ValueKind.NUMBER, number=1.0),),))
+        self.assertEqual(v.to_python(), [[1.0]])
 
 
 class LoadSaveTests(unittest.TestCase):
@@ -135,7 +137,7 @@ class LoadSaveTests(unittest.TestCase):
 
     def _assert_loaded(self, wb: Workbook) -> None:
         with wb:
-            self.assertEqual(wb.sheet(0).get_value(0, 0).number, 42.0)
+            self.assertEqual(wb.sheet(0).get_typed_value(0, 0).number, 42.0)
 
     def test_save_without_dest_returns_bytes(self) -> None:
         self.assertIsInstance(self.xlsx, bytes)
@@ -274,6 +276,9 @@ class LifecycleTests(unittest.TestCase):
             wb.save()
 
 
+_ARRAY_VALUE = Value(kind=ValueKind.ARRAY, array=((Value(kind=ValueKind.NUMBER, number=1.0),),))
+
+
 class SetValueTests(unittest.TestCase):
     def setUp(self) -> None:
         self.wb = Workbook.create_default()
@@ -281,7 +286,7 @@ class SetValueTests(unittest.TestCase):
 
     def _stored(self, value: object) -> Value:
         self.wb.sheet(0).set_value(0, 0, value)  # type: ignore[arg-type]
-        return self.wb.sheet(0).get_value(0, 0)
+        return self.wb.sheet(0).get_typed_value(0, 0)
 
     def test_zero_and_negative_zero(self) -> None:
         self.assertEqual(self._stored(0), Value(kind=ValueKind.NUMBER, number=0.0))
@@ -319,15 +324,18 @@ class SetValueTests(unittest.TestCase):
             self.wb.sheet(0).set_value(0, 0, 2**1024)
         self.assertNotIsInstance(cm.exception, FormulonError)
 
-    def test_formula_like_string_is_text(self) -> None:
-        self.assertEqual(self._stored("=A1"), Value(kind=ValueKind.TEXT, text="=A1"))
+    def test_formula_like_string_is_a_formula_and_typed_text_stays_text(self) -> None:
+        self._stored("=A1")
+        self.assertEqual(self.wb.sheet(0).get_formula(0, 0), "=A1")
+        text = Value(kind=ValueKind.TEXT, text="=A1")
+        self.assertEqual(self._stored(text), text)
         self.assertIsNone(self.wb.sheet(0).get_formula(0, 0))
 
     def test_excel_error(self) -> None:
         self.assertEqual(self._stored(ExcelError(ErrorCode.NA)), Value(kind=ValueKind.ERROR, error_code=ErrorCode.NA))
 
     def test_unsupported_types_are_type_error(self) -> None:
-        for bad in (object(), [1], {"a": 1}, b"bytes", Value(kind=ValueKind.ARRAY), Value(kind=ValueKind.REF)):
+        for bad in (object(), [1], {"a": 1}, b"bytes", _ARRAY_VALUE, Value(kind=ValueKind.REF)):
             with self.subTest(bad=bad), self.assertRaises(TypeError):
                 self.wb.sheet(0).set_value(0, 0, bad)  # type: ignore[arg-type]
 
@@ -341,7 +349,7 @@ class SetValueTests(unittest.TestCase):
         ):
             with self.subTest(kind=v.kind.name):
                 self.wb.sheet(0).set_value(1, 1, v)
-                self.assertEqual(self.wb.sheet(0).get_value(1, 1), v)
+                self.assertEqual(self.wb.sheet(0).get_typed_value(1, 1), v)
 
 
 class SheetIndexTests(unittest.TestCase):
@@ -420,8 +428,8 @@ class SheetViewTests(unittest.TestCase):
 
     def test_get_and_set(self) -> None:
         self.ws.set_value("B3", 5)
-        self.assertEqual(self.wb.sheet(0).get_value(2, 1), Value(kind=ValueKind.NUMBER, number=5.0))
-        self.assertEqual(self.ws.get_value("B3"), Value(kind=ValueKind.NUMBER, number=5.0))
+        self.assertEqual(self.wb.sheet(0).get_typed_value(2, 1), Value(kind=ValueKind.NUMBER, number=5.0))
+        self.assertEqual(self.ws.get_typed_value("B3"), Value(kind=ValueKind.NUMBER, number=5.0))
 
     def test_formula(self) -> None:
         self.ws.set_formula("C1", "=1+2")
@@ -448,24 +456,28 @@ class SheetViewTests(unittest.TestCase):
         self.ws.set_value("B3", 1)
         for a1 in ("b3", "$B$3", "B$3", "$b3"):
             with self.subTest(a1=a1):
-                self.assertEqual(self.ws.get_value(a1).number, 1.0)
+                self.assertEqual(self.ws.get_typed_value(a1).number, 1.0)
         self.ws.set_value("A1", 2)
         for a1 in ("A01", "a0000001"):
             with self.subTest(a1=a1):
-                self.assertEqual(self.ws.get_value(a1).number, 2.0)
+                self.assertEqual(self.ws.get_typed_value(a1).number, 2.0)
 
     def test_grid_edge(self) -> None:
         self.ws.set_value("XFD1048576", 9)
-        self.assertEqual(self.wb.sheet(0).get_value(1048575, 16383).number, 9.0)
+        self.assertEqual(self.wb.sheet(0).get_typed_value(1048575, 16383).number, 9.0)
         with self.assertRaises(InvalidArgumentError):
             self.ws.get_value("XFE1")
 
     def test_rejected_addresses(self) -> None:
-        for a1 in ("", "   ", "A1:B2", "Sheet2!A1", "Sheet1!A1", "R1C1", "Ａ１", "Aé1", "\ud800A1"):
+        # Text that is no reference fails to parse; a valid reference that is not one bare cell is an invalid argument.
+        unparseable = ("", "   ", "R1C1", "Ａ１", "Aé1", "\ud800A1")
+        not_a_cell = ("A1:B2", "Sheet2!A1", "Sheet1!A1")
+        for a1 in unparseable + not_a_cell:
             with self.subTest(a1=a1):
                 with self.assertRaises(InvalidArgumentError) as cm:
                     self.ws.get_value(a1)
-                self.assertEqual(cm.exception.code, StatusCode.INVALID_ARGUMENT)
+                want = StatusCode.PARSER_INVALID_REFERENCE if a1 in unparseable else StatusCode.INVALID_ARGUMENT
+                self.assertEqual(cm.exception.code, want)
                 with self.assertRaises(InvalidArgumentError):
                     self.ws.set_value(a1, 1)
 
@@ -547,9 +559,9 @@ class SheetA1PairwiseTests(unittest.TestCase):
                     continue
                 row, col = expected
                 self.ws.set_value(a1, float(row * 100000 + col))
-                self.assertEqual(self.wb.sheet(0).get_value(row, col).number, float(row * 100000 + col))
+                self.assertEqual(self.wb.sheet(0).get_typed_value(row, col).number, float(row * 100000 + col))
                 self.wb.sheet(0).set_number(row, col, -1.0)
-                self.assertEqual(self.ws.get_value(a1).number, -1.0)
+                self.assertEqual(self.ws.get_typed_value(a1).number, -1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -561,8 +573,10 @@ _LEDGER = _REPO_ROOT / "tools" / "api" / "names.yaml"
 
 # Hand-written members that are not ledger ops.
 _FACADE_EXTRA = {
-    "Workbook": {"sheet", "list_sheets", "close", "closed", "get_active_sheet", "set_active_sheet"},
-    "Sheet": {"workbook", "index", "name"},
+    "Workbook": {"sheet", "list_sheets", "close", "closed", "get_active_sheet", "set_active_sheet", "ooxml"},
+    "Sheet": {"workbook", "index", "name", "ooxml"},
+    "WorkbookOoxml": set(),
+    "SheetOoxml": set(),
 }
 
 
@@ -572,7 +586,7 @@ def _derived_py_names() -> "dict[str, set[str]]":
 
     with open(_LEDGER, encoding="utf-8") as f:
         ledger = yaml.safe_load(f)
-    out = {"Workbook": set(_FACADE_EXTRA["Workbook"]), "Sheet": set(_FACADE_EXTRA["Sheet"])}
+    out = {key: set(names) for key, names in _FACADE_EXTRA.items()}
     for entry in ledger["entries"].values():
         if not isinstance(entry, dict):
             continue
@@ -593,7 +607,8 @@ def _derived_py_names() -> "dict[str, set[str]]":
         if entry.get("kind") == "factory" and name.startswith("Workbook."):
             out["Workbook"].add(name.split(".", 1)[1])
         elif entry.get("kind") in ("op", "list") and entry.get("scope") in ("workbook", "sheet"):
-            out["Workbook" if entry["scope"] == "workbook" else "Sheet"].add(name)
+            owner = "Workbook" if entry["scope"] == "workbook" else "Sheet"
+            out[owner + "Ooxml" if entry.get("namespace") == "ooxml" else owner].add(name)
     return out
 
 
@@ -604,7 +619,7 @@ def _public_names(cls: type) -> "set[str]":
 class LedgerSurfaceTests(unittest.TestCase):
     def test_workbook_and_sheet_match_the_ledger(self) -> None:
         derived = _derived_py_names()
-        for cls in (Workbook, Sheet):
+        for cls in (Workbook, Sheet, formulon.WorkbookOoxml, formulon.SheetOoxml):
             with self.subTest(cls=cls.__name__):
                 actual = _public_names(cls)
                 want = derived[cls.__name__]
@@ -830,7 +845,7 @@ class SheetHandleTests(unittest.TestCase):
         self.assertEqual(repr(Value(kind=ValueKind.BOOL, boolean=True)), "Value(BOOL, True)")
         self.assertEqual(repr(Value(kind=ValueKind.TEXT, text="hi")), "Value(TEXT, 'hi')")
         self.assertEqual(repr(Value(kind=ValueKind.BLANK)), "Value(BLANK)")
-        self.assertEqual(repr(Value(kind=ValueKind.ARRAY)), "Value(ARRAY)")
+        self.assertEqual(repr(_ARRAY_VALUE), "Value(ARRAY, 1x1)")
         self.assertEqual(repr(Value(kind=ValueKind.TEXT, text="x" * 40)), "Value(TEXT, '" + "x" * 32 + "...')")
 
 
@@ -851,7 +866,7 @@ def _workbook_with_pivot() -> "tuple[Workbook, int, int]":
         wb.pivot_cache(cache_id).set_record_value(record, 0, region)
         wb.pivot_cache(cache_id).set_record_value(record, 1, amount)
     ws = wb.sheet(0)
-    pivot = ws.add_pivot(name="Pivot1", cache_id=cache_id, anchor_row=0, anchor_col=4)
+    pivot = ws.add_pivot(PivotInput(name="Pivot1", cache_id=cache_id, anchor=CellAddress(0, 4)))
     ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
     amount = ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE))
     ws.pivot(pivot).add_data_field(formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount))
@@ -1010,12 +1025,12 @@ class AbsentValueTests(unittest.TestCase):
         wb, ws = self.wb, self.wb.sheet(0)
         self.assertIsNone(wb.get_file_name())
         self.assertIsNone(ws.get_cell_phonetic(0, 0))
-        self.assertIsNone(ws.get_auto_filter_xml())
+        self.assertIsNone(ws.ooxml.get_auto_filter_xml())
         for getter in (
-            ws.get_page_setup_xml,
-            ws.get_page_margins_xml,
-            ws.get_print_options_xml,
-            ws.get_header_footer_xml,
+            ws.ooxml.get_page_setup_xml,
+            ws.ooxml.get_page_margins_xml,
+            ws.ooxml.get_print_options_xml,
+            ws.ooxml.get_header_footer_xml,
         ):
             with self.subTest(getter=getter.__name__):
                 self.assertIsNone(getter())

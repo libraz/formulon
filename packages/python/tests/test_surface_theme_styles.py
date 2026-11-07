@@ -9,6 +9,7 @@ from formulon import (
     CellXfInput,
     Color,
     ColorContext,
+    ColorKind,
     ColorResolution,
     EffectiveStyleSource,
     Font,
@@ -109,9 +110,11 @@ class EffectiveStyleTests(unittest.TestCase):
 
     def test_cell_xf_is_reported(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
-            xf = wb.add_cell_xf(_xf(font))
-            wb.sheet(0).set_cell_xf_index(1, 1, xf)
+            font = wb.ooxml.add_font(
+                Font(name="Calibri", size=11.0, bold=True, color=Color(ColorKind.RGB, rgb=0xFFFF0000))
+            )
+            xf = wb.ooxml.add_cell_xf(_xf(font))
+            wb.sheet(0).ooxml.set_cell_xf_index(1, 1, xf)
             style = wb.sheet(0).get_effective_style(1, 1)
             with self.assertRaises(FormulonError):
                 wb.sheet(99).get_effective_style(0, 0)
@@ -123,76 +126,82 @@ class EffectiveStyleTests(unittest.TestCase):
 class ClearCellXfIndexTests(unittest.TestCase):
     def test_clear_restores_inheritance(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
-            col_xf = wb.add_cell_xf(_xf(font))
-            cell_xf = wb.add_cell_xf(_xf(font))
-            wb.sheet(0).set_column_style(0, 0, col_xf)
+            font = wb.ooxml.add_font(
+                Font(name="Calibri", size=11.0, bold=True, color=Color(ColorKind.RGB, rgb=0xFFFF0000))
+            )
+            col_xf = wb.ooxml.add_cell_xf(_xf(font))
+            cell_xf = wb.ooxml.add_cell_xf(_xf(font))
+            wb.sheet(0).ooxml.set_column_style(0, 0, col_xf)
 
-            wb.sheet(0).set_cell_xf_index(0, 0, cell_xf)
+            wb.sheet(0).ooxml.set_cell_xf_index(0, 0, cell_xf)
             style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.CELL, cell_xf))
 
-            wb.sheet(0).clear_cell_xf_index(0, 0)
+            wb.sheet(0).ooxml.clear_cell_xf_index(0, 0)
             style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.COLUMN, col_xf))
 
-            wb.sheet(0).set_cell_xf_index(0, 0, 0)
+            wb.sheet(0).ooxml.set_cell_xf_index(0, 0, 0)
             style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.CELL, 0))
 
     def test_absent_cell_is_noop(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
-            col_xf = wb.add_cell_xf(_xf(font))
-            wb.sheet(0).set_column_style(0, 0, col_xf)
-            wb.sheet(0).clear_cell_xf_index(5, 0)
-            wb.sheet(0).clear_cell_xf_index(0, 0)
+            font = wb.ooxml.add_font(
+                Font(name="Calibri", size=11.0, bold=True, color=Color(ColorKind.RGB, rgb=0xFFFF0000))
+            )
+            col_xf = wb.ooxml.add_cell_xf(_xf(font))
+            wb.sheet(0).ooxml.set_column_style(0, 0, col_xf)
+            wb.sheet(0).ooxml.clear_cell_xf_index(5, 0)
+            wb.sheet(0).ooxml.clear_cell_xf_index(0, 0)
             style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.COLUMN, col_xf))
             with self.assertRaises(FormulonError):
-                wb.sheet(99).clear_cell_xf_index(0, 0)
+                wb.sheet(99).ooxml.clear_cell_xf_index(0, 0)
 
     def test_value_is_kept(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
-            xf = wb.add_cell_xf(_xf(font))
+            font = wb.ooxml.add_font(
+                Font(name="Calibri", size=11.0, bold=True, color=Color(ColorKind.RGB, rgb=0xFFFF0000))
+            )
+            xf = wb.ooxml.add_cell_xf(_xf(font))
             wb.sheet(0).set_number(0, 0, 7.0)
-            wb.sheet(0).set_cell_xf_index(0, 0, xf)
-            wb.sheet(0).clear_cell_xf_index(0, 0)
-            self.assertEqual(wb.sheet(0).get_value(0, 0).number, 7.0)
-            self.assertEqual(wb.sheet(0).get_cell_xf_index(0, 0), 0)
+            wb.sheet(0).ooxml.set_cell_xf_index(0, 0, xf)
+            wb.sheet(0).ooxml.clear_cell_xf_index(0, 0)
+            self.assertEqual(wb.sheet(0).get_value(0, 0), 7.0)
+            self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(0, 0), 0)
 
 
 class NamedStyleTests(unittest.TestCase):
     def test_set_and_remove_cell_style(self) -> None:
         with Workbook.create_default() as wb:
-            xf_id = wb.add_cell_style_xf(_xf(0))
-            wb.set_cell_style(CellStyle("Mine", xf_id, hidden=True))
-            names = {style.name: style for style in wb.list_cell_styles()}
-            self.assertEqual(wb.get_cell_style("Mine"), names["Mine"])
+            xf_id = wb.ooxml.add_cell_style_xf(_xf(0))
+            wb.ooxml.set_cell_style(CellStyle("Mine", xf_id, hidden=True))
+            names = {style.name: style for style in wb.ooxml.list_cell_styles()}
+            self.assertEqual(wb.ooxml.get_cell_style("Mine"), names["Mine"])
             self.assertIn("Mine", names)
             self.assertEqual(names["Mine"].xf_id, xf_id)
             self.assertTrue(names["Mine"].hidden)
-            wb.remove_cell_style("Mine")
-            after = [style.name for style in wb.list_cell_styles()]
-            self.assertIsNone(wb.get_cell_style("Mine"))
+            wb.ooxml.remove_cell_style("Mine")
+            after = [style.name for style in wb.ooxml.list_cell_styles()]
+            self.assertIsNone(wb.ooxml.get_cell_style("Mine"))
             self.assertNotIn("Mine", after)
             with self.assertRaises(FormulonError):
-                wb.remove_cell_style("Mine")
+                wb.ooxml.remove_cell_style("Mine")
             with self.assertRaises(FormulonError):
-                wb.set_cell_style(CellStyle("", xf_id))
+                wb.ooxml.set_cell_style(CellStyle("", xf_id))
 
 
 class CreateForProfileTests(unittest.TestCase):
     def test_mac_ja_jp_defaults(self) -> None:
         with Workbook.create_for_profile("mac-365-ja_JP") as wb:
-            self.assertEqual(wb.get_excel_profile_id(), "mac-365-ja_JP")
-            body = wb.get_font(0)
+            self.assertEqual(wb.get_profile_id(), "mac-365-ja_JP")
+            body = wb.ooxml.get_font(0)
             self.assertEqual(body.name, "游ゴシック")
             self.assertEqual(body.size, 12.0)
             self.assertEqual(body.charset, 128)
             self.assertEqual(body.scheme, 2)
-            self.assertEqual(wb.get_font(1).size, 6.0)
+            self.assertEqual(wb.ooxml.get_font(1).size, 6.0)
 
     def test_unknown_profile_raises(self) -> None:
         with self.assertRaises(FormulonError):
