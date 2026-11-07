@@ -353,6 +353,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/cell_evaluator.cpp
   src/eval/adhoc_eval.cpp
   src/eval/scheduler.cpp
+  src/eval/layer_worker_pool.cpp
   src/eval/spill_anchor.cpp
   src/eval/structured_ref_project.cpp
   src/eval/implicit_intersection.cpp

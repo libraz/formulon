@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -29,6 +28,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
+#include "eval/layer_worker_pool.h"
 #include "eval/recalc_engine.h"
 #include "eval/recalc_reentry.h"
 #include "eval/spill_release.h"
@@ -41,7 +41,6 @@
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/structured_log.h"
-#include "utils/thread_launch.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -61,7 +60,13 @@ const char* const kArenaExhaustedParallel = "evaluation arena exhausted during p
 // this guard exists to fail fast on a recursive same-thread call rather
 // than to police cross-thread misuse.
 using detail::g_in_recalc;
+using detail::LayerWork;
+using detail::LayerWorkerPool;
+using detail::process_scc;
+using detail::ReadObservation;
 using detail::RecalcReentryGuard;
+using detail::SccOutcome;
+using detail::ThreadArenas;
 
 // The spill-release queue, the progress snapshot and the wave ceilings are
 // shared with the serial `RecalcEngine::recalc`; see `spill_release.h`.
@@ -211,14 +216,6 @@ std::vector<std::vector<std::size_t>> kahn_layers(const CondensedGraph& cg) {
   return layers;
 }
 
-// Per-thread evaluation arenas. Allocated up front (one per worker) and
-// reset per task — `Arena::reset` keeps the largest chunk so steady-state
-// tasks become allocation-free. Stored as `unique_ptr` so the addresses
-// stay stable across vector growth (which we never trigger because the
-// pool is sized once at scheduler entry, but the cheap insurance is
-// worth the indirection).
-using ThreadArenas = std::vector<std::unique_ptr<Arena>>;
-
 ThreadArenas make_thread_arenas(std::size_t count, std::size_t max_arena_bytes) {
   ThreadArenas arenas;
   arenas.reserve(count);
@@ -227,43 +224,6 @@ ThreadArenas make_thread_arenas(std::size_t count, std::size_t max_arena_bytes) 
   }
   return arenas;
 }
-
-// Evaluates a single dirty SCC and writes the result(s) back into `wb`.
-// Holds `write_mutex` only across the per-cell `set_cell_cached_value`
-// call so concurrent evaluators on other SCCs of the same layer do not
-// serialise on it.
-//
-// Returns the per-SCC stats contribution. The atomics in
-// `recalc_parallel_impl` aggregate them once the layer drains.
-struct SccOutcome {
-  std::uint64_t cells_evaluated = 0;
-  std::uint64_t cycle_recoveries = 0;
-  /// Set when the worker's arena reported exhaustion for this component.
-  /// The committed values are degraded (an allocation failure surfaces as a
-  /// value-level error), so the pass must abort with `kOutOfMemory` rather
-  /// than report success — the same contract the serial engine applies at
-  /// each of its evaluation sites.
-  bool arena_exhausted = false;
-};
-
-// How a component's OFFSET / INDIRECT reads are observed. Only components
-// run on the calling thread carry a log; pooled ones hold no observed cell
-// (see the isolation split in `recalc_parallel_impl`).
-struct ReadObservation {
-  DynamicReadLog* log = nullptr;
-  std::uint64_t ordinal = 0U;
-
-  void observe(CellNodeId cell, EvaluateCellOptions& opts, const Sheet* sheet) const {
-    if (log != nullptr) {
-      log->observe(cell, ordinal, opts, sheet);
-    }
-  }
-  void note_commit(CellNodeId cell) const {
-    if (log != nullptr) {
-      log->note_commit(cell, ordinal);
-    }
-  }
-};
 
 enum class CellEvalStatus { kSkipped, kArenaExhausted, kCommitted };
 
@@ -300,6 +260,10 @@ CellEvalStatus evaluate_formula_cell(Workbook& wb, Sheet& sheet, CellNodeId cell
   obs.note_commit(cell);
   return CellEvalStatus::kCommitted;
 }
+
+}  // namespace
+
+namespace detail {
 
 SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, const DepGraph& graph,
                        const FunctionRegistry& registry, const IterativeOptions& iter_opts, Arena& arena,
@@ -393,205 +357,9 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
   return out;
 }
 
-// Per-layer shared state passed to each worker by reference. Bundling
-// these into a single struct cuts the `std::thread` template
-// instantiation surface from ~11 ref arguments down to 2, which trims
-// codegen meaningfully.
-struct LayerWork {
-  std::atomic<std::size_t> next_index{0U};
-  const std::vector<std::size_t>* tasks = nullptr;
-  const std::vector<std::vector<CellNodeId>>* components = nullptr;
-  Workbook* wb = nullptr;
-  const DepGraph* graph = nullptr;
-  const FunctionRegistry* registry = nullptr;
-  const IterativeOptions* iter_opts = nullptr;
-  IterativeProgressCb progress_cb = nullptr;
-  void* progress_user_data = nullptr;
-  ThreadArenas* arenas = nullptr;
-  std::mutex* write_mutex = nullptr;
-  SpillReleaseCallback release_callback = nullptr;
-  void* release_user_data = nullptr;
-  std::vector<SccOutcome>* outcomes = nullptr;
-  std::vector<std::uint8_t>* worker_used = nullptr;
-};
+}  // namespace detail
 
-// Drains the layer's task queue from one worker. `outcomes` is
-// preallocated so each worker writes into its own slot without a
-// result-side lock. `write_mutex` serialises only the per-cell store
-// mutation, not the evaluation itself.
-//
-// `next_index` is updated with `acq_rel`: the acquire half ensures any
-// writes a peer worker performed before claiming its task (in particular,
-// the `outcomes[idx] = ...` store) are visible to subsequent observers
-// of `next_index`; the release half publishes this worker's own writes
-// before the next claim. `relaxed` would have been correct only because
-// the join below provides the happens-before edge to the caller, but a
-// future change that observes `next_index` outside the join would silently
-// race; `acq_rel` keeps the invariant local to this loop.
-void worker_loop(std::size_t worker_id, LayerWork* work) {
-  Arena& arena = *(*work->arenas)[worker_id];
-  while (true) {
-    const std::size_t idx = work->next_index.fetch_add(1U, std::memory_order_acq_rel);
-    if (idx >= work->tasks->size()) {
-      return;
-    }
-    // Each worker owns one byte in this vector. The scheduler reads the
-    // flags only after the layer barrier (and, ultimately, after the pool is
-    // joined), so distinct workers can set their own flags without a result
-    // lock or an atomic increment on the hot task-claim path.
-    if (work->worker_used != nullptr) {
-      (*work->worker_used)[worker_id] = 1U;
-    }
-    (*work->outcomes)[idx] =
-        process_scc((*work->components)[(*work->tasks)[idx]], *work->wb, *work->graph, *work->registry,
-                    *work->iter_opts, arena, work->progress_cb, work->progress_user_data, *work->write_mutex,
-                    work->release_callback, work->release_user_data, ReadObservation{});
-  }
-}
-
-// A worker pool shared by every parallel layer in one recalc pass. Building
-// and joining workers per layer dominated small DAGs, so workers wait at a
-// layer barrier and are joined once when the pass ends.
-//
-// The pool takes the requested worker count as an upper bound, not a
-// promise. `launch_thread` reports an OS refusal instead of throwing (the
-// engine is built `-fno-exceptions`, so `std::thread` would have
-// terminated the host here), and the pool keeps whatever workers it did
-// start. `size()` is therefore the number to schedule against; the caller
-// falls back to evaluating on its own thread when that reaches zero, which
-// is slower but produces identical results.
-class LayerWorkerPool {
- public:
-  explicit LayerWorkerPool(std::uint32_t worker_count) : worker_used_(worker_count, 0U) {
-    // Both vectors are reserved and never grown afterwards: each live
-    // worker holds a pointer into `slots_`, which a reallocation would
-    // dangle.
-    slots_.reserve(worker_count);
-    workers_.reserve(worker_count);
-    for (std::uint32_t worker_id = 0U; worker_id < worker_count; ++worker_id) {
-      slots_.push_back(WorkerSlot{this, worker_id, ThreadStart{}});
-      WorkerSlot& slot = slots_.back();
-      slot.start.entry = &LayerWorkerPool::worker_entry;
-      slot.start.arg = &slot;
-      auto thread_or = launch_thread(slot.start);
-      if (!thread_or) {
-        // Degrade rather than abort: drop the slot that never started and
-        // run the pass on the workers already alive.
-        slots_.pop_back();
-        StructuredLog("recalc.worker.launch_failed")
-            .field("requested", static_cast<std::int64_t>(worker_count))
-            .field("started", static_cast<std::int64_t>(workers_.size()))
-            .field("reason", thread_or.error().message)
-            .warn();
-        break;
-      }
-      workers_.push_back(std::move(thread_or.value()));
-    }
-  }
-
-  LayerWorkerPool(const LayerWorkerPool&) = delete;
-  LayerWorkerPool& operator=(const LayerWorkerPool&) = delete;
-
-  ~LayerWorkerPool() {
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      stopping_ = true;
-    }
-    work_ready_.notify_all();
-    for (Thread& worker : workers_) {
-      worker.join();
-    }
-  }
-
-  /// Workers actually running, which is at most what the constructor was
-  /// asked for.
-  std::uint32_t size() const noexcept { return static_cast<std::uint32_t>(workers_.size()); }
-
-  /// Number of workers that claimed at least one task. Must be called after
-  /// the caller has drained all layers (or after destruction), because worker
-  /// flags are intentionally non-atomic and are published by the layer
-  /// barrier / thread joins.
-  std::uint32_t used_count() const noexcept {
-    std::uint32_t count = 0U;
-    for (const std::uint8_t used : worker_used_) {
-      count += used != 0U ? 1U : 0U;
-    }
-    return count;
-  }
-
-  std::vector<std::uint8_t>* used_flags() noexcept { return &worker_used_; }
-
-  /// Dispatches one layer across the live workers and returns once they
-  /// have all come back to the barrier. Requires `size() >= 1`: with no
-  /// worker to drain the queue this would return with the layer
-  /// untouched, so the caller checks the count first and takes the serial
-  /// path instead.
-  void run(LayerWork& work) {
-    work.outcomes->assign(work.tasks->size(), SccOutcome{});
-    work.next_index.store(0U, std::memory_order_relaxed);
-    std::unique_lock<std::mutex> lock(mutex_);
-    active_work_ = &work;
-    completed_workers_ = 0U;
-    ++generation_;
-    work_ready_.notify_all();
-    layer_done_.wait(lock, [this] { return completed_workers_ == workers_.size(); });
-    active_work_ = nullptr;
-  }
-
- private:
-  /// One launched worker's identity, kept at a stable address for the
-  /// lifetime of the thread that reads it.
-  struct WorkerSlot {
-    LayerWorkerPool* pool = nullptr;
-    std::uint32_t worker_id = 0U;
-    ThreadStart start;
-  };
-
-  static void worker_entry(void* raw) {
-    auto* slot = static_cast<WorkerSlot*>(raw);
-    // The re-entry guard is thread-local. The caller's guard therefore does
-    // not protect callbacks running on a pool worker; install a worker-side
-    // guard so a nested serial or parallel recalc fails before trying to
-    // acquire the already-held engine mutex.
-    RecalcReentryGuard guard;
-    slot->pool->worker_main(slot->worker_id);
-  }
-
-  void worker_main(std::uint32_t worker_id) {
-    std::size_t seen_generation = 0U;
-    while (true) {
-      LayerWork* work = nullptr;
-      {
-        std::unique_lock<std::mutex> lock(mutex_);
-        work_ready_.wait(lock, [this, seen_generation] { return stopping_ || generation_ != seen_generation; });
-        if (stopping_) {
-          return;
-        }
-        seen_generation = generation_;
-        work = active_work_;
-      }
-      worker_loop(static_cast<std::size_t>(worker_id), work);
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        ++completed_workers_;
-        if (completed_workers_ == workers_.size()) {
-          layer_done_.notify_one();
-        }
-      }
-    }
-  }
-
-  std::vector<WorkerSlot> slots_;
-  std::vector<Thread> workers_;
-  std::vector<std::uint8_t> worker_used_;
-  std::mutex mutex_;
-  std::condition_variable work_ready_;
-  std::condition_variable layer_done_;
-  LayerWork* active_work_ = nullptr;
-  std::size_t generation_ = 0U;
-  std::size_t completed_workers_ = 0U;
-  bool stopping_ = false;
-};
+namespace {
 
 std::uint32_t resolve_thread_count(std::uint32_t requested) {
   if (requested == 0U) {
