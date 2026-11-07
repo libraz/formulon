@@ -300,6 +300,38 @@ fm_status_t mutate_pivot_field(fm_workbook_t* wb, std::size_t sheet_index, std::
   return edit.commit();
 }
 
+// Sets one boolean member of a field.
+fm_status_t set_pivot_field_flag(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                 std::size_t field_index, bool formulon::pivot::PivotField::*flag, bool value) {
+  return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
+                            [flag, value](formulon::pivot::PivotField& field) { field.*flag = value; });
+}
+
+// Resolves a field and bounds-checks one of its items.
+fm_status_t resolve_pivot_item(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                               std::size_t field_index, std::size_t item_index, formulon::pivot::PivotTable** table,
+                               formulon::pivot::PivotField** field) {
+  if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_index, table, field); rc != 0) {
+    return rc;
+  }
+  return check_index(item_index, (*field)->items.size(), "item_index");
+}
+
+// Sets one boolean member of a field item.
+fm_status_t set_pivot_item_flag(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                std::size_t field_index, std::size_t item_index, bool formulon::pivot::PivotItem::*flag,
+                                bool value) {
+  formulon::pivot::PivotTable* table = nullptr;
+  formulon::pivot::PivotField* field = nullptr;
+  if (fm_status_t rc = resolve_pivot_item(wb, sheet_index, pivot_index, field_index, item_index, &table, &field);
+      rc != 0) {
+    return rc;
+  }
+  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
+  field->items[item_index].*flag = value;
+  return edit.commit();
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, std::size_t sheet_index,
@@ -368,32 +400,32 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_subtotal_top(fm_workbook_t* wb, 
                                                              std::size_t pivot_index, std::size_t field_index,
                                                              std::int32_t top) {
   clear_last_error();
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
-                            [top](formulon::pivot::PivotField& field) { field.subtotal_top = top != 0; });
+  return set_pivot_field_flag(wb, sheet_index, pivot_index, field_index, &formulon::pivot::PivotField::subtotal_top,
+                              top != 0);
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_default_subtotal(fm_workbook_t* wb, std::size_t sheet_index,
                                                                  std::size_t pivot_index, std::size_t field_index,
                                                                  std::int32_t on) {
   clear_last_error();
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
-                            [on](formulon::pivot::PivotField& field) { field.default_subtotal = on != 0; });
+  return set_pivot_field_flag(wb, sheet_index, pivot_index, field_index, &formulon::pivot::PivotField::default_subtotal,
+                              on != 0);
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_insert_blank_row(fm_workbook_t* wb, std::size_t sheet_index,
                                                                  std::size_t pivot_index, std::size_t field_index,
                                                                  std::int32_t on) {
   clear_last_error();
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
-                            [on](formulon::pivot::PivotField& field) { field.insert_blank_row = on != 0; });
+  return set_pivot_field_flag(wb, sheet_index, pivot_index, field_index, &formulon::pivot::PivotField::insert_blank_row,
+                              on != 0);
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_fill_down_labels(fm_workbook_t* wb, std::size_t sheet_index,
                                                                  std::size_t pivot_index, std::size_t field_index,
                                                                  std::int32_t on) {
   clear_last_error();
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
-                            [on](formulon::pivot::PivotField& field) { field.fill_down_labels = on != 0; });
+  return set_pivot_field_flag(wb, sheet_index, pivot_index, field_index, &formulon::pivot::PivotField::fill_down_labels,
+                              on != 0);
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_custom_name(fm_workbook_t* wb, std::size_t sheet_index,
@@ -442,8 +474,8 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_show_all(fm_workbook_t* wb, std:
                                                          std::size_t pivot_index, std::size_t field_index,
                                                          std::int32_t on) {
   clear_last_error();
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
-                            [on](formulon::pivot::PivotField& field) { field.show_all = on != 0; });
+  return set_pivot_field_flag(wb, sheet_index, pivot_index, field_index, &formulon::pivot::PivotField::show_all,
+                              on != 0);
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_show_detail(fm_workbook_t* wb, std::size_t sheet_index,
@@ -466,17 +498,8 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_show_detail(fm_workbook_t* 
                                                                  std::size_t pivot_index, std::size_t field_index,
                                                                  std::size_t item_index, std::int32_t on) {
   clear_last_error();
-  formulon::pivot::PivotTable* table = nullptr;
-  formulon::pivot::PivotField* field = nullptr;
-  if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_index(item_index, field->items.size(), "item_index"); rc != 0) {
-    return rc;
-  }
-  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  field->items[item_index].show_detail = on != 0;
-  return edit.commit();
+  return set_pivot_item_flag(wb, sheet_index, pivot_index, field_index, item_index,
+                             &formulon::pivot::PivotItem::show_detail, on != 0);
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_item_caption(fm_workbook_t* wb, std::size_t sheet_index,
@@ -491,10 +514,8 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_caption(fm_workbook_t* wb, 
   }
   formulon::pivot::PivotTable* table = nullptr;
   formulon::pivot::PivotField* field = nullptr;
-  if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_index(item_index, field->items.size(), "item_index"); rc != 0) {
+  if (fm_status_t rc = resolve_pivot_item(wb, sheet_index, pivot_index, field_index, item_index, &table, &field);
+      rc != 0) {
     return rc;
   }
   const std::string_view text = caption != nullptr ? std::string_view(caption) : std::string_view();
@@ -618,17 +639,8 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_visible(fm_workbook_t* wb, 
                                                              std::size_t pivot_index, std::size_t field_index,
                                                              std::size_t item_index, std::int32_t visible) {
   clear_last_error();
-  formulon::pivot::PivotTable* table = nullptr;
-  formulon::pivot::PivotField* field = nullptr;
-  if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_index(item_index, field->items.size(), "item_index"); rc != 0) {
-    return rc;
-  }
-  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  field->items[item_index].visible = visible != 0;
-  return edit.commit();
+  return set_pivot_item_flag(wb, sheet_index, pivot_index, field_index, item_index,
+                             &formulon::pivot::PivotItem::visible, visible != 0);
 }
 
 extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_fn(fm_workbook_t* wb, std::size_t sheet_index,

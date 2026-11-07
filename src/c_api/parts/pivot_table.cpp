@@ -513,6 +513,32 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
   return 0;
 }
 
+// Validates `spec`, resolves the table and builds the data field. With
+// `replace_index` the index must name an existing data field.
+fm_status_t prepare_data_field(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                               const fm_pivot_data_field_spec_t& spec, std::optional<std::size_t> replace_index,
+                               formulon::pivot::PivotTable** table, formulon::pivot::PivotDataField* df) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = validate(spec); rc != 0) {
+    return rc;
+  }
+  if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, table); rc != 0) {
+    return rc;
+  }
+  if (replace_index.has_value()) {
+    if (auto rc = check_index(*replace_index, (*table)->data_fields().size(), "data_field_index"); rc != 0) {
+      return rc;
+    }
+  }
+  std::string number_format;
+  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), spec.number_format, &number_format); rc != 0) {
+    return rc;
+  }
+  return fill_data_field(wb->workbook(), **table, spec, std::move(number_format), replace_index, df);
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::size_t sheet_index,
@@ -522,22 +548,9 @@ extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::siz
   if (wb == nullptr || spec == nullptr || out_index == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = validate(*spec); rc != 0) {
-    return rc;
-  }
   formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
-    return rc;
-  }
-  std::string number_format;
-  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), spec->number_format, &number_format); rc != 0) {
-    return rc;
-  }
   formulon::pivot::PivotDataField df;
-  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, std::move(number_format), std::nullopt, &df); rc != 0) {
+  if (auto rc = prepare_data_field(wb, sheet_index, pivot_index, *spec, std::nullopt, &table, &df); rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -569,26 +582,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::siz
   if (wb == nullptr || spec == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = validate(*spec); rc != 0) {
-    return rc;
-  }
   formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_index(data_field_index, table->data_fields().size(), "data_field_index"); rc != 0) {
-    return rc;
-  }
-  std::string number_format;
-  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), spec->number_format, &number_format); rc != 0) {
-    return rc;
-  }
   formulon::pivot::PivotDataField df;
-  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, std::move(number_format), data_field_index, &df);
-      rc != 0) {
+  if (auto rc = prepare_data_field(wb, sheet_index, pivot_index, *spec, data_field_index, &table, &df); rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);

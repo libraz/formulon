@@ -67,6 +67,21 @@ formulon::Arena make_eval_arena() {
   return formulon::Arena(formulon::kDefaultArenaChunkBytes, formulon::kMaxEvalArenaBytes);
 }
 
+fm_status_t check_adhoc_cell(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  return check_sheet_rect(row, col, row, col);
+}
+
+// `<file_name>!Name` names this workbook and `[@Qty]` the table holding the
+// cell; no external book is registered.
+std::string bind_adhoc_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                               const char* formula) {
+  return wb->workbook().bind_self_book_names(
+      wb->workbook().bind_entered_structured_refs(formula, sheet_index, row, col));
+}
+
 fm_status_t arena_exhausted_error() {
   return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted");
 }
@@ -79,10 +94,7 @@ extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t
   if (out == nullptr || formula == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_rect(row, col, row, col); rc != 0) {
+  if (auto rc = check_adhoc_cell(wb, sheet_index, row, col); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({formula}); rc != 0) {
@@ -91,10 +103,7 @@ extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t
   // The arena backs any text payload in the result until it is copied into
   // the read scratch below.
   formulon::Arena arena = make_eval_arena();
-  // `<file_name>!Name` names this workbook and `[@Qty]` the table holding the
-  // cell; no external book is registered.
-  const std::string text =
-      wb->workbook().bind_self_book_names(wb->workbook().bind_entered_structured_refs(formula, sheet_index, row, col));
+  const std::string text = bind_adhoc_formula(wb, sheet_index, row, col, formula);
   const formulon::Value v = formulon::eval::evaluate_formula_text(
       wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
@@ -113,10 +122,7 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
   if (out == nullptr || formula == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_rect(row, col, row, col); rc != 0) {
+  if (auto rc = check_adhoc_cell(wb, sheet_index, row, col); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({formula}); rc != 0) {
@@ -125,8 +131,7 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
   // The arena backs any text payload in the result until it is deep-copied
   // into the returned handle below.
   formulon::Arena arena = make_eval_arena();
-  const std::string text =
-      wb->workbook().bind_self_book_names(wb->workbook().bind_entered_structured_refs(formula, sheet_index, row, col));
+  const std::string text = bind_adhoc_formula(wb, sheet_index, row, col, formula);
   const formulon::Value v = formulon::eval::evaluate_formula_text_array(
       wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
@@ -206,10 +211,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, siz
   if (out == nullptr || formula == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_rect(row, col, row, col); rc != 0) {
+  if (auto rc = check_adhoc_cell(wb, sheet_index, row, col); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_rect(anchor_row, anchor_col, anchor_row, anchor_col); rc != 0) {
@@ -219,8 +221,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, siz
     return rc;
   }
   formulon::Arena arena = make_eval_arena();
-  const std::string text =
-      wb->workbook().bind_self_book_names(wb->workbook().bind_entered_structured_refs(formula, sheet_index, row, col));
+  const std::string text = bind_adhoc_formula(wb, sheet_index, row, col, formula);
   const bool fired =
       formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col, anchor_row,
                                           anchor_col, text, arena, formulon::eval::default_registry());

@@ -689,8 +689,7 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   // structured view cannot distinguish `scale="100"` from an absent
   // attribute that defaults to 100.
   pugi::xml_document doc;
-  if (!print.page_setup_xml.empty() && doc.load_buffer(print.page_setup_xml.data(), print.page_setup_xml.size(),
-                                                       pugi::parse_default, pugi::encoding_utf8)) {
+  if (load_fragment(doc, print.page_setup_xml)) {
     const pugi::xml_node root = doc.first_child();
     const EngagedAttr attrs[] = {
         {"orientation", &out->orientation_engaged},
@@ -702,8 +701,7 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
     read_engaged(root, attrs, std::size(attrs));
   }
   pugi::xml_document sheet_pr_doc;
-  if (!print.sheet_pr_xml.empty() && sheet_pr_doc.load_buffer(print.sheet_pr_xml.data(), print.sheet_pr_xml.size(),
-                                                              pugi::parse_default, pugi::encoding_utf8)) {
+  if (load_fragment(sheet_pr_doc, print.sheet_pr_xml)) {
     const pugi::xml_node page_setup_pr = sheet_pr_doc.first_child().child("pageSetUpPr");
     out->fit_to_page_engaged = (page_setup_pr && page_setup_pr.attribute("fitToPage")) ? 1 : 0;
   }
@@ -729,8 +727,7 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
   out->footer = view.footer;
 
   pugi::xml_document doc;
-  if (!print.page_margins_xml.empty() && doc.load_buffer(print.page_margins_xml.data(), print.page_margins_xml.size(),
-                                                         pugi::parse_default, pugi::encoding_utf8)) {
+  if (load_fragment(doc, print.page_margins_xml)) {
     const pugi::xml_node root = doc.first_child();
     const EngagedAttr attrs[] = {
         {"left", &out->left_engaged},     {"right", &out->right_engaged},   {"top", &out->top_engaged},

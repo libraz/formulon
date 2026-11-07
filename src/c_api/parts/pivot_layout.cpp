@@ -19,6 +19,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/pivot_internal.h"
 #include "eval/pivot_formula.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
@@ -30,10 +31,10 @@
 
 using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_index;
-using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_num_fmt_code;
+using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -85,19 +86,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
     return null_argument();
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
-  }
-  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  if (auto rc = check_index(pivot_index, sheet.pivot_tables().size(), "pivot_index"); rc != 0) {
-    return rc;
-  }
-
-  const formulon::pivot::PivotTable* table = sheet.pivot_tables()[pivot_index].get();
-  if (table == nullptr) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kEvalPivotInvalid, "pivot table entry is NULL",
-        "sheet_index=" + std::to_string(sheet_index) + " pivot_index=" + std::to_string(pivot_index));
   }
 
   // Resolved before evaluation, not just before projection: the label of an
