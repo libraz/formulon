@@ -731,6 +731,11 @@ class Workbook {
   /// and A1 rectangle before the writer rebuilds its relationships.
   std::vector<TableMetadata>& mutable_tables() noexcept { return tables_; }
 
+  /// Hands out the next session id for `TableMetadata::runtime_id` and
+  /// `pivot::PivotTable::runtime_id()`: one counter for both, starting at 1,
+  /// never reused, never saved.
+  std::uint32_t allocate_runtime_id() const noexcept { return next_runtime_id_++; }
+
   /// Replaces the workbook's table-metadata list and re-registers every
   /// formula whose structured reference names a table of the old or new
   /// list, as `set_defined_names` does for names: a reader stores cell
@@ -742,13 +747,16 @@ class Workbook {
   /// `table.ref` must be a single-area A1 range as wide as `table.columns`,
   /// whose names must be non-empty and pairwise distinct (case-insensitive).
   /// Returns `kInvalidArgument` for a bad sheet index, an empty or unparsable
-  /// identity or range, a column mismatch, or a name or display name any
-  /// existing table (a verbatim-retained XLSB table part included) already
-  /// uses. `table.style_info` is kept as given.
+  /// identity or range, a column mismatch, a display name `is_valid_table_name`
+  /// refuses, a name or display name any existing table (a verbatim-retained
+  /// XLSB table part included) or defined name of any scope already uses, or
+  /// a range overlapping another table on the sheet. `table.style_info` is
+  /// kept as given.
   Expected<std::size_t, Error> add_table(TableMetadata table);
 
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
-  /// of any table (compared case-insensitively), as `add_table` checks.
+  /// of any table nor a defined name (compared case-insensitively), as
+  /// `add_table` checks.
   std::string next_default_table_name(std::string_view word) const;
 
   /// Index in `tables()` of the first table on `sheet_index` whose `ref`
@@ -773,9 +781,9 @@ class Workbook {
   /// Renames table `index` and rewrites every structured reference naming its
   /// old name or display name (case-insensitive) to `display_name`: cell,
   /// defined-name, metadata (CF, DV, calculated-column, totals-row) and chart
-  /// formulas, plus a pivot cache sourced from the table by name. Name
-  /// validity and uniqueness are the caller's; returns `kInvalidArgument`
-  /// only for an out-of-range `index`.
+  /// formulas, plus a pivot cache sourced from the table by name. Returns
+  /// `kInvalidArgument` for an out-of-range `index` and for a name pair
+  /// `add_table` would refuse, the table's own names excepted.
   Expected<void, Error> rename_table(std::size_t index, std::string name, std::string display_name);
 
   /// Renames column `column` of table `table` from a typed header and
@@ -1440,6 +1448,8 @@ class Workbook {
   // the writer for round-trip preservation. Empty by default.
   std::vector<DefinedName> defined_names_;
   std::vector<TableMetadata> tables_;
+  // See `allocate_runtime_id()`.
+  mutable std::uint32_t next_runtime_id_ = 1;
   std::vector<PassthroughPart> passthrough_parts_;
   std::vector<ExternalLinkRecord> external_links_;
   // See `file_name()`.

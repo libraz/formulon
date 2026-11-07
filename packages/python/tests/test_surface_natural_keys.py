@@ -11,6 +11,7 @@ from formulon import (
     DefinedName,
     DefinedNameInput,
     FormulonError,
+    NotFoundError,
     Person,
     ThemeScriptFont,
     ThemeScriptFontInput,
@@ -67,19 +68,29 @@ class NaturalKeyLookupTests(unittest.TestCase):
 
     def test_shapes_and_drawing_objects_are_read_by_object_id(self) -> None:
         with Workbook.create_default() as wb:
-            object_id = wb.sheet(0).add_shape(
-                anchor_kind=AnchorKind.ONE_CELL, from_row=2, width_emu=914400, height_emu=457200, preset_geometry="rect"
+            object_id = (
+                wb.sheet(0)
+                .add_shape(
+                    anchor_kind=AnchorKind.ONE_CELL,
+                    from_row=2,
+                    width_emu=914400,
+                    height_emu=457200,
+                    preset_geometry="rect",
+                )
+                .object_id
             )
-            shape = wb.sheet(0).get_shape(object_id)
+            shape = wb.sheet(0).shape(object_id).get_properties()
             self.assertIsNotNone(shape)
             assert shape is not None
             self.assertEqual(shape.preset_geometry, "rect")
-            drawing = wb.sheet(0).get_drawing_object(object_id)
+            drawing = wb.sheet(0).drawing(object_id).get_drawing_properties()
             self.assertIsNotNone(drawing)
             assert drawing is not None
             self.assertEqual(drawing.from_row, 2)
-            self.assertIsNone(wb.sheet(0).get_shape(object_id + 1))
-            self.assertIsNone(wb.sheet(0).get_drawing_object(object_id + 1))
+            with self.assertRaises(NotFoundError):
+                wb.sheet(0).shape(object_id + 1)
+            with self.assertRaises(NotFoundError):
+                wb.sheet(0).drawing(object_id + 1)
 
     def test_theme_script_fonts_and_passthrough_parts_are_read_by_key(self) -> None:
         with Workbook.create_default() as wb:

@@ -18,8 +18,8 @@ collections:
   cell_xf: { key: index, access: indexed, plural: cell_xfs, ops: [cell_xf.add, cell_xf.get, cell_xf.get_count] }
   cell_style_xf: { key: index, access: indexed, plural: cell_style_xfs, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count] }
   dxf: { key: index, access: indexed, plural: dxfs, ops: [dxf.add, dxf.get, dxf.get_count] }
-  table: { key: index, access: list, plural: tables, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update] }
-  pivot: { key: index, access: list, plural: pivots, ops: [pivot.create, pivot.get_count, pivot.remove] }
+  table: { key: index, access: handles, handle_class: Table, plural: tables, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update, table.list.iter_tables, binding.table] }
+  pivot: { key: index, access: handles, handle_class: Pivot, plural: pivots, ops: [pivot.create, pivot.get_count, pivot.remove, pivots.list, binding.pivot] }
   pivot_field: { key: index, access: list, plural: pivot_fields, ops: [pivot_field.add, pivot_field.clear, pivot_field.get, pivot_field.get_count] }
   pivot_data_field: { key: index, access: list, plural: pivot_data_fields, ops: [pivot_data_field.add, pivot_data_field.clear, pivot_data_field.get, pivot_data_field.get_count, pivot_data_field.set] }
   pivot_filter: { key: index, access: list, plural: pivot_filters, ops: [pivot_filter.add, pivot_filter.clear, pivot_filter.get, pivot_filter.get_count, pivot_filter.remove] }
@@ -43,7 +43,7 @@ collections:
   defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.remove, defined_name.set, defined_name_attrs.get_at] }
   data_table: { key: natural, by: cell, plural: data_tables, ops: [data_table.add, data_table.get, data_table.remove] }
   lambda_text: { key: natural, by: cell, plural: lambda_texts, ops: [lambda_text.get] }
-  pivot_cache: { key: natural, by: cache_id, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id_at, pivot_cache.remove], no_getter: "addressed by cache_id through the per-property cache getters" }
+  pivot_cache: { key: natural, by: cache_id, access: handles, handle_class: PivotCache, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id_at, pivot_cache.remove, pivot_cache_ids.list, binding.pivot_cache], no_getter: "addressed by cache_id through the per-property cache getters" }
   num_fmt: { key: natural, by: num_fmt_id, plural: num_fmts, ops: [num_fmt.add, num_fmt_string.get] }
   function: { key: natural, by: name, plural: function_names, ops: [function.canonicalize_name, function.get_count, function.get_name_at, function.localize_name, function_metadata.get] }
   locale_error_name: { key: natural, by: "error code", plural: locale_error_names, ops: [locale_error_name.get_at, locale_error_name.get_count, error_display_name.get] }
@@ -51,11 +51,11 @@ collections:
   column_break: { key: natural, by: col, plural: column_breaks, ops: [column_break.add, column_break.get_at, column_break.get_count, column_break.remove], no_getter: "the element is its column number; a lookup by key returns nothing more" }
   row_override: { key: natural, by: row, plural: row_overrides, ops: [row_override.get_at, row_override.get_count], no_getter: "read by row through the per-property row getters" }
   theme_script_font: { key: natural, by: script, plural: theme_script_fonts, ops: [theme_script_font.get, theme_script_font.get_at, theme_script_font.get_count, theme_script_font.set] }
-  shape: { key: natural, by: object_id, plural: shapes, ops: [shape.add, shape.get, shape.get_at, shape.get_count, shape.remove, shape.update] }
-  image: { key: natural, by: object_id, plural: images, ops: [image.add, image.get] }
-  chart: { key: natural, by: object_id, plural: charts, ops: [chart.add, chart.get] }
-  slicer: { key: natural, by: object_id, plural: slicers, ops: [slicer.add, slicer.get, slicer.get_at, slicer.get_count, slicer.remove, slicer.update] }
-  drawing_object: { key: natural, by: object_id, plural: drawing_objects, ops: [drawing_object.get, drawing_object.get_at, drawing_object.get_count, drawing.remove] }
+  shape: { key: natural, by: object_id, access: handles, handle_class: Shape, handle_base: Drawing, plural: shapes, ops: [shape.add, shape.get, shape.get_at, shape.get_count, shape.remove, shape.update, shapes.list, binding.shape] }
+  image: { key: natural, by: object_id, access: handles, handle_class: Picture, handle_base: Drawing, plural: pictures, ops: [image.add, image.get, binding.picture, binding.list_pictures, binding.add_picture] }
+  chart: { key: natural, by: object_id, access: handles, handle_class: Chart, handle_base: Drawing, plural: charts, ops: [chart.add, chart.get, binding.chart, binding.list_charts] }
+  slicer: { key: natural, by: object_id, access: handles, handle_class: Slicer, handle_base: Drawing, plural: slicers, ops: [slicer.add, slicer.get, slicer.get_at, slicer.get_count, slicer.remove, slicer.update, slicers.list, binding.slicer] }
+  drawing_object: { key: natural, by: object_id, access: handles, handle_class: Drawing, plural: drawings, ops: [drawing_object.get, drawing_object.get_at, drawing_object.get_count, drawing.remove, drawing_objects.list, binding.drawing, binding.list_drawings, binding.remove_drawing] }
   passthrough: { key: natural, by: "part name", plural: passthroughs, ops: [passthrough.get, passthrough.get_at, passthrough.get_count] }
   cell: { key: natural, by: cell, ops: [cell.get_at, cell.get_count, value.get] }
   column_override: { key: natural, by: col, plural: column_overrides, ops: [column_override.get_at, column_override.get_count], no_getter: "read by column through the per-property column getters" }
@@ -67,6 +67,8 @@ enum_families:
   blanks: [enum.chart_blanks_as, enum.sparkline_empty_cells]
   # side: Bottom 0, Top 1, Left 2, Right 3; the legend adds TopRight 4 (its None is a record null)
   side: [enum.chart_axis_position, enum.chart_legend_position]
+  # reading direction: Context 0, LeftToRight 1, RightToLeft 2 (`readingOrder` / `<x14:dataBar direction>`)
+  reading_direction: [enum.reading_order, enum.cf_data_bar_direction]
 enum_distinct:
   - { enums: [enum.chart_axis_crosses, enum.pivot_aggregation], reason: "share Min / Max only: axis crossing point vs aggregation function" }
   - { enums: [enum.chart_axis_position, enum.chart_label_position], reason: "share Left / Right: axis side vs data-label placement" }
@@ -79,6 +81,16 @@ enum_distinct:
   - { enums: [enum.chart_source_kind, enum.chart_title_kind], reason: "share None / Ref: series source vs title source" }
   - { enums: [enum.chart_title_kind, enum.pivot_filter_value_kind], reason: "share None / Text: title source vs filter operand kind" }
   - { enums: [enum.chart_title_kind, enum.value_kind], reason: "share Ref / Text: title source vs cell value kind" }
+  - { enums: [enum.chart_axis_position, enum.horizontal_align], reason: "share Left / Right: axis side vs cell horizontal alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.chart_axis_position, enum.vertical_align], reason: "share Top / Bottom: axis side vs cell vertical alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.chart_label_position, enum.horizontal_align], reason: "share Left / Right / Center: data-label placement vs cell horizontal alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.chart_legend_position, enum.horizontal_align], reason: "share Left / Right: legend placement vs cell horizontal alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.chart_legend_position, enum.vertical_align], reason: "share Top / Bottom: legend placement vs cell vertical alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.horizontal_align, enum.vertical_align], reason: "share Center / Justify / Distributed: horizontal vs vertical cell alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.border_style, enum.pivot_filter_value_kind], reason: "share None / Double: border line style vs filter operand kind; values follow the OOXML vocabulary order" }
+  - { enums: [enum.border_style, enum.underline_style], reason: "share None / Double: border line style vs font underline; values follow the OOXML vocabulary order" }
+  - { enums: [enum.pivot_filter_value_kind, enum.underline_style], reason: "share None / Double: filter operand kind vs font underline; values follow the OOXML vocabulary order" }
+  - { enums: [enum.fill_pattern, enum.shape_paint], reason: "share None / Solid: cell fill pattern vs shape fill paint; values follow the OOXML vocabulary order" }
 entries:
   type.status:
     kind: typedef
@@ -278,8 +290,9 @@ entries:
   record.threaded_comment_patch:
     kind: record
     role: patch
+    c: fm_threaded_comment_patch_t
     js: ThreadedCommentPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
   record.person:
     kind: record
     role: result
@@ -453,18 +466,32 @@ entries:
     surfaces: [wasm, native]
   record.print_options:
     kind: record
-    role: patch
+    role: result
     c: fm_print_options_t
-    js: PrintOptionsPatch
-    surfaces: [c, wasm, native]
-    was: { c: fm_print_options_t, js: PrintOptionsInput }
-  record.header_footer:
+    js: PrintOptions
+    py: PrintOptions
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_print_options_t }
+  record.print_options_patch:
     kind: record
     role: patch
+    js: PrintOptionsPatch
+    surfaces: [wasm, native]
+    was: { js: PrintOptionsInput }
+  record.header_footer:
+    kind: record
+    role: result
     c: fm_header_footer_t
+    js: HeaderFooter
+    py: HeaderFooter
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_header_footer_t }
+  record.header_footer_patch:
+    kind: record
+    role: patch
     js: HeaderFooterPatch
-    surfaces: [c, wasm, native]
-    was: { c: fm_header_footer_t, js: HeaderFooterInput }
+    surfaces: [wasm, native]
+    was: { js: HeaderFooterInput }
   type.cf_results:
     kind: typedef
     c: fm_cf_results_t
@@ -1046,11 +1073,402 @@ entries:
     py: AnchorEditAs
     surfaces: [c, wasm, native, py]
     was: { c: fm_anchor_edit_as_t, js: AnchorEditAs, py: AnchorEditAs }
+  enum.horizontal_align:
+    kind: enum
+    c: fm_horizontal_align_t
+    js: HorizontalAlign
+    py: HorizontalAlign
+    surfaces: [c, wasm, native, py]
+  enum.vertical_align:
+    kind: enum
+    c: fm_vertical_align_t
+    js: VerticalAlign
+    py: VerticalAlign
+    surfaces: [c, wasm, native, py]
+  enum.reading_order:
+    kind: enum
+    c: fm_reading_order_t
+    js: ReadingOrder
+    py: ReadingOrder
+    surfaces: [c, wasm, native, py]
+  enum.underline_style:
+    kind: enum
+    c: fm_underline_style_t
+    js: UnderlineStyle
+    py: UnderlineStyle
+    surfaces: [c, wasm, native, py]
+  enum.font_vertical_align:
+    kind: enum
+    c: fm_font_vertical_align_t
+    js: FontVerticalAlign
+    py: FontVerticalAlign
+    surfaces: [c, wasm, native, py]
+  enum.font_scheme:
+    kind: enum
+    c: fm_font_scheme_t
+    js: FontScheme
+    py: FontScheme
+    surfaces: [c, wasm, native, py]
+  enum.font_family:
+    kind: enum
+    c: fm_font_family_t
+    js: FontFamily
+    py: FontFamily
+    surfaces: [c, wasm, native, py]
+  enum.fill_pattern:
+    kind: enum
+    c: fm_fill_pattern_t
+    js: FillPattern
+    py: FillPattern
+    surfaces: [c, wasm, native, py]
+  enum.gradient_type:
+    kind: enum
+    c: fm_gradient_type_t
+    js: GradientType
+    py: GradientType
+    surfaces: [c, wasm, native, py]
+  enum.border_style:
+    kind: enum
+    c: fm_border_style_t
+    js: BorderStyle
+    py: BorderStyle
+    surfaces: [c, wasm, native, py]
+  constant.fm_horizontal_align_general:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_GENERAL
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_horizontal_align_left:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_LEFT
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_horizontal_align_center:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_CENTER
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_horizontal_align_right:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_RIGHT
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_horizontal_align_fill:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_FILL
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_horizontal_align_justify:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_JUSTIFY
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_horizontal_align_center_continuous:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_CENTER_CONTINUOUS
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_horizontal_align_distributed:
+    kind: constant
+    c: FM_HORIZONTAL_ALIGN_DISTRIBUTED
+    enum: enum.horizontal_align
+    surfaces: [c]
+  constant.fm_vertical_align_top:
+    kind: constant
+    c: FM_VERTICAL_ALIGN_TOP
+    enum: enum.vertical_align
+    surfaces: [c]
+  constant.fm_vertical_align_center:
+    kind: constant
+    c: FM_VERTICAL_ALIGN_CENTER
+    enum: enum.vertical_align
+    surfaces: [c]
+  constant.fm_vertical_align_bottom:
+    kind: constant
+    c: FM_VERTICAL_ALIGN_BOTTOM
+    enum: enum.vertical_align
+    surfaces: [c]
+  constant.fm_vertical_align_justify:
+    kind: constant
+    c: FM_VERTICAL_ALIGN_JUSTIFY
+    enum: enum.vertical_align
+    surfaces: [c]
+  constant.fm_vertical_align_distributed:
+    kind: constant
+    c: FM_VERTICAL_ALIGN_DISTRIBUTED
+    enum: enum.vertical_align
+    surfaces: [c]
+  constant.fm_reading_order_context:
+    kind: constant
+    c: FM_READING_ORDER_CONTEXT
+    enum: enum.reading_order
+    surfaces: [c]
+  constant.fm_reading_order_left_to_right:
+    kind: constant
+    c: FM_READING_ORDER_LEFT_TO_RIGHT
+    enum: enum.reading_order
+    surfaces: [c]
+  constant.fm_reading_order_right_to_left:
+    kind: constant
+    c: FM_READING_ORDER_RIGHT_TO_LEFT
+    enum: enum.reading_order
+    surfaces: [c]
+  constant.fm_underline_style_none:
+    kind: constant
+    c: FM_UNDERLINE_STYLE_NONE
+    enum: enum.underline_style
+    surfaces: [c]
+  constant.fm_underline_style_single:
+    kind: constant
+    c: FM_UNDERLINE_STYLE_SINGLE
+    enum: enum.underline_style
+    surfaces: [c]
+  constant.fm_underline_style_double:
+    kind: constant
+    c: FM_UNDERLINE_STYLE_DOUBLE
+    enum: enum.underline_style
+    surfaces: [c]
+  constant.fm_underline_style_single_accounting:
+    kind: constant
+    c: FM_UNDERLINE_STYLE_SINGLE_ACCOUNTING
+    enum: enum.underline_style
+    surfaces: [c]
+  constant.fm_underline_style_double_accounting:
+    kind: constant
+    c: FM_UNDERLINE_STYLE_DOUBLE_ACCOUNTING
+    enum: enum.underline_style
+    surfaces: [c]
+  constant.fm_font_vertical_align_baseline:
+    kind: constant
+    c: FM_FONT_VERTICAL_ALIGN_BASELINE
+    enum: enum.font_vertical_align
+    surfaces: [c]
+  constant.fm_font_vertical_align_superscript:
+    kind: constant
+    c: FM_FONT_VERTICAL_ALIGN_SUPERSCRIPT
+    enum: enum.font_vertical_align
+    surfaces: [c]
+  constant.fm_font_vertical_align_subscript:
+    kind: constant
+    c: FM_FONT_VERTICAL_ALIGN_SUBSCRIPT
+    enum: enum.font_vertical_align
+    surfaces: [c]
+  constant.fm_font_scheme_none:
+    kind: constant
+    c: FM_FONT_SCHEME_NONE
+    enum: enum.font_scheme
+    surfaces: [c]
+  constant.fm_font_scheme_major:
+    kind: constant
+    c: FM_FONT_SCHEME_MAJOR
+    enum: enum.font_scheme
+    surfaces: [c]
+  constant.fm_font_scheme_minor:
+    kind: constant
+    c: FM_FONT_SCHEME_MINOR
+    enum: enum.font_scheme
+    surfaces: [c]
+  constant.fm_font_family_not_applicable:
+    kind: constant
+    c: FM_FONT_FAMILY_NOT_APPLICABLE
+    enum: enum.font_family
+    surfaces: [c]
+  constant.fm_font_family_roman:
+    kind: constant
+    c: FM_FONT_FAMILY_ROMAN
+    enum: enum.font_family
+    surfaces: [c]
+  constant.fm_font_family_swiss:
+    kind: constant
+    c: FM_FONT_FAMILY_SWISS
+    enum: enum.font_family
+    surfaces: [c]
+  constant.fm_font_family_modern:
+    kind: constant
+    c: FM_FONT_FAMILY_MODERN
+    enum: enum.font_family
+    surfaces: [c]
+  constant.fm_font_family_script:
+    kind: constant
+    c: FM_FONT_FAMILY_SCRIPT
+    enum: enum.font_family
+    surfaces: [c]
+  constant.fm_font_family_decorative:
+    kind: constant
+    c: FM_FONT_FAMILY_DECORATIVE
+    enum: enum.font_family
+    surfaces: [c]
+  constant.fm_fill_pattern_none:
+    kind: constant
+    c: FM_FILL_PATTERN_NONE
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_solid:
+    kind: constant
+    c: FM_FILL_PATTERN_SOLID
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_medium_gray:
+    kind: constant
+    c: FM_FILL_PATTERN_MEDIUM_GRAY
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_dark_gray:
+    kind: constant
+    c: FM_FILL_PATTERN_DARK_GRAY
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_light_gray:
+    kind: constant
+    c: FM_FILL_PATTERN_LIGHT_GRAY
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_dark_horizontal:
+    kind: constant
+    c: FM_FILL_PATTERN_DARK_HORIZONTAL
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_dark_vertical:
+    kind: constant
+    c: FM_FILL_PATTERN_DARK_VERTICAL
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_dark_down:
+    kind: constant
+    c: FM_FILL_PATTERN_DARK_DOWN
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_dark_up:
+    kind: constant
+    c: FM_FILL_PATTERN_DARK_UP
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_dark_grid:
+    kind: constant
+    c: FM_FILL_PATTERN_DARK_GRID
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_dark_trellis:
+    kind: constant
+    c: FM_FILL_PATTERN_DARK_TRELLIS
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_light_horizontal:
+    kind: constant
+    c: FM_FILL_PATTERN_LIGHT_HORIZONTAL
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_light_vertical:
+    kind: constant
+    c: FM_FILL_PATTERN_LIGHT_VERTICAL
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_light_down:
+    kind: constant
+    c: FM_FILL_PATTERN_LIGHT_DOWN
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_light_up:
+    kind: constant
+    c: FM_FILL_PATTERN_LIGHT_UP
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_light_grid:
+    kind: constant
+    c: FM_FILL_PATTERN_LIGHT_GRID
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_light_trellis:
+    kind: constant
+    c: FM_FILL_PATTERN_LIGHT_TRELLIS
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_gray125:
+    kind: constant
+    c: FM_FILL_PATTERN_GRAY125
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_fill_pattern_gray0625:
+    kind: constant
+    c: FM_FILL_PATTERN_GRAY0625
+    enum: enum.fill_pattern
+    surfaces: [c]
+  constant.fm_border_style_none:
+    kind: constant
+    c: FM_BORDER_STYLE_NONE
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_thin:
+    kind: constant
+    c: FM_BORDER_STYLE_THIN
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_medium:
+    kind: constant
+    c: FM_BORDER_STYLE_MEDIUM
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_dashed:
+    kind: constant
+    c: FM_BORDER_STYLE_DASHED
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_dotted:
+    kind: constant
+    c: FM_BORDER_STYLE_DOTTED
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_thick:
+    kind: constant
+    c: FM_BORDER_STYLE_THICK
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_double:
+    kind: constant
+    c: FM_BORDER_STYLE_DOUBLE
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_hair:
+    kind: constant
+    c: FM_BORDER_STYLE_HAIR
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_medium_dashed:
+    kind: constant
+    c: FM_BORDER_STYLE_MEDIUM_DASHED
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_dash_dot:
+    kind: constant
+    c: FM_BORDER_STYLE_DASH_DOT
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_medium_dash_dot:
+    kind: constant
+    c: FM_BORDER_STYLE_MEDIUM_DASH_DOT
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_dash_dot_dot:
+    kind: constant
+    c: FM_BORDER_STYLE_DASH_DOT_DOT
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_medium_dash_dot_dot:
+    kind: constant
+    c: FM_BORDER_STYLE_MEDIUM_DASH_DOT_DOT
+    enum: enum.border_style
+    surfaces: [c]
+  constant.fm_border_style_slant_dash_dot:
+    kind: constant
+    c: FM_BORDER_STYLE_SLANT_DASH_DOT
+    enum: enum.border_style
+    surfaces: [c]
   record.image:
     kind: record
     role: result
-    js: Image
-    surfaces: [wasm, native]
+    js: PictureProperties
+    py: PictureProperties
+    surfaces: [wasm, native, py]
   record.image_info:
     kind: record
     role: result
@@ -1064,17 +1482,18 @@ entries:
     kind: record
     role: result
     c: fm_drawing_object_t
-    js: DrawingObject
-    py: DrawingObject
+    js: DrawingProperties
+    py: DrawingProperties
     surfaces: [c, wasm, native, py]
     was: { c: fm_drawing_object, js: DrawingObject, py: DrawingObject }
   record.image_insert:
     kind: record
     role: input
     c: fm_image_insert_t
-    js: ImageInsertInput
+    js: PictureInput
     surfaces: [c, wasm, native]
     was: { c: fm_image_insert, js: ImageInsertOptions }
+    exception: "the insert record of a Picture handle carries the class name; C keeps the image noun"
   record.drawing_anchor:
     kind: record
     role: input
@@ -1094,8 +1513,8 @@ entries:
     kind: record
     role: result
     c: fm_shape_t
-    js: Shape
-    py: Shape
+    js: ShapeProperties
+    py: ShapeProperties
     surfaces: [c, wasm, native, py]
     was: { c: fm_shape, js: Shape, py: Shape }
   enum.slicer_sort:
@@ -1116,8 +1535,8 @@ entries:
     kind: record
     role: result
     c: fm_slicer_t
-    js: Slicer
-    py: Slicer
+    js: SlicerProperties
+    py: SlicerProperties
     surfaces: [c, wasm, native, py]
     was: { c: fm_slicer, js: Slicer, py: Slicer }
   enum.sparkline_type:
@@ -1323,8 +1742,8 @@ entries:
     kind: record
     role: result
     c: fm_chart_info_t
-    js: Chart
-    py: Chart
+    js: ChartProperties
+    py: ChartProperties
     surfaces: [c, wasm, native, py]
     was: { c: fm_chart_info_t, js: ChartInfo, py: ChartInfo }
   record.chart_plot:
@@ -1964,6 +2383,7 @@ entries:
     surfaces: [wasm, native]
     was: { js: ImageResult }
     drop: { js: ImageResult, closes: R8.js }
+    replaced_by: record.image
   record.image_snapshot_result:
     kind: record
     role: result
@@ -2758,8 +3178,8 @@ entries:
   record.table:
     kind: record
     role: result
-    js: Table
-    py: Table
+    js: TableProperties
+    py: TableProperties
     surfaces: [wasm, native, py]
     was: { js: TableEntry, py: Table }
   record.table_column:
@@ -2787,11 +3207,11 @@ entries:
   formula.eval:
     kind: free
     scope: process
-    js: evalFormula
-    py: eval_formula
+    js: evaluateFormula
+    py: evaluate_formula
     surfaces: [wasm, native, py]
     exception: "binding convenience: evaluates one formula in a default workbook"
-    was: { py: eval_formula, js: evalFormula }
+    was: { js: evalFormula, py: eval_formula }
   workbook.create_for_profile:
     kind: factory
     scope: workbook
@@ -2937,6 +3357,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_move_sheet, js: moveSheet, py: move_sheet }
     facade: handwritten
+    handle: { class: Sheet, js: move, py: move, supplies: [sheet] }
   sheet.copy:
     kind: op
     scope: workbook
@@ -2990,6 +3411,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_rename_sheet, js: renameSheet, py: rename_sheet }
     facade: handwritten
+    handle: { class: Sheet, js: rename, py: rename, supplies: [sheet] }
   sheets.list:
     kind: list
     scope: workbook
@@ -3035,6 +3457,7 @@ entries:
     py: insert_rows
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_insert_rows, js: insertRows, py: insert_rows }
+    span_args: [[0, row, start_count]]
   rows.delete:
     kind: op
     scope: sheet
@@ -3044,6 +3467,7 @@ entries:
     py: delete_rows
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_delete_rows, js: deleteRows, py: delete_rows }
+    span_args: [[0, row, start_count]]
   cols.insert:
     kind: op
     scope: sheet
@@ -3053,6 +3477,7 @@ entries:
     py: insert_columns
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_insert_cols, js: insertCols, py: insert_cols }
+    span_args: [[0, col, start_count]]
   cols.delete:
     kind: op
     scope: sheet
@@ -3062,6 +3487,7 @@ entries:
     py: delete_columns
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_delete_cols, js: deleteCols, py: delete_cols }
+    span_args: [[0, col, start_count]]
   number.set:
     kind: op
     scope: sheet
@@ -3469,7 +3895,7 @@ entries:
     py: get_table
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_at, js: tableAt }
-    drop: { js: getTable, py: get_table, closes: R23.list }
+    handle: { class: Table, supplies: [table] }
   table.create:
     kind: op
     scope: workbook
@@ -3489,9 +3915,9 @@ entries:
     js: updateTable
     py: update_table
     params: { header_row: bool, totals_row: bool, show_first_column: bool, show_last_column: bool, show_row_stripes: bool, show_column_stripes: bool }
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_update, js: updateTable, py: table_update }
+    handle: { class: Table, supplies: [table] }
   table.remove:
     kind: op
     scope: workbook
@@ -3502,6 +3928,24 @@ entries:
     ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_remove, js: removeTable, py: table_remove }
+  table_runtime_id.get:
+    kind: op
+    scope: workbook
+    noun: table_runtime_id
+    c: fm_workbook_get_table_runtime_id
+    js: getTableRuntimeId
+    py: get_table_runtime_id
+    surfaces: [c, wasm, native, py]
+    internal: true
+  table_runtime_id.resolve:
+    kind: op
+    scope: workbook
+    noun: table_runtime_id
+    c: fm_workbook_resolve_table_runtime_id
+    js: resolveTableRuntimeId
+    py: resolve_table_runtime_id
+    surfaces: [c, wasm, native, py]
+    internal: true
   table_info.get:
     kind: op
     scope: workbook
@@ -3542,9 +3986,9 @@ entries:
     c: fm_workbook_rename_table_column
     js: renameTableColumn
     py: rename_table_column
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_rename_column, js: renameTableColumn, py: table_rename_column }
+    handle: { class: Table, supplies: [table] }
   table_column_totals.set:
     kind: op
     scope: workbook
@@ -3552,9 +3996,9 @@ entries:
     c: fm_workbook_set_table_column_totals
     js: setTableColumnTotals
     py: set_table_column_totals
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_set_column_totals, js: setTableColumnTotals, py: table_set_column_totals }
+    handle: { class: Table, supplies: [table] }
   passthrough.get_count:
     kind: op
     scope: workbook
@@ -3956,6 +4400,8 @@ entries:
     params: { done: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_thread_resolved, js: setThreadResolved, py: set_thread_resolved }
+    drop: { c: fm_sheet_set_thread_resolved, js: setThreadResolved, py: set_thread_resolved, closes: R28.handles }
+    replaced_by: threaded_comment.update
   threaded_comment.remove:
     kind: op
     scope: sheet
@@ -4481,6 +4927,8 @@ entries:
     params: { enabled: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_fit_to_page, js: setSheetFitToPage, py: set_fit_to_page }
+    drop: { c: fm_sheet_set_fit_to_page, js: setFitToPage, py: set_fit_to_page, closes: R18.all }
+    replaced_by: page_setup.set
   print_area.set:
     kind: op
     scope: sheet
@@ -4625,10 +5073,17 @@ entries:
     py: set_print_options
     params: { grid_lines: bool, headings: bool, horizontal_centered: bool, vertical_centered: bool }
     patch: true
-    patch_record: none
-    patch_reason: "no record getter in the C ABI; the settings read back only as XML"
+    patch_record: PrintOptions
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_print_options, js: setSheetPrintOptions, py: set_print_options }
+  print_options.get:
+    kind: op
+    scope: sheet
+    noun: print_options
+    c: fm_sheet_get_print_options
+    js: getPrintOptions
+    py: get_print_options
+    surfaces: [c, wasm, native, py]
   header_footer.set:
     kind: op
     scope: sheet
@@ -4638,10 +5093,17 @@ entries:
     py: set_header_footer
     params: { different_odd_even: bool, different_first: bool, scale_with_doc: bool, align_with_margins: bool }
     patch: true
-    patch_record: none
-    patch_reason: "no record getter in the C ABI; the settings read back only as XML"
+    patch_record: HeaderFooter
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_header_footer, js: setSheetHeaderFooter, py: set_header_footer }
+  header_footer.get:
+    kind: op
+    scope: sheet
+    noun: header_footer
+    c: fm_sheet_get_header_footer
+    js: getHeaderFooter
+    py: get_header_footer
+    surfaces: [c, wasm, native, py]
   page_setup.get:
     kind: op
     scope: sheet
@@ -4804,9 +5266,9 @@ entries:
     c: fm_sheet_get_pivot_layout
     js: getPivotLayout
     py: get_pivot_layout
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_layout, js: pivotLayout, py: pivot_layout }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_cells.destroy:
     kind: op
     scope: pivot_cells
@@ -4879,6 +5341,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_get_worksheet_source, js: pivotCacheGetWorksheetSource, py: get_pivot_cache_worksheet_source }
     missing: null
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_worksheet_source.set:
     kind: op
     scope: workbook
@@ -4888,6 +5351,7 @@ entries:
     py: set_pivot_cache_worksheet_source
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_set_worksheet_source, js: pivotCacheSetWorksheetSource, py: set_pivot_cache_worksheet_source }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_field.get_count:
     kind: op
     scope: workbook
@@ -4917,6 +5381,7 @@ entries:
     py: add_pivot_cache_field
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add, js: pivotCacheFieldAdd, py: pivot_cache_field_add }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_field.clear:
     kind: op
     scope: workbook
@@ -4926,6 +5391,7 @@ entries:
     py: clear_pivot_cache_fields
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_clear, js: pivotCacheFieldClear, py: pivot_cache_field_clear }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_field_shared_item.get_count:
     kind: op
     scope: workbook
@@ -5027,6 +5493,7 @@ entries:
     py: clear_pivot_cache_field_shared_items
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_clear_shared_items, js: pivotCacheFieldClearSharedItems, py: pivot_cache_field_clear_shared_items }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_record.get_count:
     kind: op
     scope: workbook
@@ -5036,6 +5503,7 @@ entries:
     py: get_pivot_cache_record_count
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_count, js: pivotCacheRecordCount, py: pivot_cache_record_count }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_record.add:
     kind: op
     scope: workbook
@@ -5045,6 +5513,7 @@ entries:
     py: add_pivot_cache_record
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_add, js: pivotCacheRecordAdd, py: pivot_cache_record_add }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_record.clear:
     kind: op
     scope: workbook
@@ -5054,6 +5523,7 @@ entries:
     py: clear_pivot_cache_records
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_clear, js: pivotCacheRecordClear, py: pivot_cache_record_clear }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_record_number.set:
     kind: op
     scope: workbook
@@ -5124,6 +5594,7 @@ entries:
     py: get_pivot_cache_options
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_get_options, js: pivotCacheGetOptions, py: pivot_cache_get_options }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_options.set:
     kind: op
     scope: workbook
@@ -5135,6 +5606,7 @@ entries:
     patch_record: PivotCacheOptions
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_set_options, js: pivotCacheSetOptions, py: pivot_cache_set_options }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_calculated_field.add:
     kind: op
     scope: workbook
@@ -5144,6 +5616,7 @@ entries:
     py: add_pivot_cache_calculated_field
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_field_add, js: pivotCacheCalculatedFieldAdd, py: pivot_cache_calculated_field_add }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_calculated_field_formula.set:
     kind: op
     scope: workbook
@@ -5153,6 +5626,7 @@ entries:
     py: set_pivot_cache_calculated_field_formula
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_field_set_formula, js: pivotCacheCalculatedFieldSetFormula, py: pivot_cache_calculated_field_set_formula }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_calculated_field.remove:
     kind: op
     scope: workbook
@@ -5162,6 +5636,7 @@ entries:
     py: remove_pivot_cache_calculated_field
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_field_remove, js: pivotCacheCalculatedFieldRemove, py: pivot_cache_calculated_field_remove }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_field_formula.get:
     kind: op
     scope: workbook
@@ -5181,6 +5656,7 @@ entries:
     py: add_pivot_cache_calculated_item
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_item_add, js: pivotCacheCalculatedItemAdd, py: pivot_cache_calculated_item_add }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_calculated_item.get_count:
     kind: op
     scope: workbook
@@ -5210,6 +5686,7 @@ entries:
     py: set_pivot_cache_calculated_item_formula
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_item_set_formula, js: pivotCacheCalculatedItemSetFormula, py: pivot_cache_calculated_item_set_formula }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_calculated_item.move:
     kind: op
     scope: workbook
@@ -5219,6 +5696,7 @@ entries:
     py: move_pivot_cache_calculated_item
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_item_move, js: pivotCacheCalculatedItemMove, py: pivot_cache_calculated_item_move }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_calculated_item.remove:
     kind: op
     scope: workbook
@@ -5228,6 +5706,7 @@ entries:
     py: remove_pivot_cache_calculated_item
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_item_remove, js: pivotCacheCalculatedItemRemove, py: pivot_cache_calculated_item_remove }
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot.create:
     kind: op
     scope: sheet
@@ -5247,6 +5726,24 @@ entries:
     ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_remove, js: pivotRemove, py: pivot_remove }
+  pivot_runtime_id.get:
+    kind: op
+    scope: sheet
+    noun: pivot_runtime_id
+    c: fm_sheet_get_pivot_runtime_id
+    js: getPivotRuntimeId
+    py: get_pivot_runtime_id
+    surfaces: [c, wasm, native, py]
+    internal: true
+  pivot_runtime_id.resolve:
+    kind: op
+    scope: sheet
+    noun: pivot_runtime_id
+    c: fm_sheet_resolve_pivot_runtime_id
+    js: resolvePivotRuntimeId
+    py: resolve_pivot_runtime_id
+    surfaces: [c, wasm, native, py]
+    internal: true
   pivot_name.set:
     kind: op
     scope: sheet
@@ -5254,9 +5751,9 @@ entries:
     c: fm_sheet_set_pivot_name
     js: setPivotName
     py: set_pivot_name
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_name, js: pivotSetName, py: pivot_set_name }
+    handle: { class: Pivot, js: rename, py: rename, supplies: [sheet, pivot] }
   pivot_anchor.set:
     kind: op
     scope: sheet
@@ -5264,10 +5761,10 @@ entries:
     c: fm_sheet_set_pivot_anchor
     js: setPivotAnchor
     py: set_pivot_anchor
-    rect_args: [1]
-    ref_args: [0, pivot]
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_anchor, js: pivotSetAnchor, py: pivot_set_anchor }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_grand_totals.set:
     kind: op
     scope: sheet
@@ -5278,10 +5775,10 @@ entries:
     params: { rows_enabled: bool, cols_enabled: bool }
     patch: true
     patch_record: PivotGrandTotals
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_grand_totals, js: pivotSetGrandTotals, py: pivot_set_grand_totals }
     facade: handwritten
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_style_info.set:
     kind: op
     scope: sheet
@@ -5292,9 +5789,9 @@ entries:
     params: { show_row_headers: bool, show_col_headers: bool, show_row_stripes: bool, show_col_stripes: bool, show_last_column: bool }
     patch: true
     patch_record: PivotStyle
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_style_info, js: pivotSetStyleInfo, py: pivot_set_style_info }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_report_layout.get:
     kind: op
     scope: sheet
@@ -5303,9 +5800,9 @@ entries:
     js: getPivotReportLayout
     py: get_pivot_report_layout
     returns: "enum:pivot_layout"
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_layout, js: pivotGetLayout, py: get_pivot_report_layout }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_report_layout.set:
     kind: op
     scope: sheet
@@ -5314,9 +5811,9 @@ entries:
     js: setPivotReportLayout
     py: set_pivot_report_layout
     params: { layout: "enum:pivot_layout" }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_layout, js: pivotSetLayout, py: set_pivot_report_layout }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field.get_count:
     kind: op
     scope: sheet
@@ -5334,9 +5831,9 @@ entries:
     c: fm_sheet_add_pivot_field
     js: addPivotField
     py: add_pivot_field
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field.clear:
     kind: op
     scope: sheet
@@ -5344,9 +5841,9 @@ entries:
     c: fm_sheet_clear_pivot_fields
     js: clearPivotFields
     py: clear_pivot_fields
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear, js: pivotFieldClear, py: pivot_field_clear }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_axis.set:
     kind: op
     scope: sheet
@@ -5355,9 +5852,9 @@ entries:
     js: setPivotFieldAxis
     py: set_pivot_field_axis
     params: { axis: "enum:pivot_axis" }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_axis, js: pivotFieldSetAxis, py: pivot_field_set_axis }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_sort.set:
     kind: op
     scope: sheet
@@ -5366,9 +5863,9 @@ entries:
     js: setPivotFieldSort
     py: set_pivot_field_sort
     params: { order: "enum:pivot_sort_order" }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_sort, js: pivotFieldSetSort, py: pivot_field_set_sort }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_subtotal_top.set:
     kind: op
     scope: sheet
@@ -5442,9 +5939,9 @@ entries:
     js: setPivotFieldShowDetail
     py: set_pivot_field_show_detail
     params: { "on": bool }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_show_detail, js: pivotFieldSetShowDetail, py: pivot_field_set_show_detail }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_item_show_detail.set:
     kind: op
     scope: sheet
@@ -5474,9 +5971,9 @@ entries:
     js: addPivotFieldItem
     py: add_pivot_field_item
     params: { visible: bool }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_item, js: pivotFieldAddItem, py: pivot_field_add_item }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_item.add_at:
     kind: op
     scope: sheet
@@ -5485,9 +5982,9 @@ entries:
     js: addPivotFieldSharedItem
     py: add_pivot_field_shared_item
     params: { visible: bool }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_item_at, js: pivotFieldAddItemAt, py: pivot_field_add_item_at }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_items.clear:
     kind: op
     scope: sheet
@@ -5495,9 +5992,9 @@ entries:
     c: fm_sheet_clear_pivot_field_items
     js: clearPivotFieldItems
     py: clear_pivot_field_items
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_items, js: pivotFieldClearItems, py: pivot_field_clear_items }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_item_visible.set:
     kind: op
     scope: sheet
@@ -5517,9 +6014,9 @@ entries:
     js: addPivotFieldSubtotalFn
     py: add_pivot_field_subtotal_fn
     params: { agg: "enum:pivot_aggregation" }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_subtotal_fn, js: pivotFieldAddSubtotalFn, py: pivot_field_add_subtotal_fn }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_subtotal_fns.clear:
     kind: op
     scope: sheet
@@ -5527,9 +6024,9 @@ entries:
     c: fm_sheet_clear_pivot_field_subtotal_fns
     js: clearPivotFieldSubtotalFns
     py: clear_pivot_field_subtotal_fns
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_subtotal_fns, js: pivotFieldClearSubtotalFns, py: pivot_field_clear_subtotal_fns }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_date_group.set:
     kind: op
     scope: sheet
@@ -5538,10 +6035,10 @@ entries:
     js: setPivotFieldDateGroup
     py: set_pivot_field_date_group
     params: { calendar: "enum:pivot_calendar" }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_date_group, js: pivotFieldSetDateGroup, py: pivot_field_set_date_group }
     facade: handwritten
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_date_group.clear:
     kind: op
     scope: sheet
@@ -5549,9 +6046,9 @@ entries:
     c: fm_sheet_clear_pivot_field_date_group
     js: clearPivotFieldDateGroup
     py: clear_pivot_field_date_group
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_date_group, js: pivotFieldClearDateGroup, py: pivot_field_clear_date_group }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_number_format.set:
     kind: op
     scope: sheet
@@ -5569,9 +6066,9 @@ entries:
     c: fm_sheet_set_pivot_row_field_order
     js: setPivotRowFieldOrder
     py: set_pivot_row_field_order
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_row_field_order, js: pivotSetRowFieldOrder, py: pivot_set_row_field_order }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_column_field_order.set:
     kind: op
     scope: sheet
@@ -5579,9 +6076,9 @@ entries:
     c: fm_sheet_set_pivot_column_field_order
     js: setPivotColumnFieldOrder
     py: set_pivot_column_field_order
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_col_field_order, js: pivotSetColFieldOrder, py: pivot_set_col_field_order }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_field.get_count:
     kind: op
     scope: sheet
@@ -5599,9 +6096,9 @@ entries:
     c: fm_sheet_add_pivot_data_field
     js: addPivotDataField
     py: add_pivot_data_field
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_add, js: pivotDataFieldAdd, py: pivot_data_field_add }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_field.clear:
     kind: op
     scope: sheet
@@ -5609,9 +6106,9 @@ entries:
     c: fm_sheet_clear_pivot_data_fields
     js: clearPivotDataFields
     py: clear_pivot_data_fields
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_clear, js: pivotDataFieldClear, py: pivot_data_field_clear }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_field.set:
     kind: op
     scope: sheet
@@ -5619,9 +6116,9 @@ entries:
     c: fm_sheet_set_pivot_data_field
     js: setPivotDataField
     py: set_pivot_data_field
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_set, js: pivotDataFieldSet, py: pivot_data_field_set }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_field_default_name.get:
     kind: op
     scope: sheet
@@ -5630,9 +6127,9 @@ entries:
     js: getPivotDataFieldDefaultName
     py: get_pivot_data_field_default_name
     params: { aggregation: "enum:pivot_aggregation" }
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_default_name, js: pivotDataFieldDefaultName, py: pivot_data_field_default_name }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_cache.get_id:
     kind: op
     scope: sheet
@@ -5641,9 +6138,9 @@ entries:
     c: fm_sheet_get_pivot_cache_id
     js: getPivotCacheId
     py: get_pivot_cache_id
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_cache_id, js: pivotCacheId, py: pivot_cache_id }
+    handle: { class: Pivot, js: getCache, py: get_cache, supplies: [sheet, pivot] }
   pivot_name.get:
     kind: op
     scope: sheet
@@ -5651,9 +6148,9 @@ entries:
     c: fm_sheet_get_pivot_name
     js: getPivotName
     py: get_pivot_name
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_name, js: pivotName, py: pivot_name }
+    handle: { class: Pivot, js: name, py: name, property: true, supplies: [sheet, pivot] }
   pivot_options.get:
     kind: op
     scope: sheet
@@ -5661,9 +6158,9 @@ entries:
     c: fm_sheet_get_pivot_options
     js: getPivotOptions
     py: get_pivot_options
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_options, js: pivotGetOptions, py: pivot_get_options }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_options.set:
     kind: op
     scope: sheet
@@ -5673,9 +6170,9 @@ entries:
     py: set_pivot_options
     patch: true
     patch_record: PivotOptions
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_options, js: pivotSetOptions, py: pivot_set_options }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_project.get:
     kind: op
     scope: sheet
@@ -5683,9 +6180,9 @@ entries:
     c: fm_sheet_project_pivot
     js: projectPivot
     py: project_pivot
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_project, js: pivotProject, py: pivot_project }
+    handle: { class: Pivot, js: project, py: project, supplies: [sheet, pivot] }
   pivot_projection_pending.get:
     kind: op
     scope: sheet
@@ -5694,9 +6191,9 @@ entries:
     js: isPivotProjectionPending
     py: is_pivot_projection_pending
     returns: bool
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_projection_pending, js: pivotProjectionPending, py: pivot_projection_pending }
+    handle: { class: Pivot, js: isProjectionPending, py: is_projection_pending, supplies: [sheet, pivot] }
   pivot_show_details.get:
     kind: op
     scope: sheet
@@ -5705,11 +6202,11 @@ entries:
     js: showPivotDetails
     py: show_pivot_details
     returns: "union:Sheet"
-    cell_args: [[1, 2]]
-    ref_args: [0, pivot]
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_show_details, js: pivotShowDetails, py: pivot_show_details }
     facade: handwritten
+    handle: { class: Pivot, js: showDetails, py: show_details, supplies: [sheet, pivot] }
   pivot_grand_totals.get:
     kind: op
     scope: sheet
@@ -5717,9 +6214,9 @@ entries:
     c: fm_sheet_get_pivot_grand_totals
     js: getPivotGrandTotals
     py: get_pivot_grand_totals
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_grand_totals, js: pivotGetGrandTotals, py: pivot_grand_totals }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_style_info.get:
     kind: op
     scope: sheet
@@ -5727,9 +6224,9 @@ entries:
     c: fm_sheet_get_pivot_style_info
     js: getPivotStyleInfo
     py: get_pivot_style_info
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_style_info, js: pivotGetStyleInfo, py: pivot_style_info }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field.get:
     kind: op
     scope: sheet
@@ -5757,9 +6254,9 @@ entries:
     c: fm_sheet_get_pivot_field_item
     js: getPivotFieldItem
     py: get_pivot_field_item
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_item_at, js: pivotFieldItemAt, py: pivot_field_item_at }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_field.get:
     kind: op
     scope: sheet
@@ -5777,9 +6274,9 @@ entries:
     c: fm_sheet_get_pivot_row_field_order
     js: getPivotRowFieldOrder
     py: get_pivot_row_field_order
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_row_field_order, js: pivotRowFieldOrder, py: pivot_row_field_order }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_column_field_order.get:
     kind: op
     scope: sheet
@@ -5787,9 +6284,9 @@ entries:
     c: fm_sheet_get_pivot_column_field_order
     js: getPivotColumnFieldOrder
     py: get_pivot_column_field_order
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_col_field_order, js: pivotColFieldOrder, py: pivot_col_field_order }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_filter.get_count:
     kind: op
     scope: sheet
@@ -5817,9 +6314,9 @@ entries:
     c: fm_sheet_add_pivot_filter
     js: addPivotFilter
     py: add_pivot_filter
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_filter_add, js: pivotFilterAdd, py: pivot_filter_add }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_filter.clear:
     kind: op
     scope: sheet
@@ -5827,9 +6324,9 @@ entries:
     c: fm_sheet_clear_pivot_filters
     js: clearPivotFilters
     py: clear_pivot_filters
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_filter_clear, js: pivotFilterClear, py: pivot_filter_clear }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_filter.remove:
     kind: op
     scope: sheet
@@ -5837,9 +6334,9 @@ entries:
     c: fm_sheet_remove_pivot_filter
     js: removePivotFilter
     py: remove_pivot_filter
-    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_filter_remove_at, js: pivotFilterRemoveAt, py: pivot_filter_remove_at }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   spill_info.get:
     kind: op
     scope: sheet
@@ -6146,10 +6643,10 @@ entries:
     c: fm_workbook_get_table_auto_filter
     js: getTableAutoFilter
     py: get_table_auto_filter
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_get_auto_filter, js: getTableAutoFilter, py: get_table_auto_filter }
     missing: null
+    handle: { class: Table, supplies: [table] }
   table_auto_filter.set:
     kind: op
     scope: workbook
@@ -6157,9 +6654,9 @@ entries:
     c: fm_workbook_set_table_auto_filter
     js: setTableAutoFilter
     py: set_table_auto_filter
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_set_auto_filter, js: setTableAutoFilter, py: set_table_auto_filter }
+    handle: { class: Table, supplies: [table] }
   table_auto_filter.remove:
     kind: op
     scope: workbook
@@ -6167,9 +6664,9 @@ entries:
     c: fm_workbook_remove_table_auto_filter
     js: removeTableAutoFilter
     py: remove_table_auto_filter
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_remove_auto_filter, js: removeTableAutoFilter, py: remove_table_auto_filter }
+    handle: { class: Table, supplies: [table] }
   table_auto_filter.apply:
     kind: op
     scope: workbook
@@ -6177,9 +6674,9 @@ entries:
     c: fm_workbook_apply_table_auto_filter
     js: applyTableAutoFilter
     py: apply_table_auto_filter
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_apply_auto_filter, js: applyTableAutoFilter, py: apply_table_auto_filter }
+    handle: { class: Table, supplies: [table] }
   table_auto_filter.clear:
     kind: op
     scope: workbook
@@ -6187,9 +6684,9 @@ entries:
     c: fm_workbook_clear_table_auto_filter
     js: clearTableAutoFilter
     py: clear_table_auto_filter
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_clear_auto_filter, js: clearTableAutoFilter, py: clear_table_auto_filter }
+    handle: { class: Table, supplies: [table] }
   table_auto_filter.evaluate:
     kind: op
     scope: workbook
@@ -6197,9 +6694,9 @@ entries:
     c: fm_workbook_evaluate_table_auto_filter
     js: evaluateTableAutoFilter
     py: evaluate_table_auto_filter
-    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_evaluate_auto_filter, js: evaluateTableAutoFilter, py: evaluate_table_auto_filter }
+    handle: { class: Table, supplies: [table] }
   column_width.set:
     kind: op
     scope: sheet
@@ -6209,6 +6706,7 @@ entries:
     py: set_column_width
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_column_width, js: setColumnWidth, py: set_column_width }
+    span_args: [[0, col, span]]
   column_width.clear:
     kind: op
     scope: sheet
@@ -6218,6 +6716,7 @@ entries:
     py: clear_column_width
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_clear_column_width, js: clearColumnWidth, py: clear_column_width }
+    span_args: [[0, col, span]]
   column_hidden.set:
     kind: op
     scope: sheet
@@ -6228,6 +6727,7 @@ entries:
     params: { hidden: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_column_hidden, js: setColumnHidden, py: set_column_hidden }
+    span_args: [[0, col, span]]
   column_outline.set:
     kind: op
     scope: sheet
@@ -6237,6 +6737,7 @@ entries:
     py: set_column_outline
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_column_outline, js: setColumnOutline, py: set_column_outline }
+    span_args: [[0, col, span]]
   column_collapsed.set:
     kind: op
     scope: sheet
@@ -6247,6 +6748,7 @@ entries:
     params: { collapsed: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_column_collapsed, js: setColumnCollapsed, py: set_column_collapsed }
+    span_args: [[0, col, span]]
   column_style.set:
     kind: op
     scope: sheet
@@ -6256,6 +6758,7 @@ entries:
     py: set_column_style
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_column_style, js: setColumnStyle, py: set_column_style }
+    span_args: [[0, col, span]]
   column_style.clear:
     kind: op
     scope: sheet
@@ -6265,6 +6768,7 @@ entries:
     py: clear_column_style
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_clear_column_style, js: clearColumnStyle, py: clear_column_style }
+    span_args: [[0, col, span]]
   row_height.set:
     kind: op
     scope: sheet
@@ -6274,6 +6778,7 @@ entries:
     py: set_row_height
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_row_height, js: setRowHeight, py: set_row_height }
+    span_args: [[0, row, span]]
   row_auto_height.set:
     kind: op
     scope: sheet
@@ -6283,6 +6788,7 @@ entries:
     py: set_row_auto_height
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_row_auto_height, js: setRowAutoHeight, py: set_row_auto_height }
+    span_args: [[0, row, span]]
   row_hidden.set:
     kind: op
     scope: sheet
@@ -6293,6 +6799,7 @@ entries:
     params: { hidden: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_row_hidden, js: setRowHidden, py: set_row_hidden }
+    span_args: [[0, row, span]]
   row_outline.set:
     kind: op
     scope: sheet
@@ -6302,6 +6809,7 @@ entries:
     py: set_row_outline
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_row_outline, js: setRowOutline, py: set_row_outline }
+    span_args: [[0, row, span]]
   row_collapsed.set:
     kind: op
     scope: sheet
@@ -6312,6 +6820,7 @@ entries:
     params: { collapsed: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_row_collapsed, js: setRowCollapsed, py: set_row_collapsed }
+    span_args: [[0, row, span]]
   row_style.set:
     kind: op
     scope: sheet
@@ -6321,6 +6830,7 @@ entries:
     py: set_row_style
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_row_style, js: setRowStyle, py: set_row_style }
+    span_args: [[0, row, span]]
   row_style.clear:
     kind: op
     scope: sheet
@@ -6330,6 +6840,7 @@ entries:
     py: clear_row_style
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_clear_row_style, js: clearRowStyle, py: clear_row_style }
+    span_args: [[0, row, span]]
   range_style_bases.get:
     kind: op
     scope: sheet
@@ -6388,6 +6899,7 @@ entries:
     py: clear_row_height
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_clear_row_height, js: clearRowHeight, py: clear_row_height }
+    span_args: [[0, row, span]]
   format_defaults.get:
     kind: op
     scope: sheet
@@ -7152,6 +7664,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_image, js: getImage, py: get_image }
     missing: null
+    handle: { class: Picture, js: getProperties, py: get_properties, supplies: [sheet, object_id] }
   image.add:
     kind: op
     scope: sheet
@@ -7162,6 +7675,9 @@ entries:
     params: { anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_insert_image, js: insertImage, py: insert_image }
+    internal: true
+    replaced_by: binding.add_picture
+    closes: R28.handles
   drawing.remove:
     kind: op
     scope: sheet
@@ -7170,8 +7686,11 @@ entries:
     js: removeDrawingObject
     py: remove_drawing_object
     surfaces: [c, wasm, native, py]
-    was: { c: fm_sheet_remove_drawing, js: removeDrawing, py: remove_drawing }
+    was: { c: fm_sheet_remove_drawing }
     exception: "the binding name carries the collection noun (drawing_object); the C name is unchanged"
+    internal: true
+    replaced_by: binding.remove_drawing
+    closes: R28.handles
   drawing_anchor.set:
     kind: op
     scope: sheet
@@ -7182,6 +7701,7 @@ entries:
     params: { anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_drawing_anchor, js: setDrawingAnchor, py: set_drawing_anchor }
+    handle: { class: [Picture, Chart], supplies: [sheet, object_id] }
   drawing_name.set:
     kind: op
     scope: sheet
@@ -7191,6 +7711,7 @@ entries:
     py: set_drawing_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_drawing_name, js: setDrawingName, py: set_drawing_name }
+    handle: { class: [Picture, Chart], js: rename, py: rename, supplies: [sheet, object_id] }
   drawing_z_order.set:
     kind: op
     scope: sheet
@@ -7200,6 +7721,7 @@ entries:
     py: set_drawing_z_order
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_drawing_z_order, js: setDrawingZOrder, py: set_drawing_z_order }
+    handle: { class: [Picture, Chart], supplies: [sheet, object_id] }
   drawing.snapshot:
     kind: op
     scope: sheet
@@ -7209,6 +7731,7 @@ entries:
     py: snapshot_drawing
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_snapshot_drawing, js: snapshotDrawing, py: snapshot_drawing }
+    handle: { class: [Picture, Chart], js: snapshot, py: snapshot, supplies: [sheet, object_id] }
   drawing.restore:
     kind: op
     scope: sheet
@@ -7253,6 +7776,7 @@ entries:
     params: { anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as", text_box: bool, fill_kind: "enum:shape_paint", line_kind: "enum:shape_paint", hidden: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_shape, js: updateShape, py: update_shape }
+    handle: { class: Shape, supplies: [sheet, object_id] }
   shape.remove:
     kind: op
     scope: sheet
@@ -7262,6 +7786,9 @@ entries:
     py: remove_shape
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_shape, js: removeShape, py: remove_shape }
+    internal: true
+    replaced_by: binding.remove_drawing
+    closes: R28.handles
   slicer.get_count:
     kind: op
     scope: sheet
@@ -7297,6 +7824,7 @@ entries:
     params: { sort_order: "enum:slicer_sort", cross_filter: "enum:slicer_cross_filter" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_slicer, js: updateSlicer, py: update_slicer }
+    handle: { class: Slicer, supplies: [sheet, object_id] }
   slicer.remove:
     kind: op
     scope: sheet
@@ -7306,6 +7834,9 @@ entries:
     py: remove_slicer
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_slicer, js: removeSlicer, py: remove_slicer }
+    internal: true
+    replaced_by: binding.remove_drawing
+    closes: R28.handles
   sparkline_group.get_count:
     kind: op
     scope: sheet
@@ -7360,6 +7891,8 @@ entries:
     py: set_sparkline_group_sparklines
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_sparkline_group_sparklines, js: setSparklineGroupSparklines, py: set_sparkline_group_sparklines }
+    drop: { c: fm_sheet_set_sparkline_group_sparklines, js: setSparklineGroupSparklines, py: set_sparkline_group_sparklines, closes: R28.handles }
+    replaced_by: sparkline_group.update
   sparkline_group.remove:
     kind: op
     scope: sheet
@@ -7379,6 +7912,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_chart_open, js: getChart, py: get_chart }
     missing: null
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart.destroy:
     kind: op
     scope: chart
@@ -7463,6 +7997,7 @@ entries:
     was: { c: fm_sheet_chart_data_open, js: getChartData, py: get_chart_data }
     total: "returns the chart's data handle; a missing chart throws"
     missing: throw
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_preview.get:
     kind: op
     scope: sheet
@@ -7474,6 +8009,7 @@ entries:
     was: { c: fm_sheet_chart_preview_open, js: previewChartData, py: preview_chart_data }
     total: "returns the preview handle; a missing chart throws"
     missing: throw
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_data.destroy:
     kind: op
     scope: chart_data
@@ -7565,6 +8101,7 @@ entries:
     params: { kind: "enum:chart_insert_kind", grouping: "enum:chart_grouping" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_type, js: setChartType, py: set_chart_type }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_title.set:
     kind: op
     scope: sheet
@@ -7575,6 +8112,7 @@ entries:
     params: { title: "union:ChartTitle" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_title, js: setChartTitle, py: set_chart_title }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_legend.set:
     kind: op
     scope: sheet
@@ -7587,6 +8125,7 @@ entries:
     patch_record: ChartLegend
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_legend, js: setChartLegend, py: set_chart_legend }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_axis.set:
     kind: op
     scope: sheet
@@ -7596,6 +8135,7 @@ entries:
     py: set_chart_axis
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_axis, js: setChartAxis, py: set_chart_axis }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_display.set:
     kind: op
     scope: sheet
@@ -7605,6 +8145,7 @@ entries:
     py: set_chart_display
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_display, js: setChartDisplay, py: set_chart_display }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_series.set:
     kind: op
     scope: sheet
@@ -7614,6 +8155,7 @@ entries:
     py: set_chart_series
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_series, js: setChartSeries, py: set_chart_series }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_point.set:
     kind: op
     scope: sheet
@@ -7623,6 +8165,7 @@ entries:
     py: set_chart_point
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_point, js: setChartPoint, py: set_chart_point }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_plot.set:
     kind: op
     scope: sheet
@@ -7632,6 +8175,7 @@ entries:
     py: set_chart_plot
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_plot, js: setChartPlot, py: set_chart_plot }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_filter.set:
     kind: op
     scope: sheet
@@ -7641,6 +8185,7 @@ entries:
     py: set_chart_filter
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_filter, js: setChartFilter, py: set_chart_filter }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_series.add:
     kind: op
     scope: sheet
@@ -7650,6 +8195,7 @@ entries:
     py: add_chart_series
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_chart_series, js: addChartSeries, py: add_chart_series }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_series.remove:
     kind: op
     scope: sheet
@@ -7659,6 +8205,7 @@ entries:
     py: remove_chart_series
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_chart_series, js: removeChartSeries, py: remove_chart_series }
+    handle: { class: Chart, supplies: [sheet, object_id] }
   chart_source.set:
     kind: op
     scope: sheet
@@ -7670,6 +8217,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_source, js: setChartSource, py: set_chart_source }
     facade: handwritten
+    handle: { class: Chart, supplies: [sheet, object_id] }
   data_table.add:
     kind: op
     scope: sheet
@@ -7809,6 +8357,7 @@ entries:
     py: get_shape
     surfaces: [c, wasm, native, py]
     missing: null
+    handle: { class: Shape, supplies: [sheet, object_id] }
   slicer.get:
     kind: op
     scope: sheet
@@ -7818,6 +8367,7 @@ entries:
     py: get_slicer
     surfaces: [c, wasm, native, py]
     missing: null
+    handle: { class: Slicer, supplies: [sheet, object_id] }
   drawing_object.get:
     kind: op
     scope: sheet
@@ -7827,6 +8377,7 @@ entries:
     py: get_drawing_object
     surfaces: [c, wasm, native, py]
     missing: null
+    handle: { class: Drawing, js: getDrawingProperties, py: get_drawing_properties, supplies: [sheet, object_id] }
   passthrough.get:
     kind: op
     scope: workbook
@@ -7881,11 +8432,13 @@ entries:
   drawing_objects.list:
     kind: list
     scope: sheet
-    from: [drawing_object.get_count, drawing_object.get_at]
     js: listDrawingObjects
     py: list_drawing_objects
     surfaces: [wasm, native, py]
     was: { js: listDrawingObjects, py: list_drawing_objects }
+    internal: true
+    replaced_by: binding.list_drawings
+    closes: R28.handles
   column_overrides.list:
     kind: list
     scope: sheet
@@ -7955,19 +8508,19 @@ entries:
   shapes.list:
     kind: list
     scope: sheet
-    from: [shape.get_count, shape.get_at]
     js: listShapes
     py: list_shapes
     surfaces: [wasm, native, py]
     was: { js: listShapes, py: list_shapes }
+    facade: handwritten
   slicers.list:
     kind: list
     scope: sheet
-    from: [slicer.get_count, slicer.get_at]
     js: listSlicers
     py: list_slicers
     surfaces: [wasm, native, py]
     was: { js: listSlicers, py: list_slicers }
+    facade: handwritten
   sparkline_group.list.list_sparkline_groups:
     kind: list
     scope: sheet
@@ -8014,24 +8567,24 @@ entries:
     from: [pivot_field.get_count, pivot_field.get]
     js: listPivotFields
     py: list_pivot_fields
-    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_fields.list:
     kind: list
     scope: sheet
     from: [pivot_data_field.get_count, pivot_data_field.get]
     js: listPivotDataFields
     py: list_pivot_data_fields
-    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_filters.list:
     kind: list
     scope: sheet
     from: [pivot_filter.get_count, pivot_filter.get]
     js: listPivotFilters
     py: list_pivot_filters
-    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_cache_calculated_items.list:
     kind: list
     scope: workbook
@@ -8039,6 +8592,7 @@ entries:
     js: listPivotCacheCalculatedItems
     py: list_pivot_cache_calculated_items
     surfaces: [wasm, native, py]
+    handle: { class: PivotCache, supplies: [cache_id] }
   cell_phonetic_run.list.get_cell_phonetic_runs:
     kind: op
     scope: sheet
@@ -8069,19 +8623,19 @@ entries:
   pivot_cache_ids.list:
     kind: list
     scope: workbook
-    from: [pivot_cache.get_count, pivot_cache.get_id_at]
     js: listPivotCaches
     py: list_pivot_caches
     surfaces: [wasm, native, py]
+    facade: handwritten
   table.list.iter_tables:
     kind: list
     scope: workbook
-    from: [table.get_count, table.get]
     js: listTables
     py: list_tables
     surfaces: [wasm, native, py]
     was: { py: iter_tables }
     drop: { py: iter_tables, closes: R5.list }
+    facade: handwritten
   constant.fm_val_blank:
     kind: constant
     c: FM_VAL_BLANK
@@ -10471,11 +11025,13 @@ entries:
   constant.fm_gradient_linear:
     kind: constant
     c: FM_GRADIENT_LINEAR
+    enum: enum.gradient_type
     surfaces: [c]
     was: { c: FM_GRADIENT_LINEAR }
   constant.fm_gradient_path:
     kind: constant
     c: FM_GRADIENT_PATH
+    enum: enum.gradient_type
     surfaces: [c]
     was: { c: FM_GRADIENT_PATH }
   constant.fm_cell_style_builtin_id_none:
@@ -11391,10 +11947,10 @@ entries:
     py: update_pivot_field
     patch: true
     patch_record: PivotField
-    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
     exception: "binding convenience: applies a partial update of a pivot field through the per-property setters"
     facade: handwritten
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   binding.update_pivot_item:
     kind: op
     scope: sheet
@@ -11402,9 +11958,147 @@ entries:
     py: update_pivot_item
     patch: true
     patch_record: PivotItem
-    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
     exception: "binding convenience: applies a partial update of a pivot field item through the per-property setters"
+    facade: handwritten
+    handle: { class: Pivot, supplies: [sheet, pivot] }
+  binding.get_cell_format:
+    kind: op
+    scope: sheet
+    js: getCellFormat
+    py: get_cell_format
+    cell_args: [[0, 1]]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: reads a cell's effective format through the style-record getters"
+    facade: handwritten
+  binding.set_cell_format:
+    kind: op
+    scope: sheet
+    js: setCellFormat
+    py: set_cell_format
+    rect_args: [0]
+    patch: true
+    patch_record: CellFormat
+    patch_nested: { font: Font, fill: Fill, border: Border, border.left: BorderSide, border.right: BorderSide, border.top: BorderSide, border.bottom: BorderSide, border.diagonal: BorderSide, alignment: Alignment, protection: CellProtection }
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: merges a format patch into each style base and remaps the range"
+    facade: handwritten
+  binding.to_native:
+    kind: free
+    scope: process
+    js: toNative
+    surfaces: [wasm, native]
+    exception: "binding-only helper that maps a Value to its native JS value; Python has Value.to_python()"
+  binding.table:
+    kind: op
+    scope: workbook
+    js: table
+    py: table
+    ref_args: [0, table]
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the Table handle of a table, resolved by index, name or handle"
+    facade: handwritten
+  binding.pivot_cache:
+    kind: op
+    scope: workbook
+    js: pivotCache
+    py: pivot_cache
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the PivotCache handle of a cache id"
+    facade: handwritten
+  binding.pivot:
+    kind: op
+    scope: sheet
+    js: pivot
+    py: pivot
+    ref_args: [0, pivot]
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the Pivot handle of a pivot, resolved by index, name or handle"
+    facade: handwritten
+  binding.drawing:
+    kind: op
+    scope: sheet
+    js: drawing
+    py: drawing
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the handle of a drawing object, of the class its kind selects"
+    facade: handwritten
+  binding.picture:
+    kind: op
+    scope: sheet
+    js: picture
+    py: picture
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the Picture handle of a drawing object"
+    facade: handwritten
+  binding.chart:
+    kind: op
+    scope: sheet
+    js: chart
+    py: chart
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the Chart handle of a drawing object"
+    facade: handwritten
+  binding.shape:
+    kind: op
+    scope: sheet
+    js: shape
+    py: shape
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the Shape handle of a drawing object"
+    facade: handwritten
+  binding.slicer:
+    kind: op
+    scope: sheet
+    js: slicer
+    py: slicer
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the Slicer handle of a drawing object"
+    facade: handwritten
+  binding.list_drawings:
+    kind: list
+    scope: sheet
+    js: listDrawings
+    py: list_drawings
+    surfaces: [wasm, native, py]
+    facade: handwritten
+  binding.list_pictures:
+    kind: list
+    scope: sheet
+    js: listPictures
+    py: list_pictures
+    surfaces: [wasm, native, py]
+    facade: handwritten
+  binding.list_charts:
+    kind: list
+    scope: sheet
+    js: listCharts
+    py: list_charts
+    surfaces: [wasm, native, py]
+    facade: handwritten
+  binding.remove_drawing:
+    kind: op
+    scope: sheet
+    js: removeDrawing
+    py: remove_drawing
+    surfaces: [wasm, native, py]
+    was: { js: removeDrawing, py: remove_drawing }
+    exception: "binding convenience: removes a drawing object through the raw remover of its kind"
+    facade: handwritten
+  binding.add_picture:
+    kind: op
+    scope: sheet
+    js: addPicture
+    py: add_picture
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: inserts an image and returns its Picture handle"
+    facade: handwritten
+  binding.pivot_get_properties:
+    kind: op
+    scope: sheet
+    handle: { class: Pivot, js: getProperties, py: get_properties, supplies: [sheet, pivot] }
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: composes the pivot name and cache id getters"
     facade: handwritten
   binding.add_pivot_cache_field_shared_item:
     kind: op
@@ -11414,6 +12108,7 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding convenience: dispatches on the type of the value to the typed setters"
     facade: handwritten
+    handle: { class: PivotCache, supplies: [cache_id] }
   binding.set_pivot_cache_record_value:
     kind: op
     scope: workbook
@@ -11422,6 +12117,7 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding convenience: dispatches on the type of the value to the typed setters"
     facade: handwritten
+    handle: { class: PivotCache, supplies: [cache_id] }
   fonts.list:
     kind: list
     scope: workbook
@@ -11470,8 +12166,8 @@ entries:
     from: [pivot_field_item.get_count, pivot_field_item.get]
     js: listPivotFieldItems
     py: list_pivot_field_items
-    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivots.list:
     kind: list
     scope: sheet
@@ -11479,7 +12175,6 @@ entries:
     py: list_pivots
     surfaces: [wasm, native, py]
     facade: handwritten
-    note: "the elements are PivotSummary records, not read through a count and a getter"
   pivot_cache_fields.list:
     kind: list
     scope: workbook
@@ -11488,6 +12183,7 @@ entries:
     surfaces: [wasm, native, py]
     facade: handwritten
     note: "the elements are PivotCacheField records assembled from the per-property cache getters"
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_field_shared_items.list:
     kind: list
     scope: workbook
@@ -11496,6 +12192,7 @@ entries:
     surfaces: [wasm, native, py]
     facade: handwritten
     note: "the elements are PivotCacheSharedItem records assembled from the per-property cache getters"
+    handle: { class: PivotCache, supplies: [cache_id] }
   type.table_ref:
     kind: typedef
     js: TableRef
@@ -11540,8 +12237,8 @@ entries:
   record.pivot_summary:
     kind: record
     role: result
-    js: PivotSummary
-    py: PivotSummary
+    js: PivotProperties
+    py: PivotProperties
     surfaces: [wasm, native, py]
   record.pivot_cache_field:
     kind: record
@@ -11559,6 +12256,51 @@ entries:
     kind: typedef
     js: Sheet
     py: Sheet
+    surfaces: [wasm, native, py]
+  type.table_handle:
+    kind: typedef
+    js: Table
+    py: Table
+    surfaces: [wasm, native, py]
+  type.pivot_handle:
+    kind: typedef
+    js: Pivot
+    py: Pivot
+    surfaces: [wasm, native, py]
+  type.pivot_cache_handle:
+    kind: typedef
+    js: PivotCache
+    py: PivotCache
+    surfaces: [wasm, native, py]
+  type.drawing_handle:
+    kind: typedef
+    js: Drawing
+    py: Drawing
+    surfaces: [wasm, native, py]
+  type.picture_handle:
+    kind: typedef
+    js: Picture
+    py: Picture
+    surfaces: [wasm, native, py]
+  type.chart_handle:
+    kind: typedef
+    js: Chart
+    py: Chart
+    surfaces: [wasm, native, py]
+  type.shape_handle:
+    kind: typedef
+    js: Shape
+    py: Shape
+    surfaces: [wasm, native, py]
+  type.slicer_handle:
+    kind: typedef
+    js: Slicer
+    py: Slicer
+    surfaces: [wasm, native, py]
+  type.color_input:
+    kind: typedef
+    js: ColorInput
+    py: ColorInput
     surfaces: [wasm, native, py]
   type.sheet_ref:
     kind: typedef
@@ -11622,7 +12364,70 @@ entries:
     kind: record
     role: input
     js: CellXfInput
+    py: CellXfInput
+    surfaces: [wasm, native, py]
+  record.cell_format:
+    kind: record
+    role: result
+    js: CellFormat
+    py: CellFormat
+    surfaces: [wasm, native, py]
+    exception: "composed by the bindings from a cell's effective XF and the style records it points at"
+  record.alignment:
+    kind: record
+    role: result
+    js: Alignment
+    py: Alignment
+    surfaces: [wasm, native, py]
+    exception: "the alignment group of a CellFormat; C carries it as fields of fm_cell_xf_t"
+  record.cell_protection:
+    kind: record
+    role: result
+    js: CellProtection
+    py: CellProtection
+    surfaces: [wasm, native, py]
+    exception: "the protection group of a CellFormat; C carries it as fields of fm_cell_xf_t"
+  record.cell_format_patch:
+    kind: record
+    role: patch
+    js: CellFormatPatch
     surfaces: [wasm, native]
+  record.font_patch:
+    kind: record
+    role: patch
+    js: FontPatch
+    py: FontPatch
+    surfaces: [wasm, native, py]
+  record.fill_patch:
+    kind: record
+    role: patch
+    js: FillPatch
+    py: FillPatch
+    surfaces: [wasm, native, py]
+  record.border_side_patch:
+    kind: record
+    role: patch
+    js: BorderSidePatch
+    py: BorderSidePatch
+    surfaces: [wasm, native, py]
+  record.border_patch:
+    kind: record
+    role: patch
+    js: BorderPatch
+    py: BorderPatch
+    surfaces: [wasm, native, py]
+  record.alignment_patch:
+    kind: record
+    role: patch
+    js: AlignmentPatch
+    py: AlignmentPatch
+    surfaces: [wasm, native, py]
+  record.cell_protection_patch:
+    kind: record
+    role: patch
+    js: CellProtectionPatch
+    py: CellProtectionPatch
+    surfaces: [wasm, native, py]
   record.phonetic_properties_input:
     kind: record
     role: input

@@ -77,10 +77,14 @@ class PayloadTest(unittest.TestCase):
 
 
 class _RecordingSheet:
-    """Accepts the cell writes `_apply_sheets` makes and drops them."""
+    """Records the renames `_apply_sheets` makes on its workbook and drops the cell writes."""
 
-    def __init__(self, name):
+    def __init__(self, workbook, name):
+        self.workbook = workbook
         self.name = name
+
+    def rename(self, name):
+        self.workbook.order.append(name)
 
     def set_blank(self, *args):
         pass
@@ -105,14 +109,11 @@ class _RecordingWorkbook:
         self.default_name = default_name
         self.order = []
 
-    def rename_sheet(self, index, name):
-        self.order.append(name)
-
     def add_sheet(self, name):
         self.order.append(name)
 
     def sheet(self, index):
-        return _RecordingSheet(self.default_name)
+        return _RecordingSheet(self, self.default_name)
 
 
 class SheetIndexTest(unittest.TestCase):

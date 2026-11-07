@@ -34,10 +34,12 @@ The package is ES modules only (no `require`) and ships its TypeScript declarati
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
-console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
+const value = formulon.evaluateFormula('=SUM(1,2,3)');
+console.log(value.number); // 6
+console.log(formulon.toNative(value)); // 6
 ```
 
-Excel errors such as `#DIV/0!` come back as values (`v.kind === ValueKind.Error`); a host-side failure throws `FormulonError`, whose `code` is a `StatusCode`. See [Errors](https://formulon.libraz.net/compatibility/errors).
+`toNative` turns a `Value` into a plain JavaScript value: `null` for a blank, a number, a boolean or a string for the scalar kinds, and the `Value` itself for an error, array, reference or lambda. Excel errors such as `#DIV/0!` come back as values (`v.kind === ValueKind.Error`); a host-side failure throws `FormulonError`, whose `code` is a `StatusCode`. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 
@@ -66,7 +68,73 @@ On Node 24+ and in bundlers that support explicit resource management, `using wb
 
 A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet('Sheet1')` finds a sheet by name (it throws `FormulonError` with `StatusCode.NotFound` when there is none), `wb.listSheets()` lists them all, and `ws.name` and `ws.index` read its current name and position. Every method that takes a cell accepts either `(row, col)` or an A1 string (`ws.setValue('A1', 42)`, `ws.getValue('A2')`), and a rectangle argument accepts `'A1:B2'`. `ws.getValues('A1:B2')` reads a block as rows of values and `ws.setValues('A1', [[1, 'x'], [true, null]])` writes one.
 
+`ws.setCellFormat(range, patch)` changes the number format, font, fill, border, alignment and protection of a cell or range, and leaves every attribute the patch does not name as it was. Whole-column and whole-row spans take the same strings as the size operations:
+
+```js run
+import createFormulon from '@libraz/formulon';
+
+const formulon = await createFormulon();
+const wb = formulon.Workbook.createDefault();
+try {
+  const ws = wb.sheet(0);
+  ws.setValue('A1', 0.256);
+  ws.setCellFormat('A1', { numberFormat: '0.0%', font: { bold: true, color: '#C00000' } });
+  ws.setCellFormat('B:B', { alignment: { horizontal: formulon.HorizontalAlign.Center } });
+  ws.setColumnWidth('B:D', 12);
+  console.log(ws.getDisplayText('A1').text); // 25.6%
+  console.log(ws.getCellFormat('A1').font.bold); // true
+} finally {
+  wb.dispose();
+}
+```
+
 Reads return the value as of the last full `recalc()`; `wb.hasDirtyCells()` tells whether edits are still waiting for one. `ErrorDisplayName[ErrorCode.Div0]` gives `'#DIV/0!'` without a workbook.
+
+## Tables, pivot tables and charts
+
+`addTable`, `addPivot`, `addPivotCache`, `addChart`, `addShape`, `addSlicer` and `addPicture` return a handle that stays on its object while other tables, pivots or drawings come and go. The operations on the object are methods of the handle; the workbook and the sheet keep adding, listing, looking up and removing:
+
+```js run
+import createFormulon from '@libraz/formulon';
+
+const formulon = await createFormulon();
+const wb = formulon.Workbook.createDefault();
+try {
+  const ws = wb.sheet(0);
+  ws.setValues('A1', [['Region', 'Amount'], ['East', 10], ['West', 30]]);
+
+  const chart = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
+  chart.setTitle('Sales');
+  console.log(chart.getProperties().title.text); // Sales
+
+  const cache = wb.addPivotCache();
+  cache.setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.addField('Region');
+  cache.addField('Amount');
+  for (const [region, amount] of [['East', 10], ['West', 30]]) {
+    const record = cache.addRecord();
+    cache.setRecordValue(record, 0, region);
+    cache.setRecordValue(record, 1, amount);
+  }
+  const pivot = ws.addPivot({ name: 'ByRegion', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+  pivot.addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
+  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Data });
+  pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
+  pivot.rename('Totals');
+  console.log(ws.pivot('Totals') === pivot); // true
+
+  ws.removePivot(pivot);
+  try {
+    pivot.getProperties();
+  } catch (e) {
+    console.log(e.code === formulon.StatusCode.NotFound); // true
+  }
+} finally {
+  wb.dispose();
+}
+```
+
+A handle of a removed object throws `FormulonError` with `StatusCode.NotFound`. Tables are reached with `wb.table(nameOrIndex)`, charts and the other drawings with `ws.chart(id)`, `ws.shape(id)`, `ws.slicer(id)`, `ws.picture(id)` and `ws.drawing(id)`.
 
 ## Switching locale profiles
 

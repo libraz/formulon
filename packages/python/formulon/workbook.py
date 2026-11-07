@@ -6,7 +6,7 @@ Public surface:
   * :class:`Value` -- frozen dataclass holding a cell value.
   * :class:`ExcelError` -- an Excel cell error as a Python value.
   * :class:`FormulonError` -- exception raised on host-side failures.
-  * :class:`Cell`, :class:`DefinedName`, :class:`Table` -- iteration tuples.
+  * :class:`Cell`, :class:`DefinedName`, :class:`TableProperties` -- iteration tuples.
 
 Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, etc.) are reported as
 ``Value`` instances with ``kind == ValueKind.ERROR``; only host-side
@@ -59,9 +59,13 @@ from ._refs import resolve_ref
 from ._status import StatusCode
 
 if TYPE_CHECKING:
+    from .pivot_cache import PivotCache
     from .sheet import Sheet
+    from .table import Table
 
 __all__ = [
+    "Alignment",
+    "AlignmentPatch",
     "AnchorEditAs",
     "AnchorKind",
     "ArrayFormula",
@@ -72,17 +76,24 @@ __all__ = [
     "AutoFilterSortCondition",
     "AutoFilterSortState",
     "Border",
+    "BorderPatch",
     "BorderSide",
+    "BorderSidePatch",
+    "BorderStyle",
     "CalcMode",
     "canonicalize_formula",
     "canonicalize_function_name",
     "Cell",
     "CELL_STYLE_BUILTIN_ID_NONE",
+    "CellFormat",
     "CellNode",
+    "CellProtection",
+    "CellProtectionPatch",
     "CellRect",
     "CellsInRange",
     "CellStyle",
     "CellXf",
+    "CellXfInput",
     "CfCell",
     "CfColor",
     "CfDataBarAxisPosition",
@@ -91,7 +102,6 @@ __all__ = [
     "CfMatch",
     "CfMatchKind",
     "Cfvo",
-    "Chart",
     "ChartAxis",
     "ChartAxisCrosses",
     "ChartAxisKind",
@@ -127,6 +137,7 @@ __all__ = [
     "ChartPointPatch",
     "ChartPointState",
     "ChartPreviewOverridesInput",
+    "ChartProperties",
     "ChartSeries",
     "ChartSeriesDirection",
     "ChartSeriesPatch",
@@ -139,6 +150,7 @@ __all__ = [
     "CollationStrength",
     "Color",
     "ColorContext",
+    "ColorInput",
     "ColorKind",
     "ColorResolution",
     "ColorScale",
@@ -158,8 +170,8 @@ __all__ = [
     "DifferentialFormat",
     "DisplayStatus",
     "DisplayText",
-    "DrawingObject",
     "DrawingObjectKind",
+    "DrawingProperties",
     "DynamicFilterType",
     "EffectiveStyle",
     "EffectiveStyleSource",
@@ -170,9 +182,15 @@ __all__ = [
     "ExternalLink",
     "ExternalLinkKind",
     "Fill",
+    "FillPatch",
+    "FillPattern",
     "FilterKind",
     "FilterOperator",
     "Font",
+    "FontFamily",
+    "FontPatch",
+    "FontScheme",
+    "FontVerticalAlign",
     "FunctionAvailability",
     "FunctionMetadata",
     "GeometryMode",
@@ -182,6 +200,9 @@ __all__ = [
     "get_locale_facts",
     "GradientFill",
     "GradientStop",
+    "GradientType",
+    "HeaderFooter",
+    "HorizontalAlign",
     "Hyperlink",
     "IconSet",
     "ImageFormat",
@@ -209,6 +230,7 @@ __all__ = [
     "PhoneticProperties",
     "PhoneticPropertiesInput",
     "PhoneticRun",
+    "PictureProperties",
     "PIVOT_SHOW_AS_BASE_NEXT",
     "PIVOT_SHOW_AS_BASE_PREVIOUS",
     "PIVOT_VALUES_FIELD",
@@ -235,22 +257,24 @@ __all__ = [
     "PivotItem",
     "PivotLayout",
     "PivotOptions",
+    "PivotProperties",
     "PivotReportLayout",
     "PivotShowValuesAs",
     "PivotSortOrder",
     "PivotStyle",
-    "PivotSummary",
     "PivotWorksheetSource",
+    "PrintOptions",
     "PrintTitles",
     "ProtectedRange",
     "ReadDiagnostics",
+    "ReadingOrder",
     "RectPt",
     "RefMode",
     "ResolvedColor",
     "RowLayout",
     "SaveDiagnostics",
-    "Shape",
     "ShapePaint",
+    "ShapeProperties",
     "SheetComment",
     "SheetFormatDefaults",
     "SheetProtection",
@@ -260,8 +284,8 @@ __all__ = [
     "SheetView",
     "SheetViewMode",
     "SheetVisibility",
-    "Slicer",
     "SlicerCrossFilter",
+    "SlicerProperties",
     "SlicerSortOrder",
     "SortBy",
     "SortMethod",
@@ -272,8 +296,8 @@ __all__ = [
     "SparklineGroup",
     "SparklineType",
     "Spill",
-    "Table",
     "TableColumn",
+    "TableProperties",
     "TableStyle",
     "TableStyleDefaults",
     "TableStyleElement",
@@ -286,9 +310,11 @@ __all__ = [
     "ThreadedComment",
     "ThreadedCommentInput",
     "UNCHANGED",
+    "UnderlineStyle",
     "ValidationErrorStyle",
     "ValidationOutcome",
     "Value",
+    "VerticalAlign",
     "WidthModel",
     "Workbook",
     "WorkbookFormat",
@@ -620,7 +646,7 @@ class DefinedNameInput:
 
 @dataclass(frozen=True)
 class TableColumn:
-    """One column of :attr:`Table.columns`.
+    """One column of :attr:`TableProperties.columns`.
 
     ``totals_row_function`` is the ``ST_TotalsRowFunction`` token (``"none"``
     when absent); ``totals_row_formula`` is the ``custom`` function's formula.
@@ -633,8 +659,8 @@ class TableColumn:
 
 
 @dataclass(frozen=True)
-class Table:
-    """One table, as :meth:`Workbook.list_tables` returns it.
+class TableProperties:
+    """One table, as :meth:`Table.get_properties` returns it.
 
     ``style_name`` is ``None`` without a named style and may name a custom
     style (:meth:`Workbook.get_table_style`); the four toggles read false
@@ -1098,6 +1124,124 @@ class ColorKind(IntEnum):
     AUTO = 4
 
 
+class HorizontalAlign(IntEnum):
+    """OOXML ``<alignment horizontal>`` of a cell format."""
+
+    GENERAL = 0
+    LEFT = 1
+    CENTER = 2
+    RIGHT = 3
+    FILL = 4
+    JUSTIFY = 5
+    CENTER_CONTINUOUS = 6
+    DISTRIBUTED = 7
+
+
+class VerticalAlign(IntEnum):
+    """OOXML ``<alignment vertical>`` of a cell format; ``BOTTOM`` is the default."""
+
+    TOP = 0
+    CENTER = 1
+    BOTTOM = 2
+    JUSTIFY = 3
+    DISTRIBUTED = 4
+
+
+class ReadingOrder(IntEnum):
+    """OOXML ``<alignment readingOrder>``: the text direction of a cell."""
+
+    CONTEXT = 0
+    LEFT_TO_RIGHT = 1
+    RIGHT_TO_LEFT = 2
+
+
+class UnderlineStyle(IntEnum):
+    """OOXML ``<u>`` of a font."""
+
+    NONE = 0
+    SINGLE = 1
+    DOUBLE = 2
+    SINGLE_ACCOUNTING = 3
+    DOUBLE_ACCOUNTING = 4
+
+
+class FontVerticalAlign(IntEnum):
+    """OOXML ``<vertAlign>`` of a font."""
+
+    BASELINE = 0
+    SUPERSCRIPT = 1
+    SUBSCRIPT = 2
+
+
+class FontScheme(IntEnum):
+    """OOXML ``<scheme>`` of a font: its link to the theme fonts; ``NONE`` when absent."""
+
+    NONE = 0
+    MAJOR = 1
+    MINOR = 2
+
+
+class FontFamily(IntEnum):
+    """OOXML ``<family>`` font-family class."""
+
+    NOT_APPLICABLE = 0
+    ROMAN = 1
+    SWISS = 2
+    MODERN = 3
+    SCRIPT = 4
+    DECORATIVE = 5
+
+
+class FillPattern(IntEnum):
+    """OOXML ``<patternFill patternType>``."""
+
+    NONE = 0
+    SOLID = 1
+    MEDIUM_GRAY = 2
+    DARK_GRAY = 3
+    LIGHT_GRAY = 4
+    DARK_HORIZONTAL = 5
+    DARK_VERTICAL = 6
+    DARK_DOWN = 7
+    DARK_UP = 8
+    DARK_GRID = 9
+    DARK_TRELLIS = 10
+    LIGHT_HORIZONTAL = 11
+    LIGHT_VERTICAL = 12
+    LIGHT_DOWN = 13
+    LIGHT_UP = 14
+    LIGHT_GRID = 15
+    LIGHT_TRELLIS = 16
+    GRAY125 = 17
+    GRAY0625 = 18
+
+
+class GradientType(IntEnum):
+    """OOXML ``<gradientFill type>``."""
+
+    LINEAR = 0
+    PATH = 1
+
+
+class BorderStyle(IntEnum):
+    """OOXML ``style`` of a border side."""
+
+    NONE = 0
+    THIN = 1
+    MEDIUM = 2
+    DASHED = 3
+    DOTTED = 4
+    THICK = 5
+    DOUBLE = 6
+    HAIR = 7
+    MEDIUM_DASHED = 8
+    DASH_DOT = 9
+    MEDIUM_DASH_DOT = 10
+    DASH_DOT_DOT = 11
+    MEDIUM_DASH_DOT_DOT = 12
+    SLANT_DASH_DOT = 13
+
+
 class CfMatchKind(IntEnum):
     """Which kind of conditional-format rule a :class:`CfMatch` reports."""
 
@@ -1275,7 +1419,7 @@ class PivotFilterValueKind(IntEnum):
 
 class PivotDatePeriod(IntFlag):
     """Calendar periods of a pivot date group, combined into the ``periods``
-    mask of :meth:`Sheet.set_pivot_field_date_group`."""
+    mask of :meth:`Pivot.set_field_date_group`."""
 
     SECONDS = 1
     MINUTES = 2
@@ -1318,7 +1462,7 @@ class PivotSortOrder(IntEnum):
     """Sibling item order of a pivot field.
 
     ``MANUAL`` keeps items in the order added with
-    :meth:`Sheet.add_pivot_field_item` and takes no ``by_field`` key.
+    :meth:`Pivot.add_field_item` and takes no ``by_field`` key.
     """
 
     DESCENDING = 0
@@ -1631,7 +1775,17 @@ class ImageInfo:
 
 
 @dataclass(frozen=True)
-class DrawingObject:
+class PictureProperties:
+    """A picture's image format, pixel size and a copy of its media bytes (:meth:`Picture.get_properties`)."""
+
+    format: ImageFormat
+    px_width: int
+    px_height: int
+    bytes: bytes
+
+
+@dataclass(frozen=True)
+class DrawingProperties:
     """One anchored object of a sheet's drawing; sizes and offsets are in EMU."""
 
     object_id: int
@@ -1656,10 +1810,10 @@ class DrawingObject:
 
 
 @dataclass(frozen=True)
-class Shape:
+class ShapeProperties:
     """A shape, connector or group of a sheet's drawing; sizes and offsets are in EMU.
 
-    The anchor fields read as in :class:`DrawingObject`. ``fill_rgb`` and
+    The anchor fields read as in :class:`DrawingProperties`. ``fill_rgb`` and
     ``line_rgb`` are ``0xRRGGBB`` when the matching kind is ``ShapePaint.SOLID``;
     a kind is ``None`` when the shape states no fill or outline element.
     ``rotation`` is in 60000ths of a degree; ``preset_geometry`` is empty for custom
@@ -1694,11 +1848,11 @@ class Shape:
 
 
 @dataclass(frozen=True)
-class Slicer:
+class SlicerProperties:
     """A table slicer of a worksheet; sizes and offsets are in EMU.
 
     ``object_id`` is the slicer's frame in the sheet's drawing (``0`` without
-    one); the anchor fields read as in :class:`DrawingObject`, and ``to_*`` is
+    one); the anchor fields read as in :class:`DrawingProperties`, and ``to_*`` is
     zero unless the anchor is two-cell. ``cache_name``, ``table_name`` and
     ``column_name`` identify the slicer cache and the table column it filters;
     the selection itself lives in the table's AutoFilter. ``style`` is
@@ -1821,7 +1975,7 @@ class ChartPlotType(IntEnum):
 
 
 class ChartInsertKind(IntEnum):
-    """Kinds :meth:`Sheet.add_chart` and :meth:`Sheet.set_chart_type` produce."""
+    """Kinds :meth:`Sheet.add_chart` and :meth:`Chart.set_type` produce."""
 
     COLUMN = 0
     BAR = 1
@@ -2116,8 +2270,8 @@ class ChartSource:
 
 
 @dataclass(frozen=True)
-class Chart:
-    """The typed view of a chart (:meth:`Sheet.get_chart`).
+class ChartProperties:
+    """The typed view of a chart (:meth:`Chart.get_properties`).
 
     ``title`` and ``legend`` are ``None`` when the chart has none, ``blanks_as``
     when the file omits it, and ``source`` when the series share no rectangle.
@@ -2212,7 +2366,7 @@ class ChartUnresolved:
 
 @dataclass
 class ChartData:
-    """A chart's series resolved against the current cell values (:meth:`Sheet.get_chart_data`)."""
+    """A chart's series resolved against the current cell values (:meth:`Chart.get_data`)."""
 
     domain: Literal["category", "xy"]
     point_count: int
@@ -2306,7 +2460,7 @@ class ChartPlotPatch(TypedDict, total=False):
 class ChartAxisPatch(TypedDict, total=False):
     """Axis patch.
 
-    ``title`` takes the forms of :meth:`Sheet.set_chart_title`: text, or a
+    ``title`` takes the forms of :meth:`Chart.set_title`: text, or a
     :class:`ChartTitle` (``AUTO`` leaves the text to the viewer, ``NONE``
     removes the title). ``None`` on ``title`` removes the axis title, on
     ``log_base`` makes the axis linear and on ``tick_label_position``
@@ -2330,7 +2484,7 @@ class ChartAxisPatch(TypedDict, total=False):
 
 @dataclass
 class ChartPreviewOverridesInput:
-    """Overrides for :meth:`Sheet.get_chart_preview`; a field left ``None`` keeps the chart's own value."""
+    """Overrides for :meth:`Chart.get_preview`; a field left ``None`` keeps the chart's own value."""
 
     source: Optional[str] = None
     direction: Optional[ChartSeriesDirection] = None
@@ -2342,7 +2496,7 @@ class ChartPreviewOverridesInput:
 
 
 class ChartDisplayPatch(TypedDict, total=False):
-    """Display patch for :meth:`Sheet.set_chart_display`; an omitted key is kept, ``None`` removes the element."""
+    """Display patch for :meth:`Chart.set_display`; an omitted key is kept, ``None`` removes the element."""
 
     blanks_as: Optional[ChartBlanksAs]
     plot_visible_only: Optional[bool]
@@ -2713,6 +2867,47 @@ class PageMargins:
 
 
 @dataclass(frozen=True)
+class PrintOptions:
+    """Effective ``<printOptions>`` values; an attribute the sheet does not state reads false with its flag false."""
+
+    grid_lines: bool
+    headings: bool
+    horizontal_centered: bool
+    vertical_centered: bool
+    grid_lines_stated: bool
+    headings_stated: bool
+    horizontal_centered_stated: bool
+    vertical_centered_stated: bool
+
+
+@dataclass(frozen=True)
+class HeaderFooter:
+    """Effective ``<headerFooter>`` values.
+
+    A section the sheet does not have is ``None``; the text is decoded as
+    :meth:`Sheet.set_header_footer` takes it. A flag the sheet does not state
+    reads its schema default (``different_odd_even`` / ``different_first``
+    false, ``scale_with_doc`` / ``align_with_margins`` true) with its
+    ``*_stated`` flag false.
+    """
+
+    odd_header: Optional[str]
+    odd_footer: Optional[str]
+    even_header: Optional[str]
+    even_footer: Optional[str]
+    first_header: Optional[str]
+    first_footer: Optional[str]
+    different_odd_even: bool
+    different_first: bool
+    scale_with_doc: bool
+    align_with_margins: bool
+    different_odd_even_stated: bool
+    different_first_stated: bool
+    scale_with_doc_stated: bool
+    align_with_margins_stated: bool
+
+
+@dataclass(frozen=True)
 class CfMatch:
     """A resolved conditional-format match for one cell.
 
@@ -2991,20 +3186,6 @@ class LocaleFacts:
     error_names: List[ErrorName]
 
 
-# Alignment attributes; the ``<alignment>`` child is written when any of them is stated.
-_CELL_XF_ALIGNMENT = (
-    "horizontal_align",
-    "vertical_align",
-    "wrap_text",
-    "justify_last_line",
-    "text_rotation",
-    "indent",
-    "relative_indent",
-    "shrink_to_fit",
-    "reading_order",
-)
-
-
 @dataclass(frozen=True)
 class CellXf:
     """A resolved ``<xf>`` style record.
@@ -3019,8 +3200,8 @@ class CellXf:
     fill_index: int
     border_index: int
     num_fmt_id: int
-    horizontal_align: Optional[int] = None
-    vertical_align: Optional[int] = None
+    horizontal_align: Optional[HorizontalAlign] = None
+    vertical_align: Optional[VerticalAlign] = None
     wrap_text: Optional[bool] = None
     justify_last_line: Optional[bool] = None
     xf_id: int = 0
@@ -3028,7 +3209,7 @@ class CellXf:
     indent: Optional[int] = None
     relative_indent: Optional[int] = None
     shrink_to_fit: Optional[bool] = None
-    reading_order: Optional[int] = None
+    reading_order: Optional[ReadingOrder] = None
     apply_number_format: bool = False
     apply_font: bool = False
     apply_fill: bool = False
@@ -3038,6 +3219,53 @@ class CellXf:
     quote_prefix: bool = False
     locked: Optional[bool] = None
     hidden: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class CellXfInput:
+    """An ``<xf>`` record :meth:`Workbook.add_cell_xf` and :meth:`Workbook.add_cell_style_xf` write.
+
+    A ``has_*`` flag left ``None`` is inferred: ``has_horizontal_align``,
+    ``has_vertical_align``, ``has_wrap_text`` and ``has_alignment`` read true
+    (their values are always supplied), ``has_justify_last_line`` follows
+    ``justify_last_line``, and ``has_protection`` is true when ``locked`` or
+    ``hidden`` is given. An optional attribute left ``None`` is not written;
+    without ``<protection>`` a cell is locked and not hidden. ``xf_id`` names
+    the ``<cellStyleXfs>`` entry the format inherits from (``add_cell_xf``
+    only).
+    """
+
+    font_index: int
+    fill_index: int
+    border_index: int
+    num_fmt_id: int
+    horizontal_align: HorizontalAlign
+    vertical_align: VerticalAlign
+    wrap_text: bool
+    justify_last_line: Optional[bool] = None
+    has_alignment: Optional[bool] = None
+    has_horizontal_align: Optional[bool] = None
+    has_vertical_align: Optional[bool] = None
+    has_wrap_text: Optional[bool] = None
+    has_justify_last_line: Optional[bool] = None
+    apply_number_format: bool = False
+    apply_font: bool = False
+    apply_fill: bool = False
+    apply_border: bool = False
+    apply_alignment: bool = False
+    apply_protection: bool = False
+    quote_prefix: bool = False
+    has_protection: Optional[bool] = None
+    locked: Optional[bool] = None
+    hidden: Optional[bool] = None
+    #: 0..180, or 255 for vertical text.
+    text_rotation: Optional[int] = None
+    #: 0..255.
+    indent: Optional[int] = None
+    relative_indent: Optional[int] = None
+    shrink_to_fit: Optional[bool] = None
+    reading_order: Optional[ReadingOrder] = None
+    xf_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -3132,13 +3360,12 @@ class Font:
     shadow: Optional[bool] = None
     condense: Optional[bool] = None
     extend: Optional[bool] = None
-    underline: int = 0
-    #: 0=baseline, 1=superscript, 2=subscript.
-    vert_align: int = 0
-    family: Optional[int] = None
+    underline: UnderlineStyle = UnderlineStyle.NONE
+    vert_align: FontVerticalAlign = FontVerticalAlign.BASELINE
+    family: Optional[FontFamily] = None
     charset: Optional[int] = None
-    #: ``<scheme>`` theme link: 0=absent, 1=major, 2=minor.
-    scheme: int = 0
+    #: ``<scheme>`` theme link; ``FontScheme.NONE`` when absent.
+    scheme: FontScheme = FontScheme.NONE
     color: Color = field(default_factory=Color)
 
 
@@ -3155,12 +3382,11 @@ class GradientStop:
 class GradientFill:
     """A ``<gradientFill>``.
 
-    ``type`` is 0 for linear and 1 for path. ``degree`` is a linear
-    gradient's angle; ``left`` / ``right`` / ``top`` / ``bottom`` (0..1)
-    locate a path gradient's focus.
+    ``degree`` is a linear gradient's angle; ``left`` / ``right`` / ``top`` /
+    ``bottom`` (0..1) locate a path gradient's focus.
     """
 
-    type: int = 0
+    type: GradientType = GradientType.LINEAR
     degree: float = 0.0
     left: float = 0.0
     right: float = 0.0
@@ -3180,7 +3406,7 @@ class Fill:
     are ignored.
     """
 
-    pattern: int = 0
+    pattern: FillPattern = FillPattern.NONE
     fg_argb: int = 0
     bg_argb: int = 0
     fg: Color = field(default_factory=Color)
@@ -3190,13 +3416,13 @@ class Fill:
 
 @dataclass(frozen=True)
 class BorderSide:
-    """One side of a border: the OOXML ``style`` ordinal (0 none, 1 thin, ... 13 slantDashDot) and its colour.
+    """One side of a border: its style and colour.
 
     ``color_argb`` is the literal ``0xAARRGGBB`` or a compatibility
     fallback; ``color`` is the original ``<color>`` specification.
     """
 
-    style: int = 0
+    style: BorderStyle = BorderStyle.NONE
     color_argb: int = 0
     color: Color = field(default_factory=Color)
 
@@ -3215,6 +3441,132 @@ class Border:
 
 
 _BORDER_SIDES = ("left", "right", "top", "bottom", "diagonal")
+
+
+@dataclass(frozen=True)
+class Alignment:
+    """How a cell's text is placed (OOXML ``<alignment>``).
+
+    A format without the element reads ``GENERAL`` / ``BOTTOM``, every flag
+    false and every number 0, with ``ReadingOrder.CONTEXT``.
+    """
+
+    horizontal: HorizontalAlign = HorizontalAlign.GENERAL
+    vertical: VerticalAlign = VerticalAlign.BOTTOM
+    wrap_text: bool = False
+    shrink_to_fit: bool = False
+    #: Indent level, 0 to 255.
+    indent: int = 0
+    #: Degrees, 0 to 180, or 255 for vertical text.
+    text_rotation: int = 0
+    reading_order: ReadingOrder = ReadingOrder.CONTEXT
+    #: Effective with distributed horizontal alignment.
+    justify_last_line: bool = False
+    relative_indent: int = 0
+
+
+@dataclass(frozen=True)
+class CellProtection:
+    """Whether a cell is locked and its formula hidden while the sheet is protected (OOXML ``<protection>``)."""
+
+    locked: bool = True
+    hidden: bool = False
+
+
+@dataclass(frozen=True)
+class CellFormat:
+    """The format a cell shows, as :meth:`Sheet.get_cell_format` reads it.
+
+    Read from the cell's effective XF (cell, then row, then column, then the
+    default); conditional formatting is not applied. ``number_format`` is the
+    format code, ``"General"`` for General; ``alignment`` and ``protection``
+    hold the defaults when the XF has no such element.
+    """
+
+    number_format: str
+    font: Font
+    fill: Fill
+    border: Border
+    alignment: Alignment
+    protection: CellProtection
+
+
+#: A colour in a format patch: ``"#RRGGBB"`` or ``"#AARRGGBB"`` (either case;
+#: alpha defaults to ``FF``), or a :class:`Color`.
+ColorInput = Union[str, Color]
+
+
+class FontPatch(TypedDict, total=False):
+    """The font keys of :meth:`Sheet.set_cell_format`; an omitted key keeps its value.
+
+    ``None`` clears ``size``, ``bold``, ``italic`` or ``strike`` (the element
+    is removed and reads back ``None``).
+    """
+
+    name: str
+    #: Points; finite and not negative.
+    size: Optional[float]
+    bold: Optional[bool]
+    italic: Optional[bool]
+    strike: Optional[bool]
+    underline: UnderlineStyle
+    vert_align: FontVerticalAlign
+    color: ColorInput
+
+
+class FillPatch(TypedDict, total=False):
+    """The fill keys of :meth:`Sheet.set_cell_format`.
+
+    Setting ``fg`` or ``bg`` on a fill without a pattern makes it
+    ``FillPattern.SOLID`` unless ``pattern`` is given; any fill key drops a
+    gradient.
+    """
+
+    pattern: FillPattern
+    fg: ColorInput
+    bg: ColorInput
+
+
+class BorderSidePatch(TypedDict, total=False):
+    """One border side of a :class:`BorderPatch`."""
+
+    style: BorderStyle
+    color: ColorInput
+
+
+class BorderPatch(TypedDict, total=False):
+    """The border keys of :meth:`Sheet.set_cell_format`; each side merges into the current side."""
+
+    left: BorderSidePatch
+    right: BorderSidePatch
+    top: BorderSidePatch
+    bottom: BorderSidePatch
+    diagonal: BorderSidePatch
+    diagonal_up: bool
+    diagonal_down: bool
+
+
+class AlignmentPatch(TypedDict, total=False):
+    """The alignment keys of :meth:`Sheet.set_cell_format`."""
+
+    horizontal: HorizontalAlign
+    vertical: VerticalAlign
+    wrap_text: bool
+    shrink_to_fit: bool
+    #: 0 to 255.
+    indent: int
+    #: 0 to 180, or 255.
+    text_rotation: int
+    reading_order: ReadingOrder
+    justify_last_line: bool
+    relative_indent: int
+
+
+class CellProtectionPatch(TypedDict, total=False):
+    """The protection keys of :meth:`Sheet.set_cell_format`."""
+
+    locked: bool
+    hidden: bool
 
 
 @dataclass
@@ -3266,11 +3618,11 @@ def _decode_font(ptr: int) -> Font:
         size=d["size"] if d["has_size"] else None,
         color_argb=d["color_argb"],
         **{name: bool(d[name]) if d[f"has_{name}"] else None for name in _FONT_TOGGLES},
-        underline=d["underline"],
-        vert_align=d["vert_align"],
-        family=d["family"] if d["has_family"] else None,
+        underline=_enum(UnderlineStyle, d["underline"]),
+        vert_align=_enum(FontVerticalAlign, d["vert_align"]),
+        family=_enum(FontFamily, d["family"]) if d["has_family"] else None,
         charset=d["charset"] if d["has_charset"] else None,
-        scheme=d["scheme"],
+        scheme=_enum(FontScheme, d["scheme"]),
         color=_decode_color(ptr + S.FONT_RECORD.offsets["color"][1]),
     )
 
@@ -3314,7 +3666,7 @@ def _decode_fill(ptr: int) -> Fill:
                 )
             )
         gradient = GradientFill(
-            type=d["gradient_type"],
+            type=_enum(GradientType, d["gradient_type"]),
             degree=d["gradient_degree"],
             left=d["gradient_left"],
             right=d["gradient_right"],
@@ -3323,7 +3675,7 @@ def _decode_fill(ptr: int) -> Fill:
             stops=stops,
         )
     return Fill(
-        pattern=d["pattern"],
+        pattern=_enum(FillPattern, d["pattern"]),
         fg_argb=d["fg_argb"],
         bg_argb=d["bg_argb"],
         fg=_decode_color(ptr + S.FILL_RECORD.offsets["fg"][1]),
@@ -3377,7 +3729,7 @@ def _decode_border_record(ptr: int) -> Border:
         side_ptr = ptr + S.BORDER_RECORD.offsets[side][1]
         d = S.BORDER_SIDE.unpack(LIB, side_ptr)
         sides[side] = BorderSide(
-            style=d["style"],
+            style=_enum(BorderStyle, d["style"]),
             color_argb=d["color_argb"],
             color=_decode_color(side_ptr + S.BORDER_SIDE.offsets["color"][1]),
         )
@@ -3549,8 +3901,8 @@ class PivotInput:
 
 
 @dataclass(frozen=True)
-class PivotSummary:
-    """One pivot table, as :meth:`Sheet.list_pivots` returns it."""
+class PivotProperties:
+    """A pivot table's name and the id of its cache, as :meth:`Pivot.get_properties` returns them."""
 
     name: str
     cache_id: int
@@ -3574,7 +3926,7 @@ class PivotCacheSharedItem:
 
 @dataclass
 class PivotFieldInput:
-    """Argument shape for :meth:`Sheet.add_pivot_field`.
+    """Argument shape for :meth:`Pivot.add_field`.
 
     ``subtotal_top`` defaults to ``True``, Excel's default: a group's subtotal
     sits on its own heading row. ``False`` heads the group with a label-only
@@ -3590,7 +3942,7 @@ class PivotFieldInput:
 
 @dataclass(frozen=True)
 class PivotField:
-    """A pivot field's definition, as read by :meth:`Sheet.list_pivot_fields`.
+    """A pivot field's definition, as read by :meth:`Pivot.list_fields`.
 
     ``axis`` is ``None`` for a field that sits on no axis. ``cache_field_index``
     is the bound pivot-cache field (pivot field ``i`` binds to cache field
@@ -3624,7 +3976,7 @@ class PivotField:
 
 @dataclass(frozen=True)
 class PivotItem:
-    """One pivot-field item, as read by :meth:`Sheet.get_pivot_field_item`.
+    """One pivot-field item, as read by :meth:`Pivot.get_field_item`.
 
     ``name`` is the item's own label (``None`` for an item bound only by cache
     index); ``cache_index`` indexes the bound cache field's shared items and
@@ -3642,7 +3994,7 @@ class PivotItem:
 
 @dataclass(frozen=True)
 class PivotStyle:
-    """A pivot table's style, as read by :meth:`Sheet.get_pivot_style_info`.
+    """A pivot table's style, as read by :meth:`Pivot.get_style_info`.
 
     ``name`` is ``None`` when the style element carries no style name.
     """
@@ -3657,7 +4009,7 @@ class PivotStyle:
 
 @dataclass(frozen=True)
 class PivotOptions:
-    """The PivotTable Options of one pivot table, as read by :meth:`Sheet.get_pivot_options`.
+    """The PivotTable Options of one pivot table, as read by :meth:`Pivot.get_options`.
 
     A read fills every member; a string option reads ``None`` when unset.
     A ``missing_caption`` of exactly ``-`` is written as the number 0.
@@ -3694,7 +4046,7 @@ class PivotOptions:
 
 @dataclass(frozen=True)
 class PivotCacheOptions:
-    """The options of one pivot cache, as read by :meth:`Workbook.get_pivot_cache_options`.
+    """The options of one pivot cache, as read by :meth:`PivotCache.get_options`.
 
     ``missing_items_limit`` is ``-1`` for automatic, ``0`` for none, or up to 1048576.
     """
@@ -3706,7 +4058,7 @@ class PivotCacheOptions:
 
 @dataclass(frozen=True)
 class PivotCalculatedItem:
-    """One calculated item, as read by :meth:`Workbook.list_pivot_cache_calculated_items`.
+    """One calculated item, as read by :meth:`PivotCache.list_calculated_items`.
 
     ``formula`` has a leading ``=``; ``scoped`` is true for an entry read from
     a file that applies the formula only where the item meets items of other fields.
@@ -3739,7 +4091,7 @@ class PivotDataFieldInput:
 
 @dataclass(frozen=True)
 class PivotFilterInput:
-    """Argument shape for :meth:`Sheet.add_pivot_filter`; an operand whose kind is ``None`` is absent."""
+    """Argument shape for :meth:`Pivot.add_filter`; an operand whose kind is ``None`` is absent."""
 
     axis: PivotAxis
     field_name: str
@@ -3791,7 +4143,7 @@ def _print_titles_from(d: Dict[str, int]) -> PrintTitles:
 
 @dataclass(frozen=True)
 class PivotDataField:
-    """One data field of a pivot, as :meth:`Sheet.list_pivot_data_fields` reads it.
+    """One data field of a pivot, as :meth:`Pivot.list_data_fields` reads it.
 
     The fields read as in :class:`PivotDataFieldInput`; ``number_format``,
     ``show_as_base_field`` and ``show_as_base_item`` are ``None`` when unset.
@@ -3808,7 +4160,7 @@ class PivotDataField:
 
 @dataclass(frozen=True)
 class PivotFilter:
-    """One stored filter of a pivot, as :meth:`Sheet.list_pivot_filters` reads it.
+    """One stored filter of a pivot, as :meth:`Pivot.list_filters` reads it.
 
     The fields read as in :class:`PivotFilterInput`; an operand whose kind is
     ``None`` is absent.
@@ -3828,27 +4180,33 @@ class PivotFilter:
     value_high_text: str
 
 
-def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
-    """Project a :class:`CellXf` onto the cell XF struct field map.
+def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
+    """Project a :class:`CellXfInput` onto the cell XF struct field map.
 
     Shared by the direct ``<xf>`` writer and the named-style ``<xf>``
     writer, which pack the same struct, so the presence-flag defaulting
     lives in one place.
     """
+    if not isinstance(record, CellXfInput):
+        raise TypeError(f"formulon: expected a CellXfInput, got {type(record).__name__}")
+
+    def stated(flag: Optional[bool], inferred: bool) -> int:  # noqa: FBT001 -- private presence-flag encoder
+        return 1 if (inferred if flag is None else flag) else 0
+
     return {
         "font_index": _uint(record.font_index, "font_index"),
         "fill_index": _uint(record.fill_index, "fill_index"),
         "border_index": _uint(record.border_index, "border_index"),
         "num_fmt_id": _uint(record.num_fmt_id, "num_fmt_id", 16),
-        "horizontal_align": _uint(record.horizontal_align or 0, "horizontal_align", 8),
-        "has_horizontal_align": 0 if record.horizontal_align is None else 1,
-        "vertical_align": _uint(2 if record.vertical_align is None else record.vertical_align, "vertical_align", 8),
-        "has_vertical_align": 0 if record.vertical_align is None else 1,
+        "horizontal_align": _uint(record.horizontal_align, "horizontal_align", 8),
+        "has_horizontal_align": stated(record.has_horizontal_align, True),
+        "vertical_align": _uint(record.vertical_align, "vertical_align", 8),
+        "has_vertical_align": stated(record.has_vertical_align, True),
         "wrap_text": 1 if record.wrap_text else 0,
-        "has_wrap_text": 0 if record.wrap_text is None else 1,
+        "has_wrap_text": stated(record.has_wrap_text, True),
         "justify_last_line": 1 if record.justify_last_line else 0,
-        "has_justify_last_line": 0 if record.justify_last_line is None else 1,
-        "has_alignment": 1 if any(getattr(record, name) is not None for name in _CELL_XF_ALIGNMENT) else 0,
+        "has_justify_last_line": stated(record.has_justify_last_line, record.justify_last_line is not None),
+        "has_alignment": stated(record.has_alignment, True),
         "xf_id": _uint(record.xf_id, "xf_id"),
         "has_text_rotation": 1 if record.text_rotation is not None else 0,
         "text_rotation": _uint(record.text_rotation or 0, "text_rotation"),
@@ -3859,7 +4217,7 @@ def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
         "has_shrink_to_fit": 1 if record.shrink_to_fit is not None else 0,
         "shrink_to_fit": 1 if record.shrink_to_fit else 0,
         "has_reading_order": 1 if record.reading_order is not None else 0,
-        "reading_order": _uint(record.reading_order or 0, "reading_order"),
+        "reading_order": _sint(record.reading_order or 0, "reading_order"),
         "apply_number_format": 1 if record.apply_number_format else 0,
         "apply_font": 1 if record.apply_font else 0,
         "apply_fill": 1 if record.apply_fill else 0,
@@ -3867,7 +4225,7 @@ def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
         "apply_alignment": 1 if record.apply_alignment else 0,
         "apply_protection": 1 if record.apply_protection else 0,
         "quote_prefix": 1 if record.quote_prefix else 0,
-        "has_protection": 0 if record.locked is None and record.hidden is None else 1,
+        "has_protection": stated(record.has_protection, record.locked is not None or record.hidden is not None),
         "locked": 0 if record.locked is False else 1,
         "hidden": 1 if record.hidden else 0,
     }
@@ -4486,7 +4844,7 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxis:
     )
 
 
-def _read_chart(chart: int) -> Chart:
+def _read_chart(chart: int) -> ChartProperties:
     """Decode an open chart handle."""
     d = _read_struct(LIB.fm_chart_get_info, S.CHART_INFO, chart)
     source = None
@@ -4497,7 +4855,7 @@ def _read_chart(chart: int) -> Chart:
             header_row=bool(d["source_header_row"]),
             header_column=bool(d["source_header_column"]),
         )
-    return Chart(
+    return ChartProperties(
         object_id=d["object_id"],
         name=LIB.read_cstr(d["name"]),
         description=LIB.read_cstr(d["description"]),
@@ -4890,8 +5248,8 @@ def _threaded_comment_from(d: Dict[str, Any]) -> ThreadedComment:
     )
 
 
-def _drawing_object_from(d: Dict[str, Any]) -> DrawingObject:
-    return DrawingObject(
+def _drawing_object_from(d: Dict[str, Any]) -> DrawingProperties:
+    return DrawingProperties(
         object_id=d["object_id"],
         kind=_enum(DrawingObjectKind, d["kind"]),
         anchor_kind=_enum(AnchorKind, d["anchor_kind"]),
@@ -4913,8 +5271,8 @@ def _drawing_object_from(d: Dict[str, Any]) -> DrawingObject:
     )
 
 
-def _shape_from(d: Dict[str, Any]) -> Shape:
-    return Shape(
+def _shape_from(d: Dict[str, Any]) -> ShapeProperties:
+    return ShapeProperties(
         object_id=d["object_id"],
         kind=_enum(DrawingObjectKind, d["kind"]),
         anchor_kind=_enum(AnchorKind, d["anchor_kind"]),
@@ -4943,8 +5301,8 @@ def _shape_from(d: Dict[str, Any]) -> Shape:
     )
 
 
-def _slicer_from(d: Dict[str, Any]) -> Slicer:
-    return Slicer(
+def _slicer_from(d: Dict[str, Any]) -> SlicerProperties:
+    return SlicerProperties(
         object_id=d["object_id"],
         name=LIB.read_cstr(d["name"]),
         caption=LIB.read_cstr(d["caption"]),
@@ -5320,7 +5678,7 @@ class Workbook:
       serially; it has no parallel-recalc entry point.
     """
 
-    __slots__ = ("_handle", "_sheets")
+    __slots__ = ("_handle", "_sheets", "_tables", "_pivot_caches")
 
     def __init__(self) -> None:
         raise TypeError("use Workbook.create_default(), create_for_profile() or load()")
@@ -5331,6 +5689,9 @@ class Workbook:
         wb = object.__new__(cls)
         wb._handle = 0
         wb._sheets = None
+        # One handle per table runtime id and per cache id; an entry outlives its object.
+        wb._tables = {}
+        wb._pivot_caches = {}
         return wb
 
     # -- Factories ---------------------------------------------------------
@@ -5927,68 +6288,54 @@ class Workbook:
         return out
 
     def list_tables(self) -> List[Table]:
-        """Every table of the workbook, in table-index order."""
-        return [self._table_at(i) for i in range(self._table_count())]
+        """The handles of the workbook's tables; a table's position in the list is its table index."""
+        return [self._table_handle(i) for i in range(self._table_count())]
+
+    def table(self, table: Union[int, str, Table]) -> Table:
+        """Return the handle of one table.
+
+        Every call for the same table returns the same :class:`Table` object.
+
+        Args:
+          table: a 0-based table index, a table's display name (compared
+            case-insensitively), or a :class:`Table` of this workbook.
+
+        Raises:
+          NotFoundError: when no table has the display name ``table``, or
+            ``table`` is a removed table's handle.
+          IndexOutOfRangeError: when ``table`` is an index past the last table.
+          InvalidArgumentError: when ``table`` is a :class:`Table` of another workbook.
+        """
+        return self._table_handle(self._table_index(table))
 
     def _table_count(self) -> int:
         """Return the number of tables in the workbook."""
         h = self._require()
         return _read_count(LIB.fm_workbook_get_table_count, h)
 
-    def _table_at(self, table_index: int) -> Table:
-        """Return the ``table_index``-th table in declaration order."""
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.out_ptr()
-            display_ptr = scope.out_ptr()
-            rect_ptr = scope.struct(S.CELL_RECT)
-            sheet_ptr = scope.out_ptr()
-            info_ptr = scope.struct(S.TABLE_INFO)
-            column_ptr = scope.struct(S.TABLE_COLUMN_INFO)
-            status = LIB.fm_workbook_get_table(
-                h, _uint(table_index, "table_index"), name_ptr, display_ptr, rect_ptr, sheet_ptr
-            )
-            _check(status)
-            name = LIB.read_cstr(LIB.read_u32(name_ptr))
-            display = LIB.read_cstr(LIB.read_u32(display_ptr))
-            rect = _decode_cell_rect_at(rect_ptr)
-            sheet = LIB.read_u32(sheet_ptr)
-            S.zero_struct(LIB, S.TABLE_INFO, info_ptr)
-            _check(LIB.fm_workbook_get_table_info(h, _uint(table_index, "table_index"), info_ptr))
-            info = S.TABLE_INFO.unpack(LIB, info_ptr)
-            columns = []
-            for c in range(info["column_count"]):
-                S.zero_struct(LIB, S.TABLE_COLUMN_INFO, column_ptr)
-                _check(
-                    LIB.fm_workbook_get_table_column(
-                        h, _uint(table_index, "table_index"), _uint(c, "column"), column_ptr
-                    )
-                )
-                col = S.TABLE_COLUMN_INFO.unpack(LIB, column_ptr)
-                columns.append(
-                    TableColumn(
-                        name=LIB.read_cstr(col["name"]),
-                        totals_row_function=LIB.read_cstr(col["totals_row_function"]),
-                        totals_row_label=LIB.read_cstr(col["totals_row_label"]),
-                        totals_row_formula=LIB.read_cstr(col["totals_row_formula"]),
-                    )
-                )
-            return Table(
-                name=name,
-                display_name=display,
-                range=SheetRect(sheet=sheet, rect=rect),
-                style_name=LIB.read_cstr(info["style_name"]) or None,
-                show_first_column=info["show_first_column"] != 0,
-                show_last_column=info["show_last_column"] != 0,
-                show_row_stripes=info["show_row_stripes"] != 0,
-                show_column_stripes=info["show_column_stripes"] != 0,
-                header_row_count=info["header_row_count"],
-                totals_row_count=info["totals_row_count"],
-                columns=columns,
-            )
+    def _table_handle(self, index: int) -> Table:
+        """The handle of the table at ``index``, created on first use and kept for the workbook's life."""
+        from .table import Table
 
-    def _table_index(self, table: Union[int, str]) -> int:
-        """The index ``table`` addresses: an index, or a table's display name."""
+        h = self._require()
+        runtime_id = _read_count(LIB.fm_workbook_get_table_runtime_id, h, _uint(index, "table_index"))
+        handle = self._tables.get(runtime_id)
+        if handle is None:
+            handle = Table(self, runtime_id)
+            self._tables[runtime_id] = handle
+        return handle
+
+    def _table_index(self, table: Union[int, str, Table]) -> int:
+        """The index ``table`` addresses: an index, a table's display name, or a :class:`Table` of this workbook."""
+        from .table import Table
+
+        if isinstance(table, Table):
+            if table.workbook is not self:
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT,
+                    _diagnostic_override=("the table belongs to another workbook", ""),
+                )
+            return table.index
         return resolve_ref(table, self._table_display_names, "table")
 
     def _table_display_names(self) -> Iterator[str]:
@@ -6022,8 +6369,8 @@ class Workbook:
         show_column_stripes: Optional[bool] = None,
         header_row: bool = True,
         totals_row: bool = False,
-    ) -> int:
-        """Create a worksheet table over ``range`` and return its table index.
+    ) -> Table:
+        """Create a worksheet table over ``range`` and return its handle.
 
         ``columns`` must hold one non-empty, table-unique header per column
         of the range, and its length must equal the range's width;
@@ -6066,203 +6413,24 @@ class Workbook:
                 )
             )
             index = LIB.read_u32(out)
+        handle = self._table_handle(index)
         toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
         if any(t is not None for t in toggles):
             try:
-                self._table_apply_style_toggles(index, toggles)
+                handle._apply_style_toggles(index, toggles)
             except BaseException:
                 self.remove_table(index)
                 raise
-        return index
+        return handle
 
-    def _table_apply_style_toggles(self, index: int, toggles: Sequence[Optional[bool]]) -> None:
-        """Set the supplied ``show_*`` toggles over the table's current ones."""
-        current = self._table_at(index)
-        existing = (
-            current.show_first_column,
-            current.show_last_column,
-            current.show_row_stripes if self._table_style_present(index) else True,
-            current.show_column_stripes,
-        )
-        first, last, rows, columns = (existing[i] if t is None else t for i, t in enumerate(toggles))
-        h = self._require()
-        with _ArgScope() as scope:
-            # Writes the style element, keeping its name (none when absent).
-            _check(
-                LIB.fm_workbook_set_table_style_info(
-                    h,
-                    _uint(index, "table_index"),
-                    scope.nonempty_cstr(current.style_name),
-                    1 if first else 0,
-                    1 if last else 0,
-                    1 if rows else 0,
-                    1 if columns else 0,
-                )
-            )
-
-    def _table_style_present(self, table_index: int) -> bool:
-        """Whether the table has a ``<tableStyleInfo>`` element."""
-        h = self._require()
-        with _ArgScope() as scope:
-            info_ptr = scope.struct(S.TABLE_INFO)
-            _check(LIB.fm_workbook_get_table_info(h, _uint(table_index, "table_index"), info_ptr))
-            return S.TABLE_INFO.unpack(LIB, info_ptr)["style_present"] != 0
-
-    def _rename_table(self, index: int, name: str, display_name: str) -> None:
-        h = self._require()
-        with _ArgScope() as scope:
-            _check(
-                LIB.fm_workbook_rename_table(h, _uint(index, "table_index"), scope.cstr(name), scope.cstr(display_name))
-            )
-
-    def rename_table_column(self, table: Union[int, str], column: int, name: str) -> str:
-        """Rename column ``column`` (0-based) of ``table`` and return the final name.
-
-        As typing over the header cell does: an empty ``name`` takes the
-        profile's ``Column<N>`` (``列<N>``) with the lowest unused N, a name
-        another column already has (ASCII case-insensitively) gains the
-        lowest unused N >= 2, and anything else is kept verbatim. Structured
-        references to the column through this table are rewritten in cell,
-        totals-row and defined-name formulas and chart series. Writing a
-        value to a header cell (``set_text``, ``set_number``, ...) renames the
-        same way.
-        """
-        index = self._table_index(table)
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_workbook_rename_table_column(
-                    h, _uint(index, "table_index"), _uint(column, "column"), name_ptr, out
-                )
-            )
-            return LIB.read_cstr(LIB.read_u32(out))
-
-    def set_table_column_totals(
-        self,
-        table: Union[int, str],
-        column: int,
-        *,
-        function: Optional[str] = None,
-        label: Optional[str] = None,
-        formula: Optional[str] = None,
-    ) -> None:
-        """Set column ``column``'s totals-row function and label.
-
-        ``function`` is an ``ST_TotalsRowFunction`` token (``None`` means
-        ``"none"``); ``formula`` is required for ``"custom"``. While the
-        totals row is shown its cell follows: ``SUBTOTAL(109,Table[Column])``
-        and the other 1xx codes for a built-in function, the formula for
-        ``"custom"``, else the label as text, else nothing.
-        """
-        index = self._table_index(table)
-        h = self._require()
-        with _ArgScope() as scope:
-            _check(
-                LIB.fm_workbook_set_table_column_totals(
-                    h,
-                    _uint(index, "table_index"),
-                    _uint(column, "column"),
-                    scope.nonempty_cstr(function),
-                    scope.nonempty_cstr(label),
-                    scope.nonempty_cstr(formula),
-                )
-            )
-
-    def update_table(
-        self,
-        table: Union[int, str],
-        *,
-        rect: CellRect = UNCHANGED,
-        style_name: Optional[str] = UNCHANGED,
-        header_row: bool = UNCHANGED,
-        totals_row: bool = UNCHANGED,
-        name: str = UNCHANGED,
-        display_name: str = UNCHANGED,
-        show_first_column: bool = UNCHANGED,
-        show_last_column: bool = UNCHANGED,
-        show_row_stripes: bool = UNCHANGED,
-        show_column_stripes: bool = UNCHANGED,
-    ) -> None:
-        """Update a table's range, flags, names and style; an omitted argument keeps its setting.
-
-        A new ``rect`` must keep the width the table's column list already
-        describes. A new ``style_name`` keeps the four toggles, and ``None``
-        (or ``""``) removes ``<tableStyleInfo>`` -- unless a ``show_*`` toggle
-        is also given, which writes the element back without a style name.
-        Turning the totals row on writes each column's totals cell. Names
-        must be non-empty and unique case-insensitively across tables;
-        ``display_name`` follows a new ``name`` unless given, and structured
-        references to the old name are rewritten in cell, defined-name,
-        conditional-format, validation and chart formulas (a bare table name
-        used as a reference is not). The update is all-or-nothing.
+    def remove_table(self, table: Union[int, str, Table]) -> None:
+        """Remove ``table``; its handle raises :class:`NotFoundError` from then on.
 
         Raises:
-          TypeError: when a flag is not a ``bool``.
-        """
-        index = self._table_index(table)
-        flags = (header_row, totals_row, show_first_column, show_last_column, show_row_stripes, show_column_stripes)
-        for flag in flags:
-            if flag is not UNCHANGED and not isinstance(flag, bool):
-                raise TypeError(f"formulon: a table flag must be a bool, got {type(flag).__name__}")
-        current = self._table_at(index)
-        renaming = name is not UNCHANGED or display_name is not UNCHANGED
-        if renaming:
-            next_name = current.name if name is UNCHANGED else name
-            if display_name is not UNCHANGED:
-                next_display = display_name
-            else:
-                next_display = current.display_name if name is UNCHANGED else name
-            self._rename_table(index, next_name, next_display)
-        try:
-            self._table_update(
-                index,
-                current.range.rect if rect is UNCHANGED else rect,
-                None if style_name is UNCHANGED else (style_name or ""),
-                header_row=None if header_row is UNCHANGED else header_row,
-                totals_row=None if totals_row is UNCHANGED else totals_row,
-            )
-            toggles = tuple(None if t is UNCHANGED else t for t in flags[2:])
-            if any(t is not None for t in toggles):
-                self._table_apply_style_toggles(index, toggles)
-        except BaseException:
-            if renaming:
-                self._rename_table(index, current.name, current.display_name)
-            raise
-
-    def _table_update(
-        self,
-        index: int,
-        rect: CellRect,
-        style_name: Optional[str],
-        *,
-        header_row: Optional[bool],
-        totals_row: Optional[bool],
-    ) -> None:
-        h = self._require()
-        with _ArgScope() as scope:
-            rect_ptr = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rect_ptr, rect)
-            # NULL keeps the style; an empty name removes the element.
-            style_ptr = scope.opt_cstr(style_name)
-            _check(
-                LIB.fm_workbook_update_table(
-                    h,
-                    _uint(index, "table_index"),
-                    rect_ptr,
-                    style_ptr,
-                    _sint(_tristate(header_row), "header_row"),
-                    _sint(_tristate(totals_row), "totals_row"),
-                )
-            )
-
-    def remove_table(self, table: Union[int, str]) -> None:
-        """Remove ``table``.
-
-        Raises:
-          NotFoundError: when no table has the display name ``table``.
+          NotFoundError: when no table has the display name ``table``, or
+            ``table`` is a removed table's handle.
           IndexOutOfRangeError: when ``table`` is an index past the last table.
+          InvalidArgumentError: when ``table`` is a :class:`Table` of another workbook.
         """
         index = self._table_index(table)
         h = self._require()
@@ -6292,19 +6460,6 @@ class Workbook:
             return path if LIB.read_u32(present) else None
 
     # -- Sheet structure ---------------------------------------------------
-    def move_sheet(self, sheet: SheetRef, to_index: int) -> None:
-        """Move ``sheet`` to ``to_index`` (the position after it is taken out).
-
-        Every :class:`Sheet` handle keeps pointing at its sheet.
-        """
-        moving = self.sheet(sheet)
-        from_index = moving.index
-        h = self._require()
-        handles = self._sheet_handles()
-        _check(LIB.fm_workbook_move_sheet(h, _uint(from_index, "from_index"), _uint(to_index, "to_index")))
-        handles.insert(to_index, handles.pop(from_index))
-        self._renumber_sheets(handles)
-
     def copy_sheet(self, source: SheetRef, insert_before: int, new_name: Optional[str] = None) -> Sheet:
         """Copy the worksheet ``source`` and return the copy's handle.
 
@@ -6348,16 +6503,6 @@ class Workbook:
         handles.pop(index)
         removed._position = None
         self._renumber_sheets(handles)
-
-    def rename_sheet(self, sheet: SheetRef, name: str) -> None:
-        """Rename ``sheet`` to ``name``."""
-        renamed = self.sheet(sheet)
-        index = renamed.index
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            _check(LIB.fm_workbook_rename_sheet(h, _uint(index, "sheet_index"), name_ptr))
-        renamed._name = self._sheet_name(index)
 
     # -- Defined names -----------------------------------------------------
     def set_defined_name(self, defined_name: DefinedNameInput) -> None:
@@ -6713,47 +6858,6 @@ class Workbook:
             flags = LIB.read_bytes(buf, total)
             return LIB.read_u32(first_ptr), [b != 0 for b in flags]
 
-    def get_table_auto_filter(self, table: Union[int, str]) -> Optional[AutoFilter]:
-        """Return the AutoFilter of ``table``, or ``None`` when it has none."""
-        return self._read_auto_filter(LIB.fm_workbook_get_table_auto_filter, self._table_index(table), "table_index")
-
-    def set_table_auto_filter(self, table: Union[int, str], auto_filter: AutoFilter) -> None:
-        """Replace the AutoFilter of ``table``."""
-        self._write_auto_filter(
-            LIB.fm_workbook_set_table_auto_filter,
-            self._table_index(table),
-            auto_filter,
-            "table_index",
-        )
-
-    def remove_table_auto_filter(self, table: Union[int, str]) -> None:
-        """Remove the AutoFilter of ``table`` (no-op when absent)."""
-        index = self._table_index(table)
-        h = self._require()
-        _check(LIB.fm_workbook_remove_table_auto_filter(h, _uint(index, "table_index")))
-
-    def apply_table_auto_filter(self, table: Union[int, str]) -> None:
-        """Hide the body rows the table AutoFilter excludes and show the rest."""
-        index = self._table_index(table)
-        h = self._require()
-        _check(LIB.fm_workbook_apply_table_auto_filter(h, _uint(index, "table_index")))
-
-    def clear_table_auto_filter(self, table: Union[int, str]) -> None:
-        """Drop every column criterion of the table AutoFilter and show all its body rows."""
-        index = self._table_index(table)
-        h = self._require()
-        _check(LIB.fm_workbook_clear_table_auto_filter(h, _uint(index, "table_index")))
-
-    def evaluate_table_auto_filter(self, table: Union[int, str]) -> AutoFilterEval:
-        """Evaluate the table AutoFilter as :meth:`Sheet.evaluate_auto_filter`."""
-        return AutoFilterEval(
-            *self._evaluate_auto_filter(
-                LIB.fm_workbook_evaluate_table_auto_filter,
-                self._table_index(table),
-                "table_index",
-            )
-        )
-
     def _lookup(self, fn, leading: tuple, layout, decode):
         """Run the by-key getter ``fn(h, *leading, out_present, out)``; ``None`` when the key is absent.
 
@@ -6850,8 +6954,8 @@ class Workbook:
             fill_index=d["fill_index"],
             border_index=d["border_index"],
             num_fmt_id=d["num_fmt_id"],
-            horizontal_align=d["horizontal_align"] if d["has_horizontal_align"] else None,
-            vertical_align=d["vertical_align"] if d["has_vertical_align"] else None,
+            horizontal_align=_enum(HorizontalAlign, d["horizontal_align"]) if d["has_horizontal_align"] else None,
+            vertical_align=_enum(VerticalAlign, d["vertical_align"]) if d["has_vertical_align"] else None,
             wrap_text=bool(d["wrap_text"]) if d["has_wrap_text"] else None,
             justify_last_line=bool(d["justify_last_line"]) if d["has_justify_last_line"] else None,
             xf_id=d["xf_id"],
@@ -6859,7 +6963,7 @@ class Workbook:
             indent=d["indent"] if d["has_indent"] else None,
             relative_indent=d["relative_indent"] if d["has_relative_indent"] else None,
             shrink_to_fit=bool(d["shrink_to_fit"]) if d["has_shrink_to_fit"] else None,
-            reading_order=d["reading_order"] if d["has_reading_order"] else None,
+            reading_order=_enum(ReadingOrder, d["reading_order"]) if d["has_reading_order"] else None,
             apply_number_format=bool(d["apply_number_format"]),
             apply_font=bool(d["apply_font"]),
             apply_fill=bool(d["apply_fill"]),
@@ -7025,13 +7129,13 @@ class Workbook:
             _check(LIB.fm_workbook_add_fill(h, ptr, out))
             return LIB.read_u32(out)
 
-    def add_border(self, border: Border) -> int:
+    def add_border(self, record: Border) -> int:
         """Add (dedup) a border record; return its index."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.BORDER_RECORD)
             out = scope.out_ptr()
-            _pack_border_record(ptr, border)
+            _pack_border_record(ptr, record)
             _check(LIB.fm_workbook_add_border(h, ptr, out))
             return LIB.read_u32(out)
 
@@ -7044,11 +7148,16 @@ class Workbook:
             _check(LIB.fm_workbook_add_num_fmt(h, code_ptr, out))
             return LIB.read_u32(out)
 
-    def add_cell_xf(self, record: CellXf) -> int:
-        """Add (dedup) an ``<xf>`` record; return its index."""
+    def add_cell_xf(self, record: CellXfInput) -> int:
+        """Add (dedup) an ``<xf>`` record; return its index.
+
+        Out-of-range font, fill or border indices and an unregistered
+        ``num_fmt_id`` raise :class:`InvalidArgumentError` rather than growing
+        the style tables.
+        """
         return self._add_xf_record(record, LIB.fm_workbook_add_cell_xf)
 
-    def add_cell_style_xf(self, record: CellXf) -> int:
+    def add_cell_style_xf(self, record: CellXfInput) -> int:
         """Add (dedup) a named-style ``<xf>``; return its ``<cellStyleXfs>`` id.
 
         The counterpart of :meth:`get_cell_style_xf`. Named-style xfs are
@@ -7057,7 +7166,7 @@ class Workbook:
         """
         return self._add_xf_record(record, LIB.fm_workbook_add_cell_style_xf)
 
-    def _add_xf_record(self, record: CellXf, fn) -> int:
+    def _add_xf_record(self, record: CellXfInput, fn) -> int:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_XF)
@@ -7343,461 +7452,84 @@ class Workbook:
             return self._decode_cell_xf(ptr)
 
     # -- Pivot caches ------------------------------------------------------
-    def list_pivot_caches(self) -> List[int]:
-        """Return the cache ids of the pivot caches the workbook owns."""
+    def list_pivot_caches(self) -> List[PivotCache]:
+        """The handles of the pivot caches the workbook owns."""
         h = self._require()
         count = _read_count(LIB.fm_workbook_get_pivot_cache_count, h)
         return [
-            _read_count(
-                LIB.fm_workbook_get_pivot_cache_id_at,
-                h,
-                _uint(index, "idx"),
-            )
+            self._pivot_cache_handle(_read_count(LIB.fm_workbook_get_pivot_cache_id_at, h, _uint(index, "idx")))
             for index in range(count)
         ]
 
-    def add_pivot_cache(self, requested_id: int = 0) -> int:
-        """Create a new empty pivot cache; return its assigned id."""
-        h = self._require()
-        return _read_count(
-            LIB.fm_workbook_add_pivot_cache,
-            h,
-            _uint(requested_id, "requested_id"),
-        )
+    def pivot_cache(self, cache_id: Union[int, PivotCache]) -> PivotCache:
+        """Return the handle of the pivot cache ``cache_id``.
 
-    def get_pivot_cache_worksheet_source(self, cache_id: int) -> Optional[PivotWorksheetSource]:
-        """Return a cache's worksheet-source metadata, or ``None`` when absent."""
-        h = self._require()
-        with _ArgScope() as scope:
-            present = scope.out_ptr()
-            out_ref = scope.out_ptr()
-            out_sheet = scope.out_ptr()
-            out_name = scope.out_ptr()
-            _check(
-                LIB.fm_workbook_get_pivot_cache_worksheet_source(
-                    h, _uint(cache_id, "cache_id"), present, out_ref, out_sheet, out_name
-                )
-            )
-            if not LIB.read_i32(present):
-                return None
-            return PivotWorksheetSource(
-                LIB.read_cstr(LIB.read_u32(out_ref)) if LIB.read_u32(out_ref) else None,
-                LIB.read_cstr(LIB.read_u32(out_sheet)) if LIB.read_u32(out_sheet) else None,
-                LIB.read_cstr(LIB.read_u32(out_name)) if LIB.read_u32(out_name) else None,
-            )
-
-    def set_pivot_cache_worksheet_source(self, cache_id: int, source: Optional[PivotWorksheetSource]) -> None:
-        """Set cache worksheet-source metadata; pass ``None`` to clear it."""
-        h = self._require()
-        with _ArgScope() as scope:
-            values = () if source is None else (source.ref, source.sheet, source.name)
-            pointers = [scope.opt_cstr(value) for value in values] if source is not None else [0, 0, 0]
-            _check(
-                LIB.fm_workbook_set_pivot_cache_worksheet_source(
-                    h, _uint(cache_id, "cache_id"), 0 if source is None else 1, *pointers
-                )
-            )
-
-    def get_pivot_cache_options(self, cache_id: int) -> PivotCacheOptions:
-        """Read the options of the pivot cache; see :class:`PivotCacheOptions`."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.PIVOT_CACHE_OPTIONS)
-            _check(LIB.fm_workbook_get_pivot_cache_options(h, _uint(cache_id, "cache_id"), ptr))
-            d = S.PIVOT_CACHE_OPTIONS.unpack(LIB, ptr)
-            return PivotCacheOptions(
-                save_data=d["save_data"] != 0,
-                missing_items_limit=d["missing_items_limit"],
-                refresh_on_load=d["refresh_on_load"] != 0,
-            )
-
-    def set_pivot_cache_options(
-        self,
-        cache_id: int,
-        *,
-        save_data: bool = UNCHANGED,
-        missing_items_limit: int = UNCHANGED,
-        refresh_on_load: bool = UNCHANGED,
-    ) -> None:
-        """Update the options of the pivot cache; an omitted argument keeps its setting.
-
-        See :class:`PivotCacheOptions` for the members.
+        Every call for the same cache id returns the same :class:`PivotCache` object.
 
         Raises:
-          TypeError: when ``save_data`` or ``refresh_on_load`` is not a ``bool``.
+          NotFoundError: when the workbook has no cache with that id.
+          InvalidArgumentError: when ``cache_id`` is a :class:`PivotCache` of another workbook.
         """
-        for flag in (save_data, refresh_on_load):
-            if flag is not UNCHANGED and not isinstance(flag, bool):
-                raise TypeError(f"formulon: a pivot cache flag must be a bool, got {type(flag).__name__}")
-        current = self.get_pivot_cache_options(cache_id)
+        wanted = _uint(self._pivot_cache_id(cache_id), "cache_id")
         h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.PIVOT_CACHE_OPTIONS)
-            S.PIVOT_CACHE_OPTIONS.pack(
-                LIB,
-                ptr,
-                {
-                    "save_data": 1 if (current.save_data if save_data is UNCHANGED else save_data) else 0,
-                    "missing_items_limit": _sint(
-                        current.missing_items_limit if missing_items_limit is UNCHANGED else missing_items_limit,
-                        "missing_items_limit",
-                    ),
-                    "refresh_on_load": 1
-                    if (current.refresh_on_load if refresh_on_load is UNCHANGED else refresh_on_load)
-                    else 0,
-                },
-            )
-            _check(LIB.fm_workbook_set_pivot_cache_options(h, _uint(cache_id, "cache_id"), ptr))
-
-    def add_pivot_cache_calculated_field(self, cache_id: int, name: str, formula: str) -> int:
-        """Add calculated field ``name`` as the last cache field; return its index.
-
-        The formula is in English canonical form and names cache fields only,
-        quoting a name with spaces as ``'Amt Net'``. A leading ``=`` is optional.
-        """
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            formula_ptr = scope.cstr(formula)
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_workbook_add_pivot_cache_calculated_field(
-                    h, _uint(cache_id, "cache_id"), name_ptr, formula_ptr, out
-                )
-            )
-            return LIB.read_u32(out)
-
-    def set_pivot_cache_calculated_field_formula(self, cache_id: int, field_index: int, formula: str) -> None:
-        """Replace the formula of calculated field ``field_index``."""
-        h = self._require()
-        with _ArgScope() as scope:
-            formula_ptr = scope.cstr(formula)
-            _check(
-                LIB.fm_workbook_set_pivot_cache_calculated_field_formula(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), formula_ptr
-                )
-            )
-
-    def remove_pivot_cache_calculated_field(self, cache_id: int, field_index: int) -> None:
-        """Remove calculated field ``field_index`` and its data fields in every pivot table."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_remove_pivot_cache_calculated_field(
-                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
-            )
+        for index in range(_read_count(LIB.fm_workbook_get_pivot_cache_count, h)):
+            if _read_count(LIB.fm_workbook_get_pivot_cache_id_at, h, _uint(index, "idx")) == wanted:
+                return self._pivot_cache_handle(wanted)
+        raise FormulonError(
+            StatusCode.NOT_FOUND,
+            _diagnostic_override=(f"the workbook has no pivot cache {wanted}", f"cache_id={wanted}"),
         )
 
-    def add_pivot_cache_calculated_item(self, cache_id: int, field_index: int, name: str, formula: str) -> int:
-        """Add calculated item ``name`` to cache field ``field_index``; return its position, last in solve order.
+    def add_pivot_cache(self, requested_id: int = 0) -> PivotCache:
+        """Create a new empty pivot cache and return its handle.
 
-        The formula names items of the same field, as ``North``, ``'North East'``,
-        ``Region[North]``, ``Region[2]`` or ``Region[-1]``.
+        Its id is ``requested_id`` when non-zero, else one the engine assigns.
         """
         h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            formula_ptr = scope.cstr(formula)
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_workbook_add_pivot_cache_calculated_item(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), name_ptr, formula_ptr, out
-                )
-            )
-            return LIB.read_u32(out)
-
-    def list_pivot_cache_calculated_items(self, cache_id: int) -> List[PivotCalculatedItem]:
-        """Every calculated item of the cache, in order."""
-        return [
-            self._pivot_cache_calculated_item_at(cache_id, i)
-            for i in range(self._pivot_cache_calculated_item_count(cache_id))
-        ]
-
-    def _pivot_cache_calculated_item_count(self, cache_id: int) -> int:
-        """Return the number of calculated items in the cache, in solve order."""
-        h = self._require()
-        return _read_count(LIB.fm_workbook_get_pivot_cache_calculated_item_count, h, _uint(cache_id, "cache_id"))
-
-    def _pivot_cache_calculated_item_at(self, cache_id: int, item_index: int) -> PivotCalculatedItem:
-        """Read calculated item ``item_index`` (in solve order)."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.PIVOT_CALCULATED_ITEM)
-            _check(
-                LIB.fm_workbook_get_pivot_cache_calculated_item(
-                    h, _uint(cache_id, "cache_id"), _uint(item_index, "item_index"), ptr
-                )
-            )
-            d = S.PIVOT_CALCULATED_ITEM.unpack(LIB, ptr)
-            return PivotCalculatedItem(
-                field_index=d["field_index"],
-                name=LIB.read_cstr(d["name"]),
-                formula=LIB.read_cstr(d["formula"]),
-                scoped=d["scoped"] != 0,
-            )
-
-    def set_pivot_cache_calculated_item_formula(self, cache_id: int, item_index: int, formula: str) -> None:
-        """Replace the formula of calculated item ``item_index``."""
-        h = self._require()
-        with _ArgScope() as scope:
-            formula_ptr = scope.cstr(formula)
-            _check(
-                LIB.fm_workbook_set_pivot_cache_calculated_item_formula(
-                    h, _uint(cache_id, "cache_id"), _uint(item_index, "item_index"), formula_ptr
-                )
-            )
-
-    def move_pivot_cache_calculated_item(self, cache_id: int, item_index: int, new_index: int) -> None:
-        """Move calculated item ``item_index`` to position ``new_index`` in solve order."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_move_pivot_cache_calculated_item(
-                h, _uint(cache_id, "cache_id"), _uint(item_index, "item_index"), _uint(new_index, "new_index")
-            )
+        return self._pivot_cache_handle(
+            _read_count(LIB.fm_workbook_add_pivot_cache, h, _uint(requested_id, "requested_id"))
         )
 
-    def remove_pivot_cache_calculated_item(self, cache_id: int, item_index: int) -> None:
-        """Remove calculated item ``item_index``, its item in the cache field and in every pivot table."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_remove_pivot_cache_calculated_item(
-                h, _uint(cache_id, "cache_id"), _uint(item_index, "item_index")
-            )
-        )
+    def _pivot_cache_handle(self, cache_id: int) -> PivotCache:
+        """The handle of cache id ``cache_id``, whether or not the workbook has that cache now."""
+        from .pivot_cache import PivotCache
 
-    def remove_pivot_cache(self, cache_id: int) -> None:
-        """Remove the pivot cache with id ``cache_id``."""
-        h = self._require()
-        _check(LIB.fm_workbook_remove_pivot_cache(h, _uint(cache_id, "cache_id")))
+        handle = self._pivot_caches.get(cache_id)
+        if handle is None:
+            handle = PivotCache(self, cache_id)
+            self._pivot_caches[cache_id] = handle
+        return handle
 
-    def list_pivot_cache_fields(self, cache_id: int) -> List[PivotCacheField]:
-        """Every field of the cache, in field order."""
-        h = self._require()
-        fields: List[PivotCacheField] = []
-        for i in range(_read_count(LIB.fm_workbook_get_pivot_cache_field_count, h, _uint(cache_id, "cache_id"))):
-            fields.append(
-                PivotCacheField(
-                    name=_read_cstr_out(
-                        LIB.fm_workbook_get_pivot_cache_field_name,
-                        h,
-                        _uint(cache_id, "cache_id"),
-                        _uint(i, "field_index"),
-                    ),
-                    formula=_read_cstr_out(
-                        LIB.fm_workbook_get_pivot_cache_field_formula,
-                        h,
-                        _uint(cache_id, "cache_id"),
-                        _uint(i, "field_index"),
-                    )
-                    or None,
+    def _pivot_cache_id(self, cache: Union[int, PivotCache]) -> int:
+        """The cache id a cache id or a :class:`PivotCache` of this workbook names."""
+        from .pivot_cache import PivotCache
+
+        if isinstance(cache, PivotCache):
+            if cache.workbook is not self:
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT,
+                    _diagnostic_override=("the pivot cache belongs to another workbook", ""),
                 )
-            )
-        return fields
+            return cache.cache_id
+        if isinstance(cache, bool):
+            raise TypeError("formulon: cache_id must be an int or a PivotCache, got bool")
+        try:
+            return operator.index(cache)
+        except TypeError:
+            raise TypeError(f"formulon: cache_id must be an int or a PivotCache, got {type(cache).__name__}") from None
 
-    def add_pivot_cache_field(self, cache_id: int, name: str) -> int:
-        """Append a field to the cache; return its index."""
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            out = scope.out_ptr()
-            _check(LIB.fm_workbook_add_pivot_cache_field(h, _uint(cache_id, "cache_id"), name_ptr, out))
-            return LIB.read_u32(out)
+    def remove_pivot_cache(self, cache_id: Union[int, PivotCache]) -> None:
+        """Remove the pivot cache ``cache_id``.
 
-    def clear_pivot_cache_fields(self, cache_id: int) -> None:
-        """Drop every field (and record) from the cache."""
-        h = self._require()
-        _check(LIB.fm_workbook_clear_pivot_cache_fields(h, _uint(cache_id, "cache_id")))
-
-    def list_pivot_cache_field_shared_items(self, cache_id: int, field_index: int) -> List[PivotCacheSharedItem]:
-        """Every shared item of cache field ``field_index``, in item order.
-
-        A date item holds its serial number as a number and has ``is_date`` set.
-        """
-        h = self._require()
-        count = _read_count(
-            LIB.fm_workbook_get_pivot_cache_field_shared_item_count,
-            h,
-            _uint(cache_id, "cache_id"),
-            _uint(field_index, "field_index"),
-        )
-        items: List[PivotCacheSharedItem] = []
-        with _ArgScope() as scope:
-            value_ptr = scope.alloc(fm_value_t_size)
-            date_ptr = scope.out_ptr()
-            for i in range(count):
-                _check(
-                    LIB.fm_workbook_get_pivot_cache_field_shared_item_value(
-                        h,
-                        _uint(cache_id, "cache_id"),
-                        _uint(field_index, "field_index"),
-                        _uint(i, "item_index"),
-                        value_ptr,
-                    )
-                )
-                value = Value._from_wasm(value_ptr)
-                _check(
-                    LIB.fm_workbook_is_pivot_cache_field_shared_item_date(
-                        h,
-                        _uint(cache_id, "cache_id"),
-                        _uint(field_index, "field_index"),
-                        _uint(i, "item_index"),
-                        date_ptr,
-                    )
-                )
-                items.append(PivotCacheSharedItem(value=value, is_date=LIB.read_i32(date_ptr) != 0))
-        return items
-
-    def add_pivot_cache_field_shared_item(
-        self, cache_id: int, field_index: int, value: _PivotCacheValue, *, date: bool = False
-    ) -> None:
-        """Append a shared item to cache field ``field_index``.
-
-        ``value`` is a number, a ``str``, a ``bool``, ``None`` (blank) or an
-        :class:`ExcelError`. ``date=True`` stores a number as a date serial in
-        the workbook's date system, saved to the second.
+        Its handle raises :class:`NotFoundError` until a cache with the same id
+        is added. Fails while a pivot table still references the cache.
 
         Raises:
-          TypeError: when ``value`` is none of the above, or ``date`` is set
-            for a value that is not a number.
+          InvalidArgumentError: when ``cache_id`` is a :class:`PivotCache` of another workbook.
         """
-        kind = _pivot_cache_value_kind(value, date)
+        wanted = _uint(self._pivot_cache_id(cache_id), "cache_id")
         h = self._require()
-        if kind == "date":
-            _check(
-                LIB.fm_workbook_add_pivot_cache_field_shared_item_date(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), float(value)
-                )
-            )
-        elif kind == "number":
-            _check(
-                LIB.fm_workbook_add_pivot_cache_field_shared_item_number(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), float(value)
-                )
-            )
-        elif kind == "bool":
-            _check(
-                LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), 1 if value else 0
-                )
-            )
-        elif kind == "blank":
-            _check(
-                LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
-                )
-            )
-        elif kind == "error":
-            _check(
-                LIB.fm_workbook_add_pivot_cache_field_shared_item_error(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), _sint(value.code, "error")
-                )
-            )
-        else:
-            with _ArgScope() as scope:
-                text = scope.cstr(value)
-                _check(
-                    LIB.fm_workbook_add_pivot_cache_field_shared_item_text(
-                        h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), text
-                    )
-                )
-
-    def clear_pivot_cache_field_shared_items(self, cache_id: int, field_index: int) -> None:
-        """Drop every shared item from a cache field."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_clear_pivot_cache_field_shared_items(
-                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
-            )
-        )
-
-    def get_pivot_cache_record_count(self, cache_id: int) -> int:
-        """Return the number of records on the cache."""
-        h = self._require()
-        return _read_count(LIB.fm_workbook_get_pivot_cache_record_count, h, _uint(cache_id, "cache_id"))
-
-    def add_pivot_cache_record(self, cache_id: int) -> int:
-        """Append an empty record to the cache; return its index."""
-        h = self._require()
-        with _ArgScope() as scope:
-            out = scope.out_ptr()
-            _check(LIB.fm_workbook_add_pivot_cache_record(h, _uint(cache_id, "cache_id"), out))
-            return LIB.read_u32(out)
-
-    def clear_pivot_cache_records(self, cache_id: int) -> None:
-        """Drop every record from the cache."""
-        h = self._require()
-        _check(LIB.fm_workbook_clear_pivot_cache_records(h, _uint(cache_id, "cache_id")))
-
-    def set_pivot_cache_record_value(
-        self, cache_id: int, record_index: int, field_index: int, value: _PivotCacheValue, *, date: bool = False
-    ) -> None:
-        """Set cache cell ``(record_index, field_index)``; ``value`` and ``date`` as in :meth:`add_pivot_cache_field_shared_item`.
-
-        Raises:
-          TypeError: when ``value`` is not an accepted kind, or ``date`` is set
-            for a value that is not a number.
-        """
-        kind = _pivot_cache_value_kind(value, date)
-        h = self._require()
-        if kind == "date":
-            _check(
-                LIB.fm_workbook_set_pivot_cache_record_date(
-                    h,
-                    _uint(cache_id, "cache_id"),
-                    _uint(record_index, "record_index"),
-                    _uint(field_index, "field_index"),
-                    float(value),
-                )
-            )
-        elif kind == "number":
-            _check(
-                LIB.fm_workbook_set_pivot_cache_record_number(
-                    h,
-                    _uint(cache_id, "cache_id"),
-                    _uint(record_index, "record_index"),
-                    _uint(field_index, "field_index"),
-                    float(value),
-                )
-            )
-        elif kind == "bool":
-            _check(
-                LIB.fm_workbook_set_pivot_cache_record_bool(
-                    h,
-                    _uint(cache_id, "cache_id"),
-                    _uint(record_index, "record_index"),
-                    _uint(field_index, "field_index"),
-                    1 if value else 0,
-                )
-            )
-        elif kind == "blank":
-            _check(
-                LIB.fm_workbook_set_pivot_cache_record_blank(
-                    h,
-                    _uint(cache_id, "cache_id"),
-                    _uint(record_index, "record_index"),
-                    _uint(field_index, "field_index"),
-                )
-            )
-        elif kind == "error":
-            _check(
-                LIB.fm_workbook_set_pivot_cache_record_error(
-                    h,
-                    _uint(cache_id, "cache_id"),
-                    _uint(record_index, "record_index"),
-                    _uint(field_index, "field_index"),
-                    _sint(value.code, "error"),
-                )
-            )
-        else:
-            with _ArgScope() as scope:
-                _check(
-                    LIB.fm_workbook_set_pivot_cache_record_text(
-                        h,
-                        _uint(cache_id, "cache_id"),
-                        _uint(record_index, "record_index"),
-                        _uint(field_index, "field_index"),
-                        scope.cstr(value),
-                    )
-                )
+        _check(LIB.fm_workbook_remove_pivot_cache(h, wanted))
 
     # -- Reference text ----------------------------------------------------
     def parse_reference(

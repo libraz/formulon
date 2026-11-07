@@ -36,6 +36,7 @@ STATIC_RULE_IDS = {
     "R15.header", "R18.js", "R18.py", "R19.c", "R19.js", "R19.py", "R20.js", "R20.py", "R21.role", "R21.name",
     "R22.c", "R22.js", "R22.py", "R23.js", "R23.py", "R23.track", "R23.list", "R24.missing.js",
     "R24.missing.py", "R18.all", "R25.a1", "R25.rect", "R25.count", "R26.ref", "R27.sheetparam",
+    "R25.span", "R28.handles",
 }  # fmt: skip
 
 
@@ -97,7 +98,7 @@ class RegistryTest(unittest.TestCase):
     def test_without_a_ledger_the_bound_rules_are_skipped_visibly(self) -> None:
         ctx = api_conventions.Context("FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb);\n")
         bound = {r: fn for r, fn in api_conventions.all_rules().items() if fn.__module__.endswith("_bindings")}
-        self.assertEqual(len(bound), 50)
+        self.assertEqual(len(bound), 52)
         self.assertEqual(api_conventions.collect(ctx, bound), [])
         self.assertTrue(any("no name ledger" in note for note in _SKIPPED))
 
@@ -812,7 +813,7 @@ class RecordRoleTest(BindingRuleTestBase):
             self.LEDGER,
             wasm="export interface Hyperlink { readonly target: string; display: string }\n"
             "export interface HyperlinkSpec { target: string }\n"
-            "export interface IterativePatch { enabled?: boolean }\n",
+            "export interface IterativePatch { enabled?: boolean; maxIterations: number }\n",
         )
         good = self.fixture.context(
             "",
@@ -1486,10 +1487,10 @@ class SheetSurfaceTest(BindingRuleTestBase):
     }  # fmt: skip
 
     def test_r0_coverage_reads_sheet_and_skips_its_facade_members(self) -> None:
-        body = _sheet("  readonly name: string;\n  getZoom(): number;\n  get(a1: string): Value;\n")
+        body = _sheet("  readonly name: string;\n  readonly index: number;\n  getZoom(): number;\n")
         good = self.fixture.context("", self.LEDGER, wasm=body, native=body,
                                     py_sheet=_py_sheet("    def get_zoom(self) -> int: ...\n"
-                                                       "    def get(self, a1: str) -> int: ...\n"))  # fmt: skip
+                                                       "    @property\n    def index(self) -> int: ...\n"))  # fmt: skip
         self.assertEqual(hits(good, "R0.coverage"), [])
         bad = self.fixture.context("", self.LEDGER, wasm=_sheet("  getZoomLevel(): number;\n"),
                                    py_sheet=_py_sheet("    def get_zoom_level(self) -> int: ...\n"))  # fmt: skip
@@ -1558,24 +1559,33 @@ class ClassScopeTest(BindingRuleTestBase):
             " size_t* out_sheet_index);\n"
         )
         ledger = {
-            "collections": {"sheet": {"key": "index", "ops": ["sheet.add"]}},
+            "collections": {
+                "sheet": {"key": "index", "ops": ["sheet.add"]},
+                "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots"},
+            },
             "entries": {
-                key: {"kind": "op", "c": c, "js": js, "py": py, "surfaces": ["c", "wasm", "native", "py"]}
-                for key, c, js, py in (
-                    ("sheet.add", "fm_workbook_add_sheet", "addSheet", "add_sheet"),
-                    ("pivot_details.show", "fm_sheet_show_pivot_details", "showPivotDetails", "show_pivot_details"),
-                    ("table.get", "fm_workbook_get_table", "getTable", "get_table"),
+                key: {"kind": "op", "scope": scope, "c": c, "js": js, "py": py,
+                      "surfaces": ["c", "wasm", "native", "py"]}
+                for key, scope, c, js, py in (
+                    ("sheet.add", "workbook", "fm_workbook_add_sheet", "addSheet", "add_sheet"),
+                    ("pivot_details.show", "sheet", "fm_sheet_show_pivot_details", "showPivotDetails",
+                     "show_pivot_details"),
+                    ("table.get", "workbook", "fm_workbook_get_table", "getTable", "get_table"),
                 )
             },
-        }
+        }  # fmt: skip
+        ledger["entries"]["pivot_details.show"]["handle"] = {"class": "Pivot", "supplies": ["sheet", "pivot"]}
         common = (
-            "// <facade-tables>\nconst SHEET_STRUCTURE_OPS = Object.freeze(['addSheet', 'showPivotDetails']);\n"
+            "// <facade-tables>\nconst SHEET_STRUCTURE_OPS = Object.freeze(['Workbook.addSheet', 'Pivot.showDetails']);\n"
             "// </facade-tables>\n"
         )
-        sheet_py = '# <facade-tables>\nSHEET_STRUCTURE_OPS = frozenset({"add_sheet", "show_pivot_details"})\n# </facade-tables>\n'
+        sheet_py = (
+            '# <facade-tables>\nSHEET_STRUCTURE_OPS = frozenset({"Workbook.add_sheet", "Pivot.show_details"})\n'
+            "# </facade-tables>\n"
+        )
         self.assert_rule(
             "R23.track",
-            self.fixture.context(header, ledger, common=common.replace(", 'showPivotDetails'", "")),
+            self.fixture.context(header, ledger, common=common.replace(", 'Pivot.showDetails'", "")),
             self.fixture.context(header, ledger, common=common, py_sheet=sheet_py),
             [
                 ("py", "pivot_details.show", "SHEET_STRUCTURE_OPS"),
@@ -2296,15 +2306,17 @@ class PatchShapeTest(BindingRuleTestBase):
         "  hiddenSeries?: readonly number[];\n}\n"
         "export type PivotStylePatch = Patch<PivotStyle>;\n"
         "export interface PrintOptionsPatch {\n  gridLines?: boolean;\n}\n"
+        "export interface PrintOptions {\n  readonly gridLines: boolean;\n}\n"
     )
     PY_RECORDS = (
         "@dataclass(frozen=True)\nclass ChartLegend:\n    position: int\n    overlay: bool\n"
         "    hidden_series: Tuple[int, ...]\n\n"
         "@dataclass(frozen=True)\nclass PivotStyle:\n    name: Optional[str]\n    show_row_headers: bool\n\n"
+        "@dataclass(frozen=True)\nclass PrintOptions:\n    grid_lines: bool\n\n"
     )
 
     @staticmethod
-    def ledger() -> dict:
+    def ledger(print_record: str = "none") -> dict:
         def op(js: str, py: str, **fields: object) -> dict:
             return {"kind": "op", "scope": "sheet", "js": js, "py": py, "surfaces": ["wasm", "native", "py"],
                     "patch": True, **fields}  # fmt: skip
@@ -2313,8 +2325,8 @@ class PatchShapeTest(BindingRuleTestBase):
             "entries": {
                 "chart_legend.set": op("setChartLegend", "set_chart_legend", patch_record="ChartLegend"),
                 "pivot_style_info.set": op("setPivotStyleInfo", "set_pivot_style_info", patch_record="PivotStyle"),
-                "print_options.set": op("setPrintOptions", "set_print_options", patch_record="none",
-                                        patch_reason="no record getter"),
+                "print_options.set": op("setPrintOptions", "set_print_options", patch_record=print_record,
+                                        **({"patch_reason": "no record getter"} if print_record == "none" else {})),
             }
         }  # fmt: skip
 
@@ -2345,8 +2357,9 @@ class PatchShapeTest(BindingRuleTestBase):
         self.assert_rule(
             "R18.all",
             self.fixture.context("", self.ledger(), wasm=bad_js, native=good_js, py_sheet=bad_py),
-            self.fixture.context("", self.ledger(), wasm=good_js, native=good_js, py_sheet=good_py),
+            self.fixture.context("", self.ledger("PrintOptions"), wasm=good_js, native=good_js, py_sheet=good_py),
             [
+                ("c", "print_options.set", "patch_record"),
                 ("py", "chart_legend.set", "default:overlay"),
                 ("py", "chart_legend.set", "key:colour"),
                 ("py", "chart_legend.set", "positional:position"),
@@ -2381,6 +2394,197 @@ class PatchShapeTest(BindingRuleTestBase):
         )
 
 
+class HandleRuleTest(BindingRuleTestBase):
+    """R28.handles, R25.span, and the handle frame of the address rules."""
+
+    HEADER = (
+        "FM_API fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, uint32_t* out_object_id);\n"
+        "FM_API fm_status_t fm_sheet_get_chart(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,"
+        " fm_chart_info_t* out);\n"
+        "FM_API fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,"
+        " const char* text);\n"
+        "FM_API fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,"
+        " uint32_t row, uint32_t col);\n"
+    )
+
+    @staticmethod
+    def ledger(handles: bool) -> dict:
+        def op(c: str, js: str, py: str, **fields: object) -> dict:
+            return {"kind": "op", "scope": "sheet", "c": c, "js": js, "py": py,
+                    "surfaces": ["c", "wasm", "native", "py"], **fields}  # fmt: skip
+
+        chart = {"class": "Chart", "supplies": ["sheet", "object_id"]}
+        pivot = {"class": "Pivot", "supplies": ["sheet", "pivot"]}
+        entries = {
+            "chart.add": op("fm_sheet_add_chart", "addChart", "add_chart"),
+            "chart.get": op("fm_sheet_get_chart", "getChart", "get_chart"),
+            "chart_title.set": op("fm_sheet_set_chart_title", "setChartTitle", "set_chart_title"),
+            "pivot_anchor.set": op("fm_sheet_set_pivot_anchor", "setPivotAnchor", "set_pivot_anchor",
+                                   ref_args=[0, "pivot"], cell_args=[[1, 2]]),
+        }  # fmt: skip
+        if handles:
+            entries["chart.get"]["handle"] = chart
+            entries["chart_title.set"]["handle"] = chart
+            entries["pivot_anchor.set"]["handle"] = pivot
+            entries["pivot_anchor.set"]["cell_args"] = [[0, 1]]
+            del entries["pivot_anchor.set"]["ref_args"]
+        collections = {
+            "chart": {"key": "natural", "by": "object_id", "access": "handles", "handle_class": "Chart",
+                      "plural": "charts", "ops": ["chart.add", "chart.get"]},
+            "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots", "ops": []},
+        }  # fmt: skip
+        return {"collections": collections, "entries": entries}
+
+    HANDLE_JS = (
+        "export interface Chart {\n  setTitle(text: string): void;\n  getProperties(): ChartProperties;\n}\n"
+        "export interface Pivot {\n  setAnchor(row: number, col: number): void;\n"
+        "  setAnchor(a1: string): void;\n}\n"
+    )
+
+    def test_r28_handles_requires_a_handle_off_the_parent_verbs(self) -> None:
+        sheet = _sheet("  addChart(): Chart;\n")
+        self.assert_rule(
+            "R28.handles",
+            self.fixture.context(self.HEADER, self.ledger(False), wasm=sheet, native=sheet),
+            self.fixture.context(self.HEADER, self.ledger(True), wasm=sheet, native=sheet),
+            [("c", "chart.get", "handle"), ("c", "chart_title.set", "handle"), ("c", "pivot_anchor.set", "handle")],
+        )
+
+    def test_r28_handles_keeps_handle_methods_off_workbook_and_sheet(self) -> None:
+        leaked = _sheet("  addChart(): Chart;\n  setChartTitle(objectId: number, text: string): void;\n")
+        clean = _sheet("  addChart(): Chart;\n") + self.HANDLE_JS
+        py_leaked = _py_sheet("    def set_chart_title(self, object_id: int, text: str) -> None: ...\n")
+        self.assert_rule(
+            "R28.handles",
+            self.fixture.context(self.HEADER, self.ledger(True), wasm=leaked, native=clean, py_sheet=py_leaked),
+            self.fixture.context(self.HEADER, self.ledger(True), wasm=clean, native=clean, py_sheet=_py_sheet("")),
+            [("py", "chart_title.set", "Sheet"), ("wasm", "chart_title.set", "Sheet")],
+        )
+
+    def test_address_rules_read_the_handle_class_in_its_frame(self) -> None:
+        bad = self.HANDLE_JS.replace("  setAnchor(a1: string): void;\n", "")
+        self.assert_rule(
+            "R25.a1",
+            self.fixture.context(self.HEADER, self.ledger(True), wasm=bad, native=self.HANDLE_JS),
+            self.fixture.context(self.HEADER, self.ledger(True), wasm=self.HANDLE_JS, native=self.HANDLE_JS),
+            [("wasm", "pivot_anchor.set", "a1")],
+        )
+
+    def test_r8_js_an_add_of_a_handle_collection_returns_the_handle(self) -> None:
+        header = self.HEADER
+        ledger = self.ledger(True)
+        good = _sheet("  addChart(): Chart;\n")
+        bad = _sheet("  addChart(): Shape;\n")
+        self.assert_rule(
+            "R8.js",
+            self.fixture.context(header, ledger, wasm=bad, native=good),
+            self.fixture.context(header, ledger, wasm=good, native=good),
+            [("wasm", "chart.add", "result")],
+        )
+
+    def test_r7_js_a_patch_may_be_an_interface_of_optional_fields(self) -> None:
+        ledger = {"entries": {"record.font_patch": {"kind": "record", "role": "patch", "js": "FontPatch"}}}
+        alias = "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+        good = (
+            alias
+            + "export interface FontPatch {\n  readonly bold?: boolean | null;\n  readonly color?: ColorInput;\n}\n"
+        )
+        bad = alias + "export interface FontPatch {\n  readonly bold?: boolean;\n  readonly name: string;\n}\n"
+        self.assert_rule(
+            "R7.js",
+            self.fixture.context("", ledger, wasm=bad, native=good),
+            self.fixture.context("", ledger, wasm=good, native=good),
+            [("wasm", "record.font_patch", "patch")],
+        )
+
+    def test_r18_js_a_setter_may_address_a_range_where_the_getter_reads_a_cell(self) -> None:
+        def op(js: str, **fields: object) -> dict:
+            return {"kind": "op", "scope": "sheet", "js": js, "surfaces": ["wasm", "native"], **fields}
+
+        ledger = {
+            "entries": {
+                "binding.get_cell_format": op("getCellFormat", cell_args=[[0, 1]]),
+                "binding.set_cell_format": op("setCellFormat", rect_args=[0], patch=True, patch_record="CellFormat"),
+            }
+        }
+        records = "export interface CellFormat {\n  readonly numberFormat: string;\n}\n"
+        records += "export interface CellFormatPatch {\n  readonly numberFormat?: string;\n}\n"
+        getter = "  getCellFormat(row: number, col: number): CellFormat;\n"
+        good = records + _sheet(getter + "  setCellFormat(range: CellRect | string, patch: CellFormatPatch): void;\n")
+        bad = records + _sheet(getter + "  setCellFormat(range: CellRect | string, patch: number): void;\n")
+        self.assert_rule(
+            "R18.js",
+            self.fixture.context("", ledger, wasm=bad, native=good),
+            self.fixture.context("", ledger, wasm=good, native=good),
+            [("wasm", "binding.set_cell_format", "shape")],
+        )
+
+    def test_lists_on_a_handle_and_sheet_handle_methods_are_covered(self) -> None:
+        pivot = {"class": "Pivot", "supplies": ["sheet", "pivot"]}
+        ledger = {
+            "collections": {
+                "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots"},
+                "pivot_field": {"key": "index", "access": "list", "plural": "pivot_fields", "ops": []},
+            },
+            "entries": {
+                "pivot_fields.list": {"kind": "list", "scope": "sheet", "js": "listPivotFields",
+                                      "surfaces": ["wasm", "native"], "handle": pivot},
+                "sheet.rename": {"kind": "op", "scope": "workbook", "js": "renameSheet", "surfaces": ["wasm", "native"],
+                                 "handle": {"class": "Sheet", "js": "rename", "supplies": ["sheet"]}},
+            },
+        }  # fmt: skip
+        good = (
+            _sheet("  rename(name: string): void;\n") + "export interface Pivot {\n  listFields(): PivotField[];\n}\n"
+        )
+        bad = _sheet("  rename(name: string): void;\n") + "export interface Pivot {\n}\n"
+        self.assert_rule(
+            "R5.list",
+            self.fixture.context("", ledger, wasm=bad, native=good),
+            self.fixture.context("", ledger, wasm=good, native=good),
+            [("wasm", "pivot_fields.list", "missing")],
+        )
+        ctx = self.fixture.context("", ledger, wasm=good, native=good)
+        self.assertEqual([h for h in hits(ctx, "R0.coverage") if h[2] == "rename"], [])
+        self.assertEqual([h for h in hits(ctx, "R23.list") if "pivot_field" in h[1]], [])
+
+    def test_r25_span(self) -> None:
+        ledger = {
+            "entries": {
+                "column_width.set": {"kind": "op", "scope": "sheet", "js": "setColumnWidth", "py": "set_column_width",
+                                     "surfaces": ["wasm", "native", "py"], "span_args": [[0, "col", "span"]]},
+                "rows.insert": {"kind": "op", "scope": "sheet", "js": "insertRows", "py": "insert_rows",
+                                "surfaces": ["wasm", "native", "py"], "span_args": [[0, "row", "start_count"]]},
+            }
+        }  # fmt: skip
+        numbers = "  setColumnWidth(first: number, last: number, width: number): void;\n" + (
+            "  insertRows(row: number, count: number): void;\n"
+        )
+        good_js = _sheet(
+            numbers + "  setColumnWidth(span: string, width: number): void;\n  insertRows(span: string): void;\n"
+        )
+        bad_js = _sheet(numbers + "  insertRows(span: string): void;\n")
+        overload = "    @overload\n"
+        good_py = _py_sheet(
+            overload
+            + "    def set_column_width(self, first: int, last: int, width: float) -> None: ...\n"
+            + overload
+            + "    def set_column_width(self, span: str, width: float) -> None: ...\n"
+            "    def set_column_width(self, *args): ...\n"
+            + overload
+            + "    def insert_rows(self, row: int, count: int) -> None: ...\n"
+            + overload
+            + "    def insert_rows(self, span: str) -> None: ...\n"
+            "    def insert_rows(self, *args): ...\n"
+        )
+        bad_py = good_py.replace("def insert_rows(self, span: str)", "def insert_rows(self, rows: str)")
+        self.assert_rule(
+            "R25.span",
+            self.fixture.context("", ledger, wasm=bad_js, native=good_js, py_sheet=bad_py),
+            self.fixture.context("", ledger, wasm=good_js, native=good_js, py_sheet=good_py),
+            [("py", "rows.insert", "span"), ("wasm", "column_width.set", "span")],
+        )
+
+
 class RefArgTest(BindingRuleTestBase):
     def test_r26_ref(self) -> None:
         bad_js = _wb(
@@ -2398,7 +2602,7 @@ class RefArgTest(BindingRuleTestBase):
         bad_py = _py_wb("    def remove_table(self, table_index: int) -> None: ...\n") + _py_sheet(
             "    def remove_protected_range(self, protected_range: int) -> None: ...\n"
         ).replace("class Sheet", "\nclass Sheet")
-        good_py = _py_wb("    def remove_table(self, table: Union[int, str]) -> None: ...\n") + _py_sheet(
+        good_py = _py_wb("    def remove_table(self, table: Union[int, str, Table]) -> None: ...\n") + _py_sheet(
             "    def remove_protected_range(self, protected_range: Union[int, str]) -> None: ...\n"
         ).replace("class Sheet", "\nclass Sheet")
         self.assert_rule(

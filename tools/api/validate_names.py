@@ -13,8 +13,15 @@ collections carry `access` (and `plural`, or `exempt` with a reason);
 `enum_families` and `enum_distinct` name existing enum entries. An op's
 `cell_args` / `rect_args` equal the `(row, col)` pairs and `CellRect` arguments
 of its first signature in src/wasm/formulon.d.ts, and an op's or list's
-`ref_args` its `*Ref` argument; `patch: true` names its
-getter's record in `patch_record`, or `none` with a `patch_reason`.
+`ref_args` its `*Ref` argument; an op whose first signature takes a row or
+column span (`(first, last)` or `(row | col, count)`) carries `span_args`. The
+positions of an op with `handle:` are those of the handle method, checked
+against `interface <handle.class>`. `patch: true` names its getter's record in
+`patch_record`, never `none`. A public name is unique per scope (or handle
+class), a raw name per scope.
+
+`--ledger-only` runs the schema, chain, index and rule checks without reading
+src/wasm/formulon.d.ts or the C header.
 
 `--coverage` additionally requires every symbol the current tree exports
 to be named by some entry's current or `was` name. Entries carrying `flag:` or `review: true` are listed in
@@ -34,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import extract_names  # noqa: E402
 from binding_drift.api_conventions import (  # noqa: E402
+    HANDLE_IDENTITY_PROPERTIES,
     LEDGER_PATH,
     REPO_ROOT,
     SCOPES,
@@ -44,6 +52,11 @@ from binding_drift.api_conventions import (  # noqa: E402
     derive_py,
     derive_record_type,
     derive_type,
+    entry_handle,
+    handle_class_names,
+    handle_classes,
+    handle_collections,
+    handle_name,
     split_c_name,
 )
 from binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
@@ -54,9 +67,15 @@ FIELDS = frozenset(
         "kind", "scope", "noun", "qualifies", "record", "role", "from", "c", "js", "py", "enum", "returns",
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
         "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "patch", "patch_record",
-        "patch_reason",
+        "patch_reason", "patch_nested", "span_args", "internal", "handle",
     }
 )  # fmt: skip
+HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
+COLLECTION_FIELDS = frozenset(
+    {"key", "by", "access", "plural", "ops", "no_getter", "exempt", "flag", "handle_class", "handle_base"}
+)
+SPAN_AXES = frozenset({"row", "col"})
+SPAN_FORMS = frozenset({"span", "start_count"})
 # Reference types of the JS surface, by the `ref_args` kind that names them.
 JS_REF_KINDS = {"TableRef": "table", "PivotRef": "pivot", "CfRuleRef": "cfRule", "ProtectedRangeRef": "protectedRange"}
 ROLES = frozenset({"result", "input", "patch", "both"})
@@ -132,7 +151,7 @@ def check_schema(data) -> List[str]:
         if "replaced_by" in entry:
             if entry["replaced_by"] not in entries:
                 problems.append(f"{where}: replaced_by {entry['replaced_by']!r} is not an entry")
-            if "closes" not in entry:
+            if "closes" not in entry and "closes" not in (entry.get("drop") or {}):
                 problems.append(f"{where}: replaced_by needs `closes`")
         for ref_field in ("record", "enum"):
             if ref_field in entry and entry[ref_field] not in entries:
@@ -169,13 +188,25 @@ def check_schema(data) -> List[str]:
         if "sheet_arg" in entry and entry.get("scope") != "workbook":
             problems.append(f"{where}: `sheet_arg` excuses a sheet index on a workbook-scope entry only")
         problems += _address_and_patch_schema(where, entry)
-        if not any(f in entry for f in (*NAME_FIELDS, "was", "replaced_by")):
+        problems += _handle_schema(where, entry, data)
+        if not any(f in entry for f in (*NAME_FIELDS, "was", "replaced_by", "handle")):
             problems.append(f"{where}: names nothing")
     for name, collection in collections.items():
         where = f"collections.{name}"
         if not isinstance(collection, dict) or collection.get("key") not in ("index", "natural"):
             problems.append(f"{where}: key must be index or natural")
             continue
+        unknown = set(collection) - COLLECTION_FIELDS
+        if unknown:
+            problems.append(f"{where}: unknown fields {sorted(unknown)}")
+        if "handle_class" in collection and (
+            collection.get("access") != "handles" or not isinstance(collection["handle_class"], str)
+        ):
+            problems.append(f"{where}: `handle_class` names the class of an `access: handles` collection")
+        if "handle_base" in collection and (
+            "handle_class" not in collection or collection["handle_base"] not in handle_class_names(collections)
+        ):
+            problems.append(f"{where}: `handle_base` names another handle class of a handle collection")
         if not all(k in entries for k in collection.get("ops", [])):
             problems.append(f"{where}: ops must list entry keys")
         if "no_getter" in collection and (
@@ -187,8 +218,8 @@ def check_schema(data) -> List[str]:
         access = collection.get("access")
         if collection["key"] == "index" and access not in ACCESS_MODES:
             problems.append(f"{where}: an index-keyed collection needs `access` in {sorted(ACCESS_MODES)}")
-        elif collection["key"] == "natural" and "access" in collection:
-            problems.append(f"{where}: `access` belongs to index-keyed collections")
+        elif collection["key"] == "natural" and access not in (None, "handles"):
+            problems.append(f"{where}: a natural-key collection takes `access: handles` or none")
         if access is not None and not isinstance(collection.get("plural"), str):
             problems.append(f"{where}: `access` needs `plural`")
         if (access == "exempt") != isinstance(collection.get("exempt"), str):
@@ -238,6 +269,78 @@ def _address_and_patch_schema(where: str, entry: dict) -> List[str]:
         problems.append(f"{where}: `patch_record: none` needs a `patch_reason`")
     if "patch_reason" in entry and record != PATCH_RECORD_NONE:
         problems.append(f"{where}: patch_reason explains a `patch_record: none` only")
+    nested = entry.get("patch_nested")
+    if nested is not None and (
+        entry.get("patch") is not True
+        or not isinstance(nested, dict)
+        or not nested
+        or not all(isinstance(k, str) and isinstance(v, str) and v for k, v in nested.items())
+    ):
+        problems.append(f"{where}: patch_nested maps a path in the patch to its record, on a `patch: true` op")
+    elif isinstance(nested, dict):
+        for path in nested:
+            parent = path.rpartition(".")[0]
+            if parent and parent not in nested:
+                problems.append(f"{where}: patch_nested path {path} has no entry for {parent}")
+    if "span_args" in entry:
+        spans = entry["span_args"]
+        if entry.get("kind") != "op":
+            problems.append(f"{where}: span_args belong to an op")
+        if not (
+            isinstance(spans, list)
+            and spans
+            and all(
+                isinstance(s, list) and len(s) == 3 and _index(s[0]) and s[1] in SPAN_AXES and s[2] in SPAN_FORMS
+                for s in spans
+            )
+        ):
+            problems.append(f"{where}: span_args lists `[position, row|col, span|start_count]` triples")
+    return problems
+
+
+def _handle_schema(where: str, entry: dict, data: dict) -> List[str]:
+    """`internal: true` and `handle:` on an op or list; a handle names known classes and its public names."""
+    problems: List[str] = []
+    kind = entry.get("kind")
+    if "internal" in entry:
+        if entry["internal"] is not True:
+            problems.append(f"{where}: internal is `true` or absent")
+        if kind not in ("op", "list"):
+            problems.append(f"{where}: internal belongs to an op or a list")
+        if "handle" in entry:
+            problems.append(f"{where}: an internal op publishes no handle method")
+    if "replaced_by" in entry and kind in ("op", "list"):
+        target = (data.get("entries") or {}).get(entry["replaced_by"])
+        if isinstance(target, dict) and target.get("kind") not in ("op", "list"):
+            problems.append(f"{where}: an op or list is replaced by an op or list")
+    if "handle" not in entry:
+        return problems
+    handle = entry_handle(entry)
+    if kind not in ("op", "list") or handle is None:
+        return problems + [f"{where}: handle is a mapping on an op or a list"]
+    unknown = set(handle) - HANDLE_FIELDS
+    if unknown:
+        problems.append(f"{where}: handle has unknown fields {sorted(unknown)}")
+    known = handle_class_names(data.get("collections") or {})
+    classes = handle_classes(entry)
+    raw_class = handle.get("class")
+    if not classes or (isinstance(raw_class, list) and len(classes) != len(raw_class)):
+        problems.append(f"{where}: handle.class is a class name or a list of them")
+    for cls in classes:
+        if cls not in known:
+            problems.append(f"{where}: handle.class {cls} is not a handle class of the ledger ({', '.join(known)})")
+    surfaces = set(entry.get("surfaces") or [])
+    collections = data.get("collections") or {}
+    for name_field in ("js", "py"):
+        if name_field in handle and not isinstance(handle[name_field], str):
+            problems.append(f"{where}: handle.{name_field} must be a string")
+        elif set(_surface_of(name_field)) & surfaces and not handle_name(entry, name_field, collections):
+            problems.append(f"{where}: handle derives no {name_field} name; give `handle.{name_field}`")
+    supplies = handle.get("supplies", [])
+    if not isinstance(supplies, list) or not all(isinstance(s, str) and s for s in supplies):
+        problems.append(f"{where}: handle.supplies lists the raw arguments the handle supplies")
+    if "property" in handle and handle["property"] is not True:
+        problems.append(f"{where}: handle.property is `true` or absent")
     return problems
 
 
@@ -277,8 +380,32 @@ def check_enum_groups(data: dict, entries: Dict[str, dict]) -> List[str]:
     return problems
 
 
+_SCOPED_NAME_KINDS = frozenset({"op", "list", "free", "factory"})
+
+
 def _namespace(entry: dict, name_field: str) -> str:
-    return f"field:{entry.get('record')}" if entry.get("kind") == "field" else name_field
+    """The namespace of the entry's raw (or former) `name_field` name.
+
+    C names share one namespace; a binding name of an op, list, factory or free function is unique within
+    its scope (`process` included), and every other binding name within its language.
+    """
+    if entry.get("kind") == "field":
+        return f"field:{entry.get('record')}"
+    if name_field != "c" and entry.get("kind") in _SCOPED_NAME_KINDS:
+        return f"{name_field}@{entry.get('scope')}"
+    return name_field
+
+
+def _public_namespaces(entry: dict, name_field: str, collections: Dict[str, dict]) -> List[tuple]:
+    """`(namespace, name)` of each public name a `handle:` gives the entry: one per class it lists."""
+    name = handle_name(entry, name_field, collections) if name_field != "c" else None
+    if not isinstance(name, str):
+        return []
+    out = []
+    for cls in handle_classes(entry):
+        space = f"{name_field}@sheet" if cls == "Sheet" else f"{name_field}#{cls}"
+        out.append((space, name))
+    return out
 
 
 def _is_c_swap(entries: Dict[str, dict], surfaces: Optional[extract_names.Surfaces], a: str, b: str) -> bool:
@@ -286,11 +413,12 @@ def _is_c_swap(entries: Dict[str, dict], surfaces: Optional[extract_names.Surfac
 
     A stale call then fails to compile instead of binding to the other function.
     """
-    if surfaces is None:
-        return False
     was_a, was_b = (entries[a].get("was") or {}).get("c"), (entries[b].get("was") or {}).get("c")
     if not (was_a and was_b and was_a == entries[b].get("c")):
         return False
+    if surfaces is None:
+        # Ledger-only: the parameter counts are proved by the run that reads the header.
+        return True
     fa, fb = surfaces.functions.get(was_a), surfaces.functions.get(was_b)
     if fb is None:
         # After the rename the tree declares the two current names instead.
@@ -298,15 +426,23 @@ def _is_c_swap(entries: Dict[str, dict], surfaces: Optional[extract_names.Surfac
     return fa is not None and fb is not None and len(fa.params) != len(fb.params)
 
 
-def check_chains(entries: Dict[str, dict], surfaces: Optional[extract_names.Surfaces] = None) -> List[str]:
-    """New names are unique, old names are claimed once, and no new name is an old name renamed away.
+def check_chains(
+    entries: Dict[str, dict],
+    surfaces: Optional[extract_names.Surfaces] = None,
+    collections: Optional[Dict[str, dict]] = None,
+) -> List[str]:
+    """New names are unique per namespace, old names are claimed once, and no new name is an old name renamed
+    away.
 
-    The one exception is a C name handed from one function to another with a different parameter count.
+    A public name is unique per `(scope or handle.class, name)`, a raw name per `(scope, name)`. The exceptions
+    are a C name handed from one function to another with a different parameter count, and a record name a
+    handle class takes over.
     """
     problems: List[str] = []
     new: Dict[tuple, List[str]] = defaultdict(list)
     old: Dict[tuple, List[str]] = defaultdict(list)
     renamed_from: Dict[tuple, str] = {}
+    handle_names = set(handle_class_names(collections or {}))
     for key, entry in entries.items():
         for name_field in NAME_FIELDS:
             space = _namespace(entry, name_field)
@@ -314,6 +450,9 @@ def check_chains(entries: Dict[str, dict], surfaces: Optional[extract_names.Surf
             was = (entry.get("was") or {}).get(name_field)
             if isinstance(target, str):
                 new[(space, target)].append(key)
+            for public in _public_namespaces(entry, name_field, collections or {}):
+                if public != (space, target):
+                    new[public].append(key)
             if isinstance(was, str):
                 old[(space, was)].append(key)
                 if was != target:
@@ -324,6 +463,9 @@ def check_chains(entries: Dict[str, dict], surfaces: Optional[extract_names.Surf
         owner = renamed_from.get((space, name))
         if owner is not None and owner not in keys:
             if space == "c" and _is_c_swap(entries, surfaces, owner, keys[0]):
+                continue
+            # A record renamed to `<Class>Properties` hands its former name to the handle class.
+            if entries[keys[0]].get("kind") == "typedef" and name in handle_names:
                 continue
             problems.append(f"rename chain: {space} name {name} is renamed away by {owner} and into by {keys[0]}")
     for (space, name), keys in sorted(old.items()):
@@ -337,6 +479,8 @@ def check_ledger_index(data: dict, surfaces: Optional[extract_names.Surfaces] = 
     ledger = Ledger(data)
     if surfaces is not None:
         ledger.c_param_counts = {name: len(fn.params) for name, fn in surfaces.functions.items()}
+    else:
+        ledger.trust_c_handover = True
     for name_field in NAME_FIELDS:
         ledger.key_for(name_field, "")
     return list(dict.fromkeys(ledger.problems))
@@ -346,9 +490,13 @@ def _list_js(py_name: str) -> str:
     return py_name.split("_")[0] + "".join(w[:1].upper() + w[1:] for w in py_name.split("_")[1:])
 
 
-def check_rules(entries: Dict[str, dict]) -> List[str]:
-    """R1 / R2 on C function names, R5 on binding names, `derive_type` on type names."""
+def check_rules(entries: Dict[str, dict], collections: Optional[Dict[str, dict]] = None) -> List[str]:
+    """R1 / R2 on C function names, R5 on binding names, `derive_type` on type names.
+
+    The result record of a collection published as handles derives to `<handle_class>Properties`.
+    """
     problems: List[str] = []
+    handles = handle_collections(collections or {})
     for key, entry in entries.items():
         kind = entry.get("kind")
         c_name = entry.get("c")
@@ -371,7 +519,7 @@ def check_rules(entries: Dict[str, dict]) -> List[str]:
             if not exempt:
                 wants = {derive_type(c_name, entry.get("role"))}
                 if kind == "record":
-                    wants.add(derive_record_type(c_name, entry.get("role")))
+                    wants.add(derive_record_type(c_name, entry.get("role"), handles))
                 for name_field in ("js", "py"):
                     if name_field in entry and entry[name_field] not in wants:
                         want = " or ".join(sorted(wants))
@@ -435,41 +583,86 @@ def _js_ref_arg(params) -> List:
     return []
 
 
-def check_address_args(entries: Dict[str, dict], dts_text: str) -> List[str]:
-    """Each op's `cell_args` / `rect_args`, and each op's or list's `ref_args`, equal what the first signature
-    of its JS member declares."""
+_SPAN_AXIS_WORDS = (("Column", "col"), ("Row", "row"))
+
+
+def _js_span_args(name: str, params) -> List[List]:
+    """`[position, axis, form]` of each `(first, last)` or `(row | col, count)` pair of arguments.
+
+    A `(first, last)` pair takes its axis from the method name (`setColumnWidth` -> `col`), a `(row | col,
+    count)` pair from its first argument.
+    """
+    out: List[List] = []
+    for i in range(len(params) - 1):
+        a, b = params[i][0], params[i + 1][0]
+        if (a, b) == ("first", "last"):
+            axis = next((ax for word, ax in _SPAN_AXIS_WORDS if word in name), None)
+            out.append([i, axis or "?", "span"])
+        elif a in ("row", "col") and b == "count":
+            out.append([i, a, "start_count"])
+    return out
+
+
+def _handle_members(dts_text: str, entry: dict, collections: Dict[str, dict]) -> List[tuple]:
+    """`(owner, member or None)` of each class the entry's handle method is declared on."""
+    surface = JsSurface(dts_text)
+    name = handle_name(entry, "js", collections)
+    out = []
+    for cls in handle_classes(entry):
+        members = {n: m for n, m in surface.interface_members(cls).items() if m.is_method}
+        out.append((f"interface {cls}", members.get(name) if isinstance(name, str) else None))
+    return out
+
+
+def check_address_args(
+    entries: Dict[str, dict], dts_text: str, collections: Optional[Dict[str, dict]] = None
+) -> List[str]:
+    """Each op's `cell_args` / `rect_args` / `span_args`, and each op's or list's `ref_args`, equal what the
+    first signature of its JS member declares; an op with `handle:` is read from `interface <handle.class>`,
+    whose methods omit the arguments the handle supplies. An op whose first signature takes a row or column span
+    without `span_args` is reported."""
     pool = JsSurface(dts_text).callables()
     problems: List[str] = []
     for key, entry in sorted(entries.items()):
         kind = entry.get("kind") if isinstance(entry, dict) else None
-        if kind not in ("op", "list"):
+        if kind not in ("op", "list") or entry.get("internal") is True:
             continue
-        fields = ("cell_args", "rect_args", "ref_args") if kind == "op" else ("ref_args",)
-        member = pool.get(entry.get("js")) if isinstance(entry.get("js"), str) else None
-        if member is None:
-            for field in fields:
-                if field in entry:
-                    problems.append(f"{key}: {field} names no member of {WASM_DTS.name}")
-            continue
-        derived = {
-            "cell_args": lambda: _js_cell_pairs(member.params),
-            "rect_args": lambda: _js_rect_positions(member.params),
-            "ref_args": lambda: _js_ref_arg(member.params),
-        }
-        for field, want in ((f, derived[f]()) for f in fields):
-            have = entry.get(field) or []
-            if have != want:
-                problems.append(
-                    f"{key}: {field} is {have or 'absent'}, but `{member.name}` in {WASM_DTS.name} declares {want or 'none'}"
-                )
+        fields = ("cell_args", "rect_args", "ref_args", "span_args") if kind == "op" else ("ref_args",)
+        if entry_handle(entry) is not None:
+            members = _handle_members(dts_text, entry, collections or {})
+        else:
+            js = entry.get("js")
+            members = [(WASM_DTS.name, pool.get(js) if isinstance(js, str) else None)]
+        for owner, member in members:
+            if member is None:
+                for field in fields:
+                    if field in entry:
+                        problems.append(f"{key}: {field} names no member of {owner}")
+                continue
+            derived = {
+                "cell_args": lambda: _js_cell_pairs(member.params),
+                "rect_args": lambda: _js_rect_positions(member.params),
+                "ref_args": lambda: _js_ref_arg(member.params),
+                "span_args": lambda: _js_span_args(member.name, member.params),
+            }
+            for field, want in ((f, derived[f]()) for f in fields):
+                have = entry.get(field) or []
+                if have != want:
+                    problems.append(
+                        f"{key}: {field} is {have or 'absent'}, but `{member.name}` in {owner} declares {want or 'none'}"
+                    )
     return problems
 
 
-def check_coverage(entries: Dict[str, dict], surfaces: extract_names.Surfaces) -> List[str]:
+def check_coverage(
+    entries: Dict[str, dict], surfaces: extract_names.Surfaces, collections: Optional[Dict[str, dict]] = None
+) -> List[str]:
     """Each exported symbol is some entry's current or `was` name, on a surface that entry lists.
 
     A current name wins, so the tree is covered both before and after the renames land. A dropped
-    name or a `replaced_by` entry needs no surface: it leaves the tree.
+    name or a `replaced_by` entry needs no surface: it leaves the tree. A handle method is the
+    `Class.method` of an entry's `handle:`; an identity property of a handle (`index`, `objectId`, ...)
+    that no entry claims is built by the facade and needs none.
     """
     owner: Dict[tuple, str] = {}
     for key, entry in entries.items():
@@ -479,6 +672,11 @@ def check_coverage(entries: Dict[str, dict], surfaces: extract_names.Surfaces) -
             name = entry.get(name_field)
             if isinstance(name, str):
                 owner.setdefault((name_field, name), key)
+            if name_field != "c":
+                for cls in handle_classes(entry):
+                    method = handle_name(entry, name_field, collections or {})
+                    if method:
+                        owner.setdefault((name_field, f"{cls}.{method}"), key)
     for key, entry in entries.items():
         for name_field, name in (entry.get("was") or {}).items():
             owner.setdefault((name_field, name), key)
@@ -486,6 +684,9 @@ def check_coverage(entries: Dict[str, dict], surfaces: extract_names.Surfaces) -
     for surface, symbol in surfaces.exported():
         name_field = "c" if surface == "c" else "py" if surface == "py" else "js"
         key = owner.get((name_field, symbol))
+        cls, _, member = symbol.partition(".")
+        if key is None and member in HANDLE_IDENTITY_PROPERTIES and cls in handle_class_names(collections or {}):
+            continue
         if key is None:
             problems.append(
                 f"R0.coverage: [{surface}] {symbol} is exported but no entry's `{name_field}` or `was.{name_field}` names it"
@@ -502,7 +703,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ledger", type=Path, default=LEDGER_PATH)
     parser.add_argument("--coverage", action="store_true", help="also require every exported symbol to be covered")
+    parser.add_argument(
+        "--ledger-only", action="store_true", help="check the ledger alone; read neither the d.ts nor the C header"
+    )
     args = parser.parse_args(argv)
+    if args.coverage and args.ledger_only:
+        parser.error("--coverage reads the tree; it does not combine with --ledger-only")
     if not args.ledger.is_file():
         print(f"validate_names: {args.ledger} does not exist")
         return 1
@@ -514,14 +720,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     problems = check_schema(data)
     if not problems:
         entries = data["entries"]
-        surfaces = extract_names.scan()
-        problems += check_chains(entries, surfaces)
+        surfaces = None if args.ledger_only else extract_names.scan()
+        problems += check_chains(entries, surfaces, data["collections"])
         problems += check_ledger_index(data, surfaces)
-        problems += check_rules(entries)
-        problems += check_typed_slots(entries, surfaces)
-        problems += check_address_args(entries, WASM_DTS.read_text(encoding="utf-8"))
+        problems += check_rules(entries, data["collections"])
+        if surfaces is not None:
+            problems += check_typed_slots(entries, surfaces)
+            problems += check_address_args(entries, WASM_DTS.read_text(encoding="utf-8"), data["collections"])
         if args.coverage:
-            problems += check_coverage(entries, surfaces)
+            problems += check_coverage(entries, surfaces, data["collections"])
         flagged = [(f"entries.{k}", e["flag"]) for k, e in entries.items() if isinstance(e, dict) and "flag" in e]
         flagged += [
             (f"entries.{k}", f"review: {e.get('note', '')}")

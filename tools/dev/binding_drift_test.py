@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -37,6 +38,8 @@ def _load_codegen(name: str):
     path = Path(__file__).resolve().parents[1] / "codegen" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
+    # A dataclass resolves its annotations through the module it was defined in.
+    sys.modules.setdefault(name, module)
     spec.loader.exec_module(module)
     return module
 
@@ -461,6 +464,320 @@ class LedgerRenameChainTest(unittest.TestCase):
         self.assertTrue(any("PrintOptionsInput" in p for p in problems), problems)
         entry["js"] = "PrintOptionsInput"
         self.assertEqual(validate.check_rules({"record.print_options": entry}), [])
+
+
+class LedgerHandleTest(unittest.TestCase):
+    """The handle layer of the ledger: namespaces, `internal`, `handle:` and the `Properties` derivation."""
+
+    COLLECTIONS = {
+        "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots", "ops": []},
+        "drawing_object": {"key": "natural", "by": "object_id", "access": "handles", "handle_class": "Drawing",
+                           "plural": "drawings", "ops": []},
+        "image": {"key": "natural", "by": "object_id", "access": "handles", "handle_class": "Picture",
+                  "handle_base": "Drawing", "plural": "pictures", "ops": []},
+        "chart": {"key": "natural", "by": "object_id", "access": "handles", "handle_class": "Chart",
+                  "handle_base": "Drawing", "plural": "charts", "ops": []},
+        "sheet": {"key": "index", "access": "handles", "plural": "sheets", "ops": []},
+    }  # fmt: skip
+
+    def setUp(self) -> None:
+        self.validate = LedgerRenameChainTest._validate_names()
+
+    @staticmethod
+    def op(scope: str, js: str, **fields: object) -> dict:
+        return {"kind": "op", "scope": scope, "js": js, "surfaces": ["wasm"], "exception": "x", **fields}
+
+    def schema(self, entries: dict) -> list:
+        return self.validate.check_schema({"schema": 1, "collections": self.COLLECTIONS, "entries": entries})
+
+    def test_a_public_name_is_unique_per_scope_or_handle_class(self) -> None:
+        chains = lambda entries: self.validate.check_chains(entries, None, self.COLLECTIONS)  # noqa: E731
+        process = {"kind": "free", "scope": "process", "js": "evaluateFormula", "surfaces": ["wasm"]}
+        sheet = self.op("sheet", "evaluateFormula")
+        self.assertEqual(chains({"formula.eval": process, "formula.evaluate": sheet}), [])
+        self.assertTrue(chains({"a": sheet, "b": dict(sheet)}))
+        pivot = {"class": "Pivot", "supplies": ["sheet", "pivot"]}
+        a = self.op("sheet", "setPivotName", handle={**pivot, "js": "rename"})
+        b = self.op("sheet", "setPivotTitle", handle={**pivot, "js": "rename"})
+        problems = chains({"a": a, "b": b})
+        self.assertTrue(any("js#Pivot name rename" in p for p in problems), problems)
+        c = self.op("sheet", "setDrawingName", handle={"class": ["Picture", "Chart"], "js": "rename"})
+        self.assertEqual(chains({"a": a, "c": c}), [])
+        renamed = self.op("workbook", "renameSheet", handle={"class": "Sheet", "js": "rename"})
+        self.assertTrue(chains({"renamed": renamed, "clash": self.op("sheet", "rename")}))
+
+    def test_a_record_name_moves_to_its_handle_class(self) -> None:
+        record = {"kind": "record", "role": "result", "js": "ShapeProperties", "surfaces": ["wasm"],
+                  "was": {"js": "Shape"}}  # fmt: skip
+        handle = {"kind": "typedef", "js": "Shape", "surfaces": ["wasm"]}
+        collections = {**self.COLLECTIONS, "shape": {"key": "natural", "by": "object_id", "access": "handles",
+                                                     "handle_class": "Shape", "plural": "shapes"}}  # fmt: skip
+        entries = {"record.shape": record, "type.shape_handle": handle}
+        self.assertEqual(self.validate.check_chains(entries, None, collections), [])
+        self.assertTrue(self.validate.check_chains(entries, None, self.COLLECTIONS))
+        ledger = api_conventions.Ledger({"schema": 1, "collections": collections, "entries": entries})
+        self.assertEqual(ledger.key_for("js", "Shape"), "type.shape_handle")
+        self.assertEqual(ledger.problems, [])
+
+    def test_handle_names_derive_from_the_raw_name_and_the_class_noun(self) -> None:
+        derive = api_conventions.derive_handle_name
+        self.assertEqual(derive("addPivotField", "pivot", "js"), "addField")
+        self.assertEqual(derive("get_pivot_cache_worksheet_source", "pivot_cache", "py"), "get_worksheet_source")
+        self.assertEqual(derive("getChart", "chart", "js"), "getProperties")
+        self.assertEqual(derive("get_shape", "shape", "py"), "get_properties")
+        self.assertEqual(derive("setDrawingZOrder", "drawing_object", "js"), "setZOrder")
+        self.assertEqual(derive("listPivotFields", "pivot", "js"), "listFields")
+        self.assertEqual(derive("renameSheet", "sheet", "js"), "rename")
+        shared = {"kind": "op", "js": "setDrawingAnchor", "py": "set_drawing_anchor",
+                  "handle": {"class": ["Picture", "Chart"]}}  # fmt: skip
+        self.assertEqual(api_conventions.handle_name(shared, "js", self.COLLECTIONS), "setAnchor")
+        shared["handle"]["js"] = "moveTo"
+        self.assertEqual(api_conventions.handle_name(shared, "js", self.COLLECTIONS), "moveTo")
+        self.assertEqual(
+            api_conventions.common_base(["Picture", "Chart"], api_conventions.handle_bases(self.COLLECTIONS)),
+            "Drawing",
+        )
+
+    def test_internal_and_handle_schema(self) -> None:
+        handle = {"class": "Pivot", "supplies": ["sheet", "pivot"]}
+        self.assertEqual(self.schema({"a": self.op("sheet", "addPivotField", handle=handle)}), [])
+        self.assertEqual(
+            self.schema({"a": self.op("sheet", "setDrawingName", handle={"class": ["Picture", "Chart"]})}), []
+        )
+        self.assertTrue(self.schema({"a": self.op("sheet", "addPivotField", handle={"class": "Pivots"})}))
+        self.assertTrue(self.schema({"a": self.op("sheet", "addPivotField", handle={**handle, "property": False})}))
+        self.assertTrue(self.schema({"a": self.op("sheet", "addPivotField", handle={**handle, "label": "x"})}))
+        self.assertTrue(self.schema({"a": self.op("sheet", "x", handle=handle, internal=True)}))
+        self.assertTrue(self.schema({"a": self.op("sheet", "x", internal="yes")}))
+        raw_less = {"kind": "op", "scope": "sheet", "surfaces": ["wasm"], "exception": "x", "handle": handle}
+        self.assertTrue(self.schema({"a": raw_less}))
+        raw_less["handle"] = {**handle, "js": "getProperties"}
+        self.assertEqual(self.schema({"a": raw_less}), [])
+        absorbed = self.op("sheet", "addImage", internal=True, replaced_by="b", closes="R28.handles")
+        self.assertEqual(self.schema({"a": absorbed, "b": self.op("sheet", "addPicture")}), [])
+        record = {"kind": "record", "role": "result", "js": "X", "surfaces": ["wasm"]}
+        self.assertTrue(self.schema({"a": absorbed, "b": record}))
+
+    def test_collection_handle_fields(self) -> None:
+        def problems(**fields: object) -> list:
+            coll = {"key": "natural", "by": "object_id", "plural": "charts", **fields}
+            data = {"schema": 1, "collections": {**self.COLLECTIONS, "chart": coll}, "entries": {}}
+            return self.validate.check_schema(data)
+
+        self.assertEqual(problems(access="handles", handle_class="Chart", handle_base="Drawing"), [])
+        self.assertTrue(problems(access="list"))
+        self.assertTrue(problems(handle_class="Chart"))
+        self.assertTrue(problems(access="handles", handle_class="Chart", handle_base="Nothing"))
+        self.assertTrue(problems(access="handles", handle_class="Chart", colour="red"))
+
+    def test_handle_collection_records_derive_to_properties(self) -> None:
+        entry = {"kind": "record", "role": "result", "c": "fm_chart_info_t", "js": "ChartProperties",
+                 "surfaces": ["c", "wasm"]}  # fmt: skip
+        self.assertEqual(self.validate.check_rules({"record.chart_info": entry}, self.COLLECTIONS), [])
+        self.assertTrue(self.validate.check_rules({"record.chart_info": entry}, {}))
+        entry["js"] = "Chart"
+        self.assertTrue(self.validate.check_rules({"record.chart_info": entry}, self.COLLECTIONS))
+        self.assertEqual(
+            api_conventions.derive_record_type("fm_drawing_object_t", "result", {"drawing_object": "Drawing"}),
+            "DrawingProperties",
+        )
+        self.assertEqual(
+            api_conventions.derive_record_type("fm_drawing_object_t", "input", {"drawing_object": "Drawing"}),
+            "DrawingObjectInput",
+        )
+
+    def test_the_ledger_only_mode_reads_no_tree(self) -> None:
+        import contextlib
+        import io
+
+        try:
+            import yaml  # type: ignore  # noqa: F401
+        except ImportError:
+            self.skipTest("PyYAML is not importable")
+        with patch.object(self.validate.extract_names, "scan", side_effect=AssertionError("scanned the tree")):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(self.validate.main(["--ledger-only"]), 0)
+
+
+class MigrationTableTest(unittest.TestCase):
+    """Rows of the CHANGELOG migration table for handle methods, absorbed raws and removed ops."""
+
+    @staticmethod
+    def _gen():
+        import importlib
+
+        api_dir = str(Path(__file__).resolve().parents[1] / "api")
+        if api_dir not in sys.path:
+            sys.path.insert(0, api_dir)
+        return importlib.import_module("gen_migration_table")
+
+    def test_handle_internal_and_removed_rows(self) -> None:
+        data = {
+            "schema": 1,
+            "collections": {
+                "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots",
+                          "ops": ["binding.pivot"]},
+            },
+            "entries": {
+                "binding.pivot": {"kind": "op", "scope": "sheet", "js": "pivot", "py": "pivot"},
+                "pivot_field.add": {"kind": "op", "scope": "sheet", "c": "fm_sheet_add_pivot_field",
+                                    "js": "addPivotField", "py": "add_pivot_field",
+                                    "was": {"c": "fm_sheet_add_pivot_field", "js": "pivotFieldAdd"},
+                                    "handle": {"class": "Pivot", "supplies": ["sheet", "pivot"]}},
+                "binding.remove_drawing": {"kind": "op", "scope": "sheet", "js": "removeDrawing"},
+                "shape.remove": {"kind": "op", "scope": "sheet", "c": "fm_sheet_remove_shape", "js": "removeShape",
+                                 "was": {"c": "fm_sheet_remove_shape", "js": "removeShape"}, "internal": True,
+                                 "replaced_by": "binding.remove_drawing"},
+                "runtime_id.get": {"kind": "op", "scope": "sheet", "js": "getPivotRuntimeId", "internal": True,
+                                   "was": {"js": "getPivotRuntimeId"}},
+                "page_setup.set": {"kind": "op", "scope": "sheet", "c": "fm_sheet_set_page_setup",
+                                   "js": "setPageSetup"},
+                "fit_to_page.set": {"kind": "op", "scope": "sheet", "c": "fm_sheet_set_fit_to_page",
+                                    "js": "setFitToPage", "was": {"c": "fm_sheet_set_fit_to_page",
+                                                                  "js": "setFitToPage"},
+                                    "drop": {"c": "fm_sheet_set_fit_to_page", "js": "setFitToPage",
+                                             "closes": "R18.all"},
+                                    "replaced_by": "page_setup.set"},
+            },
+        }  # fmt: skip
+        rows = self._gen().rows(data)
+        self.assertEqual(
+            rows["js"],
+            [
+                ("`pivotFieldAdd()`", "`ws.pivot(...).addField()`"),
+                ("`removeShape()`", "`removeDrawing()`"),
+                ("`setFitToPage()`", "removed; use `setPageSetup()`"),
+            ],
+        )
+        self.assertEqual(rows["c"], [("`fm_sheet_set_fit_to_page`", "removed; use `fm_sheet_set_page_setup`")])
+
+
+class CountHandleOpsTest(unittest.TestCase):
+    def test_ledger_and_python_counts(self) -> None:
+        import importlib
+
+        api_dir = str(Path(__file__).resolve().parents[1] / "api")
+        if api_dir not in sys.path:
+            sys.path.insert(0, api_dir)
+        count = importlib.import_module("count_handle_ops")
+        pivot = {"class": "Pivot", "supplies": ["sheet", "pivot"]}
+        ledger = api_conventions.Ledger(
+            {
+                "schema": 1,
+                "collections": {
+                    "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots"},
+                },
+                "entries": {
+                    "pivot_field.add": {"kind": "op", "scope": "sheet", "py": "add_pivot_field",
+                                        "surfaces": ["py"], "handle": pivot},
+                    "pivot_name.get": {"kind": "op", "scope": "sheet", "py": "get_pivot_name", "surfaces": ["py"],
+                                       "handle": {**pivot, "py": "name", "property": True}},
+                },
+            }
+        )  # fmt: skip
+        with TemporaryDirectory() as tmp:
+            package = Path(tmp)
+            (package / "pivot.py").write_text(
+                "class Pivot:\n"
+                "    @property\n    def sheet(self): ...\n"
+                "    @property\n    def name(self): ...\n"
+                "    def add_field(self, spec): ...\n"
+                "    def _resolve(self): ...\n",
+                encoding="utf-8",
+            )
+            result = count.compare("Pivot", ledger, package)
+            self.assertEqual((result["ledger"], result["python"], result["missing"]), (2, 2, []))
+            (package / "pivot.py").write_text("class Pivot:\n    def add_field(self, spec): ...\n", encoding="utf-8")
+            self.assertEqual(count.compare("Pivot", ledger, package)["missing"], ["name"])
+            self.assertTrue(count.compare("Chart", ledger, package)["absent"])
+
+
+class HandleDeclarationTest(unittest.TestCase):
+    LEDGER = {
+        "schema": 1,
+        "collections": {
+            "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots", "ops": []},
+        },
+        "entries": {
+            "pivot_field.add": {"kind": "op", "scope": "sheet", "js": "addPivotField", "surfaces": ["wasm"],
+                                "handle": {"class": "Pivot", "supplies": ["sheet", "pivot"]}},
+            "pivot_runtime_id.get": {"kind": "op", "scope": "sheet", "js": "getPivotRuntimeId", "surfaces": ["wasm"],
+                                     "internal": True},
+        },
+    }  # fmt: skip
+
+    def test_internal_and_handle_raws_need_no_workbook_declaration(self) -> None:
+        raw_only, _facade_only = declaration_checks.facade_split(api_conventions.Ledger(self.LEDGER))
+        self.assertTrue({"addPivotField", "getPivotRuntimeId"} <= raw_only)
+
+    def test_a_handle_method_is_declared_on_its_class_and_forwards_to_a_registration(self) -> None:
+        ledger = api_conventions.Ledger(self.LEDGER)
+        dts = Path("src/wasm/formulon.d.ts")
+        good = "export interface Pivot {\n  addField(spec: PivotFieldInput): number;\n}\n"
+        check = declaration_checks.handle_declaration_problems
+        self.assertEqual(check("dts-wasm", ledger, {"addPivotField"}, good, declaration_checks.REPO_ROOT / dts), [])
+        problems = check("dts-wasm", ledger, set(), "export interface Pivot {\n}\n", declaration_checks.REPO_ROOT / dts)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(any("`Pivot.addField` is not declared" in p for p in problems), problems)
+
+
+class HandleDeclarationShapeTest(unittest.TestCase):
+    LEDGER = {
+        "schema": 1,
+        "collections": {
+            "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots", "ops": []},
+        },
+        "entries": {
+            "pivot_name.get": {"kind": "op", "scope": "sheet", "c": "fm_sheet_get_pivot_name", "js": "getPivotName",
+                               "surfaces": ["wasm"],
+                               "handle": {"class": "Pivot", "js": "name", "property": True,
+                                          "supplies": ["sheet", "pivot"]}},
+            "sheet.rename": {"kind": "op", "scope": "workbook", "c": "fm_workbook_rename_sheet", "js": "renameSheet",
+                             "surfaces": ["wasm"], "handle": {"class": "Sheet", "js": "rename", "supplies": ["sheet"]}},
+            "drawing_objects.list": {"kind": "list", "scope": "sheet", "js": "listDrawingObjects",
+                                     "surfaces": ["wasm"], "internal": True},
+        },
+    }  # fmt: skip
+
+    def test_interfaces_with_a_base_list_are_found(self) -> None:
+        text = "export interface Chart extends Drawing {\n  setTitle(t: string): void;\n}\n"
+        self.assertIn("setTitle", ts_decl._find_interface_body(text, "Chart", Path("x.d.ts")))
+
+    def test_properties_sheet_methods_and_internal_lists(self) -> None:
+        ledger = api_conventions.Ledger(self.LEDGER)
+        raw_only, facade_only = declaration_checks.facade_split(ledger)
+        self.assertTrue({"renameSheet", "listDrawingObjects", "getPivotName"} <= raw_only)
+        self.assertIn("rename", facade_only)
+        dts = declaration_checks.REPO_ROOT / "src/wasm/formulon.d.ts"
+        text = "export interface Pivot {\n  readonly name: string;\n}\nexport interface Sheet {\n  rename(n: string): void;\n}\n"
+        registered = {"getPivotName", "renameSheet"}
+        self.assertEqual(declaration_checks.handle_declaration_problems("dts-wasm", ledger, registered, text, dts), [])
+        as_method = text.replace("readonly name: string;", "name(): string;")
+        self.assertTrue(declaration_checks.handle_declaration_problems("dts-wasm", ledger, registered, as_method, dts))
+
+
+class ExtractHandleMembersTest(unittest.TestCase):
+    def test_generated_handle_tables_name_the_js_members(self) -> None:
+        import importlib
+
+        api_dir = str(Path(__file__).resolve().parents[1] / "api")
+        if api_dir not in sys.path:
+            sys.path.insert(0, api_dir)
+        extract = importlib.import_module("extract_names")
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(extract._js_handle_members(root), [])
+            common = root / extract.NPM_COMMON
+            common.parent.mkdir(parents=True)
+            common.write_text(
+                "// <facade-tables>\n"
+                "const HANDLE_FORWARDERS = Object.freeze({\n  'Pivot.addField': 'addPivotField',\n"
+                "  'Pivot.getProperties': null,\n});\n"
+                "const HANDLE_PROPERTIES = Object.freeze({\n  'Pivot.name': 'getPivotName',\n});\n"
+                "// </facade-tables>\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(extract._js_handle_members(root), ["Pivot.addField", "Pivot.getProperties", "Pivot.name"])
 
 
 class ApiConventionNameTest(unittest.TestCase):
@@ -974,6 +1291,8 @@ class DeclarationEntryShapeTest(unittest.TestCase):
         native_dts = node_dts if node_dts is not None else self.WORKBOOK % "  getMemoryUsage(): number;\n"
         return {
             "REPO_ROOT": self.root,
+            # The fixture entry point ships one pure-JS helper.
+            "NODE_PURE_JS_FREE_FUNCTIONS": {"mergeFunctionMetadata"},
             "LEDGER_PATH": self.write("names.yaml", ledger) if ledger is not None else self.root / "absent.yaml",
             "WASM_BINDINGS_CPP": self.write("wasm.cpp", wasm_cpp if wasm_cpp is not None else self.WASM_CPP),
             "WASM_DTS": self.write(
@@ -1075,7 +1394,7 @@ class DeclarationEntryShapeTest(unittest.TestCase):
             '  .function("getZoomLevel", &W::v)\n  .function("getZoom", &W::z)\n',
         )
         sheet = (
-            "export interface Sheet {\n  readonly name: string;\n  getZoom(): number;\n  get(a1: string): Value;\n}\n"
+            "export interface Sheet {\n  readonly name: string;\n  readonly index: number;\n  getZoom(): number;\n}\n"
         )
         wasm_dts = self.WORKBOOK % "  listTables(): readonly TableEntry[];\n" + sheet + self.ENTRY % ""
         self.assertEqual(self.run_check(declaration_checks.check_dts_wasm, wasm_cpp=cpp, wasm_dts=wasm_dts,
@@ -1545,27 +1864,117 @@ class FacadeAddressTablesTest(unittest.TestCase):
 
     def test_public_names_map_to_positions(self) -> None:
         scope = self.gen.facade_scope
-        self.assertEqual(scope.cell_args(self.ledger, "js"), {"evaluateCf": [[0, 1], [2, 3]], "setValue": [[0, 1]]})
-        self.assertEqual(scope.rect_args(self.ledger, "py"), {"add_merge": [0]})
         self.assertEqual(
-            scope.ref_args(self.ledger, "py"), {"list_pivot_fields": [0, "pivot"], "remove_table": [0, "table"]}
+            scope.cell_args(self.ledger, "js"), {"Sheet.evaluateCf": [[0, 1], [2, 3]], "Sheet.setValue": [[0, 1]]}
+        )
+        self.assertEqual(scope.rect_args(self.ledger, "py"), {"Sheet.add_merge": [0]})
+        self.assertEqual(
+            scope.ref_args(self.ledger, "py"),
+            {"Sheet.list_pivot_fields": [0, "pivot"], "Sheet.remove_table": [0, "table"]},
         )
 
     def test_regions_carry_the_tables(self) -> None:
         js = self.gen.address_tables("js", self.ledger)
         self.assertIn(
-            "const CELL_ARGS = Object.freeze({\n  evaluateCf: [\n    [0, 1],\n    [2, 3],\n  ],\n  setValue: [[0, 1]],\n});\n",
+            "const CELL_ARGS = Object.freeze({\n  'Sheet.evaluateCf': [\n    [0, 1],\n    [2, 3],\n  ],\n"
+            "  'Sheet.setValue': [[0, 1]],\n});\n",
             js,
         )
-        self.assertIn("const RECT_ARGS = Object.freeze({\n  addMerge: [0],\n});\n", js)
+        self.assertIn("const RECT_ARGS = Object.freeze({\n  'Sheet.addMerge': [0],\n});\n", js)
         py = self.gen.address_tables("py", self.ledger)
-        self.assertIn('CELL_ARGS = {\n    "evaluate_cf": ((0, 1), (2, 3)),\n    "set_value": ((0, 1),),\n}\n', py)
-        self.assertIn('RECT_ARGS = {\n    "add_merge": (0,),\n}\n', py)
         self.assertIn(
-            "const REF_ARGS = Object.freeze({\n  listPivotFields: [0, 'pivot'],\n  removeTable: [0, 'table'],\n});\n",
+            'CELL_ARGS = {\n    "Sheet.evaluate_cf": ((0, 1), (2, 3)),\n    "Sheet.set_value": ((0, 1),),\n}\n', py
+        )
+        self.assertIn('RECT_ARGS = {\n    "Sheet.add_merge": (0,),\n}\n', py)
+        self.assertIn(
+            "const REF_ARGS = Object.freeze({\n  'Sheet.listPivotFields': [0, 'pivot'],\n"
+            "  'Sheet.removeTable': [0, 'table'],\n});\n",
             js,
         )
         self.assertNotIn("REF_ARGS", py)
+
+    HANDLES = {
+        "schema": 1,
+        "collections": {
+            "pivot": {"key": "index", "access": "handles", "handle_class": "Pivot", "plural": "pivots"},
+            "drawing_object": {"key": "natural", "by": "object_id", "access": "handles", "handle_class": "Drawing",
+                               "plural": "drawings"},
+            "image": {"key": "natural", "by": "object_id", "access": "handles", "handle_class": "Picture",
+                      "handle_base": "Drawing", "plural": "pictures"},
+            "chart": {"key": "natural", "by": "object_id", "access": "handles", "handle_class": "Chart",
+                      "handle_base": "Drawing", "plural": "charts"},
+        },
+        "entries": {
+            "column_width.set": {"kind": "op", "scope": "sheet", "js": "setColumnWidth", "py": "set_column_width",
+                                 "surfaces": ["wasm", "py"], "span_args": [[0, "col", "span"]]},
+            "pivot_anchor.set": {"kind": "op", "scope": "sheet", "c": "fm_sheet_set_pivot_anchor", "js": "setPivotAnchor", "py": "set_pivot_anchor",
+                                 "surfaces": ["wasm", "py"], "cell_args": [[0, 1]],
+                                 "handle": {"class": "Pivot", "supplies": ["sheet", "pivot"]}},
+            "pivot_name.get": {"kind": "op", "scope": "sheet", "c": "fm_sheet_get_pivot_name", "js": "getPivotName", "py": "get_pivot_name",
+                               "surfaces": ["wasm", "py"],
+                               "handle": {"class": "Pivot", "js": "name", "py": "name", "property": True,
+                                          "supplies": ["sheet", "pivot"]}},
+            "drawing_name.set": {"kind": "op", "scope": "sheet", "c": "fm_sheet_set_drawing_name", "js": "setDrawingName", "py": "set_drawing_name",
+                                 "surfaces": ["wasm", "py"],
+                                 "handle": {"class": ["Picture", "Chart"], "js": "rename", "py": "rename",
+                                            "supplies": ["sheet", "object_id"]}},
+            "binding.pivot_get_properties": {"kind": "op", "scope": "sheet", "surfaces": ["wasm", "py"],
+                                             "facade": "handwritten", "exception": "x",
+                                             "handle": {"class": "Pivot", "js": "getProperties",
+                                                        "py": "get_properties", "supplies": ["sheet", "pivot"]}},
+            "pivot_runtime_id.get": {"kind": "op", "scope": "sheet", "js": "getPivotRuntimeId",
+                                     "py": "get_pivot_runtime_id", "surfaces": ["wasm", "py"], "internal": True},
+        },
+    }  # fmt: skip
+
+    def test_handle_methods_are_keyed_by_class(self) -> None:
+        scope = self.gen.facade_scope
+        ledger = api_conventions.Ledger(self.HANDLES)
+        self.assertEqual(scope.cell_args(ledger, "js"), {"Pivot.setAnchor": [[0, 1]]})
+        self.assertEqual(scope.span_args(ledger, "py"), {"Sheet.set_column_width": [[0, "col", "span"]]})
+        self.assertEqual(
+            scope.handle_forwarders(ledger, "js"),
+            {
+                "Chart.rename": "setDrawingName",
+                "Picture.rename": "setDrawingName",
+                "Pivot.getProperties": None,
+                "Pivot.setAnchor": "setPivotAnchor",
+            },
+        )
+        self.assertEqual(scope.handle_properties(ledger, "py"), {"Pivot.name": "get_pivot_name"})
+        self.assertEqual(scope.methods(ledger, "sheet", "js"), ["setColumnWidth"])
+        self.assertEqual(scope.public_name(self.HANDLES["entries"]["pivot_runtime_id.get"], "js"), None)
+        self.assertEqual(scope.raw_name(self.HANDLES["entries"]["pivot_runtime_id.get"], "js"), "getPivotRuntimeId")
+        py = self.gen.address_tables("py", ledger, facade=False)
+        self.assertIn('"Pivot.set_anchor": ((0, 1),)', py)
+        self.assertNotIn("Sheet.", py)
+
+    def test_node_scope_labels_a_shared_raw_with_the_common_base(self) -> None:
+        scope = self.gen.facade_scope
+        ledger = api_conventions.Ledger(self.HANDLES)
+        self.assertEqual(
+            scope.handle_methods(ledger),
+            [
+                ("getPivotName", "Pivot.name", 2),
+                ("setDrawingName", "Drawing.rename", 2),
+                ("setPivotAnchor", "Pivot.setAnchor", 2),
+            ],
+        )
+
+    def test_node_scope_inc_declares_both_tables(self) -> None:
+        text = self.gen.node_scope_inc()
+        self.assertIn("constexpr const char* kSheetMethods[] = {\n", text)
+        self.assertIn("struct HandleMethod {\n  const char* raw;\n  const char* label;\n  int supplied;\n};\n", text)
+        self.assertIn('    {"addPivotField", "Pivot.addField", 2},\n', text)
+        self.assertIn('    {"setDrawingName", "Drawing.rename", 2},\n', text)
+        guards = _load_codegen("gen_wasm_positional_guards")
+        self.assertIn("addPivotField", guards._sheet_methods({"addPivotField", "nope"}, text))
+        self.assertEqual(guards._handle_methods({"addPivotField"}, text), {"addPivotField": ["Pivot.addField", 2]})
+        self.assertNotIn("evalFormula", guards.FREE_FUNCTION_GUARDS)
+        self.assertIn("evaluateFormula", guards.FREE_FUNCTION_GUARDS)
+
+    def test_only_node_scope_writes_the_inc_alone(self) -> None:
+        self.assertEqual([path for path, _ in self.gen.outputs("node-scope")], [self.gen.NODE_SCOPE_INC])
 
     def test_patch_keys_are_the_patch_type_and_the_getter_record(self) -> None:
         dts = (
@@ -1590,11 +1999,51 @@ class FacadeAddressTablesTest(unittest.TestCase):
             }
         )  # fmt: skip
         keys = self.gen.facade_scope.patch_keys(ledger, dts)
-        self.assertEqual(keys["setMargins"], [1, ["left", "leftStated", "right"]])
+        self.assertEqual(keys["Sheet.setMargins"], [1, ["left", "leftStated", "right"]])
         table = self.gen.patch_table(ledger, dts)
-        self.assertIn("  setMargins: [1, ['left', 'leftStated', 'right']],\n", table)
-        self.assertIn("  setWide: [\n    0,\n    [\n      'k00',\n", table)
+        self.assertIn("  'Sheet.setMargins': [1, ['left', 'leftStated', 'right']],\n", table)
+        self.assertIn("  'Sheet.setWide': [\n    0,\n    [\n      'k00',\n", table)
         self.assertTrue(all(len(line) <= 120 for line in table.splitlines()))
+
+    def test_patch_nested_keys_are_each_level_and_its_record(self) -> None:
+        dts = (
+            "export interface Font { readonly bold: boolean; readonly family: number | null; }\n"
+            "export interface BorderSide { readonly style: number; readonly color: Color | null; }\n"
+            "export interface Border { readonly left: BorderSide; readonly diagonalUp: boolean; }\n"
+            "export interface CellFormat { readonly font: Font; readonly border: Border; }\n"
+            "export interface FontPatch { readonly bold?: boolean; readonly color?: ColorInput; }\n"
+            "export interface BorderSidePatch { readonly style?: number; readonly color?: ColorInput; }\n"
+            "export interface BorderPatch { readonly left?: BorderSidePatch; readonly diagonalUp?: boolean; }\n"
+            "export interface CellFormatPatch { readonly font?: FontPatch; readonly border?: BorderPatch; }\n"
+            "export interface Sheet {\n  setCellFormat(range: CellRect | string, patch: CellFormatPatch): void;\n}\n"
+        )
+        nested = {"font": "Font", "border": "Border", "border.left": "BorderSide"}
+        ledger = api_conventions.Ledger(
+            {
+                "schema": 1,
+                "collections": {},
+                "entries": {
+                    "binding.set_cell_format": {"kind": "op", "scope": "sheet", "js": "setCellFormat",
+                                                "surfaces": ["wasm"], "patch": True, "patch_record": "CellFormat",
+                                                "patch_nested": nested},
+                },
+            }
+        )  # fmt: skip
+        keys = self.gen.facade_scope.patch_nested_keys(ledger, dts)
+        self.assertEqual(
+            keys,
+            {
+                "Sheet.setCellFormat": {
+                    "border": ["diagonalUp", "left"],
+                    "border.left": ["color", "style"],
+                    "font": ["bold", "color", "family"],
+                }
+            },
+        )
+        table = self.gen.patch_nested_table(ledger, dts)
+        self.assertIn(
+            "  'Sheet.setCellFormat': {\n    border: ['diagonalUp', 'left'],\n", table.replace("'border'", "border")
+        )
 
     def test_the_json_is_sorted_and_per_language(self) -> None:
         import json
@@ -1602,8 +2051,9 @@ class FacadeAddressTablesTest(unittest.TestCase):
         text = self.gen.address_args_json(self.ledger)
         self.assertTrue(text.endswith("\n"))
         data = json.loads(text)
-        self.assertEqual(data["js"]["cell_args"], {"evaluateCf": [[0, 1], [2, 3]], "setValue": [[0, 1]]})
-        self.assertEqual(data["py"]["rect_args"], {"add_merge": [0]})
+        self.assertEqual(data["js"]["cell_args"], {"Sheet.evaluateCf": [[0, 1], [2, 3]], "Sheet.setValue": [[0, 1]]})
+        self.assertEqual(data["py"]["rect_args"], {"Sheet.add_merge": [0]})
+        self.assertEqual(data["py"]["span_args"], {})
         self.assertEqual(text, self.gen.address_args_json(self.ledger))
         self.assertEqual(list(data), ["js", "py"])
 
@@ -1630,7 +2080,7 @@ class LedgerAddressArgsTest(unittest.TestCase):
             "cf.evaluate": {"kind": "op", "js": "evaluateCf", "cell_args": [[0, 1], [2, 3]]},
             "merge.add": {"kind": "op", "js": "addMerge", "rect_args": [0]},
             "print_area.set": {"kind": "op", "js": "setPrintArea", "rect_args": [0]},
-            "rows.insert": {"kind": "op", "js": "insertRows"},
+            "rows.insert": {"kind": "op", "js": "insertRows", "span_args": [[0, "row", "start_count"]]},
             "freeze.set": {"kind": "op", "js": "setFreeze"},
             "table.remove": {"kind": "op", "js": "removeTable", "ref_args": [0, "table"]},
             "pivot_fields.list": {"kind": "list", "js": "listPivotFields", "ref_args": [0, "pivot"]},
@@ -1656,6 +2106,43 @@ class LedgerAddressArgsTest(unittest.TestCase):
         self.assertTrue(any("pivot_fields.list" in p and "[0, 'pivot']" in p for p in problems), problems)
         self.assertTrue(any("cf.evaluate" in p and "[[0, 1], [2, 3]]" in p for p in problems), problems)
 
+    def test_a_span_shaped_op_without_span_args_is_a_leak(self) -> None:
+        validate = LedgerAddressArgsTest._validate_names_module()
+        dts = self.DTS.replace("}\n", "  setColumnWidth(first: number, last: number, width: number): void;\n}\n")
+        entries = self.entries()
+        del entries["rows.insert"]["span_args"]
+        entries["column_width.set"] = {"kind": "op", "js": "setColumnWidth"}
+        problems = validate.check_address_args(entries, dts)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(any("rows.insert" in p and "'row', 'start_count'" in p for p in problems), problems)
+        self.assertTrue(any("column_width.set" in p and "'col', 'span'" in p for p in problems), problems)
+        entries["column_width.set"]["span_args"] = [[0, "col", "span"]]
+        entries["rows.insert"]["span_args"] = [[0, "row", "start_count"]]
+        self.assertEqual(validate.check_address_args(entries, dts), [])
+
+    def test_a_handle_op_is_read_from_its_class_in_the_handle_frame(self) -> None:
+        validate = LedgerAddressArgsTest._validate_names_module()
+        dts = self.DTS + (
+            "export interface Pivot {\n"
+            "  setAnchor(row: number, col: number): void;\n"
+            "  addField(spec: PivotFieldInput): number;\n"
+            "}\n"
+        )
+        entries = self.entries()
+        handle = {"class": "Pivot", "supplies": ["sheet", "pivot"]}
+        entries["pivot_anchor.set"] = {"kind": "op", "js": "setPivotAnchor", "cell_args": [[0, 1]], "handle": handle}
+        entries["pivot_field.add"] = {"kind": "op", "js": "addPivotField", "handle": {**handle, "js": "addField"}}
+        problems = validate.check_address_args(entries, dts)
+        self.assertTrue(any("pivot_anchor.set" in p and "interface Pivot" in p for p in problems), problems)
+        entries["pivot_anchor.set"]["handle"] = {**handle, "js": "setAnchor"}
+        self.assertEqual(validate.check_address_args(entries, dts), [])
+        entries["pivot_anchor.set"]["cell_args"] = [[1, 2]]
+        self.assertEqual(len(validate.check_address_args(entries, dts)), 1)
+
+    @staticmethod
+    def _validate_names_module():
+        return LedgerRenameChainTest._validate_names()
+
     def test_schema_shapes(self) -> None:
         validate = LedgerRenameChainTest._validate_names()
 
@@ -1676,6 +2163,16 @@ class LedgerAddressArgsTest(unittest.TestCase):
         self.assertTrue(problems(patch=False, patch_record="X"))
         self.assertTrue(problems(patch=True, patch_record="none"))
         self.assertTrue(problems(patch=True, patch_record="X", patch_reason="y"))
+        self.assertEqual(problems(span_args=[[0, "col", "span"]]), [])
+        self.assertEqual(problems(span_args=[[0, "row", "start_count"]]), [])
+        self.assertTrue(problems(span_args=[[0, "sheet", "span"]]))
+        self.assertTrue(problems(span_args=[[0, "row", "range"]]))
+        self.assertTrue(problems(span_args=[0, "row", "span"]))
+        nested = {"font": "Font", "border": "Border", "border.left": "BorderSide"}
+        self.assertEqual(problems(patch=True, patch_record="CellFormat", patch_nested=nested), [])
+        self.assertTrue(problems(patch_nested=nested))
+        self.assertTrue(problems(patch=True, patch_record="CellFormat", patch_nested={"border.left": "BorderSide"}))
+        self.assertTrue(problems(patch=True, patch_record="CellFormat", patch_nested={"font": 1}))
 
 
 if __name__ == "__main__":

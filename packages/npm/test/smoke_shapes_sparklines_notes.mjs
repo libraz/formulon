@@ -60,8 +60,10 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   const mod = await load();
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.sheet(0).listShapes().length, 0);
-  const rect = wb.sheet(0).addShape(box(mod));
-  const line = wb.sheet(0).addShape({
+  const rectShape = wb.sheet(0).addShape(box(mod));
+  const rect = rectShape.objectId;
+  assert.equal(wb.sheet(0).shape(rect), rectShape);
+  const lineShape = wb.sheet(0).addShape({
     presetGeometry: 'line',
     anchorKind: mod.AnchorKind.OneCell,
     fromRow: 10,
@@ -72,10 +74,14 @@ test('shapes insert, list, update, remove and round-trip', async () => {
     lineRgb: 0x00ff00,
     lineWidthEmu: 19050,
   });
+  const line = lineShape.objectId;
   assert.notEqual(rect, line);
 
   const loaded = roundTrip(mod, wb);
-  const shapes = loaded.sheet(0).listShapes();
+  const shapes = loaded
+    .sheet(0)
+    .listShapes()
+    .map((h) => h.getProperties());
   assert.equal(shapes.length, 2);
   assert.equal(shapes[0].objectId, rect);
   assert.equal(shapes[0].kind, mod.DrawingObjectKind.Shape);
@@ -97,9 +103,9 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(shapes[1].lineWidthEmu, 19050);
 
   // An update changes the named fields only, and an anchor moves with a row insert.
-  loaded.sheet(0).updateShape(rect, { name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
+  loaded.sheet(0).shape(rect).update({ name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
   loaded.sheet(0).insertRows(0, 3);
-  const moved = loaded.sheet(0).listShapes()[0];
+  const moved = loaded.sheet(0).listShapes()[0].getProperties();
   assert.equal(moved.name, 'Renamed');
   assert.equal(moved.hidden, true);
   assert.equal(moved.fillKind, mod.ShapePaint.None);
@@ -108,7 +114,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(moved.fromRow, 4);
   assert.equal(moved.toRow, 8);
 
-  loaded.sheet(0).removeShape(rect);
+  loaded.sheet(0).removeDrawing(rect);
   assert.deepEqual(
     loaded
       .sheet(0)
@@ -130,8 +136,8 @@ test('shape arguments are validated', async () => {
   expectFailure(() => wb.sheet(0).addShape({ ...box(mod), presetGeometry: 'a"/>' }));
   expectFailure(() => wb.sheet(5).addShape(box(mod)));
   assert.equal(wb.sheet(0).listShapes().length, 0);
-  expectFailure(() => wb.sheet(0).updateShape(99, { name: 'x' }));
-  expectFailure(() => wb.sheet(0).removeShape(99));
+  expectFailure(() => wb.sheet(0).shape(99).update({ name: 'x' }));
+  expectFailure(() => wb.sheet(0).removeDrawing(99));
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fromRow: -1 }), RangeError);
   release(wb);
 });
@@ -189,9 +195,11 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[1].location, 'F4');
   assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[1].formula, 'Sheet1!A4:D4');
 
-  // Update rewrites the modelled fields and keeps the sparklines.
+  // Update rewrites the modelled fields; without a `sparklines` key it keeps the sparklines.
+  const { sparklines: _stale, ...firstFields } = first;
+  void _stale;
   loaded.sheet(0).updateSparklineGroup(0, {
-    ...first,
+    ...firstFields,
     type: mod.SparklineType.Stacked,
     high: true,
     dateAxis: true,
@@ -204,7 +212,11 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(updated.dateAxisRef, 'Sheet1!A4:D4');
   assert.equal(updated.sparklines.length, 2);
 
-  loaded.sheet(0).setSparklineGroupSparklines(0, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  // A `sparklines` key replaces them.
+  loaded.sheet(0).updateSparklineGroup(0, {
+    ...loaded.sheet(0).listSparklineGroups()[0],
+    sparklines: [{ formula: 'Sheet1!B1:B5', location: 'H1' }],
+  });
   assert.deepEqual(loaded.sheet(0).listSparklineGroups()[0].sparklines, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
   loaded.sheet(0).removeSparklineGroup(0);
   assert.equal(loaded.sheet(0).listSparklineGroups().length, 1);
@@ -226,7 +238,7 @@ test('sparkline group arguments are validated', async () => {
   expectFailure(() => wb.sheet(4).addSparklineGroup({ sparklines: good }));
   assert.equal(wb.sheet(0).listSparklineGroups().length, 0);
   expectFailure(() => wb.sheet(0).updateSparklineGroup(0, {}));
-  expectFailure(() => wb.sheet(0).setSparklineGroupSparklines(0, good));
+  expectFailure(() => wb.sheet(0).updateSparklineGroup(0, { sparklines: good }));
   expectFailure(() => wb.sheet(0).removeSparklineGroup(0));
   release(wb);
 });

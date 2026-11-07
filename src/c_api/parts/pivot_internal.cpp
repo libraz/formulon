@@ -212,7 +212,10 @@ fm_status_t PivotEdit::commit() {
     return 0;
   }
   if (projected.error().code == formulon::FormulonErrorCode::kPreconditionFailed) {
+    // The snapshot is a clone, whose runtime id is zero; the restored table is still the same pivot.
+    const std::uint32_t runtime_id = table_.runtime_id().value();
     table_ = std::move(*snapshot_);
+    table_.runtime_id().assign(runtime_id);
     return set_last_error(projected.error());
   }
   table_.set_projection_pending(true);

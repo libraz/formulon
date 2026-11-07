@@ -97,22 +97,25 @@ test('threaded mention and image integer fields reject before C mutation', async
     assert.equal(wb.sheet(0).listThreadedComments().length, beforeComments);
 
     assert.throws(
-      () => wb.sheet(0).addImage(new Uint8Array([1, 2, 3]), { anchor: { rowOffsetEmu: Number.NaN } }),
+      () => wb.sheet(0).addPicture(new Uint8Array([1, 2, 3]), { anchor: { rowOffsetEmu: Number.NaN } }),
       RangeError,
     );
-    assert.equal(wb.sheet(0).listDrawingObjects().length, 0);
+    assert.equal(wb.sheet(0).listDrawings().length, 0);
 
     // The offsets fit the binding's int64 range; only the image bytes are refused, by the host.
     assert.throws(
       () =>
-        wb.sheet(0).addImage(new Uint8Array([1, 2, 3]), {
+        wb.sheet(0).addPicture(new Uint8Array([1, 2, 3]), {
           anchor: { rowOffsetEmu: -(2 ** 63), colOffsetEmu: 2 ** 63 - 1024 },
         }),
       (e) => e.name === 'FormulonError',
     );
 
-    assert.throws(() => wb.sheet(0).addImage(new Uint8Array([1, 2, 3]), { anchor: { widthEmu: 2 ** 63 } }), RangeError);
-    assert.equal(wb.sheet(0).listDrawingObjects().length, 0);
+    assert.throws(
+      () => wb.sheet(0).addPicture(new Uint8Array([1, 2, 3]), { anchor: { widthEmu: 2 ** 63 } }),
+      RangeError,
+    );
+    assert.equal(wb.sheet(0).listDrawings().length, 0);
   } finally {
     wb.dispose();
   }

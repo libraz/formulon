@@ -144,6 +144,9 @@ def sheet_functions() -> Tuple[List[CFunction], Dict[str, str], List[str], Poiso
         name = entry.get("c")
         if not isinstance(name, str):
             continue
+        # A dropped C function is gone from the header by design.
+        if isinstance(entry.get("drop"), dict) and entry["drop"].get("c") == name:
+            continue
         if name not in by_name:
             problems.append(f"gen_sheet_index_calls: `{key}` names {name}, which formulon_c.h does not declare")
             continue

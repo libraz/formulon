@@ -62,7 +62,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
     sortOrder: mod.SlicerSortOrder.Descending,
     crossFilter: mod.SlicerCrossFilter.None,
   });
-  assert.equal(added, 2);
+  assert.equal(added.objectId, 2);
 
   const bytes = saveBytes(wb);
   const cache = readZipEntry(bytes, 'xl/slicerCaches/slicerCache1.xml');
@@ -75,8 +75,8 @@ test('slicers add, list, update, remove and round-trip', async () => {
   const loaded = mod.Workbook.load(bytes);
   const slicers = loaded.sheet(0).listSlicers();
   assert.equal(slicers.length, 1);
-  const s = slicers[0];
-  assert.equal(s.objectId, added);
+  assert.equal(slicers[0].objectId, added.objectId);
+  const s = slicers[0].getProperties();
   assert.equal(s.name, 'Product');
   assert.equal(s.caption, 'Pick a product');
   assert.equal(s.cacheName, 'Slicer_Product');
@@ -91,21 +91,26 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.deepEqual([s.fromRow, s.fromCol, s.toRow, s.toCol], [4, 3, 14, 5]);
 
   // An update changes the named fields only; the frame follows row edits.
-  loaded.sheet(0).updateSlicer(added, { caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 });
-  const found = loaded.sheet(0).getSlicer(added);
+  loaded
+    .sheet(0)
+    .slicer(added.objectId)
+    .update({ caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 });
+  const found = loaded.sheet(0).slicer(added.objectId).getProperties();
   assert.equal(found.caption, 'Renamed');
   loaded.sheet(0).insertRows(0, 3);
-  const moved = loaded.sheet(0).listSlicers()[0];
+  const moved = loaded.sheet(0).listSlicers()[0].getProperties();
   assert.equal(moved.caption, 'Renamed');
   assert.equal(moved.style, null);
   assert.equal(moved.columnCount, 1);
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
   assert.deepEqual([moved.fromRow, moved.toRow], [3, 11]);
 
-  loaded.sheet(0).removeSlicer(added);
+  loaded.sheet(0).removeDrawing(added.objectId);
   assert.equal(loaded.sheet(0).listSlicers().length, 0);
-  const gone = loaded.sheet(0).getSlicer(added);
-  assert.equal(gone, null);
+  assert.throws(
+    () => loaded.sheet(0).slicer(added.objectId),
+    (e) => isFormulonError(e, mod.StatusCode.NotFound),
+  );
   const emptied = saveBytes(loaded);
   assert.equal(readZipEntry(emptied, 'xl/slicers/slicer1.xml'), null);
   assert.equal(readZipEntry(emptied, 'xl/slicerCaches/slicerCache1.xml'), null);
@@ -146,10 +151,17 @@ test('slicer arguments are validated', async () => {
   assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, sortOrder: 5 }), isFormulonError);
   assert.equal(wb.sheet(0).listSlicers().length, 0);
   const added = wb.sheet(0).addSlicer(0, 0, anchor);
-  assert.throws(() => wb.sheet(0).updateSlicer(added + 1, { caption: 'x' }), isFormulonError);
-  assert.throws(() => wb.sheet(0).updateSlicer(added, { name: 'x' }), isFormulonError);
-  assert.throws(() => wb.sheet(0).removeSlicer(added + 1), isFormulonError);
-  assert.throws(() => wb.sheet(5).getSlicer(added), isFormulonError);
+  assert.throws(
+    () =>
+      wb
+        .sheet(0)
+        .slicer(added.objectId + 1)
+        .update({ caption: 'x' }),
+    isFormulonError,
+  );
+  assert.throws(() => wb.sheet(0).slicer(added).update({ name: 'x' }), isFormulonError);
+  assert.throws(() => wb.sheet(0).removeDrawing(added.objectId + 1), isFormulonError);
+  assert.throws(() => wb.sheet(5).slicer(added).getProperties(), isFormulonError);
   assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, fromRow: -1 }), RangeError);
   release(wb);
 });

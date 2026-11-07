@@ -25,6 +25,9 @@ from .api_conventions import (
     _enum_family,
     _struct_field_comments,
     c_verb,
+    entry_handle,
+    handle_classes,
+    handle_name,
     strip_record_suffix,
 )
 from .api_conventions_bindings import (
@@ -40,6 +43,7 @@ from .api_conventions_bindings import (
     _field,
     _in_tree,
     _key,
+    _lookup,
     _optional_lookups,
     _owned,
     _pascal,
@@ -47,6 +51,7 @@ from .api_conventions_bindings import (
     _top_union,
     _tree_c,
     _violation,
+    handle_in_tree,
     surfaces,
 )
 from .surface_files import NPM_COMMON_MJS, PYTHON_SHEET, REPO_ROOT
@@ -210,10 +215,24 @@ def _structure_ops(ctx: Context) -> List[Tuple[str, dict]]:
     return out
 
 
+def _structure_name(ctx: Context, entry: dict, field: str) -> Optional[str]:
+    """`Class.method` under which the facade tables list a structure op: its handle method, else its `Workbook`
+    / `Sheet` one."""
+    if entry_handle(entry) is not None:
+        name = handle_name(entry, field, ctx.ledger.collections)
+        classes = handle_classes(entry)
+        return f"{classes[0]}.{name}" if name and classes else None
+    name = entry.get(field)
+    if not isinstance(name, str):
+        return None
+    return f"{SHEET_CLASS if entry.get('scope') == 'sheet' else WORKBOOK_CLASS}.{name}"
+
+
 @_owned("R23.track")
 def _rule_structure_tracking(ctx: Context) -> Iterable[Violation]:
     """Every op that adds, removes or reorders sheets is in `SHEET_STRUCTURE_OPS` of the generated facade
-    tables, in `packages/npm/common.mjs` (both npm packages) and `packages/python/formulon/sheet.py`.
+    tables, as `Class.method`, in `packages/npm/common.mjs` (both npm packages) and
+    `packages/python/formulon/sheet.py`.
     """
     sources = {
         "wasm": ("js", ctx.repo_root / NPM_COMMON_MJS.relative_to(REPO_ROOT)),
@@ -224,7 +243,7 @@ def _rule_structure_tracking(ctx: Context) -> Iterable[Violation]:
         listed = facade_table(text, language, "SHEET_STRUCTURE_OPS") or set()
         field = _field(surface)
         for key, entry in _structure_ops(ctx):
-            name = entry.get(field)
+            name = _structure_name(ctx, entry, field)
             listed_surfaces = _entry_surfaces(entry)
             if not isinstance(name, str) or (listed_surfaces is not None and surface not in listed_surfaces):
                 continue
@@ -270,11 +289,21 @@ def _tree_names(ctx: Context, keys: Sequence[str], field: str, pool: Dict[str, o
     return out
 
 
+def _list_on_handle(ctx: Context, surface: str, field: str, wanted: str) -> bool:
+    """The `kind: list` entry named `wanted` is published on its handle class, and declared there."""
+    for entry in ctx.ledger.entries.values():
+        if isinstance(entry, dict) and entry.get("kind") == "list" and entry.get(field) == wanted:
+            if handle_in_tree(ctx, surface, entry):
+                return True
+    return False
+
+
 @_owned("R23.list")
 def _rule_collection_access(ctx: Context) -> Iterable[Violation]:
     """An index-keyed collection's binding shape follows its ledger `access:`. `handles` and `list`: only
     `list<Plural>()`, no count and no element getter; `indexed`: the element getter and `list<Plural>()`, no
     count; `property`: `get<Plural>()` and `set<Plural>()`, no count and no element getter; `exempt`: unchecked.
+    A list or element getter the ledger publishes on a handle class (`pivot.listFields()`) is looked up there.
     A surface none of the collection's ops lists is not judged.
     """
     for surface in BINDING_SURFACES:
@@ -301,7 +330,8 @@ def _rule_collection_access(ctx: Context) -> Iterable[Violation]:
             else:
                 want = [f"list_{plural}" if field == "py" else f"list{pascal}"]
                 forbidden = _tree_names(ctx, counts, field, pool)
-                if not _tree_names(ctx, getters, field, pool):
+                on_handle = [k for k in getters if handle_in_tree(ctx, surface, ctx.ledger.entry(k))]
+                if not _tree_names(ctx, getters, field, pool) and not on_handle:
                     yield _violation(
                         ctx,
                         "R23.list",
@@ -311,7 +341,7 @@ def _rule_collection_access(ctx: Context) -> Iterable[Violation]:
                         f"`{name}` is indexed; it exposes the element getter by index",
                     )
             for wanted in want:
-                if wanted not in pool:
+                if wanted not in pool and not _list_on_handle(ctx, surface, field, wanted):
                     yield _violation(
                         ctx,
                         "R23.list",
@@ -455,6 +485,17 @@ def _alias_alternatives(decls: Dict[str, object], text: str, seen: Tuple[str, ..
     return out
 
 
+def _address_positions(entry: dict) -> Set[int]:
+    """Argument positions the ledger names as cells, rectangles or spans of an op."""
+    out: Set[int] = set()
+    for pair in entry.get("cell_args") or []:
+        out.update(int(i) for i in pair)
+    out.update(int(i) for i in entry.get("rect_args") or [])
+    for span in entry.get("span_args") or []:
+        out.update((int(span[0]), int(span[0]) + 1))
+    return out
+
+
 def _accessor_pairs(pool: Dict[str, object], js: bool) -> Iterator[Tuple[str, str]]:
     for name in sorted(pool):
         if js and name.startswith("get") and "set" + name[3:] in pool:
@@ -466,7 +507,9 @@ def _accessor_pairs(pool: Dict[str, object], js: bool) -> Iterator[Tuple[str, st
 @_owned("R18.js")
 def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
     """When `get<X>` returns a record `R` and `set<X>` exists, `set<X>` takes one value argument typed `R`,
-    `<R>Patch` or `<R>Input` (an input's fields are `R`'s). No public argument is `Partial<...>`.
+    `<R>Patch` or `<R>Input` (an input's fields are `R`'s). The setter's address arguments are not values: those
+    the getter shares, and those the ledger names in `cell_args` / `rect_args` / `span_args` (a setter may address
+    a range where the getter reads a cell). No public argument is `Partial<...>`.
     """
     for surface in JS_SURFACES:
         pool = _public_pool(ctx, surface)
@@ -477,12 +520,15 @@ def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
             if record is None:
                 continue
             shared = {p for p, _ in pool[getter].params}
+            addressed = _address_positions(_lookup(ctx, surface, setter)[1])
             # A `sheet` argument typed by the record (through an alias such as `SheetRef`) is the value, not an
             # address.
             values = [
                 (p, t)
-                for p, t in pool[setter].params
-                if p not in shared and (not _is_coordinate(p, True) or record in _alias_alternatives(decls, t))
+                for i, (p, t) in enumerate(pool[setter].params)
+                if p not in shared
+                and i not in addressed
+                and (not _is_coordinate(p, True) or record in _alias_alternatives(decls, t))
             ]
             accepted = {record, f"{record}Patch", f"{record}Input", f"Patch<{record}>"}
             kinds = _strip_null(values[0][1], True) if len(values) == 1 else []

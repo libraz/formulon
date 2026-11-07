@@ -677,26 +677,32 @@ void JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
   succeeded(fm_sheet_add_threaded_comment(handle_, sheet, &c));
 }
 
-void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, const std::string& text,
-                                     emscripten::val mentions) {
+void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, emscripten::val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
   JsNarrowNumericReader reader("updateThreadedComment");
+  fm_threaded_comment_patch_t out{};
+  out.done = -1;
+  std::string text;
+  out.text = reader.optional_string(patch, "text", text, "patch.text");
   MentionStore store;
-  pull_mentions(mentions, store, reader);
+  const emscripten::val mentions = reader.value(patch, "mentions", "patch.mentions");
+  if (js_value_present(mentions)) {
+    out.mentions_engaged = 1;
+    pull_mentions(mentions, store, reader);
+  }
+  const emscripten::val done = reader.value(patch, "done", "patch.done");
+  if (js_value_present(done)) {
+    out.done = reader.boolean_value(done, false) ? 1 : 0;
+  }
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_threaded_comment(handle_, sheet, id.c_str(), text.c_str(),
-                                             store.items.empty() ? nullptr : store.items.data(),
-                                             static_cast<uint32_t>(store.items.size())));
-}
-
-void JsWorkbook::setThreadResolved(uint32_t sheet, const std::string& threadId, bool done) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_thread_resolved(handle_, sheet, threadId.c_str(), done ? 1 : 0)
-                               : kBindingInvalidHandle);
+  out.mentions = store.items.empty() ? nullptr : store.items.data();
+  out.mention_count = static_cast<uint32_t>(store.items.size());
+  succeeded(fm_sheet_update_threaded_comment(handle_, sheet, id.c_str(), &out));
 }
 
 void JsWorkbook::removeThreadedComment(uint32_t sheet, const std::string& id) {

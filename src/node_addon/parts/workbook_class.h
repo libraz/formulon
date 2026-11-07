@@ -197,7 +197,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetHeaderFooterXml(const Napi::CallbackInfo& info);
   Napi::Value GetSheetSheetPrXml(const Napi::CallbackInfo& info);
   Napi::Value SetSheetSheetPrXml(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetFitToPage(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPrintArea(const Napi::CallbackInfo& info);
   Napi::Value SetSheetPrintArea(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPrintTitles(const Napi::CallbackInfo& info);
@@ -215,6 +214,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetHeaderFooter(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPageSetup(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPageMargins(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetPrintOptions(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetHeaderFooter(const Napi::CallbackInfo& info);
 
   // Row / column structural edits.
   Napi::Value InsertRows(const Napi::CallbackInfo& info);
@@ -235,6 +236,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RemoveDefinedName(const Napi::CallbackInfo& info);
   Napi::Value TableCount(const Napi::CallbackInfo& info);
   Napi::Value TableAt(const Napi::CallbackInfo& info);
+  Napi::Value TableRuntimeId(const Napi::CallbackInfo& info);
+  Napi::Value ResolveTableRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value CreateTable(const Napi::CallbackInfo& info);
   Napi::Value UpdateTable(const Napi::CallbackInfo& info);
   Napi::Value RemoveTable(const Napi::CallbackInfo& info);
@@ -288,6 +291,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// from a package alike. `pivotCacheId` returns the cache id.
   Napi::Value PivotCacheId(const Napi::CallbackInfo& info);
   Napi::Value PivotName(const Napi::CallbackInfo& info);
+  Napi::Value PivotRuntimeId(const Napi::CallbackInfo& info);
+  Napi::Value ResolvePivotRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value PivotGetGrandTotals(const Napi::CallbackInfo& info);
   Napi::Value PivotGetStyleInfo(const Napi::CallbackInfo& info);
   Napi::Value PivotRowFieldOrder(const Napi::CallbackInfo& info);
@@ -538,7 +543,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetThreadedComments(const Napi::CallbackInfo& info);
   Napi::Value AddThreadedComment(const Napi::CallbackInfo& info);
   Napi::Value EditThreadedComment(const Napi::CallbackInfo& info);
-  Napi::Value SetThreadResolved(const Napi::CallbackInfo& info);
   Napi::Value RemoveThreadedComment(const Napi::CallbackInfo& info);
   Napi::Value GetThreadedComment(const Napi::CallbackInfo& info);
   Napi::Value GetPersons(const Napi::CallbackInfo& info);
@@ -577,7 +581,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetSparklineGroup(const Napi::CallbackInfo& info);
   Napi::Value AddSparklineGroup(const Napi::CallbackInfo& info);
   Napi::Value UpdateSparklineGroup(const Napi::CallbackInfo& info);
-  Napi::Value SetSparklineGroupSparklines(const Napi::CallbackInfo& info);
   Napi::Value RemoveSparklineGroup(const Napi::CallbackInfo& info);
 
   // Charts: typed reads, resolved data, creation and typed edits.

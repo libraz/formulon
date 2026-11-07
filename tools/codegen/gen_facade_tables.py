@@ -1,35 +1,47 @@
 #!/usr/bin/env python3
-"""Generate the `Workbook` / `Sheet` facade tables from ``tools/api/names.yaml``.
+"""Generate the facade tables from ``tools/api/names.yaml``.
 
-Outputs (read through ``facade_scope.py``, never edited by hand):
+Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
+``Pivot.addField``) unless it is a per-class name list. Outputs (read through
+``facade_scope.py``, never edited by hand):
 
 * ``packages/npm/common.mjs``: the ``// <facade-tables>`` region, which both npm
   packages share: ``WORKBOOK_METHODS`` and ``SHEET_METHODS`` (the public names
-  the facade forwards or implements), ``SHEET_STRUCTURE_OPS`` (the ops after
-  which the facade re-reads the sheet list), ``LIST_FAMILIES``
-  (``{listName: [countName, getName]}``, the lists the facade assembles from a
+  the facade forwards or implements), ``SHEET_STRUCTURE_OPS`` (the methods
+  after which the facade re-reads the sheet list), ``LIST_FAMILIES``
+  (``{method: [countName, getName]}``, the lists the facade assembles from a
   raw count and element getter), ``HANDWRITTEN`` (ops the ledger marks
-  ``facade: handwritten``), ``CELL_ARGS`` (``{method: [[row, col], ...]}``, the
-  argument positions of each one-cell ``(row, col)`` pair, the receiver
-  excluded) and ``RECT_ARGS`` (``{method: [position, ...]}``, the ``CellRect``
-  arguments), both from the ledger's ``cell_args`` / ``rect_args``, and
-  ``REF_ARGS`` (``{method: [position, kind]}``, the ``*Ref`` argument) from its
-  ``ref_args``; and ``PATCH_KEYS`` (``{method: [position, [key, ...]]}``) of
-  the ``patch: true`` ops: the keys of the patch type and of the getter's
-  record in src/wasm/formulon.d.ts.
-* ``packages/python/formulon/sheet.py``: the same tables but ``REF_ARGS`` in its
-  ``# <facade-tables>`` region, with the Python names. ``--check`` skips the
-  file while it has no region or an empty one; ``--write`` fills an empty one.
-* ``src/node_addon/generated/facade_scope.inc``: the sorted raw names of the
-  sheet-scope methods, as string literals for a C++ array initialiser; the
-  addon words its argument guards for these as ``Sheet.<name>``.
-* ``tools/api/address_args.json``: ``CELL_ARGS`` and ``RECT_ARGS`` per language
-  (``{"js": {"cell_args": ..., "rect_args": ...}, "py": ...}``), sorted, for
-  the binding tests to read.
+  ``facade: handwritten``), ``HANDLE_FORWARDERS`` (``{method: rawName}``, null
+  for a handwritten one) and ``HANDLE_PROPERTIES`` (``{property: rawGetter}``)
+  of the handle classes, ``CELL_ARGS`` (``{method: [[row, col], ...]}``),
+  ``RECT_ARGS`` (``{method: [position, ...]}``), ``SPAN_ARGS``
+  (``{method: [[position, axis, form], ...]}``) and ``REF_ARGS``
+  (``{method: [position, kind]}``) from the ledger's ``cell_args`` /
+  ``rect_args`` / ``span_args`` / ``ref_args``, positions as the class method
+  sees them; ``PATCH_KEYS`` (``{method: [position, [key, ...]]}``) of the
+  ``patch: true`` ops and ``PATCH_NESTED_KEYS`` (``{method: {path: [key,
+  ...]}}``) of the ``patch_nested`` ones: the keys of the patch type and of
+  the getter's record in src/wasm/formulon.d.ts.
+* ``packages/python/formulon/sheet.py``: the ``Workbook`` / ``Sheet`` tables but
+  ``REF_ARGS`` and the patch tables in its ``# <facade-tables>`` region, with
+  the Python names. ``--check`` skips the file while it has no region or an
+  empty one; ``--write`` fills an empty one.
+* ``packages/python/formulon/_handle_tables.py``: the same tables for the handle
+  classes, the whole file generated.
+* ``src/node_addon/generated/facade_scope.inc``: ``kSheetMethods``, the sorted
+  raw names of the sheet-scope methods (the addon words their argument guards
+  as ``Sheet.<name>``), and ``kHandleMethods``, a ``HandleMethod`` per raw
+  method a handle class calls: its ``Class.method`` label and the count of
+  leading raw arguments the handle supplies. It reads the ledger alone.
+* ``tools/api/address_args.json``: ``cell_args``, ``rect_args`` and
+  ``span_args`` per language, sorted, for the binding tests to read.
 
 Modes:
   --write   rewrite the outputs
   --check   exit 1 when an output differs from what would be generated
+  --only node-scope
+            limit either mode to ``facade_scope.inc``, which needs neither the
+            d.ts nor the facade sources
 """
 
 from __future__ import annotations
@@ -48,6 +60,7 @@ import facade_scope  # noqa: E402
 
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
 PYTHON_SHEET = REPO_ROOT / "packages/python/formulon/sheet.py"
+PYTHON_HANDLE_TABLES = REPO_ROOT / "packages/python/formulon/_handle_tables.py"
 NODE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 ADDRESS_ARGS_JSON = REPO_ROOT / "tools/api/address_args.json"
 
@@ -56,6 +69,8 @@ _REGION = {
     "py": re.compile(r"(# <facade-tables>[^\n]*\n)(.*?)(# </facade-tables>)", re.S),
 }
 _INDENT = "  "
+_FACADE_CLASSES = ("Workbook.", "Sheet.")
+ONLY_TARGETS = ("node-scope",)
 
 
 class GenError(ValueError):
@@ -79,39 +94,79 @@ def _js_list(name: str, values: Sequence[str]) -> str:
     return f"const {name} = Object.freeze([\n{body}]);\n"
 
 
-def _py_positions(value: list) -> str:
-    items = [f"({p[0]}, {p[1]})" if isinstance(p, list) else str(p) for p in value]
-    return "(" + ", ".join(items) + ("," if len(items) == 1 else "") + ")"
+def _py_value(value: object) -> str:
+    """A table value as a Python literal: lists become tuples, strings take double quotes."""
+    if isinstance(value, list):
+        items = [_py_value(v) for v in value]
+        return "(" + ", ".join(items) + ("," if len(items) == 1 else "") + ")"
+    if isinstance(value, str):
+        return json.dumps(value)
+    if value is None:
+        return "None"
+    return str(value)
+
+
+def _js_value(value: object) -> str:
+    return json.dumps(value).replace('"', "'")
 
 
 def _js_positions(value: object) -> str:
     """A position entry as the formatter lays it out: nested pairs one per line when there are several."""
     if isinstance(value, list) and len(value) > 1 and all(isinstance(v, list) for v in value):
-        rows = "".join(f"{_INDENT * 2}{json.dumps(v)},\n" for v in value)
+        rows = "".join(f"{_INDENT * 2}{_js_value(v)},\n" for v in value)
         return f"[\n{rows}{_INDENT}]"
-    return json.dumps(value)
+    return _js_value(value)
 
 
-def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) -> str:
-    """The `CELL_ARGS` and `RECT_ARGS` tables of `language`'s facade region, and in JS `REF_ARGS`, which the
+def _js_key(name: str) -> str:
+    return f"'{name}'"
+
+
+def _py_dict(name: str, body: str) -> str:
+    """`name = {...}` as the formatter lays it out: an empty table stays on one line."""
+    return f"{name} = {{\n{body}}}\n" if body else f"{name} = {{}}\n"
+
+
+def _js_frozen(name: str, body: str) -> str:
+    """`const name = Object.freeze({...});` as the formatter lays it out: an empty table stays on one line."""
+    return f"const {name} = Object.freeze({{\n{body}}});\n" if body else f"const {name} = Object.freeze({{}});\n"
+
+
+_JS_IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
+
+
+def _js_bare_key(name: str) -> str:
+    """An object key as the formatter writes it: unquoted when it is an identifier."""
+    return name if _JS_IDENTIFIER.match(name) else f"'{name}'"
+
+
+def _select(entries: Dict[str, object], facade: Optional[bool]) -> Dict[str, object]:
+    """The rows of `Workbook` / `Sheet` (facade True), of the handle classes (False), or all (None)."""
+    if facade is None:
+        return entries
+    return {k: v for k, v in entries.items() if k.startswith(_FACADE_CLASSES) == facade}
+
+
+def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None, facade: Optional[bool] = None) -> str:
+    """The `CELL_ARGS`, `RECT_ARGS` and `SPAN_ARGS` tables of `language`, and in JS `REF_ARGS`, which the
     generic wrapper reads (Python methods resolve their reference themselves)."""
     ledger = ledger or facade_scope.load()
     tables = {
         "CELL_ARGS": facade_scope.cell_args(ledger, language),
         "RECT_ARGS": facade_scope.rect_args(ledger, language),
+        "SPAN_ARGS": facade_scope.span_args(ledger, language),
     }
+    if language == "js":
+        tables["REF_ARGS"] = facade_scope.ref_args(ledger, language)
     out = []
     for table, entries in tables.items():
+        entries = _select(entries, facade)
         if language == "js":
-            body = "".join(f"{_INDENT}{name}: {_js_positions(value)},\n" for name, value in entries.items())
-            out.append(f"const {table} = Object.freeze({{\n{body}}});\n")
+            body = "".join(f"{_INDENT}{_js_key(name)}: {_js_positions(value)},\n" for name, value in entries.items())
+            out.append(_js_frozen(table, body))
         else:
-            body = "".join(f'    "{name}": {_py_positions(value)},\n' for name, value in entries.items())
-            out.append(f"{table} = {{\n{body}}}\n")
-    if language == "js":
-        refs = facade_scope.ref_args(ledger, language)
-        body = "".join(f"{_INDENT}{name}: [{pos}, '{kind}'],\n" for name, (pos, kind) in refs.items())
-        out.append(f"const REF_ARGS = Object.freeze({{\n{body}}});\n")
+            body = "".join(f'    "{name}": {_py_value(value)},\n' for name, value in entries.items())
+            out.append(_py_dict(table, body))
     return "".join(out)
 
 
@@ -122,6 +177,7 @@ def _js_patch_entry(name: str, position: int, keys: Sequence[str]) -> str:
     """One `PATCH_KEYS` entry as the formatter lays it out at its line width."""
     quoted = [f"'{k}'" for k in keys]
     inline = f"[{', '.join(quoted)}]"
+    name = _js_key(name)
     one_line = f"{_INDENT}{name}: [{position}, {inline}],"
     if len(one_line) <= _LINE_WIDTH:
         return one_line + "\n"
@@ -139,8 +195,44 @@ def patch_table(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str]
     return f"const PATCH_KEYS = Object.freeze({{\n{body}}});\n"
 
 
+def _js_key_list(indent: str, name: str, keys: Sequence[str]) -> str:
+    """`name: [...]` at `indent`, one key per line once the inline form passes the line width."""
+    quoted = [f"'{k}'" for k in keys]
+    one_line = f"{indent}{name}: [{', '.join(quoted)}],"
+    if len(one_line) <= _LINE_WIDTH:
+        return one_line + "\n"
+    rows = "".join(f"{indent}{_INDENT}{q},\n" for q in quoted)
+    return f"{indent}{name}: [\n{rows}{indent}],\n"
+
+
+def patch_nested_table(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """The JS `PATCH_NESTED_KEYS` table: for each nested patch op, the keys each path into its patch accepts."""
+    entries = facade_scope.patch_nested_keys(ledger or facade_scope.load(), dts)
+    body = []
+    for name, paths in entries.items():
+        rows = "".join(_js_key_list(_INDENT * 2, _js_bare_key(path), keys) for path, keys in paths.items())
+        body.append(f"{_INDENT}{_js_key(name)}: {{\n{rows}{_INDENT}}},\n")
+    return f"const PATCH_NESTED_KEYS = Object.freeze({{\n{''.join(body)}}});\n"
+
+
+def handle_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) -> str:
+    """`HANDLE_FORWARDERS` and `HANDLE_PROPERTIES` of `language`."""
+    ledger = ledger or facade_scope.load()
+    forwarders = facade_scope.handle_forwarders(ledger, language)
+    properties = facade_scope.handle_properties(ledger, language)
+    if language == "js":
+        body = "".join(f"{_INDENT}{_js_key(k)}: {_js_key(v) if v else 'null'},\n" for k, v in forwarders.items())
+        out = f"const HANDLE_FORWARDERS = Object.freeze({{\n{body}}});\n"
+        body = "".join(f"{_INDENT}{_js_key(k)}: {_js_key(v)},\n" for k, v in properties.items())
+        return out + f"const HANDLE_PROPERTIES = Object.freeze({{\n{body}}});\n"
+    body = "".join(f'    "{k}": {_py_value(v)},\n' for k, v in forwarders.items())
+    out = _py_dict("HANDLE_FORWARDERS", body)
+    body = "".join(f'    "{k}": {_py_value(v)},\n' for k, v in properties.items())
+    return out + _py_dict("HANDLE_PROPERTIES", body)
+
+
 def address_args_json(ledger: Optional[facade_scope.Ledger] = None) -> str:
-    """`tools/api/address_args.json`: both tables per language, keys sorted, one method per line."""
+    """`tools/api/address_args.json`: the position tables per language, keys sorted, one method per line."""
     ledger = ledger or facade_scope.load()
     languages = []
     for language in sorted(facade_scope.LANGUAGES):
@@ -148,6 +240,7 @@ def address_args_json(ledger: Optional[facade_scope.Ledger] = None) -> str:
         for table, entries in (
             ("cell_args", facade_scope.cell_args(ledger, language)),
             ("rect_args", facade_scope.rect_args(ledger, language)),
+            ("span_args", facade_scope.span_args(ledger, language)),
         ):
             rows = ",\n".join(f"      {json.dumps(name)}: {json.dumps(value)}" for name, value in entries.items())
             tables.append(f'    "{table}": {{\n{rows}\n    }}' if rows else f'    "{table}": {{}}')
@@ -155,16 +248,26 @@ def address_args_json(ledger: Optional[facade_scope.Ledger] = None) -> str:
     return "{\n" + ",\n".join(languages) + "\n}\n"
 
 
+def _list_families(language: str, families: Dict[str, Tuple[str, str]]) -> str:
+    if language == "js":
+        body = "".join(f"{_INDENT}{_js_key(k)}: ['{c}', '{g}'],\n" for k, (c, g) in families.items())
+        return f"const LIST_FAMILIES = Object.freeze({{\n{body}}});\n"
+    body = "".join(f'    "{k}": ("{c}", "{g}"),\n' for k, (c, g) in families.items())
+    return _py_dict("LIST_FAMILIES", body)
+
+
 def js_region() -> str:
+    ledger = facade_scope.load()
     names, families = _tables("js")
     out = [_js_list("WORKBOOK_METHODS", names["WORKBOOK_METHODS"])]
     out.append(_js_list("SHEET_METHODS", names["SHEET_METHODS"]))
     out.append(_js_list("SHEET_STRUCTURE_OPS", names["SHEET_STRUCTURE_OPS"]))
-    body = "".join(f"{_INDENT}{k}: ['{c}', '{g}'],\n" for k, (c, g) in families.items())
-    out.append(f"const LIST_FAMILIES = Object.freeze({{\n{body}}});\n")
+    out.append(_list_families("js", families))
     out.append(_js_list("HANDWRITTEN", names["HANDWRITTEN"]))
-    out.append(address_tables("js"))
-    out.append(patch_table())
+    out.append(handle_tables("js", ledger))
+    out.append(address_tables("js", ledger))
+    out.append(patch_table(ledger))
+    out.append(patch_nested_table(ledger))
     return "".join(out)
 
 
@@ -174,24 +277,62 @@ def _py_tuple(name: str, values: Sequence[str]) -> str:
 
 
 def py_region() -> str:
+    """The `Workbook` / `Sheet` tables of sheet.py's region."""
+    ledger = facade_scope.load()
     names, families = _tables("py")
     out = [_py_tuple("WORKBOOK_METHODS", names["WORKBOOK_METHODS"])]
     out.append(_py_tuple("SHEET_METHODS", names["SHEET_METHODS"]))
     out.append(_py_tuple("SHEET_STRUCTURE_OPS", names["SHEET_STRUCTURE_OPS"]))
-    body = "".join(f'    "{k}": ("{c}", "{g}"),\n' for k, (c, g) in families.items())
-    out.append(f"LIST_FAMILIES = {{\n{body}}}\n")
+    out.append(_list_families("py", _select(families, True)))
     out.append(_py_tuple("HANDWRITTEN", names["HANDWRITTEN"]))
-    out.append(address_tables("py"))
+    out.append(address_tables("py", ledger, facade=True))
+    return "".join(out)
+
+
+def py_handle_tables() -> str:
+    """The whole of `_handle_tables.py`: the handle-class tables with the Python names."""
+    ledger = facade_scope.load()
+    _names, families = _tables("py")
+    head = (
+        '"""Facade tables of the handle classes, keyed `Class.method`.\n\n'
+        "Generated by tools/codegen/gen_facade_tables.py from tools/api/names.yaml; do not edit.\n"
+        '"""\n\n'
+    )
+    out = [head, handle_tables("py", ledger)]
+    out.append(_list_families("py", _select(families, False)))
+    out.append(address_tables("py", ledger, facade=False))
     return "".join(out)
 
 
 def node_scope_inc() -> str:
-    names = facade_scope.raw_sheet_methods(facade_scope.load(), "js")
-    head = (
-        "// Generated by tools/codegen/gen_facade_tables.py from tools/api/names.yaml; do not edit.\n"
-        "// Raw method names whose first argument is the sheet index the `Sheet` facade supplies, sorted.\n"
-    )
-    return head + "".join(f'"{n}",\n' for n in names)
+    """`facade_scope.inc`: the sheet-scope raw methods and the raw methods of the handle classes."""
+    ledger = facade_scope.load()
+    names = facade_scope.raw_sheet_methods(ledger, "js")
+    handles = facade_scope.handle_methods(ledger)
+    out = [
+        "// Generated by tools/codegen/gen_facade_tables.py from tools/api/names.yaml; do not edit.\n",
+        "\n",
+        "// Raw method names whose first argument is the sheet index the `Sheet` facade supplies, sorted.\n",
+        "constexpr const char* kSheetMethods[] = {\n",
+    ]
+    out += [f'    "{n}",\n' for n in names]
+    out += [
+        "};\n",
+        "\n",
+        "/// A raw method a handle class calls: the `Class.method` label its argument errors carry, and the count\n",
+        "/// of leading raw arguments the handle supplies.\n",
+        "struct HandleMethod {\n",
+        "  const char* raw;\n",
+        "  const char* label;\n",
+        "  int supplied;\n",
+        "};\n",
+        "\n",
+        "// Sorted by raw name.\n",
+        "constexpr HandleMethod kHandleMethods[] = {\n",
+    ]
+    out += [f'    {{"{raw}", "{label}", {supplied}}},\n' for raw, label, supplied in handles]
+    out.append("};\n")
+    return "".join(out)
 
 
 def _splice(text: str, language: str, region: str, path: Path) -> str:
@@ -206,8 +347,10 @@ def _empty_region(text: Optional[str], language: str) -> bool:
     return match is not None and not match.group(2).strip()
 
 
-def outputs() -> List[Tuple[Path, Optional[str]]]:
+def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
     """`(path, generated text)` per output; the text is None for a skipped output."""
+    if only == "node-scope":
+        return [(NODE_SCOPE_INC, node_scope_inc())]
     result: List[Tuple[Path, Optional[str]]] = []
     common = NPM_COMMON.read_text(encoding="utf-8")
     result.append((NPM_COMMON, _splice(common, "js", js_region(), NPM_COMMON)))
@@ -216,6 +359,7 @@ def outputs() -> List[Tuple[Path, Optional[str]]]:
         result.append((PYTHON_SHEET, _splice(sheet, "py", py_region(), PYTHON_SHEET)))
     else:
         result.append((PYTHON_SHEET, None))
+    result.append((PYTHON_HANDLE_TABLES, py_handle_tables()))
     result.append((NODE_SCOPE_INC, node_scope_inc()))
     result.append((ADDRESS_ARGS_JSON, address_args_json()))
     return result
@@ -226,10 +370,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="rewrite the outputs")
     mode.add_argument("--check", action="store_true", help="exit 1 when an output is not what would be generated")
+    parser.add_argument("--only", choices=ONLY_TARGETS, help="limit the run to one output")
     args = parser.parse_args(argv)
     try:
-        generated = outputs()
-    except GenError as exc:
+        generated = outputs(args.only)
+    except (GenError, ValueError) as exc:
         print(f"gen_facade_tables: {exc}", file=sys.stderr)
         return 1
     stale = []

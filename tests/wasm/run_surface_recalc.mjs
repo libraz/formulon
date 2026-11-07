@@ -21,26 +21,26 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     assert.equal(Module.getErrorDisplayName, undefined);
   });
 
-  test('evalFormula(=SUM(1,2,3)) returns NUMBER 6', () => {
-    const r = Module.evalFormula('=SUM(1,2,3)');
+  test('evaluateFormula(=SUM(1,2,3)) returns NUMBER 6', () => {
+    const r = Module.evaluateFormula('=SUM(1,2,3)');
     assert.equal(r.kind, VAL.NUMBER);
     assert.equal(r.number, 6);
   });
 
-  test('evalFormula(=IF(TRUE,1,2)) returns NUMBER 1', () => {
-    const r = Module.evalFormula('=IF(TRUE,1,2)');
+  test('evaluateFormula(=IF(TRUE,1,2)) returns NUMBER 1', () => {
+    const r = Module.evaluateFormula('=IF(TRUE,1,2)');
     assert.equal(r.kind, VAL.NUMBER);
     assert.equal(r.number, 1);
   });
 
-  test('evalFormula evaluates intersection read-only and returns #NULL!', () => {
-    const r = Module.evalFormula('=A1 B1');
+  test('evaluateFormula evaluates intersection read-only and returns #NULL!', () => {
+    const r = Module.evaluateFormula('=A1 B1');
     assert.equal(r.kind, VAL.ERROR);
     assert.equal(r.errorCode, 0); // ErrorCode::Null / #NULL!
   });
 
-  test('evalFormula(=CONCAT) returns TEXT "hello world"', () => {
-    const r = Module.evalFormula('=CONCAT("hello"," ","world")');
+  test('evaluateFormula(=CONCAT) returns TEXT "hello world"', () => {
+    const r = Module.evaluateFormula('=CONCAT("hello"," ","world")');
     assert.equal(r.kind, VAL.TEXT);
     assert.equal(r.text, 'hello world');
   });
@@ -55,7 +55,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       ['>=', true],
     ];
     for (const [operator, expected] of operators) {
-      const r = Module.evalFormula(`=7.1${operator}7.1000000000000005`);
+      const r = Module.evaluateFormula(`=7.1${operator}7.1000000000000005`);
       assert.equal(r.kind, VAL.BOOL, `operator=${operator}`);
       assert.equal(r.boolean, expected, `operator=${operator}`);
     }

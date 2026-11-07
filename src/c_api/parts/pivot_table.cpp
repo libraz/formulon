@@ -29,7 +29,6 @@
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
-using formulon::c_api::parts::check_num_fmt_id_text;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
@@ -37,9 +36,12 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_agg_from_fm;
 using formulon::c_api::parts::pivot_count;
+using formulon::c_api::parts::pivot_num_fmt_code;
+using formulon::c_api::parts::pivot_num_fmt_id_text;
 using formulon::c_api::parts::pivot_show_as_from_fm;
 using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::project_pivot;
@@ -463,15 +465,16 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* 
 namespace {
 
 // Materialises a `fm_pivot_data_field_spec_t` into a `PivotDataField`.
-// The spec is already validated by `validate(*spec, api)` and
-// `check_num_fmt_id_text` at the entry point. `field_index` and a set
+// The spec is already validated by `validate(*spec, api)` at the entry
+// point; `number_format` is its format code already converted to the
+// numFmtId text the model stores. `field_index` and a set
 // `show_as_base_field` must index `table.fields()`, else the binding error
 // is set and the status returned. A NULL or empty name is the one Excel
 // gives a new data field, `exclude` being the entry the spec replaces.
 // `kPreconditionFailed` for a function the cache's calculated items exclude.
 fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::pivot::PivotTable& table,
-                            const fm_pivot_data_field_spec_t& spec, std::optional<std::size_t> exclude,
-                            formulon::pivot::PivotDataField* out) {
+                            const fm_pivot_data_field_spec_t& spec, std::string number_format,
+                            std::optional<std::size_t> exclude, formulon::pivot::PivotDataField* out) {
   if (auto rc = check_index(spec.field_index, table.fields().size(), "field_index"); rc != 0) {
     return rc;
   }
@@ -501,7 +504,7 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
         workbook.excel_profile());
   }
   out->field_index = spec.field_index;
-  out->number_format = spec.number_format != nullptr ? spec.number_format : "";
+  out->number_format = std::move(number_format);
   out->show_as = pivot_show_as_from_fm(static_cast<fm_pivot_show_values_as_t>(spec.show_as));
   if (spec.show_as_base_field >= 0) {
     out->show_as_base_field = static_cast<std::uint32_t>(spec.show_as_base_field);
@@ -531,15 +534,16 @@ extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::siz
   if (auto rc = validate(*spec); rc != 0) {
     return rc;
   }
-  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format); rc != 0) {
-    return rc;
-  }
   formulon::pivot::PivotTable* table = nullptr;
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
+  std::string number_format;
+  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), spec->number_format, &number_format); rc != 0) {
+    return rc;
+  }
   formulon::pivot::PivotDataField df;
-  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, std::nullopt, &df); rc != 0) {
+  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, std::move(number_format), std::nullopt, &df); rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -577,9 +581,6 @@ extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::siz
   if (auto rc = validate(*spec); rc != 0) {
     return rc;
   }
-  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format); rc != 0) {
-    return rc;
-  }
   formulon::pivot::PivotTable* table = nullptr;
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
@@ -587,8 +588,13 @@ extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::siz
   if (auto rc = check_index(data_field_index, table->data_fields().size(), "data_field_index"); rc != 0) {
     return rc;
   }
+  std::string number_format;
+  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), spec->number_format, &number_format); rc != 0) {
+    return rc;
+  }
   formulon::pivot::PivotDataField df;
-  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, data_field_index, &df); rc != 0) {
+  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, std::move(number_format), data_field_index, &df);
+      rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -660,6 +666,42 @@ extern "C" fm_status_t fm_sheet_get_pivot_name(const fm_workbook_t* wb, std::siz
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_pivot_runtime_id(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                     std::size_t pivot_index, std::uint32_t* out) {
+  clear_last_error();
+  const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
+    return rc;
+  }
+  formulon::RuntimeId& id = table->runtime_id();
+  if (id.value() == 0U) {
+    id.assign(wb->workbook().allocate_runtime_id());
+  }
+  *out = id.value();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_resolve_pivot_runtime_id(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                         std::uint32_t id, std::size_t* out_pivot_index) {
+  clear_last_error();
+  if (wb == nullptr || out_pivot_index == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  const auto& pivots = wb->workbook().sheet(sheet_index).pivot_tables();
+  // Zero is the id of a pivot nobody has asked about, so it names none.
+  for (std::size_t i = 0; id != 0U && i < pivots.size(); ++i) {
+    if (pivots[i] != nullptr && pivots[i]->runtime_id().value() == id) {
+      *out_pivot_index = i;
+      return 0;
+    }
+  }
+  return not_found("no pivot on the sheet has that runtime id",
+                   "sheet_index=" + std::to_string(sheet_index) + " id=" + std::to_string(id));
+}
+
 extern "C" fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, std::size_t sheet_index,
                                                        std::size_t pivot_index, std::int32_t* out_rows,
                                                        std::int32_t* out_cols) {
@@ -711,7 +753,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field(const fm_workbook_t* wb, st
   result.name = df.name.c_str();
   result.field_index = df.field_index;
   result.aggregation = static_cast<fm_pivot_aggregation_t>(df.aggregation);
-  result.number_format = df.number_format.c_str();
+  result.number_format = pivot_num_fmt_code(wb->workbook(), df.number_format);
   result.show_as = static_cast<fm_pivot_show_values_as_t>(df.show_as);
   result.show_as_base_field =
       df.show_as_base_field.has_value() ? static_cast<std::int32_t>(*df.show_as_base_field) : -1;

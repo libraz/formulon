@@ -14,6 +14,7 @@ from .surface_files import (
     CAPI_EXPORTS,
     CAPI_HEADER,
     PYTHON_C_BINDING,
+    PYTHON_HANDLE_MODULES,
     PYTHON_PKG_DIR,
     PYTHON_SHEET,
     PYTHON_STRUCTS,
@@ -780,7 +781,7 @@ def check_python_inline_structs() -> List[str]:
                 f"which is where the binding's {struct_name} size lives"
             )
 
-    modules = [path for path in (PYTHON_WORKBOOK, PYTHON_SHEET) if path.is_file()]
+    modules = [path for path in (PYTHON_WORKBOOK, PYTHON_SHEET, *PYTHON_HANDLE_MODULES) if path.is_file()]
     trees = [(path, ast.parse(_read(path), filename=str(path))) for path in modules]
     for qualnames, struct_name in _PYTHON_INLINE_DECODERS:
         found = [

@@ -253,6 +253,73 @@ export const ColorResolution = Object.freeze({
 });
 export const ImageFormat = Object.freeze({ Unknown: 0, Png: 1, Jpeg: 2, Gif: 3, Bmp: 4 });
 export const ColorKind = Object.freeze({ None: 0, Rgb: 1, Theme: 2, Indexed: 3, Auto: 4 });
+export const HorizontalAlign = Object.freeze({
+  General: 0,
+  Left: 1,
+  Center: 2,
+  Right: 3,
+  Fill: 4,
+  Justify: 5,
+  CenterContinuous: 6,
+  Distributed: 7,
+});
+export const VerticalAlign = Object.freeze({ Top: 0, Center: 1, Bottom: 2, Justify: 3, Distributed: 4 });
+export const ReadingOrder = Object.freeze({ Context: 0, LeftToRight: 1, RightToLeft: 2 });
+export const UnderlineStyle = Object.freeze({
+  None: 0,
+  Single: 1,
+  Double: 2,
+  SingleAccounting: 3,
+  DoubleAccounting: 4,
+});
+export const FontVerticalAlign = Object.freeze({ Baseline: 0, Superscript: 1, Subscript: 2 });
+export const FontScheme = Object.freeze({ None: 0, Major: 1, Minor: 2 });
+export const FontFamily = Object.freeze({
+  NotApplicable: 0,
+  Roman: 1,
+  Swiss: 2,
+  Modern: 3,
+  Script: 4,
+  Decorative: 5,
+});
+export const FillPattern = Object.freeze({
+  None: 0,
+  Solid: 1,
+  MediumGray: 2,
+  DarkGray: 3,
+  LightGray: 4,
+  DarkHorizontal: 5,
+  DarkVertical: 6,
+  DarkDown: 7,
+  DarkUp: 8,
+  DarkGrid: 9,
+  DarkTrellis: 10,
+  LightHorizontal: 11,
+  LightVertical: 12,
+  LightDown: 13,
+  LightUp: 14,
+  LightGrid: 15,
+  LightTrellis: 16,
+  Gray125: 17,
+  Gray0625: 18,
+});
+export const GradientType = Object.freeze({ Linear: 0, Path: 1 });
+export const BorderStyle = Object.freeze({
+  None: 0,
+  Thin: 1,
+  Medium: 2,
+  Dashed: 3,
+  Dotted: 4,
+  Thick: 5,
+  Double: 6,
+  Hair: 7,
+  MediumDashed: 8,
+  DashDot: 9,
+  MediumDashDot: 10,
+  DashDotDot: 11,
+  MediumDashDotDot: 12,
+  SlantDashDot: 13,
+});
 export const FunctionAvailability = Object.freeze({
   Implemented: 0,
   ImplementedUnverified: 1,
@@ -498,6 +565,33 @@ export function mergeFunctionMetadata(base, entry, locale) {
 }
 
 /**
+ * Maps a `Value` to its native JS value, as Python's `Value.to_python()` does:
+ * Blank to `null`, Number to a number, Bool to a boolean and Text to a string;
+ * an `ErrorValue`, `ArrayValue`, `RefValue` or `LambdaValue` is returned as it
+ * is.
+ *
+ * @param {object} value A `Value`.
+ * @returns {number | string | boolean | null | object} The native value.
+ * @throws {TypeError} When `value` is not a `Value`.
+ */
+export function toNative(value) {
+  if (!isObject(value)) throw new TypeError('toNative argument 1 must be a Value');
+  switch (value.kind) {
+    case ValueKind.Blank:
+      return null;
+    case ValueKind.Array:
+    case ValueKind.Ref:
+    case ValueKind.Lambda:
+      return value;
+  }
+  const [field, type] = SCALAR_VALUE_FIELDS[value.kind] ?? [];
+  if (field === undefined || typeof value[field] !== type) {
+    throw new TypeError('toNative argument 1 must be a Value');
+  }
+  return value.kind === ValueKind.Error ? value : value[field];
+}
+
+/**
  * The error every host-side failure throws: an engine call that did not
  * complete, or a call on a disposed workbook. Failures are told apart by
  * `code`, a `StatusCode`; there are no subclasses.
@@ -592,12 +686,23 @@ export const FORMULON_MEMBERS = Object.freeze([
   'CfDataBarDirection',
   'CfDataBarAxisPosition',
   'ColorKind',
+  'HorizontalAlign',
+  'VerticalAlign',
+  'ReadingOrder',
+  'UnderlineStyle',
+  'FontVerticalAlign',
+  'FontScheme',
+  'FontFamily',
+  'FillPattern',
+  'GradientType',
+  'BorderStyle',
   'FunctionAvailability',
   'PIVOT_SHOW_AS_BASE_PREVIOUS',
   'PIVOT_SHOW_AS_BASE_NEXT',
   'PIVOT_VALUES_FIELD',
   'mergeFunctionMetadata',
-  'evalFormula',
+  'toNative',
+  'evaluateFormula',
   'getVersion',
   'getStatusName',
   'setLogMinLevel',
@@ -619,7 +724,7 @@ export const FORMULON_MEMBERS = Object.freeze([
 // other member comes from this module. The runtime's raw `Workbook` class is
 // not one of them: `buildFormulon` wraps it with `makeFacade`.
 const RUNTIME_MEMBERS = new Set([
-  'evalFormula',
+  'evaluateFormula',
   'getVersion',
   'getStatusName',
   'setLogMinLevel',
@@ -694,23 +799,12 @@ const WORKBOOK_METHODS = Object.freeze([
   'addNumFmt',
   'addPerson',
   'addPivotCache',
-  'addPivotCacheCalculatedField',
-  'addPivotCacheCalculatedItem',
-  'addPivotCacheField',
-  'addPivotCacheFieldSharedItem',
-  'addPivotCacheRecord',
   'addSheet',
   'addTable',
-  'applyTableAutoFilter',
-  'clearPivotCacheFieldSharedItems',
-  'clearPivotCacheFields',
-  'clearPivotCacheRecords',
-  'clearTableAutoFilter',
   'clearTheme',
   'copySheet',
   'dispose',
   'disposed',
-  'evaluateTableAutoFilter',
   'formatReference',
   'formatValue',
   'getActiveSheet',
@@ -735,11 +829,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'getPassthrough',
   'getPerson',
   'getPinnedNow',
-  'getPivotCacheOptions',
-  'getPivotCacheRecordCount',
-  'getPivotCacheWorksheetSource',
   'getRefMode',
-  'getTableAutoFilter',
   'getTableStyle',
   'getTableStyleDefaults',
   'getThemeColors',
@@ -758,16 +848,12 @@ const WORKBOOK_METHODS = Object.freeze([
   'listFonts',
   'listPassthroughs',
   'listPeople',
-  'listPivotCacheCalculatedItems',
-  'listPivotCacheFieldSharedItems',
-  'listPivotCacheFields',
   'listPivotCaches',
   'listSheets',
   'listTableStyles',
   'listTables',
-  'movePivotCacheCalculatedItem',
-  'moveSheet',
   'parseReference',
+  'pivotCache',
   'recalc',
   'recalcDataTables',
   'recalcParallel',
@@ -775,14 +861,9 @@ const WORKBOOK_METHODS = Object.freeze([
   'removeDefinedName',
   'removePerson',
   'removePivotCache',
-  'removePivotCacheCalculatedField',
-  'removePivotCacheCalculatedItem',
   'removeSheet',
   'removeTable',
-  'removeTableAutoFilter',
   'removeTableStyle',
-  'renameSheet',
-  'renameTableColumn',
   'resolveColor',
   'save',
   'saveWithDiagnostics',
@@ -800,14 +881,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'setIterative',
   'setIterativeProgress',
   'setPinnedNow',
-  'setPivotCacheCalculatedFieldFormula',
-  'setPivotCacheCalculatedItemFormula',
-  'setPivotCacheOptions',
-  'setPivotCacheRecordValue',
-  'setPivotCacheWorksheetSource',
   'setRefMode',
-  'setTableAutoFilter',
-  'setTableColumnTotals',
   'setTableStyle',
   'setTableStyleDefaults',
   'setThemeColors',
@@ -815,25 +889,18 @@ const WORKBOOK_METHODS = Object.freeze([
   'setThemeScriptFont',
   'setWorkbookProtection',
   'sheet',
-  'updateTable',
+  'table',
 ]);
 const SHEET_METHODS = Object.freeze([
   'addCfRule',
   'addChart',
-  'addChartSeries',
   'addColumnBreak',
   'addDataTable',
   'addHyperlink',
   'addHyperlinkRange',
-  'addImage',
   'addMerge',
+  'addPicture',
   'addPivot',
-  'addPivotDataField',
-  'addPivotField',
-  'addPivotFieldItem',
-  'addPivotFieldSharedItem',
-  'addPivotFieldSubtotalFn',
-  'addPivotFilter',
   'addProtectedRange',
   'addRowBreak',
   'addShape',
@@ -842,6 +909,7 @@ const SHEET_METHODS = Object.freeze([
   'addThreadedComment',
   'addValidation',
   'applyAutoFilter',
+  'chart',
   'clearAutoFilter',
   'clearBreaks',
   'clearCellXfIndex',
@@ -850,12 +918,6 @@ const SHEET_METHODS = Object.freeze([
   'clearColumnWidth',
   'clearHyperlinks',
   'clearMerges',
-  'clearPivotDataFields',
-  'clearPivotFieldDateGroup',
-  'clearPivotFieldItems',
-  'clearPivotFieldSubtotalFns',
-  'clearPivotFields',
-  'clearPivotFilters',
   'clearRowHeight',
   'clearRowStyle',
   'clearValidations',
@@ -863,6 +925,7 @@ const SHEET_METHODS = Object.freeze([
   'convertColumnPtToChars',
   'deleteColumns',
   'deleteRows',
+  'drawing',
   'evaluateAutoFilter',
   'evaluateCfFormula',
   'evaluateCfRange',
@@ -871,6 +934,7 @@ const SHEET_METHODS = Object.freeze([
   'getArrayFormula',
   'getAutoFilter',
   'getAutoFilterXml',
+  'getCellFormat',
   'getCellPhonetic',
   'getCellPhoneticProperties',
   'getCellPhoneticRuns',
@@ -878,23 +942,19 @@ const SHEET_METHODS = Object.freeze([
   'getCellShowPhonetic',
   'getCellXfIndex',
   'getCellsInRange',
-  'getChart',
-  'getChartData',
-  'getChartPreview',
   'getColumnWidthPt',
   'getComment',
   'getCommentVisible',
   'getDataTable',
   'getDependents',
   'getDisplayText',
-  'getDrawingObject',
   'getEffectiveStyle',
   'getFormatDefaults',
   'getFormula',
   'getFormulaR1C1',
+  'getHeaderFooter',
   'getHeaderFooterXml',
   'getHyperlink',
-  'getImage',
   'getInvalidCells',
   'getLambdaText',
   'getMergesInRange',
@@ -903,29 +963,17 @@ const SHEET_METHODS = Object.freeze([
   'getPageSetup',
   'getPageSetupXml',
   'getPagination',
-  'getPivotCacheId',
-  'getPivotColumnFieldOrder',
-  'getPivotDataFieldDefaultName',
-  'getPivotFieldItem',
-  'getPivotGrandTotals',
-  'getPivotLayout',
-  'getPivotName',
-  'getPivotOptions',
-  'getPivotReportLayout',
-  'getPivotRowFieldOrder',
-  'getPivotStyleInfo',
   'getPrecedents',
   'getPrintArea',
+  'getPrintOptions',
   'getPrintOptionsXml',
   'getPrintTitles',
   'getRangeStyleBases',
   'getRangeStyleBasesExcluding',
   'getRowHeightPt',
   'getSelection',
-  'getShape',
   'getSheetPrXml',
   'getSheetProtection',
-  'getSlicer',
   'getSpillInfo',
   'getThreadedComment',
   'getValue',
@@ -934,19 +982,16 @@ const SHEET_METHODS = Object.freeze([
   'getWidthModel',
   'insertColumns',
   'insertRows',
-  'isPivotProjectionPending',
   'listCells',
   'listCfRules',
+  'listCharts',
   'listColumnBreaks',
   'listColumnOverrides',
   'listComments',
-  'listDrawingObjects',
+  'listDrawings',
   'listHyperlinks',
   'listMerges',
-  'listPivotDataFields',
-  'listPivotFieldItems',
-  'listPivotFields',
-  'listPivotFilters',
+  'listPictures',
   'listPivots',
   'listProtectedRanges',
   'listRowBreaks',
@@ -956,24 +1001,21 @@ const SHEET_METHODS = Object.freeze([
   'listSparklineGroups',
   'listThreadedComments',
   'listValidations',
-  'projectPivot',
+  'picture',
+  'pivot',
   'recalcViewport',
   'remapRangeStyle',
   'removeAutoFilter',
   'removeCfRule',
-  'removeChartSeries',
   'removeColumnBreak',
   'removeComment',
   'removeDataTable',
-  'removeDrawingObject',
+  'removeDrawing',
   'removeHyperlink',
   'removeMerge',
   'removePivot',
-  'removePivotFilter',
   'removeProtectedRange',
   'removeRowBreak',
-  'removeShape',
-  'removeSlicer',
   'removeSparklineGroup',
   'removeThreadedComment',
   'removeValidation',
@@ -984,21 +1026,12 @@ const SHEET_METHODS = Object.freeze([
   'setAutoFilterXml',
   'setBlank',
   'setBool',
+  'setCellFormat',
   'setCellPhonetic',
   'setCellPhoneticProperties',
   'setCellPhoneticRuns',
   'setCellShowPhonetic',
   'setCellXfIndex',
-  'setChartAxis',
-  'setChartDisplay',
-  'setChartFilter',
-  'setChartLegend',
-  'setChartPlot',
-  'setChartPoint',
-  'setChartSeries',
-  'setChartSource',
-  'setChartTitle',
-  'setChartType',
   'setColumnCollapsed',
   'setColumnHidden',
   'setColumnOutline',
@@ -1006,11 +1039,7 @@ const SHEET_METHODS = Object.freeze([
   'setColumnWidth',
   'setComment',
   'setCommentVisible',
-  'setDrawingAnchor',
-  'setDrawingName',
-  'setDrawingZOrder',
   'setError',
-  'setFitToPage',
   'setFormatDefaults',
   'setFormula',
   'setHeaderFooter',
@@ -1020,19 +1049,6 @@ const SHEET_METHODS = Object.freeze([
   'setPageMarginsXml',
   'setPageSetup',
   'setPageSetupXml',
-  'setPivotAnchor',
-  'setPivotColumnFieldOrder',
-  'setPivotDataField',
-  'setPivotFieldAxis',
-  'setPivotFieldDateGroup',
-  'setPivotFieldShowDetail',
-  'setPivotFieldSort',
-  'setPivotGrandTotals',
-  'setPivotName',
-  'setPivotOptions',
-  'setPivotReportLayout',
-  'setPivotRowFieldOrder',
-  'setPivotStyleInfo',
   'setPrintArea',
   'setPrintOptions',
   'setPrintOptionsXml',
@@ -1047,289 +1063,310 @@ const SHEET_METHODS = Object.freeze([
   'setSelection',
   'setSheetPrXml',
   'setSheetProtection',
-  'setSparklineGroupSparklines',
   'setText',
-  'setThreadResolved',
   'setValue',
   'setValues',
   'setView',
-  'showPivotDetails',
-  'snapshotDrawing',
+  'shape',
+  'slicer',
   'snapshotRangeStyle',
-  'updatePivotField',
-  'updatePivotItem',
   'updateProtectedRange',
-  'updateShape',
-  'updateSlicer',
   'updateSparklineGroup',
   'updateThreadedComment',
   'validateValue',
 ]);
 const SHEET_STRUCTURE_OPS = Object.freeze([
-  'addSheet',
-  'copySheet',
-  'moveSheet',
-  'removeSheet',
-  'renameSheet',
-  'showPivotDetails',
+  'Pivot.showDetails',
+  'Sheet.move',
+  'Sheet.rename',
+  'Workbook.addSheet',
+  'Workbook.copySheet',
+  'Workbook.removeSheet',
 ]);
 const LIST_FAMILIES = Object.freeze({
-  listBorders: ['getBorderCount', 'getBorder'],
-  listCellStyleXfs: ['getCellStyleXfCount', 'getCellStyleXf'],
-  listCellXfs: ['getCellXfCount', 'getCellXf'],
-  listCfRules: ['getCfRuleCount', 'getCfRule'],
-  listDxfs: ['getDxfCount', 'getDxf'],
-  listExternalLinks: ['getExternalLinkCount', 'getExternalLink'],
-  listFills: ['getFillCount', 'getFill'],
-  listFonts: ['getFontCount', 'getFont'],
-  listPivotCacheCalculatedItems: ['getPivotCacheCalculatedItemCount', 'getPivotCacheCalculatedItem'],
-  listPivotDataFields: ['getPivotDataFieldCount', 'getPivotDataField'],
-  listPivotFieldItems: ['getPivotFieldItemCount', 'getPivotFieldItem'],
-  listPivotFields: ['getPivotFieldCount', 'getPivotField'],
-  listPivotFilters: ['getPivotFilterCount', 'getPivotFilter'],
-  listProtectedRanges: ['getProtectedRangeCount', 'getProtectedRange'],
-  listSparklineGroups: ['getSparklineGroupCount', 'getSparklineGroup'],
-  listTables: ['getTableCount', 'getTable'],
-  listValidations: ['getValidationCount', 'getValidation'],
+  'Pivot.listDataFields': ['getPivotDataFieldCount', 'getPivotDataField'],
+  'Pivot.listFieldItems': ['getPivotFieldItemCount', 'getPivotFieldItem'],
+  'Pivot.listFields': ['getPivotFieldCount', 'getPivotField'],
+  'Pivot.listFilters': ['getPivotFilterCount', 'getPivotFilter'],
+  'PivotCache.listCalculatedItems': ['getPivotCacheCalculatedItemCount', 'getPivotCacheCalculatedItem'],
+  'Sheet.listCfRules': ['getCfRuleCount', 'getCfRule'],
+  'Sheet.listProtectedRanges': ['getProtectedRangeCount', 'getProtectedRange'],
+  'Sheet.listSparklineGroups': ['getSparklineGroupCount', 'getSparklineGroup'],
+  'Sheet.listValidations': ['getValidationCount', 'getValidation'],
+  'Workbook.listBorders': ['getBorderCount', 'getBorder'],
+  'Workbook.listCellStyleXfs': ['getCellStyleXfCount', 'getCellStyleXf'],
+  'Workbook.listCellXfs': ['getCellXfCount', 'getCellXf'],
+  'Workbook.listDxfs': ['getDxfCount', 'getDxf'],
+  'Workbook.listExternalLinks': ['getExternalLinkCount', 'getExternalLink'],
+  'Workbook.listFills': ['getFillCount', 'getFill'],
+  'Workbook.listFonts': ['getFontCount', 'getFont'],
 });
 const HANDWRITTEN = Object.freeze([
   'addHyperlink',
   'addHyperlinkRange',
-  'addPivotCacheFieldSharedItem',
+  'addPicture',
   'addSheet',
+  'chart',
   'copySheet',
+  'drawing',
   'getActiveSheet',
+  'getCellFormat',
   'getCellPhoneticRuns',
   'getFormula',
   'getThemeColors',
   'getThemeFonts',
   'getValues',
   'listCells',
-  'listPivotCacheFieldSharedItems',
-  'listPivotCacheFields',
+  'listCharts',
+  'listDrawings',
+  'listPictures',
+  'listPivotCaches',
   'listPivots',
+  'listShapes',
   'listSheets',
-  'moveSheet',
+  'listSlicers',
+  'listTables',
+  'picture',
+  'pivot',
+  'pivotCache',
+  'removeDrawing',
   'removeSheet',
-  'renameSheet',
   'setActiveSheet',
   'setArrayFormula',
-  'setChartSource',
+  'setCellFormat',
   'setComment',
   'setFormula',
   'setPinnedNow',
-  'setPivotCacheRecordValue',
-  'setPivotFieldDateGroup',
-  'setPivotGrandTotals',
   'setThemeColors',
   'setThemeScriptFont',
   'setValue',
   'setValues',
   'setView',
-  'showPivotDetails',
-  'updatePivotField',
-  'updatePivotItem',
+  'shape',
+  'slicer',
+  'table',
   'updateThreadedComment',
 ]);
+const HANDLE_FORWARDERS = Object.freeze({
+  'Chart.addSeries': 'addChartSeries',
+  'Chart.getData': 'getChartData',
+  'Chart.getPreview': 'getChartPreview',
+  'Chart.getProperties': 'getChart',
+  'Chart.removeSeries': 'removeChartSeries',
+  'Chart.rename': 'setDrawingName',
+  'Chart.setAnchor': 'setDrawingAnchor',
+  'Chart.setAxis': 'setChartAxis',
+  'Chart.setDisplay': 'setChartDisplay',
+  'Chart.setFilter': 'setChartFilter',
+  'Chart.setLegend': 'setChartLegend',
+  'Chart.setPlot': 'setChartPlot',
+  'Chart.setPoint': 'setChartPoint',
+  'Chart.setSeries': 'setChartSeries',
+  'Chart.setSource': null,
+  'Chart.setTitle': 'setChartTitle',
+  'Chart.setType': 'setChartType',
+  'Chart.setZOrder': 'setDrawingZOrder',
+  'Chart.snapshot': 'snapshotDrawing',
+  'Drawing.getDrawingProperties': 'getDrawingObject',
+  'Picture.getProperties': 'getImage',
+  'Picture.rename': 'setDrawingName',
+  'Picture.setAnchor': 'setDrawingAnchor',
+  'Picture.setZOrder': 'setDrawingZOrder',
+  'Picture.snapshot': 'snapshotDrawing',
+  'Pivot.addDataField': 'addPivotDataField',
+  'Pivot.addField': 'addPivotField',
+  'Pivot.addFieldItem': 'addPivotFieldItem',
+  'Pivot.addFieldSharedItem': 'addPivotFieldSharedItem',
+  'Pivot.addFieldSubtotalFn': 'addPivotFieldSubtotalFn',
+  'Pivot.addFilter': 'addPivotFilter',
+  'Pivot.clearDataFields': 'clearPivotDataFields',
+  'Pivot.clearFieldDateGroup': 'clearPivotFieldDateGroup',
+  'Pivot.clearFieldItems': 'clearPivotFieldItems',
+  'Pivot.clearFieldSubtotalFns': 'clearPivotFieldSubtotalFns',
+  'Pivot.clearFields': 'clearPivotFields',
+  'Pivot.clearFilters': 'clearPivotFilters',
+  'Pivot.getCache': 'getPivotCacheId',
+  'Pivot.getColumnFieldOrder': 'getPivotColumnFieldOrder',
+  'Pivot.getDataFieldDefaultName': 'getPivotDataFieldDefaultName',
+  'Pivot.getFieldItem': 'getPivotFieldItem',
+  'Pivot.getGrandTotals': 'getPivotGrandTotals',
+  'Pivot.getLayout': 'getPivotLayout',
+  'Pivot.getOptions': 'getPivotOptions',
+  'Pivot.getProperties': null,
+  'Pivot.getReportLayout': 'getPivotReportLayout',
+  'Pivot.getRowFieldOrder': 'getPivotRowFieldOrder',
+  'Pivot.getStyleInfo': 'getPivotStyleInfo',
+  'Pivot.isProjectionPending': 'isPivotProjectionPending',
+  'Pivot.listDataFields': null,
+  'Pivot.listFieldItems': null,
+  'Pivot.listFields': null,
+  'Pivot.listFilters': null,
+  'Pivot.project': 'projectPivot',
+  'Pivot.removeFilter': 'removePivotFilter',
+  'Pivot.rename': 'setPivotName',
+  'Pivot.setAnchor': 'setPivotAnchor',
+  'Pivot.setColumnFieldOrder': 'setPivotColumnFieldOrder',
+  'Pivot.setDataField': 'setPivotDataField',
+  'Pivot.setFieldAxis': 'setPivotFieldAxis',
+  'Pivot.setFieldDateGroup': null,
+  'Pivot.setFieldShowDetail': 'setPivotFieldShowDetail',
+  'Pivot.setFieldSort': 'setPivotFieldSort',
+  'Pivot.setGrandTotals': null,
+  'Pivot.setOptions': 'setPivotOptions',
+  'Pivot.setReportLayout': 'setPivotReportLayout',
+  'Pivot.setRowFieldOrder': 'setPivotRowFieldOrder',
+  'Pivot.setStyleInfo': 'setPivotStyleInfo',
+  'Pivot.showDetails': null,
+  'Pivot.updateField': null,
+  'Pivot.updateItem': null,
+  'PivotCache.addCalculatedField': 'addPivotCacheCalculatedField',
+  'PivotCache.addCalculatedItem': 'addPivotCacheCalculatedItem',
+  'PivotCache.addField': 'addPivotCacheField',
+  'PivotCache.addFieldSharedItem': null,
+  'PivotCache.addRecord': 'addPivotCacheRecord',
+  'PivotCache.clearFieldSharedItems': 'clearPivotCacheFieldSharedItems',
+  'PivotCache.clearFields': 'clearPivotCacheFields',
+  'PivotCache.clearRecords': 'clearPivotCacheRecords',
+  'PivotCache.getOptions': 'getPivotCacheOptions',
+  'PivotCache.getRecordCount': 'getPivotCacheRecordCount',
+  'PivotCache.getWorksheetSource': 'getPivotCacheWorksheetSource',
+  'PivotCache.listCalculatedItems': null,
+  'PivotCache.listFieldSharedItems': null,
+  'PivotCache.listFields': null,
+  'PivotCache.moveCalculatedItem': 'movePivotCacheCalculatedItem',
+  'PivotCache.removeCalculatedField': 'removePivotCacheCalculatedField',
+  'PivotCache.removeCalculatedItem': 'removePivotCacheCalculatedItem',
+  'PivotCache.setCalculatedFieldFormula': 'setPivotCacheCalculatedFieldFormula',
+  'PivotCache.setCalculatedItemFormula': 'setPivotCacheCalculatedItemFormula',
+  'PivotCache.setOptions': 'setPivotCacheOptions',
+  'PivotCache.setRecordValue': null,
+  'PivotCache.setWorksheetSource': 'setPivotCacheWorksheetSource',
+  'Shape.getProperties': 'getShape',
+  'Shape.update': 'updateShape',
+  'Sheet.move': null,
+  'Sheet.rename': null,
+  'Slicer.getProperties': 'getSlicer',
+  'Slicer.update': 'updateSlicer',
+  'Table.applyAutoFilter': 'applyTableAutoFilter',
+  'Table.clearAutoFilter': 'clearTableAutoFilter',
+  'Table.evaluateAutoFilter': 'evaluateTableAutoFilter',
+  'Table.getAutoFilter': 'getTableAutoFilter',
+  'Table.getProperties': 'getTable',
+  'Table.removeAutoFilter': 'removeTableAutoFilter',
+  'Table.renameColumn': 'renameTableColumn',
+  'Table.setAutoFilter': 'setTableAutoFilter',
+  'Table.setColumnTotals': 'setTableColumnTotals',
+  'Table.update': 'updateTable',
+});
+const HANDLE_PROPERTIES = Object.freeze({
+  'Pivot.name': 'getPivotName',
+});
 const CELL_ARGS = Object.freeze({
-  addHyperlink: [[0, 1]],
-  clearCellXfIndex: [[0, 1]],
-  evaluateCfFormula: [
+  'Pivot.showDetails': [[0, 1]],
+  'Sheet.addHyperlink': [[0, 1]],
+  'Sheet.clearCellXfIndex': [[0, 1]],
+  'Sheet.evaluateCfFormula': [
     [0, 1],
     [2, 3],
   ],
-  evaluateFormula: [[0, 1]],
-  evaluateFormulaArray: [[0, 1]],
-  getArrayFormula: [[0, 1]],
-  getCellPhonetic: [[0, 1]],
-  getCellPhoneticProperties: [[0, 1]],
-  getCellPhoneticRuns: [[0, 1]],
-  getCellShowPhonetic: [[0, 1]],
-  getCellXfIndex: [[0, 1]],
-  getComment: [[0, 1]],
-  getCommentVisible: [[0, 1]],
-  getDataTable: [[0, 1]],
-  getDependents: [[0, 1]],
-  getDisplayText: [[0, 1]],
-  getEffectiveStyle: [[0, 1]],
-  getFormula: [[0, 1]],
-  getFormulaR1C1: [[0, 1]],
-  getHyperlink: [[0, 1]],
-  getLambdaText: [[0, 1]],
-  getPrecedents: [[0, 1]],
-  getSpillInfo: [[0, 1]],
-  getValue: [[0, 1]],
-  removeComment: [[0, 1]],
-  removeDataTable: [[0, 1]],
-  removeHyperlink: [[0, 1]],
-  setBlank: [[0, 1]],
-  setBool: [[0, 1]],
-  setCellPhonetic: [[0, 1]],
-  setCellPhoneticProperties: [[0, 1]],
-  setCellPhoneticRuns: [[0, 1]],
-  setCellShowPhonetic: [[0, 1]],
-  setCellXfIndex: [[0, 1]],
-  setComment: [[0, 1]],
-  setCommentVisible: [[0, 1]],
-  setError: [[0, 1]],
-  setFormula: [[0, 1]],
-  setNumber: [[0, 1]],
-  setText: [[0, 1]],
-  setValue: [[0, 1]],
-  setValues: [[0, 1]],
-  showPivotDetails: [[1, 2]],
-  validateValue: [[0, 1]],
+  'Sheet.evaluateFormula': [[0, 1]],
+  'Sheet.evaluateFormulaArray': [[0, 1]],
+  'Sheet.getArrayFormula': [[0, 1]],
+  'Sheet.getCellFormat': [[0, 1]],
+  'Sheet.getCellPhonetic': [[0, 1]],
+  'Sheet.getCellPhoneticProperties': [[0, 1]],
+  'Sheet.getCellPhoneticRuns': [[0, 1]],
+  'Sheet.getCellShowPhonetic': [[0, 1]],
+  'Sheet.getCellXfIndex': [[0, 1]],
+  'Sheet.getComment': [[0, 1]],
+  'Sheet.getCommentVisible': [[0, 1]],
+  'Sheet.getDataTable': [[0, 1]],
+  'Sheet.getDependents': [[0, 1]],
+  'Sheet.getDisplayText': [[0, 1]],
+  'Sheet.getEffectiveStyle': [[0, 1]],
+  'Sheet.getFormula': [[0, 1]],
+  'Sheet.getFormulaR1C1': [[0, 1]],
+  'Sheet.getHyperlink': [[0, 1]],
+  'Sheet.getLambdaText': [[0, 1]],
+  'Sheet.getPrecedents': [[0, 1]],
+  'Sheet.getSpillInfo': [[0, 1]],
+  'Sheet.getValue': [[0, 1]],
+  'Sheet.removeComment': [[0, 1]],
+  'Sheet.removeDataTable': [[0, 1]],
+  'Sheet.removeHyperlink': [[0, 1]],
+  'Sheet.setBlank': [[0, 1]],
+  'Sheet.setBool': [[0, 1]],
+  'Sheet.setCellPhonetic': [[0, 1]],
+  'Sheet.setCellPhoneticProperties': [[0, 1]],
+  'Sheet.setCellPhoneticRuns': [[0, 1]],
+  'Sheet.setCellShowPhonetic': [[0, 1]],
+  'Sheet.setCellXfIndex': [[0, 1]],
+  'Sheet.setComment': [[0, 1]],
+  'Sheet.setCommentVisible': [[0, 1]],
+  'Sheet.setError': [[0, 1]],
+  'Sheet.setFormula': [[0, 1]],
+  'Sheet.setNumber': [[0, 1]],
+  'Sheet.setText': [[0, 1]],
+  'Sheet.setValue': [[0, 1]],
+  'Sheet.setValues': [[0, 1]],
+  'Sheet.validateValue': [[0, 1]],
 });
 const RECT_ARGS = Object.freeze({
-  addHyperlinkRange: [0],
-  addMerge: [0],
-  evaluateCfRange: [0],
-  getCellRectPt: [0],
-  getCellsInRange: [0],
-  getMergesInRange: [0],
-  getRangeStyleBases: [0],
-  getRangeStyleBasesExcluding: [0],
-  getValues: [0],
-  listCells: [0],
-  recalcViewport: [0],
-  remapRangeStyle: [0],
-  removeMerge: [0],
-  setPivotAnchor: [1],
-  setPrintArea: [0],
-  setRangeXfIndex: [0],
-  snapshotRangeStyle: [0],
+  'Pivot.setAnchor': [0],
+  'Sheet.addHyperlinkRange': [0],
+  'Sheet.addMerge': [0],
+  'Sheet.evaluateCfRange': [0],
+  'Sheet.getCellRectPt': [0],
+  'Sheet.getCellsInRange': [0],
+  'Sheet.getMergesInRange': [0],
+  'Sheet.getRangeStyleBases': [0],
+  'Sheet.getRangeStyleBasesExcluding': [0],
+  'Sheet.getValues': [0],
+  'Sheet.listCells': [0],
+  'Sheet.recalcViewport': [0],
+  'Sheet.remapRangeStyle': [0],
+  'Sheet.removeMerge': [0],
+  'Sheet.setCellFormat': [0],
+  'Sheet.setPrintArea': [0],
+  'Sheet.setRangeXfIndex': [0],
+  'Sheet.snapshotRangeStyle': [0],
+});
+const SPAN_ARGS = Object.freeze({
+  'Sheet.clearColumnStyle': [[0, 'col', 'span']],
+  'Sheet.clearColumnWidth': [[0, 'col', 'span']],
+  'Sheet.clearRowHeight': [[0, 'row', 'span']],
+  'Sheet.clearRowStyle': [[0, 'row', 'span']],
+  'Sheet.deleteColumns': [[0, 'col', 'start_count']],
+  'Sheet.deleteRows': [[0, 'row', 'start_count']],
+  'Sheet.insertColumns': [[0, 'col', 'start_count']],
+  'Sheet.insertRows': [[0, 'row', 'start_count']],
+  'Sheet.setColumnCollapsed': [[0, 'col', 'span']],
+  'Sheet.setColumnHidden': [[0, 'col', 'span']],
+  'Sheet.setColumnOutline': [[0, 'col', 'span']],
+  'Sheet.setColumnStyle': [[0, 'col', 'span']],
+  'Sheet.setColumnWidth': [[0, 'col', 'span']],
+  'Sheet.setRowAutoHeight': [[0, 'row', 'span']],
+  'Sheet.setRowCollapsed': [[0, 'row', 'span']],
+  'Sheet.setRowHeight': [[0, 'row', 'span']],
+  'Sheet.setRowHidden': [[0, 'row', 'span']],
+  'Sheet.setRowOutline': [[0, 'row', 'span']],
+  'Sheet.setRowStyle': [[0, 'row', 'span']],
 });
 const REF_ARGS = Object.freeze({
-  addPivotDataField: [0, 'pivot'],
-  addPivotField: [0, 'pivot'],
-  addPivotFieldItem: [0, 'pivot'],
-  addPivotFieldSharedItem: [0, 'pivot'],
-  addPivotFieldSubtotalFn: [0, 'pivot'],
-  addPivotFilter: [0, 'pivot'],
-  addSlicer: [0, 'table'],
-  applyTableAutoFilter: [0, 'table'],
-  clearPivotDataFields: [0, 'pivot'],
-  clearPivotFieldDateGroup: [0, 'pivot'],
-  clearPivotFieldItems: [0, 'pivot'],
-  clearPivotFieldSubtotalFns: [0, 'pivot'],
-  clearPivotFields: [0, 'pivot'],
-  clearPivotFilters: [0, 'pivot'],
-  clearTableAutoFilter: [0, 'table'],
-  evaluateTableAutoFilter: [0, 'table'],
-  getPivotCacheId: [0, 'pivot'],
-  getPivotColumnFieldOrder: [0, 'pivot'],
-  getPivotDataFieldDefaultName: [0, 'pivot'],
-  getPivotFieldItem: [0, 'pivot'],
-  getPivotGrandTotals: [0, 'pivot'],
-  getPivotLayout: [0, 'pivot'],
-  getPivotName: [0, 'pivot'],
-  getPivotOptions: [0, 'pivot'],
-  getPivotReportLayout: [0, 'pivot'],
-  getPivotRowFieldOrder: [0, 'pivot'],
-  getPivotStyleInfo: [0, 'pivot'],
-  getTableAutoFilter: [0, 'table'],
-  isPivotProjectionPending: [0, 'pivot'],
-  listPivotDataFields: [0, 'pivot'],
-  listPivotFieldItems: [0, 'pivot'],
-  listPivotFields: [0, 'pivot'],
-  listPivotFilters: [0, 'pivot'],
-  projectPivot: [0, 'pivot'],
-  removeCfRule: [0, 'cfRule'],
-  removePivot: [0, 'pivot'],
-  removePivotFilter: [0, 'pivot'],
-  removeProtectedRange: [0, 'protectedRange'],
-  removeTable: [0, 'table'],
-  removeTableAutoFilter: [0, 'table'],
-  renameTableColumn: [0, 'table'],
-  setPivotAnchor: [0, 'pivot'],
-  setPivotColumnFieldOrder: [0, 'pivot'],
-  setPivotDataField: [0, 'pivot'],
-  setPivotFieldAxis: [0, 'pivot'],
-  setPivotFieldDateGroup: [0, 'pivot'],
-  setPivotFieldShowDetail: [0, 'pivot'],
-  setPivotFieldSort: [0, 'pivot'],
-  setPivotGrandTotals: [0, 'pivot'],
-  setPivotName: [0, 'pivot'],
-  setPivotOptions: [0, 'pivot'],
-  setPivotReportLayout: [0, 'pivot'],
-  setPivotRowFieldOrder: [0, 'pivot'],
-  setPivotStyleInfo: [0, 'pivot'],
-  setTableAutoFilter: [0, 'table'],
-  setTableColumnTotals: [0, 'table'],
-  showPivotDetails: [0, 'pivot'],
-  updatePivotField: [0, 'pivot'],
-  updatePivotItem: [0, 'pivot'],
-  updateProtectedRange: [0, 'protectedRange'],
-  updateTable: [0, 'table'],
+  'Sheet.addSlicer': [0, 'table'],
+  'Sheet.pivot': [0, 'pivot'],
+  'Sheet.removeCfRule': [0, 'cfRule'],
+  'Sheet.removePivot': [0, 'pivot'],
+  'Sheet.removeProtectedRange': [0, 'protectedRange'],
+  'Sheet.updateProtectedRange': [0, 'protectedRange'],
+  'Workbook.removeTable': [0, 'table'],
+  'Workbook.table': [0, 'table'],
 });
 const PATCH_KEYS = Object.freeze({
-  setChartLegend: [1, ['hiddenSeries', 'overlay', 'position']],
-  setFormatDefaults: [
+  'Chart.setLegend': [0, ['hiddenSeries', 'overlay', 'position']],
+  'Pivot.setGrandTotals': [0, ['columns', 'rows']],
+  'Pivot.setOptions': [
     0,
-    [
-      'baseColWidth',
-      'customHeight',
-      'defaultColWidth',
-      'defaultRowHeight',
-      'effectiveDefaultColWidth',
-      'effectiveDefaultRowHeight',
-      'zeroHeight',
-    ],
-  ],
-  setHeaderFooter: [
-    0,
-    [
-      'alignWithMargins',
-      'differentFirst',
-      'differentOddEven',
-      'evenFooter',
-      'evenHeader',
-      'firstFooter',
-      'firstHeader',
-      'oddFooter',
-      'oddHeader',
-      'scaleWithDoc',
-    ],
-  ],
-  setIterative: [0, ['enabled', 'maxChange', 'maxIterations']],
-  setPageMargins: [
-    0,
-    [
-      'bottom',
-      'bottomStated',
-      'footer',
-      'footerStated',
-      'header',
-      'headerStated',
-      'left',
-      'leftStated',
-      'right',
-      'rightStated',
-      'top',
-      'topStated',
-    ],
-  ],
-  setPageSetup: [
-    0,
-    [
-      'fitToHeight',
-      'fitToHeightStated',
-      'fitToPage',
-      'fitToPageStated',
-      'fitToWidth',
-      'fitToWidthStated',
-      'orientation',
-      'orientationStated',
-      'paperSize',
-      'paperSizeStated',
-      'scale',
-      'scaleStated',
-    ],
-  ],
-  setPivotCacheOptions: [1, ['missingItemsLimit', 'refreshOnLoad', 'saveData']],
-  setPivotGrandTotals: [1, ['columns', 'rows']],
-  setPivotOptions: [
-    1,
     [
       'altText',
       'altTextSummary',
@@ -1359,13 +1396,113 @@ const PATCH_KEYS = Object.freeze({
       'showMissing',
     ],
   ],
-  setPivotStyleInfo: [
-    1,
+  'Pivot.setStyleInfo': [
+    0,
     ['name', 'showColHeaders', 'showColStripes', 'showLastColumn', 'showRowHeaders', 'showRowStripes'],
   ],
-  setPrintOptions: [0, ['gridLines', 'headings', 'horizontalCentered', 'verticalCentered']],
-  setTableStyleDefaults: [0, ['pivotStyle', 'tableStyle']],
-  setView: [
+  'Pivot.updateField': [
+    1,
+    [
+      'axis',
+      'cacheFieldIndex',
+      'customName',
+      'dateCalendar',
+      'datePeriods',
+      'defaultSubtotal',
+      'fillDownLabels',
+      'groupBaseIndex',
+      'insertBlankRow',
+      'numberFormat',
+      'showAll',
+      'sortByField',
+      'sortOrder',
+      'sourceName',
+      'subtotalFns',
+      'subtotalTop',
+    ],
+  ],
+  'Pivot.updateItem': [2, ['cacheIndex', 'caption', 'name', 'showDetail', 'visible']],
+  'PivotCache.setOptions': [0, ['missingItemsLimit', 'refreshOnLoad', 'saveData']],
+  'Sheet.setCellFormat': [1, ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection']],
+  'Sheet.setFormatDefaults': [
+    0,
+    [
+      'baseColWidth',
+      'customHeight',
+      'defaultColWidth',
+      'defaultRowHeight',
+      'effectiveDefaultColWidth',
+      'effectiveDefaultRowHeight',
+      'zeroHeight',
+    ],
+  ],
+  'Sheet.setHeaderFooter': [
+    0,
+    [
+      'alignWithMargins',
+      'alignWithMarginsStated',
+      'differentFirst',
+      'differentFirstStated',
+      'differentOddEven',
+      'differentOddEvenStated',
+      'evenFooter',
+      'evenHeader',
+      'firstFooter',
+      'firstHeader',
+      'oddFooter',
+      'oddHeader',
+      'scaleWithDoc',
+      'scaleWithDocStated',
+    ],
+  ],
+  'Sheet.setPageMargins': [
+    0,
+    [
+      'bottom',
+      'bottomStated',
+      'footer',
+      'footerStated',
+      'header',
+      'headerStated',
+      'left',
+      'leftStated',
+      'right',
+      'rightStated',
+      'top',
+      'topStated',
+    ],
+  ],
+  'Sheet.setPageSetup': [
+    0,
+    [
+      'fitToHeight',
+      'fitToHeightStated',
+      'fitToPage',
+      'fitToPageStated',
+      'fitToWidth',
+      'fitToWidthStated',
+      'orientation',
+      'orientationStated',
+      'paperSize',
+      'paperSizeStated',
+      'scale',
+      'scaleStated',
+    ],
+  ],
+  'Sheet.setPrintOptions': [
+    0,
+    [
+      'gridLines',
+      'gridLinesStated',
+      'headings',
+      'headingsStated',
+      'horizontalCentered',
+      'horizontalCenteredStated',
+      'verticalCentered',
+      'verticalCenteredStated',
+    ],
+  ],
+  'Sheet.setView': [
     0,
     [
       'freezeCols',
@@ -1388,66 +1525,84 @@ const PATCH_KEYS = Object.freeze({
       'zoomScale',
     ],
   ],
-  updatePivotField: [
-    2,
-    [
-      'axis',
-      'cacheFieldIndex',
-      'customName',
-      'dateCalendar',
-      'datePeriods',
-      'defaultSubtotal',
-      'fillDownLabels',
-      'groupBaseIndex',
-      'insertBlankRow',
-      'numberFormat',
-      'showAll',
-      'sortByField',
-      'sortOrder',
-      'sourceName',
-      'subtotalFns',
-      'subtotalTop',
-    ],
+  'Sheet.updateThreadedComment': [
+    1,
+    ['col', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'row', 'text'],
   ],
-  updatePivotItem: [3, ['cacheIndex', 'caption', 'name', 'showDetail', 'visible']],
-  updateThreadedComment: [1, ['col', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'row', 'text']],
+  'Workbook.setIterative': [0, ['enabled', 'maxChange', 'maxIterations']],
+  'Workbook.setTableStyleDefaults': [0, ['pivotStyle', 'tableStyle']],
+});
+const PATCH_NESTED_KEYS = Object.freeze({
+  'Sheet.setCellFormat': {
+    alignment: [
+      'horizontal',
+      'indent',
+      'justifyLastLine',
+      'readingOrder',
+      'relativeIndent',
+      'shrinkToFit',
+      'textRotation',
+      'vertical',
+      'wrapText',
+    ],
+    border: ['bottom', 'diagonal', 'diagonalDown', 'diagonalUp', 'left', 'right', 'top'],
+    'border.bottom': ['color', 'colorArgb', 'style'],
+    'border.diagonal': ['color', 'colorArgb', 'style'],
+    'border.left': ['color', 'colorArgb', 'style'],
+    'border.right': ['color', 'colorArgb', 'style'],
+    'border.top': ['color', 'colorArgb', 'style'],
+    fill: ['bg', 'bgArgb', 'fg', 'fgArgb', 'gradient', 'pattern'],
+    font: [
+      'bold',
+      'charset',
+      'color',
+      'colorArgb',
+      'condense',
+      'extend',
+      'family',
+      'italic',
+      'name',
+      'outline',
+      'scheme',
+      'shadow',
+      'size',
+      'strike',
+      'underline',
+      'vertAlign',
+    ],
+    protection: ['hidden', 'locked'],
+  },
 });
 // </facade-tables>
-
 // Arguments the declarations type `T | null` (or optional) where the raw method
-// takes the C sentinel: method -> [position in the public call, sentinel,
-// whether an omitted argument also means absent].
-const WORKBOOK_ABSENT_ARGS = Object.freeze({
-  addPivotCache: [0, 0, true],
-  setFileName: [0, ''],
-  setWorkbookProtection: [0, {}],
-});
-const SHEET_ABSENT_ARGS = Object.freeze({
-  setAutoFilterXml: [0, ''],
-  setCellPhonetic: [2, ''],
-  setCellPhoneticRuns: [2, []],
-  setHeaderFooterXml: [0, ''],
-  setPageMarginsXml: [0, ''],
-  setPageSetupXml: [0, ''],
-  setPivotFieldAxis: [2, -1],
-  setPrintArea: [0, []],
-  setPrintOptionsXml: [0, ''],
-  setSheetPrXml: [0, ''],
-  setSheetProtection: [0, {}],
+// takes the C sentinel: `Class.method` -> [position in the public call,
+// sentinel, whether an omitted argument also means absent].
+const ABSENT_ARGS = Object.freeze({
+  'Workbook.setFileName': [0, ''],
+  'Workbook.setWorkbookProtection': [0, {}],
+  'Sheet.setAutoFilterXml': [0, ''],
+  'Sheet.setCellPhonetic': [2, ''],
+  'Sheet.setCellPhoneticRuns': [2, []],
+  'Sheet.setHeaderFooterXml': [0, ''],
+  'Sheet.setPageMarginsXml': [0, ''],
+  'Sheet.setPageSetupXml': [0, ''],
+  'Sheet.setPrintArea': [0, []],
+  'Sheet.setPrintOptionsXml': [0, ''],
+  'Sheet.setSheetPrXml': [0, ''],
+  'Sheet.setSheetProtection': [0, {}],
+  'Pivot.setFieldAxis': [1, -1],
 });
 
-// Patch setters and the non-nullable fields of their patch: method -> { field:
-// expected type }. `null` on one of these fields is a TypeError; an omitted or
-// `undefined` key keeps the value. The patch's position and its keys are
-// `PATCH_KEYS`.
+// Patch setters and the non-nullable fields of their patch: `Class.method` ->
+// { field: expected type }. `null` on one of these fields is a TypeError; an
+// omitted or `undefined` key keeps the value. The patch's position and its keys
+// are `PATCH_KEYS`.
 const bools = (...fields) => Object.fromEntries(fields.map((f) => [f, 'boolean']));
 const numbers = (...fields) => Object.fromEntries(fields.map((f) => [f, 'number']));
-const WORKBOOK_PATCHES = Object.freeze({
-  setIterative: { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') },
-  setPivotCacheOptions: bools('saveData', 'refreshOnLoad'),
-});
-const SHEET_PATCHES = Object.freeze({
-  setView: {
+const PATCH_FIELDS = Object.freeze({
+  'Workbook.setIterative': { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') },
+  'PivotCache.setOptions': bools('saveData', 'refreshOnLoad'),
+  'Sheet.setView': {
     ...numbers(
       'zoomScale',
       'freezeRows',
@@ -1471,16 +1626,15 @@ const SHEET_PATCHES = Object.freeze({
       'tabSelected',
     ),
   },
-  updatePivotField: bools('defaultSubtotal', 'insertBlankRow', 'fillDownLabels', 'showAll', 'subtotalTop'),
-  updatePivotItem: bools('visible', 'showDetail'),
-  setChartLegend: { position: 'number', overlay: 'boolean', hiddenSeries: 'array' },
-  setPrintOptions: bools('gridLines', 'headings', 'horizontalCentered', 'verticalCentered'),
-  setHeaderFooter: bools('differentOddEven', 'differentFirst', 'scaleWithDoc', 'alignWithMargins'),
-  setPivotStyleInfo: bools('showRowHeaders', 'showColHeaders', 'showRowStripes', 'showColStripes', 'showLastColumn'),
-  setPageSetup: { ...numbers('paperSize', 'scale', 'fitToWidth', 'fitToHeight'), ...bools('fitToPage') },
-  setPageMargins: numbers('left', 'right', 'top', 'bottom', 'header', 'footer'),
-  setFormatDefaults: { ...numbers('baseColWidth'), ...bools('customHeight', 'zeroHeight') },
-  setPivotOptions: {
+  'Sheet.setPrintOptions': bools('gridLines', 'headings', 'horizontalCentered', 'verticalCentered'),
+  'Sheet.setHeaderFooter': bools('differentOddEven', 'differentFirst', 'scaleWithDoc', 'alignWithMargins'),
+  'Sheet.setPageSetup': { ...numbers('paperSize', 'scale', 'fitToWidth', 'fitToHeight'), ...bools('fitToPage') },
+  'Sheet.setPageMargins': numbers('left', 'right', 'top', 'bottom', 'header', 'footer'),
+  'Sheet.setFormatDefaults': { ...numbers('baseColWidth'), ...bools('customHeight', 'zeroHeight') },
+  'Pivot.updateField': bools('defaultSubtotal', 'insertBlankRow', 'fillDownLabels', 'showAll', 'subtotalTop'),
+  'Pivot.updateItem': bools('visible', 'showDetail'),
+  'Pivot.setStyleInfo': bools('showRowHeaders', 'showColHeaders', 'showRowStripes', 'showColStripes', 'showLastColumn'),
+  'Pivot.setOptions': {
     ...bools(
       'showError',
       'showMissing',
@@ -1504,19 +1658,23 @@ const SHEET_PATCHES = Object.freeze({
     ),
     ...numbers('indent', 'pageWrap'),
   },
+  'Chart.setLegend': { position: 'number', overlay: 'boolean', hiddenSeries: 'array' },
 });
 
 // How a string key of each `*Ref` kind is matched: the element count, the key
-// of element `i`, and the wording of the errors. Tables are workbook-wide.
+// of element `i`, the wording of the errors, and the handle class that also
+// names an element. Tables are workbook-wide.
 const REF_KINDS = Object.freeze({
   table: {
     noun: 'table displayName',
+    handle: 'Table',
     context: 'table_name',
     count: (raw) => raw.getTableCount(),
     key: (raw, _sheet, i) => raw.getTable(i).displayName,
   },
   pivot: {
     noun: 'pivot name',
+    handle: 'Pivot',
     context: 'pivot_name',
     count: (raw, sheet) => raw.getPivotCount(sheet),
     key: (raw, sheet, i) => raw.getPivotName(sheet, i),
@@ -1578,6 +1736,15 @@ function requireInteger(value, where) {
   return value;
 }
 
+// An index or id argument: a number in uint32 range.
+function requireIndex(value, where) {
+  requireNumber(value, where);
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new RangeError(`${where} is outside uint32 range`);
+  }
+  return value;
+}
+
 /** A patch field: `undefined` keeps `current`, `null` is refused, anything else must pass `check`. */
 function patchField(patch, field, current, check, where) {
   const value = patch[field];
@@ -1613,6 +1780,53 @@ function rangeAddress(raw, a1) {
     );
   }
   return ref.rect;
+}
+
+// The axis a span argument (`SPAN_ARGS`) runs along: the rectangle it must
+// cover whole, and the coordinates that bound it.
+const SPAN_AXES = Object.freeze({
+  col: {
+    noun: 'whole-column',
+    whole: (rect) => rect.firstRow === 0 && rect.lastRow === GRID_ROWS - 1,
+    first: 'firstCol',
+    last: 'lastCol',
+  },
+  row: {
+    noun: 'whole-row',
+    whole: (rect) => rect.firstCol === 0 && rect.lastCol === GRID_COLS - 1,
+    first: 'firstRow',
+    last: 'lastRow',
+  },
+});
+
+// A span argument: an unqualified A1 reference over whole columns (`B`, `B:D`)
+// or whole rows (`3`, `3:5`); the whole sheet is both.
+function spanAddress(raw, text, axis) {
+  const spec = SPAN_AXES[axis];
+  const ref = raw.parseReference(text.includes(':') ? text : `${text}:${text}`);
+  if (ref === null || ref.sheetName !== null || !spec.whole(ref.rect)) {
+    throw new FormulonError(
+      StatusCode.InvalidArgument,
+      `${JSON.stringify(text)} is not a ${spec.noun} A1 span without a sheet name`,
+      `address=${text}`,
+    );
+  }
+  return [ref.rect[spec.first], ref.rect[spec.last]];
+}
+
+/**
+ * The numeric form of a call whose span arguments (`SPAN_ARGS`) may be one A1
+ * span string: `(first, last)` for a `span` form, `(first, count)` for a
+ * `start_count` one.
+ */
+function expandSpans(raw, spans, args) {
+  let out = args;
+  for (const [at, axis, form] of spans) {
+    if (typeof out[at] !== 'string') continue;
+    const [first, last] = spanAddress(raw, out[at], axis);
+    out = [...out.slice(0, at), first, form === 'span' ? last : last - first + 1, ...out.slice(at + 1)];
+  }
+  return out;
 }
 
 /**
@@ -1675,20 +1889,31 @@ function foldName(name) {
 }
 
 /**
- * The index form of a call whose `*Ref` argument (`REF_ARGS`) may be a string:
- * the first element whose key matches it case-insensitively, as sheet names
- * match, listed afresh on every call.
+ * The index form of a call whose `*Ref` argument (`REF_ARGS`) may be a string or
+ * a handle: a string is the first element whose key matches it
+ * case-insensitively, as sheet names match, listed afresh on every call; a
+ * handle is its element's current index (`handleIndex`, undefined for a value
+ * that is not one).
  */
-function resolveRef(raw, sheet, where, [at, kind], args) {
+function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
   const value = args[at];
   if (typeof value === 'number') return args;
   const spec = REF_KINDS[kind];
-  if (typeof value !== 'string') throw new TypeError(`${where} argument ${at + 1} must be an index or a ${spec.noun}`);
+  const label = `${where} argument ${at + 1}`;
+  const out = [...args];
+  if (typeof value !== 'string') {
+    const index = spec.handle === undefined ? undefined : handleIndex(kind, value, label);
+    if (index === undefined) {
+      const handle = spec.handle === undefined ? '' : ` or a ${spec.handle}`;
+      throw new TypeError(`${label} must be an index, a ${spec.noun}${handle}`);
+    }
+    out[at] = index;
+    return out;
+  }
   const want = foldName(value);
   const n = spec.count(raw, sheet);
   for (let i = 0; i < n; i++) {
     if (foldName(spec.key(raw, sheet, i)) === want) {
-      const out = [...args];
       out[at] = i;
       return out;
     }
@@ -1702,11 +1927,11 @@ function resolveRef(raw, sheet, where, [at, kind], args) {
 
 /**
  * Throws `TypeError: <where> argument <n> has no field <key>` for a key that
- * neither the patch type of `name` nor its getter's record declares
- * (`PATCH_KEYS`); `undefined` is ignored.
+ * neither the patch type of `where` (`Class.method`) nor its getter's record
+ * declares (`PATCH_KEYS`); `undefined` is ignored.
  */
-function refuseUnknownKeys(where, name, patch) {
-  const [position, keys] = PATCH_KEYS[name];
+function refuseUnknownKeys(where, patch) {
+  const [position, keys] = PATCH_KEYS[where];
   for (const [key, value] of Object.entries(patch)) {
     if (value !== undefined && !keys.includes(key)) {
       throw new TypeError(`${where} argument ${position + 1} has no field ${key}`);
@@ -1715,14 +1940,13 @@ function refuseUnknownKeys(where, name, patch) {
 }
 
 /**
- * Checks a hand-written patch of `<owner>.<name>`: an object whose keys are in
- * `PATCH_KEYS`, where a field of `fields` refuses `null`, one of
+ * Checks a hand-written patch of `where` (`Class.method`): an object whose keys
+ * are in `PATCH_KEYS`, where a field of `fields` refuses `null`, one of
  * `nullable` takes `null` to clear, and each typed value has its type.
  */
 function checkPatch(where, patch, fields, nullable = {}) {
-  const name = where.slice(where.indexOf('.') + 1);
-  requireObject(patch, `${where} argument ${PATCH_KEYS[name][0] + 1}`);
-  refuseUnknownKeys(where, name, patch);
+  requireObject(patch, `${where} argument ${PATCH_KEYS[where][0] + 1}`);
+  refuseUnknownKeys(where, patch);
   for (const [key, value] of Object.entries(patch)) {
     const type = fields[key] ?? nullable[key];
     if (value === undefined || type === undefined) continue;
@@ -1732,6 +1956,19 @@ function checkPatch(where, patch, fields, nullable = {}) {
     }
   }
   return patch;
+}
+
+/**
+ * Refuses a key outside `PATCH_KEYS` for `where` (`Class.method`), and `null` on
+ * a field of `fields` (`TypeError: <where> <field> must be a <type>`). A
+ * non-object patch is left to the raw method.
+ */
+function checkForwardedPatch(where, patch, fields = {}) {
+  if (!isObject(patch)) return;
+  refuseUnknownKeys(where, patch);
+  for (const [field, type] of Object.entries(fields)) {
+    if (patch[field] === null) throw new TypeError(`${where} ${field} must be a ${type}`);
+  }
 }
 
 function geometryMode(mode, where, position) {
@@ -1809,6 +2046,337 @@ function requireValueField(value, field, type) {
   return value[field];
 }
 
+// ---------------------------------------------------------------------------
+// Cell formats: `Sheet.getCellFormat` / `Sheet.setCellFormat` over the style
+// records. tools/api/cell_format_cases.json pins the behaviour for the JS and
+// Python facades alike.
+// ---------------------------------------------------------------------------
+
+const enumField = (table, nullable = false) => ({ kind: 'enum', max: Math.max(...Object.values(table)), nullable });
+const FORMAT_BOOLEAN = Object.freeze({ kind: 'boolean' });
+const FORMAT_FLAG = Object.freeze({ kind: 'boolean', nullable: true });
+const FORMAT_COLOR = Object.freeze({ kind: 'color' });
+const FORMAT_ARGB = Object.freeze({ kind: 'argb' });
+const FORMAT_SIDE = Object.freeze({ kind: 'side' });
+
+// How each key of each group of a `CellFormatPatch` is checked; a nullable key
+// takes `null` to clear the attribute. The accepted keys are `PATCH_NESTED_KEYS`.
+const FORMAT_FIELDS = Object.freeze({
+  font: {
+    name: { kind: 'string' },
+    size: { kind: 'size', nullable: true },
+    bold: FORMAT_FLAG,
+    italic: FORMAT_FLAG,
+    strike: FORMAT_FLAG,
+    outline: FORMAT_FLAG,
+    shadow: FORMAT_FLAG,
+    condense: FORMAT_FLAG,
+    extend: FORMAT_FLAG,
+    underline: enumField(UnderlineStyle),
+    vertAlign: enumField(FontVerticalAlign),
+    family: enumField(FontFamily, true),
+    charset: { kind: 'enum', max: 255, nullable: true },
+    scheme: enumField(FontScheme),
+    color: FORMAT_COLOR,
+    colorArgb: FORMAT_ARGB,
+  },
+  fill: {
+    pattern: enumField(FillPattern),
+    fg: FORMAT_COLOR,
+    bg: FORMAT_COLOR,
+    fgArgb: FORMAT_ARGB,
+    bgArgb: FORMAT_ARGB,
+    gradient: { kind: 'object' },
+  },
+  border: {
+    left: FORMAT_SIDE,
+    right: FORMAT_SIDE,
+    top: FORMAT_SIDE,
+    bottom: FORMAT_SIDE,
+    diagonal: FORMAT_SIDE,
+    diagonalUp: FORMAT_BOOLEAN,
+    diagonalDown: FORMAT_BOOLEAN,
+  },
+  side: { style: enumField(BorderStyle), color: FORMAT_COLOR, colorArgb: FORMAT_ARGB },
+  alignment: {
+    horizontal: enumField(HorizontalAlign),
+    vertical: enumField(VerticalAlign),
+    wrapText: FORMAT_BOOLEAN,
+    shrinkToFit: FORMAT_BOOLEAN,
+    indent: { kind: 'enum', max: 255 },
+    textRotation: { kind: 'rotation' },
+    readingOrder: enumField(ReadingOrder),
+    justifyLastLine: FORMAT_BOOLEAN,
+    relativeIndent: { kind: 'signed' },
+  },
+  protection: { locked: FORMAT_BOOLEAN, hidden: FORMAT_BOOLEAN },
+});
+
+// The `CellXfInput` field each alignment key writes, and the presence flag it sets when it has one.
+const ALIGNMENT_XF = Object.freeze({
+  horizontal: ['horizontalAlign', 'hasHorizontalAlign'],
+  vertical: ['verticalAlign', 'hasVerticalAlign'],
+  wrapText: ['wrapText', 'hasWrapText'],
+  justifyLastLine: ['justifyLastLine', 'hasJustifyLastLine'],
+  shrinkToFit: ['shrinkToFit'],
+  indent: ['indent'],
+  textRotation: ['textRotation'],
+  readingOrder: ['readingOrder'],
+  relativeIndent: ['relativeIndent'],
+});
+const OPTIONAL_XF_FIELDS = Object.freeze(['textRotation', 'indent', 'shrinkToFit', 'readingOrder', 'relativeIndent']);
+const APPLY_FLAGS = Object.freeze({
+  numberFormat: 'applyNumberFormat',
+  font: 'applyFont',
+  fill: 'applyFill',
+  border: 'applyBorder',
+  alignment: 'applyAlignment',
+  protection: 'applyProtection',
+});
+const COLOR_TEXT = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const INT32_MAX = 0x7fffffff;
+
+function outOfRange(label, value) {
+  return new FormulonError(StatusCode.InvalidArgument, `${label} is out of range`, `value=${value}`);
+}
+
+// A non-negative integer: a fraction, a negative number or NaN is a RangeError.
+function formatCount(value, label) {
+  requireNumber(value, label);
+  if (!Number.isInteger(value) || value < 0) throw new RangeError(`${label} must be a non-negative integer`);
+  return value;
+}
+
+/** A `ColorInput` as a `Color`: `#RRGGBB` (opaque) or `#AARRGGBB`, or a `Color` record. */
+function formatColor(value, label) {
+  if (typeof value === 'string') {
+    if (!COLOR_TEXT.test(value)) throw new TypeError(`${label} must be "#RRGGBB" or "#AARRGGBB"`);
+    const hex = value.length === 7 ? `FF${value.slice(1)}` : value.slice(1);
+    return { kind: ColorKind.Rgb, rgb: Number.parseInt(hex, 16), theme: 0, tint: 0, indexed: 0 };
+  }
+  if (!isObject(value)) throw new TypeError(`${label} must be a colour string or a Color`);
+  const kind = formatCount(value.kind, `${label}.kind`);
+  if (kind > ColorKind.Auto) throw outOfRange(`${label}.kind`, kind);
+  return value;
+}
+
+function formatValue(spec, value, label) {
+  if (value === null) {
+    if (spec.nullable) return null;
+    throw new TypeError(`${label} must not be null`);
+  }
+  switch (spec.kind) {
+    case 'string':
+      return requireString(value, label);
+    case 'boolean':
+      return requireBoolean(value, label);
+    case 'object':
+      return requireObject(value, label);
+    case 'color':
+      return formatColor(value, label);
+    case 'side':
+      return formatGroup('side', value, label);
+    case 'size':
+      requireNumber(value, label);
+      if (!Number.isFinite(value) || value < 0) throw new RangeError(`${label} must be finite and not negative`);
+      return value;
+    case 'argb':
+      requireNumber(value, label);
+      if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+        throw new RangeError(`${label} is outside uint32 range`);
+      }
+      return value;
+    case 'enum':
+      if (formatCount(value, label) > spec.max) throw outOfRange(label, value);
+      return value;
+    case 'rotation':
+      if (formatCount(value, label) > 180 && value !== 255) throw outOfRange(label, value);
+      return value;
+    case 'signed':
+      requireNumber(value, label);
+      if (!Number.isInteger(value)) throw new RangeError(`${label} must be an integer`);
+      if (value > INT32_MAX || value < -INT32_MAX - 1) throw outOfRange(label, value);
+      return value;
+  }
+  return value;
+}
+
+// One group of a `CellFormatPatch`, checked: its defined keys, colours as `Color` records.
+function formatGroup(group, value, label) {
+  requireObject(value, label);
+  const path = label.slice(label.indexOf(' ') + 1);
+  const accepted = PATCH_NESTED_KEYS['Sheet.setCellFormat'][path];
+  const fields = FORMAT_FIELDS[group];
+  const out = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (item === undefined) continue;
+    if (!accepted.includes(key)) throw new TypeError(`Sheet.setCellFormat argument 2 has no field ${path}.${key}`);
+    out[key] = fields[key] === undefined ? item : formatValue(fields[key], item, `${label}.${key}`);
+  }
+  return out;
+}
+
+/** Checks a whole `CellFormatPatch` before anything is written; the result holds only its given keys. */
+function checkCellFormatPatch(patch) {
+  const where = 'Sheet.setCellFormat';
+  requireObject(patch, `${where} argument 2`);
+  refuseUnknownKeys(where, patch);
+  const out = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (key === 'numberFormat') {
+      requireString(value, `${where} numberFormat`);
+      if (value === '') {
+        throw new FormulonError(StatusCode.InvalidArgument, `${where} numberFormat is empty`, 'number_format=');
+      }
+      out.numberFormat = value;
+      continue;
+    }
+    out[key] = formatGroup(key, value, `${where} ${key}`);
+  }
+  return out;
+}
+
+// Writes the colour pair `colorKey` / `argbKey` of `patch` onto `target`; an RGB
+// `Color` also sets the literal ARGB, so the colour wins over a given `argbKey`.
+function mergeColor(target, patch, colorKey, argbKey) {
+  if (patch[argbKey] !== undefined) target[argbKey] = patch[argbKey];
+  const color = patch[colorKey];
+  if (color === undefined) return;
+  target[colorKey] = color;
+  if (color.kind === ColorKind.Rgb) target[argbKey] = color.rgb;
+}
+
+function mergeFont(current, patch) {
+  const out = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    if (key !== 'color' && key !== 'colorArgb') out[key] = value;
+  }
+  mergeColor(out, patch, 'color', 'colorArgb');
+  return out;
+}
+
+// Setting a colour on a fill without a pattern makes it solid, Excel's "fill
+// colour"; any fill key drops a gradient unless the patch names one.
+function mergeFill(current, patch) {
+  const out = { ...current };
+  if (patch.gradient === undefined) delete out.gradient;
+  else out.gradient = patch.gradient;
+  if (patch.pattern !== undefined) out.pattern = patch.pattern;
+  mergeColor(out, patch, 'fg', 'fgArgb');
+  mergeColor(out, patch, 'bg', 'bgArgb');
+  const colored = patch.fg !== undefined || patch.bg !== undefined;
+  if (colored && patch.pattern === undefined && out.pattern === FillPattern.None) out.pattern = FillPattern.Solid;
+  return out;
+}
+
+function mergeBorder(current, patch) {
+  const out = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === 'diagonalUp' || key === 'diagonalDown') {
+      out[key] = value;
+      continue;
+    }
+    const side = { ...current[key] };
+    if (value.style !== undefined) side.style = value.style;
+    mergeColor(side, value, 'color', 'colorArgb');
+    out[key] = side;
+  }
+  return out;
+}
+
+const present = (value) => value !== null && value !== undefined;
+
+/**
+ * The `CellXfInput` that rebuilds `xf` as `addCellXf` reads it: an absent
+ * attribute (`null`) keeps its input default with its presence flag false, and
+ * an optional alignment attribute is copied only when the record has it.
+ */
+function cellXfInput(xf) {
+  const input = {
+    fontIndex: xf.fontIndex,
+    fillIndex: xf.fillIndex,
+    borderIndex: xf.borderIndex,
+    numFmtId: xf.numFmtId,
+    horizontalAlign: xf.horizontalAlign ?? HorizontalAlign.General,
+    hasHorizontalAlign: present(xf.horizontalAlign),
+    verticalAlign: xf.verticalAlign ?? VerticalAlign.Bottom,
+    hasVerticalAlign: present(xf.verticalAlign),
+    wrapText: xf.wrapText ?? false,
+    hasWrapText: present(xf.wrapText),
+    justifyLastLine: xf.justifyLastLine ?? false,
+    hasJustifyLastLine: present(xf.justifyLastLine),
+    applyNumberFormat: xf.applyNumberFormat,
+    applyFont: xf.applyFont,
+    applyFill: xf.applyFill,
+    applyBorder: xf.applyBorder,
+    applyAlignment: xf.applyAlignment,
+    applyProtection: xf.applyProtection,
+    quotePrefix: xf.quotePrefix,
+    hasProtection: present(xf.locked) || present(xf.hidden),
+    locked: xf.locked ?? true,
+    hidden: xf.hidden ?? false,
+  };
+  for (const key of OPTIONAL_XF_FIELDS) if (present(xf[key])) input[key] = xf[key];
+  if (present(xf.xfId)) input.xfId = xf.xfId;
+  input.hasAlignment =
+    input.hasHorizontalAlign ||
+    input.hasVerticalAlign ||
+    input.hasWrapText ||
+    input.hasJustifyLastLine ||
+    OPTIONAL_XF_FIELDS.some((key) => key in input);
+  return input;
+}
+
+/** `xf` with `patch` merged in, as the `CellXfInput` of the new record. */
+function patchedXf(raw, xf, patch, numFmtId) {
+  const input = cellXfInput(xf);
+  for (const group of Object.keys(patch)) input[APPLY_FLAGS[group]] = true;
+  if (numFmtId !== undefined) input.numFmtId = numFmtId;
+  if (patch.font !== undefined) input.fontIndex = raw.addFont(mergeFont(raw.getFont(xf.fontIndex), patch.font));
+  if (patch.fill !== undefined) input.fillIndex = raw.addFill(mergeFill(raw.getFill(xf.fillIndex), patch.fill));
+  if (patch.border !== undefined) {
+    input.borderIndex = raw.addBorder(mergeBorder(raw.getBorder(xf.borderIndex), patch.border));
+  }
+  if (patch.alignment !== undefined) {
+    for (const [key, value] of Object.entries(patch.alignment)) {
+      const [field, flag] = ALIGNMENT_XF[key];
+      input[field] = value;
+      if (flag !== undefined) input[flag] = true;
+    }
+    input.hasAlignment = true;
+  }
+  if (patch.protection !== undefined) {
+    input.locked = patch.protection.locked ?? input.locked;
+    input.hidden = patch.protection.hidden ?? input.hidden;
+    input.hasProtection = true;
+  }
+  return input;
+}
+
+/** The `CellFormat` of the cell XF record `xf`. */
+function cellFormatOf(raw, xf) {
+  const code = xf.numFmtId === 0 ? null : raw.getNumFmtString(xf.numFmtId);
+  return {
+    numberFormat: code ?? 'General',
+    font: raw.getFont(xf.fontIndex),
+    fill: raw.getFill(xf.fillIndex),
+    border: raw.getBorder(xf.borderIndex),
+    alignment: {
+      horizontal: xf.horizontalAlign ?? HorizontalAlign.General,
+      vertical: xf.verticalAlign ?? VerticalAlign.Bottom,
+      wrapText: xf.wrapText ?? false,
+      shrinkToFit: xf.shrinkToFit ?? false,
+      indent: xf.indent ?? 0,
+      textRotation: xf.textRotation ?? 0,
+      readingOrder: xf.readingOrder ?? ReadingOrder.Context,
+      justifyLastLine: xf.justifyLastLine ?? false,
+      relativeIndent: xf.relativeIndent ?? 0,
+    },
+    protection: { locked: xf.locked ?? true, hidden: xf.hidden ?? false },
+  };
+}
+
 function defineMethod(proto, name, fn) {
   Object.defineProperty(proto, name, { value: fn, writable: true, configurable: true });
 }
@@ -1821,17 +2389,39 @@ function namedFunction(name, body) {
   }[name];
 }
 
+// A raw call that resolves a runtime id, with its `NotFound` reworded as the handle's object being gone.
+function resolveRuntimeId(resolve, message) {
+  try {
+    return resolve();
+  } catch (e) {
+    if (e?.name === 'FormulonError' && e.code === StatusCode.NotFound) {
+      throw new FormulonError(StatusCode.NotFound, message, '');
+    }
+    throw e;
+  }
+}
+
 /**
- * Builds the public `Workbook` and `Sheet` classes over a runtime's raw
- * `Workbook` class. Each call returns new classes, so a workbook of one
- * `createFormulon()` result is not an `instanceof` the `Workbook` of another.
+ * Builds the public `Workbook` and `Sheet` classes and the handle classes
+ * (`Table`, `Pivot`, `PivotCache`, `Drawing` and its `Picture`, `Chart`,
+ * `Shape` and `Slicer` subclasses) over a runtime's raw `Workbook` class. Each
+ * call returns new classes, so a workbook of one `createFormulon()` result is
+ * not an `instanceof` the `Workbook` of another.
  *
  * `Workbook` holds the workbook-scope ops and `Sheet` the sheet-scope ones; a
- * `Sheet` method calls the raw method with the sheet's current index first.
- * The workbook keeps one `Sheet` per sheet in sheet order and updates that list
+ * `Sheet` method calls the raw method with the sheet's current index first. The
+ * workbook keeps one `Sheet` per sheet in sheet order and updates that list
  * after every op in `SHEET_STRUCTURE_OPS`, so a handle follows its sheet across
  * inserts, moves and renames, and a removed sheet's handle throws `NotFound`.
- * Cell, range and `*Ref` arguments also take their string forms (see
+ *
+ * A handle method calls its raw method with the arguments the handle supplies
+ * first. Tables and pivots are named by the engine's runtime id, resolved to the
+ * current index on every call; pivot caches and drawing objects by their cache
+ * and object ids. The parent keeps one handle per id and never drops it, so
+ * every lookup of an object returns the same handle, and a removed object's
+ * handle throws `NotFound`.
+ *
+ * Cell, range, span and `*Ref` arguments also take their string forms (see
  * `installArgumentForms`).
  *
  * @param {Function} Raw The runtime's raw `Workbook` class.
@@ -1840,15 +2430,396 @@ function namedFunction(name, body) {
 function makeFacade(Raw) {
   const token = Symbol('formulon.facade');
   let rawOf;
+  let liveRaw;
   let isDisposed;
   let sheetIndex;
   let sheetState;
   let insertSheet;
+  let moveSheet;
+  let pivotCacheOf;
+  let tableState;
+  let pivotState;
+  let cacheState;
+  let drawingState;
+
+  class Table {
+    #workbook;
+    #id;
+
+    constructor(key, workbook, id) {
+      if (key !== token) throw new TypeError('Table has no public constructor; use Workbook.table');
+      this.#workbook = workbook;
+      this.#id = id;
+    }
+
+    static {
+      tableState = {
+        create: (workbook, id) => new Table(token, workbook, id),
+        locate: (table) => table.#locate(),
+      };
+    }
+
+    // The raw workbook and the table's current index.
+    #locate() {
+      const raw = liveRaw(this.#workbook);
+      return [raw, resolveRuntimeId(() => raw.resolveTableRuntimeId(this.#id), 'the table was removed')];
+    }
+
+    get workbook() {
+      return this.#workbook;
+    }
+
+    get index() {
+      return this.#locate()[1];
+    }
+
+    get name() {
+      const [raw, index] = this.#locate();
+      return raw.getTable(index).name;
+    }
+
+    get displayName() {
+      const [raw, index] = this.#locate();
+      return raw.getTable(index).displayName;
+    }
+  }
+
+  class Pivot {
+    #sheet;
+    #id;
+
+    constructor(key, sheet, id) {
+      if (key !== token) throw new TypeError('Pivot has no public constructor; use Sheet.pivot');
+      this.#sheet = sheet;
+      this.#id = id;
+    }
+
+    static {
+      pivotState = {
+        create: (sheet, id) => new Pivot(token, sheet, id),
+        locate: (pivot) => pivot.#locate(),
+      };
+    }
+
+    // The raw workbook, the sheet's current index and the pivot's current index on it.
+    #locate() {
+      const sheet = sheetIndex(this.#sheet);
+      const raw = rawOf(this.#sheet.workbook);
+      return [raw, sheet, resolveRuntimeId(() => raw.resolvePivotRuntimeId(sheet, this.#id), 'the pivot was removed')];
+    }
+
+    get sheet() {
+      return this.#sheet;
+    }
+
+    get index() {
+      return this.#locate()[2];
+    }
+
+    getProperties() {
+      const [raw, sheet, pivot] = this.#locate();
+      return { name: raw.getPivotName(sheet, pivot), cacheId: raw.getPivotCacheId(sheet, pivot) };
+    }
+
+    getCache() {
+      const [raw, sheet, pivot] = this.#locate();
+      return pivotCacheOf(this.#sheet.workbook, raw.getPivotCacheId(sheet, pivot));
+    }
+
+    showDetails(row, col) {
+      const [raw, sheet, pivot] = this.#locate();
+      return insertSheet(this.#sheet.workbook, raw.showPivotDetails(sheet, pivot, row, col));
+    }
+
+    updateField(field, patch) {
+      const where = 'Pivot.updateField';
+      checkPatch(where, patch, PATCH_FIELDS[where], { customName: 'string', numberFormat: 'string' });
+      const [raw, sheet, pivot] = this.#locate();
+      const setters = [
+        ['customName', 'setPivotFieldCustomName'],
+        ['numberFormat', 'setPivotFieldNumberFormat'],
+        ['defaultSubtotal', 'setPivotFieldDefaultSubtotal'],
+        ['insertBlankRow', 'setPivotFieldInsertBlankRow'],
+        ['fillDownLabels', 'setPivotFieldFillDownLabels'],
+        ['showAll', 'setPivotFieldShowAll'],
+        ['subtotalTop', 'setPivotFieldSubtotalTop'],
+      ];
+      for (const [key, setter] of setters) {
+        if (patch[key] !== undefined) raw[setter](sheet, pivot, field, patch[key] ?? '');
+      }
+    }
+
+    updateItem(field, item, patch) {
+      const where = 'Pivot.updateItem';
+      checkPatch(where, patch, PATCH_FIELDS[where], { caption: 'string' });
+      const [raw, sheet, pivot] = this.#locate();
+      const setters = [
+        ['visible', 'setPivotFieldItemVisible'],
+        ['showDetail', 'setPivotFieldItemShowDetail'],
+        ['caption', 'setPivotFieldItemCaption'],
+      ];
+      for (const [key, setter] of setters) {
+        if (patch[key] !== undefined) raw[setter](sheet, pivot, field, item, patch[key] ?? '');
+      }
+    }
+
+    setStyleInfo(patch) {
+      const where = 'Pivot.setStyleInfo';
+      const fields = PATCH_FIELDS[where];
+      checkPatch(where, patch, fields, { name: 'string' });
+      const [raw, sheet, pivot] = this.#locate();
+      const current = raw.getPivotStyleInfo(sheet, pivot) ?? {};
+      const info = {};
+      const name = patch.name === undefined ? current.name || undefined : (patch.name ?? undefined);
+      if (name !== undefined) info.name = name;
+      for (const key of Object.keys(fields)) info[key] = patch[key] ?? current[key] ?? false;
+      raw.setPivotStyleInfo(sheet, pivot, info);
+    }
+
+    setFieldSort(field, order, options) {
+      const where = 'Pivot.setFieldSort';
+      let byField = '';
+      if (options !== undefined && options !== null) {
+        requireObject(options, `${where} argument 3`);
+        if (options.byField !== undefined) byField = requireString(options.byField, `${where} byField`);
+      }
+      const [raw, sheet, pivot] = this.#locate();
+      raw.setPivotFieldSort(sheet, pivot, field, order, byField);
+    }
+
+    addFieldItem(field, name, options) {
+      const where = 'Pivot.addFieldItem';
+      let visible = true;
+      if (options !== undefined && options !== null) {
+        requireObject(options, `${where} argument 3`);
+        if (options.visible !== undefined) visible = requireBoolean(options.visible, `${where} visible`);
+      }
+      const [raw, sheet, pivot] = this.#locate();
+      return raw.addPivotFieldItem(sheet, pivot, field, name, visible);
+    }
+
+    setGrandTotals(patch) {
+      const where = 'Pivot.setGrandTotals';
+      requireObject(patch, `${where} argument 1`);
+      refuseUnknownKeys(where, patch);
+      const [raw, sheet, pivot] = this.#locate();
+      const current =
+        patch.rows === undefined || patch.columns === undefined ? raw.getPivotGrandTotals(sheet, pivot) : {};
+      const rows = patchField(patch, 'rows', current.rows, requireBoolean, where);
+      const columns = patchField(patch, 'columns', current.columns, requireBoolean, where);
+      raw.setPivotGrandTotals(sheet, pivot, rows, columns);
+    }
+
+    setFieldDateGroup(field, group) {
+      const where = 'Pivot.setFieldDateGroup';
+      requireObject(group, `${where} argument 2`);
+      const optional = (key) => (group[key] === undefined ? undefined : requireNumber(group[key], `${where} ${key}`));
+      const args = [
+        requireInteger(group.periods, `${where} periods`),
+        group.calendar === undefined ? PivotCalendar.Gregorian : requireInteger(group.calendar, `${where} calendar`),
+      ];
+      const tail = [optional('intervalDays'), optional('start'), optional('end')];
+      while (tail.length > 0 && tail.at(-1) === undefined) tail.pop();
+      const [raw, sheet, pivot] = this.#locate();
+      raw.setPivotFieldDateGroup(sheet, pivot, field, ...args, ...tail);
+    }
+  }
+
+  class PivotCache {
+    #workbook;
+    #cacheId;
+
+    constructor(key, workbook, cacheId) {
+      if (key !== token) throw new TypeError('PivotCache has no public constructor; use Workbook.pivotCache');
+      this.#workbook = workbook;
+      this.#cacheId = cacheId;
+    }
+
+    static {
+      cacheState = {
+        create: (workbook, cacheId) => new PivotCache(token, workbook, cacheId),
+        raw: (cache) => cache.#raw(),
+      };
+    }
+
+    // The raw workbook, once the cache is known to exist: the raw methods report a missing cache id as an
+    // invalid argument, not as a removed cache.
+    #raw() {
+      const raw = liveRaw(this.#workbook);
+      if (!raw.listPivotCaches().includes(this.#cacheId)) {
+        throw new FormulonError(StatusCode.NotFound, 'the pivot cache was removed', `cache_id=${this.#cacheId}`);
+      }
+      return raw;
+    }
+
+    get workbook() {
+      return this.#workbook;
+    }
+
+    get cacheId() {
+      return this.#cacheId;
+    }
+
+    listFields() {
+      const raw = this.#raw();
+      const id = this.#cacheId;
+      const n = raw.getPivotCacheFieldCount(id);
+      const fields = [];
+      for (let i = 0; i < n; i++) {
+        fields.push({ name: raw.getPivotCacheFieldName(id, i), formula: raw.getPivotCacheFieldFormula(id, i) });
+      }
+      return fields;
+    }
+
+    listFieldSharedItems(field) {
+      const raw = this.#raw();
+      const id = this.#cacheId;
+      const n = raw.getPivotCacheFieldSharedItemCount(id, field);
+      const items = [];
+      for (let i = 0; i < n; i++) {
+        items.push({
+          value: raw.getPivotCacheFieldSharedItemValue(id, field, i),
+          isDate: raw.isPivotCacheFieldSharedItemDate(id, field, i),
+        });
+      }
+      return items;
+    }
+
+    addFieldSharedItem(field, value, options) {
+      const [kind, args] = cacheValue('PivotCache.addFieldSharedItem', 2, value, options);
+      this.#raw()[`addPivotCacheFieldSharedItem${kind}`](this.#cacheId, field, ...args);
+    }
+
+    setRecordValue(record, field, value, options) {
+      const [kind, args] = cacheValue('PivotCache.setRecordValue', 3, value, options);
+      this.#raw()[`setPivotCacheRecord${kind}`](this.#cacheId, record, field, ...args);
+    }
+  }
+
+  class Drawing {
+    #sheet;
+    #objectId;
+    #kind;
+
+    constructor(key, sheet, objectId, kind) {
+      if (key !== token) throw new TypeError('Drawing has no public constructor; use Sheet.drawing');
+      this.#sheet = sheet;
+      this.#objectId = objectId;
+      this.#kind = kind;
+    }
+
+    static {
+      drawingState = {
+        create: (cls, sheet, objectId, kind) => new cls(token, sheet, objectId, kind),
+        locate: (drawing) => drawing.#locate(),
+      };
+    }
+
+    // The raw workbook, the sheet's current index and the object id, once the object is known to exist: the raw
+    // methods report a missing object id as an invalid argument, not as a removed object.
+    #locate() {
+      const sheet = sheetIndex(this.#sheet);
+      const raw = rawOf(this.#sheet.workbook);
+      if (raw.getDrawingObject(sheet, this.#objectId) === null) {
+        throw new FormulonError(StatusCode.NotFound, 'the drawing was removed', `object_id=${this.#objectId}`);
+      }
+      return [raw, sheet, this.#objectId];
+    }
+
+    get sheet() {
+      return this.#sheet;
+    }
+
+    get objectId() {
+      return this.#objectId;
+    }
+
+    get kind() {
+      return this.#kind;
+    }
+  }
+
+  class Picture extends Drawing {}
+
+  class Chart extends Drawing {
+    setLegend(patch) {
+      const where = 'Chart.setLegend';
+      const [raw, sheet, id] = drawingState.locate(this);
+      if (patch === null) return raw.setChartLegend(sheet, id, -1, false);
+      checkPatch(where, patch, PATCH_FIELDS[where]);
+      const current = raw.getChart(sheet, id)?.legend ?? DEFAULT_LEGEND;
+      raw.setChartLegend(
+        sheet,
+        id,
+        patch.position ?? current.position,
+        patch.overlay ?? current.overlay,
+        patch.hiddenSeries ?? current.hiddenSeries,
+      );
+    }
+
+    setSource(source) {
+      const where = 'Chart.setSource';
+      requireObject(source, `${where} argument 1`);
+      const flag = (field) =>
+        source[field] === undefined || source[field] === null
+          ? undefined
+          : requireBoolean(source[field], `${where} ${field}`);
+      const args = [
+        requireString(source.source, `${where} source`),
+        requireInteger(source.direction, `${where} direction`),
+      ];
+      const headerRow = flag('headerRow');
+      const headerColumn = flag('headerColumn');
+      if (headerRow !== undefined || headerColumn !== undefined) args.push(headerRow, headerColumn);
+      const [raw, sheet, id] = drawingState.locate(this);
+      raw.setChartSource(sheet, id, ...args);
+    }
+  }
+
+  class Shape extends Drawing {}
+
+  class Slicer extends Drawing {}
+
+  // The handle class of a drawing object, from its `DrawingProperties` record.
+  function drawingClass(raw, sheet, record) {
+    switch (record.kind) {
+      case DrawingObjectKind.Picture:
+        return Picture;
+      case DrawingObjectKind.Chart:
+        return Chart;
+      case DrawingObjectKind.Shape:
+      case DrawingObjectKind.Connector:
+      case DrawingObjectKind.Group:
+        return Shape;
+    }
+    return raw.getSlicer(sheet, record.objectId) === null ? Drawing : Slicer;
+  }
+
+  // The current index of a `TableRef` / `PivotRef` handle `value` passed to a method of `self`; undefined for
+  // anything else.
+  function handleIndex(self, kind, value, label) {
+    if (kind === 'table' && value instanceof Table) {
+      const workbook = self instanceof Workbook ? self : self.workbook;
+      if (value.workbook !== workbook) {
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} is a Table of another workbook`, '');
+      }
+      return value.index;
+    }
+    if (kind === 'pivot' && value instanceof Pivot) {
+      if (value.sheet !== self) {
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} is a Pivot of another sheet`, '');
+      }
+      return value.index;
+    }
+    return undefined;
+  }
 
   class Sheet {
     #workbook;
     #position;
     #name;
+    #pivots = new Map();
+    #drawings = new Map();
 
     constructor(key, workbook, position, name) {
       if (key !== token) throw new TypeError('Sheet has no public constructor; use Workbook.sheet');
@@ -1874,9 +2845,6 @@ function makeFacade(Raw) {
         place: (sheet, position) => {
           sheet.#position = position;
         },
-        rename: (sheet, name) => {
-          sheet.#name = name;
-        },
       };
     }
 
@@ -1891,6 +2859,17 @@ function makeFacade(Raw) {
     get name() {
       this.#current();
       return this.#name;
+    }
+
+    rename(newName) {
+      const raw = rawOf(this.#workbook);
+      const index = this.#current();
+      raw.renameSheet(index, newName);
+      this.#name = raw.getSheetName(index);
+    }
+
+    move(toIndex) {
+      moveSheet(this.#workbook, this.#current(), toIndex);
     }
 
     getFormula(row, col) {
@@ -1963,25 +2942,230 @@ function makeFacade(Raw) {
       return cells;
     }
 
+    getCellFormat(row, col) {
+      const raw = rawOf(this.#workbook);
+      const { xfIndex } = raw.getEffectiveStyle(this.#current(), row, col);
+      return cellFormatOf(raw, raw.getCellXf(xfIndex));
+    }
+
+    // Every argument is checked first; the sheet changes only in the final remap.
+    setCellFormat(range, patch) {
+      const checked = checkCellFormatPatch(patch);
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const bases = raw.getRangeStyleBases(sheet, range);
+      if (Object.keys(checked).length === 0) return;
+      let numFmtId;
+      if (checked.numberFormat === 'General') numFmtId = 0;
+      else if (checked.numberFormat !== undefined) numFmtId = raw.addNumFmt(checked.numberFormat);
+      const xfs = bases.map((base) => raw.addCellXf(patchedXf(raw, raw.getCellXf(base), checked, numFmtId)));
+      raw.remapRangeStyle(sheet, range, bases, xfs);
+    }
+
+    // The handle of the pivot at `index` on the sheet `sheet` is.
+    #pivotAt(raw, sheet, index) {
+      const id = raw.getPivotRuntimeId(sheet, index);
+      let pivot = this.#pivots.get(id);
+      if (pivot === undefined) {
+        pivot = pivotState.create(this, id);
+        this.#pivots.set(id, pivot);
+      }
+      return pivot;
+    }
+
     listPivots() {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const n = raw.getPivotCount(sheet);
       const pivots = [];
-      for (let i = 0; i < n; i++)
-        pivots.push({ name: raw.getPivotName(sheet, i), cacheId: raw.getPivotCacheId(sheet, i) });
+      for (let i = 0; i < n; i++) pivots.push(this.#pivotAt(raw, sheet, i));
       return pivots;
+    }
+
+    pivot(index) {
+      requireIndex(index, 'Sheet.pivot argument 1');
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      if (index >= raw.getPivotCount(sheet)) {
+        throw new FormulonError(
+          StatusCode.IndexOutOfRange,
+          `pivot index ${index} is out of range`,
+          `pivot_index=${index}`,
+        );
+      }
+      return this.#pivotAt(raw, sheet, index);
     }
 
     addPivot(input) {
       const where = 'Sheet.addPivot';
       requireObject(input, `${where} argument 1`);
-      return rawOf(this.#workbook).addPivot(
-        this.#current(),
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const index = raw.addPivot(
+        sheet,
         requireString(input.name, `${where} name`),
         requireNumber(input.cacheId, `${where} cacheId`),
         requireNumber(input.anchorRow, `${where} anchorRow`),
         requireNumber(input.anchorCol, `${where} anchorCol`),
+      );
+      return this.#pivotAt(raw, sheet, index);
+    }
+
+    // The handle of drawing object `objectId`, whose `DrawingProperties` is `record`; `cls` overrides the class
+    // its kind selects.
+    #drawingFor(raw, sheet, objectId, record, cls) {
+      let drawing = this.#drawings.get(objectId);
+      if (drawing === undefined) {
+        const of = cls ?? drawingClass(raw, sheet, record);
+        drawing = drawingState.create(of, this, objectId, record.kind);
+        this.#drawings.set(objectId, drawing);
+      }
+      return drawing;
+    }
+
+    // The object id a `number | Drawing` argument names.
+    #drawingId(ref, where) {
+      if (ref instanceof Drawing) {
+        if (ref.sheet !== this) {
+          throw new FormulonError(StatusCode.InvalidArgument, `${where} is a Drawing of another sheet`, '');
+        }
+        return ref.objectId;
+      }
+      if (typeof ref !== 'number') throw new TypeError(`${where} must be an object id or a Drawing`);
+      return requireIndex(ref, where);
+    }
+
+    // The `DrawingProperties` of `objectId`; `NotFound` when the sheet's drawing has no such object.
+    #drawingRecord(raw, sheet, objectId) {
+      const record = raw.getDrawingObject(sheet, objectId);
+      if (record === null) {
+        throw new FormulonError(
+          StatusCode.NotFound,
+          `the sheet's drawing has no object ${objectId}`,
+          `object_id=${objectId}`,
+        );
+      }
+      return record;
+    }
+
+    #lookupDrawing(ref, method) {
+      const id = this.#drawingId(ref, `Sheet.${method} argument 1`);
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      return this.#drawingFor(raw, sheet, id, this.#drawingRecord(raw, sheet, id));
+    }
+
+    #typedDrawing(ref, cls, method) {
+      const drawing = this.#lookupDrawing(ref, method);
+      if (!(drawing instanceof cls)) {
+        throw new FormulonError(
+          StatusCode.InvalidArgument,
+          `drawing object ${drawing.objectId} is not a ${cls.name}`,
+          `object_id=${drawing.objectId}`,
+        );
+      }
+      return drawing;
+    }
+
+    // The handle of an object just added with id `objectId`.
+    #added(raw, sheet, objectId) {
+      return this.#drawingFor(raw, sheet, objectId, this.#drawingRecord(raw, sheet, objectId));
+    }
+
+    drawing(objectId) {
+      return this.#lookupDrawing(objectId, 'drawing');
+    }
+
+    picture(objectId) {
+      return this.#typedDrawing(objectId, Picture, 'picture');
+    }
+
+    chart(objectId) {
+      return this.#typedDrawing(objectId, Chart, 'chart');
+    }
+
+    shape(objectId) {
+      return this.#typedDrawing(objectId, Shape, 'shape');
+    }
+
+    slicer(objectId) {
+      return this.#typedDrawing(objectId, Slicer, 'slicer');
+    }
+
+    listDrawings() {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      return raw.listDrawingObjects(sheet).map((record) => this.#drawingFor(raw, sheet, record.objectId, record));
+    }
+
+    listPictures() {
+      return this.listDrawings().filter((drawing) => drawing instanceof Picture);
+    }
+
+    listCharts() {
+      return this.listDrawings().filter((drawing) => drawing instanceof Chart);
+    }
+
+    listShapes() {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      return raw.listShapes(sheet).map((record) => this.#drawingFor(raw, sheet, record.objectId, record, Shape));
+    }
+
+    listSlicers() {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      return raw.listSlicers(sheet).map(({ objectId }) => {
+        const known = this.#drawings.get(objectId);
+        return known ?? this.#drawingFor(raw, sheet, objectId, this.#drawingRecord(raw, sheet, objectId), Slicer);
+      });
+    }
+
+    addPicture(bytes, input) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const id = input === undefined ? raw.addImage(sheet, bytes) : raw.addImage(sheet, bytes, input);
+      return this.#added(raw, sheet, id);
+    }
+
+    addChart(options) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      return this.#added(raw, sheet, raw.addChart(sheet, options));
+    }
+
+    addShape(spec) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      return this.#added(raw, sheet, raw.addShape(sheet, spec));
+    }
+
+    addSlicer(table, column, spec) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      return this.#added(raw, sheet, raw.addSlicer(sheet, table, column, spec));
+    }
+
+    restoreDrawing(bytes, opts) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const id = opts === undefined ? raw.restoreDrawing(sheet, bytes) : raw.restoreDrawing(sheet, bytes, opts);
+      return this.#added(raw, sheet, id);
+    }
+
+    // Each kind has its own raw remover; any other object cannot be removed.
+    removeDrawing(objectId) {
+      const drawing = this.#lookupDrawing(objectId, 'removeDrawing');
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const id = drawing.objectId;
+      if (drawing instanceof Picture || drawing instanceof Chart) return raw.removeDrawingObject(sheet, id);
+      if (drawing instanceof Shape) return raw.removeShape(sheet, id);
+      if (drawing instanceof Slicer) return raw.removeSlicer(sheet, id);
+      throw new FormulonError(
+        StatusCode.InvalidArgument,
+        `drawing object ${id} is not a picture, chart, shape or table slicer`,
+        `object_id=${id}`,
       );
     }
 
@@ -1990,18 +3174,19 @@ function makeFacade(Raw) {
     // checked up front leave the view untouched.
     setView(patch) {
       const where = 'Sheet.setView';
-      checkPatch(where, patch, SHEET_PATCHES.setView);
+      const fields = PATCH_FIELDS[where];
+      checkPatch(where, patch, fields);
       const given = (key) => patch[key] !== undefined;
       const nonZero = (...keys) => keys.some((key) => given(key) && patch[key] !== 0);
       if (nonZero('freezeRows', 'freezeCols') && nonZero('splitX', 'splitY')) {
         throw new TypeError(`${where} cannot freeze and split the view at once`);
       }
-      if (!Object.keys(SHEET_PATCHES.setView).some(given)) return;
+      if (!Object.keys(fields).some(given)) return;
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const view = raw.getView(sheet);
       const merged = { ...view };
-      for (const key of Object.keys(SHEET_PATCHES.setView)) if (given(key)) merged[key] = patch[key];
+      for (const key of Object.keys(fields)) if (given(key)) merged[key] = patch[key];
       const freeze = merged.freezeRows !== view.freezeRows || merged.freezeCols !== view.freezeCols;
       const split = merged.splitX !== view.splitX || merged.splitY !== view.splitY;
       // The panes once applied: a freeze replaces a split and a split a freeze.
@@ -2061,99 +3246,18 @@ function makeFacade(Raw) {
       for (const [key, setter] of singles) if (given(key)) raw[setter](sheet, patch[key]);
     }
 
-    updatePivotField(pivot, field, patch) {
-      const where = 'Sheet.updatePivotField';
-      checkPatch(where, patch, SHEET_PATCHES.updatePivotField, { customName: 'string', numberFormat: 'string' });
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      const setters = [
-        ['customName', 'setPivotFieldCustomName'],
-        ['numberFormat', 'setPivotFieldNumberFormat'],
-        ['defaultSubtotal', 'setPivotFieldDefaultSubtotal'],
-        ['insertBlankRow', 'setPivotFieldInsertBlankRow'],
-        ['fillDownLabels', 'setPivotFieldFillDownLabels'],
-        ['showAll', 'setPivotFieldShowAll'],
-        ['subtotalTop', 'setPivotFieldSubtotalTop'],
-      ];
-      for (const [key, setter] of setters) {
-        if (patch[key] !== undefined) raw[setter](sheet, pivot, field, patch[key] ?? '');
-      }
-    }
-
-    updatePivotItem(pivot, field, item, patch) {
-      const where = 'Sheet.updatePivotItem';
-      checkPatch(where, patch, SHEET_PATCHES.updatePivotItem, { caption: 'string' });
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      const setters = [
-        ['visible', 'setPivotFieldItemVisible'],
-        ['showDetail', 'setPivotFieldItemShowDetail'],
-        ['caption', 'setPivotFieldItemCaption'],
-      ];
-      for (const [key, setter] of setters) {
-        if (patch[key] !== undefined) raw[setter](sheet, pivot, field, item, patch[key] ?? '');
-      }
-    }
-
-    setPivotStyleInfo(pivot, patch) {
-      const where = 'Sheet.setPivotStyleInfo';
-      const fields = SHEET_PATCHES.setPivotStyleInfo;
-      checkPatch(where, patch, fields, { name: 'string' });
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      const current = raw.getPivotStyleInfo(sheet, pivot) ?? {};
-      const info = {};
-      const name = patch.name === undefined ? current.name || undefined : (patch.name ?? undefined);
-      if (name !== undefined) info.name = name;
-      for (const key of Object.keys(fields)) info[key] = patch[key] ?? current[key] ?? false;
-      raw.setPivotStyleInfo(sheet, pivot, info);
-    }
-
-    setPivotFieldSort(pivot, field, order, options) {
-      const where = 'Sheet.setPivotFieldSort';
-      let byField = '';
-      if (options !== undefined && options !== null) {
-        requireObject(options, `${where} argument 4`);
-        if (options.byField !== undefined) byField = requireString(options.byField, `${where} byField`);
-      }
-      rawOf(this.#workbook).setPivotFieldSort(this.#current(), pivot, field, order, byField);
-    }
-
-    addPivotFieldItem(pivot, field, name, options) {
-      const where = 'Sheet.addPivotFieldItem';
-      let visible = true;
-      if (options !== undefined && options !== null) {
-        requireObject(options, `${where} argument 4`);
-        if (options.visible !== undefined) visible = requireBoolean(options.visible, `${where} visible`);
-      }
-      return rawOf(this.#workbook).addPivotFieldItem(this.#current(), pivot, field, name, visible);
-    }
-
-    setChartLegend(objectId, patch) {
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      if (patch === null) return raw.setChartLegend(sheet, objectId, -1, false);
-      checkPatch('Sheet.setChartLegend', patch, SHEET_PATCHES.setChartLegend);
-      const current = raw.getChart(sheet, objectId)?.legend ?? DEFAULT_LEGEND;
-      raw.setChartLegend(
-        sheet,
-        objectId,
-        patch.position ?? current.position,
-        patch.overlay ?? current.overlay,
-        patch.hiddenSeries ?? current.hiddenSeries,
-      );
-    }
-
     setPrintOptions(patch) {
-      checkPatch('Sheet.setPrintOptions', patch, SHEET_PATCHES.setPrintOptions);
+      const where = 'Sheet.setPrintOptions';
+      checkPatch(where, patch, PATCH_FIELDS[where]);
       rawOf(this.#workbook).setPrintOptions(this.#current(), patch);
     }
 
     // The C layer has no third state for a section: `null` and `''` both clear it.
     setHeaderFooter(patch) {
+      const where = 'Sheet.setHeaderFooter';
       const sections = ['oddHeader', 'oddFooter', 'evenHeader', 'evenFooter', 'firstHeader', 'firstFooter'];
       const nullable = Object.fromEntries(sections.map((key) => [key, 'string']));
-      checkPatch('Sheet.setHeaderFooter', patch, SHEET_PATCHES.setHeaderFooter, nullable);
+      checkPatch(where, patch, PATCH_FIELDS[where], nullable);
       const input = { ...patch };
       for (const key of sections) if (input[key] === null) input[key] = '';
       rawOf(this.#workbook).setHeaderFooter(this.#current(), input);
@@ -2207,12 +3311,6 @@ function makeFacade(Raw) {
       throw new TypeError('Sheet.setValue argument 3 must be a number, string, boolean, null or a scalar Value');
     }
 
-    showPivotDetails(pivotIndex, row, col) {
-      const workbook = this.#workbook;
-      const position = rawOf(workbook).showPivotDetails(this.#current(), pivotIndex, row, col);
-      return insertSheet(workbook, position);
-    }
-
     setComment(row, col, comment) {
       const where = 'Sheet.setComment';
       requireObject(comment, `${where} argument 3`);
@@ -2233,30 +3331,21 @@ function makeFacade(Raw) {
       );
     }
 
+    // Only the keys the patch gives reach the engine; a record's other fields are ignored.
     updateThreadedComment(id, patch) {
       const where = 'Sheet.updateThreadedComment';
       requireObject(patch, `${where} argument 2`);
-      refuseUnknownKeys(where, 'updateThreadedComment', patch);
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      const current =
-        patch.text === undefined || patch.mentions === undefined ? raw.getThreadedComment(sheet, id) : null;
-      const text = patchField(patch, 'text', current?.text ?? '', requireString, where);
-      const mentions = patchField(patch, 'mentions', current?.mentions ?? [], requireArray, where);
-      raw.updateThreadedComment(sheet, id, text, mentions);
-    }
-
-    setPivotGrandTotals(pivotIndex, patch) {
-      const where = 'Sheet.setPivotGrandTotals';
-      requireObject(patch, `${where} argument 2`);
-      refuseUnknownKeys(where, 'setPivotGrandTotals', patch);
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      const current =
-        patch.rows === undefined || patch.columns === undefined ? raw.getPivotGrandTotals(sheet, pivotIndex) : {};
-      const rows = patchField(patch, 'rows', current.rows, requireBoolean, where);
-      const columns = patchField(patch, 'columns', current.columns, requireBoolean, where);
-      raw.setPivotGrandTotals(sheet, pivotIndex, rows, columns);
+      refuseUnknownKeys(where, patch);
+      const input = {};
+      const checks = [
+        ['text', requireString],
+        ['mentions', requireArray],
+        ['done', requireBoolean],
+      ];
+      for (const [key, check] of checks) {
+        if (patch[key] !== undefined) input[key] = check(patch[key], `${where} ${key}`);
+      }
+      rawOf(this.#workbook).updateThreadedComment(this.#current(), id, input);
     }
 
     setArrayFormula(arrayFormula) {
@@ -2267,41 +3356,11 @@ function makeFacade(Raw) {
       rawOf(this.#workbook).setArrayFormula(this.#current(), rect, formula);
     }
 
-    setChartSource(objectId, source) {
-      const where = 'Sheet.setChartSource';
-      requireObject(source, `${where} argument 2`);
-      const flag = (field) =>
-        source[field] === undefined || source[field] === null
-          ? undefined
-          : requireBoolean(source[field], `${where} ${field}`);
-      const args = [
-        requireString(source.source, `${where} source`),
-        requireInteger(source.direction, `${where} direction`),
-      ];
-      const headerRow = flag('headerRow');
-      const headerColumn = flag('headerColumn');
-      if (headerRow !== undefined || headerColumn !== undefined) args.push(headerRow, headerColumn);
-      rawOf(this.#workbook).setChartSource(this.#current(), objectId, ...args);
-    }
-
-    setPivotFieldDateGroup(pivotIndex, fieldIndex, group) {
-      const where = 'Sheet.setPivotFieldDateGroup';
-      requireObject(group, `${where} argument 3`);
-      const optional = (field) =>
-        group[field] === undefined ? undefined : requireNumber(group[field], `${where} ${field}`);
-      const args = [
-        requireInteger(group.periods, `${where} periods`),
-        group.calendar === undefined ? PivotCalendar.Gregorian : requireInteger(group.calendar, `${where} calendar`),
-      ];
-      const tail = [optional('intervalDays'), optional('start'), optional('end')];
-      while (tail.length > 0 && tail.at(-1) === undefined) tail.pop();
-      rawOf(this.#workbook).setPivotFieldDateGroup(this.#current(), pivotIndex, fieldIndex, ...args, ...tail);
-    }
-
     setPageSetup(setup) {
+      const where = 'Sheet.setPageSetup';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      checkForwardedPatch('Sheet', 'setPageSetup', setup, SHEET_PATCHES.setPageSetup);
+      checkForwardedPatch(where, setup, PATCH_FIELDS[where]);
       // A stated orientation cannot be removed; `null` keeps an unstated one.
       if (isObject(setup) && setup.orientation === null) {
         if (raw.getPageSetup(sheet).orientationStated) {
@@ -2341,6 +3400,8 @@ function makeFacade(Raw) {
   class Workbook {
     #raw;
     #sheets;
+    #tables = new Map();
+    #pivotCaches = new Map();
     #disposed = false;
 
     constructor(key, raw) {
@@ -2357,8 +3418,14 @@ function makeFacade(Raw) {
 
     static {
       rawOf = (workbook) => workbook.#raw;
+      liveRaw = (workbook) => {
+        workbook.#alive();
+        return workbook.#raw;
+      };
       isDisposed = (workbook) => workbook.#disposed;
       insertSheet = (workbook, position) => workbook.#insert(position);
+      moveSheet = (workbook, from, toIndex) => workbook.#move(from, toIndex);
+      pivotCacheOf = (workbook, cacheId) => workbook.#cacheHandle(cacheId);
     }
 
     static load(bytes) {
@@ -2399,6 +3466,13 @@ function makeFacade(Raw) {
       this.#sheets.splice(position, 0, sheet);
       this.#renumber();
       return sheet;
+    }
+
+    #move(from, toIndex) {
+      this.#raw.moveSheet(from, toIndex);
+      const [moved] = this.#sheets.splice(from, 1);
+      this.#sheets.splice(toIndex, 0, moved);
+      this.#renumber();
     }
 
     // Resolves a `SheetRef` the way `sheet(key)` does; `method` and `position` word the errors.
@@ -2464,14 +3538,6 @@ function makeFacade(Raw) {
       return this.#insert(position);
     }
 
-    moveSheet(sheet, toIndex) {
-      const from = this.#resolve(sheet, 'moveSheet', 1);
-      this.#raw.moveSheet(from, toIndex);
-      const [moved] = this.#sheets.splice(from, 1);
-      this.#sheets.splice(toIndex, 0, moved);
-      this.#renumber();
-    }
-
     removeSheet(sheet) {
       const index = this.#resolve(sheet, 'removeSheet', 1);
       this.#raw.removeSheet(index);
@@ -2480,10 +3546,85 @@ function makeFacade(Raw) {
       this.#renumber();
     }
 
-    renameSheet(sheet, name) {
-      const index = this.#resolve(sheet, 'renameSheet', 1);
-      this.#raw.renameSheet(index, name);
-      sheetState.rename(this.#sheets[index], this.#raw.getSheetName(index));
+    // The handle of the table at workbook-wide `index`.
+    #tableAt(index) {
+      const id = this.#raw.getTableRuntimeId(index);
+      let table = this.#tables.get(id);
+      if (table === undefined) {
+        table = tableState.create(this, id);
+        this.#tables.set(id, table);
+      }
+      return table;
+    }
+
+    listTables() {
+      this.#alive();
+      const n = this.#raw.getTableCount();
+      const tables = [];
+      for (let i = 0; i < n; i++) tables.push(this.#tableAt(i));
+      return tables;
+    }
+
+    table(index) {
+      requireIndex(index, 'Workbook.table argument 1');
+      this.#alive();
+      if (index >= this.#raw.getTableCount()) {
+        throw new FormulonError(
+          StatusCode.IndexOutOfRange,
+          `table index ${index} is out of range`,
+          `table_index=${index}`,
+        );
+      }
+      return this.#tableAt(index);
+    }
+
+    addTable(input) {
+      return this.#tableAt(this.#raw.addTable(input));
+    }
+
+    // The handle of the pivot cache `cacheId`, whether or not the workbook has it now.
+    #cacheHandle(cacheId) {
+      let cache = this.#pivotCaches.get(cacheId);
+      if (cache === undefined) {
+        cache = cacheState.create(this, cacheId);
+        this.#pivotCaches.set(cacheId, cache);
+      }
+      return cache;
+    }
+
+    // The cache id a `number | PivotCache` argument names.
+    #cacheId(ref, where) {
+      if (ref instanceof PivotCache) {
+        if (ref.workbook !== this) {
+          throw new FormulonError(StatusCode.InvalidArgument, `${where} is a PivotCache of another workbook`, '');
+        }
+        return ref.cacheId;
+      }
+      if (typeof ref !== 'number') throw new TypeError(`${where} must be a cache id or a PivotCache`);
+      return requireIndex(ref, where);
+    }
+
+    listPivotCaches() {
+      this.#alive();
+      return this.#raw.listPivotCaches().map((cacheId) => this.#cacheHandle(cacheId));
+    }
+
+    pivotCache(cacheId) {
+      const id = this.#cacheId(cacheId, 'Workbook.pivotCache argument 1');
+      this.#alive();
+      if (!this.#raw.listPivotCaches().includes(id)) {
+        throw new FormulonError(StatusCode.NotFound, `the workbook has no pivot cache ${id}`, `cache_id=${id}`);
+      }
+      return this.#cacheHandle(id);
+    }
+
+    addPivotCache(requestedId) {
+      const requested = requestedId === undefined || requestedId === null ? 0 : requestedId;
+      return this.#cacheHandle(this.#raw.addPivotCache(requested));
+    }
+
+    removePivotCache(cacheId) {
+      this.#raw.removePivotCache(this.#cacheId(cacheId, 'Workbook.removePivotCache argument 1'));
     }
 
     setPinnedNow(time) {
@@ -2542,7 +3683,7 @@ function makeFacade(Raw) {
 
     setIterative(patch) {
       const where = 'Workbook.setIterative';
-      checkForwardedPatch('Workbook', 'setIterative', patch, WORKBOOK_PATCHES.setIterative);
+      checkForwardedPatch(where, patch, PATCH_FIELDS[where]);
       if (isObject(patch)) {
         const { maxIterations, maxChange } = patch;
         if (maxIterations !== undefined && !Number.isInteger(maxIterations)) {
@@ -2553,42 +3694,6 @@ function makeFacade(Raw) {
       }
       this.#raw.setIterative(patch);
     }
-
-    listPivotCacheFields(cacheId) {
-      const raw = this.#raw;
-      const n = raw.getPivotCacheFieldCount(cacheId);
-      const fields = [];
-      for (let i = 0; i < n; i++) {
-        fields.push({
-          name: raw.getPivotCacheFieldName(cacheId, i),
-          formula: raw.getPivotCacheFieldFormula(cacheId, i),
-        });
-      }
-      return fields;
-    }
-
-    listPivotCacheFieldSharedItems(cacheId, field) {
-      const raw = this.#raw;
-      const n = raw.getPivotCacheFieldSharedItemCount(cacheId, field);
-      const items = [];
-      for (let i = 0; i < n; i++) {
-        items.push({
-          value: raw.getPivotCacheFieldSharedItemValue(cacheId, field, i),
-          isDate: raw.isPivotCacheFieldSharedItemDate(cacheId, field, i),
-        });
-      }
-      return items;
-    }
-
-    addPivotCacheFieldSharedItem(cacheId, field, value, options) {
-      const [kind, args] = cacheValue('Workbook.addPivotCacheFieldSharedItem', 3, value, options);
-      this.#raw[`addPivotCacheFieldSharedItem${kind}`](cacheId, field, ...args);
-    }
-
-    setPivotCacheRecordValue(cacheId, record, field, value, options) {
-      const [kind, args] = cacheValue('Workbook.setPivotCacheRecordValue', 4, value, options);
-      this.#raw[`setPivotCacheRecord${kind}`](cacheId, record, field, ...args);
-    }
   }
 
   // `using` calls the same function as `dispose()`.
@@ -2597,42 +3702,116 @@ function makeFacade(Raw) {
     writable: true,
     configurable: true,
   });
-  const forWorkbook = [WORKBOOK_METHODS, WORKBOOK_ABSENT_ARGS, WORKBOOK_PATCHES];
-  installForwarders(Workbook.prototype, 'Workbook', ...forWorkbook, Raw, (self, name, args) =>
-    rawOf(self)[name](...args),
+
+  const sheetCall = (self, name, args) => rawOf(self.workbook)[name](sheetIndex(self), ...args);
+  const tableCall = (self, name, args) => {
+    const [raw, index] = tableState.locate(self);
+    return raw[name](index, ...args);
+  };
+  const pivotCall = (self, name, args) => {
+    const [raw, sheet, index] = pivotState.locate(self);
+    return raw[name](sheet, index, ...args);
+  };
+  const cacheCall = (self, name, args) => cacheState.raw(self)[name](self.cacheId, ...args);
+  // A drawing read the raw method answers with `null` for an object without that part (a picture's media).
+  const drawingRead = /^(?:Drawing|Picture|Chart|Shape|Slicer)\.get(?:Drawing)?Properties$/;
+  const drawingReads = new Set(
+    Object.entries(HANDLE_FORWARDERS)
+      .filter(([key, raw]) => raw !== null && drawingRead.test(key))
+      .map(([, raw]) => raw),
   );
-  const forSheet = [SHEET_METHODS, SHEET_ABSENT_ARGS, SHEET_PATCHES];
-  installForwarders(Sheet.prototype, 'Sheet', ...forSheet, Raw, (self, name, args) =>
-    rawOf(self.workbook)[name](sheetIndex(self), ...args),
-  );
-  installArgumentForms(Workbook.prototype, 'Workbook', rawOf, () => undefined);
-  installArgumentForms(Sheet.prototype, 'Sheet', (self) => rawOf(self.workbook), sheetIndex);
+  const drawingCall = (self, name, args) => {
+    const [raw, sheet, id] = drawingState.locate(self);
+    const out = raw[name](sheet, id, ...args);
+    if (out === null && drawingReads.has(name)) {
+      throw new FormulonError(StatusCode.NotFound, 'the drawing object has no such part', `object_id=${id}`);
+    }
+    return out;
+  };
+
+  const facadeClasses = [
+    ['Workbook', Workbook, (self, name, args) => rawOf(self)[name](...args), WORKBOOK_METHODS],
+    ['Sheet', Sheet, sheetCall, SHEET_METHODS],
+  ];
+  for (const [owner, cls, call, names] of facadeClasses) {
+    installForwarders(
+      cls.prototype,
+      owner,
+      names.map((name) => [name, name]),
+      Raw,
+      call,
+    );
+  }
+  const handleClasses = [
+    ['Sheet', Sheet, sheetCall],
+    ['Table', Table, tableCall],
+    ['Pivot', Pivot, pivotCall],
+    ['PivotCache', PivotCache, cacheCall],
+    ['Drawing', Drawing, drawingCall],
+    ['Picture', Picture, drawingCall],
+    ['Chart', Chart, drawingCall],
+    ['Shape', Shape, drawingCall],
+    ['Slicer', Slicer, drawingCall],
+  ];
+  for (const [owner, cls, call] of handleClasses) {
+    const prefix = `${owner}.`;
+    const entries = Object.entries(HANDLE_FORWARDERS)
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, raw]) => [key.slice(prefix.length), raw]);
+    installForwarders(cls.prototype, owner, entries, Raw, call);
+    for (const [key, getter] of Object.entries(HANDLE_PROPERTIES)) {
+      if (!key.startsWith(prefix)) continue;
+      Object.defineProperty(cls.prototype, key.slice(prefix.length), {
+        get() {
+          return call(this, getter, []);
+        },
+        configurable: true,
+      });
+    }
+  }
+
+  const argumentForms = [
+    ['Workbook', Workbook, rawOf, () => undefined],
+    ['Sheet', Sheet, (self) => rawOf(self.workbook), sheetIndex],
+    ['Pivot', Pivot, (self) => rawOf(self.sheet.workbook), (self) => sheetIndex(self.sheet)],
+  ];
+  for (const [owner, cls, rawFor, sheetFor] of argumentForms) {
+    installArgumentForms(cls.prototype, owner, rawFor, sheetFor, handleIndex);
+  }
   return Workbook;
 }
 
 /**
- * Wraps every defined method listed in `CELL_ARGS`, `RECT_ARGS` or `REF_ARGS`
- * so that A1 addresses, A1 ranges and `*Ref` strings reach it in coordinate and
- * index form. `rawOf(self)` and `sheetOf(self)` give the raw workbook and the
- * sheet index a string key is resolved against.
+ * Wraps every defined method of `owner` listed in `CELL_ARGS`, `RECT_ARGS`,
+ * `SPAN_ARGS` or `REF_ARGS` so that A1 addresses, A1 ranges, A1 spans, `*Ref`
+ * strings and `*Ref` handles reach it in coordinate and index form. `rawOf(self)`
+ * and `sheetOf(self)` give the raw workbook and the sheet index a string key is
+ * resolved against; `handleIndex(self, kind, value, label)` the index a handle
+ * names.
  */
-function installArgumentForms(proto, owner, rawOf, sheetOf) {
-  const names = new Set([...Object.keys(CELL_ARGS), ...Object.keys(RECT_ARGS), ...Object.keys(REF_ARGS)]);
-  for (const name of names) {
+function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
+  const prefix = `${owner}.`;
+  const tables = [CELL_ARGS, RECT_ARGS, SPAN_ARGS, REF_ARGS];
+  const keys = new Set(tables.flatMap((table) => Object.keys(table)));
+  for (const where of keys) {
+    if (!where.startsWith(prefix)) continue;
+    const name = where.slice(prefix.length);
     if (!Object.hasOwn(proto, name)) continue;
     const inner = proto[name];
-    const where = `${owner}.${name}`;
-    const pairs = CELL_ARGS[name];
-    const rects = RECT_ARGS[name];
-    const ref = REF_ARGS[name];
+    const pairs = CELL_ARGS[where];
+    const rects = RECT_ARGS[where];
+    const spans = SPAN_ARGS[where];
+    const ref = REF_ARGS[where];
     defineMethod(
       proto,
       name,
       namedFunction(name, function (args) {
+        if (spans !== undefined) args = expandSpans(rawOf(this), spans, args);
         if (pairs !== undefined) args = expandCells(rawOf(this), where, pairs, args);
         if (rects !== undefined) args = expandRects(rawOf(this), rects, args);
         if (ref !== undefined && typeof args[ref[0]] !== 'number') {
-          args = resolveRef(rawOf(this), sheetOf(this), where, ref, args);
+          const named = (kind, value, label) => handleIndex(this, kind, value, label);
+          args = resolveRef(rawOf(this), sheetOf(this), where, ref, args, named);
         }
         return inner.apply(this, args);
       }),
@@ -2641,37 +3820,24 @@ function installArgumentForms(proto, owner, rawOf, sheetOf) {
 }
 
 /**
- * Refuses a key outside `PATCH_KEYS` for `<owner>.<name>`, and
- * `null` on a field of `fields` (`TypeError: <owner>.<name> <field> must be a
- * <type>`). A non-object patch is left to the raw method.
+ * Defines the generated forwarders on a facade prototype: each `[name, rawName]`
+ * of `entries` the prototype does not define by hand calls `call(this, rawName,
+ * args)`. An op the ledger marks hand-written (a `Workbook` / `Sheet` name in
+ * `HANDWRITTEN`, a handle method whose raw name is null), or one that changes the
+ * sheet list, must already be defined by hand. A list family loops over the raw
+ * count and element getter. An `ABSENT_ARGS` entry maps `null` (and, for an
+ * optional argument, `undefined`) at its position to the raw sentinel, and
+ * refuses a negative number where that sentinel is negative; a patch op
+ * (`PATCH_KEYS`) refuses a key outside its table and, per `PATCH_FIELDS`, `null`
+ * on a non-nullable field. `owner` words the errors. A method the raw class does
+ * not register (a member only the other package has) is skipped.
  */
-function checkForwardedPatch(owner, name, patch, fields = {}) {
-  if (!isObject(patch)) return;
-  refuseUnknownKeys(`${owner}.${name}`, name, patch);
-  for (const [field, type] of Object.entries(fields)) {
-    if (patch[field] === null) throw new TypeError(`${owner}.${name} ${field} must be a ${type}`);
-  }
-}
-
-/**
- * Defines the generated forwarders on a facade prototype: each listed method the
- * prototype does not define by hand calls `call(this, rawName, args)`. An op the
- * ledger marks hand-written, or one that changes the sheet list, must already be
- * defined by hand. A list family loops over the raw count and element getter.
- * An `*_ABSENT_ARGS` entry maps `null` (and, for an optional argument,
- * `undefined`) at its position to the raw sentinel, and refuses a negative
- * number where that sentinel is negative; a patch op (`PATCH_KEYS`) refuses a
- * key outside its table and, per `*_PATCHES`, `null` on a non-nullable field. `owner` words the errors. A method
- * the raw class does not register (a member only the other package has) is
- * skipped.
- */
-function installForwarders(proto, owner, names, absentArgs, patches, Raw, call) {
-  for (const name of names) {
+function installForwarders(proto, owner, entries, Raw, call) {
+  const facade = owner === 'Workbook' || owner === 'Sheet';
+  for (const [name, rawName] of entries) {
     if (Object.hasOwn(proto, name)) continue;
-    if (HANDWRITTEN.includes(name) || SHEET_STRUCTURE_OPS.includes(name)) {
-      throw new TypeError(`formulon: the facade does not implement the hand-written ${name}`);
-    }
-    const family = LIST_FAMILIES[name];
+    const where = `${owner}.${name}`;
+    const family = LIST_FAMILIES[where];
     if (family !== undefined) {
       const [count, element] = family;
       defineMethod(
@@ -2686,27 +3852,30 @@ function installForwarders(proto, owner, names, absentArgs, patches, Raw, call) 
       );
       continue;
     }
-    if (typeof Raw.prototype[name] !== 'function') continue;
-    if (PATCH_KEYS[name] !== undefined) {
-      const [position] = PATCH_KEYS[name];
-      const fields = patches[name];
+    if (rawName === null || (facade && HANDWRITTEN.includes(name)) || SHEET_STRUCTURE_OPS.includes(where)) {
+      throw new TypeError(`formulon: the facade does not implement the hand-written ${where}`);
+    }
+    if (typeof Raw.prototype[rawName] !== 'function') continue;
+    if (PATCH_KEYS[where] !== undefined) {
+      const [position] = PATCH_KEYS[where];
+      const fields = PATCH_FIELDS[where];
       defineMethod(
         proto,
         name,
         namedFunction(name, function (args) {
-          checkForwardedPatch(owner, name, args[position], fields);
-          return call(this, name, args);
+          checkForwardedPatch(where, args[position], fields);
+          return call(this, rawName, args);
         }),
       );
       continue;
     }
-    const absent = absentArgs[name];
+    const absent = ABSENT_ARGS[where];
     defineMethod(
       proto,
       name,
       absent === undefined
         ? namedFunction(name, function (args) {
-            return call(this, name, args);
+            return call(this, rawName, args);
           })
         : namedFunction(name, function (args) {
             const [position, sentinel, optional = false] = absent;
@@ -2716,9 +3885,9 @@ function installForwarders(proto, owner, names, absentArgs, patches, Raw, call) 
               args[position] = sentinel;
             } else if (typeof sentinel === 'number' && sentinel < 0 && typeof value === 'number' && value < 0) {
               // The C sentinel is not a public value; absence is spelled `null`.
-              throw new RangeError(`${owner}.${name} argument ${position + 1} is outside uint32 range`);
+              throw new RangeError(`${where} argument ${position + 1} is outside uint32 range`);
             }
-            return call(this, name, args);
+            return call(this, rawName, args);
           }),
     );
   }

@@ -141,10 +141,10 @@ class SurfaceParityTests(unittest.TestCase):
     """Every advertised method must exist on ``Workbook`` or ``Sheet``."""
 
     METHODS = [
-        "move_sheet",
+        "Sheet.move",
         "copy_sheet",
         "remove_sheet",
-        "rename_sheet",
+        "Sheet.rename",
         "set_defined_name",
         "set_error",
         "insert_rows",
@@ -190,9 +190,9 @@ class SurfaceParityTests(unittest.TestCase):
         "set_values",
         "list_cells",
         "list_pivots",
-        "list_pivot_field_items",
-        "update_pivot_field",
-        "update_pivot_item",
+        "Pivot.list_field_items",
+        "Pivot.update_field",
+        "Pivot.update_item",
         "has_dirty_cells",
         "list_fonts",
         "list_fills",
@@ -200,10 +200,10 @@ class SurfaceParityTests(unittest.TestCase):
         "list_cell_xfs",
         "list_cell_style_xfs",
         "list_dxfs",
-        "list_pivot_cache_fields",
-        "list_pivot_cache_field_shared_items",
-        "add_pivot_cache_field_shared_item",
-        "set_pivot_cache_record_value",
+        "PivotCache.list_fields",
+        "PivotCache.list_field_shared_items",
+        "PivotCache.add_field_shared_item",
+        "PivotCache.set_record_value",
         "list_column_overrides",
         "set_column_width",
         "set_column_hidden",
@@ -243,28 +243,28 @@ class SurfaceParityTests(unittest.TestCase):
         "add_cell_xf",
         "get_cell_style",
         "get_cell_style_xf",
-        "get_pivot_layout",
+        "Pivot.get_layout",
         "list_pivot_caches",
         "add_pivot_cache",
         "remove_pivot_cache",
-        "add_pivot_cache_field",
-        "clear_pivot_cache_fields",
-        "add_pivot_cache_record",
+        "PivotCache.add_field",
+        "PivotCache.clear_fields",
+        "PivotCache.add_record",
         "add_pivot",
         "remove_pivot",
-        "set_pivot_name",
-        "set_pivot_anchor",
-        "set_pivot_grand_totals",
-        "set_pivot_style_info",
-        "add_pivot_field",
-        "add_pivot_field_item",
-        "add_pivot_field_shared_item",
-        "set_pivot_field_axis",
-        "add_pivot_data_field",
-        "set_pivot_data_field",
-        "add_pivot_filter",
-        "set_pivot_row_field_order",
-        "set_pivot_column_field_order",
+        "Pivot.rename",
+        "Pivot.set_anchor",
+        "Pivot.set_grand_totals",
+        "Pivot.set_style_info",
+        "Pivot.add_field",
+        "Pivot.add_field_item",
+        "Pivot.add_field_shared_item",
+        "Pivot.set_field_axis",
+        "Pivot.add_data_field",
+        "Pivot.set_data_field",
+        "Pivot.add_filter",
+        "Pivot.set_row_field_order",
+        "Pivot.set_column_field_order",
         "get_precedents",
         "get_dependents",
         "get_spill_info",
@@ -280,8 +280,19 @@ class SurfaceParityTests(unittest.TestCase):
     ]
 
     def test_all_methods_present(self) -> None:
+        handles = {
+            "Pivot": formulon.Pivot,
+            "PivotCache": formulon.PivotCache,
+            "Sheet": Sheet,
+            "Table": formulon.Table,
+            "Chart": formulon.Chart,
+        }
         for name in self.METHODS:
-            self.assertTrue(hasattr(Workbook, name) or hasattr(Sheet, name), f"missing method: {name}")
+            if "." in name:
+                owner, member = name.split(".")
+                self.assertTrue(hasattr(handles[owner], member), f"missing method: {name}")
+            else:
+                self.assertTrue(hasattr(Workbook, name) or hasattr(Sheet, name), f"missing method: {name}")
 
     def test_default_workbook_uses_english_profile(self) -> None:
         with Workbook.create_default() as wb:

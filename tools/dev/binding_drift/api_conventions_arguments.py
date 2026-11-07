@@ -2,11 +2,14 @@
 
 A cell is a `(row, col)` pair or one A1 string, a rectangle a `CellRect` or an
 A1 range string (R25.a1 / R25.rect, driven by the ledger's `cell_args` and
-`rect_args`). A collection is enumerated by `list<Plural>()`, not counted
-(R25.count). A partial update takes a declared patch whose keys are fields of
-the getter's record (R18.all, driven by `patch` / `patch_record`). Tables,
-pivots, CF rules and protected ranges are addressed by index or name
-(R26.ref), sheets by `SheetRef` (R27.sheetparam).
+`rect_args`), a row or column span a number pair or one span string (R25.span,
+driven by `span_args`). A collection is enumerated by `list<Plural>()`, not
+counted (R25.count). A partial update takes a declared patch whose keys are
+fields of the getter's record, and every patch has one (R18.all, driven by
+`patch` / `patch_record`). Tables, pivots, CF rules and protected ranges are
+addressed by index or name (R26.ref), sheets by `SheetRef` (R27.sheetparam).
+The element of a collection published as handles is edited through its
+handle; its parent keeps add, remove, the lookup and the list (R28.handles).
 
 A member's signature is its first overload (the coordinate form); R25.a1
 alone reads every overload.
@@ -15,13 +18,25 @@ alone reads every overload.
 from __future__ import annotations
 
 import re
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
 
-from .api_conventions import Context, Violation
+from .api_conventions import (
+    SHEET_HANDLE_CLASS,
+    Context,
+    Violation,
+    c_verb,
+    entry_handle,
+    handle_classes,
+    handle_collections,
+    handle_name,
+)
 from .api_conventions_bindings import (
     BINDING_SURFACES,
+    SHEET_CLASS,
+    WORKBOOK_CLASS,
     TsDecl,
     _callables,
+    _dropped,
     _entry_surfaces,
     _field,
     _in_tree,
@@ -31,6 +46,7 @@ from .api_conventions_bindings import (
     _owned,
     _parse_members,
     _split_top,
+    _tree_c,
     _violation,
     surfaces,
 )
@@ -54,6 +70,14 @@ _PY_REFS = {
     "cf_rule_index": "cf_rule",
     "protected_range_index": "protected_range",
 }
+# Python reference arguments that also take the handle of the object, as the JS `TableRef` / `PivotRef` do.
+_PY_REF_HANDLES = {"table": ("Table",), "pivot": ("Pivot",)}
+
+
+def _py_ref_union(param: str) -> str:
+    return f"Union[{', '.join(('int', 'str', *_PY_REF_HANDLES.get(param, ())))}]"
+
+
 _JS_SHEET_PARAM_RE = re.compile(r"sheet|sheetIndex|localSheetId|scope|[a-z]\w*Sheet")
 _PY_SHEET_PARAM_RE = re.compile(r"sheet|sheet_index|local_sheet_id|scope|\w+_sheet")
 _JS_COUNT_AT_RE = re.compile(r"get[A-Z]\w*(?:Count|At)")
@@ -69,6 +93,43 @@ def _ledger_ops(ctx: Context, field_name: str) -> Iterator[Tuple[str, dict]]:
 def _on(entry: dict, surface: str) -> bool:
     listed = _entry_surfaces(entry)
     return listed is None or surface in listed
+
+
+class _Target(NamedTuple):
+    """Where an op is declared on one surface: its label, its first signature, and every JS signature or the
+    Python `@overload` stubs."""
+
+    name: str
+    member: object
+    overloads: Tuple[object, ...]
+
+
+def _targets(ctx: Context, entry: dict, surface: str) -> List[_Target]:
+    """The declarations of the op on `surface`: each handle class's method for an op with `handle:`, else its
+    `Workbook` / `Sheet` method or free function. An absent declaration yields nothing."""
+    found = surfaces(ctx)
+    if entry_handle(entry) is None:
+        pool = _callables(ctx, surface)
+        name = _in_tree(pool, entry, _field(surface))
+        if name is None:
+            return []
+        if surface == "py":
+            return [_Target(name, pool[name], tuple(found.py.overloads(name)))]
+        return [_Target(name, pool[name], tuple(found.js[surface].overloads(name)) or (pool[name],))]
+    name = handle_name(entry, _field(surface), ctx.ledger.collections)
+    out: List[_Target] = []
+    for cls in handle_classes(entry):
+        if surface == "py":
+            py_class = found.py.classes.get(cls)
+            member = py_class.methods.get(name) if py_class and name else None
+            overloads = tuple(py_class.overloads.get(name, ())) if py_class and name else ()
+        else:
+            decl = found.js[surface].decls.get(cls)
+            overloads = tuple(m for m in decl.members if m.name == name and m.is_method) if decl else ()
+            member = overloads[0] if overloads else None
+        if member is not None:
+            out.append(_Target(f"{cls}.{name}", member, overloads))
+    return out
 
 
 def _pairs(entry: dict) -> List[Tuple[int, int]]:
@@ -131,23 +192,18 @@ def _rule_cell_a1(ctx: Context) -> Iterable[Violation]:
     declaration has the coordinate signature and the signature with every pair replaced by a `string`; the Python
     method has the same two `@overload` stubs, the A1 one naming the cells `a1` (then `anchor`).
     """
-    found = surfaces(ctx)
     for key, entry in _ledger_ops(ctx, "cell_args"):
         pairs = _pairs(entry)
         for surface in BINDING_SURFACES:
             if not _on(entry, surface):
                 continue
-            name = _in_tree(_callables(ctx, surface), entry, _field(surface))
-            if name is None:
-                continue
-            if surface == "py":
-                problems = _py_a1_problems(name, found.py.overloads(name), pairs)
-            else:
-                problems = _js_a1_problems(
-                    found.js[surface].overloads(name) or (_callables(ctx, surface)[name],), pairs
-                )
-            for disc, message in problems:
-                yield _violation(ctx, "R25.a1", surface, key, disc, message)
+            for target in _targets(ctx, entry, surface):
+                if surface == "py":
+                    problems = _py_a1_problems(target.name, target.overloads, pairs)
+                else:
+                    problems = _js_a1_problems(target.overloads, pairs)
+                for disc, message in problems:
+                    yield _violation(ctx, "R25.a1", surface, key, disc, message)
 
 
 def _element(alternatives: List[str], js: bool) -> List[str]:
@@ -179,25 +235,22 @@ def _rule_rect_a1(ctx: Context) -> Iterable[Violation]:
         for surface in BINDING_SURFACES:
             if not _on(entry, surface):
                 continue
-            pool = _callables(ctx, surface)
-            name = _in_tree(pool, entry, _field(surface))
-            if name is None:
-                continue
             js = surface != "py"
-            params = [(p, t) for p, t in pool[name].params if js or p not in pool[name].kwonly]
-            for position in entry.get("rect_args") or []:
-                ptype = params[position][1] if position < len(params) else ""
-                kinds = set(_element(_strip_null(ptype, js), js))
-                if kinds != (_JS_RECT if js else _PY_RECT):
-                    want = "CellRect | string" if js else "Union[CellRect, str]"
-                    yield _violation(
-                        ctx,
-                        "R25.rect",
-                        surface,
-                        key,
-                        f"arg{position}",
-                        f"`{name}` argument {position} is `{ptype}`, not `{want}`",
-                    )
+            for name, member, _overloads in _targets(ctx, entry, surface):
+                params = [(p, t) for p, t in member.params if js or p not in member.kwonly]
+                for position in entry.get("rect_args") or []:
+                    ptype = params[position][1] if position < len(params) else ""
+                    kinds = set(_element(_strip_null(ptype, js), js))
+                    if kinds != (_JS_RECT if js else _PY_RECT):
+                        want = "CellRect | string" if js else "Union[CellRect, str]"
+                        yield _violation(
+                            ctx,
+                            "R25.rect",
+                            surface,
+                            key,
+                            f"arg{position}",
+                            f"`{name}` argument {position} is `{ptype}`, not `{want}`",
+                        )
 
 
 # ---------------------------------------------------------------------------
@@ -328,33 +381,36 @@ def _py_patch_problems(fn, name: str, fields: Optional[Set[str]]) -> Iterator[Tu
 def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
     """An op with `patch: true` takes a declared `<X>Patch` last in JS, whose keys are fields of the
     `patch_record` interface with the same types (`null` added, a nested record as its patch); in Python it takes
-    keyword-only arguments defaulting to `UNCHANGED`, named after fields of the `patch_record` dataclass. A
-    `patch_record: none` op has no getter record, so its keys are not compared.
+    keyword-only arguments defaulting to `UNCHANGED`, named after fields of the `patch_record` dataclass. Every
+    patch reads back through a getter: `patch_record: none` is a violation.
     """
     found = surfaces(ctx)
     for key, entry in _ledger_ops(ctx, "patch"):
         if entry.get("patch") is not True:
             continue
+        if entry.get("patch_record") == PATCH_RECORD_NONE:
+            yield _violation(
+                ctx, "R18.all", "c", key, "patch_record", "a patch reads back through a getter; `patch_record` is none"
+            )
         record = entry.get("patch_record")
         record = None if record == PATCH_RECORD_NONE or not isinstance(record, str) else record
         for surface in BINDING_SURFACES:
             if not _on(entry, surface):
                 continue
-            pool = _callables(ctx, surface)
-            name = _in_tree(pool, entry, _field(surface))
-            if name is None:
-                continue
-            if surface == "py":
-                cls = found.py.classes.get(record) if record else None
-                if record and cls is None:
-                    yield _violation(ctx, "R18.all", "py", key, "record", f"`patch_record` `{record}` is not a class")
-                    continue
-                problems = _py_patch_problems(pool[name], name, set(cls.fields) if cls else None)
-            else:
-                js = found.js[surface]
-                problems = _js_patch_problems(js.decls, js.raw, pool[name], record)
-            for disc, message in problems:
-                yield _violation(ctx, "R18.all", surface, key, disc, message)
+            for name, member, _overloads in _targets(ctx, entry, surface):
+                if surface == "py":
+                    cls = found.py.classes.get(record) if record else None
+                    if record and cls is None:
+                        yield _violation(
+                            ctx, "R18.all", "py", key, "record", f"`patch_record` `{record}` is not a class"
+                        )
+                        continue
+                    problems = _py_patch_problems(member, name, set(cls.fields) if cls else None)
+                else:
+                    js = found.js[surface]
+                    problems = _js_patch_problems(js.decls, js.raw, member, record)
+                for disc, message in problems:
+                    yield _violation(ctx, "R18.all", surface, key, disc, message)
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +426,8 @@ def _alternatives(ptype: str, js: bool) -> List[str]:
 def _rule_refs(ctx: Context) -> Iterable[Violation]:
     """A table, pivot, CF rule or protected range argument is a reference by index or name: `table: TableRef`,
     `pivot: PivotRef`, `cfRule: CfRuleRef`, `protectedRange: ProtectedRangeRef` in JS, `Union[int, str]` under
-    the snake-case name in Python; never `<thing>Index`.
+    the snake-case name in Python (plus the handle class for a table or pivot, as `TableRef` / `PivotRef` carry
+    it); never `<thing>Index`.
     """
     for surface in BINDING_SURFACES:
         js = surface != "py"
@@ -380,16 +437,18 @@ def _rule_refs(ctx: Context) -> Iterable[Violation]:
                     want, ref = _JS_REFS[param]
                     message = f"`{name}({param})` addresses by position; take `{want}: {ref}`"
                 elif not js and param in _PY_REFS:
-                    message = f"`{name}({param})` addresses by position; take `{_PY_REFS[param]}: Union[int, str]`"
+                    want = _py_ref_union(_PY_REFS[param])
+                    message = f"`{name}({param})` addresses by position; take `{_PY_REFS[param]}: {want}`"
                 elif js and param in {v[0] for v in _JS_REFS.values()}:
                     ref = next(r for p, r in _JS_REFS.values() if p == param)
                     if _alternatives(ptype, True) == [ref]:
                         continue
                     message = f"`{name}({param}: {ptype})` is not `{ref}`"
                 elif not js and param in _PY_REFS.values():
-                    if set(_alternatives(ptype, False)) == {"int", "str"}:
+                    want = _py_ref_union(param)
+                    if set(_alternatives(ptype, False)) == {"int", "str", *_PY_REF_HANDLES.get(param, ())}:
                         continue
-                    message = f"`{name}({param}: {ptype})` is not `Union[int, str]`"
+                    message = f"`{name}({param}: {ptype})` is not `{want}`"
                 else:
                     continue
                 yield _violation(ctx, "R26.ref", surface, _key(ctx, surface, name), param, message)
@@ -414,3 +473,166 @@ def _rule_sheet_params(ctx: Context) -> Iterable[Violation]:
                         param,
                         f"`{name}({param}: {ptype})` names a sheet; type it `SheetRef`",
                     )
+
+
+# ---------------------------------------------------------------------------
+# R25.span: a row or column span is a number pair or one span string.
+# ---------------------------------------------------------------------------
+
+
+def _js_span_problems(overloads: Sequence, spans: Sequence[Sequence]) -> Iterator[Tuple[str, str]]:
+    first = overloads[0]
+    starts = [int(span[0]) for span in spans]
+    if any(i + 1 >= len(first.params) for i in starts):
+        yield "span", f"`{first.name}` has fewer arguments than its `span_args` name"
+        return
+    want = ["string" if i in starts else _norm(t) for i, (_, t) in enumerate(first.params) if i - 1 not in starts]
+    if not any([_norm(t) for _, t in m.params] == want for m in overloads[1:]):
+        yield "span", f"`{first.name}` lacks the overload taking the span as one string ({', '.join(want)})"
+
+
+def _py_span_problems(name: str, stubs: Sequence, spans: Sequence[Sequence]) -> Iterator[Tuple[str, str]]:
+    if len(stubs) < 2:
+        yield "stubs", f"`{name}` has no `@overload` stubs for the number pair and the span string"
+        return
+    starts = [int(span[0]) for span in spans]
+    numbers = [(p, t) for p, t in stubs[0].params if p not in stubs[0].kwonly]
+    if any(i + 1 >= len(numbers) or numbers[i][1] != "int" or numbers[i + 1][1] != "int" for i in starts):
+        yield "coordinate", f"`{name}`: the first stub takes `int` at the `span_args` positions"
+        return
+    want = [("span", "str") if i in starts else (p, None) for i, (p, _) in enumerate(numbers) if i - 1 not in starts]
+    second = [(p, t) for p, t in stubs[1].params if p not in stubs[1].kwonly]
+    if not (
+        len(second) == len(want) and all(p == wp and (wt is None or t == wt) for (p, t), (wp, wt) in zip(second, want))
+    ):
+        shown = ", ".join(p for p, _ in want)
+        yield "span", f"`{name}`: the second stub is the span form `({shown})`"
+
+
+@_owned("R25.span")
+def _rule_span(ctx: Context) -> Iterable[Violation]:
+    """An op with `span_args` takes each span as its number pair or as one span string (`"B:D"`, `"3:5"`): the JS
+    declaration has the number signature first and the signature with the pair replaced by a `string`; the Python
+    method has the same two `@overload` stubs, the span one naming the argument `span`.
+    """
+    for key, entry in _ledger_ops(ctx, "span_args"):
+        spans = entry.get("span_args") or []
+        for surface in BINDING_SURFACES:
+            if not _on(entry, surface):
+                continue
+            for target in _targets(ctx, entry, surface):
+                if surface == "py":
+                    problems = _py_span_problems(target.name, target.overloads, spans)
+                else:
+                    problems = _js_span_problems(target.overloads, spans)
+                for disc, message in problems:
+                    yield _violation(ctx, "R25.span", surface, key, disc, message)
+
+
+# ---------------------------------------------------------------------------
+# R28.handles: the element of a handle collection is edited through its handle.
+# ---------------------------------------------------------------------------
+
+# Verbs of the C ops a parent keeps for a handle collection: it adds and removes elements.
+_PARENT_VERBS = frozenset({"add", "create", "copy", "remove"})
+_FIRST_WORD_RE = re.compile(r"[a-z]+")
+_FIRST_ARG_KEYS = ("object_id", "cache_id")
+
+
+def _exposed(entry: dict) -> bool:
+    """The op has a binding name a published class could carry: not internal, not dropped on every language."""
+    if entry.get("internal") is True or entry.get("kind") not in ("op", "list"):
+        return False
+    names = [(field, entry.get(field)) for field in ("js", "py") if isinstance(entry.get(field), str)]
+    return any(_dropped(entry, field) != name for field, name in names) or entry_handle(entry) is not None
+
+
+def handle_collection_of(ctx: Context, key: str, entry: dict) -> Optional[str]:
+    """The handle collection an op belongs to: the one whose `ops` lists it, else the one its first argument
+    keys (`ref_args[0]`'s kind, or a C argument `object_id` / `cache_id` named by the collection's `by:`)."""
+    handles = handle_collections(ctx.ledger.collections)
+    for name in handles:
+        if key in ((ctx.ledger.collections.get(name) or {}).get("ops") or []):
+            return name
+    for name, coll in ctx.ledger.collections.items():
+        if key in (coll.get("ops") or []):
+            return None
+    ref = entry.get("ref_args")
+    if isinstance(ref, list) and len(ref) == 2 and ref[0] == 0 and ref[1] in handles:
+        return ref[1]
+    fn = _tree_c(ctx, entry)
+    rest = [p.name for p in (fn.params if fn else ()) if p.name not in ("wb", "sheet_index")]
+    if not rest or rest[0] not in _FIRST_ARG_KEYS:
+        return None
+    keyed = sorted(n for n in handles if (ctx.ledger.collections[n] or {}).get("by") == rest[0])
+    noun = key.split(".")[0]
+    prefixed = [n for n in keyed if noun == n or noun.startswith(n + "_")]
+    return (prefixed or keyed or [None])[0]
+
+
+def _parent_op(ctx: Context, key: str, entry: dict, collection: str) -> bool:
+    """An op the parent keeps: in the collection's `ops`, it adds or removes, lists, or looks the handle up."""
+    if key not in ((ctx.ledger.collections.get(collection) or {}).get("ops") or []):
+        return False
+    if entry.get("kind") == "list":
+        return True
+    target = entry.get("c")
+    if isinstance(target, str):
+        return c_verb(target) in _PARENT_VERBS
+    name = entry.get("js") if isinstance(entry.get("js"), str) else entry.get("py")
+    verb = _FIRST_WORD_RE.match(name or "")
+    lookup = name in (_lower_first(handle_collections(ctx.ledger.collections)[collection]), collection)
+    return lookup or (verb is not None and verb.group(0) in _PARENT_VERBS)
+
+
+def _lower_first(name: str) -> str:
+    return name[:1].lower() + name[1:]
+
+
+@_owned("R28.handles")
+def _rule_handles(ctx: Context) -> Iterable[Violation]:
+    """An op of a collection with `access: handles` and a `handle_class` -- listed in its `ops`, else keyed by its
+    first argument -- has `handle:` unless the parent keeps it (add / remove / the handle lookup / the list); an
+    op with `handle:` is declared on no `Workbook` or `Sheet`.
+    """
+    for key, entry in sorted(ctx.ledger.entries.items()):
+        if not isinstance(entry, dict) or not _exposed(entry):
+            continue
+        collection = handle_collection_of(ctx, key, entry)
+        if collection is None or entry_handle(entry) is not None or _parent_op(ctx, key, entry, collection):
+            continue
+        handle_class = handle_collections(ctx.ledger.collections)[collection]
+        yield _violation(
+            ctx,
+            "R28.handles",
+            "c",
+            key,
+            "handle",
+            f"`{key}` edits a `{collection}` element; publish it on `{handle_class}` with `handle:`",
+        )
+    found = surfaces(ctx)
+    for key, entry in sorted(ctx.ledger.entries.items()):
+        if not isinstance(entry, dict) or entry_handle(entry) is None:
+            continue
+        for surface in BINDING_SURFACES:
+            if not _on(entry, surface):
+                continue
+            field = _field(surface)
+            classes = found.py.class_methods() if surface == "py" else found.js[surface].classes()
+            for owner in (WORKBOOK_CLASS, SHEET_CLASS):
+                name = _in_tree(classes.get(owner) or {}, entry, field)
+                if name is None or (owner == SHEET_CLASS and SHEET_HANDLE_CLASS in _handle_class_list(entry)):
+                    continue
+                yield _violation(
+                    ctx,
+                    "R28.handles",
+                    surface,
+                    key,
+                    owner,
+                    f"`{owner}.{name}` is a handle method; only the handle class declares it",
+                )
+
+
+def _handle_class_list(entry: dict) -> List[str]:
+    cls = (entry_handle(entry) or {}).get("class")
+    return [cls] if isinstance(cls, str) else list(cls or [])

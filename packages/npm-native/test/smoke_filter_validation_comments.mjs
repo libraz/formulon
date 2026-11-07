@@ -128,12 +128,12 @@ test('table AutoFilter entry points reject a table index that does not exist', a
   const wb = mod.Workbook.createDefault();
   try {
     assert.equal(wb.listTables().length, 0);
-    assert.throws(() => wb.getTableAutoFilter(0), isFormulonError);
-    assert.throws(() => wb.evaluateTableAutoFilter(0), isFormulonError);
-    assert.throws(() => wb.setTableAutoFilter(0, { range: RANGE, columns: [] }), isFormulonError);
-    assert.throws(() => wb.removeTableAutoFilter(0), isFormulonError);
-    assert.throws(() => wb.applyTableAutoFilter(0), isFormulonError);
-    assert.throws(() => wb.clearTableAutoFilter(0), isFormulonError);
+    assert.throws(() => wb.table(0).getAutoFilter(), isFormulonError);
+    assert.throws(() => wb.table(0).evaluateAutoFilter(), isFormulonError);
+    assert.throws(() => wb.table(0).setAutoFilter({ range: RANGE, columns: [] }), isFormulonError);
+    assert.throws(() => wb.table(0).removeAutoFilter(), isFormulonError);
+    assert.throws(() => wb.table(0).applyAutoFilter(), isFormulonError);
+    assert.throws(() => wb.table(0).clearAutoFilter(), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -257,9 +257,9 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     wb.sheet(0).updateThreadedComment(REPLY, { text: 'plain', mentions: [] });
     assert.deepEqual(wb.sheet(0).listThreadedComments()[1].mentions, []);
 
-    wb.sheet(0).setThreadResolved(THREAD, true);
+    wb.sheet(0).updateThreadedComment(THREAD, { done: true });
     assert.equal(wb.sheet(0).listThreadedComments()[0].done, true);
-    wb.sheet(0).setThreadResolved(THREAD, false);
+    wb.sheet(0).updateThreadedComment(THREAD, { done: false });
     assert.equal(wb.sheet(0).listThreadedComments()[0].done, false);
 
     assert.throws(() => wb.removePerson(ANN), isFormulonError, 'a person with comments stays');
@@ -267,7 +267,12 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       () => wb.sheet(0).updateThreadedComment('{00000000-0000-0000-0000-000000000000}', { text: 'x', mentions: [] }),
       isFormulonError,
     );
-    assert.throws(() => wb.sheet(0).setThreadResolved(REPLY, true), isFormulonError, 'a reply is not a thread');
+    assert.throws(
+      () => wb.sheet(0).updateThreadedComment(REPLY, { done: true }),
+      (e) => isFormulonError(e, 9006),
+      'a reply is not a thread',
+    );
+    assert.throws(() => wb.sheet(0).updateThreadedComment(THREAD, { done: null }), TypeError);
     assert.throws(() => wb.sheet(0).addThreadedComment(null), TypeError);
     assert.throws(() => wb.sheet(99).listThreadedComments(), isFormulonError);
 

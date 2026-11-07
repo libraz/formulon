@@ -66,17 +66,20 @@ test('shapes and drawing objects are read by object id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // anchorKind 0 is OneCell.
-  const added = wb.sheet(0).addShape({
+  const shape = wb.sheet(0).addShape({
     presetGeometry: 'rect',
     anchorKind: 0,
     fromRow: 2,
     widthEmu: 914400,
     heightEmu: 457200,
   });
-  assert.equal(found(wb.sheet(0).getShape(added)).presetGeometry, 'rect');
-  assert.equal(found(wb.sheet(0).getDrawingObject(added)).fromRow, 2);
-  missing(wb.sheet(0).getShape(added + 1));
-  missing(wb.sheet(0).getDrawingObject(added + 1));
+  const added = shape.objectId;
+  assert.equal(shape.getProperties().presetGeometry, 'rect');
+  assert.equal(shape.getDrawingProperties().fromRow, 2);
+  assert.equal(wb.sheet(0).drawing(added), shape);
+  // An id the sheet does not hold is NotFound.
+  expectFailure(() => wb.sheet(0).shape(added + 1), mod.StatusCode.NotFound);
+  expectFailure(() => wb.sheet(0).drawing(added + 1), mod.StatusCode.NotFound);
   release(wb);
 });
 

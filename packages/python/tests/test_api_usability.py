@@ -58,13 +58,13 @@ def _open() -> Workbook:
 
 def _pivot_book(wb: Workbook, ws: Sheet) -> None:
     """A cache with two fields and three records, and one pivot named ``Pivot1`` at E1."""
-    cache = wb.add_pivot_cache()
-    wb.add_pivot_cache_field(cache, "Region")
-    wb.add_pivot_cache_field(cache, "Amount")
+    cache = wb.add_pivot_cache().cache_id
+    wb.pivot_cache(cache).add_field("Region")
+    wb.pivot_cache(cache).add_field("Amount")
     for region, amount in (("East", 10.0), ("East", 20.0), ("West", 30.0)):
-        rec = wb.add_pivot_cache_record(cache)
-        wb.set_pivot_cache_record_value(cache, rec, 0, region)
-        wb.set_pivot_cache_record_value(cache, rec, 1, amount)
+        rec = wb.pivot_cache(cache).add_record()
+        wb.pivot_cache(cache).set_record_value(rec, 0, region)
+        wb.pivot_cache(cache).set_record_value(rec, 1, amount)
     ws.add_pivot(name="Pivot1", cache_id=cache, anchor_row=0, anchor_col=4)
 
 
@@ -72,22 +72,22 @@ def _pivot_report_book(wb: Workbook, ws: Sheet) -> None:
     """A worksheet-sourced pivot ``Pivot1`` at E1 with Region on rows and Sum of Amount; F2 is its first value cell."""
     ws.set_text(0, 0, "Region")
     ws.set_text(0, 1, "Amount")
-    cache = wb.add_pivot_cache()
-    wb.set_pivot_cache_worksheet_source(cache, formulon.PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
-    wb.add_pivot_cache_field(cache, "Region")
-    wb.add_pivot_cache_field(cache, "Amount")
+    cache = wb.add_pivot_cache().cache_id
+    wb.pivot_cache(cache).set_worksheet_source(formulon.PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
+    wb.pivot_cache(cache).add_field("Region")
+    wb.pivot_cache(cache).add_field("Amount")
     for row, (region, amount) in enumerate((("East", 10.0), ("West", 30.0)), start=1):
         ws.set_text(row, 0, region)
         ws.set_number(row, 1, amount)
-        rec = wb.add_pivot_cache_record(cache)
-        wb.set_pivot_cache_record_value(cache, rec, 0, region)
-        wb.set_pivot_cache_record_value(cache, rec, 1, amount)
+        rec = wb.pivot_cache(cache).add_record()
+        wb.pivot_cache(cache).set_record_value(rec, 0, region)
+        wb.pivot_cache(cache).set_record_value(rec, 1, amount)
     pivot = ws.add_pivot(name="Pivot1", cache_id=cache, anchor_row=0, anchor_col=4)
-    ws.add_pivot_field(pivot, formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
-    amount_field = ws.add_pivot_field(
-        pivot, formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE)
+    ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+    amount_field = ws.pivot(pivot).add_field(
+        formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE)
     )
-    ws.add_pivot_data_field(pivot, formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount_field))
+    ws.pivot(pivot).add_data_field(formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount_field))
 
 
 def _text_cell(wb: Workbook, ws: Sheet) -> None:
@@ -108,7 +108,9 @@ class Case:
         kw: Optional[Callable[[], Dict[str, Any]]] = None,
         setup: Callable[[Workbook, Sheet], None] = _text_cell,
         cell: Tuple[int, int] = (2, 1),
+        recv: Callable[[Sheet], Any] = lambda ws: ws,
     ) -> None:
+        self.recv = recv
         self.lead = lead
         self.tail = tail
         self.kw = kw or (lambda: {})
@@ -127,77 +129,91 @@ def _hyperlink_kw() -> Dict[str, Any]:
 # Methods that no longer take a coordinate pair or whose pair moved into a record are listed as ``None``: the
 # conformance loop skips them and ``test_non_coordinate_methods`` pins their new shape instead.
 CELL_TABLE: Dict[str, Optional[Case]] = {
-    "add_hyperlink": Case(kw=_hyperlink_kw),
-    "add_pivot": None,
-    "clear_cell_xf_index": Case(),
-    "evaluate_cf_formula": Case(tail=lambda: ("=TRUE",)),
-    "evaluate_formula": Case(tail=lambda: ("=A1+1",)),
-    "evaluate_formula_array": Case(tail=lambda: ("=1+1",)),
-    "get_array_formula": Case(),
-    "get_cell_phonetic": Case(),
-    "get_cell_phonetic_properties": Case(),
-    "get_cell_phonetic_runs": Case(),
-    "get_cell_show_phonetic": Case(),
-    "get_cell_xf_index": Case(),
-    "get_comment": Case(),
-    "get_comment_visible": Case(),
-    "get_data_table": Case(),
-    "get_dependents": Case(),
-    "get_display_text": Case(),
-    "get_effective_style": Case(),
-    "get_formula": Case(),
-    "get_formula_r1c1": Case(),
-    "get_hyperlink": Case(),
-    "get_lambda_text": Case(),
-    "get_precedents": Case(),
-    "get_spill_info": Case(),
-    "get_value": Case(),
-    "remove_comment": Case(),
-    "remove_data_table": Case(),
-    "remove_hyperlink": Case(),
-    "set_blank": Case(),
-    "set_bool": Case(tail=lambda: (True,)),
-    "set_cell_phonetic": Case(tail=lambda: ("kana",)),
-    "set_cell_phonetic_properties": Case(tail=lambda: (formulon.PhoneticPropertiesInput(),)),
-    "set_cell_phonetic_runs": Case(tail=_runs),
-    "set_cell_show_phonetic": Case(tail=lambda: (True,)),
-    "set_cell_xf_index": Case(tail=lambda: (0,)),
-    "set_comment": Case(tail=lambda: (formulon.Comment("Ada", "note"),)),
-    "set_comment_visible": Case(tail=lambda: (True,)),
-    "set_error": Case(tail=lambda: (ErrorCode.NA,)),
-    "set_formula": Case(tail=lambda: ("=1+1",)),
-    "set_number": Case(tail=lambda: (5.0,)),
-    "set_pane_top_left": None,
-    "set_text": Case(tail=lambda: ("hello",)),
-    "set_top_left": None,
-    "set_value": Case(tail=lambda: (5.0,)),
-    "set_values": Case(tail=lambda: ([[5.0, "x"]],)),
-    "show_pivot_details": Case(lead=("Pivot1",), setup=_pivot_report_book, cell=(1, 5)),
-    "validate_value": Case(tail=lambda: (_number(1),)),
+    "Sheet.add_hyperlink": Case(kw=_hyperlink_kw),
+    "Sheet.add_pivot": None,
+    "Sheet.clear_cell_xf_index": Case(),
+    "Sheet.evaluate_cf_formula": Case(tail=lambda: ("=TRUE",)),
+    "Sheet.evaluate_formula": Case(tail=lambda: ("=A1+1",)),
+    "Sheet.evaluate_formula_array": Case(tail=lambda: ("=1+1",)),
+    "Sheet.get_array_formula": Case(),
+    "Sheet.get_cell_format": Case(),
+    "Sheet.get_cell_phonetic": Case(),
+    "Sheet.get_cell_phonetic_properties": Case(),
+    "Sheet.get_cell_phonetic_runs": Case(),
+    "Sheet.get_cell_show_phonetic": Case(),
+    "Sheet.get_cell_xf_index": Case(),
+    "Sheet.get_comment": Case(),
+    "Sheet.get_comment_visible": Case(),
+    "Sheet.get_data_table": Case(),
+    "Sheet.get_dependents": Case(),
+    "Sheet.get_display_text": Case(),
+    "Sheet.get_effective_style": Case(),
+    "Sheet.get_formula": Case(),
+    "Sheet.get_formula_r1c1": Case(),
+    "Sheet.get_hyperlink": Case(),
+    "Sheet.get_lambda_text": Case(),
+    "Sheet.get_precedents": Case(),
+    "Sheet.get_spill_info": Case(),
+    "Sheet.get_value": Case(),
+    "Sheet.remove_comment": Case(),
+    "Sheet.remove_data_table": Case(),
+    "Sheet.remove_hyperlink": Case(),
+    "Sheet.set_blank": Case(),
+    "Sheet.set_bool": Case(tail=lambda: (True,)),
+    "Sheet.set_cell_phonetic": Case(tail=lambda: ("kana",)),
+    "Sheet.set_cell_phonetic_properties": Case(tail=lambda: (formulon.PhoneticPropertiesInput(),)),
+    "Sheet.set_cell_phonetic_runs": Case(tail=_runs),
+    "Sheet.set_cell_show_phonetic": Case(tail=lambda: (True,)),
+    "Sheet.set_cell_xf_index": Case(tail=lambda: (0,)),
+    "Sheet.set_comment": Case(tail=lambda: (formulon.Comment("Ada", "note"),)),
+    "Sheet.set_comment_visible": Case(tail=lambda: (True,)),
+    "Sheet.set_error": Case(tail=lambda: (ErrorCode.NA,)),
+    "Sheet.set_formula": Case(tail=lambda: ("=1+1",)),
+    "Sheet.set_number": Case(tail=lambda: (5.0,)),
+    "Sheet.set_pane_top_left": None,
+    "Sheet.set_text": Case(tail=lambda: ("hello",)),
+    "Sheet.set_top_left": None,
+    "Sheet.set_value": Case(tail=lambda: (5.0,)),
+    "Sheet.set_values": Case(tail=lambda: ([[5.0, "x"]],)),
+    "Pivot.show_details": Case(setup=_pivot_report_book, cell=(1, 5), recv=lambda ws: ws.pivot("Pivot1")),
+    "Sheet.validate_value": Case(tail=lambda: (_number(1),)),
 }
 
 RECT_TABLE: Dict[str, Case] = {
-    "add_hyperlink_range": Case(kw=_hyperlink_kw),
-    "add_merge": Case(setup=lambda wb, ws: None),
-    "evaluate_cf_range": Case(),
-    "get_cell_rect_pt": Case(),
-    "get_cells_in_range": Case(),
-    "get_merges_in_range": Case(setup=_merged),
-    "list_cells": Case(),
-    "get_range_style_bases": Case(),
-    "get_values": Case(),
-    "get_range_style_bases_excluding": Case(tail=lambda: ([(1, 1)],)),
-    "recalc_viewport": Case(),
-    "remap_range_style": Case(tail=lambda: ({0: 0},)),
-    "remove_merge": Case(setup=_merged),
-    "set_pivot_anchor": Case(lead=(0,), setup=_pivot_book),
-    "set_print_area": Case(setup=lambda wb, ws: None),
-    "set_range_xf_index": Case(tail=lambda: (0,)),
-    "snapshot_range_style": Case(),
+    "Sheet.add_hyperlink_range": Case(kw=_hyperlink_kw),
+    "Sheet.add_merge": Case(setup=lambda wb, ws: None),
+    "Sheet.evaluate_cf_range": Case(),
+    "Sheet.get_cell_rect_pt": Case(),
+    "Sheet.get_cells_in_range": Case(),
+    "Sheet.get_merges_in_range": Case(setup=_merged),
+    "Sheet.list_cells": Case(),
+    "Sheet.get_range_style_bases": Case(),
+    "Sheet.get_values": Case(),
+    "Sheet.get_range_style_bases_excluding": Case(tail=lambda: ([(1, 1)],)),
+    "Sheet.recalc_viewport": Case(),
+    "Sheet.remap_range_style": Case(tail=lambda: ({0: 0},)),
+    "Sheet.remove_merge": Case(setup=_merged),
+    "Pivot.set_anchor": Case(setup=_pivot_book, recv=lambda ws: ws.pivot("Pivot1")),
+    "Sheet.set_cell_format": Case(kw=lambda: {"number_format": "0.00"}),
+    "Sheet.set_print_area": Case(setup=lambda wb, ws: None),
+    "Sheet.set_range_xf_index": Case(tail=lambda: (0,)),
+    "Sheet.snapshot_range_style": Case(),
 }
 
+_CLASSES: Dict[str, type] = {"Sheet": Sheet, "Pivot": formulon.Pivot}
+_HANDLE_CLASSES = (
+    formulon.Table,
+    formulon.Pivot,
+    formulon.PivotCache,
+    formulon.Drawing,
+    formulon.Picture,
+    formulon.Chart,
+    formulon.Shape,
+    formulon.Slicer,
+)
+
 # These take a sequence of rectangles; the A1 form is a list of strings.
-RECT_SEQUENCE = {"set_print_area"}
+RECT_SEQUENCE = {"Sheet.set_print_area"}
 
 
 def _address_args() -> Dict[str, Any]:
@@ -222,15 +238,15 @@ def _norm(result: Any) -> Any:
 
 def _state(ws: Sheet) -> Any:
     cells = tuple(ws.get_value(r, c) for r in range(6) for c in range(6))
-    return (cells, ws.list_hyperlinks(), ws.list_comments(), ws.list_merges())
+    return (cells, ws.list_hyperlinks(), ws.list_comments(), ws.list_merges(), ws.get_cell_format(1, 1))
 
 
-def _outcome(case: Case, call: Callable[[Sheet], Any]) -> Tuple[Any, ...]:
+def _outcome(case: Case, call: Callable[[Any], Any]) -> Tuple[Any, ...]:
     with _open() as wb:
         ws = wb.sheet(0)
         case.setup(wb, ws)
         try:
-            result = call(ws)
+            result = call(case.recv(ws))
         except TypeError:
             return ("type-error",)
         except FormulonError as exc:
@@ -250,12 +266,13 @@ class CellArgumentsTests(unittest.TestCase):
     def test_every_method_takes_both_forms(self) -> None:
         cell_args = _address_args()["cell_args"]
         self.assertTrue(cell_args)
-        for name, positions in sorted(cell_args.items()):
-            case = CELL_TABLE.get(name)
+        for key, positions in sorted(cell_args.items()):
+            case = CELL_TABLE.get(key)
             if case is None:
                 continue
-            with self.subTest(method=name):
-                self.assertTrue(hasattr(Sheet, name), f"Sheet.{name} is missing")
+            cls, name = key.split(".")
+            with self.subTest(method=key):
+                self.assertTrue(hasattr(_CLASSES[cls], name), f"{key} is missing")
                 self.assertEqual(positions[0][0], len(case.lead), "the table's lead does not match the ledger position")
                 pairs = [case.cell] if len(positions) == 1 else [(1, 1), (0, 0)][: len(positions)]
                 coords: List[Any] = []
@@ -264,10 +281,12 @@ class CellArgumentsTests(unittest.TestCase):
                     coords += [r, c]
                     texts.append(_a1(r, c))
                 coordinate = _outcome(
-                    case, lambda ws: getattr(ws, name)(*case.lead, *coords, *case.tail(), **case.kw())
+                    case, lambda recv: getattr(recv, name)(*case.lead, *coords, *case.tail(), **case.kw())
                 )
                 self.assertNotEqual(coordinate, ("type-error",), "the coordinate form must be accepted by the table")
-                spelled = _outcome(case, lambda ws: getattr(ws, name)(*case.lead, *texts, *case.tail(), **case.kw()))
+                spelled = _outcome(
+                    case, lambda recv: getattr(recv, name)(*case.lead, *texts, *case.tail(), **case.kw())
+                )
                 self.assertEqual(spelled, coordinate)
 
     def test_a1_spellings_equal_coordinates(self) -> None:
@@ -307,11 +326,11 @@ class CellArgumentsTests(unittest.TestCase):
                 sheet = call(ws)
                 return sheet.index, sheet.get_values("A1:B3")
 
-        expected = details(lambda ws: ws.show_pivot_details(0, 1, 5))
+        expected = details(lambda ws: ws.pivot(0).show_details(1, 5))
         self.assertEqual(expected[1][1][1].number, 10.0)
-        self.assertEqual(details(lambda ws: ws.show_pivot_details(0, "F2")), expected)
-        self.assertEqual(details(lambda ws: ws.show_pivot_details("Pivot1", 1, 5)), expected)
-        self.assertEqual(details(lambda ws: ws.show_pivot_details("Pivot1", "F2")), expected)
+        self.assertEqual(details(lambda ws: ws.pivot(0).show_details("F2")), expected)
+        self.assertEqual(details(lambda ws: ws.pivot("Pivot1").show_details(1, 5)), expected)
+        self.assertEqual(details(lambda ws: ws.pivot("Pivot1").show_details("F2")), expected)
 
     def test_set_value_edges(self) -> None:
         with _open() as wb:
@@ -360,17 +379,20 @@ class RectArgumentsTests(unittest.TestCase):
     def test_every_method_takes_both_forms(self) -> None:
         rect_args = _address_args()["rect_args"]
         self.assertTrue(rect_args)
-        for name, positions in sorted(rect_args.items()):
-            case = RECT_TABLE[name]
-            with self.subTest(method=name):
+        for key, positions in sorted(rect_args.items()):
+            case = RECT_TABLE[key]
+            name = key.split(".")[1]
+            with self.subTest(method=key):
                 self.assertEqual(positions[0], len(case.lead), "the table's lead does not match the ledger position")
                 rect = CellRect(1, 1, 2, 2)
-                sequence = name in RECT_SEQUENCE
+                sequence = key in RECT_SEQUENCE
                 as_rect: Any = [rect] if sequence else rect
                 as_text: Any = ["B2:C3"] if sequence else "B2:C3"
-                typed = _outcome(case, lambda ws: getattr(ws, name)(*case.lead, as_rect, *case.tail(), **case.kw()))
+                typed = _outcome(case, lambda recv: getattr(recv, name)(*case.lead, as_rect, *case.tail(), **case.kw()))
                 self.assertNotEqual(typed, ("type-error",))
-                spelled = _outcome(case, lambda ws: getattr(ws, name)(*case.lead, as_text, *case.tail(), **case.kw()))
+                spelled = _outcome(
+                    case, lambda recv: getattr(recv, name)(*case.lead, as_text, *case.tail(), **case.kw())
+                )
                 self.assertEqual(spelled, typed)
 
     def test_merge_texts(self) -> None:
@@ -628,11 +650,11 @@ class DirtyCellsTests(unittest.TestCase):
 
 
 class NoCountNamesTests(unittest.TestCase):
-    EXEMPT = {"get_pivot_cache_record_count"}
+    EXEMPT = {"get_record_count"}
 
     def test_no_count_or_at_names_remain(self) -> None:
         offenders = []
-        for owner in (Workbook, Sheet):
+        for owner in (Workbook, Sheet, *_HANDLE_CLASSES):
             for name in dir(owner):
                 if re.fullmatch(r"get_\w+_(count|at)", name) and name not in self.EXEMPT:
                     offenders.append(f"{owner.__name__}.{name}")
@@ -661,8 +683,9 @@ class NoCountNamesTests(unittest.TestCase):
                 self.assertFalse(hasattr(owner, name), f"{owner.__name__}.{name}")
 
     def test_lists_exist(self) -> None:
-        for name in ("list_cells", "list_pivots", "list_pivot_field_items"):
+        for name in ("list_cells", "list_pivots"):
             self.assertTrue(hasattr(Sheet, name), name)
+        self.assertTrue(hasattr(formulon.Pivot, "list_field_items"))
         for name in (
             "list_fonts",
             "list_fills",
@@ -670,10 +693,10 @@ class NoCountNamesTests(unittest.TestCase):
             "list_cell_xfs",
             "list_cell_style_xfs",
             "list_dxfs",
-            "list_pivot_cache_fields",
-            "list_pivot_cache_field_shared_items",
         ):
             self.assertTrue(hasattr(Workbook, name), name)
+        for name in ("list_fields", "list_field_shared_items"):
+            self.assertTrue(hasattr(formulon.PivotCache, name), name)
 
     def test_list_cells_matches_the_cells_written(self) -> None:
         with _open() as wb:
@@ -690,12 +713,15 @@ class NoCountNamesTests(unittest.TestCase):
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
             cache = wb.list_pivot_caches()[0]
-            summaries = ws.list_pivots()
-            self.assertEqual([(s.name, s.cache_id) for s in summaries], [("Pivot1", cache)])
-            fields = wb.list_pivot_cache_fields(cache)
+            pivots = ws.list_pivots()
+            self.assertEqual([(p.name, p.get_cache().cache_id) for p in pivots], [("Pivot1", cache.cache_id)])
+            self.assertIs(pivots[0].get_cache(), cache)
+            fields = cache.list_fields()
             self.assertEqual([(f.name, f.formula) for f in fields], [("Region", None), ("Amount", None)])
-            self.assertTrue(dataclasses.is_dataclass(summaries[0]))
-            self.assertTrue(summaries[0].__dataclass_params__.frozen)  # type: ignore[attr-defined]
+            properties = pivots[0].get_properties()
+            self.assertEqual((properties.name, properties.cache_id), ("Pivot1", cache.cache_id))
+            self.assertTrue(dataclasses.is_dataclass(properties))
+            self.assertTrue(properties.__dataclass_params__.frozen)  # type: ignore[attr-defined]
 
     def test_sibling_alignment(self) -> None:
         for name in ("convert_column_chars_to_pt", "convert_column_pt_to_chars"):
@@ -709,13 +735,13 @@ class NoCountNamesTests(unittest.TestCase):
         self.assertIn("major", {f.name for f in dataclasses.fields(formulon.ThemeScriptFont)})
         self.assertIn("scope", inspect.signature(Workbook.get_defined_name).parameters)
         self.assertIn("scope", inspect.signature(Workbook.remove_defined_name).parameters)
-        by_field = inspect.signature(Sheet.set_pivot_field_sort).parameters["by_field"]
+        by_field = inspect.signature(formulon.Pivot.set_field_sort).parameters["by_field"]
         self.assertIs(by_field.kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertIsNone(by_field.default)
-        visible = inspect.signature(Sheet.add_pivot_field_item).parameters["visible"]
+        visible = inspect.signature(formulon.Pivot.add_field_item).parameters["visible"]
         self.assertIs(visible.kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertIs(visible.default, True)
-        grouping = inspect.signature(Sheet.set_chart_type).parameters["grouping"]
+        grouping = inspect.signature(formulon.Chart.set_type).parameters["grouping"]
         self.assertEqual(grouping.default, formulon.ChartGrouping.CLUSTERED)
 
     def test_defined_name_scope(self) -> None:
@@ -765,10 +791,12 @@ class PatchShapeTests(unittest.TestCase):
 
     PATCHES: List[Tuple[type, str, Optional[type]]] = [
         (Sheet, "set_view", getattr(formulon, "SheetView", None)),
-        (Sheet, "update_pivot_field", getattr(formulon, "PivotField", None)),
-        (Sheet, "update_pivot_item", getattr(formulon, "PivotItem", None)),
-        (Sheet, "set_pivot_style_info", getattr(formulon, "PivotStyle", None)),
-        (Sheet, "set_chart_legend", getattr(formulon, "ChartLegend", None)),
+        (formulon.Pivot, "update_field", getattr(formulon, "PivotField", None)),
+        (formulon.Pivot, "update_item", getattr(formulon, "PivotItem", None)),
+        (formulon.Pivot, "set_style_info", getattr(formulon, "PivotStyle", None)),
+        (formulon.Chart, "set_legend", getattr(formulon, "ChartLegend", None)),
+        (Sheet, "update_threaded_comment", None),
+        (formulon.Table, "update", None),
         (Sheet, "set_print_options", None),
         (Sheet, "set_header_footer", None),
     ]
@@ -883,9 +911,9 @@ class ChartLegendPatchTests(unittest.TestCase):
     def test_position_keeps_overlay(self) -> None:
         with _open() as wb:
             oid = self._chart(wb)
-            wb.sheet(0).set_chart_legend(oid, position=formulon.ChartLegendPosition.TOP, overlay=True)
-            wb.sheet(0).set_chart_legend(oid, position=formulon.ChartLegendPosition.RIGHT)
-            legend = wb.sheet(0).get_chart(oid).legend  # type: ignore[union-attr]
+            wb.sheet(0).chart(oid).set_legend(position=formulon.ChartLegendPosition.TOP, overlay=True)
+            wb.sheet(0).chart(oid).set_legend(position=formulon.ChartLegendPosition.RIGHT)
+            legend = wb.sheet(0).chart(oid).get_properties().legend  # type: ignore[union-attr]
             self.assertEqual(legend.position, formulon.ChartLegendPosition.RIGHT)
             self.assertTrue(legend.overlay)
 
@@ -893,17 +921,17 @@ class ChartLegendPatchTests(unittest.TestCase):
         with _open() as wb:
             oid = self._chart(wb)
             with self.assertRaises(TypeError):
-                wb.sheet(0).set_chart_legend(oid, position=None)  # type: ignore[arg-type]
+                wb.sheet(0).chart(oid).set_legend(position=None)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                wb.sheet(0).set_chart_legend(oid, hidden_series=None)  # type: ignore[arg-type]
+                wb.sheet(0).chart(oid).set_legend(hidden_series=None)  # type: ignore[arg-type]
 
     def test_overlay_alone_creates_a_right_legend(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             oid = self._chart(wb, legend=None)
-            self.assertIsNone(ws.get_chart(oid).legend)  # type: ignore[union-attr]
-            ws.set_chart_legend(oid, overlay=True)
-            legend = ws.get_chart(oid).legend  # type: ignore[union-attr]
+            self.assertIsNone(ws.chart(oid).get_properties().legend)  # type: ignore[union-attr]
+            ws.chart(oid).set_legend(overlay=True)
+            legend = ws.chart(oid).get_properties().legend  # type: ignore[union-attr]
             self.assertEqual(legend.position, formulon.ChartLegendPosition.RIGHT)
             self.assertTrue(legend.overlay)
             self.assertEqual(list(legend.hidden_series), [])
@@ -948,13 +976,13 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.add_pivot_field(0, formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
-            ws.update_pivot_field(0, 0, custom_name="Area", show_all=True)
-            field = ws.list_pivot_fields(0)[0]
+            ws.pivot(0).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).update_field(0, custom_name="Area", show_all=True)
+            field = ws.pivot(0).list_fields()[0]
             self.assertEqual(field.custom_name, "Area")
             self.assertTrue(field.show_all)
-            ws.update_pivot_field(0, 0, custom_name=None)
-            field = ws.list_pivot_fields(0)[0]
+            ws.pivot(0).update_field(0, custom_name=None)
+            field = ws.pivot(0).list_fields()[0]
             self.assertIsNone(field.custom_name)
             self.assertTrue(field.show_all)
 
@@ -962,22 +990,22 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.add_pivot_field(0, formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
             with self.assertRaises(TypeError):
-                ws.update_pivot_field(0, 0, axis=formulon.PivotAxis.COL)  # type: ignore[call-arg]
+                ws.pivot(0).update_field(0, axis=formulon.PivotAxis.COL)  # type: ignore[call-arg]
 
     def test_update_pivot_item(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.add_pivot_field(0, formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
-            ws.add_pivot_field_item(0, 0, "East", visible=True)
-            ws.update_pivot_item(0, 0, 0, visible=False, caption="Eastern")
-            item = ws.get_pivot_field_item(0, 0, 0)
+            ws.pivot(0).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).add_field_item(0, "East", visible=True)
+            ws.pivot(0).update_item(0, 0, visible=False, caption="Eastern")
+            item = ws.pivot(0).get_field_item(0, 0)
             self.assertFalse(item.visible)
             self.assertEqual(item.caption, "Eastern")
-            ws.update_pivot_item(0, 0, 0, caption=None)
-            item = ws.get_pivot_field_item(0, 0, 0)
+            ws.pivot(0).update_item(0, 0, caption=None)
+            item = ws.pivot(0).get_field_item(0, 0)
             self.assertIsNone(item.caption)
             self.assertFalse(item.visible)
 
@@ -1047,9 +1075,12 @@ class RefTests(unittest.TestCase):
             ws = wb.sheet(0)
             ws.set_text(0, 0, "A")
             wb.add_table(
-                range=formulon.SheetRect(0, CellRect(0, 0, 1, 0)), name="Three", display_name="3", columns=["A"]
+                range=formulon.SheetRect(0, CellRect(0, 0, 1, 0)), name="Sales", display_name="Sales", columns=["A"]
             )
-            wb.remove_table("3")
+            with self.assertRaises(NotFoundError):
+                wb.remove_table("0")
+            self.assertEqual(len(wb.list_tables()), 1)
+            wb.remove_table(0)
             self.assertEqual(wb.list_tables(), [])
 
     def test_cf_rule_by_id(self) -> None:
@@ -1093,12 +1124,12 @@ class RefTests(unittest.TestCase):
     def test_duplicate_pivot_name_removes_the_first(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            first = wb.add_pivot_cache()
-            second = wb.add_pivot_cache()
+            first = wb.add_pivot_cache().cache_id
+            second = wb.add_pivot_cache().cache_id
             ws.add_pivot(name="Dup", cache_id=first, anchor_row=0, anchor_col=0)
             ws.add_pivot(name="Dup", cache_id=second, anchor_row=0, anchor_col=10)
             ws.remove_pivot("Dup")
-            self.assertEqual([(s.name, s.cache_id) for s in ws.list_pivots()], [("Dup", second)])
+            self.assertEqual([(p.name, p.get_cache().cache_id) for p in ws.list_pivots()], [("Dup", second)])
 
     def test_pivot_by_name_and_number_agree(self) -> None:
         with _open() as wb:
@@ -1165,20 +1196,21 @@ class PivotCacheWriterTests(unittest.TestCase):
     def test_typed_writers_are_gone(self) -> None:
         for name in self.TYPED:
             self.assertFalse(hasattr(Workbook, name), name)
-        self.assertTrue(hasattr(Workbook, "add_pivot_cache_field_shared_item"))
-        self.assertTrue(hasattr(Workbook, "set_pivot_cache_record_value"))
+            self.assertFalse(hasattr(formulon.PivotCache, name), name)
+        self.assertTrue(hasattr(formulon.PivotCache, "add_field_shared_item"))
+        self.assertTrue(hasattr(formulon.PivotCache, "set_record_value"))
 
     def _cache(self, wb: Workbook) -> int:
-        cache = wb.add_pivot_cache()
-        wb.add_pivot_cache_field(cache, "F")
+        cache = wb.add_pivot_cache().cache_id
+        wb.pivot_cache(cache).add_field("F")
         return cache
 
     def test_values_dispatch_on_type(self) -> None:
         with _open() as wb:
             cache = self._cache(wb)
             for value in ("East", 4.5, True, None, ExcelError(ErrorCode.NA)):
-                wb.add_pivot_cache_field_shared_item(cache, 0, value)
-            items = wb.list_pivot_cache_field_shared_items(cache, 0)
+                wb.pivot_cache(cache).add_field_shared_item(0, value)
+            items = wb.pivot_cache(cache).list_field_shared_items(0)
             self.assertEqual(
                 [i.value.kind for i in items],
                 [ValueKind.TEXT, ValueKind.NUMBER, ValueKind.BOOL, ValueKind.BLANK, ValueKind.ERROR],
@@ -1188,21 +1220,21 @@ class PivotCacheWriterTests(unittest.TestCase):
     def test_date_flag(self) -> None:
         with _open() as wb:
             cache = self._cache(wb)
-            wb.add_pivot_cache_field_shared_item(cache, 0, 5, date=True)
-            item = wb.list_pivot_cache_field_shared_items(cache, 0)[0]
+            wb.pivot_cache(cache).add_field_shared_item(0, 5, date=True)
+            item = wb.pivot_cache(cache).list_field_shared_items(0)[0]
             self.assertTrue(item.is_date)
             self.assertEqual(item.value.number, 5.0)
             with self.assertRaises(TypeError):
-                wb.add_pivot_cache_field_shared_item(cache, 0, "x", date=True)
+                wb.pivot_cache(cache).add_field_shared_item(0, "x", date=True)
 
     def test_record_value(self) -> None:
         with _open() as wb:
             cache = self._cache(wb)
-            rec = wb.add_pivot_cache_record(cache)
-            wb.set_pivot_cache_record_value(cache, rec, 0, "x")
-            wb.set_pivot_cache_record_value(cache, rec, 0, 3.0, date=True)
+            rec = wb.pivot_cache(cache).add_record()
+            wb.pivot_cache(cache).set_record_value(rec, 0, "x")
+            wb.pivot_cache(cache).set_record_value(rec, 0, 3.0, date=True)
             with self.assertRaises(TypeError):
-                wb.set_pivot_cache_record_value(cache, rec, 0, True, date=True)
+                wb.pivot_cache(cache).set_record_value(rec, 0, True, date=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1291,11 +1323,11 @@ class MissingKeyTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             with self.assertRaises(NotFoundError):
-                ws.remove_drawing_object(999)
+                ws.remove_drawing(999)
             with self.assertRaises(NotFoundError):
-                ws.get_chart_data(999)
+                ws.chart(999).get_data()
             with self.assertRaises(NotFoundError):
-                ws.get_chart_preview(999)
+                ws.chart(999).get_preview()
 
 
 # ---------------------------------------------------------------------------
@@ -1348,7 +1380,7 @@ class PlatformOnlyRemovalTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            options = ws.get_pivot_options(0)
+            options = ws.pivot(0).get_options()
             self.assertIsNone(options.error_caption)
             self.assertIsNone(options.missing_caption)
 

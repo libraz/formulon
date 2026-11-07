@@ -111,7 +111,7 @@ class ExcelErrorTests(unittest.TestCase):
         self.assertEqual(str(ExcelError(ErrorCode.NA)), "#N/A")
 
     def test_to_python_returns_excel_error(self) -> None:
-        v = formulon.eval_formula("=1/0")
+        v = formulon.evaluate_formula("=1/0")
         self.assertIs(v.kind, ValueKind.ERROR)
         self.assertIs(v.error_code, ErrorCode.DIV0)
         self.assertEqual(v.to_python(), ExcelError(ErrorCode.DIV0))
@@ -441,7 +441,7 @@ class SheetViewTests(unittest.TestCase):
         self.assertEqual(self.ws["A4"], ExcelError(ErrorCode.REF))
 
     def test_name_is_live(self) -> None:
-        self.wb.rename_sheet(0, "Renamed")
+        self.wb.sheet(0).rename("Renamed")
         self.assertEqual(self.ws.name, "Renamed")
 
     def test_equivalent_spellings(self) -> None:
@@ -582,6 +582,14 @@ def _derived_py_names() -> "dict[str, set[str]]":
         name = entry.get("py")
         if not isinstance(name, str) or (entry.get("drop") or {}).get("py") == name:
             continue
+        if entry.get("internal"):
+            continue
+        handle = entry.get("handle")
+        if handle is not None:
+            classes = handle["class"] if isinstance(handle["class"], list) else [handle["class"]]
+            if "Sheet" in classes and isinstance(handle.get("py"), str):
+                out["Sheet"].add(handle["py"])
+            continue
         if entry.get("kind") == "factory" and name.startswith("Workbook."):
             out["Workbook"].add(name.split(".", 1)[1])
         elif entry.get("kind") in ("op", "list") and entry.get("scope") in ("workbook", "sheet"):
@@ -670,7 +678,7 @@ class SheetHandleTests(unittest.TestCase):
     def test_move_keeps_handle(self) -> None:
         # H3
         ws = self.wb.sheet("Sheet1")
-        self.wb.move_sheet(ws, 2)
+        self.wb.sheet(ws).move(2)
         self.assertEqual(ws.index, 2)
         self.assertEqual(ws.name, "Sheet1")
         self.assertIs(self.wb.sheet(2), ws)
@@ -679,7 +687,7 @@ class SheetHandleTests(unittest.TestCase):
     def test_rename_keeps_handle(self) -> None:
         # H4
         ws = self.wb.sheet("Data")
-        self.wb.rename_sheet(ws, "Renamed")
+        self.wb.sheet(ws).rename("Renamed")
         self.assertEqual(ws.name, "Renamed")
         self.assertIs(self.wb.sheet("renamed"), ws)
         self._assert_in_sync()
@@ -739,7 +747,7 @@ class SheetHandleTests(unittest.TestCase):
             self.wb.copy_sheet(0, len(self.wb) + 1)
         self.assertEqual(cm.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
         ws = self.wb.sheet("Data")
-        self.wb.move_sheet(ws, ws.index)
+        self.wb.sheet(ws).move(ws.index)
         self.assertEqual(ws.index, 1)
         self._assert_in_sync()
         with Workbook.create_default() as single:
@@ -778,9 +786,9 @@ class SheetHandleTests(unittest.TestCase):
     def test_sheet_ref_forms(self) -> None:
         # H12
         ws = self.wb.sheet("Tail")
-        self.wb.rename_sheet(ws, "T1")
-        self.wb.rename_sheet(2, "T2")
-        self.wb.rename_sheet("t2", "T3")
+        self.wb.sheet(ws).rename("T1")
+        self.wb.sheet(2).rename("T2")
+        self.wb.sheet("t2").rename("T3")
         self.assertEqual(ws.name, "T3")
         self.wb.set_active_sheet(ws)
         self.assertIs(self.wb.get_active_sheet(), ws)
@@ -834,19 +842,19 @@ class SheetHandleTests(unittest.TestCase):
 def _workbook_with_pivot() -> "tuple[Workbook, int, int]":
     """A default workbook with one two-field pivot on sheet 0: ``(wb, pivot_index, cache_id)``."""
     wb = Workbook.create_default()
-    cache_id = wb.add_pivot_cache()
-    wb.set_pivot_cache_worksheet_source(cache_id, formulon.PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
-    wb.add_pivot_cache_field(cache_id, "Region")
-    wb.add_pivot_cache_field(cache_id, "Amount")
+    cache_id = wb.add_pivot_cache().cache_id
+    wb.pivot_cache(cache_id).set_worksheet_source(formulon.PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
+    wb.pivot_cache(cache_id).add_field("Region")
+    wb.pivot_cache(cache_id).add_field("Amount")
     for region, amount in (("East", 10.0), ("West", 30.0)):
-        record = wb.add_pivot_cache_record(cache_id)
-        wb.set_pivot_cache_record_value(cache_id, record, 0, region)
-        wb.set_pivot_cache_record_value(cache_id, record, 1, amount)
+        record = wb.pivot_cache(cache_id).add_record()
+        wb.pivot_cache(cache_id).set_record_value(record, 0, region)
+        wb.pivot_cache(cache_id).set_record_value(record, 1, amount)
     ws = wb.sheet(0)
     pivot = ws.add_pivot(name="Pivot1", cache_id=cache_id, anchor_row=0, anchor_col=4)
-    ws.add_pivot_field(pivot, formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
-    amount = ws.add_pivot_field(pivot, formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE))
-    ws.add_pivot_data_field(pivot, formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount))
+    ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+    amount = ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE))
+    ws.pivot(pivot).add_data_field(formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount))
     return wb, pivot, cache_id
 
 
@@ -889,11 +897,11 @@ class SetterRoundTripTests(unittest.TestCase):
         self.wb.set_table_style_defaults(**dataclasses.asdict(before))
         self.assertEqual(self.wb.get_table_style_defaults(), before)
 
-        self.ws.set_pivot_grand_totals(self.pivot, rows=False)
-        before = self.ws.get_pivot_grand_totals(self.pivot)
+        self.ws.pivot(self.pivot).set_grand_totals(rows=False)
+        before = self.ws.pivot(self.pivot).get_grand_totals()
         self.assertEqual(before, formulon.PivotGrandTotals(rows=False, columns=True))
-        self.ws.set_pivot_grand_totals(self.pivot, **dataclasses.asdict(before))
-        self.assertEqual(self.ws.get_pivot_grand_totals(self.pivot), before)
+        self.ws.pivot(self.pivot).set_grand_totals(**dataclasses.asdict(before))
+        self.assertEqual(self.ws.pivot(self.pivot).get_grand_totals(), before)
 
         self.ws.set_page_setup(orientation=formulon.PageOrientation.LANDSCAPE, scale=80)
         before = self.ws.get_page_setup()
@@ -966,9 +974,9 @@ class SetterRoundTripTests(unittest.TestCase):
         )
         self.assertEqual(self.wb.get_theme_script_font(major=True, script="Jpan"), script)
 
-        style = self.ws.get_pivot_style_info(self.pivot)
-        self.ws.set_pivot_style_info(self.pivot, **dataclasses.asdict(style))
-        self.assertEqual(self.ws.get_pivot_style_info(self.pivot), style)
+        style = self.ws.pivot(self.pivot).get_style_info()
+        self.ws.pivot(self.pivot).set_style_info(**dataclasses.asdict(style))
+        self.assertEqual(self.ws.pivot(self.pivot).get_style_info(), style)
 
 
 # ---------------------------------------------------------------------------
@@ -1014,24 +1022,24 @@ class AbsentValueTests(unittest.TestCase):
                 self.assertIsNone(getter())
         self.assertIsNone(ws.get_print_titles())
         self.assertIsNone(ws.get_print_area())
-        self.assertIsNone(wb.list_pivot_cache_fields(self.cache)[0].formula)
+        self.assertIsNone(wb.pivot_cache(self.cache).list_fields()[0].formula)
         self.assertIsNone(wb.get_defined_name("Rate").comment)
-        self.assertIsNone(wb.list_tables()[self.table].style_name)
+        self.assertIsNone(wb.list_tables()[self.table.index].get_properties().style_name)
         self.assertEqual(wb.get_table_style_defaults(), formulon.TableStyleDefaults(None, None))
         hyperlink = ws.get_hyperlink(10, 0)
         self.assertEqual((hyperlink.display, hyperlink.tooltip, hyperlink.location), (None, None, None))
         validation = ws.list_validations()[0]
         self.assertEqual((validation.formula2, validation.error_title, validation.prompt_message), (None, None, None))
-        chart = ws.get_chart(self.chart)
+        chart = ws.chart(self.chart).get_properties()
         self.assertIsNone(chart.legend)
-        drawing = ws.get_drawing_object(self.chart)
+        drawing = ws.drawing(self.chart).get_drawing_properties()
         self.assertIsNone(drawing.media_path)
         self.assertIsNone(ws.list_sparkline_groups()[0].date_axis_ref)
-        data_field = ws.list_pivot_data_fields(self.pivot)[0]
+        data_field = ws.pivot(self.pivot).list_data_fields()[0]
         self.assertEqual(
             (data_field.number_format, data_field.show_as_base_field, data_field.show_as_base_item), (None, None, None)
         )
-        field = ws.list_pivot_fields(self.pivot)[0]
+        field = ws.pivot(self.pivot).list_fields()[0]
         self.assertEqual((field.custom_name, field.group_base_index), (None, None))
         self.assertIsNone(ws.get_page_setup().orientation)
         self.assertEqual(ws.get_view().view_mode, formulon.SheetViewMode.NORMAL)
@@ -1071,10 +1079,10 @@ class AbsentValueTests(unittest.TestCase):
         wb, pivot, _ = _workbook_with_pivot()
         with wb:
             ws = wb.sheet(0)
-            ws.set_pivot_field_axis(pivot, 0, None)
-            self.assertIsNone(ws.list_pivot_fields(pivot)[0].axis)
+            ws.pivot(pivot).set_field_axis(0, None)
+            self.assertIsNone(ws.pivot(pivot).list_fields()[0].axis)
             with self.assertRaises(InvalidArgumentError):
-                ws.set_pivot_field_axis(pivot, 0, -1)  # type: ignore[arg-type]
+                ws.pivot(pivot).set_field_axis(0, -1)  # type: ignore[arg-type]
 
     def test_patch_omitted_none_and_value(self) -> None:
         # A6
@@ -1124,9 +1132,9 @@ class AbsentValueTests(unittest.TestCase):
             for r in range(3):
                 ws.set_number(r, 0, float(r))
             chart = ws.add_chart(formulon.ChartInsertKind.COLUMN, "Sheet1!$A$1:$A$3", title="T")
-            ws.set_chart_title(chart, None)
-            ws.set_chart_legend(chart, None)
-            info = ws.get_chart(chart)
+            ws.chart(chart).set_title(None)
+            ws.chart(chart).set_legend(None)
+            info = ws.chart(chart).get_properties()
             self.assertEqual((info.title, info.legend), (None, None))
 
 
@@ -1262,9 +1270,9 @@ class PivotDetailsHandleTests(unittest.TestCase):
         wb, pivot, _ = _workbook_with_pivot()
         with wb:
             ws = wb.sheet(0)
-            layout = ws.get_pivot_layout(pivot)
+            layout = ws.pivot(pivot).get_layout()
             row, col = next((c.row, c.col) for c in layout.cells if c.value.kind == ValueKind.NUMBER)
-            details = ws.show_pivot_details(pivot, row, col)
+            details = ws.pivot(pivot).show_details(row, col)
             self.assertIsInstance(details, Sheet)
             self.assertEqual(details.index, 0)
             self.assertEqual(ws.index, 1)

@@ -226,6 +226,8 @@ class JsWorkbook {
 
   double tableCount() const;
   emscripten::val tableAt(uint32_t idx) const;
+  uint32_t tableRuntimeId(uint32_t idx) const;
+  uint32_t resolveTableRuntimeId(uint32_t id) const;
   uint32_t createTable(emscripten::val spec);
   void updateTable(uint32_t idx, emscripten::val spec);
   void removeTable(uint32_t idx);
@@ -269,7 +271,6 @@ class JsWorkbook {
   /// Toggles `<sheetPr><pageSetUpPr fitToPage>` without touching anything
   /// else `<sheetPr>` carries. Pair with `fitToWidth` / `fitToHeight` on
   /// the page setup to state the target.
-  void setSheetFitToPage(uint32_t sheet, bool enabled);
 
   /// Print area as comma-separated A1 ranges. `{ ranges }`.
   emscripten::val getSheetPrintArea(uint32_t sheet) const;
@@ -299,6 +300,8 @@ class JsWorkbook {
   void setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFooter);
   emscripten::val getSheetPageSetup(uint32_t sheet) const;
   emscripten::val getSheetPageMargins(uint32_t sheet) const;
+  emscripten::val getSheetPrintOptions(uint32_t sheet) const;
+  emscripten::val getSheetHeaderFooter(uint32_t sheet) const;
 
   // ---- Sheet view / layout ------------------------------------------------
 
@@ -506,8 +509,7 @@ class JsWorkbook {
   emscripten::val getThreadedComments(uint32_t sheet) const;
   emscripten::val getThreadedComment(uint32_t sheet, const std::string& id) const;
   void addThreadedComment(uint32_t sheet, emscripten::val comment);
-  void editThreadedComment(uint32_t sheet, const std::string& id, const std::string& text, emscripten::val mentions);
-  void setThreadResolved(uint32_t sheet, const std::string& threadId, bool done);
+  void editThreadedComment(uint32_t sheet, const std::string& id, emscripten::val patch);
   void removeThreadedComment(uint32_t sheet, const std::string& id);
   emscripten::val getPersons() const;
   void addPerson(emscripten::val person);
@@ -545,7 +547,6 @@ class JsWorkbook {
   emscripten::val getSparklineGroup(uint32_t sheet, uint32_t sparklineGroupIndex) const;
   uint32_t addSparklineGroup(uint32_t sheet, emscripten::val spec);
   void updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec);
-  void setSparklineGroupSparklines(uint32_t sheet, uint32_t index, emscripten::val sparklines);
   void removeSparklineGroup(uint32_t sheet, uint32_t index);
 
   emscripten::val getChart(uint32_t sheet, uint32_t objectId) const;
@@ -643,6 +644,8 @@ class JsWorkbook {
   /// from a package alike. `pivotCacheId` returns the cache id.
   uint32_t pivotCacheId(uint32_t sheet, uint32_t pivotIndex) const;
   std::string pivotName(uint32_t sheet, uint32_t pivotIndex) const;
+  uint32_t pivotRuntimeId(uint32_t sheet, uint32_t pivotIndex) const;
+  uint32_t resolvePivotRuntimeId(uint32_t sheet, uint32_t id) const;
   emscripten::val pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIndex) const;
   emscripten::val pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIndex) const;
   emscripten::val pivotRowFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
@@ -787,7 +790,7 @@ class JsWorkbook {
 /// Convenience entry point that mirrors `formulon_cli eval <formula>`:
 /// spin up an empty workbook with the default Sheet1, place the formula
 /// at A1, recalc, and return the resulting cell value.
-emscripten::val eval_formula(const std::string& formula);
+emscripten::val evaluate_formula(const std::string& formula);
 
 /// Returns the Formulon library version (NUL-terminated UTF-8).
 std::string version_string();

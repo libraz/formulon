@@ -1,0 +1,371 @@
+{
+  "fields": {
+    "id": "unique case name",
+    "before": "patches applied in order before the case, each `{ range, patch }`",
+    "range": "the range argument of setCellFormat / set_cell_format: an A1 cell, range, column span or row span",
+    "patch": "the CellFormatPatch, keys in JS camelCase; Python converts every key to snake_case",
+    "patch_from": "instead of `patch`: pass back the record getCellFormat / get_cell_format returns for this cell",
+    "expect": "per cell, the CellFormat fields that must read back; a nested object compares only the keys it names",
+    "expect_xf": "per cell, the CellXf fields that must read back through getCellXf(getEffectiveStyle(cell).xfIndex)",
+    "unchanged": "cells whose getCellFormat result is equal before and after the call",
+    "idempotent": "applying the same patch a second time leaves listCellXfs().length unchanged",
+    "throws": "the error each surface raises before anything changes: `TypeError`, `RangeError`, `ValueError`, `FormulonError:InvalidArgument`, `InvalidArgumentError`",
+    "enums": "an enum field is written by member name (`Center`; Python upper-cases it: `CENTER`); a number is passed as is",
+    "colors": "a colour is written `#RRGGBB` or `#AARRGGBB`; an expected colour is upper-case `#AARRGGBB`, compared with `<field>.rgb`",
+    "null": "null clears the attribute on a key whose read-record field is nullable (`font.bold`, `font.size`, `font.family`, ...); on any other key it is a TypeError"
+  },
+  "cases": [
+    {
+      "id": "bold-keeps-number-format",
+      "before": [{ "range": "A1:B2", "patch": { "numberFormat": "0.00" } }],
+      "range": "A1",
+      "patch": { "font": { "bold": true } },
+      "expect": { "A1": { "font": { "bold": true }, "numberFormat": "0.00" } },
+      "unchanged": ["B2"],
+      "idempotent": true
+    },
+    {
+      "id": "italic-and-strike",
+      "range": "A1",
+      "patch": { "font": { "italic": true, "strike": true } },
+      "expect": { "A1": { "font": { "italic": true, "strike": true } } },
+      "unchanged": ["A2"],
+      "idempotent": true
+    },
+    {
+      "id": "font-name-and-size",
+      "range": "B3",
+      "patch": { "font": { "name": "Arial", "size": 14 } },
+      "expect": { "B3": { "font": { "name": "Arial", "size": 14 } } },
+      "idempotent": true
+    },
+    {
+      "id": "font-color-six-digits-gets-opaque-alpha",
+      "range": "A1",
+      "patch": { "font": { "color": "#ff0000" } },
+      "expect": { "A1": { "font": { "color": "#FFFF0000" } } },
+      "idempotent": true
+    },
+    {
+      "id": "font-color-keeps-alpha",
+      "range": "A1",
+      "patch": { "font": { "color": "#80112233" } },
+      "expect": { "A1": { "font": { "color": "#80112233" } } }
+    },
+    {
+      "id": "underline-and-superscript",
+      "range": "C1",
+      "patch": { "font": { "underline": "Double", "vertAlign": "Superscript" } },
+      "expect": { "C1": { "font": { "underline": "Double", "vertAlign": "Superscript" } } },
+      "idempotent": true
+    },
+    {
+      "id": "font-family-null-is-the-record-value",
+      "range": "A1",
+      "patch": { "font": { "family": null } },
+      "expect": { "A1": { "font": { "family": null } } }
+    },
+    {
+      "id": "fill-color-implies-solid",
+      "range": "A1",
+      "patch": { "fill": { "fg": "#FFFF00" } },
+      "expect": { "A1": { "fill": { "pattern": "Solid", "fg": "#FFFFFF00" } } },
+      "unchanged": ["A2"],
+      "idempotent": true
+    },
+    {
+      "id": "fill-explicit-pattern-is-kept",
+      "range": "A1",
+      "patch": { "fill": { "pattern": "DarkGrid", "fg": "#000000", "bg": "#FFFFFF" } },
+      "expect": { "A1": { "fill": { "pattern": "DarkGrid", "fg": "#FF000000", "bg": "#FFFFFFFF" } } }
+    },
+    {
+      "id": "border-one-side",
+      "range": "B2",
+      "patch": { "border": { "left": { "style": "Thin" } } },
+      "expect": { "B2": { "border": { "left": { "style": "Thin" }, "right": { "style": "None" } } } },
+      "unchanged": ["C2"],
+      "idempotent": true
+    },
+    {
+      "id": "border-side-color-merges-with-style",
+      "before": [{ "range": "B2", "patch": { "border": { "bottom": { "style": "Medium" } } } }],
+      "range": "B2",
+      "patch": { "border": { "bottom": { "color": "#0000FF" } } },
+      "expect": { "B2": { "border": { "bottom": { "style": "Medium", "color": "#FF0000FF" } } } }
+    },
+    {
+      "id": "border-diagonal-flags",
+      "range": "D4",
+      "patch": { "border": { "diagonal": { "style": "Dashed" }, "diagonalUp": true, "diagonalDown": false } },
+      "expect": { "D4": { "border": { "diagonal": { "style": "Dashed" }, "diagonalUp": true, "diagonalDown": false } } }
+    },
+    {
+      "id": "number-format-code",
+      "range": "A1",
+      "patch": { "numberFormat": "0.00%" },
+      "expect": { "A1": { "numberFormat": "0.00%" } },
+      "idempotent": true
+    },
+    {
+      "id": "number-format-general-resets",
+      "before": [{ "range": "A1", "patch": { "numberFormat": "#,##0" } }],
+      "range": "A1",
+      "patch": { "numberFormat": "General" },
+      "expect": { "A1": { "numberFormat": "General" } }
+    },
+    {
+      "id": "number-format-unicode-code",
+      "range": "A1",
+      "patch": { "numberFormat": "0.0\"円\"" },
+      "expect": { "A1": { "numberFormat": "0.0\"円\"" } }
+    },
+    {
+      "id": "alignment-horizontal-and-vertical",
+      "range": "A1",
+      "patch": { "alignment": { "horizontal": "Center", "vertical": "Top" } },
+      "expect": { "A1": { "alignment": { "horizontal": "Center", "vertical": "Top", "wrapText": false } } },
+      "idempotent": true
+    },
+    {
+      "id": "alignment-wrap-indent-rotation",
+      "range": "A1",
+      "patch": { "alignment": { "wrapText": true, "indent": 2, "textRotation": 45 } },
+      "expect": { "A1": { "alignment": { "wrapText": true, "indent": 2, "textRotation": 45, "horizontal": "General" } } }
+    },
+    {
+      "id": "alignment-vertical-text-rotation-255",
+      "range": "A1",
+      "patch": { "alignment": { "textRotation": 255, "shrinkToFit": true } },
+      "expect": { "A1": { "alignment": { "textRotation": 255, "shrinkToFit": true } } }
+    },
+    {
+      "id": "alignment-reading-order",
+      "range": "A1",
+      "patch": { "alignment": { "readingOrder": "RightToLeft", "justifyLastLine": true, "relativeIndent": 1 } },
+      "expect": { "A1": { "alignment": { "readingOrder": "RightToLeft", "justifyLastLine": true, "relativeIndent": 1 } } }
+    },
+    {
+      "id": "protection-unlocked-hidden",
+      "range": "A1",
+      "patch": { "protection": { "locked": false, "hidden": true } },
+      "expect": { "A1": { "protection": { "locked": false, "hidden": true } } },
+      "unchanged": ["A2"],
+      "idempotent": true
+    },
+    {
+      "id": "defaults-without-alignment-or-protection",
+      "range": "A1",
+      "patch": { "font": { "bold": true } },
+      "expect": {
+        "A1": {
+          "alignment": {
+            "horizontal": "General",
+            "vertical": "Bottom",
+            "wrapText": false,
+            "shrinkToFit": false,
+            "indent": 0,
+            "textRotation": 0,
+            "readingOrder": "Context",
+            "justifyLastLine": false,
+            "relativeIndent": 0
+          },
+          "protection": { "locked": true, "hidden": false }
+        }
+      }
+    },
+    {
+      "id": "untouched-alignment-stays-absent-in-the-xf",
+      "range": "A1",
+      "patch": { "font": { "bold": true } },
+      "expect_xf": {
+        "A1": { "horizontalAlign": null, "verticalAlign": null, "wrapText": null, "justifyLastLine": null, "locked": null, "hidden": null }
+      }
+    },
+    {
+      "id": "touched-alignment-states-only-its-fields",
+      "range": "A1",
+      "patch": { "alignment": { "horizontal": "Right" } },
+      "expect_xf": { "A1": { "horizontalAlign": "Right", "verticalAlign": null, "wrapText": null } }
+    },
+    {
+      "id": "untouched-groups-are-kept",
+      "before": [{ "range": "A1", "patch": { "font": { "bold": true }, "fill": { "fg": "#00FF00" } } }],
+      "range": "A1",
+      "patch": { "alignment": { "horizontal": "Center" } },
+      "expect": {
+        "A1": { "font": { "bold": true }, "fill": { "pattern": "Solid", "fg": "#FF00FF00" }, "alignment": { "horizontal": "Center" } }
+      }
+    },
+    {
+      "id": "range-applies-to-every-cell",
+      "range": "A1:B2",
+      "patch": { "font": { "bold": true } },
+      "expect": { "A1": { "font": { "bold": true } }, "B2": { "font": { "bold": true } } },
+      "unchanged": ["C3"],
+      "idempotent": true
+    },
+    {
+      "id": "column-span-formats-the-column",
+      "range": "B:B",
+      "patch": { "fill": { "fg": "#FF0000" } },
+      "expect": { "B1": { "fill": { "pattern": "Solid" } }, "B1000": { "fill": { "fg": "#FFFF0000" } } },
+      "unchanged": ["A5", "C5"]
+    },
+    {
+      "id": "row-span-formats-the-row",
+      "range": "3:3",
+      "patch": { "font": { "italic": true } },
+      "expect": { "A3": { "font": { "italic": true } }, "XFD3": { "font": { "italic": true } } },
+      "unchanged": ["A2", "A4"]
+    },
+    {
+      "id": "record-passes-back-whole",
+      "before": [
+        {
+          "range": "A1",
+          "patch": {
+            "numberFormat": "0.000",
+            "font": { "bold": true, "color": "#336699" },
+            "fill": { "fg": "#EEEEEE" },
+            "border": { "top": { "style": "Thick" } },
+            "alignment": { "horizontal": "Right", "wrapText": true },
+            "protection": { "locked": false }
+          }
+        }
+      ],
+      "range": "C5",
+      "patch_from": "A1",
+      "expect": {
+        "C5": {
+          "numberFormat": "0.000",
+          "font": { "bold": true, "color": "#FF336699" },
+          "fill": { "pattern": "Solid", "fg": "#FFEEEEEE" },
+          "border": { "top": { "style": "Thick" } },
+          "alignment": { "horizontal": "Right", "wrapText": true },
+          "protection": { "locked": false }
+        }
+      },
+      "unchanged": ["A1"]
+    },
+    {
+      "id": "null-clears-an-explicit-bold",
+      "before": [{ "range": "A1", "patch": { "font": { "bold": true, "italic": true } } }],
+      "range": "A1",
+      "patch": { "font": { "bold": null } },
+      "expect": { "A1": { "font": { "bold": null, "italic": true } } },
+      "idempotent": true
+    },
+    {
+      "id": "copy-format-to-a-range",
+      "before": [
+        { "range": "A1", "patch": { "numberFormat": "0.0%", "font": { "italic": true }, "alignment": { "vertical": "Center" } } }
+      ],
+      "range": "E1:F2",
+      "patch_from": "A1",
+      "expect": {
+        "E1": { "numberFormat": "0.0%", "font": { "italic": true }, "alignment": { "vertical": "Center" } },
+        "F2": { "numberFormat": "0.0%", "font": { "italic": true }, "alignment": { "vertical": "Center" } }
+      },
+      "unchanged": ["A1", "G3"],
+      "idempotent": true
+    },
+    {
+      "id": "empty-patch-does-nothing",
+      "range": "A1",
+      "patch": {},
+      "unchanged": ["A1"],
+      "idempotent": true
+    },
+    {
+      "id": "null-on-a-non-null-key-is-type-error",
+      "range": "A1",
+      "patch": { "alignment": { "wrapText": null } },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "null-group-is-type-error",
+      "range": "A1",
+      "patch": { "alignment": null },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "unknown-top-level-key",
+      "range": "A1",
+      "patch": { "colour": "#FF0000" },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "unknown-nested-key",
+      "range": "A1",
+      "patch": { "font": { "weight": 700 } },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "string-bold-is-type-error",
+      "range": "A1",
+      "patch": { "font": { "bold": "yes" } },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "number-format-number-is-type-error",
+      "range": "A1",
+      "patch": { "numberFormat": 10 },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "empty-number-format",
+      "range": "A1",
+      "patch": { "numberFormat": "" },
+      "throws": { "js": "FormulonError:InvalidArgument", "py": "InvalidArgumentError" }
+    },
+    {
+      "id": "empty-color-is-type-error",
+      "range": "A1",
+      "patch": { "font": { "color": "" } },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "malformed-color-is-type-error",
+      "range": "A1",
+      "patch": { "fill": { "fg": "#12345" } },
+      "throws": { "js": "TypeError", "py": "TypeError" }
+    },
+    {
+      "id": "negative-size-is-range-error",
+      "range": "A1",
+      "patch": { "font": { "size": -1 } },
+      "throws": { "js": "RangeError", "py": "ValueError" }
+    },
+    {
+      "id": "fractional-enum-is-range-error",
+      "range": "A1",
+      "patch": { "font": { "underline": 1.5 } },
+      "throws": { "js": "RangeError", "py": "ValueError" }
+    },
+    {
+      "id": "enum-out-of-range",
+      "range": "A1",
+      "patch": { "border": { "left": { "style": 14 } } },
+      "throws": { "js": "FormulonError:InvalidArgument", "py": "InvalidArgumentError" }
+    },
+    {
+      "id": "indent-above-255",
+      "range": "A1",
+      "patch": { "alignment": { "indent": 256 } },
+      "throws": { "js": "FormulonError:InvalidArgument", "py": "InvalidArgumentError" }
+    },
+    {
+      "id": "text-rotation-between-180-and-255",
+      "range": "A1",
+      "patch": { "alignment": { "textRotation": 181 } },
+      "throws": { "js": "FormulonError:InvalidArgument", "py": "InvalidArgumentError" }
+    },
+    {
+      "id": "indent-two-to-the-31",
+      "range": "A1",
+      "patch": { "alignment": { "indent": 2147483648 } },
+      "throws": { "js": "FormulonError:InvalidArgument", "py": "InvalidArgumentError" }
+    }
+  ]
+}

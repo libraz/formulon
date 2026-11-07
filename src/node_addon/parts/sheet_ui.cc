@@ -732,26 +732,31 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   const std::string id = ArgString(info, 1);
-  const std::string text = ArgString(info, 2);
+  const Napi::Object patch = ArgObject(info, 2);
+  fm_threaded_comment_patch_t out{};
+  out.done = -1;
+  std::string text;
+  const bool has_text = reader.String(patch, "text", &text);
   std::vector<std::string> mention_ids;
   std::vector<fm_mention_t> mentions;
-  if (info.Length() > 3) {
-    ReadMentions(reader, info[3], mention_ids, mentions);
+  const Napi::Value mention_list = reader.Get(patch, "mentions");
+  if (!mention_list.IsUndefined() && !mention_list.IsNull()) {
+    out.mentions_engaged = 1;
+    ReadMentions(reader, mention_list, mention_ids, mentions);
   }
+  bool has_done = false;
+  const bool done = reader.Bool(patch, "done", false, &has_done);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const fm_status_t rc = fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), text.c_str(),
-                                                          mentions.empty() ? nullptr : mentions.data(),
-                                                          static_cast<uint32_t>(mentions.size()));
+  out.text = has_text ? text.c_str() : nullptr;
+  out.mentions = mentions.empty() ? nullptr : mentions.data();
+  out.mention_count = static_cast<uint32_t>(mentions.size());
+  if (has_done) {
+    out.done = done ? 1 : 0;
+  }
+  const fm_status_t rc = fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), &out);
   return ValueOrThrow(env, rc, env.Undefined());
-}
-
-Napi::Value Workbook::SetThreadResolved(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string thread_id = ArgString(info, 1);
-    return fm_sheet_set_thread_resolved(handle, ArgU32(info, 0), thread_id.c_str(), ArgFlag(info, 2));
-  });
 }
 
 Napi::Value Workbook::GetThreadedComment(const Napi::CallbackInfo& info) {

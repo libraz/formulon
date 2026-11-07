@@ -11,10 +11,12 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "auto_filter.h"
+#include "utils/runtime_id.h"
 
 namespace formulon {
 
@@ -114,7 +116,13 @@ struct TableMetadata {
   /// namespace declarations and compatibility attributes needed by raw
   /// column or extension payloads.
   std::string root_extra_attrs;
+  /// Session identity the C API assigns on first request; never saved. See
+  /// `utils/runtime_id.h` for how it behaves across copies and moves.
+  mutable RuntimeId runtime_id;
 };
+
+// Reallocation must move, not copy, or every table would lose its id.
+static_assert(std::is_nothrow_move_constructible_v<TableMetadata>, "TableMetadata must stay nothrow-movable");
 
 }  // namespace formulon
 

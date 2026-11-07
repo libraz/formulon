@@ -212,6 +212,29 @@ Napi::Value Workbook::PivotName(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, JsString(env, name));
 }
 
+Napi::Value Workbook::PivotRuntimeId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
+  uint32_t out = 0;
+  const fm_status_t rc = fm_sheet_get_pivot_runtime_id(handle_, sheet, pivot_index, &out);
+  return ValueOrThrow(env, rc, JsNumber(env, out));
+}
+
+Napi::Value Workbook::ResolvePivotRuntimeId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  std::size_t out = 0;
+  const fm_status_t rc = fm_sheet_resolve_pivot_runtime_id(handle_, sheet, ArgU32(info, 1), &out);
+  return ValueOrThrow(env, rc, JsNumber(env, static_cast<double>(out)));
+}
+
 Napi::Value Workbook::PivotGetGrandTotals(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

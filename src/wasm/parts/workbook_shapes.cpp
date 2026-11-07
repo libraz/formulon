@@ -337,28 +337,21 @@ void JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten
   }
   JsNarrowNumericReader reader("updateSparklineGroup");
   std::string ref_store;
-  const fm_sparkline_group_t group = pull_group(reader, spec, ref_store);
-  if (!reader.ok()) {
-    return;
-  }
-  succeeded(fm_sheet_update_sparkline_group(handle_, sheet, index, &group));
-}
-
-void JsWorkbook::setSparklineGroupSparklines(uint32_t sheet, uint32_t index, emscripten::val sparklines) {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return;
-  }
-  JsNarrowNumericReader reader("setSparklineGroupSparklines");
   std::vector<std::string> texts;
   std::vector<fm_sparkline_t> items;
-  pull_sparklines(reader, sparklines, texts, items);
+  const fm_sparkline_group_t group = pull_group(reader, spec, ref_store);
+  const emscripten::val sparklines = reader.value(spec, "sparklines", "group.sparklines");
+  const bool replace = js_value_present(sparklines);
+  if (reader.ok() && replace) {
+    pull_sparklines(reader, sparklines, texts, items);
+  }
   if (!reader.ok()) {
     return;
   }
+  // Without `sparklines` the group keeps its own; an empty array reaches the core, which rejects it.
   fm_sparkline_t none{};
-  succeeded(fm_sheet_set_sparkline_group_sparklines(handle_, sheet, index, items.empty() ? &none : items.data(),
-                                                    items.size()));
+  const fm_sparkline_t* replacement = !replace ? nullptr : items.empty() ? &none : items.data();
+  succeeded(fm_sheet_update_sparkline_group(handle_, sheet, index, &group, replacement, items.size()));
 }
 
 void JsWorkbook::removeSparklineGroup(uint32_t sheet, uint32_t index) {

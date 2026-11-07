@@ -95,6 +95,8 @@ fm_workbook_get_defined_name
 fm_workbook_remove_defined_name
 fm_workbook_get_table_count
 fm_workbook_get_table
+fm_workbook_get_table_runtime_id
+fm_workbook_resolve_table_runtime_id
 fm_workbook_add_table
 fm_workbook_update_table
 fm_workbook_remove_table
@@ -163,7 +165,6 @@ fm_sheet_get_threaded_comment_at
 fm_sheet_get_threaded_comment
 fm_sheet_add_threaded_comment
 fm_sheet_update_threaded_comment
-fm_sheet_set_thread_resolved
 fm_sheet_remove_threaded_comment
 fm_workbook_get_person_count
 fm_workbook_get_person_at
@@ -384,6 +385,8 @@ fm_sheet_get_pivot_report_layout
 fm_sheet_set_pivot_report_layout
 fm_sheet_get_pivot_cache_id
 fm_sheet_get_pivot_name
+fm_sheet_get_pivot_runtime_id
+fm_sheet_resolve_pivot_runtime_id
 fm_sheet_get_pivot_grand_totals
 fm_sheet_get_pivot_style_info
 fm_sheet_get_pivot_row_field_order
@@ -502,7 +505,6 @@ fm_sheet_get_header_footer_xml
 fm_sheet_set_header_footer_xml
 fm_sheet_get_sheet_pr_xml
 fm_sheet_set_sheet_pr_xml
-fm_sheet_set_fit_to_page
 fm_sheet_get_print_area
 fm_sheet_set_print_area
 fm_sheet_get_print_titles
@@ -522,6 +524,8 @@ fm_sheet_set_print_options
 fm_sheet_set_header_footer
 fm_sheet_get_page_setup
 fm_sheet_get_page_margins
+fm_sheet_get_print_options
+fm_sheet_get_header_footer
 fm_sheet_set_range_xf_index
 
 # -- Drawing objects -------------------------------------------------------------
@@ -594,7 +598,6 @@ fm_sheet_get_sparkline_group
 fm_sheet_get_sparkline
 fm_sheet_add_sparkline_group
 fm_sheet_update_sparkline_group
-fm_sheet_set_sparkline_group_sparklines
 fm_sheet_remove_sparkline_group
 fm_sheet_add_data_table
 fm_sheet_get_data_table

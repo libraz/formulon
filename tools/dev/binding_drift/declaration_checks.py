@@ -6,7 +6,16 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from .api_conventions import LEDGER_PATH, Ledger, c_verb, load_ledger
+from .api_conventions import (
+    LEDGER_PATH,
+    SHEET_HANDLE_CLASS,
+    Ledger,
+    c_verb,
+    entry_handle,
+    handle_classes,
+    handle_name,
+    load_ledger,
+)
 from .api_conventions_bindings import FACADE_EXTRA, SHEET_CLASS, WORKBOOK_CLASS
 from .enum_decl import (
     _cpp_enum_class_values,
@@ -61,7 +70,7 @@ NODE_ONLY_METHODS = {"getMemoryUsage"}
 # helpers implemented once in packages/npm/common.mjs (e.g. the
 # function-metadata provider merge helper). Excluded before comparing the
 # d.ts free-function surface against the registrations.
-NODE_PURE_JS_FREE_FUNCTIONS = {"mergeFunctionMetadata"}
+NODE_PURE_JS_FREE_FUNCTIONS = {"mergeFunctionMetadata", "toNative"}
 
 # `Workbook` methods the pure-JS layer adds (`installWorkbookExtensions`, or the
 # `makeFacade` classes); no registration stands behind them in either runtime.
@@ -81,7 +90,7 @@ _READONLY_FIELD_RE = re.compile(r"^\s*readonly\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*:"
 
 def _optional_interface_body(text: str, name: str) -> str:
     """The body of `export interface <name>`, or "" when the file does not declare it."""
-    match = re.search(r"export interface %s\s*\{" % re.escape(name), text)
+    match = re.search(r"export interface %s(?:\s+extends\s+[^{]+?)?\s*\{" % re.escape(name), text)
     return _find_interface_body(text, name, Path(name)) if match else ""
 
 
@@ -107,10 +116,11 @@ def facade_split(ledger: Ledger) -> Tuple[Set[str], Set[str]]:
     """`(raw_only, facade_only)` JS method names the ledger implies.
 
     Raw-only names stay registered while the published declarations drop them: the count and element getter
-    of a `list` / `handles` / `property` collection, and every `drop:` JS name. Facade-only names are declared
+    of a `list` / `handles` / `property` collection, every `drop:` JS name, and the raw name of an `internal`
+    op or list or of an op a handle class publishes. Facade-only names are declared
     but built in JS: `FACADE_EXTRA`, the `list<Plural>()` of a `list` / `handles` collection, the
-    `get<Plural>()` of a `property` collection, every `kind: list` entry and every `facade: handwritten` op
-    without a C target.
+    `get<Plural>()` of a `property` collection, every `kind: list` entry, every `facade: handwritten` op
+    without a C target, and the `Sheet` handle methods (`rename`, `move`).
     """
     raw_only: Set[str] = set()
     facade_only: Set[str] = set(PURE_JS_WORKBOOK_METHODS)
@@ -134,9 +144,44 @@ def facade_split(ledger: Ledger) -> Tuple[Set[str], Set[str]]:
         drop = entry.get("drop") if isinstance(entry, dict) else None
         if isinstance(drop, dict) and isinstance(drop.get("js"), str):
             raw_only.add(drop["js"])
+        if isinstance(entry, dict) and (entry.get("internal") is True or entry_handle(entry) is not None):
+            if isinstance(entry.get("js"), str):
+                raw_only.add(entry["js"])
+            # A `Sheet` handle method is declared on `Sheet` and forwards to a raw of another name.
+            name = handle_name(entry, "js", ledger.collections)
+            if name and SHEET_HANDLE_CLASS in handle_classes(entry):
+                facade_only.add(name)
+            continue
         if _facade_built(entry) and isinstance(entry.get("js"), str):
             facade_only.add(entry["js"])
     return raw_only, facade_only
+
+
+def handle_declaration_problems(
+    check: str, ledger: Ledger, registered: Set[str], dts_text: str, dts: Path
+) -> List[str]:
+    """Each handle method is declared on `interface <class>`, and the raw method it forwards to is registered."""
+    problems: List[str] = []
+    for key, entry in sorted(ledger.entries.items()):
+        if not isinstance(entry, dict) or entry_handle(entry) is None or entry.get("kind") not in ("op", "list"):
+            continue
+        surfaces = entry.get("surfaces")
+        if isinstance(surfaces, list) and not {"wasm", "native"} & set(surfaces):
+            continue
+        name = handle_name(entry, "js", ledger.collections)
+        handle = entry_handle(entry) or {}
+        for cls in handle_classes(entry):
+            body = _optional_interface_body(dts_text, cls)
+            # An identity property is a readonly field of the class; every other handle op is a method.
+            declared = (
+                set(_READONLY_FIELD_RE.findall(body)) if handle.get("property") is True else _extract_ts_methods(body)
+            )
+            if name and name not in declared:
+                problems.append(f"{check}: {key}: `{cls}.{name}` is not declared in {dts.relative_to(REPO_ROOT)}")
+        raw = entry.get("js")
+        if not _facade_built(entry) and isinstance(raw, str) and raw not in registered:
+            problems.append(f"{check}: {key}: the raw `{raw}` a handle method forwards to is not registered")
+    return problems
 
 
 def _facade_built(entry) -> bool:
@@ -192,6 +237,7 @@ def check_dts_wasm() -> List[str]:
     accessor_cpp = set(re.findall(r'\.property\("([^"]+)"', cpp_text))
     accessor_dts = set(_READONLY_FIELD_RE.findall(_find_interface_body(dts_text, "Workbook", WASM_DTS)))
 
+    problems += handle_declaration_problems("dts-wasm", _ledger(), instance_cpp, dts_text, WASM_DTS)
     for label, cpp_set, dts_set, allowed in (
         ("Workbook / Sheet instance methods", instance_cpp, instance_dts, split),
         ("Workbook static factories", static_cpp, static_dts, (set(), set())),
@@ -269,6 +315,7 @@ def check_dts_node() -> List[str]:
     if stale_node_only:
         problems.append(f"dts-node: stale Node-only allowlist entries: {sorted(stale_node_only)}")
 
+    problems += handle_declaration_problems("dts-node", _ledger(), instance_cc, dts_text, NODE_DTS)
     for label, cc_set, dts_set, allowed in (
         ("Workbook / Sheet instance methods", instance_cc, instance_dts, split),
         ("Workbook static factories", static_cc, static_dts, (set(), set())),

@@ -101,7 +101,7 @@ def _apply_sheets(wb: Any, case: Dict[str, Any]) -> Dict[str, int]:
         if position > 0:
             wb.add_sheet(name)
         else:
-            wb.rename_sheet(0, name)
+            wb.sheet(0).rename(name)
         indices[name] = position
         for addr, rec in (cells or {}).items():
             _write_cell(wb, position, addr, rec)

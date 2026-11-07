@@ -5,7 +5,9 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from formulon import CellXf, FormulonError, PrintTitles, Value, ValueKind, Workbook
+from _xf_input import input_of
+
+from formulon import CellXfInput, FormulonError, PrintTitles, Value, ValueKind, Workbook
 from formulon.workbook import (
     CellRect,
     DisplayStatus,
@@ -55,8 +57,8 @@ class GeometryTests(unittest.TestCase):
 
     def test_axis_styles_reach_entered_cells(self) -> None:
         with Workbook.create_default() as wb:
-            col_xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=1))
-            row_xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
+            col_xf = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=1))
+            row_xf = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=2))
             wb.sheet(0).set_column_width(1, 1, 20.0)
             wb.sheet(0).set_column_style(1, 1, col_xf)
             wb.sheet(0).set_row_style(2, 2, row_xf)
@@ -78,7 +80,7 @@ class GeometryTests(unittest.TestCase):
 
     def test_row_style_span(self) -> None:
         with Workbook.create_default() as wb:
-            xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
+            xf = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=2))
             wb.sheet(0).set_row_style(0, 999, xf)
             self.assertEqual(len(wb.sheet(0).list_row_overrides()), 1000)
             wb.sheet(0).clear_row_style(0, 999)
@@ -89,9 +91,9 @@ class GeometryTests(unittest.TestCase):
     def test_range_style_remap_and_restore(self) -> None:
         last_row = 1048575
         with Workbook.create_default() as wb:
-            r = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=1))
-            a = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
-            b = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=3))
+            r = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=1))
+            a = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=2))
+            b = wb.add_cell_xf(replace(input_of(wb.get_cell_xf(0)), num_fmt_id=3))
             wb.sheet(0).set_row_style(2, 2, r)
             self.assertEqual(wb.sheet(0).get_range_style_bases(CellRect(0, 1, last_row, 1)), [0, r])
             # Row 2 of a one-column selection is a single cell; excluding it hides the row style.
@@ -246,7 +248,7 @@ class DisplayTextTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             nf = wb.add_num_fmt("0.00")
             xf = wb.add_cell_xf(
-                CellXf(
+                CellXfInput(
                     font_index=0,
                     fill_index=0,
                     border_index=0,
@@ -283,7 +285,7 @@ class CellXfFlagTests(unittest.TestCase):
     def test_apply_and_protection_flags_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             xf = wb.add_cell_xf(
-                CellXf(
+                CellXfInput(
                     font_index=0,
                     fill_index=0,
                     border_index=0,

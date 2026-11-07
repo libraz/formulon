@@ -90,7 +90,7 @@ a real bug, fix the bug.
 
   * Workbook load/save parity (CLI's `recalc` vs npm's `loadBytes` vs
     Python's `Workbook.load`) is a separate harness; this one is
-    `eval_formula`-only.
+    `evaluate_formula`-only.
   * Locale-specific formatting (Japanese era dates, ja-JP separators)
     is owned by the oracle harness (`tests/oracle/`).
   * Status-envelope failures (parser crashes that surface as a non-OK

@@ -1,6 +1,6 @@
 """Smoke tests for the Formulon Python wheel.
 
-These tests exercise the public surface only -- ``formulon.eval_formula``,
+These tests exercise the public surface only -- ``formulon.evaluate_formula``,
 ``formulon.Workbook``, the ``Value`` POD, and ``FormulonError`` -- and use
 ``unittest`` so we do not depend on pytest.
 
@@ -65,12 +65,12 @@ class VersionTests(unittest.TestCase):
 
 class EvalFormulaTests(unittest.TestCase):
     def test_sum_returns_number_six(self) -> None:
-        v = formulon.eval_formula("=SUM(1,2,3)")
+        v = formulon.evaluate_formula("=SUM(1,2,3)")
         self.assertEqual(v.kind, ValueKind.NUMBER)
         self.assertEqual(v.to_python(), 6.0)
 
     def test_division_by_zero_surfaces_as_value(self) -> None:
-        v = formulon.eval_formula("=1/0")
+        v = formulon.evaluate_formula("=1/0")
         self.assertEqual(v.kind, ValueKind.ERROR)
         # to_python returns an ExcelError for ERROR; callers inspect
         # the code rather than catching an exception.
@@ -79,17 +79,17 @@ class EvalFormulaTests(unittest.TestCase):
         self.assertEqual(v.error_code, formulon.ErrorCode.DIV0)
 
     def test_intersection_uses_read_only_evaluation(self) -> None:
-        v = formulon.eval_formula("=A1 B1")
+        v = formulon.evaluate_formula("=A1 B1")
         self.assertEqual(v.kind, ValueKind.ERROR)
         self.assertEqual(v.error_code, 0)  # ErrorCode::Null / #NULL!
 
     def test_text_concat(self) -> None:
-        v = formulon.eval_formula('="hello "&"world"')
+        v = formulon.evaluate_formula('="hello "&"world"')
         self.assertEqual(v.kind, ValueKind.TEXT)
         self.assertEqual(v.to_python(), "hello world")
 
     def test_boolean_literal(self) -> None:
-        v = formulon.eval_formula("=TRUE()")
+        v = formulon.evaluate_formula("=TRUE()")
         self.assertEqual(v.kind, ValueKind.BOOL)
         self.assertIs(v.to_python(), True)
 
@@ -115,10 +115,10 @@ class WorkbookLifecycleTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.add_sheet("ä")
             with self.assertRaises(FormulonError):
-                wb.rename_sheet(1, "ä")
+                wb.sheet(1).rename("ä")
             self.assertEqual(wb.sheet(0).name, "Ä")
             self.assertEqual(wb.sheet(1).name, "Ö")
-            wb.rename_sheet(0, "ä")
+            wb.sheet(0).rename("ä")
             self.assertEqual(wb.sheet(0).name, "ä")
             self.assertEqual(wb.sheet(1).name, "Ö")
 
@@ -441,11 +441,11 @@ class IteratorHandleLivenessTests(unittest.TestCase):
             wb.sheet(0).set_number(1, 0, 2)
             wb.add_table(range=SheetRect(0, CellRect(0, 0, 1, 0)), name="T", display_name="T", columns=["Qty"])
             wb.sheet(0).set_formula(0, 2, "=SUM(T[Qty])")
-            self.assertEqual(wb.rename_table_column(0, 0, "Amount"), "Amount")
+            self.assertEqual(wb.table(0).rename_column(0, "Amount"), "Amount")
             self.assertEqual(wb.sheet(0).get_formula(0, 2), "=SUM(T[Amount])")
-            self.assertEqual(wb.rename_table_column(0, 0, ""), "Column1")
+            self.assertEqual(wb.table(0).rename_column(0, ""), "Column1")
             with self.assertRaises(FormulonError):
-                wb.rename_table_column(0, 1, "X")
+                wb.table(0).rename_column(1, "X")
 
 
 if __name__ == "__main__":

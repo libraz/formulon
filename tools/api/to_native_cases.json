@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "formula": "evaluated with evaluateFormula / evaluate_formula; the case reads its result",
+    "cell": "instead of `formula`: read this cell of a new sheet with getValue / get_value",
+    "native": "what toNative (JS) and Value.to_python() (Python) return: a JSON scalar or null as is",
+    "error": "`native: { error: <ErrorCode member> }`: JS returns the ErrorValue with that errorCode, Python an ExcelError with ErrorCode.<UPPER>",
+    "passthrough": "`native: { passthrough: true }`: the input value itself is returned (array, reference, lambda)"
+  },
+  "cases": [
+    { "formula": "=SUM(1,2)", "native": 3 },
+    { "formula": "=-0.5", "native": -0.5 },
+    { "formula": "=0", "native": 0 },
+    { "formula": "=2^53", "native": 9007199254740992 },
+    { "formula": "=TRUE", "native": true },
+    { "formula": "=1>2", "native": false },
+    { "formula": "=\"abc\"", "native": "abc" },
+    { "formula": "=\"\"", "native": "" },
+    { "formula": "=\"日本語\"", "native": "日本語" },
+    { "formula": "=1/0", "native": { "error": "Div0" } },
+    { "formula": "=NA()", "native": { "error": "NA" } },
+    { "formula": "=SQRT(-1)", "native": { "error": "Num" } },
+    { "formula": "=\"a\"+1", "native": { "error": "Value" } },
+    { "cell": "Z99", "native": null }
+  ]
+}

@@ -31,7 +31,7 @@ def _extract_braced_block(text: str, start: int) -> str:
 
 
 def _find_interface_body(text: str, name: str, source: Path) -> str:
-    match = re.search(r"export interface %s\s*\{" % re.escape(name), text)
+    match = re.search(r"export interface %s(?:\s+extends\s+[^{]+?)?\s*\{" % re.escape(name), text)
     if not match:
         print(f"check_binding_drift: interface {name!r} not found in {source}", file=sys.stderr)
         sys.exit(2)

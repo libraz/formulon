@@ -120,10 +120,6 @@ void JsWorkbook::setSheetSheetPrXml(uint32_t sheet, const std::string& xml) {
   return xml_set(handle_, sheet, xml, &fm_sheet_set_sheet_pr_xml);
 }
 
-void JsWorkbook::setSheetFitToPage(uint32_t sheet, bool enabled) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_fit_to_page(handle_, sheet, enabled ? 1 : 0) : kBindingInvalidHandle);
-}
-
 // ---- Print area / titles -----------------------------------------------
 
 emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
@@ -398,6 +394,46 @@ emscripten::val JsWorkbook::getSheetPageMargins(uint32_t sheet) const {
   out.set("bottomStated", margins.bottom_engaged != 0);
   out.set("headerStated", margins.header_engaged != 0);
   out.set("footerStated", margins.footer_engaged != 0);
+  return out;
+}
+
+emscripten::val JsWorkbook::getSheetPrintOptions(uint32_t sheet) const {
+  fm_print_options_t options{};
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_print_options(handle_, sheet, &options) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val out = emscripten::val::object();
+  out.set("gridLines", options.grid_lines != 0);
+  out.set("headings", options.headings != 0);
+  out.set("horizontalCentered", options.horizontal_centered != 0);
+  out.set("verticalCentered", options.vertical_centered != 0);
+  out.set("gridLinesStated", options.grid_lines_engaged != 0);
+  out.set("headingsStated", options.headings_engaged != 0);
+  out.set("horizontalCenteredStated", options.horizontal_centered_engaged != 0);
+  out.set("verticalCenteredStated", options.vertical_centered_engaged != 0);
+  return out;
+}
+
+emscripten::val JsWorkbook::getSheetHeaderFooter(uint32_t sheet) const {
+  fm_header_footer_t hf{};
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_header_footer(handle_, sheet, &hf) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val out = emscripten::val::object();
+  js_set_cstr_or_null_fields(out, {{"oddHeader", hf.odd_header},
+                                   {"oddFooter", hf.odd_footer},
+                                   {"evenHeader", hf.even_header},
+                                   {"evenFooter", hf.even_footer},
+                                   {"firstHeader", hf.first_header},
+                                   {"firstFooter", hf.first_footer}});
+  out.set("differentOddEven", hf.different_odd_even != 0);
+  out.set("differentFirst", hf.different_first != 0);
+  out.set("scaleWithDoc", hf.scale_with_doc != 0);
+  out.set("alignWithMargins", hf.align_with_margins != 0);
+  out.set("differentOddEvenStated", hf.different_odd_even_engaged != 0);
+  out.set("differentFirstStated", hf.different_first_engaged != 0);
+  out.set("scaleWithDocStated", hf.scale_with_doc_engaged != 0);
+  out.set("alignWithMarginsStated", hf.align_with_margins_engaged != 0);
   return out;
 }
 

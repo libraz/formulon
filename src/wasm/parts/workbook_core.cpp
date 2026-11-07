@@ -755,7 +755,7 @@ void JsWorkbook::setIterativeProgress(emscripten::val cb) {
 
 // ---- Free helpers ------------------------------------------------------
 
-emscripten::val eval_formula(const std::string& formula) {
+emscripten::val evaluate_formula(const std::string& formula) {
   fm_workbook_t* wb = nullptr;
   if (!succeeded(fm_workbook_create_empty(&wb))) {
     return emscripten::val::undefined();

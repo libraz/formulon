@@ -381,11 +381,14 @@ TEST(OoxmlPrintAuthoring, TypedPatchOnATemplateKeepsEverythingItDoesNotState) {
   EXPECT_TRUE(static_cast<bool>(zip.read_entry("xl/printerSettings/printerSettings1.bin")));
 }
 
-TEST(OoxmlPrintAuthoring, FitToPageHelperOnATemplateKeepsTabColorAndCodeName) {
+TEST(OoxmlPrintAuthoring, FitToPageOnATemplateKeepsTabColorAndCodeName) {
   const std::vector<std::uint8_t> source = BuildTemplatePackage();
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_fit_to_page(wb.handle, 0, 1), 0);
+  fm_page_setup_t fit{};
+  fit.fit_to_page_engaged = 1;
+  fit.fit_to_page = 1;
+  ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &fit), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);

@@ -148,7 +148,7 @@ void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf_t* out) {
   out->has_shrink_to_fit = xf.has_shrink_to_fit ? 1 : 0;
   out->shrink_to_fit = xf.shrink_to_fit ? 1 : 0;
   out->has_reading_order = xf.has_reading_order ? 1 : 0;
-  out->reading_order = xf.reading_order;
+  out->reading_order = static_cast<int32_t>(xf.reading_order);
   out->has_horizontal_align = xf.has_horizontal_align ? 1 : 0;
   out->has_vertical_align = xf.has_vertical_align ? 1 : 0;
   out->has_wrap_text = xf.has_wrap_text ? 1 : 0;

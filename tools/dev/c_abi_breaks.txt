@@ -324,3 +324,5 @@ signature fm_sheet_set_print_titles :: takes const fm_print_titles_t* (NULL clea
 signature fm_sheet_set_view_mode :: takes an int32_t fm_sheet_view_mode_t instead of the `view` attribute text
 signature fm_workbook_set_defined_name :: takes const fm_defined_name_input_t* (name, formula, scope, comment, hidden); an empty formula is INVALID_ARGUMENT instead of a removal
 signature fm_workbook_set_iterative :: takes const fm_iterative_settings_patch_t* instead of three scalars
+removed fm_sheet_set_fit_to_page :: fm_sheet_set_page_setup sets and clears fitToPage through fm_page_setup_t.fit_to_page_engaged / fit_to_page
+removed fm_sheet_set_thread_resolved :: fm_sheet_update_threaded_comment sets the resolved state through fm_threaded_comment_patch_t.done

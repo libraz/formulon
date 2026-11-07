@@ -71,29 +71,30 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   const loaded = roundTrip(mod, wb);
   const shapes = loaded.sheet(0).listShapes();
   assert.equal(shapes.length, 2);
-  assert.equal(shapes[0].objectId, rect);
-  assert.equal(shapes[0].kind, mod.DrawingObjectKind.Shape);
-  assert.equal(shapes[0].name, 'Box');
-  assert.equal(shapes[0].presetGeometry, 'roundRect');
-  assert.equal(shapes[0].text, 'Hello\nWorld');
-  assert.equal(shapes[0].anchorKind, mod.AnchorKind.TwoCell);
-  assert.equal(shapes[0].toCol, 4);
-  assert.equal(shapes[0].fillKind, mod.ShapePaint.Solid);
-  assert.equal(shapes[0].fillRgb, 0xff0000);
-  assert.equal(shapes[0].lineKind, mod.ShapePaint.None);
-  assert.equal(shapes[0].rotation, 900000);
-  assert.equal(shapes[0].hidden, false);
-  assert.equal(shapes[1].kind, mod.DrawingObjectKind.Connector);
-  assert.equal(shapes[1].anchorKind, mod.AnchorKind.OneCell);
-  assert.equal(shapes[1].fromColOffsetEmu, 500);
-  assert.equal(shapes[1].widthEmu, 914400);
-  assert.equal(shapes[1].lineRgb, 0x00ff00);
-  assert.equal(shapes[1].lineWidthEmu, 19050);
+  const props = shapes.map((shape) => shape.getProperties());
+  assert.equal(shapes[0].objectId, rect.objectId);
+  assert.equal(props[0].kind, mod.DrawingObjectKind.Shape);
+  assert.equal(props[0].name, 'Box');
+  assert.equal(props[0].presetGeometry, 'roundRect');
+  assert.equal(props[0].text, 'Hello\nWorld');
+  assert.equal(props[0].anchorKind, mod.AnchorKind.TwoCell);
+  assert.equal(props[0].toCol, 4);
+  assert.equal(props[0].fillKind, mod.ShapePaint.Solid);
+  assert.equal(props[0].fillRgb, 0xff0000);
+  assert.equal(props[0].lineKind, mod.ShapePaint.None);
+  assert.equal(props[0].rotation, 900000);
+  assert.equal(props[0].hidden, false);
+  assert.equal(props[1].kind, mod.DrawingObjectKind.Connector);
+  assert.equal(props[1].anchorKind, mod.AnchorKind.OneCell);
+  assert.equal(props[1].fromColOffsetEmu, 500);
+  assert.equal(props[1].widthEmu, 914400);
+  assert.equal(props[1].lineRgb, 0x00ff00);
+  assert.equal(props[1].lineWidthEmu, 19050);
 
   // An update changes the named fields only, and an anchor moves with a row insert.
-  loaded.sheet(0).updateShape(rect, { name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
+  loaded.sheet(0).shape(rect.objectId).update({ name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
   loaded.sheet(0).insertRows(0, 3);
-  const moved = loaded.sheet(0).listShapes()[0];
+  const moved = loaded.sheet(0).listShapes()[0].getProperties();
   assert.equal(moved.name, 'Renamed');
   assert.equal(moved.hidden, true);
   assert.equal(moved.fillKind, mod.ShapePaint.None);
@@ -102,13 +103,13 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(moved.fromRow, 4);
   assert.equal(moved.toRow, 8);
 
-  loaded.sheet(0).removeShape(rect);
+  loaded.sheet(0).removeDrawing(rect.objectId);
   assert.deepEqual(
     loaded
       .sheet(0)
       .listShapes()
       .map((s) => s.objectId),
-    [line],
+    [line.objectId],
   );
   release(loaded);
   release(wb);
@@ -124,8 +125,8 @@ test('shape arguments are validated', async () => {
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), presetGeometry: 'a"/>' }), isFormulonError);
   assert.throws(() => wb.sheet(5).addShape(box(mod)), isFormulonError);
   assert.equal(wb.sheet(0).listShapes().length, 0);
-  assert.throws(() => wb.sheet(0).updateShape(99, { name: 'x' }), isFormulonError);
-  assert.throws(() => wb.sheet(0).removeShape(99), isFormulonError);
+  assert.throws(() => wb.sheet(0).shape(99).update({ name: 'x' }), isFormulonError);
+  assert.throws(() => wb.sheet(0).removeDrawing(99), isFormulonError);
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fromRow: -1 }), RangeError);
   release(wb);
 });
@@ -198,8 +199,12 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(updated.dateAxisRef, 'Sheet1!A4:D4');
   assert.equal(updated.sparklines.length, 2);
 
-  loaded.sheet(0).setSparklineGroupSparklines(0, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  loaded.sheet(0).updateSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!B1:B5', location: 'H1' }] });
   assert.deepEqual(loaded.sheet(0).listSparklineGroups()[0].sparklines, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  // An empty group cannot be saved, and a patch without `sparklines` keeps them.
+  assert.throws(() => loaded.sheet(0).updateSparklineGroup(0, { sparklines: [] }), isFormulonError);
+  loaded.sheet(0).updateSparklineGroup(0, { high: false });
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines.length, 1);
   loaded.sheet(0).removeSparklineGroup(0);
   assert.equal(loaded.sheet(0).listSparklineGroups().length, 1);
   assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[0].location, 'G11');
@@ -226,7 +231,7 @@ test('sparkline group arguments are validated', async () => {
   assert.throws(() => wb.sheet(4).addSparklineGroup({ sparklines: good }), isFormulonError);
   assert.equal(wb.sheet(0).listSparklineGroups().length, 0);
   assert.throws(() => wb.sheet(0).updateSparklineGroup(0, {}), isFormulonError);
-  assert.throws(() => wb.sheet(0).setSparklineGroupSparklines(0, good), isFormulonError);
+  assert.throws(() => wb.sheet(0).updateSparklineGroup(0, { sparklines: good }), isFormulonError);
   assert.throws(() => wb.sheet(0).removeSparklineGroup(0), isFormulonError);
   release(wb);
 });

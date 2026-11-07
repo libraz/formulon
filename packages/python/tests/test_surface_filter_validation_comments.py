@@ -206,10 +206,9 @@ class AutoFilterTests(unittest.TestCase):
             idx = wb.add_table(
                 range=SheetRect(0, CellRect(0, 0, 3, 1)), name="Tbl", display_name="Tbl", columns=["n", "m"]
             )
-            wb.remove_table_auto_filter(idx)
-            self.assertIsNone(wb.get_table_auto_filter(idx))
-            wb.set_table_auto_filter(
-                idx,
+            wb.table(idx).remove_auto_filter()
+            self.assertIsNone(wb.table(idx).get_auto_filter())
+            wb.table(idx).set_auto_filter(
                 AutoFilter(
                     range=CellRect(0, 0, 3, 1),
                     columns=[
@@ -221,19 +220,19 @@ class AutoFilterTests(unittest.TestCase):
                             val1="2",
                         )
                     ],
-                ),
+                )
             )
-            got = wb.get_table_auto_filter(idx)
+            got = wb.table(idx).get_auto_filter()
             assert got is not None
             self.assertEqual(got.columns[0].val1, "2")
-            self.assertEqual(wb.evaluate_table_auto_filter(idx), AutoFilterEval(1, [False, True, True]))
-            wb.apply_table_auto_filter(idx)
-            wb.clear_table_auto_filter(idx)
-            self.assertEqual(wb.evaluate_table_auto_filter(idx), AutoFilterEval(1, [True, True, True]))
-            wb.remove_table_auto_filter(idx)
-            self.assertIsNone(wb.get_table_auto_filter(idx))
+            self.assertEqual(wb.table(idx).evaluate_auto_filter(), AutoFilterEval(1, [False, True, True]))
+            wb.table(idx).apply_auto_filter()
+            wb.table(idx).clear_auto_filter()
+            self.assertEqual(wb.table(idx).evaluate_auto_filter(), AutoFilterEval(1, [True, True, True]))
+            wb.table(idx).remove_auto_filter()
+            self.assertIsNone(wb.table(idx).get_auto_filter())
             with self.assertRaises(FormulonError):
-                wb.get_table_auto_filter(idx + 5)
+                wb.table(idx.index + 5).get_auto_filter()
 
 
 class ValidationCheckTests(unittest.TestCase):
@@ -331,9 +330,9 @@ class ThreadedCommentTests(unittest.TestCase):
             self.assertEqual(wb.sheet(0).list_threaded_comments()[1].text, "plain")
             self.assertEqual(wb.sheet(0).list_threaded_comments()[1].mentions, [])
 
-            wb.sheet(0).set_thread_resolved(THREAD, True)
+            wb.sheet(0).update_threaded_comment(THREAD, done=True)
             self.assertTrue(wb.sheet(0).list_threaded_comments()[0].done)
-            wb.sheet(0).set_thread_resolved(THREAD, False)
+            wb.sheet(0).update_threaded_comment(THREAD, done=False)
             self.assertFalse(wb.sheet(0).list_threaded_comments()[0].done)
 
             wb.sheet(0).remove_threaded_comment(REPLY)
@@ -351,7 +350,7 @@ class ThreadedCommentTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.sheet(0).update_threaded_comment(THREAD, text="x")
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_thread_resolved(THREAD, True)
+                wb.sheet(0).update_threaded_comment(THREAD, done=True)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).remove_threaded_comment(THREAD)
 

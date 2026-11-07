@@ -28,12 +28,12 @@ from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The sheet-scope method list gen_facade_tables.py writes from the ledger; reading the generated copy keeps
-# the WASM build free of a YAML parser.
+# The sheet-scope method list and the handle-method table gen_facade_tables.py writes from the ledger;
+# reading the generated copy keeps the WASM build free of a YAML parser.
 FACADE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 424
+EXPECTED_NODE_REGISTRATIONS = 427
 
 MASK_NAMES = (
     "u32",
@@ -62,7 +62,7 @@ NODE_ONLY_METHODS = frozenset(("getMemoryUsage",))
 # Positional specs of the free functions that take checked primitives. Every
 # other registered free function is still wrapped, with an empty spec.
 FREE_FUNCTION_GUARDS = {
-    "evalFormula": {"string": 0x1},
+    "evaluateFormula": {"string": 0x1},
     "getStatusName": {"i32": 0x1},
     "setLogMinLevel": {"i32": 0x1},
     "canonicalizeFormula": {"string": 0x3},
@@ -254,19 +254,45 @@ def _check_surface(specs: dict[str, dict[str, int]], wasm_methods: set[str]) -> 
         raise GuardGenerationError(f"WASM/Node binding surface drift: missing={missing}, extra={extra}")
 
 
-def _sheet_methods(wasm_methods: set[str]) -> list[str]:
+_INC_ARRAY = r"\b%s\[\]\s*=\s*\{(.*?)\n\};"
+_HANDLE_ROW = re.compile(r'^\s*\{"([A-Za-z0-9_]+)",\s*"([A-Za-z0-9_.]+)",\s*(\d+)\},$', re.MULTILINE)
+
+
+def _inc_block(name: str, text: str) -> str:
+    found = re.search(_INC_ARRAY % name, text, re.S)
+    if found is None:
+        raise GuardGenerationError(f"{FACADE_SCOPE_INC}: no `{name}` table")
+    return found.group(1)
+
+
+def _sheet_methods(wasm_methods: set[str], text: str | None = None) -> list[str]:
     """Raw methods whose first argument is the sheet index the `Sheet` facade supplies."""
-    names = re.findall(r'^"([A-Za-z0-9_]+)",$', FACADE_SCOPE_INC.read_text(encoding="utf-8"), re.MULTILINE)
+    text = FACADE_SCOPE_INC.read_text(encoding="utf-8") if text is None else text
+    names = re.findall(r'^\s*"([A-Za-z0-9_]+)",$', _inc_block("kSheetMethods", text), re.MULTILINE)
     return sorted(set(names) & wasm_methods)
 
 
+def _handle_methods(wasm_methods: set[str], text: str | None = None) -> dict[str, list[object]]:
+    """`{raw: [label, supplied]}` of the raw methods a handle class calls: the `Class.method` its argument
+    errors carry and the count of leading raw arguments the handle supplies."""
+    text = FACADE_SCOPE_INC.read_text(encoding="utf-8") if text is None else text
+    rows = _HANDLE_ROW.findall(_inc_block("kHandleMethods", text))
+    return {raw: [label, int(supplied)] for raw, label, supplied in sorted(rows) if raw in wasm_methods}
+
+
 def _build_metadata(
-    node: list[Registration], specs: dict[str, dict[str, int]], sheet: list[str], free: set[str], static: set[str]
+    node: list[Registration],
+    specs: dict[str, dict[str, int]],
+    sheet: list[str],
+    free: set[str],
+    static: set[str],
+    handle: dict[str, list[object]] | None = None,
 ) -> dict[str, object]:
     return {
         "nodeRegistrationCount": len(node),
         "workbook": dict(sorted(specs.items())),
         "sheet": sheet,
+        "handle": dict(sorted((handle or {}).items())),
         "static": {name: dict(STATIC_FUNCTION_GUARDS[name]) for name in sorted(static)},
         "free": {name: dict(FREE_FUNCTION_GUARDS.get(name, {})) for name in sorted(free)},
         "wasmExcluded": sorted(NODE_ONLY_METHODS),
@@ -316,10 +342,20 @@ def _render(metadata: dict[str, object]) -> str:
   // errors name the facade method and count arguments as it sees them; the
   // sheet index itself only reaches a guard through a direct raw call.
   const sheetMethods = new Set(metadata.sheet);
+  // The raw methods a handle class calls: `[label, supplied]`, the `Class.method` its errors name and the
+  // count of leading arguments the handle supplies. A handle method takes precedence over a sheet method.
+  const handleMethods = new Map(Object.entries(metadata.handle));
 
   // `owner` is 'Workbook' for the class and its statics, null for a free function.
   function argumentLabel(owner, name, index) {{
     if (owner === null) return name + ' argument ' + (index + 1);
+    const handle = owner === 'Workbook' ? handleMethods.get(name) : undefined;
+    if (handle !== undefined) {{
+      const [label, supplied] = handle;
+      return index < supplied
+        ? label + ' supplied argument ' + (index + 1)
+        : label + ' argument ' + (index - supplied + 1);
+    }}
     if (owner === 'Workbook' && sheetMethods.has(name)) {{
       return index === 0 ? 'Sheet.' + name + ' sheet index' : 'Sheet.' + name + ' argument ' + index;
     }}
@@ -647,7 +683,7 @@ def generate(node_source: Path, wasm_source: Path, output: Path) -> None:
     _check_surface(specs, wasm)
     free = _parse_free_functions(wasm_source)
     static = _parse_static_functions(wasm_source)
-    metadata = _build_metadata(node, specs, _sheet_methods(wasm), free, static)
+    metadata = _build_metadata(node, specs, _sheet_methods(wasm), free, static, _handle_methods(wasm))
     rendered = _render(metadata)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(rendered, encoding="utf-8")

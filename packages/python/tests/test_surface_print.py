@@ -6,7 +6,7 @@ import unittest
 
 from formulon import (
     CellRect,
-    CellXf,
+    CellXfInput,
     FormulonError,
     NotFoundError,
     PageOrientation,
@@ -47,7 +47,7 @@ class PrintSettingsTests(unittest.TestCase):
     def test_fit_to_page_keeps_the_rest_of_sheet_pr(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_sheet_pr_xml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>')
-            wb.sheet(0).set_fit_to_page(True)
+            wb.sheet(0).set_page_setup(fit_to_page=True)
             xml = wb.sheet(0).get_sheet_pr_xml()
             # A VBA binding and a tab colour are not print settings, and
             # toggling fit-to-page must not be how they get lost.
@@ -203,7 +203,7 @@ class PrintSettingsTests(unittest.TestCase):
             # Something other than the seeded default xf, so the range
             # write is observable rather than deduping to index 0.
             xf = wb.add_cell_xf(
-                CellXf(
+                CellXfInput(
                     font_index=0,
                     fill_index=0,
                     border_index=0,

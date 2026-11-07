@@ -152,10 +152,23 @@ function makeRaw(surface) {
       this.alive();
       return this.threaded.get(id) ?? null;
     }
-    updateThreadedComment(sheet, id, text, mentions) {
+    updateThreadedComment(sheet, id, patch) {
       this.alive();
-      this.log.push(['updateThreadedComment', [sheet, id, text, mentions]]);
-      this.threaded.set(id, { id, text, mentions });
+      this.log.push(['updateThreadedComment', [sheet, id, patch]]);
+      this.threaded.set(id, { ...this.threaded.get(id), ...patch });
+    }
+    getPivotCount(_sheet) {
+      this.alive();
+      return 1;
+    }
+    getPivotRuntimeId(_sheet, pivotIndex) {
+      this.alive();
+      return pivotIndex + 1;
+    }
+    resolvePivotRuntimeId(_sheet, id) {
+      this.alive();
+      if (id !== 1) throw fail(StatusCode.NotFound, 'pivot');
+      return 0;
     }
     getCfRuleCount(_sheet) {
       this.alive();
@@ -185,7 +198,7 @@ function buildFacade(surface = 'wasm') {
   const { RawWorkbook, instances } = makeRaw(surface);
   const runtime = {
     Workbook: RawWorkbook,
-    evalFormula: () => null,
+    evaluateFormula: () => null,
     getVersion: () => 'stub',
     getStatusName: () => 'OK',
     getFunctionMetadata: () => null,
@@ -282,15 +295,15 @@ test('H2: copySheet before a handle shifts it and returns the copy', () => {
   assertInSync(wb, raw);
 });
 
-test('H3 / H4: moveSheet and renameSheet keep the handle on its sheet', () => {
+test('H3 / H4: Sheet.move and Sheet.rename keep the handle on its sheet', () => {
   const { wb, raw } = loaded();
   const data = wb.sheet('Data');
-  wb.moveSheet(data, 2);
+  data.move(2);
   assert.equal(data.index, 2);
   assert.equal(data.name, 'Data');
   assert.equal(rawSheetOf(raw, data), 2);
   assertInSync(wb, raw);
-  wb.renameSheet('data', 'Renamed');
+  wb.sheet('data').rename('Renamed');
   assert.equal(data.name, 'Renamed');
   assert.equal(wb.sheet('Renamed'), data);
   assertInSync(wb, raw);
@@ -310,10 +323,10 @@ test('H5 / H6 / H15: a removed handle throws NotFound; later handles shift down'
   assertInSync(wb, raw);
 });
 
-test('H9: showPivotDetails returns the new sheet and shifts the handles after it', () => {
+test('H9: Pivot.showDetails returns the new sheet and shifts the handles after it', () => {
   const { wb, raw } = loaded();
   const [, calc, notes] = wb.listSheets();
-  const details = calc.showPivotDetails(0, 3, 4);
+  const details = calc.pivot(0).showDetails(3, 4);
   assert.equal(details.name, 'Details');
   assert.equal(details.index, 1);
   assert.equal(calc.index, 2);
@@ -348,14 +361,14 @@ test('H13 / H7: after dispose, Sheet members throw BindingInvalidHandle', () => 
   wb.dispose();
 });
 
-test('H14: copySheet at the end appends; past the end fails; moveSheet in place is a no-op', () => {
+test('H14: copySheet at the end appends; past the end fails; Sheet.move in place is a no-op', () => {
   const { wb, raw } = loaded();
   const data = wb.sheet(0);
   const copy = wb.copySheet(data, 3);
   assert.equal(copy.index, 3);
   expectCode(() => wb.copySheet(data, 5), StatusCode.SheetIndexOutOfRange);
   assertInSync(wb, raw);
-  wb.moveSheet(data, data.index);
+  data.move(data.index);
   assertInSync(wb, raw);
   const single = buildFacade().Workbook.createDefault();
   expectCode(() => single.removeSheet(0), StatusCode.CannotRemoveLastSheet);
@@ -365,13 +378,17 @@ test('H14: copySheet at the end appends; past the end fails; moveSheet in place 
 test('A6: a patch leaves omitted and undefined keys unchanged, and refuses null on a non-nullable key', () => {
   const { wb, raw } = loaded();
   const ws = wb.sheet('Calc');
-  ws.setPivotGrandTotals(0, { columns: true });
+  const pivot = ws.pivot(0);
+  pivot.setGrandTotals({ columns: true });
   assert.deepEqual(raw.log.at(-1), ['setPivotGrandTotals', [1, 0, true, true]]);
-  ws.setPivotGrandTotals(0, { rows: false, columns: undefined });
+  pivot.setGrandTotals({ rows: false, columns: undefined });
   assert.deepEqual(raw.log.at(-1), ['setPivotGrandTotals', [1, 0, false, true]]);
-  assert.throws(() => ws.setPivotGrandTotals(0, { rows: null }), TypeError);
+  assert.throws(() => pivot.setGrandTotals({ rows: null }), TypeError);
   ws.updateThreadedComment('c1', { text: 'new' });
-  assert.deepEqual(raw.log.at(-1), ['updateThreadedComment', [1, 'c1', 'new', []]]);
+  assert.deepEqual(raw.log.at(-1), ['updateThreadedComment', [1, 'c1', { text: 'new' }]]);
+  ws.updateThreadedComment('c1', { done: true });
+  assert.deepEqual(raw.log.at(-1), ['updateThreadedComment', [1, 'c1', { done: true }]]);
+  assert.throws(() => ws.updateThreadedComment('c1', { done: null }), TypeError);
 });
 
 test('the hand-written guards count arguments as the facade method sees them', () => {

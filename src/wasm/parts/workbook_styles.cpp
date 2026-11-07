@@ -68,7 +68,7 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf_t* xf, JsNarrowNu
   xf->indent = reader.u32_value(indent, 0U, "xf.indent");
   xf->relative_indent = reader.i32_value(relative_indent, 0, "xf.relativeIndent");
   xf->shrink_to_fit = reader.boolean_value(shrink_to_fit, false) ? 1 : 0;
-  xf->reading_order = reader.u32_value(reading_order, 0U, "xf.readingOrder");
+  xf->reading_order = reader.i32_value(reading_order, 0, "xf.readingOrder");
   xf->has_text_rotation = text_rotation_present ? 1 : 0;
   xf->has_indent = indent_present ? 1 : 0;
   xf->has_relative_indent = relative_indent_present ? 1 : 0;

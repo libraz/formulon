@@ -1,10 +1,10 @@
 import test from 'node:test';
 import { assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readFile } from './smoke_support.mjs';
 
-test('the Formulon object exposes Workbook + evalFormula + getVersion', async () => {
+test('the Formulon object exposes Workbook + evaluateFormula + getVersion', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.Workbook, 'function');
-  assert.equal(typeof mod.evalFormula, 'function');
+  assert.equal(typeof mod.evaluateFormula, 'function');
   assert.equal(typeof mod.getVersion, 'function');
   assert.equal(typeof mod.getStatusName, 'function');
   assert.equal(typeof mod.ValueKind, 'object');
@@ -251,10 +251,10 @@ const ONE_SHOT_CASES = [
   { formula: '=SEQUENCE(3)', kind: 1, number: 1 },
   { formula: '=ROWS(SEQUENCE(3))', kind: 1, number: 3 },
 ];
-test('evalFormula evaluates read-only against a blank anchor', async () => {
+test('evaluateFormula evaluates read-only against a blank anchor', async () => {
   const mod = await getModule();
   for (const spec of ONE_SHOT_CASES) {
-    const r = mod.evalFormula(spec.formula);
+    const r = mod.evaluateFormula(spec.formula);
     assert.equal(r.kind, spec.kind, spec.formula);
     if (spec.number !== undefined) {
       assert.equal(r.number, spec.number, spec.formula);
@@ -267,16 +267,16 @@ test('evalFormula evaluates read-only against a blank anchor', async () => {
   }
 });
 
-test("evalFormula('=1+2') returns NUMBER 3", async () => {
+test("evaluateFormula('=1+2') returns NUMBER 3", async () => {
   const mod = await getModule();
-  const r = mod.evalFormula('=1+2');
+  const r = mod.evaluateFormula('=1+2');
   assert.equal(r.kind, mod.ValueKind.Number);
   assert.equal(r.number, 3);
 });
 
-test("evalFormula('=#REF!') returns an ERROR value (does not throw)", async () => {
+test("evaluateFormula('=#REF!') returns an ERROR value (does not throw)", async () => {
   const mod = await getModule();
-  const r = mod.evalFormula('=#REF!');
+  const r = mod.evaluateFormula('=#REF!');
   assert.equal(r.kind, mod.ValueKind.Error);
 });
 
@@ -366,11 +366,17 @@ test('print settings: fitToPage keeps the rest of sheetPr', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setSheetPrXml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>');
-  wb.sheet(0).setFitToPage(true);
+  wb.sheet(0).setPageSetup({ fitToPage: true });
   const xml = wb.sheet(0).getSheetPrXml();
   assert.match(xml, /codeName="Sheet1"/);
   assert.match(xml, /<tabColor rgb="FFFF0000"\/>/);
   assert.match(xml, /fitToPage="true"/);
+  assert.equal(wb.sheet(0).getPageSetup().fitToPage, true);
+  // fitToPage: false removes the attribute and the stated flag reads false.
+  wb.sheet(0).setPageSetup({ fitToPage: false });
+  assert.doesNotMatch(wb.sheet(0).getSheetPrXml(), /fitToPage/);
+  assert.equal(wb.sheet(0).getPageSetup().fitToPage, false);
+  assert.equal(wb.sheet(0).getPageSetup().fitToPageStated, false);
 });
 
 test('print settings: header/footer sections take decoded text', async () => {
@@ -477,7 +483,7 @@ test('pivotCount + pivotLayout expose the PivotTable projection', async () => {
   assert.equal(wb.sheet(0).listPivots().length, 0);
 
   assert.throws(
-    () => wb.sheet(0).getPivotLayout(0),
+    () => wb.sheet(0).pivot(0).getLayout(),
     (e) => isFormulonError(e) && e.code !== 0,
   );
 });

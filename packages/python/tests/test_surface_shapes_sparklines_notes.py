@@ -14,8 +14,10 @@ from formulon import (
     Comment,
     DrawingObjectKind,
     FormulonError,
+    InvalidArgumentError,
     Shape,
     ShapePaint,
+    ShapeProperties,
     Sparkline,
     SparklineAxisType,
     SparklineEmptyCells,
@@ -60,12 +62,14 @@ class ShapeTests(unittest.TestCase):
                 line_rgb=0x00FF00,
                 line_width_emu=19050,
             )
-            self.assertNotEqual(rect, line)
+            self.assertIsInstance(rect, Shape)
+            self.assertNotEqual(rect.object_id, line.object_id)
             with Workbook.load(wb.save()) as loaded:
-                shapes = loaded.sheet(0).list_shapes()
-                self.assertEqual(len(shapes), 2)
-                self.assertIsInstance(shapes[0], Shape)
-                self.assertEqual(shapes[0].object_id, rect)
+                handles = loaded.sheet(0).list_shapes()
+                self.assertEqual(len(handles), 2)
+                shapes = [h.get_properties() for h in handles]
+                self.assertIsInstance(shapes[0], ShapeProperties)
+                self.assertEqual(shapes[0].object_id, rect.object_id)
                 self.assertEqual(shapes[0].kind, DrawingObjectKind.SHAPE)
                 self.assertEqual(
                     (shapes[0].name, shapes[0].preset_geometry, shapes[0].text), ("Box", "roundRect", "Hello\nWorld")
@@ -80,15 +84,15 @@ class ShapeTests(unittest.TestCase):
                 )
                 self.assertEqual(shapes[1].line_width_emu, 19050)
 
-                loaded.sheet(0).update_shape(rect, name="Renamed", hidden=True, fill_kind=ShapePaint.NONE)
+                loaded.sheet(0).shape(rect.object_id).update(name="Renamed", hidden=True, fill_kind=ShapePaint.NONE)
                 loaded.sheet(0).insert_rows(0, 3)
-                moved = loaded.sheet(0).list_shapes()[0]
+                moved = loaded.sheet(0).list_shapes()[0].get_properties()
                 self.assertEqual((moved.name, moved.hidden, moved.fill_kind), ("Renamed", True, ShapePaint.NONE))
                 self.assertEqual((moved.preset_geometry, moved.rotation), ("roundRect", 900000))
                 self.assertEqual((moved.from_row, moved.to_row), (4, 8))
 
-                loaded.sheet(0).remove_shape(rect)
-                self.assertEqual([s.object_id for s in loaded.sheet(0).list_shapes()], [line])
+                loaded.sheet(0).remove_drawing(rect.object_id)
+                self.assertEqual([s.object_id for s in loaded.sheet(0).list_shapes()], [line.object_id])
 
     def test_arguments_are_validated(self) -> None:
         with Workbook.create_default() as wb:
@@ -104,9 +108,9 @@ class ShapeTests(unittest.TestCase):
                 wb.sheet(5).add_shape(**_box())
             self.assertEqual(wb.sheet(0).list_shapes(), [])
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_shape(99, name="x")
+                wb.sheet(0).shape(99).update(name="x")
             with self.assertRaises(FormulonError):
-                wb.sheet(0).remove_shape(99)
+                wb.sheet(0).remove_drawing(99)
 
 
 def _group(**overrides) -> SparklineGroup:
@@ -168,7 +172,17 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual(updated.date_axis_ref, "Sheet1!A4:D4")
                 self.assertEqual(len(updated.sparklines), 2)
 
-                loaded.sheet(0).set_sparkline_group_sparklines(0, [Sparkline("Sheet1!B1:B5", "H1")])
+                loaded.sheet(0).update_sparkline_group(
+                    0, replace(loaded.sheet(0).list_sparkline_groups()[0], sparklines=[Sparkline("Sheet1!B1:B5", "H1")])
+                )
+                self.assertEqual(
+                    loaded.sheet(0).list_sparkline_groups()[0].sparklines,
+                    [Sparkline("Sheet1!B1:B5", "H1")],
+                )
+                with self.assertRaises(InvalidArgumentError):
+                    loaded.sheet(0).update_sparkline_group(
+                        0, replace(loaded.sheet(0).list_sparkline_groups()[0], sparklines=[])
+                    )
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines,
                     [Sparkline("Sheet1!B1:B5", "H1")],
@@ -196,7 +210,7 @@ class SparklineGroupTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.sheet(0).update_sparkline_group(0, SparklineGroup())
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_sparkline_group_sparklines(0, good)
+                wb.sheet(0).update_sparkline_group(0, SparklineGroup(sparklines=good))
             with self.assertRaises(FormulonError):
                 wb.sheet(0).remove_sparkline_group(0)
 

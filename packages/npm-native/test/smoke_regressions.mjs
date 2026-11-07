@@ -253,32 +253,32 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
   const wb = mod.Workbook.createDefault();
   try {
     const cache = wb.addPivotCache(0);
-    const region = wb.addPivotCacheField(cache, 'Region');
-    const amount = wb.addPivotCacheField(cache, 'Amount');
+    const region = cache.addField('Region');
+    const amount = cache.addField('Amount');
     // Shared item 0 renders as "North"; shared item 1 is the blank, which
     // carries no label of its own and can only be named by its index.
-    wb.addPivotCacheFieldSharedItem(cache, region, 'North');
-    wb.addPivotCacheFieldSharedItem(cache, region, null);
+    cache.addFieldSharedItem(region, 'North');
+    cache.addFieldSharedItem(region, null);
 
-    const first = wb.addPivotCacheRecord(cache);
-    wb.setPivotCacheRecordValue(cache, first, region, 0);
-    wb.setPivotCacheRecordValue(cache, first, amount, 100);
-    const second = wb.addPivotCacheRecord(cache);
-    wb.setPivotCacheRecordValue(cache, second, region, null);
-    wb.setPivotCacheRecordValue(cache, second, amount, 200);
+    const first = cache.addRecord();
+    cache.setRecordValue(first, region, 0);
+    cache.setRecordValue(first, amount, 100);
+    const second = cache.addRecord();
+    cache.setRecordValue(second, region, null);
+    cache.setRecordValue(second, amount, 200);
 
-    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId: cache, anchorRow: 0, anchorCol: 0 });
-    const regionField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
-    const amountField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
-    wb.sheet(0).setPivotRowFieldOrder(pivot, [regionField]);
-    wb.sheet(0).addPivotDataField(pivot, {
+    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 0 });
+    const regionField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
+    const amountField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
+    wb.sheet(0).pivot(pivot).setRowFieldOrder([regionField]);
+    wb.sheet(0).pivot(pivot).addDataField({
       name: 'Sum of Amount',
       fieldIndex: amountField,
       aggregation: 0,
     });
 
     const sumDataCells = () => {
-      const layout = wb.sheet(0).getPivotLayout(pivot);
+      const layout = wb.sheet(0).pivot(pivot).getLayout();
       let total = 0;
       for (const cell of layout.cells) {
         if (cell.kind === mod.PivotCellKind.Data && cell.value.kind === mod.ValueKind.Number) {
@@ -289,8 +289,8 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     };
     assert.equal(sumDataCells(), 300);
 
-    wb.sheet(0).addPivotFieldItem(pivot, regionField, 'North');
-    wb.sheet(0).addPivotFieldSharedItem(pivot, regionField, 1, false);
+    wb.sheet(0).pivot(pivot).addFieldItem(regionField, 'North');
+    wb.sheet(0).pivot(pivot).addFieldSharedItem(regionField, 1, false);
     assert.equal(sumDataCells(), 100);
   } finally {
     wb.dispose();

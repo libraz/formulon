@@ -14,6 +14,8 @@ from formulon import (
     ImageFormat,
     ImageInfo,
     IndexOutOfRangeError,
+    NotFoundError,
+    Picture,
     Workbook,
     get_image_info,
 )
@@ -52,12 +54,14 @@ class DrawingImageTests(unittest.TestCase):
         png = _png(4, 3)
         wb = Workbook.create_default()
         try:
-            self.assertEqual(wb.sheet(0).list_drawing_objects(), [])
-            oid = wb.sheet(0).add_image(png, name="logo", description="a logo", row=2, col=1, row_offset_emu=100)
-            objs = wb.sheet(0).list_drawing_objects()
+            self.assertEqual(wb.sheet(0).list_drawings(), [])
+            pic = wb.sheet(0).add_picture(png, name="logo", description="a logo", row=2, col=1, row_offset_emu=100)
+            self.assertIsInstance(pic, Picture)
+            objs = wb.sheet(0).list_drawings()
             self.assertEqual(len(objs), 1)
-            obj = objs[0]
-            self.assertEqual(obj.object_id, oid)
+            self.assertIs(objs[0], pic)
+            obj = objs[0].get_drawing_properties()
+            self.assertEqual(obj.object_id, pic.object_id)
             self.assertEqual(obj.kind, DrawingObjectKind.PICTURE)
             self.assertEqual(obj.anchor_kind, AnchorKind.ONE_CELL)
             self.assertEqual((obj.from_row, obj.from_col, obj.from_row_offset_emu), (2, 1, 100))
@@ -65,35 +69,39 @@ class DrawingImageTests(unittest.TestCase):
             self.assertEqual((obj.name, obj.description), ("logo", "a logo"))
             self.assertEqual(obj.image_format, ImageFormat.PNG)
             self.assertTrue(obj.media_path)
-            self.assertEqual(wb.sheet(0).get_image(oid), png)
+            props = wb.sheet(0).picture(pic.object_id).get_properties()
+            self.assertEqual((props.format, props.px_width, props.px_height, props.bytes), (ImageFormat.PNG, 4, 3, png))
 
             loaded = Workbook.load(wb.save())
             try:
-                again = loaded.sheet(0).list_drawing_objects()
+                again = loaded.sheet(0).list_drawings()
                 self.assertEqual(len(again), 1)
-                self.assertEqual((again[0].name, again[0].width_emu, again[0].height_emu), ("logo", 4 * 9525, 3 * 9525))
-                self.assertEqual(loaded.sheet(0).get_image(again[0].object_id), png)
+                again_obj = again[0].get_drawing_properties()
+                self.assertEqual(
+                    (again_obj.name, again_obj.width_emu, again_obj.height_emu), ("logo", 4 * 9525, 3 * 9525)
+                )
+                self.assertEqual(loaded.sheet(0).picture(again_obj.object_id).get_properties().bytes, png)
             finally:
                 loaded.close()
 
-            wb.sheet(0).remove_drawing_object(oid)
-            self.assertEqual(wb.sheet(0).list_drawing_objects(), [])
+            wb.sheet(0).remove_drawing(pic)
+            self.assertEqual(wb.sheet(0).list_drawings(), [])
             with self.assertRaises(FormulonError):
-                wb.sheet(0).remove_drawing_object(oid)
+                wb.sheet(0).remove_drawing(pic)
         finally:
             wb.close()
 
     def test_two_cell_anchor_and_explicit_size(self) -> None:
         wb = Workbook.create_default()
         try:
-            wb.sheet(0).add_image(
+            wb.sheet(0).add_picture(
                 _png(2, 2),
                 anchor_kind=AnchorKind.TWO_CELL,
                 edit_as=AnchorEditAs.ONE_CELL,
                 width_emu=1_000_000,
                 height_emu=2_000_000,
             )
-            obj = wb.sheet(0).list_drawing_objects()[0]
+            obj = wb.sheet(0).list_drawings()[0].get_drawing_properties()
             self.assertEqual((obj.anchor_kind, obj.edit_as), (AnchorKind.TWO_CELL, AnchorEditAs.ONE_CELL))
             self.assertEqual((obj.width_emu, obj.height_emu), (1_000_000, 2_000_000))
         finally:
@@ -103,18 +111,18 @@ class DrawingImageTests(unittest.TestCase):
         wb = Workbook.create_default()
         try:
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_image(b"junk")
-            self.assertIsNone(wb.sheet(0).get_image(12345))
+                wb.sheet(0).add_picture(b"junk")
+            with self.assertRaises(NotFoundError):
+                wb.sheet(0).picture(12345)
             with self.assertRaises(IndexOutOfRangeError):
-                wb.sheet(9).get_image(1)
+                wb.sheet(9).picture(1).get_properties()
         finally:
             wb.close()
 
     def test_set_drawing_anchor_moves_and_resizes(self) -> None:
         with Workbook.create_default() as wb:
-            oid = wb.sheet(0).add_image(_png(4, 3), name="logo", row=1, col=1)
-            wb.sheet(0).set_drawing_anchor(
-                oid,
+            pic = wb.sheet(0).add_picture(_png(4, 3), name="logo", row=1, col=1)
+            wb.sheet(0).drawing(pic.object_id).set_anchor(
                 anchor_kind=AnchorKind.TWO_CELL,
                 edit_as=AnchorEditAs.ONE_CELL,
                 row=5,
@@ -123,72 +131,79 @@ class DrawingImageTests(unittest.TestCase):
                 col_offset_emu=2000,
                 width_emu=200_000,
             )
-            obj = wb.sheet(0).list_drawing_objects()[0]
-            self.assertEqual((obj.object_id, obj.name), (oid, "logo"))
+            obj = wb.sheet(0).list_drawings()[0].get_drawing_properties()
+            self.assertEqual((obj.object_id, obj.name), (pic.object_id, "logo"))
             self.assertEqual((obj.anchor_kind, obj.edit_as), (AnchorKind.TWO_CELL, AnchorEditAs.ONE_CELL))
             self.assertEqual(
                 (obj.from_row, obj.from_col, obj.from_row_offset_emu, obj.from_col_offset_emu), (5, 3, 1000, 2000)
             )
             self.assertEqual((obj.width_emu, obj.height_emu), (200_000, 3 * 9525))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_drawing_anchor(oid, anchor_kind=AnchorKind.ABSOLUTE)
+                pic.set_anchor(anchor_kind=AnchorKind.ABSOLUTE)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_drawing_anchor(9999)
+                wb.sheet(0).drawing(9999).set_anchor()
 
     def test_set_drawing_name_renames_the_object(self) -> None:
         wb = Workbook.create_default()
         try:
-            oid = wb.sheet(0).add_image(_png(2, 2), name="logo")
-            wb.sheet(0).set_drawing_name(oid, "renamed")
-            self.assertEqual(wb.sheet(0).list_drawing_objects()[0].name, "renamed")
+            pic = wb.sheet(0).add_picture(_png(2, 2), name="logo")
+            wb.sheet(0).drawing(pic.object_id).rename("renamed")
+            self.assertEqual(wb.sheet(0).list_drawings()[0].get_drawing_properties().name, "renamed")
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_drawing_name(oid, "")
+                pic.rename("")
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_drawing_name(9999, "x")
+                wb.sheet(0).drawing(9999).rename("x")
         finally:
             wb.close()
 
     def test_set_drawing_z_order_reorders_the_list(self) -> None:
         with Workbook.create_default() as wb:
-            a = wb.sheet(0).add_image(_png(2, 2), row=0)
-            b = wb.sheet(0).add_image(_png(2, 2), row=3)
-            c = wb.sheet(0).add_image(_png(2, 2), row=6)
-            self.assertEqual([o.object_id for o in wb.sheet(0).list_drawing_objects()], [a, b, c])
-            wb.sheet(0).set_drawing_z_order(c, 0)
-            self.assertEqual([o.object_id for o in wb.sheet(0).list_drawing_objects()], [c, a, b])
+            a = wb.sheet(0).add_picture(_png(2, 2), row=0)
+            b = wb.sheet(0).add_picture(_png(2, 2), row=3)
+            c = wb.sheet(0).add_picture(_png(2, 2), row=6)
+            self.assertEqual(
+                [o.object_id for o in wb.sheet(0).list_drawings()], [a.object_id, b.object_id, c.object_id]
+            )
+            wb.sheet(0).drawing(c.object_id).set_z_order(0)
+            self.assertEqual(
+                [o.object_id for o in wb.sheet(0).list_drawings()], [c.object_id, a.object_id, b.object_id]
+            )
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_drawing_z_order(c, 3)
+                c.set_z_order(3)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_drawing_z_order(9999, 0)
+                wb.sheet(0).drawing(9999).set_z_order(0)
 
     def test_snapshot_and_restore_drawing(self) -> None:
         png = _png(4, 3)
         with Workbook.create_default() as wb:
-            a = wb.sheet(0).add_image(png, name="A", row=1)
-            b = wb.sheet(0).add_image(_png(2, 2), name="B", row=4)
-            snap = wb.sheet(0).snapshot_drawing(a)
+            a = wb.sheet(0).add_picture(png, name="A", row=1)
+            b = wb.sheet(0).add_picture(_png(2, 2), name="B", row=4)
+            snap = wb.sheet(0).drawing(a.object_id).snapshot()
             self.assertIsInstance(snap, bytes)
             self.assertGreater(len(snap), 0)
 
-            wb.sheet(0).remove_drawing_object(a)
-            self.assertEqual(wb.sheet(0).restore_drawing(snap), a)
-            self.assertEqual([o.object_id for o in wb.sheet(0).list_drawing_objects()], [a, b])
-            self.assertEqual(wb.sheet(0).get_image(a), png)
+            wb.sheet(0).remove_drawing(a)
+            restored = wb.sheet(0).restore_drawing(snap)
+            self.assertIs(restored, a)
+            self.assertEqual([o.object_id for o in wb.sheet(0).list_drawings()], [a.object_id, b.object_id])
+            self.assertEqual(wb.sheet(0).picture(a.object_id).get_properties().bytes, png)
 
-            wb.sheet(0).set_drawing_anchor(a, row=9)
-            wb.sheet(0).set_drawing_z_order(a, 1)
-            self.assertEqual(wb.sheet(0).restore_drawing(snap), a)
-            self.assertEqual([o.object_id for o in wb.sheet(0).list_drawing_objects()], [a, b])
-            self.assertEqual(wb.sheet(0).list_drawing_objects()[0].from_row, 1)
+            wb.sheet(0).drawing(a.object_id).set_anchor(row=9)
+            wb.sheet(0).drawing(a.object_id).set_z_order(1)
+            self.assertIs(wb.sheet(0).restore_drawing(snap), a)
+            self.assertEqual([o.object_id for o in wb.sheet(0).list_drawings()], [a.object_id, b.object_id])
+            self.assertEqual(wb.sheet(0).list_drawings()[0].get_drawing_properties().from_row, 1)
 
             copy = wb.sheet(0).restore_drawing(snap, new_id=True)
-            self.assertNotIn(copy, (a, b))
-            self.assertEqual([o.object_id for o in wb.sheet(0).list_drawing_objects()], [a, b, copy])
+            self.assertNotIn(copy.object_id, (a.object_id, b.object_id))
+            self.assertEqual(
+                [o.object_id for o in wb.sheet(0).list_drawings()], [a.object_id, b.object_id, copy.object_id]
+            )
 
             with self.assertRaises(FormulonError):
                 wb.sheet(0).restore_drawing(b"junk")
             with self.assertRaises(FormulonError):
-                wb.sheet(0).snapshot_drawing(9999)
+                wb.sheet(0).drawing(9999).snapshot()
 
 
 if __name__ == "__main__":

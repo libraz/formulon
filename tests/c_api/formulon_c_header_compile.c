@@ -122,8 +122,8 @@ int main(void) {
       fm_sheet_get_invalid_cells;
   fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment_t*) =
       fm_sheet_add_threaded_comment;
-  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const char*, const fm_mention_t*,
-                                       uint32_t) = fm_sheet_update_threaded_comment;
+  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const fm_threaded_comment_patch_t*) =
+      fm_sheet_update_threaded_comment;
   fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person_t*) = fm_workbook_get_person_at;
   fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_image_insert_t*, uint32_t*) =
       fm_sheet_add_image;

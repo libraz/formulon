@@ -29,7 +29,6 @@
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_limit;
-using formulon::c_api::parts::check_num_fmt_id_text;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -42,6 +41,8 @@ using formulon::c_api::parts::pivot_axis_from_fm;
 using formulon::c_api::parts::pivot_axis_to_fm;
 using formulon::c_api::parts::pivot_calendar_from_fm;
 using formulon::c_api::parts::pivot_count;
+using formulon::c_api::parts::pivot_num_fmt_code;
+using formulon::c_api::parts::pivot_num_fmt_id_text;
 using formulon::c_api::parts::pivot_subtotal_from_fm;
 using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::resolve_pivot;
@@ -184,11 +185,12 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   if (auto rc = validate(*spec); rc != 0) {
     return rc;
   }
-  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format); rc != 0) {
-    return rc;
-  }
   formulon::pivot::PivotTable* table = nullptr;
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
+    return rc;
+  }
+  std::string number_format;
+  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), spec->number_format, &number_format); rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -223,7 +225,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   field.custom_name = spec->custom_name != nullptr ? spec->custom_name : "";
   field.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
   field.subtotal_top = spec->subtotal_top != 0;
-  field.number_format = spec->number_format != nullptr ? spec->number_format : "";
+  field.number_format = std::move(number_format);
   sync_field_order(*table, static_cast<std::uint32_t>(index));
   const fm_status_t status = edit.commit();
   if (status == 0) {
@@ -708,11 +710,12 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_number_format(fm_workbook_t* wb,
   if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
     return rc;
   }
-  if (auto rc = check_num_fmt_id_text(wb->workbook(), utf8); rc != 0) {
+  std::string number_format;
+  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), utf8, &number_format); rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  field->number_format = utf8;
+  field->number_format = std::move(number_format);
   return edit.commit();
 }
 
@@ -734,7 +737,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_field(const fm_workbook_t* wb, std::si
   const auto axis = pivot_axis_to_fm(field->axis);
   result.axis = axis.has_value() ? static_cast<std::int32_t>(*axis) : -1;
   result.subtotal_top = field->subtotal_top ? 1 : 0;
-  result.number_format = field->number_format.c_str();
+  result.number_format = pivot_num_fmt_code(wb->workbook(), field->number_format);
   const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id());
   result.cache_field_index =
       cache != nullptr && field_index < cache->fields().size() ? static_cast<std::int32_t>(field_index) : -1;

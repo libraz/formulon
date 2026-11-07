@@ -1,4 +1,5 @@
-// The JS surface and the Python surface name the same members: Workbook, Sheet and
+// The JS surface and the Python surface name the same members: Workbook, Sheet, the
+// handle classes (Table, Pivot, PivotCache, Drawing, Picture, Chart, Shape, Slicer) and
 // the module-level functions, apart from the differences recorded in
 // tools/api/platform_diff.json. Python names are read from the source files.
 // The native package additionally carries the members recorded under native_only.
@@ -70,10 +71,95 @@ function assertParity(label, jsNames, jsOnly, pyNames, pyOnly) {
   const py = new Map([...pyNames].filter((n) => !pyOnlyKeys.has(key(n)) && !n.startsWith('_')).map((n) => [key(n), n]));
   const { onlyJs, onlyPy } = diffSets(new Set(js.keys()), new Set(py.keys()));
   assert.deepEqual(
-    { onlyJs: onlyJs.map((k) => js.get(k)), onlyPy: onlyPy.map((k) => py.get(k)) },
+    {
+      onlyJs: onlyJs.map((k) => js.get(k)),
+      onlyPy: onlyPy.map((k) => py.get(k)),
+    },
     { onlyJs: [], onlyPy: [] },
     `${label}: members present on one side only`,
   );
+}
+
+const HANDLE_FILES = {
+  Table: 'table.py',
+  Pivot: 'pivot.py',
+  PivotCache: 'pivot_cache.py',
+  Drawing: 'drawing.py',
+  Picture: 'drawing.py',
+  Chart: 'drawing.py',
+  Shape: 'drawing.py',
+  Slicer: 'drawing.py',
+};
+const DRAWING_SUBCLASSES = new Set(['Picture', 'Chart', 'Shape', 'Slicer']);
+
+/** Members a handle class exposes in Python; Drawing subclasses include the inherited base members. */
+function pythonHandleMembers(cls) {
+  const own = pythonClassMembers(HANDLE_FILES[cls], cls);
+  return DRAWING_SUBCLASSES.has(cls) ? new Set([...own, ...pythonClassMembers('drawing.py', 'Drawing')]) : own;
+}
+
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+/** One live instance of every handle class, built in a fresh workbook. */
+function makeHandles(formulon, wb) {
+  const ws = wb.sheet(0);
+  ws.setText(0, 0, 'Product');
+  ws.setText(0, 1, 'Amount');
+  ws.setNumber(1, 1, 5);
+  const table = wb.addTable({
+    range: {
+      sheet: 0,
+      rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 },
+    },
+    name: 'Tbl',
+    columns: ['Product', 'Amount'],
+  });
+  const cache = wb.addPivotCache();
+  const pivot = ws.addPivot({
+    name: 'P1',
+    cacheId: cache.cacheId,
+    anchorRow: 10,
+    anchorCol: 4,
+  });
+  const chart = ws.addChart({
+    kind: formulon.ChartInsertKind.Column,
+    source: 'Sheet1!$A$1:$B$2',
+    legend: formulon.ChartLegendPosition.Right,
+  });
+  const shape = ws.addShape({
+    presetGeometry: 'rect',
+    anchorKind: 0,
+    fromRow: 2,
+    widthEmu: 914400,
+    heightEmu: 457200,
+  });
+  const slicer = ws.addSlicer(table, 0, {
+    fromRow: 20,
+    fromCol: 3,
+    toRow: 30,
+    toCol: 5,
+  });
+  const picture = ws.addPicture(PNG_1X1);
+  return {
+    Table: table,
+    Pivot: pivot,
+    PivotCache: cache,
+    Drawing: Object.create(Object.getPrototypeOf(Object.getPrototypeOf(picture))),
+    Picture: picture,
+    Chart: chart,
+    Shape: shape,
+    Slicer: slicer,
+  };
+}
+
+/** Prototype members of a handle instance, with the Drawing base members for subclasses. */
+function jsHandleMembers(instance) {
+  const proto = Object.getPrototypeOf(instance);
+  const base = DRAWING_SUBCLASSES.has(proto.constructor.name) ? Object.getPrototypeOf(proto) : null;
+  return [...new Set([...prototypeKeys(proto), ...(base ? prototypeKeys(base) : [])])];
 }
 
 const diffSet = (table, name) => new Set(table[name] ?? []);
@@ -137,6 +223,27 @@ test('Sheet has the Python Sheet members apart from the platform differences', a
     wb.dispose();
   }
 });
+
+for (const cls of Object.keys(HANDLE_FILES)) {
+  test(`${cls} has the Python ${cls} members apart from the platform differences`, async () => {
+    const formulon = await getFormulon();
+    const wb = formulon.Workbook.createDefault();
+    try {
+      const handles = makeHandles(formulon, wb);
+      // Drawing itself has no public constructor; an object over its prototype stands in.
+      const instance = handles[cls];
+      assertParity(
+        cls,
+        jsHandleMembers(instance),
+        diffSet(DIFF.js_only, cls),
+        pythonHandleMembers(cls),
+        diffSet(DIFF.py_only, cls),
+      );
+    } finally {
+      wb.dispose();
+    }
+  });
+}
 
 test('Formulon has the Python module functions apart from the platform differences', async () => {
   const formulon = await getFormulon();

@@ -830,7 +830,7 @@ CELL_XF = Struct(
         ("has_shrink_to_fit", I32),
         ("shrink_to_fit", I32),
         ("has_reading_order", I32),
-        ("reading_order", U32),
+        ("reading_order", I32),
         ("has_horizontal_align", I32),
         ("has_vertical_align", I32),
         ("has_wrap_text", I32),
@@ -1252,6 +1252,19 @@ THREADED_COMMENT = Struct(
         ("done", I32),
         ("mentions", PTR),
         ("mention_count", U32),
+    ],
+)
+
+# ``text`` NULL keeps the text; ``mentions_engaged`` 0 keeps the mentions;
+# ``done`` -1 keeps the resolved state, 0 / 1 sets it.
+THREADED_COMMENT_PATCH = Struct(
+    "fm_threaded_comment_patch_t",
+    [
+        ("text", PTR),
+        ("mentions", PTR),
+        ("mention_count", U32),
+        ("mentions_engaged", I32),
+        ("done", I32),
     ],
 )
 

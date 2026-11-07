@@ -15,6 +15,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
@@ -161,38 +162,51 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
 }
 
 extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
-                                                        const char* text, const fm_mention_t* mentions,
-                                                        uint32_t mention_count) {
+                                                        const fm_threaded_comment_patch_t* patch) {
   clear_last_error();
   if (id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8({id, text}); rc != 0) {
-    return rc;
-  }
-  std::vector<formulon::Mention> model;
-  if (auto rc = mentions_from_fm(mentions, mention_count, &model); rc != 0) {
-    return rc;
-  }
-  return finish_status(wb->workbook().edit_threaded_comment(sheet_index, id, text_or_empty(text), std::move(model)));
-}
-
-extern "C" fm_status_t fm_sheet_set_thread_resolved(fm_workbook_t* wb, size_t sheet_index, const char* thread_id,
-                                                    int32_t done) {
-  clear_last_error();
-  if (thread_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "thread_id is NULL");
+  if (patch == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "patch is NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({thread_id}); rc != 0) {
+  if (auto rc = check_utf8({id, patch->text}); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().set_thread_resolved(sheet_index, thread_id, done != 0));
+  if (auto rc = check_enum_domain(patch->done, -1, 1, "done"); rc != 0) {
+    return rc;
+  }
+  std::vector<formulon::Mention> mentions;
+  if (patch->mentions_engaged != 0) {
+    if (auto rc = mentions_from_fm(patch->mentions, patch->mention_count, &mentions); rc != 0) {
+      return rc;
+    }
+  }
+  formulon::Workbook& book = wb->workbook();
+  const auto& comments = book.sheet(sheet_index).threaded_comments();
+  const std::size_t index = formulon::find_threaded_comment(comments, id);
+  if (index == comments.size() || (patch->done != -1 && !comments[index].parent_id.empty())) {
+    return set_binding_error(formulon::FormulonErrorCode::kThreadedCommentInvalid,
+                             index == comments.size() ? "no threaded comment has that id" : "done is set on a reply",
+                             std::string("id=") + id);
+  }
+  if (patch->text != nullptr || patch->mentions_engaged != 0) {
+    std::string text = patch->text != nullptr ? std::string(patch->text) : comments[index].text;
+    if (patch->mentions_engaged == 0) {
+      mentions = comments[index].mentions;
+    }
+    if (auto rc = finish_status(book.edit_threaded_comment(sheet_index, id, std::move(text), std::move(mentions)));
+        rc != 0) {
+      return rc;
+    }
+  }
+  if (patch->done != -1) {
+    return finish_status(book.set_thread_resolved(sheet_index, id, patch->done != 0));
+  }
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id) {

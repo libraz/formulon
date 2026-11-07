@@ -569,7 +569,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('formula error surfaces as ERROR-kind value', () => {
-    const r = Module.evalFormula('=1/0');
+    const r = Module.evaluateFormula('=1/0');
     assert.equal(r.kind, VAL.ERROR);
   });
 
@@ -580,7 +580,7 @@ export function registerCellsIo(Module, test) {
     // when the call throws.
     let r;
     try {
-      r = Module.evalFormula('=#GARBAGE');
+      r = Module.evaluateFormula('=#GARBAGE');
     } catch (e) {
       assert.equal(e.name, 'FormulonError');
       assert.equal(typeof e.message, 'string');

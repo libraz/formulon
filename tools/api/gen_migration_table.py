@@ -5,10 +5,15 @@ One Markdown table per surface (C, JavaScript, Python), each row a former name
 and what replaces it:
 
 * a rename (``was`` differs from the current name), records and fields included;
+* an op a handle class now publishes (``handle:``): the former name and the
+  handle method reached through its parent's lookup
+  (``addPivotField()`` -> ``ws.pivot(...).addField()``);
 * a ``drop`` name, whether or not it was also renamed: removed, pointing at the
-  ``list`` entry that absorbs it or at the entry it was an alias of, when the
-  ledger names one;
-* a ``replaced_by`` type: folded into the type it names.
+  ``list`` entry that absorbs it, at the op that replaces it, or at the entry it
+  was an alias of, when the ledger names one;
+* a ``replaced_by`` type: folded into the type it names; an ``internal`` op
+  with ``replaced_by``: the facade member that took it over. Any other
+  ``internal`` op has no row.
 
 The table lives in ``CHANGELOG.md`` between the two marker comments below, so
 the generated rows and the hand-written notes around them never overlap.
@@ -27,6 +32,16 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools" / "dev"))
+
+from binding_drift.api_conventions import (  # noqa: E402
+    common_base,
+    entry_handle,
+    handle_bases,
+    handle_classes,
+    handle_name,
+)
+
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 
@@ -40,6 +55,8 @@ SURFACES = (
 )
 
 Row = Tuple[str, str]
+# The receiver each binding class is reached through in the rows.
+_RECEIVERS = {"workbook": "wb", "sheet": "ws"}
 
 
 def load_ledger(path: Path = LEDGER_PATH) -> dict:
@@ -77,6 +94,51 @@ def _parent_name(entries: Dict[str, dict], key: str, field: str) -> Optional[str
     return None
 
 
+def _snake(name: str) -> str:
+    return "".join(f"_{c.lower()}" if c.isupper() else c for c in name).lstrip("_")
+
+
+def _accessor(data: dict, cls: str, field: str) -> str:
+    """How a handle of `cls` is reached: `wb.sheet(...)`, `ws.pivot(...)`, `wb.table(...)`, ..."""
+    if cls == "Sheet":
+        return "wb.sheet(...)"
+    lookup = cls[:1].lower() + cls[1:]
+    name = lookup if field == "js" else _snake(lookup)
+    scope = "sheet"
+    for coll in (data.get("collections") or {}).values():
+        if isinstance(coll, dict) and coll.get("handle_class") == cls:
+            for op in coll.get("ops") or []:
+                entry = data["entries"].get(op) or {}
+                if entry.get(field) == name:
+                    scope = entry.get("scope", scope)
+    return f"{_RECEIVERS.get(scope, 'ws')}.{name}(...)"
+
+
+def _handle_call(data: dict, entry: dict, field: str) -> Optional[str]:
+    """`ws.pivot(...).addField()` for an op a handle class publishes, else None."""
+    if field == "c":
+        return None
+    handle = entry_handle(entry)
+    name = handle_name(entry, field, data.get("collections") or {}) if handle is not None else None
+    if not name:
+        return None
+    cls = common_base(handle_classes(entry), handle_bases(data.get("collections") or {}))
+    suffix = "" if handle.get("property") is True else "()"
+    return f"`{_accessor(data, cls, field)}.{name}{suffix}`"
+
+
+def _target_call(data: dict, key: str, field: str) -> Optional[str]:
+    """How the op `key` is written now: its handle method, else its current name."""
+    entry = data["entries"].get(key)
+    if not isinstance(entry, dict):
+        return None
+    handled = _handle_call(data, entry, field)
+    if handled:
+        return handled
+    name = entry.get(field)
+    return _call(name, field, str(entry.get("kind", ""))) if isinstance(name, str) else None
+
+
 def rows(data: dict) -> Dict[str, List[Row]]:
     """Per name field (`c` / `js` / `py`), the (before, after) cells."""
     entries: Dict[str, dict] = data["entries"]
@@ -102,11 +164,29 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                     prefix = f"{owner}." if isinstance(owner, str) else ""
                     out[field].append((f"`{prefix}{old}`", f"`{prefix}{new}`"))
                 continue
-            if "replaced_by" in entry:
+            # An op or list a facade member took over keeps its C function unless the ledger drops it.
+            replaced = "replaced_by" in entry and not (
+                kind in ("op", "list") and field == "c" and not isinstance(drop.get("c"), str)
+            )
+            if replaced and kind in ("op", "list"):
+                instead = _target_call(data, str(entry["replaced_by"]), field)
+                if entry.get("internal") is True:
+                    after = instead or "removed"
+                else:
+                    after = f"removed; use {instead}" if instead else "removed"
+                out[field].append((_call(old, field, kind), after))
+                continue
+            if replaced:
                 target = entries.get(str(entry["replaced_by"]), {})
                 new = target.get(field) if isinstance(target, dict) else None
                 after = f"folded into `{new}`" if isinstance(new, str) else "removed"
                 out[field].append((_call(old, field, kind), after))
+                continue
+            if entry.get("internal") is True and field != "c":
+                continue
+            handled = _handle_call(data, entry, field)
+            if handled:
+                out[field].append((_call(old, field, kind), handled))
                 continue
             if isinstance(drop.get(field), str):
                 instead = _absorbing_list(entries, key, field) or _parent_name(entries, key, field)

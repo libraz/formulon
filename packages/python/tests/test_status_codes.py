@@ -113,9 +113,9 @@ class ExceptionFamilyTest(unittest.TestCase):
         self.assertNotEqual(ctx.exception.code, StatusCode.OK)
         with Workbook.create_default() as wb:
             with self.assertRaises(IndexOutOfRangeError) as missing:
-                wb.rename_sheet(len(wb), "x")
+                wb.sheet(len(wb)).rename("x")
             self.assertEqual(missing.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
             with self.assertRaises(FormulonError) as invalid:
-                wb.rename_sheet(0, "")
+                wb.sheet(0).rename("")
             self.assertIs(type(invalid.exception), FormulonError)
             self.assertEqual(invalid.exception.code, StatusCode.INVALID_SHEET_NAME)

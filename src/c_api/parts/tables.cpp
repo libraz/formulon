@@ -15,12 +15,10 @@
 #include "c_api/parts/common.h"
 #include "drawing/slicer_edit.h"
 #include "io/auto_filter_xml.h"
-#include "io/xlsb/table_records.h"
 #include "io/xml_escape.h"
 #include "parser/structured_ref_payload.h"
 #include "table.h"
 #include "utils/error.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -33,6 +31,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
@@ -127,37 +126,6 @@ fm_status_t write_totals_cell(formulon::Workbook& book, const formulon::TableMet
     written = book.set_cell_value(table.sheet_index, row, cell_col, formulon::Value::blank());
   }
   return finish_status(written);
-}
-
-/// Rejects an empty name or one another table (other than `self`) already
-/// uses as its name or display name, a table part kept verbatim included.
-/// Table names share one case-insensitive namespace.
-fm_status_t check_table_names(const formulon::Workbook& book, std::string_view name, std::string_view display_name,
-                              std::size_t self) {
-  if (name.empty() || display_name.empty()) {
-    return invalid_argument("table name is empty");
-  }
-  const auto collides = [name, display_name](const auto& existing) {
-    return formulon::strings::case_insensitive_eq(existing.name, name) ||
-           formulon::strings::case_insensitive_eq(existing.display_name, name) ||
-           formulon::strings::case_insensitive_eq(existing.name, display_name) ||
-           formulon::strings::case_insensitive_eq(existing.display_name, display_name);
-  };
-  const auto& tables = book.tables();
-  for (std::size_t i = 0; i < tables.size(); ++i) {
-    if (i == self) {
-      continue;
-    }
-    if (collides(tables[i])) {
-      return invalid_argument("table name already exists", "name=" + std::string(name));
-    }
-  }
-  for (const formulon::io::xlsb::XlsbRetainedTable& retained : formulon::io::xlsb::xlsb_retained_tables(book)) {
-    if (collides(retained)) {
-      return invalid_argument("table name already exists", "name=" + std::string(name));
-    }
-  }
-  return 0;
 }
 
 // Changes only the opening element's ref attribute of an AutoFilter the
@@ -300,6 +268,40 @@ extern "C" fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_get_table_runtime_id(const fm_workbook_t* wb, size_t table_index, uint32_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  const auto& tables = wb->workbook().tables();
+  if (auto rc = check_index(table_index, tables.size(), "table_index"); rc != 0) {
+    return rc;
+  }
+  formulon::RuntimeId& id = tables[table_index].runtime_id;
+  if (id.value() == 0U) {
+    id.assign(wb->workbook().allocate_runtime_id());
+  }
+  *out = id.value();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_resolve_table_runtime_id(const fm_workbook_t* wb, uint32_t id,
+                                                            size_t* out_table_index) {
+  clear_last_error();
+  if (wb == nullptr || out_table_index == nullptr) {
+    return null_argument();
+  }
+  const auto& tables = wb->workbook().tables();
+  // Zero is the id of a table nobody has asked about, so it names none.
+  for (std::size_t i = 0; id != 0U && i < tables.size(); ++i) {
+    if (tables[i].runtime_id.value() == id) {
+      *out_table_index = i;
+      return 0;
+    }
+  }
+  return not_found("no table has that runtime id", "id=" + std::to_string(id));
+}
+
 extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* rect,
                                              const char* name, const char* display_name,
                                              const char* const* column_names, size_t column_count,
@@ -374,6 +376,14 @@ extern "C" fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index,
   if (!table.columns.empty() && table_ref_column_count(ref) != table.columns.size()) {
     return invalid_argument("ref width does not match the table's column count",
                             "ref=" + std::string(ref) + " column_count=" + std::to_string(table.columns.size()));
+  }
+
+  const std::optional<formulon::MergeRange> next_rect = formulon::parse_a1_rectangle(ref);
+  for (std::size_t i = 0; i < tables.size() && next_rect; ++i) {
+    const std::optional<formulon::MergeRange> other = formulon::parse_a1_rectangle(tables[i].ref);
+    if (i != index && tables[i].sheet_index == table.sheet_index && other && formulon::intersects(*next_rect, *other)) {
+      return invalid_argument("table range overlaps another table", "ref=" + ref);
+    }
   }
 
   // Compute every replacement before committing any metadata. In
@@ -546,9 +556,6 @@ extern "C" fm_status_t fm_workbook_rename_table(fm_workbook_t* wb, size_t index,
   }
   const std::string next_name = name;
   const std::string next_display_name = display_name != nullptr ? display_name : name;
-  if (auto rc = check_table_names(book, next_name, next_display_name, index); rc != 0) {
-    return rc;
-  }
   return finish_status(book.rename_table(index, next_name, next_display_name));
 }
 

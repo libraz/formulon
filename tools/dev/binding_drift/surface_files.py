@@ -85,3 +85,8 @@ def _format_diff(label_a: str, only_a: Set[str], label_b: str, only_b: Set[str])
 PYTHON_WORKBOOK = PYTHON_PKG_DIR / "workbook.py"
 # The `Sheet` class of the Python binding; absent until the sheet-scope methods move out of workbook.py.
 PYTHON_SHEET = PYTHON_PKG_DIR / "sheet.py"
+# The modules of the Python handle classes (`Table`, `Pivot`, `PivotCache`, the drawing classes); each is read
+# once it exists.
+PYTHON_HANDLE_MODULES = tuple(
+    PYTHON_PKG_DIR / name for name in ("table.py", "pivot.py", "pivot_cache.py", "drawing.py")
+)

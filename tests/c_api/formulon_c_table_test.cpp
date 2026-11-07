@@ -625,6 +625,27 @@ TEST(FormulonCApiTable, RenameRejectsTheNameOfAVerbatimXlsbTable) {
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, index, "Fresh2", "Fresh2"), 0);
 }
 
+TEST(FormulonCApiTable, AddUpdateAndRenameRefuseWhatExcelRefuses) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  const char* columns[] = {"A", "B"};
+  std::size_t index = 0;
+  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "T1", "T1", columns, 2, nullptr,
+                                  1, 0, &index),
+            kInvalidArgument);
+  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{2, 1, 4, 2}), "Other", "Other", columns, 2,
+                                  nullptr, 1, 0, &index),
+            kInvalidArgument);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "Other", "Other", columns, 2,
+                                  nullptr, 1, 0, &index),
+            0);
+  EXPECT_EQ(fm_workbook_update_table(wb.handle, index, record_arg(fm_cell_rect_t{0, 1, 2, 2}), nullptr, -1, -1),
+            kInvalidArgument);
+  EXPECT_EQ(fm_workbook_update_table(wb.handle, index, record_arg(fm_cell_rect_t{0, 4, 3, 5}), nullptr, -1, -1), 0);
+  EXPECT_EQ(fm_workbook_rename_table(wb.handle, index, "R2D2", nullptr), kInvalidArgument);
+  EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 2U);
+}
+
 TEST(FormulonCApiTable, CreateAvoidsTheIdOfAVerbatimXlsbTable) {
   WorkbookGuard wb;
   Load(RetainedSalesPackage(1), wb);
@@ -637,6 +658,137 @@ TEST(FormulonCApiTable, CreateAvoidsTheIdOfAVerbatimXlsbTable) {
   const std::string table_xml = ExtractZipEntry(Save(wb.handle), "xl/tables/table2.xml");
   EXPECT_NE(table_xml.find(" id=\"2\""), std::string::npos) << table_xml;
   EXPECT_NE(table_xml.find("name=\"Fresh\""), std::string::npos) << table_xml;
+}
+
+std::uint32_t TableRuntimeId(const fm_workbook_t* wb, std::size_t index) {
+  std::uint32_t id = 0;
+  EXPECT_EQ(fm_workbook_get_table_runtime_id(wb, index, &id), 0) << fm_get_last_error_message();
+  return id;
+}
+
+std::string TableName(const fm_workbook_t* wb, std::size_t index) {
+  const char* name = nullptr;
+  const char* display = nullptr;
+  fm_cell_rect_t rect{};
+  std::size_t sheet = 0;
+  EXPECT_EQ(fm_workbook_get_table(wb, index, &name, &display, &rect, &sheet), 0) << fm_get_last_error_message();
+  return name != nullptr ? name : "";
+}
+
+/// The name of the table `id` resolves to, or "" when it resolves to none.
+std::string ResolvedTableName(const fm_workbook_t* wb, std::uint32_t id) {
+  std::size_t index = 0;
+  return fm_workbook_resolve_table_runtime_id(wb, id, &index) == 0 ? TableName(wb, index) : std::string();
+}
+
+/// Adds a one-column table `name` on `sheet` over rows `row`..`row + 1` of column A.
+void AddOneColumnTable(fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, const char* name) {
+  const char* columns[] = {"Value"};
+  ASSERT_EQ(fm_sheet_set_text(wb, sheet, row, 0, "Value"), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb, sheet, record_arg(fm_cell_rect_t{row, 0, row + 1U, 0}), name, name, columns, 1,
+                                  nullptr, 1, 0, ignored_index()),
+            0)
+      << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiTable, RuntimeIdFollowsTheTableAcrossListRebuilds) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  std::size_t other = 99;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &other), 0) << fm_get_last_error_message();
+  AddOneColumnTable(wb.handle, other, 0U, "Tracked");
+  const std::uint32_t tracked = TableRuntimeId(wb.handle, 1);
+  const std::uint32_t sales = TableRuntimeId(wb.handle, 0);
+  EXPECT_NE(tracked, 0U);
+  EXPECT_NE(sales, 0U);
+  EXPECT_NE(tracked, sales);
+  EXPECT_EQ(TableRuntimeId(wb.handle, 1), tracked);
+
+  std::size_t index = 99;
+  EXPECT_EQ(fm_workbook_resolve_table_runtime_id(wb.handle, 0U, &index), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(index, 99U);
+
+  // Enough appends to reallocate the list.
+  for (std::uint32_t i = 0; i < 12U; ++i) {
+    const std::string name = "Extra" + std::to_string(i);
+    AddOneColumnTable(wb.handle, other, 3U * (i + 1U), name.c_str());
+  }
+  EXPECT_EQ(ResolvedTableName(wb.handle, tracked), "Tracked");
+
+  // A row deletion on another sheet rebuilds the list.
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 5U, 2U), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ResolvedTableName(wb.handle, tracked), "Tracked");
+
+  // Removing another sheet, with a table of its own, rebuilds it too.
+  std::size_t doomed = 99;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Doomed", &doomed), 0) << fm_get_last_error_message();
+  AddOneColumnTable(wb.handle, doomed, 0U, "Gone");
+  const std::uint32_t gone = TableRuntimeId(wb.handle, 14);
+  ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, doomed), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ResolvedTableName(wb.handle, tracked), "Tracked");
+  EXPECT_EQ(fm_workbook_resolve_table_runtime_id(wb.handle, gone, &index), FM_STATUS_NOT_FOUND);
+
+  // Removing the preceding table shifts the tracked one down by one.
+  ASSERT_EQ(fm_workbook_remove_table(wb.handle, 0), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_resolve_table_runtime_id(wb.handle, tracked, &index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(index, 0U);
+  EXPECT_EQ(TableName(wb.handle, index), "Tracked");
+  EXPECT_EQ(fm_workbook_resolve_table_runtime_id(wb.handle, sales, &index), FM_STATUS_NOT_FOUND);
+
+  // Rewriting the table in place keeps its identity.
+  ASSERT_EQ(fm_workbook_rename_table(wb.handle, 0, "Renamed", "Renamed"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ResolvedTableName(wb.handle, tracked), "Renamed");
+
+  std::uint32_t out = 0;
+  EXPECT_EQ(fm_workbook_get_table_runtime_id(wb.handle, 99, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_get_table_runtime_id(wb.handle, 0, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_resolve_table_runtime_id(wb.handle, tracked, nullptr), kBindingNullPointer);
+}
+
+TEST(FormulonCApiTable, RuntimeIdsAreUniqueAcrossLoadAddCopyAndRemove) {
+  WorkbookGuard source;
+  CreateSalesTable(source);
+  AddOneColumnTable(source.handle, 0, 10U, "Second");
+  WorkbookGuard wb;
+  Load(Save(source.handle), wb);
+
+  std::vector<std::uint32_t> seen;
+  const auto expect_new = [&seen](std::uint32_t id) {
+    EXPECT_NE(id, 0U);
+    for (const std::uint32_t earlier : seen) {
+      EXPECT_NE(id, earlier);
+    }
+    seen.push_back(id);
+  };
+  // Loaded tables.
+  expect_new(TableRuntimeId(wb.handle, 0));
+  expect_new(TableRuntimeId(wb.handle, 1));
+
+  // Added.
+  AddOneColumnTable(wb.handle, 0, 20U, "Third");
+  expect_new(TableRuntimeId(wb.handle, 2));
+
+  // Copied: the copies are new tables; the originals keep their ids.
+  std::size_t copy = 99;
+  ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 1, "Copy", &copy), 0) << fm_get_last_error_message();
+  std::size_t count = 0;
+  ASSERT_EQ(fm_workbook_get_table_count(wb.handle, &count), 0);
+  ASSERT_EQ(count, 6U);
+  for (std::size_t i = 0; i < 3U; ++i) {
+    EXPECT_EQ(TableRuntimeId(wb.handle, i), seen[i]);
+  }
+  for (std::size_t i = 3; i < 6U; ++i) {
+    expect_new(TableRuntimeId(wb.handle, i));
+  }
+
+  // Added after a removal: the removed id is not reused.
+  const std::uint32_t removed = TableRuntimeId(wb.handle, 2);
+  ASSERT_EQ(fm_workbook_remove_table(wb.handle, 2), 0) << fm_get_last_error_message();
+  AddOneColumnTable(wb.handle, 0, 30U, "Fourth");
+  ASSERT_EQ(fm_workbook_get_table_count(wb.handle, &count), 0);
+  const std::uint32_t fresh = TableRuntimeId(wb.handle, count - 1U);
+  EXPECT_NE(fresh, removed);
+  expect_new(fresh);
 }
 
 }  // namespace

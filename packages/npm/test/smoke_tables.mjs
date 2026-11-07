@@ -22,7 +22,8 @@ function salesWorkbook(mod, rect = { firstRow: 0, firstCol: 0, lastRow: 2, lastC
     styleName: 'TableStyleLight9',
     totalsRow,
   });
-  assert.equal(created, 0);
+  assert.equal(created.index, 0);
+  assert.equal(wb.table(0), created);
   return wb;
 }
 
@@ -30,7 +31,7 @@ test('tableAt reads the style toggles, row counts and columns', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
   try {
-    const table = wb.listTables()[0];
+    const table = wb.listTables()[0].getProperties();
     assert.equal(table.styleName, 'TableStyleLight9');
     assert.equal(table.showRowStripes, true);
     assert.equal(table.showFirstColumn, false);
@@ -53,8 +54,8 @@ test('updateTable keeps the toggles across a style name change', async () => {
   const wb = salesWorkbook(mod);
   let bytes;
   try {
-    wb.updateTable(0, { showFirstColumn: true, showRowStripes: false, showColumnStripes: true });
-    wb.updateTable(0, { styleName: 'TableStyleMedium4' });
+    wb.table(0).update({ showFirstColumn: true, showRowStripes: false, showColumnStripes: true });
+    wb.table(0).update({ styleName: 'TableStyleMedium4' });
     const saved = wb.save();
     bytes = saved;
   } finally {
@@ -62,7 +63,7 @@ test('updateTable keeps the toggles across a style name change', async () => {
   }
   const reloaded = mod.Workbook.load(bytes);
   try {
-    const table = reloaded.listTables()[0];
+    const table = reloaded.listTables()[0].getProperties();
     assert.equal(table.styleName, 'TableStyleMedium4');
     assert.equal(table.showFirstColumn, true);
     assert.equal(table.showRowStripes, false);
@@ -76,18 +77,18 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 }, true);
   try {
-    wb.setTableColumnTotals(0, 0, { label: 'Total' });
-    wb.setTableColumnTotals(0, 1, { function: 'sum' });
+    wb.table(0).setColumnTotals(0, { label: 'Total' });
+    wb.table(0).setColumnTotals(1, { function: 'sum' });
     assert.equal(wb.sheet(0).getFormula(3, 1), '=SUBTOTAL(109,[Amount])');
     wb.recalc();
     assert.equal(wb.sheet(0).getValue(3, 1).number, 30);
     assert.equal(wb.sheet(0).getValue(3, 0).text, 'Total');
-    expectFailure(() => wb.setTableColumnTotals(0, 1, { function: 'median' }));
-    const columns = wb.listTables()[0].columns;
+    expectFailure(() => wb.table(0).setColumnTotals(1, { function: 'median' }));
+    const columns = wb.listTables()[0].getProperties().columns;
     assert.equal(columns[0].totalsRowLabel, 'Total');
     assert.equal(columns[1].totalsRowFunction, 'sum');
-    wb.setTableColumnTotals(0, 1, { function: 'custom', formula: '=MAX(Sales[Amount])' });
-    assert.equal(wb.listTables()[0].columns[1].totalsRowFormula, '=MAX([Amount])');
+    wb.table(0).setColumnTotals(1, { function: 'custom', formula: '=MAX(Sales[Amount])' });
+    assert.equal(wb.listTables()[0].getProperties().columns[1].totalsRowFormula, '=MAX([Amount])');
   } finally {
     release(wb);
   }
@@ -98,8 +99,8 @@ test('updateTable renames the table and its structured references', async () => 
   const wb = salesWorkbook(mod);
   try {
     wb.sheet(0).setFormula(0, 3, '=SUM(Sales[Amount])');
-    wb.updateTable(0, { name: 'Revenue' });
-    const table = wb.listTables()[0];
+    wb.table(0).update({ name: 'Revenue' });
+    const table = wb.listTables()[0].getProperties();
     assert.equal(table.name, 'Revenue');
     assert.equal(table.displayName, 'Revenue');
     assert.equal(wb.sheet(0).getFormula(0, 3), '=SUM(Revenue[Amount])');
@@ -110,9 +111,9 @@ test('updateTable renames the table and its structured references', async () => 
     });
     // A clash is refused and leaves the rest of the update unapplied.
     expectFailure(() =>
-      wb.updateTable(other, { name: 'revenue', rect: { firstRow: 0, firstCol: 5, lastRow: 4, lastCol: 5 } }),
+      wb.table(other).update({ name: 'revenue', rect: { firstRow: 0, firstCol: 5, lastRow: 4, lastCol: 5 } }),
     );
-    assert.deepEqual(wb.listTables()[other].range.rect, { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 });
+    assert.deepEqual(other.getProperties().range.rect, { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 });
   } finally {
     release(wb);
   }
@@ -123,12 +124,12 @@ test('renameTableColumn renames the column and its structured references', async
   const wb = salesWorkbook(mod);
   try {
     wb.sheet(0).setFormula(0, 3, '=SUM(Sales[Amount])');
-    const renamed = wb.renameTableColumn(0, 1, 'Revenue');
+    const renamed = wb.table(0).renameColumn(1, 'Revenue');
     assert.equal(renamed, 'Revenue');
     assert.equal(wb.sheet(0).getFormula(0, 3), '=SUM(Sales[Revenue])');
     assert.equal(wb.sheet(0).getValue(0, 1).text, 'Revenue');
-    assert.equal(wb.renameTableColumn(0, 1, ''), 'Column1');
-    expectFailure(() => wb.renameTableColumn(0, 9, 'X'));
+    assert.equal(wb.table(0).renameColumn(1, ''), 'Column1');
+    expectFailure(() => wb.table(0).renameColumn(9, 'X'));
   } finally {
     release(wb);
   }
@@ -154,7 +155,7 @@ test('custom table styles round-trip and a table can use one', async () => {
     expectFailure(() => wb.setTableStyle({ name: 'TableStyleMedium2' }));
     expectFailure(() => wb.setTableStyle({ name: 'Bad', elements: [{ type: 'bodyRow' }] }));
     assert.equal(wb.listTableStyles().length, 1);
-    wb.updateTable(0, { styleName: 'Corporate' });
+    wb.table(0).update({ styleName: 'Corporate' });
     const defaults = wb.getTableStyleDefaults();
     assert.equal(defaults.tableStyle, 'TableStyleMedium2');
     assert.equal(defaults.pivotStyle, 'PivotStyleLight16');
@@ -181,7 +182,7 @@ test('custom table styles round-trip and a table can use one', async () => {
         ['totalRow', 1, undefined],
       ],
     );
-    assert.equal(reloaded.listTables()[0].styleName, 'Corporate');
+    assert.equal(reloaded.listTables()[0].getProperties().styleName, 'Corporate');
     reloaded.setTableStyleDefaults({ tableStyle: 'Corporate' });
     assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'Corporate');
     reloaded.removeTableStyle('corporate');

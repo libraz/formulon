@@ -320,11 +320,20 @@ fm_status_t check_guid(const char* text, const char* field);
 // registered in `styles.num_fmts`.
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id);
 
-// Rejects a `numFmtId` string that is malformed UTF-8 (`check_utf8`) or is not
-// decimal digits naming an id
-// `num_fmt_id_known` accepts. NULL and the empty string pass: both mean
-// "no number format".
-fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text);
+// The `fm_workbook_add_num_fmt` lookup: a built-in id whose ECMA-376 code is
+// `code`, then a registered custom id, else a newly appended custom id.
+fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, std::uint32_t* out_id);
+
+// Converts a pivot `number_format` format code into the numFmtId text the
+// pivot model stores. NULL and `""` mean "no number format" and yield `""`.
+// A built-in id whose profile-rendered code is `code` wins, so a code read
+// back from a built-in id maps to that id; otherwise `add_num_fmt_code`.
+fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std::string* out);
+
+// Format code of a pivot model numFmtId text, resolved as
+// `fm_workbook_get_num_fmt_string` does; `""` for none or an unregistered id.
+// The view is static or styles-owned, valid until the next mutation.
+const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text);
 
 // Validates a conditional-formatting rule record: sqref shape and every
 // rectangle in it, plus the `type` / `op` / `time_period` /

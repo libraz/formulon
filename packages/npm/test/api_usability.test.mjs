@@ -73,83 +73,85 @@ function pivotWorkbook(wb, formulon) {
   const ws = wb.sheet(0);
   ws.setText(0, 0, 'Region');
   ws.setText(0, 1, 'Amount');
-  const cacheId = wb.addPivotCache();
-  wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:B3', sheet: 'Sheet1' });
-  wb.addPivotCacheField(cacheId, 'Region');
-  wb.addPivotCacheField(cacheId, 'Amount');
+  const cache = wb.addPivotCache();
+  cache.setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.addField('Region');
+  cache.addField('Amount');
   for (const [region, amount] of [
     ['East', 10],
     ['West', 30],
   ]) {
-    const row = wb.getPivotCacheRecordCount(cacheId) + 1;
+    const row = cache.getRecordCount() + 1;
     ws.setText(row, 0, region);
     ws.setNumber(row, 1, amount);
-    const rec = wb.addPivotCacheRecord(cacheId);
-    wb.setPivotCacheRecordValue(cacheId, rec, 0, region);
-    wb.setPivotCacheRecordValue(cacheId, rec, 1, amount);
+    const rec = cache.addRecord();
+    cache.setRecordValue(rec, 0, region);
+    cache.setRecordValue(rec, 1, amount);
   }
-  const pivot = ws.addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 4 });
-  ws.addPivotField(pivot, { sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amountField = ws.addPivotField(pivot, { sourceName: 'Amount', axis: formulon.PivotAxis.Data });
-  ws.addPivotDataField(pivot, { name: 'Sum of Amount', fieldIndex: amountField, aggregation: 0 });
-  return { cacheId, pivot };
+  const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+  ws.pivot(pivot).addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
+  const amountField = ws.pivot(pivot).addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Data });
+  ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amountField, aggregation: 0 });
+  return { cache, cacheId: cache.cacheId, pivot };
 }
 
 // One entry per JSON method. `args` is the coordinate form; the A1 form is derived from the JSON
 // positions. `setup` may return context for `args`.
 const CELL_METHODS = {
-  addHyperlink: { args: () => [CELL_ROW, CELL_COL, HYPERLINK] },
-  clearCellXfIndex: { args: () => [CELL_ROW, CELL_COL] },
-  evaluateCfFormula: { args: () => [CELL_ROW, CELL_COL, 0, 0, '=TRUE'] },
-  evaluateFormula: { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
-  evaluateFormulaArray: { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
-  getArrayFormula: { args: () => [CELL_ROW, CELL_COL] },
-  getCellPhonetic: { args: () => [CELL_ROW, CELL_COL] },
-  getCellPhoneticProperties: { args: () => [CELL_ROW, CELL_COL] },
-  getCellPhoneticRuns: { args: () => [CELL_ROW, CELL_COL] },
-  getCellShowPhonetic: { args: () => [CELL_ROW, CELL_COL] },
-  getCellXfIndex: { args: () => [CELL_ROW, CELL_COL] },
-  getComment: { args: () => [CELL_ROW, CELL_COL] },
-  getCommentVisible: { args: () => [CELL_ROW, CELL_COL] },
-  getDataTable: { args: () => [CELL_ROW, CELL_COL] },
-  getDependents: { args: () => [CELL_ROW, CELL_COL, 1] },
-  getDisplayText: { args: () => [CELL_ROW, CELL_COL] },
-  getEffectiveStyle: { args: () => [CELL_ROW, CELL_COL] },
-  getFormula: { args: () => [CELL_ROW, CELL_COL] },
-  getFormulaR1C1: { args: () => [CELL_ROW, CELL_COL] },
-  getHyperlink: { args: () => [CELL_ROW, CELL_COL] },
-  getLambdaText: { args: () => [CELL_ROW, CELL_COL] },
-  getPrecedents: { args: () => [CELL_ROW, CELL_COL, 1] },
-  getSpillInfo: { args: () => [CELL_ROW, CELL_COL] },
-  getValue: { args: () => [CELL_ROW, CELL_COL] },
-  removeComment: { args: () => [CELL_ROW, CELL_COL] },
-  removeDataTable: { args: () => [CELL_ROW, CELL_COL] },
-  removeHyperlink: { args: () => [CELL_ROW, CELL_COL] },
-  setBlank: { args: () => [CELL_ROW, CELL_COL], pre: (ws) => ws.setNumber(CELL_ROW, CELL_COL, 7), mutates: true },
-  setBool: { args: () => [CELL_ROW, CELL_COL, true], mutates: true },
-  setCellPhonetic: { args: () => [CELL_ROW, CELL_COL, 'kana'], mutates: true },
-  setCellPhoneticProperties: { args: () => [CELL_ROW, CELL_COL, { fontId: 0, type: 2, alignment: 1 }] },
-  setCellPhoneticRuns: { args: () => [CELL_ROW, CELL_COL, [{ sb: 0, eb: 1, text: 'x' }]] },
-  setCellShowPhonetic: { args: () => [CELL_ROW, CELL_COL, true] },
-  setCellXfIndex: { args: () => [CELL_ROW, CELL_COL, 0] },
-  setComment: { args: () => [CELL_ROW, CELL_COL, { author: 'A', text: 'note' }], mutates: true },
-  setCommentVisible: { args: () => [CELL_ROW, CELL_COL, true] },
-  setError: { args: (f) => [CELL_ROW, CELL_COL, f.ErrorCode.Div0], mutates: true },
-  setFormula: { args: () => [CELL_ROW, CELL_COL, '=1+1'], mutates: true },
-  setNumber: { args: () => [CELL_ROW, CELL_COL, 5], mutates: true },
-  setText: { args: () => [CELL_ROW, CELL_COL, 'hello'], mutates: true },
-  setValue: { args: () => [CELL_ROW, CELL_COL, 5], mutates: true },
-  setValues: { args: () => [CELL_ROW, CELL_COL, [[5, 'x']]], mutates: true },
-  // F2 (1, 5) is the first value cell of the report anchored at E1.
-  showPivotDetails: {
-    args: (_f, ctx) => [ctx.pivot, 1, 5],
-    pivot: true,
+  'Sheet.addHyperlink': { args: () => [CELL_ROW, CELL_COL, HYPERLINK] },
+  'Sheet.clearCellXfIndex': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.evaluateCfFormula': { args: () => [CELL_ROW, CELL_COL, 0, 0, '=TRUE'] },
+  'Sheet.evaluateFormula': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
+  'Sheet.evaluateFormulaArray': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
+  'Sheet.getArrayFormula': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCellFormat': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCellPhonetic': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCellPhoneticProperties': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCellPhoneticRuns': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCellShowPhonetic': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCellXfIndex': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getComment': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCommentVisible': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getDataTable': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getDependents': { args: () => [CELL_ROW, CELL_COL, 1] },
+  'Sheet.getDisplayText': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getEffectiveStyle': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getFormula': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getFormulaR1C1': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getHyperlink': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getLambdaText': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getPrecedents': { args: () => [CELL_ROW, CELL_COL, 1] },
+  'Sheet.getSpillInfo': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getValue': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.removeComment': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.removeDataTable': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.removeHyperlink': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.setBlank': {
+    args: () => [CELL_ROW, CELL_COL],
+    pre: (ws) => ws.setNumber(CELL_ROW, CELL_COL, 7),
+    mutates: true,
   },
-  validateValue: { args: (f) => [CELL_ROW, CELL_COL, { kind: f.ValueKind.Number, number: 1 }] },
+  'Sheet.setBool': { args: () => [CELL_ROW, CELL_COL, true], mutates: true },
+  'Sheet.setCellPhonetic': { args: () => [CELL_ROW, CELL_COL, 'kana'], mutates: true },
+  'Sheet.setCellPhoneticProperties': { args: () => [CELL_ROW, CELL_COL, { fontId: 0, type: 2, alignment: 1 }] },
+  'Sheet.setCellPhoneticRuns': { args: () => [CELL_ROW, CELL_COL, [{ sb: 0, eb: 1, text: 'x' }]] },
+  'Sheet.setCellShowPhonetic': { args: () => [CELL_ROW, CELL_COL, true] },
+  'Sheet.setCellXfIndex': { args: () => [CELL_ROW, CELL_COL, 0] },
+  'Sheet.setComment': { args: () => [CELL_ROW, CELL_COL, { author: 'A', text: 'note' }], mutates: true },
+  'Sheet.setCommentVisible': { args: () => [CELL_ROW, CELL_COL, true] },
+  'Sheet.setError': { args: (f) => [CELL_ROW, CELL_COL, f.ErrorCode.Div0], mutates: true },
+  'Sheet.setFormula': { args: () => [CELL_ROW, CELL_COL, '=1+1'], mutates: true },
+  'Sheet.setNumber': { args: () => [CELL_ROW, CELL_COL, 5], mutates: true },
+  'Sheet.setText': { args: () => [CELL_ROW, CELL_COL, 'hello'], mutates: true },
+  'Sheet.setValue': { args: () => [CELL_ROW, CELL_COL, 5], mutates: true },
+  'Sheet.setValues': { args: () => [CELL_ROW, CELL_COL, [[5, 'x']]], mutates: true },
+  // F2 (1, 5) is the first value cell of the report anchored at E1.
+  'Pivot.showDetails': { args: () => [1, 5], pivot: true },
+  'Sheet.validateValue': { args: (f) => [CELL_ROW, CELL_COL, { kind: f.ValueKind.Number, number: 1 }] },
   // Methods whose cell form moved elsewhere in the same surface revision.
-  addPivot: { skip: 'takes a PivotInput record' },
-  setPaneTopLeft: { skip: 'folded into setView' },
-  setTopLeft: { skip: 'folded into setView' },
+  'Sheet.addPivot': { skip: 'takes a PivotInput record' },
+  'Sheet.setPaneTopLeft': { skip: 'folded into setView' },
+  'Sheet.setTopLeft': { skip: 'folded into setView' },
 };
 
 const READERS = [
@@ -166,6 +168,12 @@ const READERS = [
   'getDataTable',
   'getArrayFormula',
 ];
+
+// The object and method name a `Class.method` key of the argument tables addresses.
+function target(ws, ctx, key) {
+  const [cls, method] = key.split('.');
+  return [cls === 'Pivot' ? ctx.pivot : ws, method];
+}
 
 function attempt(fn) {
   try {
@@ -244,9 +252,11 @@ for (const [name, pairs] of Object.entries(ADDRESS.cell_args)) {
   test(`criterion 1: ${name} takes A1 in place of (row, col) and matches the coordinate form`, async () => {
     const formulon = await getFormulon();
     const probe = formulon.Workbook.createDefault();
-    const exists = typeof probe.sheet(0)[name] === 'function';
+    const { ws: probeWs, ctx: probeCtx } = seeded(probe, formulon, entry.pivot === true);
+    const [probeObj, probeMethod] = target(probeWs, probeCtx, name);
+    const exists = typeof probeObj[probeMethod] === 'function';
     probe.dispose();
-    assert.equal(exists, true, `Sheet.${name} is missing`);
+    assert.equal(exists, true, `${name} is missing`);
     const run = (form) =>
       withWorkbook((wb, f) => {
         const { ws, ctx } = seeded(wb, f, entry.pivot === true);
@@ -254,7 +264,8 @@ for (const [name, pairs] of Object.entries(ADDRESS.cell_args)) {
         const coord = entry.args(f, ctx);
         const args = form === 'a1' ? a1Args(coord, pairs) : coord;
         const before = snapshot(ws);
-        const result = attempt(() => ws[name](...args));
+        const [obj, method] = target(ws, ctx, name);
+        const result = attempt(() => obj[method](...args));
         return { result, before, after: snapshot(ws) };
       });
     const coordRun = await run('coord');
@@ -275,7 +286,8 @@ for (const [name, pairs] of Object.entries(ADDRESS.cell_args)) {
         const mixed = [...coord];
         mixed[i] = a1(coord[i], coord[j]);
         mixed.splice(j, 1);
-        assert.throws(() => ws[name](...mixed), TYPE_ERROR);
+        const [obj, method] = target(ws, ctx, name);
+        assert.throws(() => obj[method](...mixed), TYPE_ERROR);
       });
     });
   }
@@ -289,11 +301,11 @@ test('criterion 1: a coordinate-form call with the pair at a non-string position
       const sheet = call(wb.sheet(0));
       return { index: sheet.index, values: plain(sheet.getValues('A1:B3')) };
     });
-  const expected = await details((ws) => ws.showPivotDetails(0, 1, 5));
+  const expected = await details((ws) => ws.pivot(0).showDetails(1, 5));
   assert.equal(expected.values[1][1].number, 10);
-  assert.deepEqual(await details((ws) => ws.showPivotDetails(0, 'F2')), expected);
-  assert.deepEqual(await details((ws) => ws.showPivotDetails('Pivot1', 1, 5)), expected);
-  assert.deepEqual(await details((ws) => ws.showPivotDetails('Pivot1', 'F2')), expected);
+  assert.deepEqual(await details((ws) => ws.pivot(0).showDetails('F2')), expected);
+  assert.deepEqual(await details((ws) => ws.pivot('Pivot1').showDetails(1, 5)), expected);
+  assert.deepEqual(await details((ws) => ws.pivot('Pivot1').showDetails('F2')), expected);
 });
 
 test('edge: A1 spellings of one cell address the same cell', async () => {
@@ -346,23 +358,24 @@ test('edge: setFormula accepts text with or without the leading equals sign', as
 
 const R = rect(1, 1, 2, 2);
 const RECT_METHODS = {
-  addHyperlinkRange: { args: (r) => [r, HYPERLINK], mutates: true },
-  addMerge: { args: (r) => [r], mutates: true },
-  evaluateCfRange: { args: (r) => [r, 45000] },
-  getCellRectPt: { args: (r, f) => [r, f.GeometryMode.Display] },
-  getCellsInRange: { args: (r) => [r] },
-  getMergesInRange: { args: (r) => [r] },
-  getRangeStyleBases: { args: (r) => [r] },
-  getRangeStyleBasesExcluding: { args: (r) => [r, [], []] },
-  getValues: { args: (r) => [r] },
-  listCells: { args: (r) => [r], pre: (ws) => ws.setNumber(2, 2, 9) },
-  recalcViewport: { args: (r) => [r] },
-  remapRangeStyle: { args: (r) => [r, [0], [0]] },
-  removeMerge: { args: (r) => [r], pre: (ws) => ws.addMerge(R) },
-  setPivotAnchor: { args: (r, _f, ctx) => [ctx.pivot, r], pivot: true },
-  setPrintArea: { args: (r) => [[r]], mutates: true },
-  setRangeXfIndex: { args: (r) => [r, 0] },
-  snapshotRangeStyle: { args: (r) => [r] },
+  'Sheet.addHyperlinkRange': { args: (r) => [r, HYPERLINK], mutates: true },
+  'Sheet.addMerge': { args: (r) => [r], mutates: true },
+  'Sheet.evaluateCfRange': { args: (r) => [r, 45000] },
+  'Sheet.getCellRectPt': { args: (r, f) => [r, f.GeometryMode.Display] },
+  'Sheet.getCellsInRange': { args: (r) => [r] },
+  'Sheet.getMergesInRange': { args: (r) => [r] },
+  'Sheet.getRangeStyleBases': { args: (r) => [r] },
+  'Sheet.getRangeStyleBasesExcluding': { args: (r) => [r, [], []] },
+  'Sheet.getValues': { args: (r) => [r] },
+  'Sheet.listCells': { args: (r) => [r], pre: (ws) => ws.setNumber(2, 2, 9) },
+  'Sheet.recalcViewport': { args: (r) => [r] },
+  'Sheet.remapRangeStyle': { args: (r) => [r, [0], [0]] },
+  'Sheet.removeMerge': { args: (r) => [r], pre: (ws) => ws.addMerge(R) },
+  'Pivot.setAnchor': { args: (r) => [r], pivot: true },
+  'Sheet.setCellFormat': { args: (r) => [r, { font: { bold: true } }], mutates: true },
+  'Sheet.setPrintArea': { args: (r) => [[r]], mutates: true },
+  'Sheet.setRangeXfIndex': { args: (r) => [r, 0] },
+  'Sheet.snapshotRangeStyle': { args: (r) => [r] },
 };
 
 test('criterion 2: the JSON rect set is non-empty and every method has an argument-table entry', () => {
@@ -392,8 +405,9 @@ for (const [name, positions] of Object.entries(ADDRESS.rect_args)) {
         entry.pre?.(ws);
         const args = entry.args(asString ? rectA1(R) : R, f, ctx);
         const before = snapshot(ws);
-        const result = attempt(() => ws[name](...args));
-        const extra = name === 'setPivotAnchor' ? attempt(() => ws.getPivotLayout(ctx.pivot)) : null;
+        const [obj, method] = target(ws, ctx, name);
+        const result = attempt(() => obj[method](...args));
+        const extra = name === 'Pivot.setAnchor' ? attempt(() => ws.pivot(ctx.pivot).getLayout()) : null;
         return { result, before, after: [snapshot(ws), extra] };
       });
     const rectRun = await run(false);
@@ -708,9 +722,11 @@ test('criterion 6: no public name keeps a get...Count or get...At form except th
       for (const n of Object.getOwnPropertyNames(proto)) names.add(n);
     }
     for (const n of Object.keys(f)) names.add(n);
-    const offenders = [...names].filter((n) => /^get.*(Count|At)$/.test(n) && n !== 'getPivotCacheRecordCount');
+    const handleProtos = [wb.addPivotCache()].map((h) => Object.getPrototypeOf(h));
+    for (const proto of handleProtos) for (const n of Object.getOwnPropertyNames(proto)) names.add(n);
+    const offenders = [...names].filter((n) => /^get.*(Count|At)$/.test(n) && n !== 'getRecordCount');
     assert.deepEqual(offenders, []);
-    assert.equal(typeof wb.getPivotCacheRecordCount, 'function');
+    assert.equal(typeof wb.addPivotCache().getRecordCount, 'function');
   });
 });
 
@@ -744,23 +760,29 @@ test('criterion 6: listPivots, listPivotFieldItems and the pivot cache lists des
   await withWorkbook((wb, f) => {
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    assert.deepEqual(plain(ws.listPivots()), [{ name: 'Pivot1', cacheId }]);
     assert.deepEqual(
-      wb.listPivotCacheFields(cacheId).map((x) => x.name),
+      ws.listPivots().map((p) => plain(p.getProperties())),
+      [{ name: 'Pivot1', cacheId }],
+    );
+    assert.deepEqual(
+      wb
+        .pivotCache(cacheId)
+        .listFields()
+        .map((x) => x.name),
       ['Region', 'Amount'],
     );
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, 'East');
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, 45292, { date: true });
-    const shared = wb.listPivotCacheFieldSharedItems(cacheId, 0);
+    wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
+    wb.pivotCache(cacheId).addFieldSharedItem(0, 45292, { date: true });
+    const shared = wb.pivotCache(cacheId).listFieldSharedItems(0);
     assert.equal(shared.length, 2);
     assert.deepEqual(plain(shared[0]), { value: { kind: f.ValueKind.Text, text: 'East' }, isDate: false });
     assert.equal(shared[1].isDate, true);
-    assert.deepEqual(plain(ws.listPivotFieldItems(pivot, 0)), []);
-    expectCode(() => ws.getPivotFieldItem(pivot, 0, 0), f.StatusCode.IndexOutOfRange);
-    ws.addPivotFieldItem(pivot, 0, 'East');
-    const items = ws.listPivotFieldItems(pivot, 0);
+    assert.deepEqual(plain(ws.pivot(pivot).listFieldItems(0)), []);
+    expectCode(() => ws.pivot(pivot).getFieldItem(0, 0), f.StatusCode.IndexOutOfRange);
+    ws.pivot(pivot).addFieldItem(0, 'East');
+    const items = ws.pivot(pivot).listFieldItems(0);
     assert.equal(items.length, 1);
-    assert.deepEqual(plain(ws.getPivotFieldItem(pivot, 0, 0)), plain(items[0]));
+    assert.deepEqual(plain(ws.pivot(pivot).getFieldItem(0, 0)), plain(items[0]));
   });
 });
 
@@ -871,9 +893,9 @@ function chartWorkbook(wb, f) {
 test('criterion 7: setChartLegend keeps the keys it omits', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
-    ws.setChartLegend(id, { position: f.ChartLegendPosition.Bottom, overlay: true, hiddenSeries: [1] });
-    ws.setChartLegend(id, { position: f.ChartLegendPosition.Right });
-    const legend = plain(ws.getChart(id).legend);
+    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Bottom, overlay: true, hiddenSeries: [1] });
+    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Right });
+    const legend = plain(ws.chart(id).getProperties().legend);
     assert.deepEqual(legend, { position: f.ChartLegendPosition.Right, overlay: true, hiddenSeries: [1] });
   });
 });
@@ -881,17 +903,17 @@ test('criterion 7: setChartLegend keeps the keys it omits', async () => {
 test('criterion 7: setChartLegend with null removes the legend; a patch on no legend creates one', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
-    ws.setChartLegend(id, null);
-    assert.equal(ws.getChart(id).legend, null);
-    ws.setChartLegend(id, { overlay: true });
-    assert.deepEqual(plain(ws.getChart(id).legend), {
+    ws.chart(id).setLegend(null);
+    assert.equal(ws.chart(id).getProperties().legend, null);
+    ws.chart(id).setLegend({ overlay: true });
+    assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
       position: f.ChartLegendPosition.Right,
       overlay: true,
       hiddenSeries: [],
     });
-    ws.setChartLegend(id, null);
-    ws.setChartLegend(id, {});
-    assert.deepEqual(plain(ws.getChart(id).legend), {
+    ws.chart(id).setLegend(null);
+    ws.chart(id).setLegend({});
+    assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
       position: f.ChartLegendPosition.Right,
       overlay: false,
       hiddenSeries: [],
@@ -902,8 +924,8 @@ test('criterion 7: setChartLegend with null removes the legend; a patch on no le
 test('criterion 7: setChartLegend rejects null for keys that cannot be cleared', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
-    assert.throws(() => ws.setChartLegend(id, { position: null }), TYPE_ERROR);
-    assert.throws(() => ws.setChartLegend(id, { hiddenSeries: null }), TYPE_ERROR);
+    assert.throws(() => ws.chart(id).setLegend({ position: null }), TYPE_ERROR);
+    assert.throws(() => ws.chart(id).setLegend({ hiddenSeries: null }), TYPE_ERROR);
   });
 });
 
@@ -936,16 +958,16 @@ test('criterion 7: updatePivotField clears customName with null and ignores reco
   await withWorkbook((wb, f) => {
     const { pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    ws.updatePivotField(pivot, 0, { customName: 'Area' });
-    assert.equal(ws.listPivotFields(pivot)[0].customName, 'Area');
-    ws.updatePivotField(pivot, 0, { showAll: true });
-    assert.equal(ws.listPivotFields(pivot)[0].customName, 'Area');
-    ws.updatePivotField(pivot, 0, { customName: null });
-    assert.equal(ws.listPivotFields(pivot)[0].customName, null);
+    ws.pivot(pivot).updateField(0, { customName: 'Area' });
+    assert.equal(ws.pivot(pivot).listFields()[0].customName, 'Area');
+    ws.pivot(pivot).updateField(0, { showAll: true });
+    assert.equal(ws.pivot(pivot).listFields()[0].customName, 'Area');
+    ws.pivot(pivot).updateField(0, { customName: null });
+    assert.equal(ws.pivot(pivot).listFields()[0].customName, null);
     // `axis` is a field of the getter's record the patch cannot set: ignored, not applied.
-    const axis = ws.listPivotFields(pivot)[0].axis;
-    ws.updatePivotField(pivot, 0, { axis: axis === f.PivotAxis.Row ? f.PivotAxis.Column : f.PivotAxis.Row });
-    assert.equal(ws.listPivotFields(pivot)[0].axis, axis);
+    const axis = ws.pivot(pivot).listFields()[0].axis;
+    ws.pivot(pivot).updateField(0, { axis: axis === f.PivotAxis.Row ? f.PivotAxis.Column : f.PivotAxis.Row });
+    assert.equal(ws.pivot(pivot).listFields()[0].axis, axis);
   });
 });
 
@@ -954,9 +976,10 @@ test('criterion 7: every patch setter rejects a key that is neither in its patch
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
     const bogus = { bogus: 1 };
+    const chart = ws.addChart({ kind: f.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
     const calls = {
       setIterative: () => wb.setIterative(bogus),
-      setPivotCacheOptions: () => wb.setPivotCacheOptions(cacheId, bogus),
+      setPivotCacheOptions: () => wb.pivotCache(cacheId).setOptions(bogus),
       setTableStyleDefaults: () => wb.setTableStyleDefaults(bogus),
       setPageSetup: () => ws.setPageSetup(bogus),
       setPageMargins: () => ws.setPageMargins(bogus),
@@ -964,12 +987,12 @@ test('criterion 7: every patch setter rejects a key that is neither in its patch
       setHeaderFooter: () => ws.setHeaderFooter(bogus),
       setFormatDefaults: () => ws.setFormatDefaults(bogus),
       setView: () => ws.setView(bogus),
-      setPivotGrandTotals: () => ws.setPivotGrandTotals(pivot, bogus),
-      setPivotStyleInfo: () => ws.setPivotStyleInfo(pivot, bogus),
-      setPivotOptions: () => ws.setPivotOptions(pivot, bogus),
-      updatePivotField: () => ws.updatePivotField(pivot, 0, bogus),
-      updatePivotItem: () => ws.updatePivotItem(pivot, 0, 0, bogus),
-      setChartLegend: () => ws.setChartLegend(1, bogus),
+      setPivotGrandTotals: () => ws.pivot(pivot).setGrandTotals(bogus),
+      setPivotStyleInfo: () => ws.pivot(pivot).setStyleInfo(bogus),
+      setPivotOptions: () => ws.pivot(pivot).setOptions(bogus),
+      updatePivotField: () => ws.pivot(pivot).updateField(0, bogus),
+      updatePivotItem: () => ws.pivot(pivot).updateItem(0, 0, bogus),
+      setChartLegend: () => chart.setLegend(bogus),
       updateThreadedComment: () => ws.updateThreadedComment('{00000000-0000-4000-8000-000000000001}', bogus),
     };
     for (const [name, call] of Object.entries(calls)) {
@@ -978,9 +1001,9 @@ test('criterion 7: every patch setter rejects a key that is neither in its patch
     // An `undefined` value is an omitted key; a getter record passes back whole.
     ws.setPageMargins({ bogus: undefined, left: 1 });
     assert.equal(ws.getPageMargins().left, 1);
-    const fieldBefore = ws.listPivotFields(pivot)[0];
-    ws.updatePivotField(pivot, 0, fieldBefore);
-    assert.deepEqual(ws.listPivotFields(pivot)[0], fieldBefore);
+    const fieldBefore = ws.pivot(pivot).listFields()[0];
+    ws.pivot(pivot).updateField(0, fieldBefore);
+    assert.deepEqual(ws.pivot(pivot).listFields()[0], fieldBefore);
   });
 });
 
@@ -988,14 +1011,14 @@ test('criterion 7: updatePivotItem changes the keys given and the per-field sett
   await withWorkbook((wb, f) => {
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, 'East');
-    ws.addPivotFieldItem(pivot, 0, 'East');
-    ws.updatePivotItem(pivot, 0, 0, { caption: 'Eastern', visible: false });
-    const item = ws.getPivotFieldItem(pivot, 0, 0);
+    wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
+    ws.pivot(pivot).addFieldItem(0, 'East');
+    ws.pivot(pivot).updateItem(0, 0, { caption: 'Eastern', visible: false });
+    const item = ws.pivot(pivot).getFieldItem(0, 0);
     assert.equal(item.caption, 'Eastern');
     assert.equal(item.visible, false);
-    ws.updatePivotItem(pivot, 0, 0, { caption: null });
-    assert.equal(ws.getPivotFieldItem(pivot, 0, 0).caption, null);
+    ws.pivot(pivot).updateItem(0, 0, { caption: null });
+    assert.equal(ws.pivot(pivot).getFieldItem(0, 0).caption, null);
     for (const name of [
       'setPivotFieldCustomName',
       'setPivotFieldNumberFormat',
@@ -1087,14 +1110,14 @@ test('criterion 8: removeCfRule takes an id; adding a duplicate id is InvalidArg
 
 test('criterion 8: removePivot resolves a name and takes the first of two equal names', async () => {
   await withWorkbook((wb, f) => {
-    const { cacheId } = pivotWorkbook(wb, f);
+    const { cache } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    const second = ws.addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 10 });
-    assert.equal(second, 1);
+    const second = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 10 });
+    assert.equal(second.index, 1);
     ws.removePivot('Pivot1');
     const left = ws.listPivots();
     assert.equal(left.length, 1);
-    assert.equal(ws.getPivotLayout(0).rect.firstCol, 10);
+    assert.equal(ws.pivot(0).getLayout().rect.firstCol, 10);
     expectCode(() => ws.removePivot('Nope'), f.StatusCode.NotFound);
   });
 });
@@ -1158,26 +1181,27 @@ test('criterion 9: Formulon exposes no stateless function under the retired erro
 
 test('criterion 10: two dispatching writers replace the twelve typed ones', async () => {
   await withWorkbook((wb) => {
+    const cache = wb.addPivotCache();
     for (const kind of ['Text', 'Number', 'Date', 'Bool', 'Blank', 'Error']) {
-      assert.equal(`addPivotCacheFieldSharedItem${kind}` in wb, false, kind);
-      assert.equal(`setPivotCacheRecord${kind}` in wb, false, kind);
+      assert.equal(`addFieldSharedItem${kind}` in cache, false, kind);
+      assert.equal(`setRecord${kind}` in cache, false, kind);
     }
-    assert.equal(typeof wb.addPivotCacheFieldSharedItem, 'function');
-    assert.equal(typeof wb.setPivotCacheRecordValue, 'function');
+    assert.equal(typeof cache.addFieldSharedItem, 'function');
+    assert.equal(typeof cache.setRecordValue, 'function');
   });
 });
 
 test('criterion 10: addPivotCacheFieldSharedItem dispatches on the value type and date needs a number', async () => {
   await withWorkbook((wb, f) => {
-    const cacheId = wb.addPivotCache();
-    wb.addPivotCacheField(cacheId, 'Mixed');
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, 5, { date: true });
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, 5);
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, 'x');
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, true);
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, null);
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, { kind: f.ValueKind.Error, errorCode: f.ErrorCode.NA });
-    const items = wb.listPivotCacheFieldSharedItems(cacheId, 0);
+    const cache = wb.addPivotCache();
+    cache.addField('Mixed');
+    cache.addFieldSharedItem(0, 5, { date: true });
+    cache.addFieldSharedItem(0, 5);
+    cache.addFieldSharedItem(0, 'x');
+    cache.addFieldSharedItem(0, true);
+    cache.addFieldSharedItem(0, null);
+    cache.addFieldSharedItem(0, { kind: f.ValueKind.Error, errorCode: f.ErrorCode.NA });
+    const items = cache.listFieldSharedItems(0);
     assert.deepEqual(
       items.map((i) => [i.value.kind, i.isDate]),
       [
@@ -1189,21 +1213,21 @@ test('criterion 10: addPivotCacheFieldSharedItem dispatches on the value type an
         [f.ValueKind.Error, false],
       ],
     );
-    assert.throws(() => wb.addPivotCacheFieldSharedItem(cacheId, 0, 'x', { date: true }), TYPE_ERROR);
-    assert.equal(wb.listPivotCacheFieldSharedItems(cacheId, 0).length, 6);
+    assert.throws(() => cache.addFieldSharedItem(0, 'x', { date: true }), TYPE_ERROR);
+    assert.equal(cache.listFieldSharedItems(0).length, 6);
   });
 });
 
 test('criterion 10: setPivotCacheRecordValue dispatches on the value type', async () => {
   await withWorkbook((wb, f) => {
-    const cacheId = wb.addPivotCache();
-    wb.addPivotCacheField(cacheId, 'A');
-    const rec = wb.addPivotCacheRecord(cacheId);
-    wb.setPivotCacheRecordValue(cacheId, rec, 0, 'West');
-    wb.setPivotCacheRecordValue(cacheId, rec, 0, 7);
-    wb.setPivotCacheRecordValue(cacheId, rec, 0, 45300, { date: true });
-    assert.throws(() => wb.setPivotCacheRecordValue(cacheId, rec, 0, true, { date: true }), TYPE_ERROR);
-    assert.equal(wb.getPivotCacheRecordCount(cacheId), 1);
+    const cache = wb.addPivotCache();
+    cache.addField('A');
+    const rec = cache.addRecord();
+    cache.setRecordValue(rec, 0, 'West');
+    cache.setRecordValue(rec, 0, 7);
+    cache.setRecordValue(rec, 0, 45300, { date: true });
+    assert.throws(() => cache.setRecordValue(rec, 0, true, { date: true }), TYPE_ERROR);
+    assert.equal(cache.getRecordCount(), 1);
     void f;
   });
 });
@@ -1214,8 +1238,8 @@ test('criterion 12: removing or reading a missing drawing object, chart or merge
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const missing = 987654;
-    expectCode(() => ws.removeDrawingObject(missing), f.StatusCode.NotFound);
-    expectCode(() => ws.getChartData(missing), f.StatusCode.NotFound);
+    expectCode(() => ws.removeDrawing(missing), f.StatusCode.NotFound);
+    expectCode(() => ws.chart(missing).getData(), f.StatusCode.NotFound);
     expectCode(() => ws.removeMerge(rect(0, 0, 1, 1)), f.StatusCode.NotFound);
     expectCode(() => ws.removeDataTable(0, 0), f.StatusCode.NotFound);
     assert.deepEqual(ws.getMergesInRange(rect(0, 0, 9, 9)), []);
@@ -1283,11 +1307,11 @@ test('criterion 13: theme script fonts are read by a key record and written by a
 test('criterion 13: setChartType defaults the grouping to Clustered', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
-    ws.setChartType(id, 0, f.ChartInsertKind.Line);
-    const explicit = plain(ws.getChart(id));
-    ws.setChartType(id, 0, f.ChartInsertKind.Column, f.ChartGrouping.Stacked);
-    ws.setChartType(id, 0, f.ChartInsertKind.Line, f.ChartGrouping.Clustered);
-    assert.deepEqual(plain(ws.getChart(id)), explicit);
+    ws.chart(id).setType(0, f.ChartInsertKind.Line);
+    const explicit = plain(ws.chart(id).getProperties());
+    ws.chart(id).setType(0, f.ChartInsertKind.Column, f.ChartGrouping.Stacked);
+    ws.chart(id).setType(0, f.ChartInsertKind.Line, f.ChartGrouping.Clustered);
+    assert.deepEqual(plain(ws.chart(id).getProperties()), explicit);
   });
 });
 
@@ -1295,14 +1319,14 @@ test('criterion 13: setPivotFieldSort and addPivotFieldItem take an options obje
   await withWorkbook((wb, f) => {
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    wb.addPivotCacheFieldSharedItem(cacheId, 0, 'East');
-    ws.addPivotFieldItem(pivot, 0, 'East', { visible: false });
-    assert.equal(ws.getPivotFieldItem(pivot, 0, 0).visible, false);
-    ws.addPivotFieldItem(pivot, 0, 'West');
-    assert.equal(ws.getPivotFieldItem(pivot, 0, 1).visible, true);
-    ws.setPivotFieldSort(pivot, 0, f.PivotSortOrder.Ascending);
-    ws.setPivotFieldSort(pivot, 0, f.PivotSortOrder.Descending, { byField: 'Sum of Amount' });
-    assert.equal(ws.listPivotFields(pivot)[0].sortByField, 'Sum of Amount');
+    wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
+    ws.pivot(pivot).addFieldItem(0, 'East', { visible: false });
+    assert.equal(ws.pivot(pivot).getFieldItem(0, 0).visible, false);
+    ws.pivot(pivot).addFieldItem(0, 'West');
+    assert.equal(ws.pivot(pivot).getFieldItem(0, 1).visible, true);
+    ws.pivot(pivot).setFieldSort(0, f.PivotSortOrder.Ascending);
+    ws.pivot(pivot).setFieldSort(0, f.PivotSortOrder.Descending, { byField: 'Sum of Amount' });
+    assert.equal(ws.pivot(pivot).listFields()[0].sortByField, 'Sum of Amount');
   });
 });
 

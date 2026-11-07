@@ -152,6 +152,7 @@ class StructLayoutTests(unittest.TestCase):
         "ITERATIVE_SETTINGS_PATCH": 16,
         "DEFINED_NAME_INPUT": 20,
         "DEFINED_NAME": 20,
+        "THREADED_COMMENT_PATCH": 20,
     }
 
     def test_struct_sizes(self) -> None:

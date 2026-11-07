@@ -185,7 +185,7 @@ test('an argument the binding cannot represent throws TypeError and changes noth
         'remapRangeStyle mismatched lengths',
         () => wb.sheet(0).remapRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
       ],
-      ['probeImage({})', () => mod.getImageInfo({})],
+      ['getImageInfo({})', () => mod.getImageInfo({})],
     ]) {
       assert.throws(call, TypeError, label);
     }

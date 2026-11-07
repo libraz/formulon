@@ -155,6 +155,19 @@ std::string JsWorkbook::pivotName(uint32_t sheet, uint32_t pivotIndex) const {
   return string_from_cstr(name);
 }
 
+uint32_t JsWorkbook::pivotRuntimeId(uint32_t sheet, uint32_t pivotIndex) const {
+  uint32_t out = 0;
+  succeeded(handle_ != nullptr ? fm_sheet_get_pivot_runtime_id(handle_, sheet, pivotIndex, &out)
+                               : kBindingInvalidHandle);
+  return out;
+}
+
+uint32_t JsWorkbook::resolvePivotRuntimeId(uint32_t sheet, uint32_t id) const {
+  std::size_t out = 0;
+  succeeded(handle_ != nullptr ? fm_sheet_resolve_pivot_runtime_id(handle_, sheet, id, &out) : kBindingInvalidHandle);
+  return static_cast<uint32_t>(out);
+}
+
 emscripten::val JsWorkbook::pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIndex) const {
   int32_t rows = 0;
   int32_t cols = 0;

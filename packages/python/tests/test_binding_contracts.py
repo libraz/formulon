@@ -28,7 +28,7 @@ from formulon import (
     CalcMode,
     CellRect,
     CellStyle,
-    CellXf,
+    CellXfInput,
     CfColor,
     Cfvo,
     Comment,
@@ -267,8 +267,8 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
     """Writers whose readers already existed, and vice versa."""
 
     @staticmethod
-    def _xf() -> CellXf:
-        return CellXf(
+    def _xf() -> CellXfInput:
+        return CellXfInput(
             font_index=0,
             fill_index=0,
             border_index=0,
@@ -332,7 +332,7 @@ class StyleSeedingTests(unittest.TestCase):
             fill_index = wb.add_fill(Fill(pattern=1, fg_argb=0xFFFF0000))
             border_index = wb.add_border(Border(left=BorderSide(style=1, color_argb=0xFF000000)))
             xf_index = wb.add_cell_xf(
-                CellXf(
+                CellXfInput(
                     font_index=font_index,
                     fill_index=fill_index,
                     border_index=border_index,
@@ -583,14 +583,14 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 range=SheetRect(0, CellRect(0, 0, 2, 1)), name="Table1", display_name="Table1", columns=["A", "B"]
             )
             self.assertEqual(
-                [t.range for t in wb.list_tables()],
+                [t.get_properties().range for t in wb.list_tables()],
                 [SheetRect(0, CellRect(0, 0, 2, 1))],
             )
             self.assertEqual([t.name for t in wb.list_tables()], ["Table1"])
 
-            wb.update_table(index, rect=CellRect(0, 0, 4, 1))
+            wb.table(index).update(rect=CellRect(0, 0, 4, 1))
             self.assertEqual(
-                [t.range for t in wb.list_tables()],
+                [t.get_properties().range for t in wb.list_tables()],
                 [SheetRect(0, CellRect(0, 0, 4, 1))],
             )
 
@@ -606,17 +606,17 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 columns=["A", "B"],
                 style_name="TableStyleLight9",
             )
-            table = wb.list_tables()[0]
+            table = wb.list_tables()[0].get_properties()
             self.assertEqual(table.style_name, "TableStyleLight9")
             self.assertTrue(table.show_row_stripes)
             self.assertFalse(table.show_first_column)
             self.assertEqual((table.header_row_count, table.totals_row_count), (1, 0))
             self.assertEqual([c.name for c in table.columns], ["A", "B"])
 
-            wb.update_table(index, rect=CellRect(0, 0, 2, 1), show_first_column=True, show_row_stripes=False)
-            wb.update_table(index, rect=CellRect(0, 0, 2, 1), style_name="TableStyleMedium4")
+            wb.table(index).update(rect=CellRect(0, 0, 2, 1), show_first_column=True, show_row_stripes=False)
+            wb.table(index).update(rect=CellRect(0, 0, 2, 1), style_name="TableStyleMedium4")
             with Workbook.load(wb.save()) as reloaded:
-                table = reloaded.list_tables()[0]
+                table = reloaded.list_tables()[0].get_properties()
                 self.assertEqual(table.style_name, "TableStyleMedium4")
                 self.assertTrue(table.show_first_column)
                 self.assertFalse(table.show_row_stripes)
@@ -634,15 +634,15 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 columns=["Product", "Amount"],
                 totals_row=True,
             )
-            wb.set_table_column_totals(index, 0, label="Total")
-            wb.set_table_column_totals(index, 1, function="sum")
+            wb.table(index).set_column_totals(0, label="Total")
+            wb.table(index).set_column_totals(1, function="sum")
             self.assertEqual(wb.sheet(0).get_formula(3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
             self.assertEqual(wb.sheet(0).get_value(3, 1).number, 30.0)
             with self.assertRaises(FormulonError):
-                wb.set_table_column_totals(index, 1, function="median")
+                wb.table(index).set_column_totals(1, function="median")
             with Workbook.load(wb.save()) as reloaded:
-                columns = reloaded.list_tables()[0].columns
+                columns = reloaded.list_tables()[0].get_properties().columns
                 self.assertEqual(columns[0].totals_row_label, "Total")
                 self.assertEqual(columns[1].totals_row_function, "sum")
 
@@ -654,14 +654,14 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 range=SheetRect(0, CellRect(0, 0, 1, 0)), name="Sales", display_name="Sales", columns=["Amount"]
             )
             wb.sheet(0).set_formula(0, 3, "=SUM(Sales[Amount])")
-            wb.update_table(index, rect=CellRect(0, 0, 1, 0), name="Revenue")
+            wb.table(index).update(rect=CellRect(0, 0, 1, 0), name="Revenue")
             self.assertEqual(wb.sheet(0).get_formula(0, 3), "=SUM(Revenue[Amount])")
             self.assertEqual(wb.list_tables()[0].display_name, "Revenue")
             other = wb.add_table(
                 range=SheetRect(0, CellRect(0, 2, 1, 2)), name="Other", display_name="Other", columns=["X"]
             )
             with self.assertRaises(FormulonError):
-                wb.update_table(other, name="revenue")
+                wb.table(other).update(name="revenue")
 
     def test_custom_table_style_round_trips(self) -> None:
         with Workbook.create_default() as wb:
@@ -694,7 +694,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 self.assertEqual(reloaded.list_table_styles(), [style])
                 self.assertEqual(reloaded.get_table_style("corporate"), style)
                 self.assertIsNone(reloaded.get_table_style("Other"))
-                self.assertEqual(reloaded.list_tables()[index].style_name, "Corporate")
+                self.assertEqual(reloaded.list_tables()[index.index].get_properties().style_name, "Corporate")
                 reloaded.set_table_style_defaults(table_style="Corporate")
                 self.assertEqual(reloaded.get_table_style_defaults().table_style, "Corporate")
                 reloaded.remove_table_style("corporate")
@@ -712,11 +712,11 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 columns=["A", "B"],
                 style_name="TableStyleMedium2",
             )
-            wb.update_table(index, rect=CellRect(0, 0, 2, 1))
-            self.assertEqual(wb.list_tables()[0].style_name, "TableStyleMedium2")
+            wb.table(index).update(rect=CellRect(0, 0, 2, 1))
+            self.assertEqual(wb.list_tables()[0].get_properties().style_name, "TableStyleMedium2")
 
-            wb.update_table(index, rect=CellRect(0, 0, 2, 1), style_name="")
-            table = wb.list_tables()[0]
+            wb.table(index).update(rect=CellRect(0, 0, 2, 1), style_name="")
+            table = wb.list_tables()[0].get_properties()
             self.assertIsNone(table.style_name)
             self.assertFalse(table.show_row_stripes)
             data = wb.save()
@@ -725,7 +725,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             self.assertEqual(len(parts), 1)
             self.assertNotIn(b"tableStyleInfo", archive.read(parts[0]))
         with Workbook.load(data) as reloaded:
-            self.assertIsNone(reloaded.list_tables()[0].style_name)
+            self.assertIsNone(reloaded.list_tables()[0].get_properties().style_name)
 
     def test_table_create_rejects_a_column_count_that_does_not_match_ref(self) -> None:
         with Workbook.create_default() as wb:
@@ -759,7 +759,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
 
 class OneShotEvaluationTests(unittest.TestCase):
-    """``eval_formula`` must agree value-for-value with the JS surfaces.
+    """``evaluate_formula`` must agree value-for-value with the JS surfaces.
 
     Both npm packages assert the same table. The anchor-referencing cases
     are the ones that diverge if a surface writes the formula into A1 and
@@ -779,7 +779,7 @@ class OneShotEvaluationTests(unittest.TestCase):
     def test_values_match_the_shared_one_shot_table(self) -> None:
         for formula, kind, payload in self.CASES:
             with self.subTest(formula=formula):
-                value = formulon.eval_formula(formula)
+                value = formulon.evaluate_formula(formula)
                 self.assertEqual(value.kind, kind)
                 if kind is ValueKind.BOOL:
                     self.assertEqual(value.boolean, payload)
@@ -791,18 +791,18 @@ class OneShotEvaluationTests(unittest.TestCase):
 
     def test_the_anchor_is_left_blank_rather_than_written(self) -> None:
         """The distinguishing observation between the two semantics."""
-        self.assertEqual(formulon.eval_formula("=ISBLANK(A1)").boolean, True)
+        self.assertEqual(formulon.evaluate_formula("=ISBLANK(A1)").boolean, True)
 
     def test_array_results_reduce_to_their_top_left_element(self) -> None:
-        self.assertEqual(formulon.eval_formula("=SEQUENCE(3)").number, 1.0)
-        self.assertEqual(formulon.eval_formula("=SEQUENCE(2,3)").number, 1.0)
+        self.assertEqual(formulon.evaluate_formula("=SEQUENCE(3)").number, 1.0)
+        self.assertEqual(formulon.evaluate_formula("=SEQUENCE(2,3)").number, 1.0)
 
     def test_one_shot_reads_one_cell_whatever_the_result_size(self) -> None:
         real = _c.LIB.fm_value_array_get_value_at
         for formula, expected in (("=1+2", 3.0), ("=SEQUENCE(1000)", 1.0), ("=SEQUENCE(100,100,7)", 7.0)):
             with self.subTest(formula=formula):
                 with mock.patch.object(_c.LIB, "fm_value_array_get_value_at", wraps=real, create=True) as cell:
-                    value = formulon.eval_formula(formula)
+                    value = formulon.evaluate_formula(formula)
                 self.assertEqual(cell.call_count, 1)
                 self.assertEqual((value.kind, value.number), (ValueKind.NUMBER, expected))
 
@@ -818,22 +818,21 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     @staticmethod
     def _workbook_with_pivot():
         wb = Workbook.create_default()
-        cache_id = wb.add_pivot_cache()
+        cache_id = wb.add_pivot_cache().cache_id
         # A cache with no declared source cannot be saved: Excel offers to
         # repair any package containing one, so the writer refuses instead.
-        wb.set_pivot_cache_worksheet_source(cache_id, PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
-        wb.add_pivot_cache_field(cache_id, "Region")
-        wb.add_pivot_cache_field(cache_id, "Amount")
+        wb.pivot_cache(cache_id).set_worksheet_source(PivotWorksheetSource(ref="A1:B3", sheet="Sheet1"))
+        wb.pivot_cache(cache_id).add_field("Region")
+        wb.pivot_cache(cache_id).add_field("Amount")
         for region, amount in (("East", 10.0), ("West", 30.0)):
-            rec = wb.add_pivot_cache_record(cache_id)
-            wb.set_pivot_cache_record_value(cache_id, rec, 0, region)
-            wb.set_pivot_cache_record_value(cache_id, rec, 1, amount)
+            rec = wb.pivot_cache(cache_id).add_record()
+            wb.pivot_cache(cache_id).set_record_value(rec, 0, region)
+            wb.pivot_cache(cache_id).set_record_value(rec, 1, amount)
         pivot = wb.sheet(0).add_pivot(name="Pivot1", cache_id=cache_id, anchor_row=0, anchor_col=4)
-        wb.sheet(0).add_pivot_field(pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
-        amount_field = wb.sheet(0).add_pivot_field(pivot, PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
-        wb.sheet(0).add_pivot_data_field(
-            pivot,
-            PivotDataFieldInput(name="Sum of Amount", field_index=amount_field, aggregation=PivotAggregation.SUM),
+        wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
+        amount_field = wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+        wb.sheet(0).pivot(pivot).add_data_field(
+            PivotDataFieldInput(name="Sum of Amount", field_index=amount_field, aggregation=PivotAggregation.SUM)
         )
         return wb, pivot
 
@@ -850,9 +849,9 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     def test_added_filter_reads_back_field_for_field(self) -> None:
         wb, pivot = self._workbook_with_pivot()
         try:
-            wb.sheet(0).add_pivot_filter(pivot, self._filter())
-            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 1)
-            got = wb.sheet(0).list_pivot_filters(pivot)[0]
+            wb.sheet(0).pivot(pivot).add_filter(self._filter())
+            self.assertEqual(len(wb.sheet(0).pivot(pivot).list_filters()), 1)
+            got = wb.sheet(0).pivot(pivot).list_filters()[0]
         finally:
             wb.close()
         self.assertEqual(got.axis, PivotAxis.ROW)
@@ -864,9 +863,9 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     def test_count_reports_the_filters_on_the_pivot(self) -> None:
         wb, pivot = self._workbook_with_pivot()
         try:
-            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 0)
-            wb.sheet(0).add_pivot_filter(pivot, self._filter())
-            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 1)
+            self.assertEqual(len(wb.sheet(0).pivot(pivot).list_filters()), 0)
+            wb.sheet(0).pivot(pivot).add_filter(self._filter())
+            self.assertEqual(len(wb.sheet(0).pivot(pivot).list_filters()), 1)
         finally:
             wb.close()
 
@@ -874,15 +873,15 @@ class PivotFilterPersistenceTests(unittest.TestCase):
         """The list is written by save() and decodes back on load."""
         wb, pivot = self._workbook_with_pivot()
         try:
-            wb.sheet(0).add_pivot_filter(pivot, self._filter())
-            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 1)
+            wb.sheet(0).pivot(pivot).add_filter(self._filter())
+            self.assertEqual(len(wb.sheet(0).pivot(pivot).list_filters()), 1)
             data = wb.save()
         finally:
             wb.close()
         with Workbook.load(data) as reloaded:
             self.assertEqual(len(reloaded.sheet(0).list_pivots()), 1)
-            self.assertEqual(len(reloaded.sheet(0).list_pivot_filters(0)), 1)
-            got = reloaded.sheet(0).list_pivot_filters(0)[0]
+            self.assertEqual(len(reloaded.sheet(0).pivot(0).list_filters()), 1)
+            got = reloaded.sheet(0).pivot(0).list_filters()[0]
             self.assertEqual((got.field_name, got.type), ("Region", PivotFilterType.VALUE_GREATER_THAN))
             self.assertEqual((got.value_kind, got.value_double), (PivotFilterValueKind.DOUBLE, 15.0))
 
@@ -890,7 +889,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
         wb, pivot = self._workbook_with_pivot()
         try:
             with self.assertRaises(IndexError):
-                wb.sheet(0).list_pivot_filters(pivot)[99]
+                wb.sheet(0).pivot(pivot).list_filters()[99]
         finally:
             wb.close()
 
@@ -901,26 +900,26 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def test_definition_survives_save_and_load(self) -> None:
         wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
-            wb.sheet(0).set_pivot_grand_totals(pivot, rows=True, columns=False)
-            cache_id = wb.sheet(0).get_pivot_cache_id(pivot)
+            wb.sheet(0).pivot(pivot).set_grand_totals(rows=True, columns=False)
+            cache_id = wb.sheet(0).pivot(pivot).get_cache().cache_id
             data = wb.save()
         finally:
             wb.close()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.sheet(0).get_pivot_cache_id(0), cache_id)
-            self.assertEqual(reloaded.sheet(0).get_pivot_name(0), "Pivot1")
-            self.assertEqual(reloaded.sheet(0).get_pivot_grand_totals(0), PivotGrandTotals(rows=True, columns=False))
-            self.assertEqual(reloaded.sheet(0).get_pivot_row_field_order(0), [0])
-            self.assertEqual(reloaded.sheet(0).list_pivot_fields(0)[0].axis, PivotAxis.ROW)
-            self.assertEqual(reloaded.sheet(0).list_pivot_data_fields(0)[0].name, "Sum of Amount")
+            self.assertEqual(reloaded.sheet(0).pivot(0).get_cache().cache_id, cache_id)
+            self.assertEqual(reloaded.sheet(0).pivot(0).name, "Pivot1")
+            self.assertEqual(reloaded.sheet(0).pivot(0).get_grand_totals(), PivotGrandTotals(rows=True, columns=False))
+            self.assertEqual(reloaded.sheet(0).pivot(0).get_row_field_order(), [0])
+            self.assertEqual(reloaded.sheet(0).pivot(0).list_fields()[0].axis, PivotAxis.ROW)
+            self.assertEqual(reloaded.sheet(0).pivot(0).list_data_fields()[0].name, "Sum of Amount")
 
     def test_out_of_range_index_is_rejected(self) -> None:
         wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
             with self.assertRaises(IndexError):
-                wb.sheet(0).list_pivot_fields(pivot)[99]
+                wb.sheet(0).pivot(pivot).list_fields()[99]
             with self.assertRaises(IndexError):
-                wb.sheet(0).list_pivot_data_fields(pivot)[99]
+                wb.sheet(0).pivot(pivot).list_data_fields()[99]
         finally:
             wb.close()
 
@@ -939,7 +938,7 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
             data = wb.save()
         with Workbook.load(data) as reloaded:
             self.assertEqual(reloaded.get_active_sheet().index, 2)
-            reloaded.move_sheet(2, 0)
+            reloaded.sheet(2).move(0)
             self.assertEqual(reloaded.get_active_sheet().index, 0)
 
     def test_show_phonetic_survives_value_writes_and_a_round_trip(self) -> None:
@@ -1323,12 +1322,13 @@ class ArgumentScopeTests(unittest.TestCase):
         runs = [PhoneticRun(i, i + 1, "\u30a2") for i in range(200)] + [PhoneticRun(-1, 1, "\u30a4")]
         ranges = [CellRect(0, 0, 0, 0)] * 200 + [CellRect(-1, 0, 0, 0)]
         bad_spec = PivotDataFieldInput(name="Sum", field_index=-1)
-        with Workbook.create_default() as wb:
+        wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
+        with wb:
             for name, call in (
                 ("set_cell_phonetic_runs", lambda: wb.sheet(0).set_cell_phonetic_runs(0, 0, runs)),
                 ("set_selection", lambda: wb.sheet(0).set_selection(SheetSelection(0, 0, list(ranges)))),
-                ("add_pivot_data_field", lambda: wb.sheet(0).add_pivot_data_field(0, bad_spec)),
-                ("set_pivot_data_field", lambda: wb.sheet(0).set_pivot_data_field(0, 0, bad_spec)),
+                ("add_pivot_data_field", lambda: wb.sheet(0).pivot(pivot).add_data_field(bad_spec)),
+                ("set_pivot_data_field", lambda: wb.sheet(0).pivot(pivot).set_data_field(0, bad_spec)),
             ):
                 with self.subTest(method=name):
                     self.assertGreater(self._assert_rejected_without_leak(call), 0)
@@ -1366,7 +1366,7 @@ class LoneSurrogateTests(unittest.TestCase):
             wb.sheet(0).set_text(0, 0, "a\ud800b")
             # A surrogate pair is one code point, not two replacements.
             wb.sheet(0).set_text(2, 0, "\ud83d\ude00")
-            wb.rename_sheet(0, "S\udc00")
+            wb.sheet(0).rename("S\udc00")
             wb.sheet(0).set_formula(1, 0, '="x\ud800"')
             wb.set_defined_name(DefinedNameInput("Lone", '="y\udfff"'))
             self._assert_normalised(wb)
@@ -1424,11 +1424,12 @@ class PackedIntegerGuardTests(unittest.TestCase):
             self.assertEqual(wb.sheet(0).list_shapes(), [])
 
     def test_pivot_field_order_indices(self) -> None:
-        with Workbook.create_default() as wb:
+        wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
+        with wb:
             for indices in ([1.7], [-1], ["1"]):
                 with self.subTest(indices=indices):
                     with self.assertRaises((TypeError, ValueError)):
-                        wb.sheet(0).set_pivot_row_field_order(0, indices)
+                        wb.sheet(0).pivot(pivot).set_row_field_order(indices)
 
     def test_data_bar_length_percentages(self) -> None:
         with Workbook.create_default() as wb:

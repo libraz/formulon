@@ -1,7 +1,7 @@
 //
 // Stable C ABI tests for the print-authoring surface: raw print-settings
-// XML, the `fitToPage` helper, print area / titles, manual page breaks and
-// the typed patch setters.
+// XML, `fitToPage`, print area / titles, manual page breaks and the typed
+// patch setters with their read-back getters.
 //
 // The driver is C++ for gtest convenience; every mutation and observation
 // stays on the pure-C surface. Two properties get repeated attention
@@ -68,6 +68,14 @@ std::string GetSheetPrXml(fm_workbook_t* wb) {
   const char* xml = nullptr;
   EXPECT_EQ(fm_sheet_get_sheet_pr_xml(wb, 0, &xml), 0);
   return xml == nullptr ? std::string() : std::string(xml);
+}
+
+// `fitToPage` alone, through the page-setup patch.
+fm_status_t SetFitToPage(fm_workbook_t* wb, std::size_t sheet_index, int32_t enabled) {
+  fm_page_setup_t patch{};
+  patch.fit_to_page_engaged = 1;
+  patch.fit_to_page = enabled;
+  return fm_sheet_set_page_setup(wb, sheet_index, &patch);
 }
 
 }  // namespace
@@ -185,7 +193,7 @@ TEST(FormulonCApiPrintSettings, FitToPagePreservesOtherSheetPrContent) {
   ASSERT_EQ(
       fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr codeName=\"Sheet1\"><tabColor rgb=\"FFFF0000\"/></sheetPr>"),
       0);
-  ASSERT_EQ(fm_sheet_set_fit_to_page(wb.handle, 0, 1), 0);
+  ASSERT_EQ(SetFitToPage(wb.handle, 0, 1), 0);
 
   const std::string xml = GetSheetPrXml(wb.handle);
   // A VBA binding and a tab colour are not print settings, and toggling
@@ -206,7 +214,7 @@ TEST(FormulonCApiPrintSettings, ClearingFitToPageKeepsTheElements) {
   ASSERT_EQ(
       fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr><pageSetUpPr fitToPage=\"1\" autoPageBreaks=\"0\"/></sheetPr>"),
       0);
-  ASSERT_EQ(fm_sheet_set_fit_to_page(wb.handle, 0, 0), 0);
+  ASSERT_EQ(SetFitToPage(wb.handle, 0, 0), 0);
 
   const std::string xml = GetSheetPrXml(wb.handle);
   EXPECT_EQ(xml.find("fitToPage"), std::string::npos) << xml;
@@ -221,7 +229,7 @@ TEST(FormulonCApiPrintSettings, ClearingFitToPageKeepsTheElements) {
 TEST(FormulonCApiPrintSettings, FitToPageCreatesSheetPrWhenAbsent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_fit_to_page(wb.handle, 0, 1), 0);
+  ASSERT_EQ(SetFitToPage(wb.handle, 0, 1), 0);
   EXPECT_EQ(GetSheetPrXml(wb.handle), "<sheetPr><pageSetUpPr fitToPage=\"true\"/></sheetPr>");
 }
 
@@ -792,6 +800,99 @@ TEST(FormulonCApiPrintSettings, HeaderFooterNullLeavesSectionAndEmptyClearsIt) {
   EXPECT_STREQ(xml, "<headerFooter><oddHeader>Keep</oddHeader></headerFooter>");
 }
 
+TEST(FormulonCApiPrintSettings, ClearingFitToPageThroughPageSetupDropsTheStatedAttribute) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(SetFitToPage(wb.handle, 0, 1), 0);
+  ASSERT_EQ(SetFitToPage(wb.handle, 0, 0), 0);
+  fm_page_setup_t setup{};
+  ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
+  EXPECT_EQ(setup.fit_to_page, 0);
+  EXPECT_EQ(setup.fit_to_page_engaged, 0);
+  EXPECT_EQ(GetSheetPrXml(wb.handle), "<sheetPr><pageSetUpPr/></sheetPr>");
+}
+
+TEST(FormulonCApiPrintSettings, PrintOptionsGetterReportsStatedAndAbsentAttributes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_print_options_t fresh{};
+  fresh.grid_lines = 7;
+  ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &fresh), 0);
+  EXPECT_EQ(fresh.grid_lines, 0);
+  EXPECT_EQ(fresh.grid_lines_engaged, 0);
+  EXPECT_EQ(fresh.headings_engaged, 0);
+  EXPECT_EQ(fresh.horizontal_centered_engaged, 0);
+  EXPECT_EQ(fresh.vertical_centered_engaged, 0);
+
+  fm_print_options_t patch{};
+  patch.grid_lines_engaged = 1;
+  patch.grid_lines = 1;
+  patch.headings_engaged = 1;
+  patch.headings = 0;
+  ASSERT_EQ(fm_sheet_set_print_options(wb.handle, 0, &patch), 0);
+
+  fm_print_options_t read{};
+  ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &read), 0);
+  EXPECT_EQ(read.grid_lines, 1);
+  EXPECT_EQ(read.grid_lines_engaged, 1);
+  // A stated `false` is distinct from an absent attribute.
+  EXPECT_EQ(read.headings, 0);
+  EXPECT_EQ(read.headings_engaged, 1);
+  EXPECT_EQ(read.horizontal_centered, 0);
+  EXPECT_EQ(read.horizontal_centered_engaged, 0);
+  EXPECT_EQ(read.vertical_centered_engaged, 0);
+
+  ASSERT_EQ(fm_sheet_set_print_options_xml(wb.handle, 0, "<printOptions verticalCentered=\"1\"/>"), 0);
+  ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &read), 0);
+  EXPECT_EQ(read.vertical_centered, 1);
+  EXPECT_EQ(read.vertical_centered_engaged, 1);
+  EXPECT_EQ(read.grid_lines_engaged, 0);
+}
+
+TEST(FormulonCApiPrintSettings, HeaderFooterGetterReadsDecodedSectionsAndNullForAbsentOnes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_header_footer_t fresh{};
+  ASSERT_EQ(fm_sheet_get_header_footer(wb.handle, 0, &fresh), 0);
+  EXPECT_EQ(fresh.odd_header, nullptr);
+  EXPECT_EQ(fresh.first_footer, nullptr);
+  EXPECT_EQ(fresh.different_odd_even, 0);
+  EXPECT_EQ(fresh.different_odd_even_engaged, 0);
+  // CT_HeaderFooter defaults these two to true.
+  EXPECT_EQ(fresh.scale_with_doc, 1);
+  EXPECT_EQ(fresh.scale_with_doc_engaged, 0);
+  EXPECT_EQ(fresh.align_with_margins, 1);
+  EXPECT_EQ(fresh.align_with_margins_engaged, 0);
+
+  fm_header_footer_t patch{};
+  patch.odd_header = "&C\xE5\xB8\xB3\xE7\xA5\xA8";  // "&C帳票"
+  patch.even_footer = "&R&P / &N";
+  patch.different_odd_even_engaged = 1;
+  patch.different_odd_even = 1;
+  patch.scale_with_doc_engaged = 1;
+  patch.scale_with_doc = 0;
+  ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &patch), 0);
+
+  fm_header_footer_t read{};
+  ASSERT_EQ(fm_sheet_get_header_footer(wb.handle, 0, &read), 0);
+  ASSERT_NE(read.odd_header, nullptr);
+  // The text comes back decoded, in the form the setter takes.
+  EXPECT_STREQ(read.odd_header, "&C\xE5\xB8\xB3\xE7\xA5\xA8");
+  ASSERT_NE(read.even_footer, nullptr);
+  EXPECT_STREQ(read.even_footer, "&R&P / &N");
+  EXPECT_EQ(read.odd_footer, nullptr);
+  EXPECT_EQ(read.even_header, nullptr);
+  EXPECT_EQ(read.first_header, nullptr);
+  EXPECT_EQ(read.first_footer, nullptr);
+  EXPECT_EQ(read.different_odd_even, 1);
+  EXPECT_EQ(read.different_odd_even_engaged, 1);
+  EXPECT_EQ(read.scale_with_doc, 0);
+  EXPECT_EQ(read.scale_with_doc_engaged, 1);
+  EXPECT_EQ(read.different_first_engaged, 0);
+  EXPECT_EQ(read.align_with_margins, 1);
+  EXPECT_EQ(read.align_with_margins_engaged, 0);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Pagination linkage                                                         */
 /* -------------------------------------------------------------------------- */
@@ -887,6 +988,8 @@ TEST(FormulonCApiPrintSettings, NullArgumentsReportBindingNullPointer) {
   EXPECT_EQ(fm_sheet_set_page_margins(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_print_options(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_header_footer(wb.handle, 0, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_print_options(wb.handle, 0, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_header_footer(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0, nullptr), kNullPointer);
 }
@@ -897,7 +1000,11 @@ TEST(FormulonCApiPrintSettings, OutOfRangeSheetIndexIsRejectedEverywhere) {
   const char* xml = nullptr;
   EXPECT_EQ(fm_sheet_get_page_setup_xml(wb.handle, 9, &xml), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 9, "<pageSetup/>"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_fit_to_page(wb.handle, 9, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetFitToPage(wb.handle, 9, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  fm_print_options_t options{};
+  EXPECT_EQ(fm_sheet_get_print_options(wb.handle, 9, &options), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  fm_header_footer_t hf{};
+  EXPECT_EQ(fm_sheet_get_header_footer(wb.handle, 9, &hf), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   const fm_cell_rect_t area{0, 0, 1, 1};
   EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 9, &area, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 9, 1, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

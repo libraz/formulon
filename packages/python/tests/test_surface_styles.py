@@ -5,13 +5,18 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
+from _xf_input import input_of
+
 from formulon import (
     Border,
     BorderSide,
+    CellXfInput,
     Color,
     DifferentialFormat,
     Fill,
     Font,
+    HorizontalAlign,
+    VerticalAlign,
     Workbook,
 )
 
@@ -34,15 +39,17 @@ class StyleTests(unittest.TestCase):
             # border must exist before it can be referenced.
             border = wb.add_border(Border(left=BorderSide(style=1, color_argb=0xFF000000)))
 
-            from formulon import CellXf
-
             xf = wb.add_cell_xf(
-                CellXf(
+                CellXfInput(
                     font_index=fi,
                     fill_index=fill,
                     border_index=border,
                     num_fmt_id=nf,
-                    vertical_align=0,
+                    horizontal_align=HorizontalAlign.GENERAL,
+                    has_horizontal_align=False,
+                    vertical_align=VerticalAlign.TOP,
+                    wrap_text=False,
+                    has_wrap_text=False,
                     text_rotation=255,
                     indent=0,
                     relative_indent=-3,
@@ -65,14 +72,28 @@ class StyleTests(unittest.TestCase):
             self.assertIsNone(resolved.horizontal_align)
             self.assertEqual(resolved.vertical_align, 0)
             self.assertIsNone(resolved.wrap_text)
-            self.assertEqual(wb.add_cell_xf(resolved), xf)
+            self.assertEqual(wb.add_cell_xf(input_of(resolved)), xf)
 
-            omitted = wb.add_cell_xf(CellXf(font_index=fi, fill_index=fill, border_index=border, num_fmt_id=nf))
+            omitted = wb.add_cell_xf(
+                CellXfInput(
+                    font_index=fi,
+                    fill_index=fill,
+                    border_index=border,
+                    num_fmt_id=nf,
+                    horizontal_align=HorizontalAlign.GENERAL,
+                    vertical_align=VerticalAlign.BOTTOM,
+                    wrap_text=False,
+                    has_alignment=False,
+                    has_horizontal_align=False,
+                    has_vertical_align=False,
+                    has_wrap_text=False,
+                )
+            )
             got = wb.get_cell_xf(omitted)
             self.assertEqual((got.horizontal_align, got.vertical_align, got.wrap_text), (None, None, None))
 
             stated = wb.add_cell_xf(
-                CellXf(
+                CellXfInput(
                     font_index=fi,
                     fill_index=fill,
                     border_index=border,

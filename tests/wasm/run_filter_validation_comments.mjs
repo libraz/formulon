@@ -525,15 +525,17 @@ export function registerFilterValidationComments(Module, test) {
       assert.deepEqual(reply.mentions, []);
 
       expectFailure(() => wb.removePerson(BOB));
-      wb.updateThreadedComment(0, THREAD, 'Edited', []);
+      wb.updateThreadedComment(0, THREAD, { text: 'Edited', mentions: [] });
       assert.equal(wb.listThreadedComments(0)[0].text, 'Edited');
       assert.deepEqual(wb.listThreadedComments(0)[0].mentions, []);
-      expectFailure(() => wb.updateThreadedComment(0, '{00000000-0000-4000-8000-000000000000}', 'x', []));
+      expectFailure(() => wb.updateThreadedComment(0, '{00000000-0000-4000-8000-000000000000}', { text: 'x' }));
 
-      wb.setThreadResolved(0, THREAD, true);
+      wb.updateThreadedComment(0, THREAD, { done: true });
       assert.equal(wb.listThreadedComments(0)[0].done, true);
-      wb.setThreadResolved(0, THREAD, false);
+      assert.equal(wb.listThreadedComments(0)[0].text, 'Edited');
+      wb.updateThreadedComment(0, THREAD, { done: false });
       assert.equal(wb.listThreadedComments(0)[0].done, false);
+      expectFailure(() => wb.updateThreadedComment(0, REPLY, { done: true }));
 
       wb.removeThreadedComment(0, REPLY);
       assert.equal(wb.listThreadedComments(0).length, 1);

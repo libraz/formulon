@@ -47,13 +47,39 @@ pip install formulon            # Python 3.9+
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
-console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
+const value = formulon.evaluateFormula('=SUM(1,2,3)');
+console.log(formulon.toNative(value)); // 6
 ```
 
 ```python run
 import formulon
 
-print(formulon.eval_formula("=SUM(1,2,3)").to_python())  # 6.0
+print(formulon.evaluate_formula("=SUM(1,2,3)").to_python())  # 6.0
+```
+
+```js run
+import createFormulon from '@libraz/formulon';
+
+const formulon = await createFormulon();
+const wb = formulon.Workbook.createDefault();
+try {
+  const ws = wb.sheet(0);
+  ws.setValue('A1', 0.256);
+  ws.setCellFormat('A1', { numberFormat: '0.0%', font: { bold: true } });
+  console.log(ws.getDisplayText('A1').text); // 25.6%
+} finally {
+  wb.dispose();
+}
+```
+
+```python run
+import formulon
+
+with formulon.Workbook.create_default() as wb:
+    ws = wb.sheet(0)
+    ws["A1"] = 0.256
+    ws.set_cell_format("A1", number_format="0.0%", font={"bold": True})
+    print(ws.get_display_text("A1").text)  # 25.6%
 ```
 
 ```bash

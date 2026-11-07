@@ -240,13 +240,13 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 2, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 5, 0, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
 
-  // Update rewrites the group's modelled fields and keeps its sparklines.
+  // Update without items rewrites the group's modelled fields and keeps its sparklines.
   out.type = FM_SPARKLINE_STACKED;
   out.date_axis = 1;
   const char* date_ref = "Sheet1!A1:D1";
   out.date_axis_ref = date_ref;
   out.high = 1;
-  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &out), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &out, nullptr, 0), 0) << fm_get_last_error_message();
   fm_sparkline_group_t changed{};
   ASSERT_EQ(fm_sheet_get_sparkline_group(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.type, FM_SPARKLINE_STACKED);
@@ -255,10 +255,19 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   EXPECT_STREQ(changed.date_axis_ref, "Sheet1!A1:D1");
   EXPECT_EQ(changed.sparkline_count, 2U);
 
+  // Update with items replaces the sparklines; the group read back and written
+  // unchanged keeps every attribute.
   const fm_sparkline_t replacement[] = {{"Sheet1!B1:B5", "H1"}};
-  ASSERT_EQ(fm_sheet_set_sparkline_group_sparklines(again.handle, 0, 0, replacement, 1), 0);
+  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &changed, replacement, 1), 0)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_sparkline_group(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.sparkline_count, 1U);
+  EXPECT_EQ(changed.type, FM_SPARKLINE_STACKED);
+  EXPECT_EQ(changed.high, 1);
+  EXPECT_STREQ(changed.date_axis_ref, "Sheet1!A1:D1");
+  ASSERT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 0, &sp), 0);
+  EXPECT_STREQ(sp.formula, "Sheet1!B1:B5");
+  EXPECT_STREQ(sp.location, "H1");
 
   ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), 0);
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(again.handle, 0, &count), 0);
@@ -290,11 +299,40 @@ TEST(FormulonCApiSparklines, Validation) {
   size_t count = 5;
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &g), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_sparkline_group_sparklines(wb.handle, 0, 0, good, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &g, nullptr, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &g, good, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, nullptr, good, 1), kBindingNullPointer);
   fm_sparkline_group_t out{};
   EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, nullptr), kBindingNullPointer);
+}
+
+TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}, {"Sheet1!A2:D2", "F2"}};
+  fm_sparkline_group_t g = ColumnGroup();
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_index()), 0)
+      << fm_get_last_error_message();
+
+  fm_sparkline_group_t changed = g;
+  changed.type = FM_SPARKLINE_LINE;
+  // A group cannot hold zero sparklines (CT_Sparklines requires one), so a
+  // zero count is rejected like an invalid item, and neither half lands.
+  const fm_sparkline_t none[] = {{"Sheet1!A1:D1", "F1"}};
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &changed, none, 0), kInvalidArgument);
+  const fm_sparkline_t bad[] = {{"Sheet1!A1:D1", "F1:F2"}};
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &changed, bad, 1), kInvalidArgument);
+  // An invalid group with valid items does not replace the items either.
+  fm_sparkline_group_t invalid = g;
+  invalid.line_weight = -1.0;
+  const fm_sparkline_t one[] = {{"Sheet1!B1:B5", "H1"}};
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &invalid, one, 1), kInvalidArgument);
+
+  fm_sparkline_group_t read{};
+  ASSERT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, &read), 0);
+  EXPECT_EQ(read.type, FM_SPARKLINE_COLUMN);
+  EXPECT_EQ(read.sparkline_count, 2U);
 }
 
 }  // namespace

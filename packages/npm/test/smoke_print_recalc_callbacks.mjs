@@ -198,10 +198,10 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
     wb.addSheet('Ä');
     wb.addSheet('Ö');
     expectFailure(() => wb.addSheet('ä'));
-    expectFailure(() => wb.renameSheet(1, 'ä'));
+    expectFailure(() => wb.sheet(1).rename('ä'));
     assert.equal(wb.sheet(0).name, 'Ä');
     assert.equal(wb.sheet(1).name, 'Ö');
-    wb.renameSheet(0, 'ä');
+    wb.sheet(0).rename('ä');
     assert.equal(wb.sheet(0).name, 'ä');
     assert.equal(wb.sheet(1).name, 'Ö');
   } finally {

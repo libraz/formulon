@@ -108,22 +108,22 @@ export function registerPositional(Module, test, hookProbe) {
       name: 'TypeError',
       message: 'Workbook.createForProfile argument 1 must be a primitive string',
     });
-    assert.throws(() => Module.evalFormula(1), {
+    assert.throws(() => Module.evaluateFormula(1), {
       name: 'TypeError',
-      message: 'evalFormula argument 1 must be a primitive string',
+      message: 'evaluateFormula argument 1 must be a primitive string',
     });
   });
 
   test('WASM string free function is primitive-only', () => {
-    expectTypeError(() => Module.evalFormula(Symbol('formula')));
+    expectTypeError(() => Module.evaluateFormula(Symbol('formula')));
     expectTypeError(() =>
-      Module.evalFormula({
+      Module.evaluateFormula({
         toString() {
           throw new Error('toString');
         },
       }),
     );
-    const result = Module.evalFormula('=1+1');
+    const result = Module.evaluateFormula('=1+1');
     assert.equal(result.number, 2);
   });
 

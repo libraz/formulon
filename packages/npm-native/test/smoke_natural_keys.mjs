@@ -78,10 +78,15 @@ test('shapes and drawing objects are read by object id', async () => {
     widthEmu: 914400,
     heightEmu: 457200,
   });
-  assert.equal(found(wb.sheet(0).getShape(added)).presetGeometry, 'rect');
-  assert.equal(found(wb.sheet(0).getDrawingObject(added)).fromRow, 2);
-  missing(wb.sheet(0).getShape(added + 1));
-  missing(wb.sheet(0).getDrawingObject(added + 1));
+  assert.equal(wb.sheet(0).shape(added).getProperties().presetGeometry, 'rect');
+  assert.equal(wb.sheet(0).drawing(added).getDrawingProperties().fromRow, 2);
+  // An id the sheet does not hold is NotFound, and so is a removed object.
+  const absent = (read) => assert.throws(read, (e) => isFormulonError(e, mod.StatusCode.NotFound));
+  absent(() => wb.sheet(0).shape(added.objectId + 1));
+  absent(() => wb.sheet(0).drawing(added.objectId + 1));
+  wb.sheet(0).removeDrawing(added);
+  absent(() => added.getProperties());
+  absent(() => added.getDrawingProperties());
   release(wb);
 });
 

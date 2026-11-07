@@ -144,10 +144,10 @@ const ONE_SHOT_CASES = [
   { formula: '=SEQUENCE(3)', kind: 1, number: 1 },
   { formula: '=ROWS(SEQUENCE(3))', kind: 1, number: 3 },
 ];
-test('evalFormula evaluates read-only against a blank anchor', async () => {
+test('evaluateFormula evaluates read-only against a blank anchor', async () => {
   const Module = await getModule();
   for (const spec of ONE_SHOT_CASES) {
-    const r = Module.evalFormula(spec.formula);
+    const r = Module.evaluateFormula(spec.formula);
     assert.equal(r.kind, spec.kind, spec.formula);
     if (spec.number !== undefined) {
       assert.equal(r.number, spec.number, spec.formula);
@@ -194,24 +194,25 @@ test('staged constant tables carry the ordinals the staged .d.ts declares', asyn
 // `delete` is embind's auto-added finaliser; the caller must call it.
 function makePivotWorkbook(Workbook) {
   const wb = Workbook.createDefault();
-  const cacheId = wb.addPivotCache(0);
+  const cache = wb.addPivotCache(0);
+  const cacheId = cache.cacheId;
   // A cache without a worksheet source cannot be saved, so the fixture
   // declares the range its two fields and two records occupy.
-  wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:B3', sheet: 'Sheet1' });
-  wb.addPivotCacheField(cacheId, 'Region');
-  wb.addPivotCacheField(cacheId, 'Amount');
+  wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).addField('Region');
+  wb.pivotCache(cacheId).addField('Amount');
   for (const [region, amount] of [
     ['East', 10],
     ['West', 30],
   ]) {
-    const rec = wb.addPivotCacheRecord(cacheId);
-    wb.setPivotCacheRecordValue(cacheId, rec, 0, region);
-    wb.setPivotCacheRecordValue(cacheId, rec, 1, amount);
+    const rec = wb.pivotCache(cacheId).addRecord();
+    wb.pivotCache(cacheId).setRecordValue(rec, 0, region);
+    wb.pivotCache(cacheId).setRecordValue(rec, 1, amount);
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 4 });
-  wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
-  const amountField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
-  wb.sheet(0).addPivotDataField(pivot, {
+  wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
+  const amountField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
+  wb.sheet(0).pivot(pivot).addDataField({
     name: 'Sum of Amount',
     fieldIndex: amountField,
     aggregation: 0,
@@ -232,9 +233,9 @@ test('pivotFilterAt reads back an added filter field for field', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    wb.sheet(0).addPivotFilter(pivot, PIVOT_FILTER);
-    assert.equal(wb.sheet(0).listPivotFilters(pivot).length, 1);
-    const got = wb.sheet(0).listPivotFilters(pivot)[0];
+    wb.sheet(0).pivot(pivot).addFilter(PIVOT_FILTER);
+    assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, 1);
+    const got = wb.sheet(0).pivot(pivot).listFilters()[0];
     assert.equal(got.axis, PIVOT_FILTER.axis);
     assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
     assert.equal(got.type, PIVOT_FILTER.type);
@@ -249,9 +250,9 @@ test('pivotFilterCount counts the filters on the pivot', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    assert.equal(wb.sheet(0).listPivotFilters(pivot).length, 0);
-    wb.sheet(0).addPivotFilter(pivot, PIVOT_FILTER);
-    assert.equal(wb.sheet(0).listPivotFilters(pivot).length, 1);
+    assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, 0);
+    wb.sheet(0).pivot(pivot).addFilter(PIVOT_FILTER);
+    assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, 1);
   } finally {
     wb.dispose();
   }
@@ -262,8 +263,8 @@ test('pivot filters survive save/load', async () => {
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   let bytes;
   try {
-    wb.sheet(0).addPivotFilter(pivot, PIVOT_FILTER);
-    assert.equal(wb.sheet(0).listPivotFilters(pivot).length, 1);
+    wb.sheet(0).pivot(pivot).addFilter(PIVOT_FILTER);
+    assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, 1);
     const saved = wb.save();
     bytes = saved;
   } finally {
@@ -273,8 +274,8 @@ test('pivot filters survive save/load', async () => {
   try {
     assert.equal(reloaded.sheet(0).listPivots().length, 1);
     // The filter is written as `<filters>` and decodes back into the list.
-    assert.equal(reloaded.sheet(0).listPivotFilters(0).length, 1);
-    const got = reloaded.sheet(0).listPivotFilters(0)[0];
+    assert.equal(reloaded.sheet(0).pivot(0).listFilters().length, 1);
+    const got = reloaded.sheet(0).pivot(0).listFilters()[0];
     assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
     assert.equal(got.type, PIVOT_FILTER.type);
     assert.equal(got.valueKind, PIVOT_FILTER.valueKind);
@@ -288,7 +289,7 @@ test('pivotFilterAt rejects an out-of-range index', async () => {
   const Module = await getModule();
   const { wb } = makePivotWorkbook(Module.Workbook);
   try {
-    expectFailure(() => wb.sheet(0).listPivotFilters(99));
+    expectFailure(() => wb.sheet(0).pivot(99).listFilters());
   } finally {
     wb.dispose();
   }
@@ -298,24 +299,24 @@ test('a required pivot spec string field left out of the object is rejected, not
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    const fieldCountBefore = wb.sheet(0).listPivotFields(pivot).length;
+    const fieldCountBefore = wb.sheet(0).pivot(pivot).listFields().length;
     // no `sourceName`
-    expectFailure(() => wb.sheet(0).addPivotField(pivot, { axis: 0 }), Module.StatusCode.BindingNullPointer);
-    assert.equal(wb.sheet(0).listPivotFields(pivot).length, fieldCountBefore, 'no field must have been added');
+    expectFailure(() => wb.sheet(0).pivot(pivot).addField({ axis: 0 }), Module.StatusCode.BindingNullPointer);
+    assert.equal(wb.sheet(0).pivot(pivot).listFields().length, fieldCountBefore, 'no field must have been added');
 
     // `name` is optional: an omitted one is derived from the workbook profile.
-    const dataFieldCountBefore = wb.sheet(0).listPivotDataFields(pivot).length;
-    const dataField = wb.sheet(0).addPivotDataField(pivot, { fieldIndex: 0, aggregation: 0 }); // no `name`
-    assert.equal(wb.sheet(0).listPivotDataFields(pivot).length, dataFieldCountBefore + 1);
-    assert.equal(wb.sheet(0).listPivotDataFields(pivot)[dataField].name, 'Sum of Region');
+    const dataFieldCountBefore = wb.sheet(0).pivot(pivot).listDataFields().length;
+    const dataField = wb.sheet(0).pivot(pivot).addDataField({ fieldIndex: 0, aggregation: 0 }); // no `name`
+    assert.equal(wb.sheet(0).pivot(pivot).listDataFields().length, dataFieldCountBefore + 1);
+    assert.equal(wb.sheet(0).pivot(pivot).listDataFields()[dataField].name, 'Sum of Region');
 
-    const filterCountBefore = wb.sheet(0).listPivotFilters(pivot).length;
+    const filterCountBefore = wb.sheet(0).pivot(pivot).listFilters().length;
     // no `fieldName`
     expectFailure(
-      () => wb.sheet(0).addPivotFilter(pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }),
+      () => wb.sheet(0).pivot(pivot).addFilter({ axis: 0, type: 1, valueKind: 1, valueDouble: 15 }),
       Module.StatusCode.BindingNullPointer,
     );
-    assert.equal(wb.sheet(0).listPivotFilters(pivot).length, filterCountBefore, 'no filter must have been added');
+    assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, filterCountBefore, 'no filter must have been added');
   } finally {
     wb.dispose();
   }
@@ -328,22 +329,22 @@ test('getVersion returns a non-empty string', async () => {
   assert.ok(v.length > 0, `expected non-empty version, got ${JSON.stringify(v)}`);
 });
 
-test('evalFormula(=SUM(1,2,3)) returns NUMBER 6', async () => {
+test('evaluateFormula(=SUM(1,2,3)) returns NUMBER 6', async () => {
   const Module = await getModule();
-  const r = Module.evalFormula('=SUM(1,2,3)');
+  const r = Module.evaluateFormula('=SUM(1,2,3)');
   assert.equal(r.kind, VAL.NUMBER);
   assert.equal(r.number, 6);
 });
 
-test('evalFormula(=1/0) surfaces Excel error as a value (not failed status)', async () => {
+test('evaluateFormula(=1/0) surfaces Excel error as a value (not failed status)', async () => {
   const Module = await getModule();
-  const r = Module.evalFormula('=1/0');
+  const r = Module.evaluateFormula('=1/0');
   assert.equal(r.kind, VAL.ERROR);
 });
 
-test('evalFormula uses read-only evaluation for the intersection operator', async () => {
+test('evaluateFormula uses read-only evaluation for the intersection operator', async () => {
   const Module = await getModule();
-  const r = Module.evalFormula('=A1 B1');
+  const r = Module.evaluateFormula('=A1 B1');
   assert.equal(r.kind, VAL.ERROR);
   assert.equal(r.errorCode, 0); // ErrorCode::Null / #NULL!
 });
@@ -452,19 +453,19 @@ test('pivot definition read-backs report what the setters wrote', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    assert.equal(wb.sheet(0).getPivotCacheId(pivot), wb.listPivotCaches()[0]);
-    assert.equal(wb.sheet(0).getPivotName(pivot), 'Pivot1');
-    assert.deepEqual({ ...wb.sheet(0).getPivotGrandTotals(pivot) }, { rows: true, columns: true });
-    wb.sheet(0).setPivotGrandTotals(pivot, { rows: false, columns: true });
-    const totals = wb.sheet(0).getPivotGrandTotals(pivot);
+    assert.equal(wb.sheet(0).pivot(pivot).getCache(), wb.listPivotCaches()[0]);
+    assert.equal(wb.sheet(0).pivot(pivot).name, 'Pivot1');
+    assert.deepEqual({ ...wb.sheet(0).pivot(pivot).getGrandTotals() }, { rows: true, columns: true });
+    wb.sheet(0).pivot(pivot).setGrandTotals({ rows: false, columns: true });
+    const totals = wb.sheet(0).pivot(pivot).getGrandTotals();
     assert.equal(totals.rows, false);
     assert.equal(totals.columns, true);
 
-    assert.deepEqual(wb.sheet(0).getPivotRowFieldOrder(pivot), [0]);
-    assert.deepEqual(wb.sheet(0).getPivotColumnFieldOrder(pivot), []);
+    assert.deepEqual(wb.sheet(0).pivot(pivot).getRowFieldOrder(), [0]);
+    assert.deepEqual(wb.sheet(0).pivot(pivot).getColumnFieldOrder(), []);
 
-    wb.sheet(0).setPivotFieldSort(pivot, 0, 0, { byField: 'Sum of Amount' });
-    const region = wb.sheet(0).listPivotFields(pivot)[0];
+    wb.sheet(0).pivot(pivot).setFieldSort(0, 0, { byField: 'Sum of Amount' });
+    const region = wb.sheet(0).pivot(pivot).listFields()[0];
     assert.equal(region.sourceName, 'Region');
     assert.equal(region.axis, 0);
     assert.equal(region.cacheFieldIndex, 0);
@@ -472,24 +473,24 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(region.sortByField, 'Sum of Amount');
     assert.equal(region.datePeriods, 0);
     assert.equal(region.groupBaseIndex, null);
-    assert.equal(wb.sheet(0).listPivotFields(pivot)[1].axis, 2);
+    assert.equal(wb.sheet(0).pivot(pivot).listFields()[1].axis, 2);
 
-    wb.sheet(0).addPivotFieldItem(pivot, 0, 'East', { visible: true });
-    wb.sheet(0).addPivotFieldItem(pivot, 0, 'West', { visible: true });
-    wb.sheet(0).updatePivotItem(pivot, 0, 1, { visible: false });
-    assert.equal(wb.sheet(0).listPivotFieldItems(pivot, 0).length, 2);
-    const east = wb.sheet(0).getPivotFieldItem(pivot, 0, 0);
+    wb.sheet(0).pivot(pivot).addFieldItem(0, 'East', { visible: true });
+    wb.sheet(0).pivot(pivot).addFieldItem(0, 'West', { visible: true });
+    wb.sheet(0).pivot(pivot).updateItem(0, 1, { visible: false });
+    assert.equal(wb.sheet(0).pivot(pivot).listFieldItems(0).length, 2);
+    const east = wb.sheet(0).pivot(pivot).getFieldItem(0, 0);
     assert.equal(east.name, 'East');
     // The scratch cache holds no shared items, so a label binds to nothing.
     assert.equal(east.cacheIndex, null);
     assert.equal(east.visible, true);
-    assert.equal(wb.sheet(0).getPivotFieldItem(pivot, 0, 1).visible, false);
-    wb.sheet(0).addPivotFieldSharedItem(pivot, 0, 5, true);
-    const bound = wb.sheet(0).getPivotFieldItem(pivot, 0, 2);
+    assert.equal(wb.sheet(0).pivot(pivot).getFieldItem(0, 1).visible, false);
+    wb.sheet(0).pivot(pivot).addFieldSharedItem(0, 5, true);
+    const bound = wb.sheet(0).pivot(pivot).getFieldItem(0, 2);
     assert.equal(bound.cacheIndex, 5);
     assert.equal(bound.name, '');
 
-    const dataField = wb.sheet(0).listPivotDataFields(pivot)[0];
+    const dataField = wb.sheet(0).pivot(pivot).listDataFields()[0];
     assert.equal(dataField.name, 'Sum of Amount');
     assert.equal(dataField.fieldIndex, 1);
     assert.equal(dataField.aggregation, 0);
@@ -504,7 +505,7 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    const initial = wb.sheet(0).getPivotStyleInfo(pivot);
+    const initial = wb.sheet(0).pivot(pivot).getStyleInfo();
     assert.notEqual(initial, null);
     assert.equal(initial.name, 'PivotStyleLight16');
     assert.deepEqual(
@@ -513,8 +514,8 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     );
     assert.equal(initial.showLastColumn, true);
 
-    wb.sheet(0).setPivotStyleInfo(pivot, { name: 'PivotStyleDark3', showRowStripes: true });
-    const set = wb.sheet(0).getPivotStyleInfo(pivot);
+    wb.sheet(0).pivot(pivot).setStyleInfo({ name: 'PivotStyleDark3', showRowStripes: true });
+    const set = wb.sheet(0).pivot(pivot).getStyleInfo();
     assert.equal(set.name, 'PivotStyleDark3');
     assert.deepEqual(
       [set.showRowHeaders, set.showColHeaders, set.showRowStripes, set.showColStripes, set.showLastColumn],
@@ -525,22 +526,22 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     const saved = wb.save();
     const reloaded = Module.Workbook.load(saved);
     try {
-      assert.equal(reloaded.sheet(0).getPivotStyleInfo(0).name, 'PivotStyleDark3');
-      assert.equal(reloaded.sheet(0).getPivotStyleInfo(0).showRowStripes, true);
+      assert.equal(reloaded.sheet(0).pivot(0).getStyleInfo().name, 'PivotStyleDark3');
+      assert.equal(reloaded.sheet(0).pivot(0).getStyleInfo().showRowStripes, true);
     } finally {
       reloaded.dispose();
     }
 
     // An empty patch changes nothing; an empty name leaves the element without a style name.
-    wb.sheet(0).setPivotStyleInfo(pivot, {});
-    assert.equal(wb.sheet(0).getPivotStyleInfo(pivot).name, 'PivotStyleDark3');
-    wb.sheet(0).setPivotStyleInfo(pivot, { name: '' });
-    const bare = wb.sheet(0).getPivotStyleInfo(pivot);
+    wb.sheet(0).pivot(pivot).setStyleInfo({});
+    assert.equal(wb.sheet(0).pivot(pivot).getStyleInfo().name, 'PivotStyleDark3');
+    wb.sheet(0).pivot(pivot).setStyleInfo({ name: '' });
+    const bare = wb.sheet(0).pivot(pivot).getStyleInfo();
     assert.notEqual(bare, null);
     assert.equal(bare.name, '');
 
-    expectFailure(() => wb.sheet(0).getPivotStyleInfo(9));
-    expectFailure(() => wb.sheet(0).setPivotStyleInfo(9, { name: 'X' }));
+    expectFailure(() => wb.sheet(0).pivot(9).getStyleInfo());
+    expectFailure(() => wb.sheet(0).pivot(9).setStyleInfo({ name: 'X' }));
   } finally {
     wb.dispose();
   }
@@ -551,15 +552,15 @@ test('pivot definition read-backs reject out-of-range indices', async () => {
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
     for (const call of [
-      () => wb.sheet(0).getPivotCacheId(9),
-      () => wb.sheet(0).getPivotName(9),
-      () => wb.sheet(9).getPivotGrandTotals(pivot),
-      () => wb.sheet(0).getPivotRowFieldOrder(9),
-      () => wb.sheet(0).getPivotColumnFieldOrder(9),
-      () => wb.sheet(0).listPivotFields(99),
-      () => wb.sheet(0).listPivotFieldItems(pivot, 99),
-      () => wb.sheet(0).getPivotFieldItem(pivot, 0, 99),
-      () => wb.sheet(0).listPivotDataFields(99),
+      () => wb.sheet(0).pivot(9).getCache(),
+      () => wb.sheet(0).pivot(9).name,
+      () => wb.sheet(9).pivot(pivot).getGrandTotals(),
+      () => wb.sheet(0).pivot(9).getRowFieldOrder(),
+      () => wb.sheet(0).pivot(9).getColumnFieldOrder(),
+      () => wb.sheet(0).pivot(99).listFields(),
+      () => wb.sheet(0).pivot(pivot).listFieldItems(99),
+      () => wb.sheet(0).pivot(pivot).getFieldItem(0, 99),
+      () => wb.sheet(0).pivot(99).listDataFields(),
     ]) {
       expectFailure(call);
     }
@@ -582,14 +583,14 @@ test('an empty or omitted data field name is derived from the workbook profile',
         { name: '', fieldIndex: 1, aggregation: 0 },
       ]) {
         // A repeat of the same source field is numbered, so each name starts from none.
-        wb.sheet(0).clearPivotDataFields(pivot);
-        const added = wb.sheet(0).addPivotDataField(pivot, spec);
-        assert.equal(wb.sheet(0).listPivotDataFields(pivot)[added].name, expected);
+        wb.sheet(0).pivot(pivot).clearDataFields();
+        const added = wb.sheet(0).pivot(pivot).addDataField(spec);
+        assert.equal(wb.sheet(0).pivot(pivot).listDataFields()[added].name, expected);
       }
-      wb.sheet(0).setPivotDataField(pivot, 0, { fieldIndex: 1, aggregation: 2 });
-      assert.ok(wb.sheet(0).listPivotDataFields(pivot)[0].name.endsWith(' Amount'));
+      wb.sheet(0).pivot(pivot).setDataField(0, { fieldIndex: 1, aggregation: 2 });
+      assert.ok(wb.sheet(0).pivot(pivot).listDataFields()[0].name.endsWith(' Amount'));
     }
-    expectFailure(() => wb.sheet(0).addPivotDataField(pivot, { fieldIndex: 99, aggregation: 0 }));
+    expectFailure(() => wb.sheet(0).pivot(pivot).addDataField({ fieldIndex: 99, aggregation: 0 }));
   } finally {
     wb.dispose();
   }
@@ -737,31 +738,32 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    const cacheId = wb.addPivotCache();
-    wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:D3', sheet: 'Sheet1' });
-    for (const name of ['Region', 'Product', 'Sales', 'Qty']) wb.addPivotCacheField(cacheId, name);
+    const cache = wb.addPivotCache();
+    const cacheId = cache.cacheId;
+    wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:D3', sheet: 'Sheet1' });
+    for (const name of ['Region', 'Product', 'Sales', 'Qty']) wb.pivotCache(cacheId).addField(name);
     for (const sales of [100, 200]) {
-      const rec = wb.addPivotCacheRecord(cacheId);
-      for (const [col, value] of [0, 0, sales, 1].entries()) wb.setPivotCacheRecordValue(cacheId, rec, col, value);
+      const rec = wb.pivotCache(cacheId).addRecord();
+      for (const [col, value] of [0, 0, sales, 1].entries()) wb.pivotCache(cacheId).setRecordValue(rec, col, value);
     }
     const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchorRow: 0, anchorCol: 6 });
-    const region = wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
-    const sales = wb.sheet(0).addPivotField(pivot, { sourceName: 'Sales', axis: 2 });
+    const region = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
+    const sales = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Sales', axis: 2 });
     assert.equal(region, 0);
     assert.equal(sales, 2);
-    assert.equal(wb.sheet(0).listPivotFields(pivot).length, 4);
-    assert.equal(wb.sheet(0).listPivotFields(pivot)[1].axis, null);
-    wb.sheet(0).addPivotDataField(pivot, { fieldIndex: 2, aggregation: 0 });
-    assert.equal(wb.sheet(0).listPivotDataFields(pivot).length, 1);
+    assert.equal(wb.sheet(0).pivot(pivot).listFields().length, 4);
+    assert.equal(wb.sheet(0).pivot(pivot).listFields()[1].axis, null);
+    wb.sheet(0).pivot(pivot).addDataField({ fieldIndex: 2, aggregation: 0 });
+    assert.equal(wb.sheet(0).pivot(pivot).listDataFields().length, 1);
 
-    wb.sheet(0).setPivotFieldAxis(pivot, 2, null);
-    assert.equal(wb.sheet(0).listPivotFields(pivot)[2].axis, null);
-    assert.equal(wb.sheet(0).listPivotDataFields(pivot).length, 0);
-    wb.sheet(0).setPivotFieldAxis(pivot, 0, null);
-    assert.deepEqual(wb.sheet(0).getPivotRowFieldOrder(pivot), []);
-    expectFailure(() => wb.sheet(0).setPivotFieldAxis(pivot, 0, 4));
-    assert.throws(() => wb.sheet(0).setPivotFieldAxis(pivot, 0, -1), RangeError);
-    assert.throws(() => wb.sheet(0).setPivotFieldAxis(pivot, 0, -2), RangeError);
+    wb.sheet(0).pivot(pivot).setFieldAxis(2, null);
+    assert.equal(wb.sheet(0).pivot(pivot).listFields()[2].axis, null);
+    assert.equal(wb.sheet(0).pivot(pivot).listDataFields().length, 0);
+    wb.sheet(0).pivot(pivot).setFieldAxis(0, null);
+    assert.deepEqual(wb.sheet(0).pivot(pivot).getRowFieldOrder(), []);
+    expectFailure(() => wb.sheet(0).pivot(pivot).setFieldAxis(0, 4));
+    assert.throws(() => wb.sheet(0).pivot(pivot).setFieldAxis(0, -1), RangeError);
+    assert.throws(() => wb.sheet(0).pivot(pivot).setFieldAxis(0, -2), RangeError);
   } finally {
     wb.dispose();
   }

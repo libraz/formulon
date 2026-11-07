@@ -18,6 +18,7 @@
 
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
+#include "utils/runtime_id.h"
 
 namespace formulon::pivot {
 
@@ -73,6 +74,10 @@ class PivotTable {
 
   std::uint32_t pivot_cache_id() const { return pivot_cache_id_; }
   void set_pivot_cache_id(std::uint32_t id) { pivot_cache_id_ = id; }
+
+  /// Session identity the C API assigns on first request; never saved. A
+  /// `clone()` starts at zero (see `utils/runtime_id.h`).
+  RuntimeId& runtime_id() const { return runtime_id_; }
 
   /// The `dataCaption` attribute on `<pivotTableDefinition>` — the header
   /// shown over the Values area (e.g. "Values" / "値"). ECMA-376 marks it
@@ -618,6 +623,7 @@ class PivotTable {
   // Keep the mutex separately allocated so PivotTable remains movable.
   mutable std::shared_ptr<std::mutex> last_result_mutex_ = std::make_shared<std::mutex>();
   mutable std::shared_ptr<const PivotResult> last_result_;
+  mutable RuntimeId runtime_id_;
 };
 
 }  // namespace formulon::pivot

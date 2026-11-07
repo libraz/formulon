@@ -253,7 +253,8 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                       const fm_sparkline_group_t* group) {
+                                                       const fm_sparkline_group_t* group, const fm_sparkline_t* items,
+                                                       size_t count) {
   clear_last_error();
   if (group == nullptr) {
     return set_binding_error(FormulonErrorCode::kBindingNullPointer, "group is NULL");
@@ -264,30 +265,27 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
   if (auto rc = check_utf8({group->date_axis_ref}); rc != 0) {
     return rc;
   }
+  if (items != nullptr) {
+    if (auto rc = check_items_utf8(items, count); rc != 0) {
+      return rc;
+    }
+  }
   if (auto rc = check_group_index(wb, sheet_index, idx); rc != 0) {
     return rc;
   }
   const io::SparklineGroup model = group_from_c(*group);
-  return edit_ext_lst(wb, sheet_index, [&](std::string& xml) { return io::update_sparkline_group(xml, idx, model); });
-}
-
-extern "C" fm_status_t fm_sheet_set_sparkline_group_sparklines(fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                               const fm_sparkline_t* items, size_t count) {
-  clear_last_error();
-  if (items == nullptr) {
-    return set_binding_error(FormulonErrorCode::kBindingNullPointer, "items is NULL");
+  std::vector<io::SparklineItem> replacement;
+  if (items != nullptr) {
+    replacement = items_from_c(items, count);
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_items_utf8(items, count); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_group_index(wb, sheet_index, idx); rc != 0) {
-    return rc;
-  }
-  const std::vector<io::SparklineItem> model = items_from_c(items, count);
-  return edit_ext_lst(wb, sheet_index, [&](std::string& xml) { return io::set_group_sparklines(xml, idx, model); });
+  return edit_ext_lst(wb, sheet_index, [&](std::string& xml) -> formulon::Expected<void, formulon::Error> {
+    if (items != nullptr) {
+      if (auto replaced = io::set_group_sparklines(xml, idx, replacement); !replaced) {
+        return replaced;
+      }
+    }
+    return io::update_sparkline_group(xml, idx, model);
+  });
 }
 
 extern "C" fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx) {

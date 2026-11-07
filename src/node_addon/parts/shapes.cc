@@ -327,37 +327,26 @@ Napi::Value Workbook::UpdateSparklineGroup(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
+  const Napi::Object spec = ArgObject(info, 2);
   std::string ref_store;
-  const fm_sparkline_group_t group = PullGroup(reader, ArgObject(info, 2), ref_store);
+  std::vector<std::string> texts;
+  std::vector<fm_sparkline_t> items;
+  const fm_sparkline_group_t group = PullGroup(reader, spec, ref_store);
+  Napi::Array array;
+  const bool replace = reader.Array(spec, "sparklines", &array);
+  if (replace) {
+    PullSparklines(reader, array, texts, items);
+  }
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_update_sparkline_group(handle_, ArgU32(info, 0), ArgU32(info, 1), &group),
-                      env.Undefined());
-}
-
-Napi::Value Workbook::SetSparklineGroupSparklines(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  Napi::Array sparklines;
-  if (!ArrayArg(info, 2, &sparklines)) {
-    Napi::TypeError::New(env, "setSparklineGroupSparklines expects (sheet:number, index:number, sparklines:array)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  CheckedSpecReader reader(env);
-  std::vector<std::string> texts;
-  std::vector<fm_sparkline_t> items;
-  if (!PullSparklines(reader, sparklines, texts, items) && !reader.ok()) {
-    return env.Undefined();
-  }
+  // Without `sparklines` the group keeps its own; an empty array reaches the core, which rejects it.
   fm_sparkline_t none{};
-  return ValueOrThrow(env,
-                      fm_sheet_set_sparkline_group_sparklines(handle_, ArgU32(info, 0), ArgU32(info, 1),
-                                                              items.empty() ? &none : items.data(), items.size()),
-                      env.Undefined());
+  const fm_sparkline_t* replacement = !replace ? nullptr : items.empty() ? &none : items.data();
+  return ValueOrThrow(
+      env,
+      fm_sheet_update_sparkline_group(handle_, ArgU32(info, 0), ArgU32(info, 1), &group, replacement, items.size()),
+      env.Undefined());
 }
 
 Napi::Value Workbook::RemoveSparklineGroup(const Napi::CallbackInfo& info) {

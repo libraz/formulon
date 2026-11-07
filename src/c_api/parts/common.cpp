@@ -487,28 +487,99 @@ bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
   return false;
 }
 
-fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text) {
-  if (text == nullptr || text[0] == '\0') {
+fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, std::uint32_t* out_id) {
+  const formulon::StylesTable& existing_styles = wb.styles();
+
+  // Step 1: return a built-in slot only when that slot's effective mapping
+  // matches the requested code. A custom record may override the built-in.
+  for (std::uint16_t id = 0; id < 164U; ++id) {
+    const std::optional<std::string_view> resolved = effective_num_fmt(existing_styles, id);
+    if (resolved.has_value() && code == *resolved) {
+      *out_id = id;
+      return 0;
+    }
+  }
+
+  formulon::StylesTable& styles = wb.mutable_styles();
+
+  // Step 2: existing custom entry whose id still resolves to its code. This
+  // skips shadowed duplicate ids and invalid string indexes.
+  for (const formulon::NumFmtRecord& n : styles.num_fmts) {
+    const std::optional<std::string_view> resolved = effective_num_fmt(styles, n.id);
+    if (resolved.has_value() && code == *resolved) {
+      *out_id = n.id;
+      return 0;
+    }
+  }
+
+  // Step 3: append a new custom entry. New id is one past the largest
+  // existing custom id, with `163` as the lower bound (the last
+  // built-in slot).
+  std::uint32_t next_id = 163U;
+  for (const formulon::NumFmtRecord& n : styles.num_fmts) {
+    if (n.id > next_id) {
+      next_id = n.id;
+    }
+  }
+  if (next_id >= std::numeric_limits<std::uint16_t>::max()) {
+    return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, "custom numFmtId space exhausted",
+                             "max_num_fmt_id=" + std::to_string(std::numeric_limits<std::uint16_t>::max()));
+  }
+  ++next_id;
+
+  styles.num_fmt_strings.push_back(code);
+  formulon::NumFmtRecord rec;
+  rec.id = static_cast<std::uint16_t>(next_id);
+  rec.format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size() - 1);
+  styles.num_fmts.push_back(rec);
+  *out_id = static_cast<std::uint16_t>(next_id);
+  return 0;
+}
+
+fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std::string* out) {
+  out->clear();
+  if (code == nullptr || code[0] == '\0') {
     return 0;
   }
-  // The text is echoed into the diagnostic context, which must stay UTF-8.
-  if (auto rc = check_utf8(text, "field=number_format"); rc != 0) {
+  if (auto rc = check_utf8(code, "field=number_format"); rc != 0) {
     return rc;
   }
+  const std::string_view text(code);
+  for (std::uint16_t id = 0; id < 164U; ++id) {
+    const std::optional<std::string_view> rendered = effective_num_fmt(wb.styles(), id, wb.excel_profile());
+    if (rendered.has_value() && *rendered == text) {
+      *out = std::to_string(id);
+      return 0;
+    }
+  }
   std::uint32_t id = 0;
-  for (const char* p = text; *p != '\0'; ++p) {
-    if (*p < '0' || *p > '9') {
-      return invalid_argument("number_format is not a numFmtId", "number_format=" + std::string(text));
-    }
-    id = id * 10U + static_cast<std::uint32_t>(*p - '0');
-    if (id > std::numeric_limits<std::uint16_t>::max()) {
-      return invalid_argument("number_format is out of the numFmtId range", "number_format=" + std::string(text));
-    }
+  if (auto rc = add_num_fmt_code(wb, std::string(text), &id); rc != 0) {
+    return rc;
   }
-  if (!num_fmt_id_known(wb.styles(), static_cast<std::uint16_t>(id))) {
-    return invalid_argument("number_format names an unregistered numFmtId", "number_format=" + std::string(text));
-  }
+  *out = std::to_string(id);
   return 0;
+}
+
+const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text) {
+  if (id_text.empty()) {
+    return "";
+  }
+  std::uint32_t id = 0;
+  for (const char c : id_text) {
+    if (c < '0' || c > '9') {
+      return "";
+    }
+    id = id * 10U + static_cast<std::uint32_t>(c - '0');
+    if (id > std::numeric_limits<std::uint16_t>::max()) {
+      return "";
+    }
+  }
+  const auto id16 = static_cast<std::uint16_t>(id);
+  std::optional<std::string_view> resolved = effective_num_fmt(wb.styles(), id16);
+  if (!resolved.has_value()) {
+    resolved = effective_num_fmt(wb.styles(), id16, wb.excel_profile());
+  }
+  return resolved.has_value() ? resolved->data() : "";
 }
 
 fm_status_t validate(const fm_pivot_field_spec_t& spec) {

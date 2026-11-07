@@ -1,5 +1,5 @@
 // Free (non-method) bindings exposed on the module exports object:
-// `evalFormula`, `getVersion`, `getStatusName`, `setLogMinLevel`,
+// `evaluateFormula`, `getVersion`, `getStatusName`, `setLogMinLevel`,
 // `setLogSink`, the loader-only `__setErrorClass`, and the workbook-free
 // catalog, locale, collation and image-probe functions that
 // `RegisterModuleFunctions` attaches. Declared here so `addon.cc::Init` can
@@ -12,13 +12,13 @@
 
 namespace formulon_node {
 
-/// `evalFormula(formula)`: convenience that mirrors the embind variant.
+/// `evaluateFormula(formula)`: convenience that mirrors the embind variant.
 /// Evaluates `formula` read-only against a fresh single-sheet workbook,
 /// anchored at `Sheet1!A1`, and returns the `Value`. Nothing is
 /// written and no recalc runs, so an anchor-referencing formula such as
 /// `=A1` reads the (blank) anchor rather than becoming a self-reference.
 /// An array result is reduced to its top-left element.
-Napi::Value EvalFormula(const Napi::CallbackInfo& info);
+Napi::Value EvaluateFormula(const Napi::CallbackInfo& info);
 
 /// Returns the engine version string (`fm_get_version`).
 Napi::Value Version(const Napi::CallbackInfo& info);

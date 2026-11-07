@@ -87,6 +87,8 @@ def _parse_header(path: Path) -> dict:
 
 
 def _is_literal_int(node: ast.AST) -> bool:
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        return _is_literal_int(node.operand)
     return isinstance(node, ast.Constant) and isinstance(node.value, int)
 
 
@@ -95,18 +97,90 @@ def _is_int_call(node: ast.AST) -> bool:
     return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "int"
 
 
-def _is_guarded(node: ast.AST) -> bool:
-    """True when ``node`` cannot reach WASM with an out-of-range value."""
+# Methods whose result tuple is range-checked where it is built (verified by
+# `ResolverGuardTests`), so the names a call site unpacks from one are guarded.
+_GUARDED_RESOLVERS = {"_at", "_call"}
+
+
+def _is_guarded(node: ast.AST, known: "frozenset[str]" = frozenset()) -> bool:
+    """True when ``node`` cannot reach WASM with an out-of-range value.
+
+    ``known`` holds the local names every assignment of which is itself guarded.
+    """
     if _is_literal_int(node):
         return True
+    if isinstance(node, ast.Name):
+        return node.id in known
     if isinstance(node, ast.IfExp):
-        return _is_literal_int(node.body) and _is_literal_int(node.orelse)
+        return _is_guarded(node.body, known) and _is_guarded(node.orelse, known)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and f"{node.func.id}()" in known:
+        return True
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id in ("_uint", "_sint")
+        and node.func.id in ("_uint", "_sint", "_flag")
         and not (node.args and _is_int_call(node.args[0]))
     )
+
+
+class _Facts:
+    """What a function body establishes about its locals: guarded names and tuple-valued names."""
+
+    def __init__(self, func: "ast.AST | None") -> None:
+        self.known: "frozenset[str]" = frozenset()
+        self.tuples: "dict[str, list]" = {}
+        if func is None:
+            return
+        params = set()
+        if isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = func.args
+            params = {a.arg for a in (*args.posonlyargs, *args.args, *args.kwonlyargs)}
+            params |= {a.arg for a in (args.vararg, args.kwarg) if a is not None}
+        bad: set = set(params)
+        assigned: "dict[str, list]" = {}
+        resolver_names: set = set()
+        # A nested helper whose every return is guarded makes its calls guarded.
+        nested = set()
+        for node in ast.walk(func):
+            if isinstance(node, ast.FunctionDef) and node is not func:
+                returns = [r.value for r in ast.walk(node) if isinstance(r, ast.Return) and r.value is not None]
+                if returns and all(_is_guarded(v) for v in returns):
+                    nested.add(f"{node.name}()")
+        for node in ast.walk(func):
+            if isinstance(node, ast.Assign):
+                if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                    assigned.setdefault(node.targets[0].id, []).append(node.value)
+                    continue
+                target = node.targets[0] if len(node.targets) == 1 else None
+                if (
+                    isinstance(target, ast.Tuple)
+                    and isinstance(node.value, ast.Call)
+                    and _called_name(node.value) in _GUARDED_RESOLVERS
+                ):
+                    for elt in target.elts[1:]:
+                        if isinstance(elt, ast.Name):
+                            resolver_names.add(elt.id)
+                    continue
+                for tgt in node.targets:
+                    bad.update(n.id for n in ast.walk(tgt) if isinstance(n, ast.Name))
+            elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+                bad.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
+            elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+                bad.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
+            elif isinstance(node, ast.NamedExpr):
+                bad.add(node.target.id)
+            elif isinstance(node, ast.withitem) and node.optional_vars is not None:
+                bad.update(n.id for n in ast.walk(node.optional_vars) if isinstance(n, ast.Name))
+        known: set = {n for n in resolver_names if n not in bad and n not in assigned and n != "_"} | nested
+        for _ in range(3):
+            frozen = frozenset(known)
+            known |= {
+                n for n, values in assigned.items() if n not in bad and all(_is_guarded(v, frozen) for v in values)
+            }
+        self.known = frozenset(known)
+        for name, values in assigned.items():
+            if len(values) == 1 and isinstance(values[0], ast.Tuple) and name not in bad:
+                self.tuples[name] = list(values[0].elts)
 
 
 def _lib_fn_name(node: ast.AST) -> "str | None":
@@ -130,9 +204,16 @@ def _called_name(node: ast.Call) -> "str | None":
     return None
 
 
-def _check_args(args, params, offset: int, where: str, findings: list) -> None:
+def _check_args(args, params, offset: int, where: str, findings: list, facts: "_Facts | None" = None) -> None:
     """Pair positional arguments against C parameters starting at ``offset``."""
-    for position, arg in enumerate(args):
+    facts = facts or _Facts(None)
+    expanded: list = []
+    for arg in args:
+        if isinstance(arg, ast.Starred) and isinstance(arg.value, ast.Name) and arg.value.id in facts.tuples:
+            expanded.extend(facts.tuples[arg.value.id])
+        else:
+            expanded.append(arg)
+    for position, arg in enumerate(expanded):
         index = offset + position
         if index >= len(params):
             findings.append(f"{where}: argument {position} has no parameter at index {index}")
@@ -140,11 +221,13 @@ def _check_args(args, params, offset: int, where: str, findings: list) -> None:
         ptype, pname = params[index]
         if ptype not in _UNSIGNED_TYPES and ptype not in _SIGNED_TYPES:
             continue
-        if not _is_guarded(arg):
+        if not _is_guarded(arg, facts.known):
             findings.append(f"{where}: {ptype} {pname} <- {ast.unparse(arg)}")
 
 
-def _direct_call_slots(node: ast.Call, functions: dict, module_name: str, findings: list) -> None:
+def _direct_call_slots(
+    node: ast.Call, functions: dict, module_name: str, findings: list, facts: "_Facts | None" = None
+) -> None:
     """Check a ``LIB.fm_*(...)`` call site against the header signature."""
     name = _lib_fn_name(node.func)
     if name is None:
@@ -157,10 +240,12 @@ def _direct_call_slots(node: ast.Call, functions: dict, module_name: str, findin
     if len(node.args) > len(params):
         findings.append(f"{where}: passes {len(node.args)} args for {len(params)} parameters")
         return
-    _check_args(node.args, params, 0, where, findings)
+    _check_args(node.args, params, 0, where, findings, facts)
 
 
-def _indirect_call_slots(node: ast.Call, functions: dict, module_name: str, findings: list) -> None:
+def _indirect_call_slots(
+    node: ast.Call, functions: dict, module_name: str, findings: list, facts: "_Facts | None" = None
+) -> None:
     """Check a ``LIB.fm_*`` reference passed to a helper that calls it.
 
     The reference is not a call expression, so a sweep looking only for
@@ -185,7 +270,7 @@ def _indirect_call_slots(node: ast.Call, functions: dict, module_name: str, find
         return
     if first_param is None:
         return
-    _check_args(node.args[callable_index + 1 :], params, first_param, where, findings)
+    _check_args(node.args[callable_index + 1 :], params, first_param, where, findings, facts)
 
 
 def _struct_layout(node: ast.AST):
@@ -213,7 +298,13 @@ def _is_non_integer(node: ast.AST) -> bool:
 
 def _returned_dict(func: ast.FunctionDef) -> "ast.Dict | None":
     """The dict literal a one-expression field-projection helper returns."""
-    body = [stmt for stmt in func.body if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant))]
+    body = [
+        stmt
+        for stmt in func.body
+        if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant))
+        and not isinstance(stmt, ast.FunctionDef)
+        and not (isinstance(stmt, ast.If) and all(isinstance(s, ast.Raise) for s in stmt.body) and not stmt.orelse)
+    ]
     if len(body) == 1 and isinstance(body[0], ast.Return) and isinstance(body[0].value, ast.Dict):
         return body[0].value
     return None
@@ -247,7 +338,7 @@ def _collected_payload(name: str, scope: ast.AST) -> "list | None":
     return writes if seen else None
 
 
-def _check_packed_field(layout, key, value, where: str, findings: list) -> None:
+def _check_packed_field(layout, key, value, where: str, findings: list, known: "frozenset[str]" = frozenset()) -> None:
     """Range-check one field written into a packed struct."""
     if isinstance(key, ast.Constant) and isinstance(key.value, str):
         entry = layout.offsets.get(key.value)
@@ -257,16 +348,18 @@ def _check_packed_field(layout, key, value, where: str, findings: list) -> None:
         kind = entry[0]
         if kind not in _PACKED_INT_KINDS:
             return
-        if not _is_guarded(value):
+        if not _is_guarded(value, known):
             findings.append(f"{where}: {kind} {key.value} <- {ast.unparse(value)}")
         return
     # Field name computed at runtime: the value has to be safe for
     # whichever integer field it reaches.
-    if not (_is_guarded(value) or _is_non_integer(value)):
+    if not (_is_guarded(value, known) or _is_non_integer(value)):
         findings.append(f"{where}: {ast.unparse(key)} <- {ast.unparse(value)}")
 
 
-def _struct_pack_slots(node: ast.Call, scope, helpers: dict, module_name: str, findings: list) -> None:
+def _struct_pack_slots(
+    node: ast.Call, scope, helpers: dict, module_name: str, findings: list, facts: "_Facts | None" = None
+) -> None:
     """Check the integer fields written by ``S.<LAYOUT>.pack(LIB, ptr, ...)``.
 
     The ABI reads these through a pointer, so the header signature says
@@ -283,6 +376,7 @@ def _struct_pack_slots(node: ast.Call, scope, helpers: dict, module_name: str, f
     payload = node.args[2]
 
     pairs = None
+    known = (facts or _Facts(None)).known
     if isinstance(payload, ast.Dict):
         pairs = list(zip(payload.keys, payload.values))
     elif isinstance(payload, ast.Call) and isinstance(payload.func, ast.Name):
@@ -290,6 +384,7 @@ def _struct_pack_slots(node: ast.Call, scope, helpers: dict, module_name: str, f
         returned = _returned_dict(helper) if helper is not None else None
         if returned is not None:
             pairs = list(zip(returned.keys, returned.values))
+            known = _Facts(helper).known
     elif isinstance(payload, ast.Name) and scope is not None:
         pairs = _collected_payload(payload.id, scope)
 
@@ -299,7 +394,7 @@ def _struct_pack_slots(node: ast.Call, scope, helpers: dict, module_name: str, f
         findings.append(f"{where}: packs a payload this sweep cannot inspect ({ast.unparse(payload)})")
         return
     for key, value in pairs:
-        _check_packed_field(layout, key, value, where, findings)
+        _check_packed_field(layout, key, value, where, findings, known)
 
 
 # Encoders whose input a constructor has already validated, so the fields
@@ -340,28 +435,44 @@ def _scopes(tree: ast.AST) -> dict:
     return enclosing
 
 
-def _sweep_source(source: str, functions: dict, module_name: str = "<probe>") -> list:
+def _package_helpers() -> dict:
+    """The module-level functions of every module of the package, for payloads built in a sibling module."""
+    out: dict = {}
+    for module in sorted(_PKG_ROOT.joinpath("formulon").glob("*.py")):
+        for node in ast.parse(module.read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.FunctionDef):
+                out.setdefault(node.name, node)
+    return out
+
+
+def _sweep_source(source: str, functions: dict, module_name: str = "<probe>", shared: "dict | None" = None) -> list:
     """Run the three checkers over one module's source."""
     tree = ast.parse(source)
-    helpers = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    helpers = {**(shared or {}), **{n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}}
     enclosing = _scopes(tree)
+    facts_of: dict = {}
     findings: list = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        _direct_call_slots(node, functions, module_name, findings)
-        _indirect_call_slots(node, functions, module_name, findings)
-        _struct_pack_slots(node, enclosing.get(node), helpers, module_name, findings)
-        _raw_struct_pack_slots(node, enclosing.get(node), module_name, findings)
+        scope = enclosing.get(node)
+        if id(scope) not in facts_of:
+            facts_of[id(scope)] = _Facts(scope)
+        facts = facts_of[id(scope)]
+        _direct_call_slots(node, functions, module_name, findings, facts)
+        _indirect_call_slots(node, functions, module_name, findings, facts)
+        _struct_pack_slots(node, scope, helpers, module_name, findings, facts)
+        _raw_struct_pack_slots(node, scope, module_name, findings)
     return findings
 
 
 def _unguarded_slots() -> list:
     """Return every unguarded integer argument slot in the package."""
     functions = _parse_header(_HEADER)
+    shared = _package_helpers()
     findings: list = []
     for module in sorted(_PKG_ROOT.joinpath("formulon").glob("*.py")):
-        findings.extend(_sweep_source(module.read_text(encoding="utf-8"), functions, module.name))
+        findings.extend(_sweep_source(module.read_text(encoding="utf-8"), functions, module.name, shared))
     return findings
 
 
@@ -465,6 +576,50 @@ class ArgumentSweepTests(unittest.TestCase):
         ):
             with self.subTest(source=source):
                 self.assertEqual(_sweep_source(source, functions), [])
+
+
+class ResolverGuardTests(unittest.TestCase):
+    """The helpers the sweep trusts to return range-checked values do."""
+
+    def test_guarded_resolvers_return_range_checked_values(self) -> None:
+        seen = set()
+        for module in sorted(_PKG_ROOT.joinpath("formulon").glob("*.py")):
+            for func in ast.walk(ast.parse(module.read_text(encoding="utf-8"))):
+                if not (isinstance(func, ast.FunctionDef) and func.name in _GUARDED_RESOLVERS):
+                    continue
+                returns = [r.value for r in ast.walk(func) if isinstance(r, ast.Return)]
+                self.assertTrue(returns, f"{module.name}:{func.name} returns nothing")
+                for value in returns:
+                    self.assertIsInstance(value, ast.Tuple, f"{module.name}:{func.name}")
+                    for element in value.elts[1:]:
+                        self.assertTrue(
+                            _is_guarded(element), f"{module.name}:{func.name} returns {ast.unparse(element)}"
+                        )
+                seen.add(func.name)
+        self.assertEqual(seen, _GUARDED_RESOLVERS)
+
+    def test_sweep_trusts_only_the_resolvers(self) -> None:
+        functions = _parse_header(_HEADER)
+        trusted = "def f(ws):\n    h, sheet, oid = ws._at()\n    LIB.fm_sheet_set_drawing_z_order(h, sheet, oid, 0)\n"
+        self.assertEqual(_sweep_source(trusted, functions), [])
+        untrusted = trusted.replace("_at", "_other")
+        self.assertEqual(len(_sweep_source(untrusted, functions)), 2)
+
+    def test_sweep_checks_a_local_assigned_from_a_guard(self) -> None:
+        functions = _parse_header(_HEADER)
+        guarded = 'def f(sheet):\n    s = _uint(sheet, "s")\n    LIB.fm_sheet_set_number(h, s, 0, 0, 1.0)\n'
+        self.assertEqual(_sweep_source(guarded, functions), [])
+        reassigned = guarded + "    s = sheet\n    LIB.fm_sheet_set_number(h, s, 0, 0, 1.0)\n"
+        self.assertEqual(len(_sweep_source(reassigned, functions)), 2)
+        parameter = "def f(s):\n    LIB.fm_sheet_set_number(h, s, 0, 0, 1.0)\n"
+        self.assertEqual(len(_sweep_source(parameter, functions)), 1)
+
+    def test_sweep_expands_a_starred_tuple_of_guards(self) -> None:
+        functions = _parse_header(_HEADER)
+        lead = 'def f(a, b):\n    lead = (_uint(a, "a"), 0)\n    LIB.fm_sheet_set_number(h, *lead, 0, 1.0)\n'
+        self.assertEqual(_sweep_source(lead, functions), [])
+        raw = "def f(a, b):\n    lead = (a, 0)\n    LIB.fm_sheet_set_number(h, *lead, 0, 1.0)\n"
+        self.assertEqual(len(_sweep_source(raw, functions)), 1)
 
 
 class IndexRangeTests(unittest.TestCase):

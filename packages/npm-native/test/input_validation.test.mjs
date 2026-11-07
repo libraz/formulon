@@ -87,8 +87,8 @@ test('module-level numeric and string positions reject coercion and overflow', (
     probe('status-overflow', RangeError, () => addon.getStatusName(2 ** 31));
     probe('log-symbol', TypeError, () => addon.setLogMinLevel(Symbol('log')));
     probe('log-underflow', RangeError, () => addon.setLogMinLevel(-(2 ** 31) - 1));
-    probe('formula-symbol', TypeError, () => addon.evalFormula(Symbol('formula')));
-    probe('formula-object', TypeError, () => addon.evalFormula({ toString() { throw new Error('toString'); } }));
+    probe('formula-symbol', TypeError, () => addon.evaluateFormula(Symbol('formula')));
+    probe('formula-object', TypeError, () => addon.evaluateFormula({ toString() { throw new Error('toString'); } }));
     if (failures.length) {
       console.error(JSON.stringify(failures));
       process.exitCode = 1;

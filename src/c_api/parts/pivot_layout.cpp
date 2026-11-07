@@ -13,6 +13,7 @@
 #include <memory>
 #include <new>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -32,6 +33,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::pivot_num_fmt_code;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -148,7 +150,13 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
     dst.kind = pivot_cell_kind_to_fm(src.kind);
     dst.depth = src.depth;
     dst.field_name = store_cstr(handle->text_store, src.field_name);
-    dst.number_format = store_cstr(handle->text_store, src.number_format);
+    // Value cells carry their data field's numFmtId text; label cells already carry a format code.
+    const bool value_cell = src.role == formulon::pivot::PivotCellRole::DataValue ||
+                            src.role == formulon::pivot::PivotCellRole::SubtotalValue ||
+                            src.role == formulon::pivot::PivotCellRole::GrandTotalValue;
+    dst.number_format =
+        store_cstr(handle->text_store, value_cell ? pivot_num_fmt_code(wb->workbook(), src.number_format)
+                                                  : std::string_view(src.number_format));
     handle->cells.push_back(dst);
   }
 

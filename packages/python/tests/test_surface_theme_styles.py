@@ -6,7 +6,7 @@ import unittest
 
 from formulon import (
     CellStyle,
-    CellXf,
+    CellXfInput,
     Color,
     ColorContext,
     ColorResolution,
@@ -26,8 +26,8 @@ _RGB_KIND = 1
 _AUTO_KIND = 4
 
 
-def _xf(font_index: int) -> CellXf:
-    return CellXf(
+def _xf(font_index: int) -> CellXfInput:
+    return CellXfInput(
         font_index=font_index,
         fill_index=0,
         border_index=0,

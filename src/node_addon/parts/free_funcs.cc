@@ -97,10 +97,10 @@ bool ReadInt32(const Napi::CallbackInfo& info, const char* name, std::int32_t* o
 // recalcing instead would make every A1-referencing formula (`=A1`,
 // `=COUNTA(A1)`) a self-reference and return `#REF!`, which is neither
 // what a one-shot helper should mean nor what the other two surfaces do.
-Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
+Napi::Value EvaluateFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsString()) {
-    Napi::TypeError::New(env, "evalFormula argument 1 must be a primitive string").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "evaluateFormula argument 1 must be a primitive string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string formula = StringArg(info, 0);

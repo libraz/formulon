@@ -324,6 +324,18 @@ emscripten::val JsWorkbook::listDefinedNames() const {
   return arr;
 }
 
+uint32_t JsWorkbook::tableRuntimeId(uint32_t idx) const {
+  uint32_t out = 0;
+  succeeded(handle_ != nullptr ? fm_workbook_get_table_runtime_id(handle_, idx, &out) : kBindingInvalidHandle);
+  return out;
+}
+
+uint32_t JsWorkbook::resolveTableRuntimeId(uint32_t id) const {
+  std::size_t out = 0;
+  succeeded(handle_ != nullptr ? fm_workbook_resolve_table_runtime_id(handle_, id, &out) : kBindingInvalidHandle);
+  return static_cast<uint32_t>(out);
+}
+
 emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   const char* name = nullptr;
   const char* display = nullptr;

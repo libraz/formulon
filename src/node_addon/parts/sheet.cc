@@ -191,6 +191,26 @@ Napi::Value Workbook::RemoveDefinedName(const Napi::CallbackInfo& info) {
   });
 }
 
+Napi::Value Workbook::TableRuntimeId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  uint32_t out = 0;
+  const fm_status_t rc = fm_workbook_get_table_runtime_id(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &out);
+  return ValueOrThrow(env, rc, JsNumber(env, out));
+}
+
+Napi::Value Workbook::ResolveTableRuntimeId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  std::size_t out = 0;
+  const fm_status_t rc = fm_workbook_resolve_table_runtime_id(handle_, ArgU32(info, 0), &out);
+  return ValueOrThrow(env, rc, JsNumber(env, static_cast<double>(out)));
+}
+
 Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
   const char* name = nullptr;
   const char* display = nullptr;

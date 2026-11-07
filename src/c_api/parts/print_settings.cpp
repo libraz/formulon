@@ -52,11 +52,14 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fragment_within_size_limit;
 using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::validate_single_element_fragment;
 
 namespace {
@@ -218,6 +221,11 @@ void set_attr_double(pugi::xml_node node, const char* name, double value) {
   set_attr(node, name, text);
 }
 
+/// `<headerFooter>` section children in schema order, matching the section
+/// pointers of `fm_header_footer_t`.
+constexpr std::string_view kHeaderFooterSections[] = {"oddHeader",  "oddFooter",   "evenHeader",
+                                                      "evenFooter", "firstHeader", "firstFooter"};
+
 /// Writes a `<headerFooter>` section child, creating it in schema order or
 /// removing it when `text` is empty.
 ///
@@ -226,9 +234,7 @@ void set_attr_double(pugi::xml_node node, const char* name, double value) {
 /// list is walked backwards from the target to find the nearest existing
 /// predecessor so a new child lands where the schema expects it.
 void set_header_footer_section(pugi::xml_node root, std::size_t section_index, std::string_view text) {
-  static constexpr std::string_view kSections[] = {"oddHeader",  "oddFooter",   "evenHeader",
-                                                   "evenFooter", "firstHeader", "firstFooter"};
-  const std::string name(kSections[section_index]);
+  const std::string name(kHeaderFooterSections[section_index]);
   pugi::xml_node node = root.child(name.c_str());
   if (text.empty()) {
     if (node) {
@@ -239,7 +245,7 @@ void set_header_footer_section(pugi::xml_node root, std::size_t section_index, s
   if (!node) {
     pugi::xml_node after;
     for (std::size_t i = section_index; i > 0; --i) {
-      const std::string previous(kSections[i - 1U]);
+      const std::string previous(kHeaderFooterSections[i - 1U]);
       if (pugi::xml_node candidate = root.child(previous.c_str())) {
         after = candidate;
         break;
@@ -252,6 +258,37 @@ void set_header_footer_section(pugi::xml_node root, std::size_t section_index, s
   // reaches the file as `&amp;C...` - which is exactly the form Excel
   // writes for a header formatting code.
   node.text().set(std::string(text).c_str());
+}
+
+/// Sets or clears `<sheetPr><pageSetUpPr fitToPage>` without disturbing any
+/// other `<sheetPr>` content.
+void set_fit_to_page(SheetPrintSettings& print, bool enabled) {
+  pugi::xml_document doc;
+  pugi::xml_node root = load_or_create_root(doc, print.sheet_pr_xml, "sheetPr");
+  pugi::xml_node page_setup_pr = root.child("pageSetUpPr");
+  if (!enabled) {
+    // Clear the attribute but keep both elements: `<pageSetUpPr>` also
+    // carries `autoPageBreaks`, and `<sheetPr>` carries tab colour and the
+    // VBA code name.
+    if (page_setup_pr) {
+      page_setup_pr.remove_attribute("fitToPage");
+    }
+  } else {
+    if (!page_setup_pr) {
+      // `<pageSetUpPr>` is the last child in `<sheetPr>`'s content model,
+      // after `<tabColor>` and `<outlinePr>`.
+      page_setup_pr = root.append_child("pageSetUpPr");
+    }
+    set_attr_bool(page_setup_pr, "fitToPage", true);
+  }
+  print.sheet_pr_xml = raw_xml(root);
+  print.page_setup.fit_to_page = enabled;
+}
+
+/// Loads a stored print fragment for a getter; false when it is absent.
+bool load_fragment(pugi::xml_document& doc, const std::string& fragment) {
+  return !fragment.empty() &&
+         doc.load_buffer(fragment.data(), fragment.size(), pugi::parse_default, pugi::encoding_utf8);
 }
 
 /// Upserts a manual break into an axis vector, keeping it sorted by index.
@@ -411,35 +448,6 @@ extern "C" fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet
   return set_fragment(wb, sheet_index, kSheetPrSlot, xml);
 }
 
-extern "C" fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_index, int32_t enabled) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  pugi::xml_document doc;
-  pugi::xml_node root = load_or_create_root(doc, print.sheet_pr_xml, "sheetPr");
-  pugi::xml_node page_setup_pr = root.child("pageSetUpPr");
-  if (enabled == 0) {
-    // Clear the attribute but keep both elements: `<pageSetUpPr>` also
-    // carries `autoPageBreaks`, and `<sheetPr>` carries tab colour and the
-    // VBA code name.
-    if (page_setup_pr) {
-      page_setup_pr.remove_attribute("fitToPage");
-    }
-  } else {
-    if (!page_setup_pr) {
-      // `<pageSetUpPr>` is the last child in `<sheetPr>`'s content model,
-      // after `<tabColor>` and `<outlinePr>`.
-      page_setup_pr = root.append_child("pageSetUpPr");
-    }
-    set_attr_bool(page_setup_pr, "fitToPage", true);
-  }
-  print.sheet_pr_xml = raw_xml(root);
-  print.page_setup.fit_to_page = enabled != 0;
-  return 0;
-}
-
 /* -------------------------------------------------------------------------- */
 /* Manual page breaks                                                         */
 /* -------------------------------------------------------------------------- */
@@ -546,7 +554,7 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
   // `fitToPage` is not a `<pageSetup>` attribute; it rides along on this
   // struct because callers think of it as part of one page-setup decision.
   if (setup->fit_to_page_engaged != 0) {
-    return fm_sheet_set_fit_to_page(wb, sheet_index, setup->fit_to_page);
+    set_fit_to_page(print, setup->fit_to_page != 0);
   }
   return 0;
 }
@@ -729,6 +737,76 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
         {"bottom", &out->bottom_engaged}, {"header", &out->header_engaged}, {"footer", &out->footer_engaged},
     };
     read_engaged(root, attrs, std::size(attrs));
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_print_options(const fm_workbook_t* wb, size_t sheet_index,
+                                                  fm_print_options_t* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return null_argument("out");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  *out = fm_print_options_t{};
+  pugi::xml_document doc;
+  if (!load_fragment(doc, wb->workbook().sheet(sheet_index).print_settings().print_options_xml)) {
+    return 0;
+  }
+  const pugi::xml_node root = doc.first_child();
+  out->grid_lines = root.attribute("gridLines").as_bool(false) ? 1 : 0;
+  out->headings = root.attribute("headings").as_bool(false) ? 1 : 0;
+  out->horizontal_centered = root.attribute("horizontalCentered").as_bool(false) ? 1 : 0;
+  out->vertical_centered = root.attribute("verticalCentered").as_bool(false) ? 1 : 0;
+  const EngagedAttr attrs[] = {
+      {"gridLines", &out->grid_lines_engaged},
+      {"headings", &out->headings_engaged},
+      {"horizontalCentered", &out->horizontal_centered_engaged},
+      {"verticalCentered", &out->vertical_centered_engaged},
+  };
+  read_engaged(root, attrs, std::size(attrs));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_t sheet_index,
+                                                  fm_header_footer_t* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return null_argument("out");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  *out = fm_header_footer_t{};
+  // CT_HeaderFooter defaults: scaleWithDoc and alignWithMargins are true.
+  out->scale_with_doc = 1;
+  out->align_with_margins = 1;
+  pugi::xml_document doc;
+  if (!load_fragment(doc, wb->workbook().sheet(sheet_index).print_settings().header_footer_xml)) {
+    return 0;
+  }
+  const pugi::xml_node root = doc.first_child();
+  out->different_odd_even = root.attribute("differentOddEven").as_bool(false) ? 1 : 0;
+  out->different_first = root.attribute("differentFirst").as_bool(false) ? 1 : 0;
+  out->scale_with_doc = root.attribute("scaleWithDoc").as_bool(true) ? 1 : 0;
+  out->align_with_margins = root.attribute("alignWithMargins").as_bool(true) ? 1 : 0;
+  const EngagedAttr attrs[] = {
+      {"differentOddEven", &out->different_odd_even_engaged},
+      {"differentFirst", &out->different_first_engaged},
+      {"scaleWithDoc", &out->scale_with_doc_engaged},
+      {"alignWithMargins", &out->align_with_margins_engaged},
+  };
+  read_engaged(root, attrs, std::size(attrs));
+  TextStore& store = fresh_read_scratch(wb);
+  const char** const sections[] = {&out->odd_header,  &out->odd_footer,   &out->even_header,
+                                   &out->even_footer, &out->first_header, &out->first_footer};
+  for (std::size_t i = 0; i < std::size(sections); ++i) {
+    const pugi::xml_node node = root.child(std::string(kHeaderFooterSections[i]).c_str());
+    if (node) {
+      *sections[i] = store_cstr(store, node.text().get());
+    }
   }
   return 0;
 }

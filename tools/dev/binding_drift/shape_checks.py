@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Set, Tuple
 
+from .api_conventions import LEDGER_PATH, handle_class_names, load_ledger
 from .c_header import _c_struct_fields
 from .surface_files import (
     CAPI_HEADER,
@@ -97,6 +98,12 @@ def _declaration_mismatches(kind: str, owner: str, wasm_body: str, node_body: st
     return problems
 
 
+def _handle_classes() -> List[str]:
+    """The handle classes the ledger names, `Sheet` included; none when the ledger does not load."""
+    ledger = load_ledger(LEDGER_PATH)
+    return [] if ledger.problems else handle_class_names(ledger.collections)
+
+
 def check_dts_shared_shapes() -> List[str]:
     problems: List[str] = []
     wasm_dts = _read(WASM_DTS)
@@ -104,10 +111,14 @@ def check_dts_shared_shapes() -> List[str]:
     wasm_label = str(WASM_DTS.relative_to(REPO_ROOT))
     node_label = str(NODE_DTS.relative_to(REPO_ROOT))
 
-    # `Sheet` joins the method interfaces once both files declare it.
+    # `Sheet` and each handle class of the ledger join the method interfaces once both files declare them.
     method_interfaces = ["Workbook", "WorkbookCtor"]
-    if all(re.search(r"^export interface Sheet\b", text, re.MULTILINE) for text in (wasm_dts, node_dts)):
-        method_interfaces.append("Sheet")
+    for interface in ["Sheet", *_handle_classes()]:
+        pattern = r"^export interface %s\b" % re.escape(interface)
+        if interface not in method_interfaces and all(
+            re.search(pattern, text, re.MULTILINE) for text in (wasm_dts, node_dts)
+        ):
+            method_interfaces.append(interface)
     for interface in method_interfaces:
         wasm_body = _find_interface_body(wasm_dts, interface, WASM_DTS)
         node_body = _find_interface_body(node_dts, interface, NODE_DTS)

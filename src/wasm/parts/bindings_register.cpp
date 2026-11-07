@@ -218,7 +218,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getThreadedComment", &JsWorkbook::getThreadedComment)
       .function("addThreadedComment", &JsWorkbook::addThreadedComment)
       .function("updateThreadedComment", &JsWorkbook::editThreadedComment)
-      .function("setThreadResolved", &JsWorkbook::setThreadResolved)
       .function("removeThreadedComment", &JsWorkbook::removeThreadedComment)
       .function("listPeople", &JsWorkbook::getPersons)
       .function("addPerson", &JsWorkbook::addPerson)
@@ -259,7 +258,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getSparklineGroup", &JsWorkbook::getSparklineGroup)
       .function("addSparklineGroup", &JsWorkbook::addSparklineGroup)
       .function("updateSparklineGroup", &JsWorkbook::updateSparklineGroup)
-      .function("setSparklineGroupSparklines", &JsWorkbook::setSparklineGroupSparklines)
       .function("removeSparklineGroup", &JsWorkbook::removeSparklineGroup)
       .function("getChart", &JsWorkbook::getChart)
       .function("getChartData", &JsWorkbook::getChartData)
@@ -341,6 +339,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("listColumnBreaks", &JsWorkbook::getSheetColBreaks)
       .function("getHeaderFooterXml", &JsWorkbook::getSheetHeaderFooterXml)
       .function("getPageMargins", &JsWorkbook::getSheetPageMargins)
+      .function("getPrintOptions", &JsWorkbook::getSheetPrintOptions)
+      .function("getHeaderFooter", &JsWorkbook::getSheetHeaderFooter)
       .function("getPageMarginsXml", &JsWorkbook::getSheetPageMarginsXml)
       .function("getPageSetup", &JsWorkbook::getSheetPageSetup)
       .function("getPageSetupXml", &JsWorkbook::getSheetPageSetupXml)
@@ -492,6 +492,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPivotReportLayout", &JsWorkbook::pivotGetLayout)
       .function("getPivotCacheId", &JsWorkbook::pivotCacheId)
       .function("getPivotName", &JsWorkbook::pivotName)
+      .function("getPivotRuntimeId", &JsWorkbook::pivotRuntimeId)
+      .function("resolvePivotRuntimeId", &JsWorkbook::resolvePivotRuntimeId)
       .function("getPivotGrandTotals", &JsWorkbook::pivotGetGrandTotals)
       .function("getPivotStyleInfo", &JsWorkbook::pivotGetStyleInfo)
       .function("getPivotRowFieldOrder", &JsWorkbook::pivotRowFieldOrder)
@@ -597,7 +599,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("restoreRangeStyle", &JsWorkbook::restoreRangeStyle)
       .function("setFreeze", &JsWorkbook::setSheetFreeze)
       .function("setAutoFilterXml", &JsWorkbook::setSheetAutoFilterXml)
-      .function("setFitToPage", &JsWorkbook::setSheetFitToPage)
       .function("setHeaderFooter", &JsWorkbook::setSheetHeaderFooter)
       .function("setHeaderFooterXml", &JsWorkbook::setSheetHeaderFooterXml)
       .function("setPageMargins", &JsWorkbook::setSheetPageMargins)
@@ -641,13 +642,15 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getArrayFormula", &JsWorkbook::getArrayFormula)
       .function("setArrayFormula", &JsWorkbook::setArrayFormula)
       .function("getTable", &JsWorkbook::tableAt)
+      .function("getTableRuntimeId", &JsWorkbook::tableRuntimeId)
+      .function("resolveTableRuntimeId", &JsWorkbook::resolveTableRuntimeId)
       .function("getTableCount", &JsWorkbook::tableCount)
       .function("updateTable", &JsWorkbook::updateTable)
       .function("setTableColumnTotals", &JsWorkbook::setTableColumnTotals)
       .function("getCellXfCount", &JsWorkbook::xfCount);
 
   // ---- Free functions ------------------------------------------------------
-  function("evalFormula", &eval_formula);
+  function("evaluateFormula", &evaluate_formula);
   function("getVersion", &version_string);
   function("getStatusName", &status_string);
   function("setLogMinLevel", &set_log_min_level);

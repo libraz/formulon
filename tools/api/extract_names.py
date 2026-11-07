@@ -49,6 +49,11 @@ NODE_ADDON = Path("src/node_addon/addon.cc")
 NODE_SOURCES = (Path("src/node_addon/parts"), Path("src/node_addon/generated"), Path("src/node_addon"))
 NODE_DTS = Path("packages/npm-native/index.d.ts")
 PY_PKG = Path("packages/python/formulon")
+# The modules of the Python handle classes; a module not written yet is skipped.
+PY_HANDLE_MODULES = ("table.py", "pivot.py", "pivot_cache.py", "drawing.py")
+# The facade source whose generated tables name the JS handle methods `Class.method`.
+NPM_COMMON = Path("packages/npm/common.mjs")
+_JS_HANDLE_TABLES = ("HANDLE_FORWARDERS", "HANDLE_PROPERTIES")
 
 JS_SURFACES = ("wasm", "native")
 LEDGER_SURFACES = ("c", "wasm", "native", "py")
@@ -254,7 +259,24 @@ def _scan_js(root: Path) -> Dict[str, Dict[str, Member]]:
         if name not in NODE_INTERNAL_EXPORTS:
             targets.setdefault(name, ("free", target))
     js["native"] = _js_members(root, NODE_DTS, targets, graph)
+    for name in _js_handle_members(root):
+        for surface in JS_SURFACES:
+            js[surface].setdefault(name, Member(name, "method"))
     return js
+
+
+def _js_handle_members(root: Path) -> List[str]:
+    """`Class.method` of every handle method the generated facade tables of common.mjs name."""
+    path = root / NPM_COMMON
+    if not path.is_file():
+        return []
+    region = re.search(r"// <facade-tables>(.*?)// </facade-tables>", path.read_text(encoding="utf-8"), re.S)
+    out: List[str] = []
+    for table in _JS_HANDLE_TABLES:
+        found = re.search(r"\b%s\s*=\s*Object\.freeze\(\{(.*?)\}\);" % table, region.group(1), re.S) if region else None
+        if found:
+            out += re.findall(r"^\s*'([A-Z]\w*\.\w+)':", found.group(1), re.M)
+    return out
 
 
 def _js_members(root: Path, rel: Path, targets: Dict[str, Tuple[str, str]], graph) -> Dict[str, Member]:
@@ -379,6 +401,21 @@ def _scan_py(root: Path):
             reach(f"Workbook.{name}"),
             _py_signature(node),
         )
+    for module in PY_HANDLE_MODULES:
+        path = pkg / module
+        if not path.is_file():
+            continue
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for item in node.body:
+                if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+                    continue
+                prop = any(getattr(d, "id", "") == "property" for d in item.decorator_list)
+                name = f"{node.name}.{item.name}"
+                out.setdefault(
+                    name, Member(name, "property" if prop else "method", _py_refs(item)[0], _py_signature(item))
+                )
     init = ast.parse((pkg / "__init__.py").read_text(encoding="utf-8"))
     for node in init.body:
         if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "__all__":

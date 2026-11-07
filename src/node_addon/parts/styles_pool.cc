@@ -285,7 +285,7 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
   xf.indent = reader.U32(record, "indent", 0U, &indent_present);
   xf.relative_indent = reader.I32(record, "relativeIndent", 0, &relative_indent_present);
   xf.shrink_to_fit = reader.Bool(record, "shrinkToFit", false, &shrink_to_fit_present) ? 1 : 0;
-  xf.reading_order = reader.U32(record, "readingOrder", 0U, &reading_order_present);
+  xf.reading_order = reader.I32(record, "readingOrder", 0, &reading_order_present);
   xf.has_text_rotation = text_rotation_present ? 1 : 0;
   xf.has_indent = indent_present ? 1 : 0;
   xf.has_relative_indent = relative_indent_present ? 1 : 0;

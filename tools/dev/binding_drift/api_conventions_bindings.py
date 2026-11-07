@@ -33,6 +33,10 @@ from .api_conventions import (
     derive_py,
     derive_record_type,
     derive_type,
+    entry_handle,
+    handle_classes,
+    handle_collections,
+    handle_name,
     rule,
 )
 from .surface_files import _SKIPPED, NODE_DTS, NPM_COMMON_MJS, PYTHON_PKG_DIR, REPO_ROOT, WASM_DTS
@@ -54,11 +58,11 @@ FACADE_EXTRA = {
         WORKBOOK_CLASS: frozenset(
             {"sheet", "listSheets", "dispose", "disposed", "[Symbol.dispose]", "getActiveSheet", "setActiveSheet"}
         ),
-        SHEET_CLASS: frozenset({"workbook", "index", "name", "get", "set"}),
+        SHEET_CLASS: frozenset({"workbook", "index", "name"}),
     },
     "py": {
         WORKBOOK_CLASS: frozenset({"sheet", "list_sheets", "close", "closed", "get_active_sheet", "set_active_sheet"}),
-        SHEET_CLASS: frozenset({"workbook", "index", "name", "get", "set"}),
+        SHEET_CLASS: frozenset({"workbook", "index", "name"}),
     },
 }
 
@@ -606,6 +610,31 @@ def _functions_by_key(ctx: Context) -> Dict[str, CFunction]:
     return _cached(ctx, "functions-by-key", lambda: {ctx.op_key(fn.name): fn for fn in ctx.functions})
 
 
+def handle_members(ctx: Context, surface: str, cls: str) -> Dict[str, object]:
+    """Members of the handle class `cls` on `surface`: the interface's methods and fields, or the Python class's
+    methods and properties."""
+    found = surfaces(ctx)
+    if surface == "py":
+        py_class = found.py.classes.get(cls)
+        return dict(py_class.methods) if py_class else {}
+    decl = found.js[surface].decls.get(cls)
+    out: Dict[str, object] = {}
+    for member in decl.members if decl else ():
+        out.setdefault(member.name, member)
+    return out
+
+
+def handle_in_tree(ctx: Context, surface: str, entry: dict) -> Optional[str]:
+    """`Class.method` under which a handle op is declared on `surface`, or None (also for a non-handle op)."""
+    if entry_handle(entry) is None:
+        return None
+    name = handle_name(entry, _field(surface), ctx.ledger.collections)
+    for cls in handle_classes(entry):
+        if name and name in handle_members(ctx, surface, cls):
+            return f"{cls}.{name}"
+    return None
+
+
 def _in_tree(found: Dict[str, object], entry: dict, field: str) -> Optional[str]:
     """The tree name under which `entry` appears in `found`, excluding a dropped name."""
     dropped = _dropped(entry, field)
@@ -686,6 +715,17 @@ def _positional_params(fn: CFunction) -> List[CParam]:
 _SYMBOL_ALIASES = {"[Symbol.dispose]": "dispose"}
 
 
+def _sheet_handle_names(ctx: Context, field: str) -> Set[str]:
+    """Names the ledger publishes on `Sheet` through `handle: {class: Sheet}` (`rename`, `move`)."""
+    out: Set[str] = set()
+    for entry in ctx.ledger.entries.values():
+        if isinstance(entry, dict) and SHEET_CLASS in handle_classes(entry):
+            name = handle_name(entry, field, ctx.ledger.collections)
+            if name:
+                out.add(name)
+    return out
+
+
 @_owned("R0.coverage")
 def _rule_coverage(ctx: Context) -> Iterable[Violation]:
     """Every exported symbol on every surface is the current name of a ledger entry that lists the surface.
@@ -701,6 +741,8 @@ def _rule_coverage(ctx: Context) -> Iterable[Violation]:
                 if key is not None and entry.get(field) == _SYMBOL_ALIASES[symbol]:
                     continue
             key, entry = _lookup(ctx, surface, symbol)
+            if key is None and surface != "c" and symbol in _sheet_handle_names(ctx, field):
+                continue
             if key is None:
                 yield _violation(ctx, "R0.coverage", surface, symbol, symbol, f"`{symbol}` has no ledger entry")
                 continue
@@ -963,7 +1005,7 @@ def _rule_derive(ctx: Context) -> Iterable[Violation]:
                 continue
             typed = {derive_type(tree_c, entry.get("role"))}
             if kind == "record":
-                typed.add(derive_record_type(tree_c, entry.get("role")))
+                typed.add(derive_record_type(tree_c, entry.get("role"), ctx.ledger.handle_collections()))
             wants = {"js": typed, "py": typed}
         else:
             continue
@@ -997,11 +1039,21 @@ def _plural_name(ctx: Context, entry: dict) -> Optional[str]:
 @_owned("R5.list")
 def _rule_list(ctx: Context) -> Iterable[Violation]:
     """A `kind: list` entry is `list<Plural>` / `list_<plural>` of its collection and is callable on each binding
-    surface it lists (a `Workbook` method or an exported function); dropped count / at names are gone from the
-    binding surfaces.
+    surface it lists (a `Workbook` method or an exported function, or a method of its handle class); dropped
+    count / at names are gone from the binding surfaces. An `internal` list is raw-only.
     """
     for key, entry in sorted(ctx.ledger.entries.items()):
-        if not isinstance(entry, dict) or entry.get("kind") != "list":
+        if not isinstance(entry, dict) or entry.get("kind") != "list" or entry.get("internal") is True:
+            continue
+        if entry_handle(entry) is not None:
+            for surface in BINDING_SURFACES:
+                if surface in (_entry_surfaces(entry) or list(BINDING_SURFACES)) and not handle_in_tree(
+                    ctx, surface, entry
+                ):
+                    shown = handle_name(entry, _field(surface), ctx.ledger.collections)
+                    yield _violation(
+                        ctx, "R5.list", surface, key, "missing", f"`{shown}` is not on its handle class on {surface}"
+                    )
             continue
         plural = _plural_name(ctx, entry)
         listed = _entry_surfaces(entry) or list(BINDING_SURFACES)
@@ -1180,7 +1232,8 @@ def _is_interface_union(decls: Dict[str, TsDecl], decl: TsDecl) -> bool:
 def _rule_js_records(ctx: Context) -> Iterable[Violation]:
     """JS record shape by role: a result is an interface of `readonly` fields (or a union of such interfaces,
     which R16.js judges), an input an interface named
-    `<Name>Input`, a patch `type <Name>Patch = Patch<...>`; `Patch<T>` is declared once as
+    `<Name>Input`, a patch `type <Name>Patch = Patch<...>` or a dedicated interface whose every field is optional
+    (a patch whose keys take no `null`, or only the nullable ones); `Patch<T>` is declared once as
     `{ [K in keyof T]?: T[K] | null }`.
     """
     found = surfaces(ctx)
@@ -1196,8 +1249,15 @@ def _rule_js_records(ctx: Context) -> Iterable[Violation]:
             if problem:
                 yield _violation(ctx, "R7.js", surface, key, "name", problem)
             if role == "patch":
-                if decl.kind != "type" or not decl.text.startswith("Patch<"):
-                    yield _violation(ctx, "R7.js", surface, key, "patch", f"`{name}` is not declared as `Patch<...>`")
+                if not (decl.kind == "type" and decl.text.startswith("Patch<")) and not _optional_interface(decl):
+                    yield _violation(
+                        ctx,
+                        "R7.js",
+                        surface,
+                        key,
+                        "patch",
+                        f"`{name}` is neither `Patch<...>` nor an interface of optional fields",
+                    )
             elif decl.kind == "type" and _is_interface_union(decls, decl):
                 continue
             elif decl.kind != "interface":
@@ -1221,6 +1281,30 @@ def _rule_js_records(ctx: Context) -> Iterable[Violation]:
                 yield _violation(
                     ctx, "R7.js", surface, "Patch", "alias", f"declare `export type Patch<T> = {_PATCH_ALIAS};` once"
                 )
+
+
+_TS_FIELD_RE = re.compile(r"(?:^|[;{\n])\s*(?:readonly\s+)?[A-Za-z_$][\w$]*(\??)\s*:")
+
+
+def _optional_interface(decl: TsDecl) -> bool:
+    """An interface with fields, every one of them optional (`name?: T`)."""
+    if decl.kind != "interface" or any(m.is_method for m in decl.members):
+        return False
+    marks = _TS_FIELD_RE.findall(_extract_top_level(decl.text))
+    return bool(marks) and all(mark == "?" for mark in marks)
+
+
+def _extract_top_level(body: str) -> str:
+    """`body` with every nested `{...}` / `<...>` / `(...)` / `[...]` removed, so only its own fields remain."""
+    out, depth = [], 0
+    for char in body:
+        if char in "{<([":
+            depth += 1
+        elif char in "}>)]":
+            depth -= 1
+        elif depth == 0:
+            out.append(char)
+    return "".join(out)
 
 
 def _is_dataclass(cls: PyClass, frozen: bool) -> bool:
@@ -1341,7 +1425,8 @@ def _field_renames(ctx: Context, surface: str, rule_id: str) -> Iterator[Violati
 def _rule_js_results(ctx: Context) -> Iterable[Violation]:
     """JS results carry no envelope: no declaration is named like a retired result type, no `export interface`
     has a `status` field, and no callable returns a retired type. A scalar result is the scalar, an allocated
-    key a `number` (or the type the ledger's `returns: union:<Type>` names), a natural-key lookup `T | null`;
+    key a `number` (or the type the ledger's `returns: union:<Type>` names, or the handle class of a collection
+    published as handles), a natural-key lookup `T | null`;
     `kind: field` renames are applied.
     """
     found = surfaces(ctx)
@@ -1393,12 +1478,21 @@ def _rule_js_results(ctx: Context) -> Iterable[Violation]:
             fn = _tree_c(ctx, entry)
             # An allocated key is a `number` unless the ledger types the result (a handle the facade wraps).
             if fn is not None and c_verb(ctx.target_c(fn.name)) == "add" and _allocates_key(fn) and typed is None:
-                want = "number"
+                # An add of a collection published as handles returns the new element's handle.
+                want = _handle_result(ctx, key) or "number"
             if want and member.type != want:
                 yield _violation(
                     ctx, "R8.js", surface, key, "result", f"`{name}` returns `{member.type}`, not `{want}`"
                 )
         yield from _field_renames(ctx, surface, "R8.js")
+
+
+def _handle_result(ctx: Context, key: str) -> Optional[str]:
+    """The handle class of the collection whose `ops` list `key`, when it is published as handles."""
+    for name, cls in handle_collections(ctx.ledger.collections).items():
+        if key in ((ctx.ledger.collections.get(name) or {}).get("ops") or []):
+            return cls
+    return None
 
 
 def _is_tuple(annotation: str, classes: Dict[str, PyClass]) -> bool:

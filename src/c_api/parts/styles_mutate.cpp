@@ -23,6 +23,7 @@
 #include "workbook.h"
 
 using formulon::effective_num_fmt;
+using formulon::c_api::parts::add_num_fmt_code;
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
@@ -161,7 +162,7 @@ fm_status_t validate_xf_alignment(const fm_cell_xf_t& record) {
   if (record.has_indent != 0 && record.indent > 255U) {
     return invalid_argument("indent out of range", "indent=" + std::to_string(record.indent));
   }
-  if (record.has_reading_order != 0 && record.reading_order > 2U) {
+  if (record.has_reading_order != 0 && (record.reading_order < 0 || record.reading_order > 2)) {
     return invalid_argument("reading_order out of range", "reading_order=" + std::to_string(record.reading_order));
   }
   return 0;
@@ -199,7 +200,7 @@ formulon::CellXf cell_xf_from_c(const fm_cell_xf_t& record, std::uint32_t xf_id)
   candidate.has_shrink_to_fit = record.has_shrink_to_fit != 0;
   candidate.shrink_to_fit = record.shrink_to_fit != 0;
   candidate.has_reading_order = record.has_reading_order != 0;
-  candidate.reading_order = record.reading_order;
+  candidate.reading_order = static_cast<std::uint32_t>(record.reading_order);
 
   candidate.apply_number_format = record.apply_number_format != 0;
   candidate.apply_font = record.apply_font != 0;
@@ -434,53 +435,7 @@ extern "C" fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* fo
   if (auto rc = check_utf8({format_code}); rc != 0) {
     return rc;
   }
-  const std::string code = text_or_empty(format_code);
-  const formulon::StylesTable& existing_styles = wb->workbook().styles();
-
-  // Step 1: return a built-in slot only when that slot's effective mapping
-  // matches the requested code. A custom record may override the built-in.
-  for (uint16_t id = 0; id < 164U; ++id) {
-    const std::optional<std::string_view> resolved = effective_num_fmt(existing_styles, id);
-    if (resolved.has_value() && code == *resolved) {
-      *out_num_fmt_id = id;
-      return 0;
-    }
-  }
-
-  formulon::StylesTable& styles = wb->workbook().mutable_styles();
-
-  // Step 2: existing custom entry whose id still resolves to its code. This
-  // skips shadowed duplicate ids and invalid string indexes.
-  for (const formulon::NumFmtRecord& n : styles.num_fmts) {
-    const std::optional<std::string_view> resolved = effective_num_fmt(styles, n.id);
-    if (resolved.has_value() && code == *resolved) {
-      *out_num_fmt_id = n.id;
-      return 0;
-    }
-  }
-
-  // Step 3: append a new custom entry. New id is one past the largest
-  // existing custom id, with `163` as the lower bound (the last
-  // built-in slot).
-  std::uint32_t next_id = 163U;
-  for (const formulon::NumFmtRecord& n : styles.num_fmts) {
-    if (n.id > next_id) {
-      next_id = n.id;
-    }
-  }
-  if (next_id >= std::numeric_limits<std::uint16_t>::max()) {
-    return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, "custom numFmtId space exhausted",
-                             "max_num_fmt_id=" + std::to_string(std::numeric_limits<std::uint16_t>::max()));
-  }
-  ++next_id;
-
-  styles.num_fmt_strings.push_back(code);
-  formulon::NumFmtRecord rec;
-  rec.id = static_cast<std::uint16_t>(next_id);
-  rec.format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size() - 1);
-  styles.num_fmts.push_back(rec);
-  *out_num_fmt_id = static_cast<std::uint16_t>(next_id);
-  return 0;
+  return add_num_fmt_code(wb->workbook(), text_or_empty(format_code), out_num_fmt_id);
 }
 
 namespace {

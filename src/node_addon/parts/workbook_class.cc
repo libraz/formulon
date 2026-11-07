@@ -40,6 +40,12 @@ struct PositionalArgSpec {
   std::uint64_t required_mask;
 };
 
+// The generated facade scope tables, from the ledger:
+//   * `kSheetMethods` -- the raw methods the `Sheet` facade calls with the sheet index first, sorted;
+//   * `kHandleMethods` -- the raw methods a handle class calls, each a `HandleMethod` with the
+//     `Class.method` label its errors carry and the count of leading arguments the handle supplies.
+#include "node_addon/generated/facade_scope.inc"
+
 /// One registered method or module function: its masks and the name its errors carry.
 struct GuardedMethodData {
   PositionalArgSpec spec;
@@ -48,25 +54,34 @@ struct GuardedMethodData {
   const char* owner;
   /// The `Sheet` facade supplies the first argument (the sheet index).
   bool sheet_scoped;
+  /// The handle class that calls the method, or null; it takes precedence over `sheet_scoped`.
+  const HandleMethod* handle;
 };
 
 // A uint64 argument arrives as a Number, which is exact only up to 2^53 - 1;
 // a larger value could not name the cursor the caller holds.
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
-// The raw methods the `Sheet` facade calls with the sheet index first, sorted.
-constexpr const char* kSheetMethods[] = {
-#include "node_addon/generated/facade_scope.inc"
-};
-
 bool IsSheetMethod(const char* name) {
   return std::binary_search(std::begin(kSheetMethods), std::end(kSheetMethods), name,
                             [](const char* a, const char* b) { return std::strcmp(a, b) < 0; });
 }
 
-// Names the argument at `idx` as the facade method sees it: a sheet-scoped
-// method's first argument is the sheet index, which the facade supplies.
+const HandleMethod* FindHandleMethod(const char* name) {
+  const auto found = std::find_if(std::begin(kHandleMethods), std::end(kHandleMethods),
+                                  [name](const HandleMethod& entry) { return std::strcmp(entry.raw, name) == 0; });
+  return found != std::end(kHandleMethods) ? &*found : nullptr;
+}
+
+// Names the argument at `idx` as the facade method sees it: a handle method
+// counts after the arguments its handle supplies, and a sheet-scoped method's
+// first argument is the sheet index, which the facade supplies.
 std::string ArgumentLabel(const GuardedMethodData& method, std::size_t idx) {
+  if (method.handle != nullptr) {
+    const auto supplied = static_cast<std::size_t>(method.handle->supplied);
+    return idx < supplied ? std::string(method.handle->label) + " supplied argument " + std::to_string(idx + 1)
+                          : std::string(method.handle->label) + " argument " + std::to_string(idx - supplied + 1);
+  }
   if (method.sheet_scoped) {
     return idx == 0 ? std::string("Sheet.") + method.name + " sheet index"
                     : std::string("Sheet.") + method.name + " argument " + std::to_string(idx);
@@ -193,7 +208,8 @@ Napi::ClassPropertyDescriptor<Workbook> GuardedInstanceMethod(const char* name) 
                                        optional_u64_mask, optional_null_mask, object_mask, required_mask},
                                       name,
                                       "Workbook",
-                                      IsSheetMethod(name)};
+                                      IsSheetMethod(name),
+                                      FindHandleMethod(name)};
   napi_property_descriptor descriptor{};
   descriptor.utf8name = name;
   descriptor.method = &GuardedInstanceMethodCallback<method>;
@@ -216,7 +232,8 @@ void SetGuardedModuleFunction(Napi::Env env, Napi::Object exports, const char* n
                                        optional_u64_mask, optional_null_mask, object_mask, required_mask},
                                       name,
                                       nullptr,
-                                      false};
+                                      false,
+                                      nullptr};
   exports.Set(name, Napi::Function::New(
                         env,
                         [](const Napi::CallbackInfo& info) -> Napi::Value {
@@ -414,7 +431,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::ApplyTableAutoFilter, 0x1ULL>("applyTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::ClearAutoFilter, 0x1ULL>("clearAutoFilter"),
           GuardedInstanceMethod<&Workbook::ClearTableAutoFilter, 0x1ULL>("clearTableAutoFilter"),
-          GuardedInstanceMethod<&Workbook::EditThreadedComment, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("updateThreadedComment"),
+          GuardedInstanceMethod<&Workbook::EditThreadedComment, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateThreadedComment"),
           GuardedInstanceMethod<&Workbook::EvaluateAutoFilter, 0x1ULL>("evaluateAutoFilter"),
           GuardedInstanceMethod<&Workbook::EvaluateTableAutoFilter, 0x1ULL>("evaluateTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::GetAutoFilter, 0x1ULL>("getAutoFilter"),
@@ -432,7 +449,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetThreadedComment, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("getThreadedComment"),
           GuardedInstanceMethod<&Workbook::SetAutoFilter, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setAutoFilter"),
           GuardedInstanceMethod<&Workbook::SetTableAutoFilter, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setTableAutoFilter"),
-          GuardedInstanceMethod<&Workbook::SetThreadResolved, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setThreadResolved"),
           GuardedInstanceMethod<&Workbook::ValidateValue, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("validateValue"),
           GuardedInstanceMethod<&Workbook::ListDrawingObjects, 0x1ULL>("listDrawingObjects"),
           GuardedInstanceMethod<&Workbook::GetDrawingObject, 0x3ULL>("getDrawingObject"),
@@ -461,7 +477,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetSparklineGroup, 0x3ULL>("getSparklineGroup"),
           GuardedInstanceMethod<&Workbook::AddSparklineGroup, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addSparklineGroup"),
           GuardedInstanceMethod<&Workbook::UpdateSparklineGroup, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateSparklineGroup"),
-          GuardedInstanceMethod<&Workbook::SetSparklineGroupSparklines, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setSparklineGroupSparklines"),
           GuardedInstanceMethod<&Workbook::RemoveSparklineGroup, 0x3ULL>("removeSparklineGroup"),
           GuardedInstanceMethod<&Workbook::GetChart, 0x3ULL>("getChart"),
           GuardedInstanceMethod<&Workbook::GetChartData, 0x3ULL>("getChartData"),
@@ -603,7 +618,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetSheetHeaderFooterXml, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setHeaderFooterXml"),
           GuardedInstanceMethod<&Workbook::GetSheetSheetPrXml, 0x1ULL>("getSheetPrXml"),
           GuardedInstanceMethod<&Workbook::SetSheetSheetPrXml, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetPrXml"),
-          GuardedInstanceMethod<&Workbook::SetSheetFitToPage, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setFitToPage"),
           GuardedInstanceMethod<&Workbook::GetSheetPrintArea, 0x1ULL>("getPrintArea"),
           GuardedInstanceMethod<&Workbook::SetSheetPrintArea, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setPrintArea"),
           GuardedInstanceMethod<&Workbook::GetSheetPrintTitles, 0x1ULL>("getPrintTitles"),
@@ -621,6 +635,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetSheetHeaderFooter, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setHeaderFooter"),
           GuardedInstanceMethod<&Workbook::GetSheetPageSetup, 0x1ULL>("getPageSetup"),
           GuardedInstanceMethod<&Workbook::GetSheetPageMargins, 0x1ULL>("getPageMargins"),
+          GuardedInstanceMethod<&Workbook::GetSheetPrintOptions, 0x1ULL>("getPrintOptions"),
+          GuardedInstanceMethod<&Workbook::GetSheetHeaderFooter, 0x1ULL>("getHeaderFooter"),
           GuardedInstanceMethod<&Workbook::ListPassthroughs>("listPassthroughs"),
           GuardedInstanceMethod<&Workbook::GetPassthrough, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getPassthrough"),
           GuardedInstanceMethod<&Workbook::ListPivotCaches>("listPivotCaches"),
@@ -720,6 +736,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotShowDetails, 0xFULL>("showPivotDetails"),
           GuardedInstanceMethod<&Workbook::SetDrawingName, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setDrawingName"),
           GuardedInstanceMethod<&Workbook::PivotName, 0x3ULL>("getPivotName"),
+          GuardedInstanceMethod<&Workbook::PivotRuntimeId, 0x3ULL>("getPivotRuntimeId"),
+          GuardedInstanceMethod<&Workbook::ResolvePivotRuntimeId, 0x3ULL>("resolvePivotRuntimeId"),
           GuardedInstanceMethod<&Workbook::PivotRowFieldOrder, 0x3ULL>("getPivotRowFieldOrder"),
           GuardedInstanceMethod<&Workbook::PivotSetLayout, 0x3ULL, 0x4ULL>("setPivotReportLayout"),
           GuardedInstanceMethod<&Workbook::PivotSetName, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setPivotName"),
@@ -815,6 +833,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetArrayFormula, 0x7ULL>("getArrayFormula"),
           GuardedInstanceMethod<&Workbook::SetArrayFormula, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setArrayFormula"),
           GuardedInstanceMethod<&Workbook::TableAt, 0x1ULL>("getTable"),
+          GuardedInstanceMethod<&Workbook::TableRuntimeId, 0x1ULL>("getTableRuntimeId"),
+          GuardedInstanceMethod<&Workbook::ResolveTableRuntimeId, 0x1ULL>("resolveTableRuntimeId"),
           GuardedInstanceMethod<&Workbook::CreateTable, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addTable"),
           GuardedInstanceMethod<&Workbook::UpdateTable, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("updateTable"),
           GuardedInstanceMethod<&Workbook::RemoveTable, 0x1ULL>("removeTable"),

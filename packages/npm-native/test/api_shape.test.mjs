@@ -32,7 +32,8 @@ const NON_TABLE_MEMBERS = new Set([
   'Workbook',
   'FormulonError',
   'mergeFunctionMetadata',
-  'evalFormula',
+  'toNative',
+  'evaluateFormula',
   'getVersion',
   'getStatusName',
   'getFunctionMetadata',
@@ -282,9 +283,9 @@ test('each scalar kind carries only its own fields', async () => {
   });
 });
 
-test('evalFormula returns a bare Value', async () => {
-  const { evalFormula, ValueKind } = await getFormulon();
-  assert.deepStrictEqual({ ...evalFormula('=SUM(1,2,3)') }, { kind: ValueKind.Number, number: 6 });
+test('evaluateFormula returns a bare Value', async () => {
+  const { evaluateFormula, ValueKind } = await getFormulon();
+  assert.deepStrictEqual({ ...evaluateFormula('=SUM(1,2,3)') }, { kind: ValueKind.Number, number: 6 });
 });
 
 test('setValue(getValue(...)) round-trips every scalar kind', async () => {
@@ -397,7 +398,7 @@ test('sheet() resolves names and indices and rejects the rest', async () => {
 test('a Sheet keeps its index and reads its name live', async () => {
   await withWorkbook((wb) => {
     const view = wb.sheet('Sheet1');
-    wb.renameSheet(0, 'Renamed');
+    wb.sheet(0).rename('Renamed');
     assert.equal(view.name, 'Renamed');
     assert.equal(view.index, 0);
   });
@@ -542,7 +543,7 @@ function assertSheetsInSync(formulon, wb) {
 
 function threeSheets(formulon) {
   const wb = formulon.Workbook.createDefault();
-  wb.renameSheet(0, 'Data');
+  wb.sheet(0).rename('Data');
   wb.addSheet('Calc');
   wb.addSheet('Notes');
   return wb;
@@ -550,7 +551,7 @@ function threeSheets(formulon) {
 
 test('H1: one handle per sheet, by index or by case-insensitive name', async () => {
   await withWorkbook((wb) => {
-    wb.renameSheet(0, 'Data');
+    wb.sheet(0).rename('Data');
     const ws = wb.sheet(0);
     assert.equal(wb.sheet(0), ws);
     assert.equal(wb.sheet('Data'), ws);
@@ -587,13 +588,13 @@ test('H3 / H4 / H14: moveSheet and renameSheet keep the handle on its sheet', as
   try {
     const data = wb.sheet('Data');
     data.setNumber(0, 0, 1);
-    wb.moveSheet(data, 2);
+    wb.sheet(data).move(2);
     assert.equal(data.index, 2);
     assert.equal(data.getValue(0, 0).number, 1);
-    wb.moveSheet(data, data.index);
+    wb.sheet(data).move(data.index);
     assert.equal(data.index, 2);
     assertSheetsInSync(formulon, wb);
-    wb.renameSheet('data', 'Renamed');
+    wb.sheet('data').rename('Renamed');
     assert.equal(data.name, 'Renamed');
     assert.equal(wb.sheet('Renamed'), data);
     assertSheetsInSync(formulon, wb);
@@ -652,10 +653,11 @@ test('H9: showPivotDetails returns the new sheet and the existing handles follow
     const ws = wb.sheet(0);
     // The grand total's value cell, not its label.
     const cell = ws
-      .getPivotLayout(pivot)
+      .pivot(pivot)
+      .getLayout()
       .cells.find((c) => c.kind === formulon.PivotCellKind.GrandTotal && c.value.kind === formulon.ValueKind.Number);
     assert.ok(cell, 'the pivot has a grand total value cell');
-    const details = ws.showPivotDetails(pivot, cell.row, cell.col);
+    const details = ws.pivot(pivot).showDetails(cell.row, cell.col);
     assert.equal(details.index, 0);
     assert.equal(wb.sheet(0), details);
     assert.equal(ws.index, 1);
@@ -758,10 +760,10 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => ws.getPrintTitles(),
       (v) => ws.setPrintTitles(v),
     );
-    ws.setPivotGrandTotals(pivot, { rows: false, columns: true });
+    ws.pivot(pivot).setGrandTotals({ rows: false, columns: true });
     same(
-      () => ws.getPivotGrandTotals(pivot),
-      (v) => ws.setPivotGrandTotals(pivot, v),
+      () => ws.pivot(pivot).getGrandTotals(),
+      (v) => ws.pivot(pivot).setGrandTotals(v),
     );
     ws.setComment(5, 5, { author: 'Ann', text: 'note' });
     same(
@@ -806,15 +808,15 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => wb.getTableStyleDefaults(),
       (v) => wb.setTableStyleDefaults(v),
     );
-    ws.setPivotOptions(pivot, { errorCaption: 'n/a', showError: true });
+    ws.pivot(pivot).setOptions({ errorCaption: 'n/a', showError: true });
     same(
-      () => ws.getPivotOptions(pivot),
-      (v) => ws.setPivotOptions(pivot, v),
+      () => ws.pivot(pivot).getOptions(),
+      (v) => ws.pivot(pivot).setOptions(v),
     );
-    const cacheId = ws.getPivotCacheId(pivot);
+    const cacheId = ws.pivot(pivot).getCache();
     same(
-      () => wb.getPivotCacheOptions(cacheId),
-      (v) => wb.setPivotCacheOptions(cacheId, v),
+      () => wb.pivotCache(cacheId).getOptions(),
+      (v) => wb.pivotCache(cacheId).setOptions(v),
     );
     ws.setFormatDefaults({ defaultColWidth: 12 });
     same(
@@ -871,16 +873,16 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     assert.equal(protection.enabled, false);
     assert.equal(protection.hashValue, null);
 
-    const field = ws.listPivotFields(pivot)[0];
+    const field = ws.pivot(pivot).listFields()[0];
     assert.deepEqual([field.customName, field.numberFormat, field.groupBaseIndex], [null, null, null]);
-    const dataField = ws.listPivotDataFields(pivot)[0];
+    const dataField = ws.pivot(pivot).listDataFields()[0];
     assert.deepEqual([dataField.numberFormat, dataField.showAsBaseField, dataField.showAsBaseItem], [null, null, null]);
-    const options = ws.getPivotOptions(pivot);
+    const options = ws.pivot(pivot).getOptions();
     assert.deepEqual([options.errorCaption, options.altText, options.grandTotalCaption], [null, null, null]);
-    const cacheId = ws.getPivotCacheId(pivot);
-    assert.equal(wb.getPivotCacheOptions(cacheId).missingItemsLimit, null);
-    assert.equal(wb.listPivotCacheFields(cacheId)[0].formula, null);
-    assert.equal(wb.getPivotCacheWorksheetSource(wb.addPivotCache()), null);
+    const cacheId = ws.pivot(pivot).getCache();
+    assert.equal(wb.pivotCache(cacheId).getOptions().missingItemsLimit, null);
+    assert.equal(wb.pivotCache(cacheId).listFields()[0].formula, null);
+    assert.equal(wb.pivotCache(wb.addPivotCache()).getWorksheetSource(), null);
 
     ws.addSparklineGroup({ sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1' }] });
     assert.equal(ws.listSparklineGroups()[0].dateAxisRef, null);
@@ -940,12 +942,12 @@ test('A5 / N4: a null pivot axis takes the field off the report; the -1 sentinel
   const { wb, pivot } = pivotWorkbook(formulon);
   try {
     const ws = wb.sheet(0);
-    ws.setPivotFieldAxis(pivot, 0, null);
-    assert.equal(ws.listPivotFields(pivot)[0].axis, null);
-    ws.setPivotFieldAxis(pivot, 0, formulon.PivotAxis.Row);
-    assert.equal(ws.listPivotFields(pivot)[0].axis, formulon.PivotAxis.Row);
-    assert.throws(() => ws.setPivotFieldAxis(pivot, 0, -1), RangeError);
-    assert.equal(ws.listPivotFields(pivot)[0].axis, formulon.PivotAxis.Row);
+    ws.pivot(pivot).setFieldAxis(0, null);
+    assert.equal(ws.pivot(pivot).listFields()[0].axis, null);
+    ws.pivot(pivot).setFieldAxis(0, formulon.PivotAxis.Row);
+    assert.equal(ws.pivot(pivot).listFields()[0].axis, formulon.PivotAxis.Row);
+    assert.throws(() => ws.pivot(pivot).setFieldAxis(0, -1), RangeError);
+    assert.equal(ws.pivot(pivot).listFields()[0].axis, formulon.PivotAxis.Row);
     assert.throws(() => wb.getDefinedName('x', -1), RangeError);
   } finally {
     wb.dispose();
@@ -1028,20 +1030,20 @@ test('A11: an absent chart title or legend is null, and null in a patch removes 
     const ws = wb.sheet(0);
     for (let r = 0; r < 4; r += 1) ws.setNumber(r, 1, r + 1);
     const id = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$B$1:$B$4', legend: null });
-    assert.equal(ws.getChart(id).legend, null);
-    ws.setChartTitle(id, 'T');
-    assert.equal(ws.getChart(id).title.text, 'T');
-    ws.setChartTitle(id, null);
-    assert.equal(ws.getChart(id).title, null);
-    ws.setChartLegend(id, { position: formulon.ChartLegendPosition.Top });
-    assert.equal(ws.getChart(id).legend.position, formulon.ChartLegendPosition.Top);
-    ws.setChartLegend(id, null);
-    assert.equal(ws.getChart(id).legend, null);
-    const axis = ws.getChart(id).axes[0];
-    ws.setChartAxis(id, axis.id, { title: 'Axis' });
-    assert.equal(ws.getChart(id).axes[0].title.text, 'Axis');
-    ws.setChartAxis(id, axis.id, { title: null });
-    assert.equal(ws.getChart(id).axes[0].title, null);
+    assert.equal(ws.chart(id).getProperties().legend, null);
+    ws.chart(id).setTitle('T');
+    assert.equal(ws.chart(id).getProperties().title.text, 'T');
+    ws.chart(id).setTitle(null);
+    assert.equal(ws.chart(id).getProperties().title, null);
+    ws.chart(id).setLegend({ position: formulon.ChartLegendPosition.Top });
+    assert.equal(ws.chart(id).getProperties().legend.position, formulon.ChartLegendPosition.Top);
+    ws.chart(id).setLegend(null);
+    assert.equal(ws.chart(id).getProperties().legend, null);
+    const axis = ws.chart(id).getProperties().axes[0];
+    ws.chart(id).setAxis(axis.id, { title: 'Axis' });
+    assert.equal(ws.chart(id).getProperties().axes[0].title.text, 'Axis');
+    ws.chart(id).setAxis(axis.id, { title: null });
+    assert.equal(ws.chart(id).getProperties().axes[0].title, null);
   });
 });
 
@@ -1150,8 +1152,8 @@ test('N3: the old ordinal of a removed member reads with its new meaning', async
     const ws = wb.sheet(0);
     for (let r = 0; r < 4; r += 1) ws.setNumber(r, 1, r + 1);
     const id = ws.addChart({ kind: formulon.ChartInsertKind.Line, source: 'Sheet1!$B$1:$B$4' });
-    ws.setChartDisplay(id, { blanksAs: 0 });
-    assert.equal(ws.getChart(id).blanksAs, formulon.ChartBlanksAs.Gap);
+    ws.chart(id).setDisplay({ blanksAs: 0 });
+    assert.equal(ws.chart(id).getProperties().blanksAs, formulon.ChartBlanksAs.Gap);
   });
 });
 
@@ -1204,23 +1206,24 @@ function pivotWorkbook(formulon) {
   const ws = wb.sheet(0);
   ws.setText(0, 0, 'Region');
   ws.setText(0, 1, 'Amount');
-  const cacheId = wb.addPivotCache();
-  wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:B3', sheet: 'Sheet1' });
-  wb.addPivotCacheField(cacheId, 'Region');
-  wb.addPivotCacheField(cacheId, 'Amount');
+  const cache = wb.addPivotCache();
+  const { cacheId } = cache;
+  wb.pivotCache(cacheId).setWorksheetSource({ present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).addField('Region');
+  wb.pivotCache(cacheId).addField('Amount');
   for (const [region, amount] of [
     ['East', 10],
     ['West', 30],
   ]) {
-    ws.setText(wb.getPivotCacheRecordCount(cacheId) + 1, 0, region);
-    ws.setNumber(wb.getPivotCacheRecordCount(cacheId) + 1, 1, amount);
-    const rec = wb.addPivotCacheRecord(cacheId);
-    wb.setPivotCacheRecordValue(cacheId, rec, 0, region);
-    wb.setPivotCacheRecordValue(cacheId, rec, 1, amount);
+    ws.setText(wb.pivotCache(cacheId).getRecordCount() + 1, 0, region);
+    ws.setNumber(wb.pivotCache(cacheId).getRecordCount() + 1, 1, amount);
+    const rec = wb.pivotCache(cacheId).addRecord();
+    wb.pivotCache(cacheId).setRecordValue(rec, 0, region);
+    wb.pivotCache(cacheId).setRecordValue(rec, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 4 });
-  ws.addPivotField(pivot, { sourceName: 'Region', axis: 0 });
-  const amount = ws.addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
-  ws.addPivotDataField(pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
+  ws.pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
+  const amount = ws.pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
+  ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, pivot };
 }

@@ -34,9 +34,9 @@ pip install formulon   # Python 3.9+
 ```python run
 import formulon
 
-print(formulon.eval_formula("=SUM(1,2,3)").to_python())  # 6.0
+print(formulon.evaluate_formula("=SUM(1,2,3)").to_python())  # 6.0
 
-v = formulon.eval_formula("=1/0")
+v = formulon.evaluate_formula("=1/0")
 print(v.kind.name, v.error_code.name)  # ERROR DIV0
 ```
 
@@ -72,6 +72,28 @@ Every method that takes a cell accepts either `(row, col)` or an A1 string, and 
 A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet(key)` and `wb[key]` take an index or a name and raise `NotFoundError` or `IndexOutOfRangeError` when nothing matches; `wb.list_sheets()` lists every sheet.
 
 `wb.close()` or leaving the `with` block releases the workbook; `wb.closed` reports it, and any later call raises `WorkbookClosedError`.
+
+## Format cells
+
+```python run
+import formulon
+
+with formulon.Workbook.create_default() as wb:
+    ws = wb.sheet(0)
+    ws.set_cell_format(
+        "A1:B2",
+        number_format="0.00%",
+        font={"bold": True, "color": "#C00000"},
+        fill={"fg": "#FFF2CC"},
+        alignment={"horizontal": formulon.HorizontalAlign.CENTER},
+    )
+    ws.set_cell_format("D:D", border={"left": {"style": formulon.BorderStyle.THIN}})
+
+    fmt = ws.get_cell_format("A1")
+    print(fmt.number_format, fmt.font.bold, fmt.fill.pattern.name)  # 0.00% True SOLID
+```
+
+`set_cell_format` merges only the groups and keys it is given into each cell's format; a column (`"D:D"`), row (`"3:3"`) or whole-sheet range formats that axis, so cells entered there later take the format too. Equal formats share one style record.
 
 ## Switching locale profiles
 

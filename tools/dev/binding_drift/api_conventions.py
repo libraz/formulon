@@ -214,8 +214,22 @@ def strip_record_suffix(name: str) -> str:
     return name
 
 
-def derive_record_type(c_typedef: str, role: Optional[str] = None) -> str:
-    """R21 record name of a C typedef: `derive_type` without a meaningless suffix."""
+def derive_record_type(
+    c_typedef: str, role: Optional[str] = None, handle_collections: Optional[Dict[str, str]] = None
+) -> str:
+    """R21 record name of a C typedef: `derive_type` without a meaningless suffix.
+
+    The result record of a collection published as handles is `<handle_class>Properties`; the collection is
+    the typedef's name without its meaningless suffix word (`fm_chart_info_t` -> `chart`).
+    """
+    if role == "result" and handle_collections:
+        body = c_typedef[3:] if c_typedef.startswith("fm_") else c_typedef
+        words = (body[:-2] if body.endswith("_t") else body).split("_")
+        if len(words) > 1 and words[-1].capitalize() in MEANINGLESS_SUFFIXES:
+            words = words[:-1]
+        handle_class = handle_collections.get("_".join(words))
+        if handle_class is not None:
+            return f"{handle_class}Properties"
     return strip_record_suffix(derive_type(c_typedef, role))
 
 
@@ -235,6 +249,8 @@ class Ledger:
         self.problems: List[str] = []
         self._index: Dict[str, Dict[str, str]] = {}
         self.c_param_counts: Dict[str, int] = {}
+        # Without the C header the parameter counts are unknown; a structural hand-over is then taken on trust.
+        self.trust_c_handover = False
 
     def _handed_over(self, a: str, b: str, name: str) -> bool:
         """One entry renames C function `name` away and the other takes the name, with another parameter count."""
@@ -249,8 +265,7 @@ class Ledger:
             if (
                 gave == name != self.entry(giver).get("c")
                 and self.entry(taker).get("c") == name
-                and None not in counts
-                and counts[0] != counts[1]
+                and (self.trust_c_handover or (None not in counts and counts[0] != counts[1]))
             ):
                 return True
         return False
@@ -258,6 +273,20 @@ class Ledger:
     @property
     def present(self) -> bool:
         return bool(self.data)
+
+    def _claim_space(self, key: str) -> Optional[str]:
+        """The namespace a binding name of `key` lives in: the scope of an op, list, factory or free function."""
+        entry = self.entry(key)
+        return entry.get("scope") if entry.get("kind") in ("op", "list", "factory", "free") else None
+
+    def _moved_to_handle(self, owner: str, name_field: str, name: str) -> bool:
+        """`owner` is the typedef of a handle class that took over `name` from a record renamed away."""
+        entry = self.entry(owner)
+        return (
+            entry.get("kind") == "typedef"
+            and entry.get(name_field) == name
+            and name in handle_class_names(self.collections)
+        )
 
     def key_for(self, name_field: str, symbol: str) -> Optional[str]:
         """Ledger key whose `<name_field>` or `was.<name_field>` names `symbol`; a current name wins a hand-over.
@@ -274,20 +303,171 @@ class Ledger:
                 was = entry.get("was") if isinstance(entry.get("was"), dict) else {}
                 claims.append((0, key, entry.get(name_field)))
                 claims.append((1, key, was.get(name_field)))
-            for _order, key, name in sorted(claims, key=lambda c: c[0]):
+            for order, key, name in sorted(claims, key=lambda c: c[0]):
                 if isinstance(name, str):
                     owner = index.setdefault(name, key)
-                    if owner != key and not (name_field == "c" and self._handed_over(owner, key, name)):
-                        self.problems.append(
-                            f"api-conventions: ledger entries `{owner}` and `{key}` both claim "
-                            f"{name_field} name `{name}`"
-                        )
+                    if owner == key or (name_field == "c" and self._handed_over(owner, key, name)):
+                        continue
+                    if name_field != "c" and self._claim_space(owner) != self._claim_space(key):
+                        continue
+                    if order == 1 and self._moved_to_handle(owner, name_field, name):
+                        continue
+                    self.problems.append(
+                        f"api-conventions: ledger entries `{owner}` and `{key}` both claim {name_field} name `{name}`"
+                    )
             self._index[name_field] = index
         return index.get(symbol)
 
     def entry(self, key: Optional[str]) -> dict:
         found = self.entries.get(key) if key is not None else None
         return found if isinstance(found, dict) else {}
+
+    def handle_collections(self) -> Dict[str, str]:
+        """`{collection: handle_class}` of the collections whose elements the bindings publish as handles."""
+        return handle_collections(self.collections)
+
+    def handle_bases(self) -> Dict[str, str]:
+        """`{handle_class: base_class}` of the handle classes that extend another one."""
+        return handle_bases(self.collections)
+
+
+# ---------------------------------------------------------------------------
+# Handles: the classes the bindings publish for the elements of a collection.
+# ---------------------------------------------------------------------------
+
+# The handle class of the sheet collection; it carries no `handle_class` of its own.
+SHEET_HANDLE_CLASS = "Sheet"
+
+# Identity properties the facade builds on a handle from what it holds (its parent, id or position); none
+# reads a raw getter of its own, so no ledger op stands behind it. `name` on a pivot is the exception: it reads
+# `getPivotName` and carries `handle: {property: true}`.
+HANDLE_IDENTITY_PROPERTIES = frozenset(
+    {"workbook", "sheet", "index", "name", "displayName", "display_name", "cacheId", "cache_id", "objectId",
+     "object_id", "kind"}
+)  # fmt: skip
+
+
+def handle_collections(collections: Dict[str, dict]) -> Dict[str, str]:
+    """`{collection: handle_class}` of every collection with `access: handles` and a `handle_class`."""
+    out: Dict[str, str] = {}
+    for name, coll in collections.items():
+        if isinstance(coll, dict) and coll.get("access") == "handles" and isinstance(coll.get("handle_class"), str):
+            out[name] = coll["handle_class"]
+    return out
+
+
+def handle_bases(collections: Dict[str, dict]) -> Dict[str, str]:
+    """`{handle_class: handle_base}` read from the collections that name a `handle_base`."""
+    out: Dict[str, str] = {}
+    for coll in collections.values():
+        if isinstance(coll, dict) and isinstance(coll.get("handle_class"), str):
+            base = coll.get("handle_base")
+            if isinstance(base, str):
+                out[coll["handle_class"]] = base
+    return out
+
+
+def handle_class_names(collections: Dict[str, dict]) -> List[str]:
+    """Every handle class the ledger names, `Sheet` included, sorted."""
+    return sorted({SHEET_HANDLE_CLASS, *handle_collections(collections).values()})
+
+
+def entry_handle(entry: object) -> Optional[dict]:
+    """The `handle:` mapping of a ledger entry, or None."""
+    handle = entry.get("handle") if isinstance(entry, dict) else None
+    return handle if isinstance(handle, dict) else None
+
+
+def handle_classes(entry: object) -> List[str]:
+    """The classes an entry's `handle:` publishes it on; `class` is one name or a list."""
+    handle = entry_handle(entry)
+    if handle is None:
+        return []
+    cls = handle.get("class")
+    if isinstance(cls, str):
+        return [cls]
+    return [c for c in cls if isinstance(c, str)] if isinstance(cls, list) else []
+
+
+def handle_noun(cls: str, collections: Dict[str, dict]) -> str:
+    """The collection noun a handle class stands for (`Picture` -> `image`); `Sheet` is `sheet`."""
+    if cls == SHEET_HANDLE_CLASS:
+        return "sheet"
+    for name, handle_class in handle_collections(collections).items():
+        if handle_class == cls:
+            return name
+    return ""
+
+
+_JS_WORD_RE = re.compile(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])")
+
+
+def derive_handle_name(raw: str, noun: str, language: str) -> str:
+    """A handle method name: the raw name without the class's noun (its longest leading run of words that
+    occurs after the verb); a bare `get` reads the element's record, `getProperties`."""
+    js = language == "js"
+    words = _JS_WORD_RE.findall(raw) if js else raw.split("_")
+    noun_words = [w.lower() for w in noun.split("_") if w]
+    for size in range(len(noun_words), 0, -1):
+        want = noun_words[:size]
+        for start in range(1, len(words) - size + 1):
+            if [w.lower() for w in words[start : start + size]] == want:
+                words = words[:start] + words[start + size :]
+                break
+        else:
+            continue
+        break
+    if words == ["get"]:
+        words = ["get", "Properties" if js else "properties"]
+    if not js:
+        return "_".join(words)
+    return words[0] + "".join(w[:1].upper() + w[1:] for w in words[1:])
+
+
+def handle_name(entry: dict, language: str, collections: Dict[str, dict]) -> Optional[str]:
+    """The entry's method name on its handle class(es): the explicit `handle.<language>`, else derived from the
+    raw (or dropped) binding name and the noun of the classes' common base."""
+    handle = entry_handle(entry)
+    if handle is None:
+        return None
+    explicit = handle.get(language)
+    if isinstance(explicit, str):
+        return explicit
+    raw = entry.get(language)
+    if not isinstance(raw, str):
+        drop = entry.get("drop")
+        raw = drop.get(language) if isinstance(drop, dict) else None
+    if not isinstance(raw, str):
+        return None
+    base = common_base(handle_classes(entry), handle_bases(collections))
+    return derive_handle_name(raw, handle_noun(base, collections), language)
+
+
+def handle_shift(entry: dict) -> int:
+    """Raw arguments a handle method supplies beyond the sheet the `Sheet` frame already omits."""
+    handle = entry_handle(entry) or {}
+    supplies = [s for s in handle.get("supplies") or [] if isinstance(s, str)]
+    if entry.get("scope") == "sheet" and "sheet" in supplies:
+        return len(supplies) - 1
+    return len(supplies)
+
+
+def common_base(classes: Sequence[str], bases: Dict[str, str]) -> str:
+    """The nearest class every one of `classes` is or extends; the first class when they share none."""
+
+    def chain(cls: str) -> List[str]:
+        out = [cls]
+        while out[-1] in bases and bases[out[-1]] not in out:
+            out.append(bases[out[-1]])
+        return out
+
+    if not classes:
+        return ""
+    common = chain(classes[0])
+    for cls in classes[1:]:
+        ancestors = chain(cls)
+        common = [c for c in common if c in ancestors]
+    return common[0] if common else classes[0]
 
 
 def load_ledger(path: Path = LEDGER_PATH) -> Ledger:

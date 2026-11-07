@@ -11,7 +11,7 @@ it is built from the repository, as described under
 [Building from source](#building-from-source). The badges above track the
 sibling WebAssembly and Python packages, which are published.
 
-The one-shot `evalFormula` always evaluates with the
+The one-shot `evaluateFormula` always evaluates with the
 default `win-365-en_US` profile, and a new workbook starts on it too. The
 profile is a per-workbook setting: call `wb.setExcelProfileId()` to select any of the 28
 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. The
@@ -44,8 +44,8 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 424 instance methods plus the four static factories. Of those
-instance methods, 423 are shared with WASM; zero remain WASM-only, while
+register 427 instance methods plus the four static factories. Of those
+instance methods, 426 are shared with WASM; zero remain WASM-only, while
 `getMemoryUsage()` is a native-only helper.
 The shared `Workbook` methods take the same arguments, return the same values
 and throw the same `FormulonError`; switching packages still requires updating
@@ -90,7 +90,7 @@ To use it directly out of a source checkout, point Node at the staged
 package:
 
 ```bash
-node -e "import('./packages/npm-native/dist/index.mjs').then(async m => console.log((await m.createFormulon()).evalFormula('=1+2')))"
+node -e "import('./packages/npm-native/dist/index.mjs').then(async m => console.log((await m.createFormulon()).evaluateFormula('=1+2')))"
 ```
 
 ## Usage
@@ -101,7 +101,8 @@ Like the WASM package, it is ES modules only (no `require`).
 import createFormulon from '@libraz/formulon-native';
 
 const formulon = await createFormulon();
-console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
+const { evaluateFormula, toNative } = formulon;
+console.log(toNative(evaluateFormula('=SUM(1,2,3)'))); // 6
 
 const wb = formulon.Workbook.createDefault();
 try {
@@ -110,10 +111,36 @@ try {
   ws.setValues('B1', [[10, 20], [30, 40]]);
   console.log(wb.hasDirtyCells()); // true
   wb.recalc();
-  console.log(ws.getValue('A1').number); // 3
-  console.log(ws.getValues('B1:C2').map((row) => row.map((v) => v.number))); // [ [ 10, 20 ], [ 30, 40 ] ]
+  console.log(toNative(ws.getValue('A1'))); // 3
+  console.log(ws.getValues('B1:C2').map((row) => row.map(toNative))); // [ [ 10, 20 ], [ 30, 40 ] ]
 } finally {
   wb.dispose(); // wb.disposed is now true
+}
+```
+
+`toNative` turns a `Value` into a JavaScript value: a number, string, boolean or `null` for a blank cell. An error, array, reference or lambda value is returned as it is.
+
+A format is set with `setCellFormat`; only the keys you give change, and a colour is `'#RRGGBB'`:
+
+```js run
+import createFormulon from '@libraz/formulon-native';
+
+const formulon = await createFormulon();
+const wb = formulon.Workbook.createDefault();
+try {
+  const ws = wb.sheet(0);
+  ws.setNumber('A1', 1234.5);
+  ws.setCellFormat('A1:B2', {
+    numberFormat: '#,##0.00',
+    font: { bold: true, color: '#C00000' },
+    alignment: { horizontal: formulon.HorizontalAlign.Right },
+  });
+  const format = ws.getCellFormat('A1');
+  console.log(format.numberFormat); // #,##0.00
+  console.log(format.font.bold); // true
+  console.log(ws.getDisplayText('A1').text); // 1,234.50
+} finally {
+  wb.dispose();
 }
 ```
 
