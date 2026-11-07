@@ -52,16 +52,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install clang-format
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang-format
-
       # `make format-check` fans out to ruff (Python) via `uvx` and biome
       # (.mjs / .d.ts) via `npx`, so uv and Node must be on PATH alongside
       # clang-format.
       - name: Set up uv (ruff)
         uses: astral-sh/setup-uv@v10.2.0
+
+      # Pinned to the local clang-format major: releases rewrap code
+      # differently, so the runner image's apt package drifts the gate.
+      - name: Install clang-format
+        run: |
+          uv tool install clang-format==18.1.8
+          echo "$(uv tool dir --bin)" >> "$GITHUB_PATH"
+
+      - name: Show clang-format version
+        run: clang-format --version
 
       - name: Set up Node.js (biome)
         uses: actions/setup-node@v7
@@ -93,7 +98,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build libbrotli-dev brotli
+            build-essential cmake ninja-build libbrotli-dev brotli python3-yaml
 
       - name: Cache CMake build directory (debug)
         uses: actions/cache@v6
