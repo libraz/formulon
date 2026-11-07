@@ -24,6 +24,8 @@ Error unparseable(std::string_view what, std::string_view detail) {
                     std::string(detail));
 }
 
+constexpr std::string_view kSlicerUri = "http://schemas.microsoft.com/office/drawing/2010/slicer";
+
 bool is_anchor(const pugi::xml_node& node) {
   const std::string_view name = local_name(node);
   return name == "twoCellAnchor" || name == "oneCellAnchor" || name == "absoluteAnchor";
@@ -257,6 +259,24 @@ pugi::xml_node find_drawing_object(const pugi::xml_node& root, std::uint32_t obj
     }
   }
   return {};
+}
+
+pugi::xml_node find_drawing_object(const pugi::xml_node& root, std::uint32_t object_id,
+                                   bool (*anchor_ok)(const pugi::xml_node& anchor, DrawingObjectKind kind)) {
+  for (const pugi::xml_node& anchor : drawing_anchors(root, false)) {
+    const DrawingObject obj = read_drawing_object_fields(anchor);
+    if (obj.object_id == object_id && anchor_ok(anchor, obj.kind)) {
+      return anchor;
+    }
+  }
+  return {};
+}
+
+bool is_slicer_frame(const pugi::xml_node& anchor) {
+  const pugi::xml_node content = anchor_content(anchor);
+  return local_name(content) == "graphicFrame" &&
+         std::string_view(child_local(child_local(content, "graphic"), "graphicData").attribute("uri").value()) ==
+             kSlicerUri;
 }
 
 std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,

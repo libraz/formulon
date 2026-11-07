@@ -452,6 +452,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/drawing/image_header_test.cpp
   unit/drawing/drawing_clone_test.cpp
   unit/drawing/drawing_edit_test.cpp
+  unit/drawing/drawing_edit_kinds_test.cpp
   unit/drawing/drawing_names_test.cpp
   unit/drawing/drawing_snapshot_test.cpp
   unit/chart/chart_model_test.cpp

@@ -138,6 +138,14 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
 pugi::xml_node find_drawing_object(const pugi::xml_node& root, std::uint32_t object_id,
                                    bool (*kind_ok)(DrawingObjectKind));
 
+/// As above, with `anchor_ok` also seeing the anchor.
+pugi::xml_node find_drawing_object(const pugi::xml_node& root, std::uint32_t object_id,
+                                   bool (*anchor_ok)(const pugi::xml_node& anchor, DrawingObjectKind kind));
+
+/// Whether `anchor` holds a slicer: a graphic frame whose `a:graphicData`
+/// uri is the slicer one.
+bool is_slicer_frame(const pugi::xml_node& anchor);
+
 /// Reads every anchored object of a parsed drawing part.
 std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
                                                 const std::vector<io::ooxml::DrawingRel>& rels);

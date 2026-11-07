@@ -1,6 +1,6 @@
 //
 // Typed drawing edits: insert images and graphic frames, and place, reorder,
-// snapshot, restore and remove pictures and charts in a sheet's drawing part.
+// snapshot, restore and remove drawing objects in a sheet's drawing part.
 //
 // Every edit parses the drawing part, patches the DOM and re-serialises it,
 // so charts, shapes and anything else the part holds stay intact; a part no
@@ -15,7 +15,10 @@
 // could not lift (still a drawing relationship in `Sheet::unknown_relationships()`);
 // bytes that are not a recognised image fail with `kIoImageUnsupported`.
 // Edits target worksheets; a chartsheet's drawing is listed but not edited.
-// Shapes, groups, connectors and other frames are refused with
+// Each edit accepts the kinds it can carry out: remove and anchor take
+// pictures and charts (shapes and slicers have their own paths), rename takes
+// shapes too, z-order also takes slicers, and snapshot/restore take pictures,
+// charts and shapes. Groups, connectors and other frames are refused with
 // `kInvalidArgument`.
 //
 // Row/column edits follow Excel's anchor rules: a move-and-size (two-cell)
@@ -117,12 +120,12 @@ std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_ax
 Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                          const DrawingAnchor& anchor);
 
-/// Renames the first picture or chart with `object_id`. Duplicate names are
-/// allowed. Fails with `kInvalidArgument` for an empty `name` or when the
-/// sheet has no picture or chart with that id.
+/// Renames the first picture, chart or shape with `object_id`. Duplicate
+/// names are allowed. Fails with `kInvalidArgument` for an empty `name` or
+/// when the sheet has no picture, chart or shape with that id.
 Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::string_view name);
 
-/// Moves the first picture or chart with `object_id` so it becomes item
+/// Moves the first picture, chart, shape or slicer with `object_id` so it becomes item
 /// `index` of `list_drawing_objects`, whose order is the z-order (0 is the
 /// back). The unit moved is the object's top-level element, a whole
 /// `mc:AlternateContent` included. Fails with `kInvalidArgument` for an
@@ -131,7 +134,7 @@ Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uin
 Expected<void, Error> set_drawing_z_order(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                           std::uint32_t index);
 
-/// Captures the first picture or chart with `object_id` as opaque versioned
+/// Captures the first picture, chart or shape with `object_id` as opaque versioned
 /// bytes: its list position, its top-level element, the relationships it
 /// names with their parts, and every part reachable from those parts' rels
 /// (a chart's style, colors, user shapes and embeddings) with the rels parts.

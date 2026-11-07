@@ -42,6 +42,8 @@ void for_each_element(const pugi::xml_node& node, const Fn& fn) {
 }
 
 inline constexpr const char* kNoObject = "drawing: no picture or chart with that id";
+inline constexpr const char* kNoShapeOrObject = "drawing: no picture, chart or shape with that id";
+inline constexpr const char* kNoOrderable = "drawing: no picture, chart, shape or slicer with that id";
 
 // Loads sheet `sheet`'s editable drawing into `doc` and returns its path; a
 // sheet with no drawing holds no object.
@@ -84,13 +86,25 @@ void ensure_default_content_type(Workbook& wb, const char* extension, const char
 // The `xdr:wsDr` child holding `node`.
 pugi::xml_node top_of(const pugi::xml_node& root, pugi::xml_node node);
 
-// The kinds the drawing edits move, snapshot and remove.
+// The kinds the drawing edits move and remove.
 inline bool is_editable(DrawingObjectKind kind) {
   return kind == DrawingObjectKind::kPicture || kind == DrawingObjectKind::kChart;
 }
 
-// The first listed picture or chart anchor with `object_id`, or a null node.
-pugi::xml_node find_object(const pugi::xml_node& root, std::uint32_t object_id);
+// The kinds a rename accepts.
+inline bool is_nameable(DrawingObjectKind kind) {
+  return is_editable(kind) || kind == DrawingObjectKind::kShape;
+}
+
+// The kinds a snapshot captures and a restore places.
+inline bool is_snapshot_kind(DrawingObjectKind kind) {
+  return is_editable(kind) || kind == DrawingObjectKind::kShape;
+}
+
+// The objects a z-order move accepts: the nameable kinds and slicer frames.
+inline bool is_orderable(const pugi::xml_node& anchor, DrawingObjectKind kind) {
+  return is_nameable(kind) || is_slicer_frame(anchor);
+}
 
 // Where a top-level element moved to list position `index` goes: before the
 // element holding that item once `moving` is out of the list, or at the end

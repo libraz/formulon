@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "drawing/drawing_edit.h"
@@ -433,8 +434,8 @@ TEST(DrawingSnapshot, RejectsMalformedBytes) {
   EXPECT_EQ(code(snap, 2), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(code(Handmade(1, "<xdr:oneCellAnchor><xdr:from>")), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(code(Handmade(1,
-                          "<xdr:oneCellAnchor><xdr:sp><xdr:nvSpPr><xdr:cNvPr id=\"9\"/></xdr:nvSpPr></xdr:sp>"
-                          "</xdr:oneCellAnchor>")),
+                          "<xdr:oneCellAnchor><xdr:cxnSp><xdr:nvCxnSpPr><xdr:cNvPr id=\"9\"/></xdr:nvCxnSpPr>"
+                          "</xdr:cxnSp></xdr:oneCellAnchor>")),
             FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Restore(wb, 0, Bytes{}).error().code, FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(restore_drawing(wb, 0, nullptr, 0, 0).error().code, FormulonErrorCode::kInvalidArgument);
@@ -442,8 +443,15 @@ TEST(DrawingSnapshot, RejectsMalformedBytes) {
   for (std::size_t i = 0; i < parts.size(); ++i) {
     EXPECT_EQ(wb.passthrough_parts()[i].bytes, parts[i].bytes) << parts[i].path;
   }
-  // The intact capture still restores.
+  // The intact capture still restores, and so does a hand-made shape.
   EXPECT_TRUE(static_cast<bool>(Restore(wb, 0, snap)));
+  auto shape = Restore(wb, 0,
+                       Handmade(1,
+                                "<xdr:oneCellAnchor><xdr:sp><xdr:nvSpPr><xdr:cNvPr id=\"9\"/></xdr:nvSpPr></xdr:sp>"
+                                "</xdr:oneCellAnchor>"));
+  ASSERT_TRUE(static_cast<bool>(shape));
+  EXPECT_EQ(shape.value(), 9U);
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{9, 2, 3, 4}));
 }
 
 TEST(DrawingSnapshot, RefusesWhatItCannotCaptureOrPlace) {
@@ -452,18 +460,31 @@ TEST(DrawingSnapshot, RefusesWhatItCannotCaptureOrPlace) {
     auto result = snapshot_drawing(wb, 0, id);
     return result ? FormulonErrorCode::kOk : result.error().code;
   };
-  EXPECT_EQ(snap_code(3), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(snap_code(3), FormulonErrorCode::kOk);
   EXPECT_EQ(snap_code(9), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(snapshot_drawing(wb, 4, 2).error().code, FormulonErrorCode::kInvalidArgument);
   const Bytes snap4 = Snapshot(wb, 4);
 
-  // Id 3 belongs to a shape on the target sheet.
+  // Id 3 belongs to a connector on the target sheet.
+  Workbook wired = Fixture();
+  std::string xml(Part(wired, kDrawingPath)->bytes.begin(), Part(wired, kDrawingPath)->bytes.end());
+  for (const auto& swap : {std::pair<std::string, std::string>{"xdr:sp ", "xdr:cxnSp "},
+                           {"xdr:sp>", "xdr:cxnSp>"},
+                           {"xdr:nvSpPr>", "xdr:nvCxnSpPr>"},
+                           {"xdr:cNvSpPr/>", "xdr:cNvCxnSpPr/>"}}) {
+    for (std::size_t at = xml.find(swap.first); at != std::string::npos;
+         at = xml.find(swap.first, at + swap.second.size())) {
+      xml.replace(at, swap.first.size(), swap.second);
+    }
+  }
+  ASSERT_TRUE(static_cast<bool>(wired.replace_passthrough_part(kDrawingPath, ToBytes(xml))));
+  ASSERT_EQ(Find(wired, 3).kind, DrawingObjectKind::kConnector);
   Bytes as_three = snap4;
   const std::string needle = "id=\"4\"";
   const auto at = std::search(as_three.begin(), as_three.end(), needle.begin(), needle.end());
   ASSERT_NE(at, as_three.end());
   *(at + 4) = '3';
-  auto clash = Restore(wb, 0, as_three);
+  auto clash = Restore(wired, 0, as_three);
   ASSERT_FALSE(static_cast<bool>(clash));
   EXPECT_EQ(clash.error().code, FormulonErrorCode::kInvalidArgument);
 

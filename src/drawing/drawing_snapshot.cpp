@@ -454,9 +454,9 @@ Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, 
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
   const pugi::xml_node root = doc.document_element();
-  const pugi::xml_node target = find_object(root, object_id);
+  const pugi::xml_node target = find_drawing_object(root, object_id, is_snapshot_kind);
   if (!target) {
-    return invalid(kNoObject);
+    return invalid(kNoShapeOrObject);
   }
   const pugi::xml_node top = top_of(root, target);
   const std::vector<pugi::xml_node> items = drawing_anchors(root, false);
@@ -557,12 +557,12 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
   const pugi::xml_node element = fragment.document_element();
   pugi::xml_node object;
   for (const pugi::xml_node& anchor : drawing_anchors(fragment, false)) {
-    if (elements == 1 && !object && is_editable(read_drawing_object(anchor, {}).kind)) {
+    if (elements == 1 && !object && is_snapshot_kind(read_drawing_object(anchor, {}).kind)) {
       object = anchor;
     }
   }
   if (!object) {
-    return invalid("drawing: snapshot holds no picture or chart");
+    return invalid("drawing: snapshot holds no picture, chart or shape");
   }
   std::uint32_t id = read_drawing_object(object, {}).object_id;
   const bool new_id = (flags & kDrawingRestoreNewId) != 0;
@@ -606,17 +606,17 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
     });
     id = next;
   } else {
-    if (const pugi::xml_node same = find_object(root, id)) {
+    if (const pugi::xml_node same = find_drawing_object(root, id, is_snapshot_kind)) {
       replaced = top_of(root, same);
     }
     bool clash = false;
     for_each_element(root, [&](const pugi::xml_node& node) {
       const std::string_view holder = local_name(node.parent());
       clash = clash || (local_name(node) == "cNvPr" && node.attribute("id").as_uint() == id && holder != "nvPicPr" &&
-                        holder != "nvGraphicFramePr" && !(replaced && is_within(node, replaced)));
+                        holder != "nvGraphicFramePr" && holder != "nvSpPr" && !(replaced && is_within(node, replaced)));
     });
     if (clash) {
-      return invalid("drawing: the id belongs to an object that is not a picture or chart");
+      return invalid("drawing: the id belongs to an object that is not a picture, chart or shape");
     }
   }
 

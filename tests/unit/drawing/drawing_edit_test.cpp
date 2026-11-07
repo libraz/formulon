@@ -1496,8 +1496,8 @@ TEST(DrawingZOrder, MovesTopLevelElements) {
     std::uint32_t index;
     Ids3 expected;
   };
-  for (const Case& c :
-       {Case{4, 0, Ids3{4, 2, 3}}, Case{2, 2, Ids3{3, 4, 2}}, Case{2, 1, Ids3{3, 2, 4}}, Case{4, 1, Ids3{2, 4, 3}}}) {
+  for (const Case& c : {Case{4, 0, Ids3{4, 2, 3}}, Case{2, 2, Ids3{3, 4, 2}}, Case{2, 1, Ids3{3, 2, 4}},
+                        Case{4, 1, Ids3{2, 4, 3}}, Case{3, 0, Ids3{3, 2, 4}}, Case{3, 2, Ids3{2, 4, 3}}}) {
     SCOPED_TRACE(std::to_string(c.id) + " -> " + std::to_string(c.index));
     Workbook wb = ZOrderFixture();
     ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, c.id, c.index)));
@@ -1522,11 +1522,11 @@ TEST(DrawingZOrder, UnchangedOrderWritesNothing) {
   EXPECT_EQ(AllBytes(wb), before);
 }
 
-TEST(DrawingZOrder, RefusesOutOfRangeAndShapes) {
+TEST(DrawingZOrder, RefusesOutOfRange) {
   Workbook wb = ZOrderFixture();
   const std::vector<Bytes> before = AllBytes(wb);
   EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 2, 3)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 3, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 3, 3)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 7, 0)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Code(set_drawing_z_order(wb, 2, 2, 0)), FormulonErrorCode::kInvalidArgument);
   Workbook empty = Workbook::create();
