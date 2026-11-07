@@ -594,6 +594,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_cell_set_xf_index` | `fm_sheet_set_cell_xf_index` |
 | `fm_cell_xf` | `fm_cell_xf_t` |
 | `fm_cf_cell_range_t` | folded into `fm_cell_rect_t` |
+| `fm_cf_color_t` | folded into `fm_color_spec_t` |
 | `fm_cf_results_cell_at` | `fm_cf_results_get_cell_at` |
 | `fm_cf_results_cell_count` | `fm_cf_results_get_cell_count` |
 | `fm_cf_results_match_at` | `fm_cf_results_get_match_at` |
@@ -774,6 +775,9 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sort_condition` | `fm_sort_condition_t` |
 | `fm_sparkline_group` | `fm_sparkline_group_t` |
 | `fm_sparkline` | `fm_sparkline_t` |
+| `FM_STATUS_CLI_FILE_NOT_FOUND` | removed |
+| `FM_STATUS_CLI_INVALID_ARGS` | removed |
+| `FM_STATUS_CLI_OUTPUT_FAILED` | removed |
 | `fm_status_string` | `fm_get_status_name` |
 | `fm_styles_add_batch` | `fm_workbook_add_batch` |
 | `fm_styles_add_border` | `fm_workbook_add_border` |
@@ -838,7 +842,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_evaluate_cf_formula` | `fm_sheet_evaluate_cf_formula` |
 | `fm_workbook_evaluate_formula_array` | `fm_sheet_evaluate_formula_array` |
 | `fm_workbook_evaluate_formula` | `fm_sheet_evaluate_formula` |
-| `fm_workbook_excel_profile_id` | `fm_workbook_get_excel_profile_id` |
+| `fm_workbook_excel_profile_id` | `fm_workbook_get_profile_id` |
 | `fm_workbook_external_link_at` | `fm_workbook_get_external_link` |
 | `fm_workbook_external_link_count` | `fm_workbook_get_external_link_count` |
 | `fm_workbook_file_name` | `fm_workbook_get_file_name` |
@@ -982,6 +986,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_set_defined_name_attrs` | removed |
 | `fm_workbook_set_defined_name_scoped` | removed |
 | `fm_workbook_set_error` | `fm_sheet_set_error` |
+| `fm_workbook_set_excel_profile_id` | `fm_workbook_set_profile_id` |
 | `fm_workbook_set_formula` | `fm_sheet_set_formula` |
 | `fm_workbook_set_iterative_enabled` | removed |
 | `fm_workbook_set_number` | `fm_sheet_set_number` |
@@ -1029,7 +1034,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `calcOnSave()` | `getCalcOnSave()` |
 | `cellAt()` | removed |
 | `cellCount()` | removed |
-| `CellEntry` | `Cell` |
+| `CellEntry` | folded into `RangeCell` |
 | `CellRectResult` | removed |
 | `CellResult` | removed |
 | `CellShowPhoneticResult` | folded into `BoolResult` |
@@ -1040,6 +1045,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `CellXfIndexResult` | folded into `NumberResult` |
 | `CellXfResult` | folded into `CellXf` |
 | `CfCellResult` | `CfCell` |
+| `CfColor` | folded into `Color` |
 | `CfRangeResult` | removed |
 | `chart` | `value` |
 | `ChartAxisInfo` | `ChartAxis` |
@@ -1101,7 +1107,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `evaluateConditionalFormula()` | `evaluateCfFormula()` |
 | `evaluateFormulaText()` | `evaluateFormula()` |
 | `evaluateTableAutoFilter()` | `wb.table(...).evaluateAutoFilter()` |
-| `excelProfileId()` | `getExcelProfileId()` |
+| `excelProfileId()` | `getProfileId()` |
+| `ExcelProfileId` | `ProfileId` |
 | `ExternalLinkRecord` | `ExternalLink` |
 | `ExternalLinkResult` | removed |
 | `fileName()` | `getFileName()` |
@@ -1386,6 +1393,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `setDrawingAnchor()` | `ws.drawing(...).setAnchor()` |
 | `setDrawingName()` | `ws.drawing(...).rename()` |
 | `setDrawingZOrder()` | `ws.drawing(...).setZOrder()` |
+| `setExcelProfileId()` | `setProfileId()` |
 | `setSheetAutoFilterXml()` | `setAutoFilterXml()` |
 | `setSheetFitToPage()` | removed; use `setPageSetup()` |
 | `setSheetFormatDefaults()` | `setFormatDefaults()` |
@@ -1460,7 +1468,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `updateShape()` | `ws.shape(...).update()` |
 | `updateSlicer()` | `ws.slicer(...).update()` |
 | `updateTable()` | `wb.table(...).update()` |
-| `ValidationEntry` | `Validation` |
+| `ValidationEntry` | folded into `DataValidation` |
 | `ValidationOutcomeResult` | `ValidationOutcome` |
 | `version()` | removed; use `getVersion()` |
 | `versionString()` | `getVersion()` |
@@ -1487,9 +1495,11 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `cell_style_count()` | removed; use `list_cell_styles()` |
 | `cell_style_xf_count()` | removed; use `list_cell_style_xfs()` |
 | `cell_xf_count()` | removed; use `list_cell_xfs()` |
+| `Cell` | folded into `RangeCell` |
 | `CellStyleRecord` | `CellStyle` |
 | `cf_count()` | removed; use `list_cf_rules()` |
 | `CfCellResult` | `CfCell` |
+| `CfColor` | folded into `Color` |
 | `CfValueObject` | `Cfvo` |
 | `ChartAxisInfo` | `ChartAxis` |
 | `ChartFillInfo` | `ChartFill` |
@@ -1522,7 +1532,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `error_display_name()` | removed |
 | `eval_formula()` | `evaluate_formula()` |
 | `evaluate_table_auto_filter()` | `wb.table(...).evaluate_auto_filter()` |
-| `excel_profile_id()` | `get_excel_profile_id()` |
+| `excel_profile_id()` | `get_profile_id()` |
+| `ExcelProfileId` | `ProfileId` |
 | `external_link_count()` | removed; use `list_external_links()` |
 | `ExternalLinkRecord` | `ExternalLink` |
 | `file_name()` | `get_file_name()` |
@@ -1738,6 +1749,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `set_drawing_anchor()` | `ws.drawing(...).set_anchor()` |
 | `set_drawing_name()` | `ws.drawing(...).rename()` |
 | `set_drawing_z_order()` | `ws.drawing(...).set_z_order()` |
+| `set_excel_profile_id()` | `set_profile_id()` |
 | `set_fit_to_page()` | removed; use `set_page_setup()` |
 | `set_iterative_enabled()` | removed |
 | `set_phonetic()` | `set_cell_phonetic()` |

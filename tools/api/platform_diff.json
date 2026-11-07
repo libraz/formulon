@@ -8,6 +8,7 @@
     "Sheet": [],
     "Workbook": [
       "[Symbol.dispose]",
+      "[Symbol.iterator]",
       "dispose",
       "disposed",
       "recalcParallel",
@@ -16,9 +17,7 @@
   },
   "js_only_note": "toNative: the Python counterpart is Value.to_python(), a method because the Python Value is a class; the JS Value is a plain object embind builds, so the conversion is a module function.",
   "native_only": {
-    "Workbook": [
-      "getMemoryUsage"
-    ]
+    "Workbook": []
   },
   "native_only_note": "Present in the native package and in Python; absent only from the WASM package.",
   "py_only": {

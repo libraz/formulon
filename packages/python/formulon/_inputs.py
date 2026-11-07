@@ -34,6 +34,7 @@ RECORD_RANGE_FIELDS = {
     "AutoFilterSortState": {"ref": "CellRect", "conditions": "AutoFilterSortCondition[]"},
     "ConditionalFormatInput": {"ranges": "CellRect[]"},
     "DataValidationInput": {"ranges": "CellRect[]"},
+    "PivotInput": {"anchor": "CellAddress"},
 }
 # </record-range-fields>
 

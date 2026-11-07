@@ -2342,10 +2342,10 @@ entries:
     drop: { js: EvalResult, closes: R8.js }
   enum.excel_profile_id:
     kind: enum
-    js: ExcelProfileId
-    py: ExcelProfileId
+    js: ProfileId
+    py: ProfileId
     surfaces: [wasm, native, py]
-    was: { js: ExcelProfileId }
+    was: { js: ExcelProfileId, py: ExcelProfileId }
   enum.external_link_kind:
     kind: enum
     js: ExternalLinkKind
@@ -2797,17 +2797,33 @@ entries:
     kind: record
     role: result
     js: RangeCell
-    surfaces: [wasm, native]
+    py: RangeCell
+    surfaces: [wasm, native, py]
     was: { js: RangeCell }
+  record.civil_time_input:
+    kind: record
+    role: input
+    js: CivilTimeInput
+    surfaces: [wasm, native]
+  type.workbook_ooxml:
+    kind: typedef
+    js: WorkbookOoxml
+    surfaces: [wasm, native]
+  type.sheet_ooxml:
+    kind: typedef
+    js: SheetOoxml
+    surfaces: [wasm, native]
   type.native_value:
     kind: typedef
     js: NativeValue
-    surfaces: [wasm, native]
+    py: NativeValue
+    surfaces: [wasm, native, py]
   record.cell_address:
     kind: record
     role: both
     js: CellAddress
-    surfaces: [wasm, native]
+    py: CellAddress
+    surfaces: [wasm, native, py]
   record.range_style_bases_result:
     kind: record
     role: result
@@ -3349,6 +3365,13 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding convenience: evaluates one formula in a default workbook"
     was: { js: evalFormula, py: eval_formula }
+  binding.evaluate_typed_formula_free:
+    kind: free
+    scope: process
+    js: evaluateTypedFormula
+    py: evaluate_typed_formula
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: evaluateFormula with the result kind-tagged"
   workbook.create_for_profile:
     kind: factory
     scope: workbook
@@ -3389,8 +3412,7 @@ entries:
     c: fm_workbook_get_memory_usage
     js: getMemoryUsage
     py: get_memory_usage
-    surfaces: [c, native, py]
-    exception: "process memory of the native addon; WASM linear memory has no equivalent"
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_memory_usage, js: memoryUsage, py: memory_usage }
   workbook.destroy:
     kind: op
@@ -4782,20 +4804,18 @@ entries:
     scope: workbook
     noun: profile_id
     c: fm_workbook_get_profile_id
-    js: getExcelProfileId
-    py: get_excel_profile_id
+    js: getProfileId
+    py: get_profile_id
     surfaces: [c, wasm, native, py]
-    exception: "the binding names keep the Excel-profile wording until the declarations take getProfileId / get_profile_id"
     was: { c: fm_workbook_excel_profile_id, js: excelProfileId, py: excel_profile_id }
   excel_profile_id.set:
     kind: op
     scope: workbook
     noun: profile_id
     c: fm_workbook_set_profile_id
-    js: setExcelProfileId
-    py: set_excel_profile_id
+    js: setProfileId
+    py: set_profile_id
     surfaces: [c, wasm, native, py]
-    exception: "the binding names keep the Excel-profile wording until the declarations take setProfileId / set_profile_id"
     was: { c: fm_workbook_set_excel_profile_id, js: setExcelProfileId, py: set_excel_profile_id }
   file_name.get:
     kind: op
@@ -4991,6 +5011,7 @@ entries:
   page_setup_xml.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: page_setup_xml
     c: fm_sheet_get_page_setup_xml
     js: getPageSetupXml
@@ -5000,6 +5021,7 @@ entries:
   page_setup_xml.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: page_setup_xml
     c: fm_sheet_set_page_setup_xml
     js: setPageSetupXml
@@ -5009,6 +5031,7 @@ entries:
   page_margins_xml.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: page_margins_xml
     c: fm_sheet_get_page_margins_xml
     js: getPageMarginsXml
@@ -5018,6 +5041,7 @@ entries:
   page_margins_xml.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: page_margins_xml
     c: fm_sheet_set_page_margins_xml
     js: setPageMarginsXml
@@ -5027,6 +5051,7 @@ entries:
   print_options_xml.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: print_options_xml
     c: fm_sheet_get_print_options_xml
     js: getPrintOptionsXml
@@ -5036,6 +5061,7 @@ entries:
   print_options_xml.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: print_options_xml
     c: fm_sheet_set_print_options_xml
     js: setPrintOptionsXml
@@ -5045,6 +5071,7 @@ entries:
   header_footer_xml.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: header_footer_xml
     c: fm_sheet_get_header_footer_xml
     js: getHeaderFooterXml
@@ -5054,6 +5081,7 @@ entries:
   header_footer_xml.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: header_footer_xml
     c: fm_sheet_set_header_footer_xml
     js: setHeaderFooterXml
@@ -5063,6 +5091,7 @@ entries:
   sheet_pr_xml.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: sheet_pr_xml
     c: fm_sheet_get_sheet_pr_xml
     js: getSheetPrXml
@@ -5072,6 +5101,7 @@ entries:
   sheet_pr_xml.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: sheet_pr_xml
     c: fm_sheet_set_sheet_pr_xml
     js: setSheetPrXml
@@ -5083,13 +5113,17 @@ entries:
     scope: sheet
     noun: tab_color
     c: fm_sheet_get_tab_color
-    surfaces: [c]
+    js: getTabColor
+    py: get_tab_color
+    surfaces: [c, wasm, native, py]
   tab_color.set:
     kind: op
     scope: sheet
     noun: tab_color
     c: fm_sheet_set_tab_color
-    surfaces: [c]
+    js: setTabColor
+    py: set_tab_color
+    surfaces: [c, wasm, native, py]
   fit_to_page.set:
     kind: op
     scope: sheet
@@ -6749,6 +6783,7 @@ entries:
   auto_filter_xml.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: auto_filter_xml
     c: fm_sheet_get_auto_filter_xml
     js: getAutoFilterXml
@@ -6758,6 +6793,7 @@ entries:
   auto_filter_xml.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: auto_filter_xml
     c: fm_sheet_set_auto_filter_xml
     js: setAutoFilterXml
@@ -6937,6 +6973,7 @@ entries:
   column_style.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: column_style
     c: fm_sheet_set_column_style
     js: setColumnStyle
@@ -6947,6 +6984,7 @@ entries:
   column_style.clear:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: column_style
     c: fm_sheet_clear_column_style
     js: clearColumnStyle
@@ -7009,6 +7047,7 @@ entries:
   row_style.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: row_style
     c: fm_sheet_set_row_style
     js: setRowStyle
@@ -7019,6 +7058,7 @@ entries:
   row_style.clear:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: row_style
     c: fm_sheet_clear_row_style
     js: clearRowStyle
@@ -7029,6 +7069,7 @@ entries:
   range_style_bases.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: range_style_bases
     c: fm_sheet_get_range_style_bases
     js: getRangeStyleBases
@@ -7039,6 +7080,7 @@ entries:
   range_style_bases_excluding.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: range_style_bases_excluding
     c: fm_sheet_get_range_style_bases_excluding
     js: getRangeStyleBasesExcluding
@@ -7049,6 +7091,7 @@ entries:
   range_style.remap:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: range_style
     c: fm_sheet_remap_range_style
     js: remapRangeStyle
@@ -7322,7 +7365,9 @@ entries:
     kind: record
     role: result
     c: fm_parse_error_t
-    surfaces: [c]
+    js: ParseError
+    py: ParseError
+    surfaces: [c, wasm, native, py]
   enum.parse_error_code:
     kind: enum
     c: fm_parse_error_code_t
@@ -7554,6 +7599,7 @@ entries:
   cell_xf_index.get:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: cell_xf_index
     c: fm_sheet_get_cell_xf_index
     js: getCellXfIndex
@@ -7564,6 +7610,7 @@ entries:
   cell_xf_index.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: cell_xf_index
     c: fm_sheet_set_cell_xf_index
     js: setCellXfIndex
@@ -7574,6 +7621,7 @@ entries:
   cell_xf_index.clear:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: cell_xf_index
     c: fm_sheet_clear_cell_xf_index
     js: clearCellXfIndex
@@ -7584,6 +7632,7 @@ entries:
   range_xf_index.set:
     kind: op
     scope: sheet
+    namespace: ooxml
     noun: range_xf_index
     c: fm_sheet_set_range_xf_index
     js: setRangeXfIndex
@@ -7594,6 +7643,7 @@ entries:
   cell_xf.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: cell_xf
     c: fm_workbook_get_cell_xf
     js: getCellXf
@@ -7603,6 +7653,7 @@ entries:
   font.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: font
     c: fm_workbook_get_font
     js: getFont
@@ -7612,6 +7663,7 @@ entries:
   num_fmt_string.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: num_fmt_string
     c: fm_workbook_get_num_fmt_string
     js: getNumFmtString
@@ -7622,6 +7674,7 @@ entries:
   fill.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: fill
     c: fm_workbook_get_fill
     js: getFill
@@ -7631,6 +7684,7 @@ entries:
   border.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: border
     c: fm_workbook_get_border
     js: getBorder
@@ -7650,6 +7704,7 @@ entries:
   dxf.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: dxf
     c: fm_workbook_get_dxf
     js: getDxf
@@ -7659,6 +7714,7 @@ entries:
   dxf.add:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: dxf
     c: fm_workbook_add_dxf
     js: addDxf
@@ -7793,6 +7849,7 @@ entries:
   cell_style_xf.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: cell_style_xf
     c: fm_workbook_get_cell_style_xf
     js: getCellStyleXf
@@ -7802,6 +7859,7 @@ entries:
   font.add:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: font
     c: fm_workbook_add_font
     js: addFont
@@ -7811,6 +7869,7 @@ entries:
   font.set:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: font
     c: fm_workbook_set_font
     js: setFont
@@ -7829,6 +7888,7 @@ entries:
   fill.add:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: fill
     c: fm_workbook_add_fill
     js: addFill
@@ -7838,6 +7898,7 @@ entries:
   border.add:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: border
     c: fm_workbook_add_border
     js: addBorder
@@ -7847,6 +7908,7 @@ entries:
   num_fmt.add:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: num_fmt
     c: fm_workbook_add_num_fmt
     js: addNumFmt
@@ -7856,6 +7918,7 @@ entries:
   cell_xf.add:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: cell_xf
     c: fm_workbook_add_cell_xf
     js: addCellXf
@@ -7865,6 +7928,7 @@ entries:
   cell_style_xf.add:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: cell_style_xf
     c: fm_workbook_add_cell_style_xf
     js: addCellStyleXf
@@ -7874,6 +7938,7 @@ entries:
   cell_style.set:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: cell_style
     c: fm_workbook_set_cell_style
     js: setCellStyle
@@ -7883,6 +7948,7 @@ entries:
   cell_style.remove:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: cell_style
     c: fm_workbook_remove_cell_style
     js: removeCellStyle
@@ -7892,6 +7958,7 @@ entries:
   cell_styles.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [cell_style.get_count, cell_style.get_at]
     js: listCellStyles
     py: list_cell_styles
@@ -8277,7 +8344,6 @@ entries:
     py: update_sparkline_group
     patch: true
     patch_record: SparklineGroup
-    patch_nested: { colorSeries: Color, colorNegative: Color, colorAxis: Color, colorMarkers: Color, colorFirst: Color, colorLast: Color, colorHigh: Color, colorLow: Color }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_sparkline_group, js: updateSparklineGroup, py: update_sparkline_group }
     facade: handwritten
@@ -8732,6 +8798,7 @@ entries:
   cell_style.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: cell_style
     c: fm_workbook_get_cell_style
     js: getCellStyle
@@ -8799,6 +8866,7 @@ entries:
   passthrough.get:
     kind: op
     scope: workbook
+    namespace: ooxml
     noun: passthrough
     c: fm_workbook_get_passthrough
     js: getPassthrough
@@ -9025,6 +9093,7 @@ entries:
   passthroughs.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [passthrough.get_count, passthrough.get_at]
     js: listPassthroughs
     py: list_passthroughs
@@ -12261,6 +12330,13 @@ entries:
     c: FM_STATUS_INDEX_OUT_OF_RANGE
     enum: enum.status_code
     surfaces: [c]
+  binding.sheet_iterator:
+    kind: op
+    scope: workbook
+    js: "[Symbol.iterator]"
+    surfaces: [wasm, native]
+    exception: "binding-only protocol: iterates the sheet handles in sheet order; Python's __iter__ is a py_only dunder"
+    facade: handwritten
   binding.disposed:
     kind: op
     scope: workbook
@@ -12287,6 +12363,13 @@ entries:
     py: PIVOT_SHOW_AS_BASE_NEXT
     surfaces: [wasm, native, py]
     was: { js: PIVOT_SHOW_AS_BASE_NEXT }
+  binding.enum_name:
+    kind: free
+    scope: process
+    js: enumName
+    py: enum_name
+    surfaces: [wasm, native, py]
+    exception: "binding-only helper: the key an ordinal table has for a value"
   binding.merge_function_metadata:
     kind: free
     scope: process
@@ -12329,6 +12412,90 @@ entries:
     rect_args: [0]
     surfaces: [wasm, native, py]
     exception: "binding convenience: reads a range as a dense two-dimensional array of values"
+    facade: handwritten
+  binding.get_typed_value:
+    kind: op
+    scope: sheet
+    js: getTypedValue
+    py: get_typed_value
+    cell_args: [[0, 1]]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: reads one cell as a kind-tagged value"
+    facade: handwritten
+  binding.get_typed_values:
+    kind: op
+    scope: sheet
+    js: getTypedValues
+    py: get_typed_values
+    rect_args: [0]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: reads a range as a dense two-dimensional array of kind-tagged values"
+    facade: handwritten
+  binding.get_date:
+    kind: op
+    scope: sheet
+    js: getDate
+    py: get_date
+    cell_args: [[0, 1]]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: reads a date-valued cell as a Date / datetime"
+    facade: handwritten
+  binding.get_used_range:
+    kind: op
+    scope: sheet
+    js: getUsedRange
+    py: get_used_range
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: the bounding rectangle of the cells holding a value or a formula"
+    facade: handwritten
+  binding.iter_rows:
+    kind: op
+    scope: sheet
+    js: iterRows
+    py: iter_rows
+    rect_args: [0]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: iterates the rows of a range as native values"
+    facade: handwritten
+  binding.evaluate_typed_formula:
+    kind: op
+    scope: sheet
+    js: evaluateTypedFormula
+    py: evaluate_typed_formula
+    cell_args: [[0, 1]]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: evaluateFormula with the result kind-tagged"
+    facade: handwritten
+  binding.evaluate_typed_formula_array:
+    kind: op
+    scope: sheet
+    js: evaluateTypedFormulaArray
+    py: evaluate_typed_formula_array
+    cell_args: [[0, 1]]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: evaluateFormulaArray with the results kind-tagged"
+    facade: handwritten
+  column_style.get:
+    kind: op
+    scope: sheet
+    namespace: ooxml
+    noun: column_style
+    from: [column_override.get_count, column_override.get_at]
+    js: getColumnStyle
+    py: get_column_style
+    surfaces: [wasm, native, py]
+    exception: "composed from the column layout reads; the C ABI has no per-column style getter"
+    facade: handwritten
+  row_style.get:
+    kind: op
+    scope: sheet
+    namespace: ooxml
+    noun: row_style
+    from: [row_override.get_count, row_override.get_at]
+    js: getRowStyle
+    py: get_row_style
+    surfaces: [wasm, native, py]
+    exception: "composed from the row layout reads; the C ABI has no per-row style getter"
     facade: handwritten
   binding.set_values:
     kind: op
@@ -12539,6 +12706,7 @@ entries:
   fonts.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [font.get_count, font.get]
     js: listFonts
     py: list_fonts
@@ -12546,6 +12714,7 @@ entries:
   fills.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [fill.get_count, fill.get]
     js: listFills
     py: list_fills
@@ -12553,6 +12722,7 @@ entries:
   borders.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [border.get_count, border.get]
     js: listBorders
     py: list_borders
@@ -12560,6 +12730,7 @@ entries:
   cell_xfs.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [cell_xf.get_count, cell_xf.get]
     js: listCellXfs
     py: list_cell_xfs
@@ -12567,6 +12738,7 @@ entries:
   cell_style_xfs.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [cell_style_xf.get_count, cell_style_xf.get]
     js: listCellStyleXfs
     py: list_cell_style_xfs
@@ -12574,6 +12746,7 @@ entries:
   dxfs.list:
     kind: list
     scope: workbook
+    namespace: ooxml
     from: [dxf.get_count, dxf.get]
     js: listDxfs
     py: list_dxfs
