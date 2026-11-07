@@ -418,7 +418,7 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       return Value::error(ErrorCode::NA);
     }
     const std::size_t idx = wb->sheet_index_by_name(name);
-    return idx == kNoSheetIndex ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(idx + 1));
+    return idx == Workbook::kNoSheet ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(idx + 1));
   };
 
   // 0-arity: number of the currently-bound sheet.

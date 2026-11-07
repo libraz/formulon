@@ -20,6 +20,11 @@ namespace print {
 /// margins are reduced to before any layout arithmetic).
 inline constexpr double kPointsPerInch = 72.0;
 
+/// Converts inches to points.
+constexpr double inches_to_points(double inches) noexcept {
+  return inches * kPointsPerInch;
+}
+
 /// Millimetres per inch, used to convert ISO (A-series) paper sizes.
 inline constexpr double kMillimetresPerInch = 25.4;
 

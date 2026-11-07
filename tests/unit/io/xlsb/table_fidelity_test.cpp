@@ -446,6 +446,27 @@ TEST(XlsbTableFidelity, ModelTableAvoidsTheIdOfAVerbatimPart) {
   EXPECT_NE(back.tables()[0].id, 3U);
 }
 
+TEST(XlsbTableFidelity, CopiedSheetTableAvoidsTheIdOfAVerbatimPart) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(Entry(package, "xl/tables/table3.bin"));
+  Workbook wb = LoadXlsb(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}}));
+  ASSERT_TRUE(wb.tables().empty());
+  // The sheet holding the verbatim part is not copyable, so the copied table lives on another sheet.
+  const std::size_t other = wb.add_sheet("Other");
+  TableMetadata added = AuthoredTable();
+  added.id = 2;
+  added.name = "Added";
+  added.display_name = "Added";
+  added.ref = "F2:H7";
+  added.sheet_index = other;
+  added.auto_filter_xml.reset();
+  wb.mutable_tables().push_back(added);
+  ASSERT_TRUE(wb.copy_sheet(other, other + 1U, std::nullopt).has_value());
+  ASSERT_EQ(wb.tables().size(), 2U);
+  EXPECT_NE(wb.tables()[1].id, 3U);
+  EXPECT_NE(wb.tables()[1].id, wb.tables()[0].id);
+}
+
 TEST(XlsbTableFidelity, NewTableAvoidsTheRangeOfAVerbatimPart) {
   const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
   const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(Entry(package, "xl/tables/table3.bin"));

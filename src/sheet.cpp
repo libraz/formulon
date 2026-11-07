@@ -50,6 +50,13 @@ std::optional<CellAddress> spill_displaced_by_write(const SpillTable* table, std
   return std::nullopt;
 }
 
+/// Drops the furigana the previous value carried.
+void clear_phonetics(Cell& slot) {
+  slot.phonetic_runs.clear();
+  slot.phonetic_props = PhoneticProperties{};
+  slot.phonetic_present = false;
+}
+
 /// Turns `slot` into a literal: drops the formula and the annotations the
 /// previous value carried.
 void reset_to_literal(Cell& slot) {
@@ -57,9 +64,7 @@ void reset_to_literal(Cell& slot) {
   slot.dynamic_array = false;
   slot.array_block_cols = 0U;
   slot.array_block_rows = 0U;
-  slot.phonetic_runs.clear();
-  slot.phonetic_props = PhoneticProperties{};
-  slot.phonetic_present = false;
+  clear_phonetics(slot);
 }
 
 /// The stored cell at `(row, col)` when it holds a formula, else null.
@@ -311,9 +316,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   Cell& slot = ensure_overwritten_cell_locked(row, col);
   reset_to_literal(slot);
-  auto owned = std::make_unique<std::string>(text);
-  slot.cached_value = Value::text(*owned);
-  slot.cached_text_owned = std::move(owned);
+  set_cell_cached_value_locked(slot, Value::text(text));
   index_formula_cell_locked(row, col, false);
   cell_enumeration_revision_.bump();
 }
@@ -325,9 +328,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
 
   Cell& slot = ensure_overwritten_cell_locked(row, col);
   slot.formula_text = std::move(formula);
-  slot.phonetic_runs.clear();
-  slot.phonetic_props = PhoneticProperties{};
-  slot.phonetic_present = false;
+  clear_phonetics(slot);
   slot.cached_value = Value::blank();
   slot.cached_text_owned.reset();
   index_formula_cell_locked(row, col, !slot.formula_text.empty());

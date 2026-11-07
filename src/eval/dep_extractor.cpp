@@ -210,11 +210,12 @@ void emit_rect(WalkState& state, std::uint16_t sheet_id, const DeclaredRect& rec
 // sheet; two qualified sides must agree, else the pair has no footprint.
 std::optional<Footprint> pair_footprint(const parser::Reference& lhs, const parser::Reference& rhs,
                                         const WalkState& state) {
-  if (!lhs.sheet.empty() && !rhs.sheet.empty() && !sheet_names::equal(lhs.sheet, rhs.sheet)) {
+  const Expected<std::string_view, ErrorCode> merged = merge_sheet_qualifiers(lhs.sheet, rhs.sheet);
+  if (!merged) {
     return std::nullopt;
   }
   parser::Reference probe{};
-  probe.sheet = lhs.sheet.empty() ? rhs.sheet : lhs.sheet;
+  probe.sheet = merged.value();
   Footprint out;
   if (!resolve_sheet_id(probe, state, &out.sheet_id)) {
     return std::nullopt;

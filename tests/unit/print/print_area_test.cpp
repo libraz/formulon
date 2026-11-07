@@ -52,6 +52,14 @@ TEST(PrintAreaTest, SingleRangeResolution) {
   EXPECT_EQ(r.last_col, 7U);
 }
 
+TEST(PrintAreaTest, BuiltInNameLookupIgnoresCase) {
+  Workbook wb = MakeWorkbook({SheetScoped("_xlnm.print_area", "Sheet1!$A$1:$H$80", 0)});
+  auto result = resolve_print_area(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_EQ(result.value().size(), 1U);
+  EXPECT_EQ(result.value().front().last_col, 7U);
+}
+
 TEST(PrintAreaTest, MultiAreaCommaSeparated) {
   Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Area", "Sheet1!$A$1:$D$20,Sheet1!$F$1:$H$20", 0)});
   auto result = resolve_print_area(wb, 0);

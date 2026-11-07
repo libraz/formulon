@@ -315,7 +315,6 @@ bool match_duplicate_or_unique(const CFRule& rule, const Value& cell_value, cons
 // stance when oracle data lands). Errors and blanks never participate.
 // ---------------------------------------------------------------------------
 
-constexpr double kPercentDivisor = 100.0;
 constexpr std::int32_t kDefaultTop10Rank = 10;
 
 bool match_above_average(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
@@ -349,7 +348,7 @@ std::size_t resolve_top10_rank(const CFRule& rule, std::size_t population) {
   std::int64_t resolved = raw_rank;
   if (rule.percent) {
     resolved = static_cast<std::int64_t>(
-        std::floor(static_cast<double>(population) * static_cast<double>(raw_rank) / kPercentDivisor));
+        std::floor(static_cast<double>(population) * static_cast<double>(raw_rank) / helpers::kPercentDivisor));
   }
   if (resolved < 1) {
     resolved = 1;

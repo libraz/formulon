@@ -40,10 +40,6 @@ constexpr double kB4JisHeightMm = 364.0;
 constexpr double kB5JisWidthMm = 182.0;
 constexpr double kB5JisHeightMm = 257.0;
 
-constexpr double InchesToPoints(double inches) noexcept {
-  return inches * kPointsPerInch;
-}
-
 constexpr double MmToPoints(double mm) noexcept {
   return mm * kPointsPerInch / kMillimetresPerInch;
 }
@@ -53,9 +49,9 @@ constexpr double MmToPoints(double mm) noexcept {
 PaperDimensions resolve_paper_dimensions(std::uint32_t paper_size) noexcept {
   switch (paper_size) {
     case kPaperLetter:
-      return PaperDimensions{InchesToPoints(kLetterWidthInches), InchesToPoints(kLetterHeightInches)};
+      return PaperDimensions{inches_to_points(kLetterWidthInches), inches_to_points(kLetterHeightInches)};
     case kPaperLegal:
-      return PaperDimensions{InchesToPoints(kLegalWidthInches), InchesToPoints(kLegalHeightInches)};
+      return PaperDimensions{inches_to_points(kLegalWidthInches), inches_to_points(kLegalHeightInches)};
     case kPaperA3:
       return PaperDimensions{MmToPoints(kA3WidthMm), MmToPoints(kA3HeightMm)};
     case kPaperA4:
@@ -99,8 +95,8 @@ PrintableArea compute_printable_area(const PageSetup& setup, const PageMargins& 
     std::swap(page_width, page_height);
   }
 
-  const double horizontal_margin = (margins.left + margins.right) * kPointsPerInch;
-  const double vertical_margin = (margins.top + margins.bottom) * kPointsPerInch;
+  const double horizontal_margin = inches_to_points(margins.left + margins.right);
+  const double vertical_margin = inches_to_points(margins.top + margins.bottom);
   // Excel's `<pageMargins>` stores header / footer as the distance from
   // the page edge to that band, and the top / bottom margins as the
   // distance to the cell body. The bands therefore sit *inside* the
@@ -118,10 +114,10 @@ PrintableArea compute_printable_area(const PageSetup& setup, const PageMargins& 
   // line height, ~13.2 pt; 14 pt keeps the body in lockstep with Excel's
   // `Pages.Count`.
   constexpr double kHeaderFooterTextBandPt = 14.0;
-  const double header_band = margins.header * kPointsPerInch;
-  const double footer_band = margins.footer * kPointsPerInch;
-  const double top_margin = margins.top * kPointsPerInch;
-  const double bottom_margin = margins.bottom * kPointsPerInch;
+  const double header_band = inches_to_points(margins.header);
+  const double footer_band = inches_to_points(margins.footer);
+  const double top_margin = inches_to_points(margins.top);
+  const double bottom_margin = inches_to_points(margins.bottom);
   const double header_encroach =
       header_band > 0.0 ? std::max(0.0, header_band + kHeaderFooterTextBandPt - top_margin) : 0.0;
   const double footer_encroach =

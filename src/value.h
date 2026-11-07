@@ -363,7 +363,7 @@ class Value {
   ///
   /// Examples: `"Blank"`, `"Number(42)"`, `"Bool(true)"`,
   /// `"Error(#DIV/0!)"`. The exact number format is not load-bearing and
-  /// uses `std::to_string`; Excel-exact formatting is implemented separately.
+  /// uses a fixed six-decimal rendering; Excel-exact formatting is implemented separately.
   std::string debug_to_string() const;
 
   /// Value-level equality.

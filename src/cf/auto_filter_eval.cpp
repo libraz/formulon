@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "cf/cf_evaluator.h"
+#include "cf/cf_helpers.h"
 #include "cf/cf_match.h"
 #include "color_resolve.h"
 #include "eval/collation.h"
@@ -215,7 +216,7 @@ std::optional<double> top10_threshold(const Top10Filter& f, std::vector<double>&
     return std::nullopt;
   }
   const double n = static_cast<double>(numbers.size());
-  double count = f.percent ? std::floor(n * f.val / 100.0) : std::floor(f.val);
+  double count = f.percent ? std::floor(n * f.val / cf::helpers::kPercentDivisor) : std::floor(f.val);
   count = std::max(1.0, std::min(count, n));
   const auto k = static_cast<std::size_t>(count);
   const std::size_t index = f.top ? numbers.size() - k : k - 1U;

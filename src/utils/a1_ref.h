@@ -55,6 +55,11 @@ bool parse_uint(std::string_view text, std::size_t* pos, std::uint32_t* out_val)
 /// DOM cell-ref path in `cell_parser.cpp` so both OOXML readers converge.
 bool parse_a1_ref(std::string_view text, std::uint32_t* out_row, std::uint32_t* out_col) noexcept;
 
+/// Appends the A1 address of a 0-based (row, col) to `out`, with `$` anchors
+/// on both parts when `absolute`. Returns false, appending nothing, when the
+/// column is outside Excel's grid.
+bool append_a1(std::string& out, std::uint32_t row, std::uint32_t col, bool absolute = false);
+
 /// Encodes a 0-based (row, col) into the Excel A1 address (1-based, e.g.
 /// "A1", "AA1", "XFD1048576"). Returns an empty string when the column is
 /// outside Excel's grid.

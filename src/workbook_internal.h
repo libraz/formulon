@@ -16,10 +16,13 @@
 
 #include "auto_filter.h"
 #include "defined_name.h"
+#include "eval/recalc_engine.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -32,13 +35,47 @@ namespace detail {
 // Hidden sheet-scoped name Excel keeps over a sheet AutoFilter's range.
 inline constexpr std::string_view kFilterDatabaseName = "_xlnm._FilterDatabase";
 
-// `op`-prefixed target check for a cell setter: the sheet index, then the grid coordinate.
-inline Expected<void, Error> check_cell_target(const char* op, std::size_t sheet_index, std::size_t sheet_count,
-                                               std::uint32_t row, std::uint32_t col) {
+// Eagerly marks every existing dependent of `cell` dirty in `mutator`'s
+// engine. The next `recalc()` pass would discover them via BFS anyway,
+// but eager marking keeps the dirty set self-consistent between
+// mutations and matches what callers see when they introspect the
+// engine via `recalc_engine()`.
+//
+// Precondition: caller holds the engine mutex for the lifetime of the
+// `LockedMutator&`. The helper routes through the facade so the
+// compound mutation in `set_cell_value` / `set_cell_formula` stays
+// under a single critical section, which keeps the `Sheet` write that
+// follows from racing against a concurrent `recalc_parallel`.
+inline void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, eval::CellNodeId cell) {
+  for (eval::CellNodeId dep : mutator.dep_graph().dependents_of_ref(cell)) {
+    mutator.mark_dirty(dep);
+  }
+  mutator.mark_range_dependents_dirty(cell);
+}
+
+// Index of the sheet named `name` (Unicode simple fold), or `Workbook::kNoSheet`.
+inline std::size_t find_sheet_index(const std::vector<Sheet>& sheets, std::string_view name) noexcept {
+  for (std::size_t i = 0; i < sheets.size(); ++i) {
+    if (sheet_names::equal(sheets[i].name(), name)) {
+      return i;
+    }
+  }
+  return static_cast<std::size_t>(-1);
+}
+
+// `op`-prefixed sheet index range check whose detail names the sheet count.
+inline Expected<void, Error> check_sheet_in_range(const char* op, std::size_t sheet_index, std::size_t sheet_count) {
   if (sheet_index >= sheet_count) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheet_count));
   }
+  return Expected<void, Error>::Ok();
+}
+
+// `op`-prefixed target check for a cell setter: the sheet index, then the grid coordinate.
+inline Expected<void, Error> check_cell_target(const char* op, std::size_t sheet_index, std::size_t sheet_count,
+                                               std::uint32_t row, std::uint32_t col) {
+  RETURN_IF_ERROR(check_sheet_in_range(op, sheet_index, sheet_count));
   if (!Sheet::coord_in_grid(row, col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": coordinate out of grid",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));

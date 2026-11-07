@@ -383,10 +383,7 @@ void update_table_columns(TableMetadata& table, const MergeRange& before, const 
       const std::uint32_t col = edit.index + i;
       sheet.set_cell_text(after.first_row, col, column.name);
       const eval::CellNodeId node = make_node(sheet_index, after.first_row, col);
-      for (const eval::CellNodeId dependent : mutator.dep_graph().dependents_of_ref(node)) {
-        mutator.mark_dirty(dependent);
-      }
-      mutator.mark_range_dependents_dirty(node);
+      detail::mark_dependents_dirty(mutator, node);
     }
     added.push_back(std::move(column));
   }

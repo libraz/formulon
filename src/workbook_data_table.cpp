@@ -23,6 +23,7 @@
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
+#include "workbook_internal.h"
 
 namespace formulon {
 
@@ -275,10 +276,7 @@ Expected<TableResult, Error> compute_table(Workbook& wb, std::size_t sheet_index
 
 Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRange ref, DataTableInput row_input,
                                                DataTableInput col_input) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "add_data_table: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
-  }
+  RETURN_IF_ERROR(detail::check_sheet_in_range("add_data_table", sheet_index, sheets_.size()));
   ref = normalized(ref);
   if (!Sheet::coord_in_grid(ref.first_row, ref.first_col) || !Sheet::coord_in_grid(ref.last_row, ref.last_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "add_data_table: ref outside grid");

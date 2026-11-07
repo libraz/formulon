@@ -295,16 +295,11 @@ std::string_view Workbook::intern_text(std::string_view text) {
 
 const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
   const std::size_t index = sheet_index_by_name(name);
-  return index == static_cast<std::size_t>(-1) ? nullptr : &sheets_[index];
+  return index == kNoSheet ? nullptr : &sheets_[index];
 }
 
 std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept {
-  for (std::size_t i = 0; i < sheets_.size(); ++i) {
-    if (sheet_names::equal(sheets_[i].name(), name)) {
-      return i;
-    }
-  }
-  return static_cast<std::size_t>(-1);
+  return detail::find_sheet_index(sheets_, name);
 }
 
 std::size_t Workbook::approximate_memory_bytes() const noexcept {

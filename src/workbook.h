@@ -309,9 +309,12 @@ class Workbook {
 
   /// Returns the 0-based index of the sheet whose display name matches
   /// `name` under Unicode simple case folding. Returns
-  /// `static_cast<size_t>(-1)` when no sheet matches. Linear scan, like
+  /// `kNoSheet` when no sheet matches. Linear scan, like
   /// `sheet_by_name`.
   std::size_t sheet_index_by_name(std::string_view name) const noexcept;
+
+  /// What `sheet_index_by_name` returns when no sheet matches.
+  static constexpr std::size_t kNoSheet = static_cast<std::size_t>(-1);
 
   /// Serialises the workbook to an in-memory `.xlsx` byte stream. Delegates
   /// to `io::write_ooxml`; see that function's documentation for the exact
@@ -766,6 +769,10 @@ class Workbook {
   /// of any table nor a defined name (compared case-insensitively), as
   /// `add_table` checks.
   std::string next_default_table_name(std::string_view word) const;
+
+  /// Smallest table id above `after` that no model table and no verbatim-kept
+  /// XLSB table part owns.
+  std::uint32_t next_free_table_id(std::uint32_t after) const;
 
   /// Index in `tables()` of the first table on `sheet_index` whose `ref`
   /// (header through totals row) contains the 0-based (`row`, `col`).

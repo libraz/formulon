@@ -160,22 +160,7 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   }
   RETURN_IF_ERROR(check_table_identity(*this, table.name, table.display_name, std::nullopt));
   RETURN_IF_ERROR(check_table_range_free(*this, table.sheet_index, *rect, std::nullopt, /*unmerge_inside=*/true));
-  const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
-  std::uint32_t next_id = 1;
-  for (const TableMetadata& existing : tables_) {
-    next_id = next_id > existing.id + 1U ? next_id : existing.id + 1U;
-  }
-  // A table part kept verbatim still owns its id.
-  for (bool taken = true; taken;) {
-    taken = false;
-    for (const io::xlsb::XlsbRetainedTable& kept : retained) {
-      if (kept.id == next_id) {
-        ++next_id;
-        taken = true;
-      }
-    }
-  }
-  table.id = next_id;
+  table.id = next_free_table_id(0);
   std::unordered_set<std::string> column_keys;
   column_keys.reserve(table.columns.size());
   std::uint32_t column_id = 1;
@@ -229,6 +214,25 @@ void Workbook::set_tables(std::vector<TableMetadata> tables) {
   }
   tables_ = std::move(tables);
   reindex_formulas_for_table_change(names);
+}
+
+std::uint32_t Workbook::next_free_table_id(std::uint32_t after) const {
+  for (const TableMetadata& existing : tables_) {
+    after = after > existing.id ? after : existing.id;
+  }
+  const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
+  std::uint32_t next_id = after + 1U;
+  // A table part kept verbatim still owns its id.
+  for (bool taken = true; taken;) {
+    taken = false;
+    for (const io::xlsb::XlsbRetainedTable& kept : retained) {
+      if (kept.id == next_id) {
+        ++next_id;
+        taken = true;
+      }
+    }
+  }
+  return next_id;
 }
 
 std::string Workbook::next_default_table_name(std::string_view word) const {
@@ -438,10 +442,7 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
     const std::uint32_t header_col = rect->first_col + static_cast<std::uint32_t>(column);
     sheets_[tables_[table].sheet_index].set_cell_text(rect->first_row, header_col, final_name);
     const eval::CellNodeId node = make_node(tables_[table].sheet_index, rect->first_row, header_col);
-    for (const eval::CellNodeId dependent : mutator.dep_graph().dependents_of_ref(node)) {
-      mutator.mark_dirty(dependent);
-    }
-    mutator.mark_range_dependents_dirty(node);
+    detail::mark_dependents_dirty(mutator, node);
   }
   if (renamed) {
     reindex_formulas_referencing_table(sheets_, mutator, *this, {tables_[table].name, tables_[table].display_name});

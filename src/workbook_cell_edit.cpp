@@ -71,27 +71,6 @@ Expected<void, Error> check_cell_writable(const char* op, const std::vector<Shee
   RETURN_IF_ERROR(check_not_part_of_array(op, sheets[sheet_index], row, col));
   return check_not_part_of_data_table(op, sheets[sheet_index], row, col);
 }
-}  // namespace
-
-namespace {
-
-// Eagerly marks every existing dependent of `cell` dirty in `mutator`'s
-// engine. The next `recalc()` pass would discover them via BFS anyway,
-// but eager marking keeps the dirty set self-consistent between
-// mutations and matches what callers see when they introspect the
-// engine via `recalc_engine()`.
-//
-// Precondition: caller holds the engine mutex for the lifetime of the
-// `LockedMutator&`. The helper routes through the facade so the
-// compound mutation in `set_cell_value` / `set_cell_formula` stays
-// under a single critical section, which keeps the `Sheet` write that
-// follows from racing against a concurrent `recalc_parallel`.
-void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, eval::CellNodeId cell) {
-  for (eval::CellNodeId dep : mutator.dep_graph().dependents_of_ref(cell)) {
-    mutator.mark_dirty(dep);
-  }
-  mutator.mark_range_dependents_dirty(cell);
-}
 
 // When `(row, col)` is a *phantom* of a committed spill region (i.e. a
 // spill target that is not the anchor), a write here clears the region via
@@ -152,7 +131,7 @@ void prepare_cell_overwrite(const eval::RecalcEngine::LockedMutator& mutator, st
                             const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
   const eval::CellNodeId node = make_node(sheet_index, row, col);
   mutator.mark_dirty(node);
-  mark_dependents_dirty(mutator, node);
+  detail::mark_dependents_dirty(mutator, node);
   mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets, row, col);
   mutator.clear_cell_dependencies(node);
   mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets, row, col);
@@ -357,7 +336,7 @@ void Workbook::put_cell_formula(std::size_t sheet_index, std::uint32_t row, std:
 
     // Mark the cell dirty and propagate to direct dependents.
     mutator.mark_dirty(node);
-    mark_dependents_dirty(mutator, node);
+    detail::mark_dependents_dirty(mutator, node);
   }
 }
 
@@ -368,7 +347,7 @@ void Workbook::mark_cell_dependents_dirty(std::size_t sheet_index, std::uint32_t
   const eval::CellNodeId node = make_node(sheet_index, row, col);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  mark_dependents_dirty(mutator, node);
+  detail::mark_dependents_dirty(mutator, node);
 }
 
 }  // namespace formulon

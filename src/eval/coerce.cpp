@@ -442,11 +442,9 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
       // Skip vs. HasValue distinction; the two helpers stay in sync.
       const std::string_view text = v.as_text();
       const LocaleFacts& facts = locale_facts(current_eval_profile());
-      if (strings::case_insensitive_eq(text, facts.true_name)) {
-        return true;
-      }
-      if (strings::case_insensitive_eq(text, facts.false_name)) {
-        return false;
+      bool parsed = false;
+      if (parse_locale_bool_text(text, facts, &parsed)) {
+        return parsed;
       }
       return ErrorCode::Value;
     }

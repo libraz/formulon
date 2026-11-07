@@ -17,10 +17,6 @@ namespace formulon {
 namespace print {
 namespace {
 
-// OOXML built-in defined-name identifiers for the print area and titles.
-constexpr std::string_view kPrintAreaName = "_xlnm.Print_Area";
-constexpr std::string_view kPrintTitlesName = "_xlnm.Print_Titles";
-
 constexpr char kAreaSeparator = ',';
 constexpr char kRangeSeparator = ':';
 constexpr char kSheetSeparator = '!';
@@ -94,35 +90,46 @@ bool ParseCellRef(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
 constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
 constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
 
+/// Parses both endpoints of an axis span as pure column letters (`columns`)
+/// or pure decimal rows. Writes the 1-based low/high ends, ordered; rows
+/// reject 0.
+bool ParseAxisPair(std::string_view lhs, std::string_view rhs, bool columns, std::uint32_t* lo, std::uint32_t* hi) {
+  std::size_t pi = 0;
+  std::size_t pj = 0;
+  std::uint32_t a = 0;
+  std::uint32_t b = 0;
+  if (columns) {
+    if (!a1::parse_column_letters(lhs, &pi, &a) || pi != lhs.size() || !a1::parse_column_letters(rhs, &pj, &b) ||
+        pj != rhs.size()) {
+      return false;
+    }
+  } else if (!a1::parse_uint(lhs, &pi, &a) || pi != lhs.size() || a == 0U || !a1::parse_uint(rhs, &pj, &b) ||
+             pj != rhs.size() || b == 0U) {
+    return false;
+  }
+  *lo = std::min(a, b);
+  *hi = std::max(a, b);
+  return true;
+}
+
 /// Recognises a whole-column (`A:D`) or whole-row (`1:50`) print-area
 /// span and synthesizes the clamped rectangle: a column span covers every
 /// row up to the sheet ceiling, a row span every column. Mirrors how
 /// `ParseTitleToken` accepts the same two shapes for `Print_Titles`.
 /// Returns false when the token is neither shape.
 bool ParseWholeAxisToken(std::string_view lhs, std::string_view rhs, CellRange* out_range) {
-  // Whole-column span: both endpoints are pure column letters.
-  std::size_t pi = 0;
-  std::size_t pj = 0;
-  std::uint32_t c1 = 0;
-  std::uint32_t c2 = 0;
-  if (a1::parse_column_letters(lhs, &pi, &c1) && pi == lhs.size() && a1::parse_column_letters(rhs, &pj, &c2) &&
-      pj == rhs.size()) {
-    out_range->first_col = std::min(std::min(c1, c2) - 1U, kMaxColIndex);
-    out_range->last_col = std::min(std::max(c1, c2) - 1U, kMaxColIndex);
+  std::uint32_t lo = 0;
+  std::uint32_t hi = 0;
+  if (ParseAxisPair(lhs, rhs, /*columns=*/true, &lo, &hi)) {
+    out_range->first_col = std::min(lo - 1U, kMaxColIndex);
+    out_range->last_col = std::min(hi - 1U, kMaxColIndex);
     out_range->first_row = 0U;
     out_range->last_row = kMaxRowIndex;
     return true;
   }
-
-  // Whole-row span: both endpoints are pure decimal row indices.
-  pi = 0;
-  pj = 0;
-  std::uint32_t r1 = 0;
-  std::uint32_t r2 = 0;
-  if (a1::parse_uint(lhs, &pi, &r1) && pi == lhs.size() && r1 != 0U && a1::parse_uint(rhs, &pj, &r2) &&
-      pj == rhs.size() && r2 != 0U) {
-    out_range->first_row = std::min(std::min(r1, r2) - 1U, kMaxRowIndex);
-    out_range->last_row = std::min(std::max(r1, r2) - 1U, kMaxRowIndex);
+  if (ParseAxisPair(lhs, rhs, /*columns=*/false, &lo, &hi)) {
+    out_range->first_row = std::min(lo - 1U, kMaxRowIndex);
+    out_range->last_row = std::min(hi - 1U, kMaxRowIndex);
     out_range->first_col = 0U;
     out_range->last_col = kMaxColIndex;
     return true;
@@ -180,9 +187,8 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
 /// Locates a sheet-scoped built-in defined name.
 ///
 /// Returns the matching `formula`, or `nullptr` when no defined name
-/// matches `name` for `sheet_index`. Names are matched case-insensitively
-/// only on the comparison Excel performs; the built-in identifiers are
-/// stored verbatim, so a plain comparison suffices here.
+/// matches `name` for `sheet_index`. Names compare ASCII case-insensitively,
+/// as every other defined-name lookup does.
 const std::string* FindSheetScopedFormula(const Workbook& wb, std::uint32_t sheet_index, std::string_view name) {
   for (const DefinedName& dn : wb.defined_names()) {
     if (dn.local_sheet_id < 0) {
@@ -191,7 +197,7 @@ const std::string* FindSheetScopedFormula(const Workbook& wb, std::uint32_t shee
     if (static_cast<std::uint32_t>(dn.local_sheet_id) != sheet_index) {
       continue;
     }
-    if (dn.name == name) {
+    if (strings::case_insensitive_eq(dn.name, name)) {
       return &dn.formula;
     }
   }
@@ -215,50 +221,19 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
     return false;
   }
 
-  // Whole-row span: both endpoints are pure decimal row indices.
-  if (strings::is_ascii_digit(lhs.front())) {
-    std::size_t pi = 0;
-    std::size_t pj = 0;
-    std::uint32_t r1 = 0;
-    std::uint32_t r2 = 0;
-    if (!a1::parse_uint(lhs, &pi, &r1) || pi != lhs.size()) {
-      return false;
-    }
-    if (!a1::parse_uint(rhs, &pj, &r2) || pj != rhs.size()) {
-      return false;
-    }
-    if (r1 == 0U || r2 == 0U) {
-      return false;
-    }
-    const std::uint32_t lo = std::min(r1, r2) - 1U;
-    const std::uint32_t hi = std::max(r1, r2) - 1U;
-    // A crafted `Print_Titles` such as `1:4294967295` would otherwise
-    // drive pagination through a multi-billion-row loop. Reject any span
-    // whose far edge leaves the Excel grid.
-    if (hi >= Sheet::kMaxRows) {
-      return false;
-    }
-    out_titles->repeat_rows = std::make_pair(lo, hi);
-    return true;
-  }
-
-  // Whole-column span: both endpoints are pure column letters.
-  std::size_t pi = 0;
-  std::size_t pj = 0;
-  std::uint32_t c1 = 0;
-  std::uint32_t c2 = 0;
-  if (!a1::parse_column_letters(lhs, &pi, &c1) || pi != lhs.size()) {
+  const bool rows = strings::is_ascii_digit(lhs.front());
+  std::uint32_t lo = 0;
+  std::uint32_t hi = 0;
+  if (!ParseAxisPair(lhs, rhs, !rows, &lo, &hi)) {
     return false;
   }
-  if (!a1::parse_column_letters(rhs, &pj, &c2) || pj != rhs.size()) {
+  // A crafted `Print_Titles` such as `1:4294967295` would otherwise drive
+  // pagination through a multi-billion-row loop. Reject any span whose far
+  // edge leaves the Excel grid.
+  if (hi - 1U >= (rows ? Sheet::kMaxRows : Sheet::kMaxCols)) {
     return false;
   }
-  const std::uint32_t lo = std::min(c1, c2) - 1U;
-  const std::uint32_t hi = std::max(c1, c2) - 1U;
-  if (hi >= Sheet::kMaxCols) {
-    return false;
-  }
-  out_titles->repeat_cols = std::make_pair(lo, hi);
+  (rows ? out_titles->repeat_rows : out_titles->repeat_cols) = std::make_pair(lo - 1U, hi - 1U);
   return true;
 }
 

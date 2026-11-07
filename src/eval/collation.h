@@ -45,9 +45,6 @@ class CollateQuery {
 
   int compare(std::string_view cell) const;
 
-  /// False when the query takes the ASCII fast path, where `collate` itself is as cheap as `compare`.
-  bool keyed() const noexcept { return !ascii_; }
-
  private:
   std::string query_;
   // Empty when the query takes the ASCII fast path, whose comparison needs no key.

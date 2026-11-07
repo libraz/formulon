@@ -24,7 +24,6 @@ namespace formulon::cf::scales {
 
 namespace {
 
-constexpr double kPercentDivisor = 100.0;
 constexpr double kColorChannelMax = 255.0;
 
 // ---------------------------------------------------------------------------
@@ -46,14 +45,14 @@ std::optional<double> resolve_cfvo(const CfValueObject& cfvo, const ColorScalePo
       if (!pct.has_value()) {
         return std::nullopt;
       }
-      return helpers::interpolate_interval(pop.min, pop.max, *pct / kPercentDivisor);
+      return helpers::interpolate_interval(pop.min, pop.max, *pct / helpers::kPercentDivisor);
     }
     case CfvoType::Percentile: {
       auto pct = helpers::parse_double(cfvo.value);
       if (!pct.has_value() || pop.sorted.empty()) {
         return std::nullopt;
       }
-      return helpers::percentile_inc(pop.sorted, *pct / kPercentDivisor);
+      return helpers::percentile_inc(pop.sorted, *pct / helpers::kPercentDivisor);
     }
     case CfvoType::Min:
     case CfvoType::AutoMin:

@@ -481,9 +481,6 @@ double percentile_inc(const std::vector<double>& sorted, double percentile) {
 }
 
 std::optional<double> parse_double(std::string_view source) {
-  if (source.empty()) {
-    return std::nullopt;
-  }
   // Shared parser with the engine's text-to-number coercion so CFVO
   // thresholds parse identically to `=`/`<`/`>` numeric operands.
   double parsed = 0.0;

@@ -97,9 +97,6 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
   std::vector<TableMetadata> table_copies;
   std::vector<std::pair<std::string, std::string>> table_map;
   std::uint32_t next_id = 0;
-  for (const TableMetadata& table : tables_) {
-    next_id = std::max(next_id, table.id);
-  }
   struct NameScope {
     const Workbook* workbook;
     const std::vector<TableMetadata>* table_copies;
@@ -126,7 +123,8 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
         copy_table_name(table.display_name, tables_.size() + table_copies.size(), name_taken, &scope);
     copy.name = renamed;
     copy.display_name = renamed;
-    copy.id = ++next_id;
+    next_id = next_free_table_id(next_id);
+    copy.id = next_id;
     copy.sheet_index = n;
     rederive_attr_guid(copy.root_extra_attrs, "xr:uid", copy_name);
     for (TableColumn& column : copy.columns) {

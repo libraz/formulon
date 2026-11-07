@@ -85,9 +85,6 @@ struct WholeAxisExtent {
   constexpr bool any() const noexcept { return rows != 0U || cols != 0U; }
 };
 
-/// What `Workbook::sheet_index_by_name` returns when no sheet matches.
-inline constexpr std::size_t kNoSheetIndex = static_cast<std::size_t>(-1);
-
 /// A caller-owned temporary value that shadows one worksheet cell while a
 /// formula is evaluated. The pointed-to value and this descriptor must outlive
 /// every evaluation that observes the context. This is intentionally a read

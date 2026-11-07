@@ -90,13 +90,28 @@ bool parse_a1_ref(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
   return true;
 }
 
+bool append_a1(std::string& out, std::uint32_t row, std::uint32_t col, bool absolute) {
+  const std::size_t start = out.size();
+  if (absolute) {
+    out.push_back('$');
+  }
+  if (!append_column_letters(out, col)) {
+    out.resize(start);
+    return false;
+  }
+  if (absolute) {
+    out.push_back('$');
+  }
+  out.append(std::to_string(static_cast<std::uint64_t>(row) + 1U));
+  return true;
+}
+
 std::string encode_a1(std::uint32_t row, std::uint32_t col) {
   std::string out;
   out.reserve(10U);
-  if (!append_column_letters(out, col)) {
+  if (!append_a1(out, row, col)) {
     return {};
   }
-  out.append(std::to_string(row + 1U));
   return out;
 }
 

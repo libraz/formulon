@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,6 +24,10 @@ namespace formulon {
 class Workbook;
 
 namespace print {
+
+/// Built-in sheet-scoped defined names Excel stores the print settings under.
+inline constexpr std::string_view kPrintAreaName = "_xlnm.Print_Area";
+inline constexpr std::string_view kPrintTitlesName = "_xlnm.Print_Titles";
 
 /// A rectangular cell range, 0-based and inclusive on both corners.
 ///

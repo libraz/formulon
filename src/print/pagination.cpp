@@ -229,9 +229,9 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     result.paper.width_pt = result.paper.landscape ? paper.height_pt : paper.width_pt;
     result.paper.height_pt = result.paper.landscape ? paper.width_pt : paper.height_pt;
     result.paper.known = is_known_paper_size(page_setup.paper_size);
-    result.margins = MarginsPt{page_margins.left * kPointsPerInch,   page_margins.right * kPointsPerInch,
-                               page_margins.top * kPointsPerInch,    page_margins.bottom * kPointsPerInch,
-                               page_margins.header * kPointsPerInch, page_margins.footer * kPointsPerInch};
+    result.margins = MarginsPt{inches_to_points(page_margins.left),   inches_to_points(page_margins.right),
+                               inches_to_points(page_margins.top),    inches_to_points(page_margins.bottom),
+                               inches_to_points(page_margins.header), inches_to_points(page_margins.footer)};
     result.printable = RectPt{result.margins.left, result.margins.top, page_body.width_pt, page_body.height_pt};
     result.page_order = settings.page_setup.page_order;
     result.scale = page_setup.fit_to_page ? 1.0 : FixedScaleFactor(page_setup);

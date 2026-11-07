@@ -137,6 +137,20 @@ TEST(WorkbookTest, ApproximateMemoryCountsPassthroughPayloads) {
   EXPECT_GE(wb.approximate_memory_bytes() - before, kPayloadBytes);
 }
 
+TEST(WorkbookTest, RemovingASheetShiftsRetainedPivotPartOrigins) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("B");
+  wb.add_sheet("C");
+  std::vector<PassthroughPart> parts;
+  parts.push_back(PassthroughPart{"xl/pivotTables/pivotTable1.bin", "application/octet-stream", {}});
+  parts.back().retained_origin = PassthroughPart::RetainedOrigin::kPivotTable;
+  parts.back().origin_sheet_index = 2U;
+  wb.set_passthrough_parts(std::move(parts));
+  ASSERT_TRUE(wb.remove_sheet(0U).has_value());
+  ASSERT_EQ(wb.passthrough_parts().size(), 1U);
+  EXPECT_EQ(wb.passthrough_parts()[0].origin_sheet_index, 1U);
+}
+
 TEST(WorkbookTest, ApproximateMemoryIsStableWithoutMutation) {
   // Hosts report the delta against the previous reading, so a repeated
   // call on an unchanged workbook has to return the same number or the

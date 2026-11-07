@@ -242,7 +242,7 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // Sheet names are unique under folding, so the one match is either the
   // sheet being renamed or a genuine collision.
   const std::size_t idx = sheet_index_by_name(new_name);
-  if (idx != static_cast<std::size_t>(-1) && idx != static_cast<std::size_t>(index)) {
+  if (idx != kNoSheet && idx != static_cast<std::size_t>(index)) {
     return make_error(FormulonErrorCode::kInvalidSheetName, "rename_sheet: name collides with another sheet",
                       "name=\"" + new_name + "\" colliding_index=" + std::to_string(idx));
   }
@@ -427,20 +427,44 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
     return std::any_of(pivot_caches_.begin(), pivot_caches_.end(),
                        [cache_id](const auto& cache) { return cache != nullptr && cache->cache_id() == cache_id; });
   };
-  for (Sheet& sheet : sheets_) {
+  for (std::size_t sheet_pos = 0; sheet_pos < sheets_.size(); ++sheet_pos) {
+    Sheet& sheet = sheets_[sheet_pos];
     std::vector<std::unique_ptr<pivot::PivotTable>> retained_pivots;
     retained_pivots.reserve(sheet.pivot_tables().size());
+    // Position of each pre-removal pivot among the survivors; SIZE_MAX marks a dropped one.
+    std::vector<std::size_t> pivot_new_pos(sheet.pivot_tables().size(), static_cast<std::size_t>(-1));
+    std::size_t pivot_pos = 0;
     for (std::unique_ptr<pivot::PivotTable>& pivot_table : sheet.mutable_pivot_tables()) {
+      const std::size_t old_pos = pivot_pos++;
       if (pivot_table == nullptr) {
         continue;
       }
       const std::uint32_t cache_id = pivot_table->pivot_cache_id();
       if (cache_survives(cache_id) &&
           std::find(dropped_cache_ids.begin(), dropped_cache_ids.end(), cache_id) == dropped_cache_ids.end()) {
+        pivot_new_pos[old_pos] = retained_pivots.size();
         retained_pivots.push_back(std::move(pivot_table));
       }
     }
     sheet.mutable_pivot_tables() = std::move(retained_pivots);
+    for (PassthroughPart& part : passthrough_parts_) {
+      if (part.retained_origin == PassthroughPart::RetainedOrigin::kPivotTable &&
+          part.origin_sheet_index == sheet_pos && part.origin_pivot_index < pivot_new_pos.size() &&
+          pivot_new_pos[part.origin_pivot_index] != static_cast<std::size_t>(-1)) {
+        part.origin_pivot_index = pivot_new_pos[part.origin_pivot_index];
+      }
+    }
+  }
+  // Parts owned by the removed sheet point past the end afterwards, so they read as stale.
+  for (PassthroughPart& part : passthrough_parts_) {
+    if (part.retained_origin != PassthroughPart::RetainedOrigin::kPivotTable) {
+      continue;
+    }
+    if (part.origin_sheet_index == index) {
+      part.origin_sheet_index = sheets_.size();
+    } else if (part.origin_sheet_index > index) {
+      --part.origin_sheet_index;
+    }
   }
 
   // Erase only after all transforms have resolved against the pre-removal

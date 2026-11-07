@@ -83,6 +83,9 @@ struct PreparedCfFormulaCache {
 
 namespace helpers {
 
+/// Divisor turning a percent figure into a fraction.
+inline constexpr double kPercentDivisor = 100.0;
+
 // ---------------------------------------------------------------------------
 // Literal-operand machinery for `cellIs` rules.
 // ---------------------------------------------------------------------------

@@ -494,11 +494,12 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
       (!full_col && !full_row &&
        (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
         (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
-  if (begin_idx != kNoSheetIndex && end_idx == kNoSheetIndex) {
+  if (begin_idx != Workbook::kNoSheet && end_idx == Workbook::kNoSheet) {
     *out_err = ErrorCode::Name;
     return false;
   }
-  if (begin_idx == kNoSheetIndex || end_idx == kNoSheetIndex || incompatible_whole_shape || corners_out_of_bounds) {
+  if (begin_idx == Workbook::kNoSheet || end_idx == Workbook::kNoSheet || incompatible_whole_shape ||
+      corners_out_of_bounds) {
     return false;
   }
   const std::size_t lo = std::min(begin_idx, end_idx);

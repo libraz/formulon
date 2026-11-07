@@ -229,11 +229,11 @@ Expected<std::vector<FormulaProbeResult>, Error> evaluate_pivot_formula_probes(B
     return invalid("pivot 'anchor' has a malformed sheet-qualified A1 address");
   }
   const std::size_t anchor_sheet = built->workbook->sheet_index_by_name(anchor_sheet_name);
-  if (anchor_sheet == static_cast<std::size_t>(-1)) {
+  if (anchor_sheet == Workbook::kNoSheet) {
     return invalid("pivot 'anchor' names an unknown sheet '" + anchor_sheet_name + "'");
   }
   for (const PendingProbe& probe : pending) {
-    if (built->workbook->sheet_index_by_name(probe.sheet) == static_cast<std::size_t>(-1)) {
+    if (built->workbook->sheet_index_by_name(probe.sheet) == Workbook::kNoSheet) {
       return invalid("formula probe '" + probe.id + "' names an unknown sheet '" + probe.sheet + "'");
     }
   }

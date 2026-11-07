@@ -25,7 +25,9 @@
 #include "sheet.h"
 #include "sheet_name.h"
 #include "table.h"
+#include "workbook.h"
 #include "workbook_formula_index.h"
+#include "workbook_internal.h"
 
 namespace formulon {
 
@@ -161,17 +163,21 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
   }
 
   const auto rewrite_field = [](std::string& field, const parser::RefTransform& transform) {
-    const FormulaRewriteResult result = rewrite_formula(field, transform);
+    FormulaRewriteResult result = rewrite_formula(field, transform);
     if (!result.changed) {
       return false;
     }
-    field = result.text;
+    field = std::move(result.text);
     return true;
+  };
+  // A short `per_sheet` degrades to its first slot.
+  const auto transform_for = [&per_sheet](std::size_t i) -> const parser::RefTransform& {
+    return *per_sheet[i < per_sheet.size() ? i : 0U];
   };
 
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
-    const parser::RefTransform& transform = *per_sheet[sheet_idx < per_sheet.size() ? sheet_idx : 0U];
+    const parser::RefTransform& transform = transform_for(sheet_idx);
     for (cf::ConditionalFormat& conditional_format : sheet.mutable_conditional_formats()) {
       for (cf::CFRule& rule : conditional_format.rules) {
         if (rule.formula1.has_value()) {
@@ -225,8 +231,7 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
 
   for (TableMetadata& table : tables) {
     const parser::RefTransform& transform =
-        table.sheet_index < sheets.size() ? *per_sheet[table.sheet_index < per_sheet.size() ? table.sheet_index : 0U]
-                                          : unowned_transform;
+        table.sheet_index < sheets.size() ? transform_for(table.sheet_index) : unowned_transform;
     rewrite_field(table.ref, transform);
     for (TableColumn& column : table.columns) {
       rewrite_field(column.calculated_column_formula, transform);
@@ -242,18 +247,12 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     if (!direct_sheet_old.empty() && sheet_names::equal(source.sheet, direct_sheet_old)) {
       source.sheet.assign(direct_sheet_new);
     }
-    std::optional<std::size_t> owner_sheet;
-    for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
-      if (sheet_names::equal(sheets[sheet_idx].name(), source.sheet)) {
-        owner_sheet = sheet_idx;
-        break;
-      }
-    }
+    const std::size_t owner_sheet = detail::find_sheet_index(sheets, source.sheet);
     const parser::RefTransform& transform =
-        owner_sheet.has_value() ? *per_sheet[*owner_sheet < per_sheet.size() ? *owner_sheet : 0U] : unowned_transform;
-    const FormulaRewriteResult ref_result = rewrite_formula(source.ref, transform);
+        owner_sheet != Workbook::kNoSheet ? transform_for(owner_sheet) : unowned_transform;
+    FormulaRewriteResult ref_result = rewrite_formula(source.ref, transform);
     if (ref_result.changed) {
-      source.ref = ref_result.text;
+      source.ref = std::move(ref_result.text);
     }
     if (!removed_sheet_name.empty() && source.present &&
         (sheet_names::equal(source.sheet, removed_sheet_name) || ref_result.changed)) {

@@ -31,7 +31,7 @@
 #include "sheet_name.h"
 #include "styles.h"
 #include "table.h"
-#include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -227,8 +227,8 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   detail.name = next_default_table_name(defaults.table_word);
   detail.display_name = detail.name;
   detail.ref = "A1:";
-  a1::append_column_letters(detail.ref, static_cast<std::uint32_t>(columns.empty() ? 0U : columns.size() - 1U));
-  detail.ref += std::to_string(records.size() + 1U);
+  a1::append_a1(detail.ref, static_cast<std::uint32_t>(records.size()),
+                static_cast<std::uint32_t>(columns.empty() ? 0U : columns.size() - 1U));
   detail.totals_row_shown = false;
   for (const std::size_t f : columns) {
     TableColumn column;

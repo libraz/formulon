@@ -16,7 +16,7 @@
 #include "parser/ast_format.h"
 #include "sheet.h"
 #include "table.h"
-#include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -49,10 +49,7 @@ std::string filter_database_formula(std::string_view sheet_name, const MergeRang
   parser::append_sheet_name(sheet_name, false, out);
   out.push_back('!');
   const auto append_cell = [&out](std::uint32_t row, std::uint32_t col) {
-    out.push_back('$');
-    a1::append_column_letters(out, col);
-    out.push_back('$');
-    out.append(std::to_string(row + 1U));
+    a1::append_a1(out, row, col, /*absolute=*/true);
   };
   append_cell(range.first_row, range.first_col);
   out.push_back(':');

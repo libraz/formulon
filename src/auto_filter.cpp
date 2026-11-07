@@ -51,13 +51,7 @@ std::optional<MergeRange> parse_a1_rectangle(std::string_view text) noexcept {
 }
 
 bool append_a1_rectangle(std::string& out, const MergeRange& rect) {
-  const auto append_cell = [&out](std::uint32_t row, std::uint32_t col) {
-    if (!a1::append_column_letters(out, col)) {
-      return false;
-    }
-    out += std::to_string(static_cast<std::uint64_t>(row) + 1U);
-    return true;
-  };
+  const auto append_cell = [&out](std::uint32_t row, std::uint32_t col) { return a1::append_a1(out, row, col); };
   if (!append_cell(rect.first_row, rect.first_col)) {
     return false;
   }
