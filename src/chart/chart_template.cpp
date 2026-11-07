@@ -381,12 +381,12 @@ Cls first_cell_class(const Workbook& wb, const std::string& formula) {
   return g.cls(r.top, r.left);
 }
 
-std::uint32_t point_count(const std::string& formula) {
+std::uint64_t point_count(const std::string& formula) {
   RectRef r;
   if (!parse_rect(formula, &r) || r.full_col || r.full_row) {
     return 0;
   }
-  return (r.bottom - r.top + 1U) * (r.right - r.left + 1U);
+  return static_cast<std::uint64_t>(r.bottom - r.top + 1U) * (r.right - r.left + 1U);
 }
 
 }  // namespace
@@ -598,7 +598,11 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
       }
     }
     if (is_pie) {
-      const std::uint32_t points = point_count(s.val);
+      const std::uint64_t points = point_count(s.val);
+      if (points > Sheet::kMaxRows) {
+        return make_error(FormulonErrorCode::kSecResourceLimit, "chart: point count exceeds Excel row limit",
+                          "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
+      }
       for (std::uint32_t p = 0; p < points; ++p) {
         x += "<c:dPt><c:idx val=\"" + std::to_string(p) + "\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill>";
         append_accent(x, colors, p);

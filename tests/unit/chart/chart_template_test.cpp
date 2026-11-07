@@ -850,6 +850,19 @@ TEST(ChartTemplateXml, ColourAttributesKeepOoxmlSpellingsLiteral) {
   EXPECT_EQ(chart_cycle_color(style.document_element(), 0), "<a:schemeClr val=\"_x0041_\"/>");
 }
 
+TEST(ChartTemplateXml, PieRefusesASeriesWithMoreCellsThanTheRowLimit) {
+  const Workbook wb = excel_workbook();
+  ChartInsertOptions pie;
+  pie.kind = ChartInsertKind::kPie;
+  for (const char* val : {"Sheet1!$A$1:$Z$100000", "Sheet1!$A$1:$XFD$1048576"}) {
+    ChartSeriesRefs s;
+    s.val = val;
+    const auto xml = build_chart_xml(wb, pie, ChartSplit{{s}});
+    ASSERT_FALSE(static_cast<bool>(xml)) << val;
+    EXPECT_EQ(xml.error().code, FormulonErrorCode::kSecResourceLimit) << val;
+  }
+}
+
 TEST(ChartTemplateXml, RejectsEmptySplit) {
   const Workbook wb = excel_workbook();
   const auto xml = build_chart_xml(wb, ChartInsertOptions{}, ChartSplit{});

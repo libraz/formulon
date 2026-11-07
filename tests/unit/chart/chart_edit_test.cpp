@@ -1455,6 +1455,29 @@ TEST(ChartEdit, FilterRoundTrip) {
   EXPECT_TRUE(NoRefresh(wb));
 }
 
+// A bare CT_Boolean element is true, so a bare `autoTitleDeleted` keeps a pie from taking a title.
+TEST(ChartEdit, BareAutoTitleDeletedKeepsPieTitleless) {
+  Workbook wb = GridBook();
+  const std::uint32_t id = Insert(wb, K::kColumn);
+  const Located c = Find(wb);
+  std::string xml = PartText(wb, c.path);
+  const std::string from = "<c:autoTitleDeleted val=\"0\"/>";
+  const std::size_t at = xml.find(from);
+  ASSERT_NE(at, std::string::npos);
+  xml.replace(at, from.size(), "<c:autoTitleDeleted/>");
+  const std::size_t title = xml.find("<c:title>");
+  if (title != std::string::npos) {
+    const std::string close = "</c:title>";
+    xml.erase(title, xml.find(close, title) + close.size() - title);
+  }
+  ASSERT_EQ(xml.find("<c:title>"), std::string::npos);
+  ASSERT_TRUE(
+      static_cast<bool>(wb.replace_passthrough_part(c.path, std::vector<std::uint8_t>(xml.begin(), xml.end()))));
+
+  MustOk(set_chart_type(wb, c.sheet, id, 0, K::kPie, ChartGrouping::kClustered));
+  EXPECT_EQ(PartText(wb, c.path).find("<c:title>"), std::string::npos);
+}
+
 // A filtered group bound to a non-`c15` prefix still gets in-scope `c15:` children.
 TEST(ChartEdit, FilterUnderForeignC15PrefixKeepsC15Bound) {
   Workbook wb = GridBook();

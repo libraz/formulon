@@ -167,8 +167,9 @@ inline bool flag_attr(const xml_node& node, const char* name) {
   return v == "1" || v == "true";
 }
 
+/// CT_Boolean: a present element without `val` is true; an absent one is false.
 inline bool flag(const xml_node& node) {
-  return flag_attr(node, "val");
+  return node && (!node.attribute("val") || flag_attr(node, "val"));
 }
 
 inline bool load_xml(pugi::xml_document& doc, const std::string& xml) {
