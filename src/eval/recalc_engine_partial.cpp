@@ -350,7 +350,7 @@ partial_recalc_next_wave:
         wave_budget.count_dependency_wave();
       }
       if (wave_budget.exceeded(!released.empty())) {
-        return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
+        return make_error(FormulonErrorCode::kGraphScheduleFailed, detail::kWavesNoProgressMessage,
                           "partial spill recovery or dynamic-reference retries exceeded the bounded wave budget");
       }
       goto partial_recalc_next_wave;

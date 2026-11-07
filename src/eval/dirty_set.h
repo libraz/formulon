@@ -17,7 +17,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_set>
-#include <utility>
 
 #include "eval/dep_graph.h"
 
@@ -70,7 +69,7 @@ class DirtySet {
   template <typename Fn>
   void for_each(Fn&& visitor) const {
     for (CellNodeId cell : cells_) {
-      std::forward<Fn>(visitor)(cell);
+      visitor(cell);
     }
   }
 

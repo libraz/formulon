@@ -39,6 +39,7 @@
 #include "utils/expected.h"
 #include "utils/index_sort.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 #include "utils/thread_launch.h"
 #include "value.h"
@@ -920,32 +921,11 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       ++serial_fallback_steps;
     }
 
-    const DepGraph::DependencyDelta dependency_delta = engine.reconcile_spill_dependencies_locked(wb);
-    // A reader that saw a target before its final value (or itself) runs
-    // again behind the edge it just taught the graph.
-    const bool dynamic_retry = !dynamic.end_wave(nullptr).empty();
-    const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
-    if (dependency_retry) {
-      wave_budget.count_dependency_wave();
-      engine.mark_edges_dirty_locked(dependency_delta.added);
-    }
-
-    const std::vector<CellNodeId> released = release_queue.take();
-    if (!released.empty() || dependency_retry) {
-      wave_budget.count_release_wave();
-      wave_budget.observe_release(wb, released);
-      if (wave_budget.exceeded(!released.empty())) {
-        // Keep the current dirty set, including unrelated work, while
-        // retaining the release targets for a caller retry after an
-        // external mutation.
-        engine.mark_spill_release_wave_locked(released);
-        return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
-                          "parallel spill recovery or dynamic-reference retries exceeded the bounded wave budget");
-      }
-      engine.dirty_.clear();
-      engine.mark_spill_release_wave_locked(released);
-      engine.mark_edges_dirty_locked(dependency_delta.added);
-      dynamic.mark_stale_dirty();
+    ASSIGN_OR_RETURN(const bool another_wave,
+                     engine.finish_wave_locked(
+                         wb, dynamic, wave_budget, release_queue,
+                         "parallel spill recovery or dynamic-reference retries exceeded the bounded wave budget"));
+    if (another_wave) {
       continue;
     }
 

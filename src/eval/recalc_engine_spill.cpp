@@ -20,13 +20,13 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "eval/recalc_reentry.h"
+#include "eval/spill_producer_index.h"
 #include "eval/spill_release.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/rect_iterator.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -59,7 +59,7 @@ void collect_populated_cells(const Sheet& sheet, const CellRangeDependency& rang
   const auto scan_row = [&](std::uint32_t row, const RowCells& cells) {
     for (const auto& [col, cell] :
          cells.entries_in(extent.first_col, static_cast<std::uint64_t>(extent.last_col) + 1U)) {
-      if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
+      if (blocks_spill(&cell)) {
         out.push_back(CellNodeId{range.sheet_id, row, col});
       }
     }

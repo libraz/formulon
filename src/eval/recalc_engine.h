@@ -66,6 +66,11 @@ class Workbook;
 namespace eval {
 
 class FunctionRegistry;
+namespace detail {
+class SpillWaveBudget;
+struct SpillReleaseQueue;
+}  // namespace detail
+
 class RecalcEngine;
 struct SchedulerConfig;
 struct SchedulerStats;
@@ -555,6 +560,14 @@ class RecalcEngine {
                                                          const std::unordered_set<CellNodeId, CellNodeIdHash>* closure,
                                                          const char* iterative_oom_message,
                                                          std::unordered_set<CellNodeId, CellNodeIdHash>& visited);
+
+  /// Ends one wave of a full recalc: reconciles spill dependencies, queues the
+  /// dependency and release retries, and enforces the wave budget. Returns true
+  /// when the dirty set was rebuilt for another wave, false when the pass is
+  /// complete; `budget_detail` is the context of the budget-exceeded error.
+  Expected<bool, Error> finish_wave_locked(Workbook& workbook, DynamicReadPass& dynamic,
+                                           detail::SpillWaveBudget& wave_budget,
+                                           detail::SpillReleaseQueue& release_queue, const char* budget_detail);
 
   /// Dirties each release anchor, its direct dependents and the owners of
   /// compact ranges covering it, so the next wave re-runs them in order.

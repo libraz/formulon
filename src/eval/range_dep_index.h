@@ -222,8 +222,14 @@ class RangeDepIndex {
     std::uint32_t owner_index = 0;
   };
 
+  static std::uint32_t band_of(std::uint32_t row) noexcept { return row / kBandRows; }
+
+  static std::uint64_t band_bucket_key(std::uint32_t sheet_id, std::uint32_t band) noexcept {
+    return (static_cast<std::uint64_t>(sheet_id) << 32U) | band;
+  }
+
   static std::uint64_t band_key(std::uint16_t sheet_id, std::uint32_t row) noexcept {
-    return (static_cast<std::uint64_t>(sheet_id) << 32U) | (row / kBandRows);
+    return band_bucket_key(sheet_id, band_of(row));
   }
 
   /// Returns the id of `range`, registering it when absent (`is_new`).

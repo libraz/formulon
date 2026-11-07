@@ -26,7 +26,6 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/rect_iterator.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -507,6 +506,47 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
   return recalc_locked(workbook, registry);
 }
 
+Expected<bool, Error> RecalcEngine::finish_wave_locked(Workbook& workbook, DynamicReadPass& dynamic,
+                                                       SpillWaveBudget& wave_budget, SpillReleaseQueue& release_queue,
+                                                       const char* budget_detail) {
+  // Reconcile compact-range -> spill-producer edges only after every cell in
+  // this wave has committed its result. Newly acquired source edges schedule
+  // their watcher for one targeted follow-up wave; old edges remain active
+  // throughout the current wave, so a producer shrink still dirties and
+  // orders its watcher correctly.
+  const DepGraph::DependencyDelta dependency_delta = reconcile_spill_dependencies_locked(workbook);
+  // A reader that saw a target before its final value (or itself) runs
+  // again behind the edge it just taught the graph.
+  const bool dynamic_retry = !dynamic.end_wave(nullptr).empty();
+  const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
+  if (dependency_retry) {
+    wave_budget.count_dependency_wave();
+    mark_edges_dirty_locked(dependency_delta.added);
+  }
+
+  // A spill shape change can release cells that blocked a different pending
+  // producer. Keep those anchors for a dependency-ordered next wave instead
+  // of losing them when this pass clears its dirty set.
+  const std::vector<CellNodeId> released = release_queue.take();
+  if (!released.empty() || dependency_retry) {
+    wave_budget.count_release_wave();
+    wave_budget.observe_release(workbook, released);
+    if (wave_budget.exceeded(!released.empty())) {
+      // Do not recurse through an unbounded chain of release waves. Preserve
+      // the existing dirty set (including unrelated work) and keep the
+      // release targets dirty for a caller retry after an external mutation.
+      mark_spill_release_wave_locked(released);
+      return make_error(FormulonErrorCode::kGraphScheduleFailed, detail::kWavesNoProgressMessage, budget_detail);
+    }
+    dirty_.clear();
+    mark_spill_release_wave_locked(released);
+    mark_edges_dirty_locked(dependency_delta.added);
+    dynamic.mark_stale_dirty();
+    return true;
+  }
+  return false;
+}
+
 Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, const FunctionRegistry& registry) {
   RecalcStats stats;
   SpillReleaseQueue release_queue{&workbook};
@@ -565,40 +605,10 @@ recalc_next_wave:
     RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, c));
   }
 
-  // Reconcile compact-range -> spill-producer edges only after every cell in
-  // this wave has committed its result. Newly acquired source edges schedule
-  // their watcher for one targeted follow-up wave; old edges remain active
-  // throughout the current wave, so a producer shrink still dirties and
-  // orders its watcher correctly.
-  const DepGraph::DependencyDelta dependency_delta = reconcile_spill_dependencies_locked(workbook);
-  // A reader that saw a target before its final value (or itself) runs
-  // again behind the edge it just taught the graph.
-  const bool dynamic_retry = !dynamic.end_wave(nullptr).empty();
-  const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
-  if (dependency_retry) {
-    wave_budget.count_dependency_wave();
-    mark_edges_dirty_locked(dependency_delta.added);
-  }
-
-  // A spill shape change can release cells that blocked a different pending
-  // producer. Keep those anchors for a dependency-ordered next wave instead
-  // of losing them when this pass clears its dirty set.
-  const std::vector<CellNodeId> released = release_queue.take();
-  if (!released.empty() || dependency_retry) {
-    wave_budget.count_release_wave();
-    wave_budget.observe_release(workbook, released);
-    if (wave_budget.exceeded(!released.empty())) {
-      // Do not recurse through an unbounded chain of release waves. Preserve
-      // the existing dirty set (including unrelated work) and keep the
-      // release targets dirty for a caller retry after an external mutation.
-      mark_spill_release_wave_locked(released);
-      return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
-                        "spill recovery or dynamic-reference retries exceeded the bounded wave budget");
-    }
-    dirty_.clear();
-    mark_spill_release_wave_locked(released);
-    mark_edges_dirty_locked(dependency_delta.added);
-    dynamic.mark_stale_dirty();
+  ASSIGN_OR_RETURN(const bool another_wave,
+                   finish_wave_locked(workbook, dynamic, wave_budget, release_queue,
+                                      "spill recovery or dynamic-reference retries exceeded the bounded wave budget"));
+  if (another_wave) {
     goto recalc_next_wave;
   }
 

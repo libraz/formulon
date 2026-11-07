@@ -11,6 +11,7 @@
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "workbook.h"
 
 namespace formulon::eval {
@@ -88,10 +89,7 @@ bool SpillProducerIndex::admissible(const Workbook& workbook, const FunctionRegi
     if (producer_cell == nullptr || producer_cell->formula_text.empty()) {
       return false;
     }
-    std::string_view formula = producer_cell->formula_text;
-    if (!formula.empty() && formula.front() == '=') {
-      formula.remove_prefix(1);
-    }
+    const std::string_view formula = strip_formula_prefix(producer_cell->formula_text);
     potential_arena.reset();
     parser::AstNode* producer_ast = parse_formula_entry(formula, potential_arena);
     if (producer_ast == nullptr) {

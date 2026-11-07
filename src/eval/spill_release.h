@@ -89,6 +89,9 @@ std::vector<CellNodeId> canonical_release_targets(const std::vector<CellNodeId>&
 constexpr std::size_t kMaxSpillReleaseWaves = 4096U;
 constexpr std::size_t kMaxNoProgressSpillWaves = 8U;
 
+/// Error message when the release / dependency retry waves exceed their budget.
+constexpr const char* kWavesNoProgressMessage = "recalc waves made no progress";
+
 /// Wave counters and the no-progress snapshot of one recalc call's release
 /// loop. Each driver decides which waves it counts; the ceilings are shared.
 class SpillWaveBudget {

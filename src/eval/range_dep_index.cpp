@@ -11,18 +11,6 @@
 
 namespace formulon::eval {
 
-namespace {
-
-std::uint32_t band_of(std::uint32_t row) noexcept {
-  return row / RangeDepIndex::kBandRows;
-}
-
-std::uint64_t band_bucket_key(std::uint32_t sheet_id, std::uint32_t band) noexcept {
-  return (static_cast<std::uint64_t>(sheet_id) << 32U) | band;
-}
-
-}  // namespace
-
 RangeDepIndex::AddResult RangeDepIndex::intern_range(const CellRangeDependency& range) {
   const auto existing = range_ids_.find(range);
   if (existing != range_ids_.end()) {
