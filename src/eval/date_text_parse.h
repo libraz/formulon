@@ -32,6 +32,27 @@ struct DateTimeText {
   bool has_date;
 };
 
+/// The year of the year-less forms, either given or read on first use. A lazy
+/// source is called at most once per parse, and only when a year-less form is
+/// actually tried.
+class YearSource {
+ public:
+  YearSource(int year) noexcept : year_(year) {}
+  YearSource(int (*read)() noexcept) noexcept : read_(read) {}
+
+  int get() const noexcept {
+    if (read_ != nullptr) {
+      year_ = read_();
+      read_ = nullptr;
+    }
+    return year_;
+  }
+
+ private:
+  mutable int year_ = 0;
+  mutable int (*read_)() noexcept = nullptr;
+};
+
 /// Recognises `text` as a date, a time, or a date and a time in either
 /// order, and writes the result into `*out`. Texts longer than 255 UTF-16
 /// units, and texts holding control characters or blanks other than U+0020 /
@@ -39,7 +60,8 @@ struct DateTimeText {
 /// after a time and in the gaps of a month-name date with a year. `current_year` supplies the year of the year-less
 /// forms (`1/2`, `Jan 1`, `1月2日`); `0` disables them. Returns false, leaving
 /// `*out` untouched, when the text is not a date or time.
-bool parse_date_time_text(std::string_view text, TextEdges edges, int current_year, DateTimeText* out) noexcept;
+bool parse_date_time_text(std::string_view text, TextEdges edges, const YearSource& current_year,
+                          DateTimeText* out) noexcept;
 
 }  // namespace date_parse
 }  // namespace eval

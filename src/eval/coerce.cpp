@@ -175,7 +175,7 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // #VALUE!) while trailing ones are fine. A year-less date ("1/2") takes
   // the evaluation clock's year.
   date_parse::DateTimeText date_text{};
-  if (date_parse::parse_date_time_text(text, date_parse::TextEdges::kKeepLead, current_eval_now().date.y, &date_text)) {
+  if (date_parse::parse_date_time_text(text, date_parse::TextEdges::kKeepLead, &current_eval_year, &date_text)) {
     if (from_date_text != nullptr) {
       *from_date_text = date_text.has_date;
     }

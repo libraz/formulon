@@ -98,8 +98,7 @@ Expected<CoercedDateArg, ErrorCode> coerce_date_arg(const Value& v, bool date190
 
   // Same reading as `coerce_to_number`, on the evaluation clock.
   date_parse::DateTimeText parsed{};
-  if (!date_parse::parse_date_time_text(v.as_text(), date_parse::TextEdges::kKeepLead, current_eval_now().date.y,
-                                        &parsed) ||
+  if (!date_parse::parse_date_time_text(v.as_text(), date_parse::TextEdges::kKeepLead, &current_eval_year, &parsed) ||
       !parsed.has_date) {
     return out;
   }

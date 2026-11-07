@@ -113,14 +113,26 @@ bool probe_bool(std::string_view rhs, bool* out_bool) {
 // date-string criteria as numeric date comparisons.
 bool probe_date(std::string_view rhs, double* out_number) {
   date_parse::DateTimeText parsed{};
-  if (!date_parse::parse_date_time_text(rhs, date_parse::TextEdges::kTrim, current_eval_now().date.y, &parsed)) {
+  if (!date_parse::parse_date_time_text(rhs, date_parse::TextEdges::kTrim, &current_eval_year, &parsed)) {
     return false;
   }
   *out_number = parsed.value;
   return true;
 }
 
+bool is_all_ascii(std::string_view text) noexcept {
+  for (const char ch : text) {
+    if (static_cast<unsigned char>(ch) >= 0x80U) {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::string fold_fullwidth_digits_only(std::string_view input) {
+  if (is_all_ascii(input)) {
+    return std::string(input);
+  }
   std::string out;
   out.reserve(input.size());
   for (std::size_t i = 0; i < input.size();) {
@@ -230,7 +242,7 @@ const ParsedCriterion::CollationRhs& ParsedCriterion::cached_collation_rhs(Excel
   }
   const std::string input = unescape_first ? unescape_wildcard_literal(rhs_text) : std::string(rhs_text);
   rhs_key_cache_.prefolded = collation_prefold(input, profile);
-  rhs_key_cache_.key = collation_key(rhs_key_cache_.prefolded, profile, CollationStrength::kCompare);
+  rhs_key_cache_.query.emplace(rhs_key_cache_.prefolded, profile, CollationStrength::kCompare);
   rhs_key_cache_unescape_first_ = unescape_first;
   rhs_key_cache_profile_ = profile;
   rhs_key_cached_ = true;
@@ -452,14 +464,21 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
   // earlier on the original raw RHS, so a full-width ＊ stays un-flagged and
   // compares as a literal rather than gaining wildcard semantics.
   const auto wildcard_cell_folded = [&]() { return fold_criteria_text_for_profile(cell_text, profile); };
+  // Pre-folding leaves ASCII text unchanged, so such a cell is viewed in place.
+  std::string prefolded_storage;
+  const auto prefolded_cell = [&]() -> std::string_view {
+    if (is_all_ascii(cell_text)) {
+      return cell_text;
+    }
+    prefolded_storage = collation_prefold(cell_text, profile);
+    return prefolded_storage;
+  };
   const auto collated_cmp = [&](bool unescape_first) {
     const ParsedCriterion::CollationRhs& rhs = c.cached_collation_rhs(profile, unescape_first);
-    const std::string key = collation_key(collation_prefold(cell_text, profile), profile, CollationStrength::kCompare);
-    return collate_key_compare(key, rhs.key);
+    return rhs.query->compare(prefolded_cell());
   };
   const auto collated_prefix = [&]() {
-    return collate_prefix_equal(collation_prefold(cell_text, profile), c.cached_collation_rhs(profile, true).prefolded,
-                                profile);
+    return collate_prefix_equal(prefolded_cell(), c.cached_collation_rhs(profile, true).prefolded, profile);
   };
 
   switch (c.op) {

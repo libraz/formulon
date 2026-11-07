@@ -21,6 +21,11 @@ inline date_time::CivilTime current_eval_now() noexcept {
                                                        : date_time::host_civil_time();
 }
 
+/// Year of `current_eval_now()`, as a lazy `date_parse::YearSource`.
+inline int current_eval_year() noexcept {
+  return current_eval_now().date.y;
+}
+
 class ScopedEvalClock {
  public:
   explicit ScopedEvalClock(const std::optional<date_time::CivilTime>& pinned_now) noexcept

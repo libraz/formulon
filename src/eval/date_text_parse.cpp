@@ -228,8 +228,9 @@ bool written_year_serial(DigitRun year, int month, int day, double* out) noexcep
   return year.digits <= 4 && serial_from_parsed_ymd(year.value, year.digits, month, day, out);
 }
 
-bool current_year_serial(int current_year, int month, int day, double* out) noexcept {
-  return current_year > 0 && serial_from_parsed_ymd(current_year, 4, month, day, out);
+bool current_year_serial(const YearSource& current_year, int month, int day, double* out) noexcept {
+  const int year = current_year.get();
+  return year > 0 && serial_from_parsed_ymd(year, 4, month, day, out);
 }
 
 // Every reading of the head of a text as a date, longest first.
@@ -349,8 +350,8 @@ ShapeMatch parse_era_text(std::string_view s, double* out_serial, std::string_vi
 // `Y年M月D日`, `Y年M月` (the 1st) and `M月D日` (the current year), `first`
 // already scanned; `forms` limits which are dates. Fields take any number of
 // leading zeros; the year is read by value, so `026年` is 2026.
-bool parse_kanji_date(DigitRun first, std::string_view s, int current_year, KanjiDateText forms, double* out_serial,
-                      std::string_view* rest) noexcept {
+bool parse_kanji_date(DigitRun first, std::string_view s, const YearSource& current_year, KanjiDateText forms,
+                      double* out_serial, std::string_view* rest) noexcept {
   DigitRun month{};
   DigitRun day{};
   const bool all_forms = forms == KanjiDateText::kAll;
@@ -414,7 +415,7 @@ bool finish_hangul_ymd(std::string_view s, DigitRun year, double* out_serial, st
 // that is no day), and y/m above that or for a four-digit `a`. The others
 // read their own day/month order against the current year, else m/y, where
 // `b` is a one-, two- or four-digit year (day-first profiles take no year 0).
-bool pair_serial(DigitRun a, DigitRun b, int current_year, double* out) noexcept {
+bool pair_serial(DigitRun a, DigitRun b, const YearSource& current_year, double* out) noexcept {
   const DateOrder order = profile_facts().date_order;
   if (order == DateOrder::kYMD) {
     if (b.digits > 2) {
@@ -468,7 +469,8 @@ bool triple_serial(DigitRun a, DigitRun b, DigitRun c, double* out) noexcept {
 
 // Numeric pairs and triples, `first` already scanned. The date separators mix
 // freely, with blanks around each.
-void numeric_date_candidates(DigitRun first, std::string_view s, int current_year, DateCandidates* out) noexcept {
+void numeric_date_candidates(DigitRun first, std::string_view s, const YearSource& current_year,
+                             DateCandidates* out) noexcept {
   DigitRun second{};
   if (!consume_spaced_sep(&s, is_date_sep) || !scan_run(&s, &second)) {
     return;
@@ -488,7 +490,7 @@ void numeric_date_candidates(DigitRun first, std::string_view s, int current_yea
 }
 
 // `/M/D` where an empty leading field is the current year.
-void leading_separator_candidates(std::string_view s, int current_year, DateCandidates* out) noexcept {
+void leading_separator_candidates(std::string_view s, const YearSource& current_year, DateCandidates* out) noexcept {
   DigitRun month{};
   DigitRun day{};
   double serial = 0.0;
@@ -639,7 +641,8 @@ bool skip_year_comma(std::string_view* s) noexcept {
 // `D MMM [Y]`, `first` already scanned. The day must exist; there is no
 // fallback to a year. Day-first profiles also take `D MMM, Y`, and U+3000 in
 // the gaps of a form with a year.
-void day_first_name_candidates(DigitRun day, std::string_view s, int current_year, DateCandidates* out) noexcept {
+void day_first_name_candidates(DigitRun day, std::string_view s, const YearSource& current_year,
+                               DateCandidates* out) noexcept {
   if (day.digits > 2) {
     return;
   }
@@ -672,7 +675,7 @@ void day_first_name_candidates(DigitRun day, std::string_view s, int current_yea
 // of the month in the current year is a two-digit year (`Jan 32` is
 // 1932-01-01); four digits are a year. Day-first profiles read `MMM N` as
 // the year alone and have no `MMM D, Y`.
-void month_first_candidates(std::string_view s, int current_year, DateCandidates* out) noexcept {
+void month_first_candidates(std::string_view s, const YearSource& current_year, DateCandidates* out) noexcept {
   int month = 0;
   if (!scan_month_word(&s, &month)) {
     return;
@@ -706,7 +709,7 @@ void month_first_candidates(std::string_view s, int current_year, DateCandidates
   }
 }
 
-void date_candidates(std::string_view s, int current_year, DateCandidates* out) noexcept {
+void date_candidates(std::string_view s, const YearSource& current_year, DateCandidates* out) noexcept {
   const LocaleFacts& facts = profile_facts();
   double serial = 0.0;
   std::string_view rest;
@@ -1034,7 +1037,7 @@ bool numeric_tail_ok(std::string_view s) noexcept {
   return false;
 }
 
-bool recognise(std::string_view s, int current_year, DateTimeText* out) noexcept {
+bool recognise(std::string_view s, const YearSource& current_year, DateTimeText* out) noexcept {
   const LocaleFacts& facts = profile_facts();
   {
     std::string_view probe = s;
@@ -1099,7 +1102,8 @@ bool recognise(std::string_view s, int current_year, DateTimeText* out) noexcept
 
 }  // namespace
 
-bool parse_date_time_text(std::string_view text, TextEdges edges, int current_year, DateTimeText* out) noexcept {
+bool parse_date_time_text(std::string_view text, TextEdges edges, const YearSource& current_year,
+                          DateTimeText* out) noexcept {
   if (numeric_text_too_long(text)) {
     return false;
   }

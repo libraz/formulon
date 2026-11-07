@@ -31,9 +31,11 @@
 #define FORMULON_EVAL_CRITERIA_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
+#include "eval/collation.h"
 #include "excel_profile.h"
 #include "value.h"
 
@@ -142,11 +144,11 @@ struct ParsedCriterion {
   /// selected by `op`/`has_wildcard`, themselves fixed).
   const std::string& cached_folded_rhs(ExcelProfile profile, bool unescape_first) const;
 
-  /// Pre-folded `rhs_text` and its `kCompare` collation key, cached per
+  /// Pre-folded `rhs_text` and its `kCompare` collation query, cached per
   /// (profile, unescape_first) like `cached_folded_rhs`.
   struct CollationRhs {
     std::string prefolded;
-    std::string key;
+    std::optional<CollateQuery> query;
   };
   const CollationRhs& cached_collation_rhs(ExcelProfile profile, bool unescape_first) const;
 
