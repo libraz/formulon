@@ -23,12 +23,8 @@ std::vector<std::uint64_t> ExternalBook::sorted_cell_keys() const {
 }
 
 std::uint32_t ExternalBook::sheet_index(std::string_view sheet) const noexcept {
-  for (std::size_t i = 0; i < sheet_names.size(); ++i) {
-    if (::formulon::sheet_names::equal(sheet_names[i], sheet)) {
-      return static_cast<std::uint32_t>(i);
-    }
-  }
-  return kNoSheet;
+  const std::size_t index = ::formulon::sheet_names::find_index(sheet_names, sheet);
+  return index == ::formulon::sheet_names::kNotFound ? kNoSheet : static_cast<std::uint32_t>(index);
 }
 
 const ExternalBookName* ExternalBook::find_name(std::string_view name, std::uint32_t scope_sheet) const noexcept {

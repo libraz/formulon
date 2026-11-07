@@ -13,29 +13,17 @@
 
 #include "io/cf_writer.h"
 #include "io/data_validation_attr_names.h"
-#include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/sheet_overlay_reader.h"
+#include "io/sqref_text.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
-#include "parser/ast.h"
 #include "parser/parser.h"
 #include "pugixml.hpp"
-#include "utils/arena.h"
 
 namespace formulon::io {
 namespace {
-
-bool FormulaReferencesOtherSheet(std::string_view formula, std::string_view own_sheet) {
-  if (formula.empty()) {
-    return false;
-  }
-  Arena arena;
-  parser::Parser parser(formula, arena);
-  const parser::AstNode* root = parser.parse();
-  return root != nullptr && parser.errors().empty() && parser::references_other_sheet(*root, own_sheet);
-}
 
 void AppendX14Entry(std::string& out, const DataValidation& v, const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:dataValidation");
@@ -52,12 +40,7 @@ void AppendX14Entry(std::string& out, const DataValidation& v, const parser::Ext
   append_formula("x14:formula1", v.formula1);
   append_formula("x14:formula2", v.formula2);
   out.append("<xm:sqref>");
-  for (std::size_t i = 0; i < v.ranges.size(); ++i) {
-    if (i > 0) {
-      out.push_back(' ');
-    }
-    AppendRangeRef(out, v.ranges[i]);
-  }
+  out.append(format_sqref_text(v.ranges));
   out.append("</xm:sqref></x14:dataValidation>");
 }
 
@@ -73,7 +56,8 @@ pugi::xml_node FindContainer(const pugi::xml_node& ext_lst) {
 }  // namespace
 
 bool data_validation_in_x14(const DataValidation& v, std::string_view own_sheet) {
-  return FormulaReferencesOtherSheet(v.formula1, own_sheet) || FormulaReferencesOtherSheet(v.formula2, own_sheet);
+  return parser::formula_references_other_sheet(v.formula1, own_sheet) ||
+         parser::formula_references_other_sheet(v.formula2, own_sheet);
 }
 
 void append_data_validation_attrs(std::string& out, const DataValidation& v) {

@@ -189,16 +189,8 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i, const parser::Ext
   out.append("</iconSet>");
 }
 
-/// True when `formula` parses and names a sheet other than `own_sheet`.
-bool FormulaReferencesOtherSheet(std::string_view formula, std::string_view own_sheet) {
-  Arena arena;
-  parser::Parser parser(formula, arena);
-  const parser::AstNode* root = parser.parse();
-  return root != nullptr && parser.errors().empty() && parser::references_other_sheet(*root, own_sheet);
-}
-
 bool CfvoReferencesOtherSheet(const cf::CfValueObject& v, std::string_view own_sheet) {
-  return v.type == cf::CfvoType::Formula && FormulaReferencesOtherSheet(v.value, own_sheet);
+  return v.type == cf::CfvoType::Formula && parser::formula_references_other_sheet(v.value, own_sheet);
 }
 
 /// True when `r` is written only in the x14 extension: a formula or `cfvo`
@@ -208,7 +200,7 @@ bool RuleIsX14Only(const cf::CFRule& r, std::string_view own_sheet) {
     return false;
   }
   for (const std::optional<std::string>* formula : {&r.formula1, &r.formula2}) {
-    if (formula->has_value() && FormulaReferencesOtherSheet(**formula, own_sheet)) {
+    if (formula->has_value() && parser::formula_references_other_sheet(**formula, own_sheet)) {
       return true;
     }
   }

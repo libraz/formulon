@@ -129,12 +129,7 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
     out.append("<dataValidation");
     append_data_validation_attrs(out, v);
     out.append(" sqref=\"");
-    for (std::size_t i = 0; i < v.ranges.size(); ++i) {
-      if (i > 0) {
-        out.push_back(' ');
-      }
-      AppendRangeRef(out, v.ranges[i]);
-    }
+    out.append(format_sqref_text(v.ranges));
     out.append("\">");
     append_formula("formula1", v.formula1);
     append_formula("formula2", v.formula2);

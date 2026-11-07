@@ -89,6 +89,24 @@ Expected<std::vector<MergeRange>, Error> ParseSqrefRanges(std::string_view sqref
   return out;
 }
 
+/// Parses the `ref` attribute of `entry` as an A1 range; records a skip under
+/// `section` and returns false when it is missing or unparseable.
+bool ReadEntryRange(const pugi::xml_node& entry, std::string_view section, ReadDiagnostics* diagnostics,
+                    MergeRange& out) {
+  const std::string_view ref = attr_str(entry, "ref");
+  if (ref.empty()) {
+    SkipOverlayEntry(section, "ref attribute missing or empty", ref, diagnostics);
+    return false;
+  }
+  auto range = ParseA1RangeMerge(ref);
+  if (!range) {
+    SkipOverlayEntry(section, "ref unparseable", ref, diagnostics);
+    return false;
+  }
+  out = range.value();
+  return true;
+}
+
 }  // namespace
 
 Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& worksheet, ReadDiagnostics* diagnostics) {
@@ -101,17 +119,10 @@ Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& works
     return out;
   }
   for (pugi::xml_node m = mc.child("mergeCell"); m; m = m.next_sibling("mergeCell")) {
-    const std::string_view ref = attr_str(m, "ref");
-    if (ref.empty()) {
-      SkipOverlayEntry("mergeCells", "ref attribute missing or empty", ref, diagnostics);
-      continue;
+    MergeRange range;
+    if (ReadEntryRange(m, "mergeCells", diagnostics, range)) {
+      out.push_back(range);
     }
-    auto r = ParseA1RangeMerge(ref);
-    if (!r) {
-      SkipOverlayEntry("mergeCells", "ref unparseable", ref, diagnostics);
-      continue;
-    }
-    out.push_back(r.value());
   }
   return out;
 }
@@ -126,25 +137,19 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
     return out;
   }
   for (pugi::xml_node h = node.child("hyperlink"); h; h = h.next_sibling("hyperlink")) {
-    const std::string_view ref = attr_str(h, "ref");
-    if (ref.empty()) {
-      SkipOverlayEntry("hyperlinks", "ref attribute missing or empty", ref, diagnostics);
-      continue;
-    }
     // Hyperlinks may span a range (`ref="A1:B2"`); Excel applies the link
     // to every cell. Keep both corners in the model so structural edits can
     // shrink/shift the complete rectangle and the writer can regenerate the
     // A1 reference from numeric coordinates.
-    auto range_or = ParseA1RangeMerge(ref);
-    if (!range_or) {
-      SkipOverlayEntry("hyperlinks", "ref unparseable", ref, diagnostics);
+    MergeRange range;
+    if (!ReadEntryRange(h, "hyperlinks", diagnostics, range)) {
       continue;
     }
     Hyperlink hl;
-    hl.row = range_or.value().first_row;
-    hl.col = range_or.value().first_col;
-    hl.last_row = range_or.value().last_row;
-    hl.last_col = range_or.value().last_col;
+    hl.row = range.first_row;
+    hl.col = range.first_col;
+    hl.last_row = range.last_row;
+    hl.last_col = range.last_col;
     hl.rid = ooxml::relationship_ref_id(h);
     hl.location.assign(attr_str(h, "location"));
     hl.display.assign(attr_str(h, "display"));

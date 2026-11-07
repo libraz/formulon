@@ -50,12 +50,8 @@ inline bool UsesHiddenNameRoute(std::string_view name) {
 
 /// Resolves a sheet name to its 0-based ixti. Returns -1 when absent.
 inline int resolve_ixti(const std::vector<std::string>& sheet_names, std::string_view sheet) {
-  for (std::size_t i = 0; i < sheet_names.size(); ++i) {
-    if (formulon::sheet_names::equal(sheet_names[i], sheet)) {
-      return static_cast<int>(i);
-    }
-  }
-  return -1;
+  const std::size_t index = formulon::sheet_names::find_index(sheet_names, sheet);
+  return index == formulon::sheet_names::kNotFound ? -1 : static_cast<int>(index);
 }
 
 }  // namespace xlsb

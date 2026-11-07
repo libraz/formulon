@@ -615,6 +615,15 @@ AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts) {
   return root;
 }
 
+bool formula_references_other_sheet(std::string_view formula, std::string_view own_sheet) {
+  if (formula.empty()) {
+    return false;
+  }
+  Arena arena;
+  const AstNode* root = parse_strict(formula, arena);
+  return root != nullptr && references_other_sheet(*root, own_sheet);
+}
+
 // ---------------------------------------------------------------------------
 // Pratt expression loop
 // ---------------------------------------------------------------------------

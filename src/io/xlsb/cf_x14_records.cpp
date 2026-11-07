@@ -28,9 +28,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/tail_refs.h"
 #include "io/xml_utils.h"
-#include "parser/ast.h"
 #include "parser/parser.h"
-#include "utils/arena.h"
 #include "utils/status_macros.h"
 
 namespace formulon {
@@ -500,17 +498,6 @@ bool IsVisualRule(cf::RuleType type) {
   return type == cf::RuleType::ColorScale || type == cf::RuleType::DataBar || type == cf::RuleType::IconSet;
 }
 
-/// True when `formula` parses and names a sheet other than `own_sheet`.
-bool FormulaNamesOtherSheet(const std::optional<std::string>& formula, std::string_view own_sheet) {
-  if (!formula.has_value() || formula->empty()) {
-    return false;
-  }
-  Arena arena;
-  parser::Parser parser(*formula, arena);
-  const parser::AstNode* root = parser.parse();
-  return root != nullptr && parser.errors().empty() && parser::references_other_sheet(*root, own_sheet);
-}
-
 /// The dxf copy between the rule head and BrtEndCFRule14
 /// (`recs[from..until)`): nothing, or BrtBeginDXFs, one BrtDXF, BrtEndDXFs.
 /// False for any other run, or for a copy that states formatting the
@@ -718,8 +705,10 @@ bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet) {
   if (IsVisualRule(rule.type)) {
     return false;
   }
-  return !own_sheet.empty() &&
-         (FormulaNamesOtherSheet(rule.formula1, own_sheet) || FormulaNamesOtherSheet(rule.formula2, own_sheet));
+  const auto names_other = [&](const std::optional<std::string>& formula) {
+    return formula.has_value() && parser::formula_references_other_sheet(*formula, own_sheet);
+  };
+  return !own_sheet.empty() && (names_other(rule.formula1) || names_other(rule.formula2));
 }
 
 void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaReadContext& ctx,

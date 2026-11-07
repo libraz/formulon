@@ -355,6 +355,11 @@ AstNode* parse_strict(std::string_view src, Arena& arena);
 /// `parse_strict` under explicit parser options.
 AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts);
 
+/// True when `formula` (no leading `=`) parses cleanly and holds a reference
+/// into a sheet other than `own_sheet` (see `references_other_sheet`). An
+/// empty or unparsable formula yields false.
+bool formula_references_other_sheet(std::string_view formula, std::string_view own_sheet);
+
 }  // namespace parser
 }  // namespace formulon
 
