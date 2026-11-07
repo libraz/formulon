@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -25,6 +26,7 @@
 #include "eval/name_env.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/range_resolvers.h"
 #include "eval/tree_walker/broadcast.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
@@ -103,6 +105,10 @@ LazyAggArg resolve_lazy_agg_arg(const parser::AstNode& raw_arg, Arena& arena, co
     // propagate. A LET binding never carries a union AST, so the passthrough
     // the resolver performs cannot reach this shape.
     out.shape = LazyArgShape::Range;
+    if (const std::optional<ErrorCode> invalid = union_reference_error(raw_arg, ctx)) {
+      out.cells.push_back(Value::error(*invalid));
+      return out;
+    }
     const std::uint32_t area_count = raw_arg.as_union_arity();
     for (std::uint32_t area = 0; area < area_count; ++area) {
       auto area_result = resolve_range_arg(raw_arg.as_union_child(area), arena, registry, ctx);

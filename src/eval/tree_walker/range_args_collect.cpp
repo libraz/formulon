@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -405,6 +406,14 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
   // `SUM((A1:A2,A1:A2))` doubles the A1:A2 total.
   if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::UnionOp) {
     had_range_shaped_arg = true;
+    if (const std::optional<ErrorCode> invalid = union_reference_error(arg_node, ctx)) {
+      const Value err = Value::error(*invalid);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
     const std::uint32_t area_count = arg_node.as_union_arity();
     Value range_err = Value::blank();
     bool short_circuit = false;

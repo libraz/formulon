@@ -20,6 +20,7 @@
 #include "eval/areas_lazy.h"
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #include "eval/eval_context.h"
@@ -75,6 +76,10 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
     }
   }
   if (k == parser::NodeKind::UnionOp) {
+    if (const std::optional<ErrorCode> invalid = union_reference_error(n, ctx)) {
+      *propagated = *invalid;
+      return kAreasPropagate;
+    }
     std::int64_t total = 0;
     const std::uint32_t arity = n.as_union_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {

@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #include "defined_name.h"
@@ -31,6 +32,7 @@
 #include "eval/trimrange_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "sheet.h"
 #include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -591,6 +593,84 @@ bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& r
   *out_bottom_row = r2;
   *out_right_col = c2;
   return true;
+}
+
+namespace {
+
+bool union_has_ref3d(const parser::AstNode& node) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref3D:
+      return true;
+    case parser::NodeKind::UnionOp:
+    case parser::NodeKind::RangeOp:
+    case parser::NodeKind::IntersectOp:
+      return parser::any_child_node(node, [](const parser::AstNode& child) { return union_has_ref3d(child); });
+    default:
+      return false;
+  }
+}
+
+// The sheet an area spells: a `Ref`'s qualifier, the first qualifier of a `:`
+// chain, else the formula's sheet. False for an area whose sheet is not spelled.
+bool spelled_area_sheet(const parser::AstNode& area, std::string_view home, std::string_view* out) {
+  if (area.kind() == parser::NodeKind::Ref) {
+    *out = area.as_ref().sheet.empty() ? home : area.as_ref().sheet;
+    return true;
+  }
+  if (area.kind() != parser::NodeKind::RangeOp) {
+    return false;
+  }
+  *out = home;
+  for (std::uint32_t i = 0; i < area.as_range_arity(); ++i) {
+    const parser::AstNode& operand = area.as_range_operand(i);
+    if (operand.kind() != parser::NodeKind::Ref) {
+      return false;
+    }
+    if (!operand.as_ref().sheet.empty()) {
+      *out = operand.as_ref().sheet;
+      return true;
+    }
+  }
+  return true;
+}
+
+// Writes the first spelled sheet to `*first`; false once an area names another sheet.
+bool union_areas_share_sheet(const parser::AstNode& node, std::string_view home, std::string_view* first,
+                             bool* have_first) {
+  if (node.kind() == parser::NodeKind::UnionOp) {
+    for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+      if (!union_areas_share_sheet(node.as_union_child(i), home, first, have_first)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  std::string_view sheet;
+  if (!spelled_area_sheet(node, home, &sheet)) {
+    return true;
+  }
+  if (!*have_first) {
+    *first = sheet;
+    *have_first = true;
+    return true;
+  }
+  return sheet_names::equal(*first, sheet);
+}
+
+}  // namespace
+
+std::optional<ErrorCode> union_reference_error(const parser::AstNode& union_node, const EvalContext& ctx) {
+  if (union_has_ref3d(union_node)) {
+    return ErrorCode::Name;
+  }
+  const std::string_view home =
+      ctx.current_sheet() != nullptr ? std::string_view(ctx.current_sheet()->name()) : std::string_view();
+  std::string_view first;
+  bool have_first = false;
+  if (!union_areas_share_sheet(union_node, home, &first, &have_first)) {
+    return ErrorCode::Value;
+  }
+  return std::nullopt;
 }
 
 }  // namespace eval

@@ -306,3 +306,111 @@ cases:
       'Sheet3!B2': 5
       'Sheet3!C1': 7
     formula: '=SUM(Sheet2:Sheet3!B2:B2)'
+
+  - id: union_ref3d_first
+    description: 'A union holding a 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM((Sheet2:Sheet3!A1:B2,B2))'
+
+  - id: union_ref3d_second
+    description: 'A 3-D reference after a plain area is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM((B2,Sheet2:Sheet3!A1:B2))'
+
+  - id: union_ref3d_single_sheet_span
+    description: 'A one-sheet 3-D span in a union is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM((Sheet2:Sheet2!A1:B2,B2))'
+
+  - id: union_ref3d_nested
+    description: 'A nested parenthesised 3-D area is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(((Sheet2:Sheet3!A1:B2),B2))'
+
+  - id: union_ref3d_count
+    description: 'COUNT skips the #NAME? union'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=COUNT((Sheet2:Sheet3!A1:B2,B2))'
+
+  - id: union_ref3d_areas
+    description: 'AREAS of a 3-D union is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=AREAS((Sheet2:Sheet3!A1,B2))'
+
+  - id: union_ref3d_isref
+    description: 'ISREF of a 3-D union is FALSE'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ISREF((Sheet2:Sheet3!A1,B2))'
+
+  - id: union_across_sheets
+    description: 'A union of areas on two sheets is #VALUE!'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM((Sheet2!A1:B2,B2))'
+
+  - id: ref3d_args_not_union
+    description: 'Separate 3-D and plain arguments still sum'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(Sheet2:Sheet3!A1:B2,B2)'

@@ -20,6 +20,7 @@
 #define FORMULON_EVAL_RANGE_RESOLVERS_H_
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #include "utils/arena.h"
@@ -141,6 +142,13 @@ bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& r
                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
                             std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
                             std::uint32_t* out_right_col, bool* out_disjoint, ErrorCode* out_err);
+
+/// The error a reference union `(a, b, ...)` stands for as a whole, or nullopt
+/// for a valid multi-area reference: a 3-D reference anywhere in it is
+/// `#NAME?`, and areas on different sheets are `#VALUE!`. Sheets are compared
+/// only where a `Ref` or `:` chain spells them; an area a name or a call
+/// yields is not judged.
+std::optional<ErrorCode> union_reference_error(const parser::AstNode& union_node, const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -20,6 +21,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "eval/range_resolvers.h"
 #include "eval/tree_walker/dispatch.h"
 #include "numeric_aggregate_kernels.h"
 #include "parser/ast.h"
@@ -336,6 +338,10 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
   const parser::NodeKind k = node.kind();
 
   if (k == parser::NodeKind::UnionOp) {
+    if (const std::optional<ErrorCode> invalid = union_reference_error(node, ctx)) {
+      *out_err = Value::error(*invalid);
+      return false;
+    }
     for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
       if (!collect_arg(node.as_union_child(i), arena, registry, ctx, scope, out_cells, out_hidden, out_nested,
                        out_err)) {

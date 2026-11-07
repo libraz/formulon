@@ -651,6 +651,12 @@ void collect_union_areas(const parser::AstNode& node, const EvalContext& ctx,
 Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstNode& call, Arena& arena,
                                                               const FunctionRegistry& registry,
                                                               const EvalContext& ctx) {
+  const parser::AstNode& source = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  if (source.kind() == parser::NodeKind::UnionOp) {
+    if (const std::optional<ErrorCode> invalid = union_reference_error(source, ctx)) {
+      return *invalid;
+    }
+  }
   std::vector<const parser::AstNode*> areas;
   collect_union_areas(call.as_call_arg(0), ctx, &areas);
   std::uint32_t area_idx = 1U;
