@@ -145,6 +145,136 @@ export const PivotFilterValueKind = Object.freeze({ Int: 0, Double: 1, Text: 2 }
 export const CfMatchKind = Object.freeze({ DifferentialFormat: 0, ColorScale: 1, DataBar: 2, IconSet: 3 });
 export const CfDataBarDirection = Object.freeze({ Context: 0, LeftToRight: 1, RightToLeft: 2 });
 export const CfDataBarAxisPosition = Object.freeze({ Automatic: 0, Middle: 1, None: 2 });
+export const CfRuleType = Object.freeze({
+  Expression: 0,
+  CellIs: 1,
+  ColorScale: 2,
+  DataBar: 3,
+  IconSet: 4,
+  Top10: 5,
+  AboveAverage: 6,
+  ContainsText: 7,
+  NotContainsText: 8,
+  BeginsWith: 9,
+  EndsWith: 10,
+  ContainsBlanks: 11,
+  NotContainsBlanks: 12,
+  ContainsErrors: 13,
+  NotContainsErrors: 14,
+  TimePeriod: 15,
+  DuplicateValues: 16,
+  UniqueValues: 17,
+});
+export const CfOperator = Object.freeze({
+  LessThan: 0,
+  LessThanOrEqual: 1,
+  Equal: 2,
+  NotEqual: 3,
+  GreaterThanOrEqual: 4,
+  GreaterThan: 5,
+  Between: 6,
+  NotBetween: 7,
+});
+export const CfTimePeriod = Object.freeze({
+  Today: 0,
+  Yesterday: 1,
+  Tomorrow: 2,
+  Last7Days: 3,
+  ThisWeek: 4,
+  LastWeek: 5,
+  NextWeek: 6,
+  ThisMonth: 7,
+  LastMonth: 8,
+  NextMonth: 9,
+});
+export const CfValueObjectType = Object.freeze({
+  Number: 0,
+  Percent: 1,
+  Percentile: 2,
+  Min: 3,
+  Max: 4,
+  Formula: 5,
+  AutoMin: 6,
+  AutoMax: 7,
+});
+export const IconSetName = Object.freeze({
+  ThreeArrows: 0,
+  ThreeArrowsGray: 1,
+  ThreeFlags: 2,
+  ThreeTrafficLights1: 3,
+  ThreeTrafficLights2: 4,
+  ThreeSigns: 5,
+  ThreeSymbols: 6,
+  ThreeSymbols2: 7,
+  FourArrows: 8,
+  FourArrowsGray: 9,
+  FourRedToBlack: 10,
+  FourRating: 11,
+  FourTrafficLights: 12,
+  FiveArrows: 13,
+  FiveArrowsGray: 14,
+  FiveRating: 15,
+  FiveQuarters: 16,
+});
+export const ValidationType = Object.freeze({
+  None: 0,
+  Whole: 1,
+  Decimal: 2,
+  List: 3,
+  Date: 4,
+  Time: 5,
+  TextLength: 6,
+  Custom: 7,
+});
+export const ValidationOperator = Object.freeze({
+  Between: 0,
+  NotBetween: 1,
+  Equal: 2,
+  NotEqual: 3,
+  GreaterThan: 4,
+  LessThan: 5,
+  GreaterThanOrEqual: 6,
+  LessThanOrEqual: 7,
+});
+export const ParseErrorCode = Object.freeze({
+  LexerInvalidCharacter: 0,
+  LexerUnterminatedString: 1,
+  LexerUnterminatedSheetQuote: 2,
+  LexerInvalidNumberLiteral: 3,
+  LexerInvalidErrorLiteral: 4,
+  LexerInvalidEscape: 5,
+  LexerInvalidReference: 6,
+  LexerExcessiveLength: 7,
+  UnexpectedToken: 8,
+  UnexpectedEof: 9,
+  ExpectedExpression: 10,
+  ExpectedCloseParen: 11,
+  UnbalancedBraces: 12,
+  ArrayRowMismatch: 13,
+  ExpectedRparenOrComma: 14,
+  ExpectedCommaOrSemiInArray: 15,
+  InvalidReference: 16,
+  UnsupportedConstruct: 17,
+  ExpectedOpenParen: 18,
+  ExpectedComma: 19,
+  UnbalancedBrackets: 20,
+  InvalidRange: 21,
+  NestedFormulaTooDeep: 22,
+  TooManyErrors: 23,
+  LetInvalidName: 24,
+  LetWrongArity: 25,
+  LambdaInvalidParam: 26,
+  LambdaEmpty: 27,
+  LambdaDuplicateParam: 28,
+  EntryWrongArity: 29,
+  EntryReferenceRequired: 30,
+  EntryQualifiedBuiltin: 31,
+  EntryRefusedWhitespace: 32,
+  EntryParamShapedName: 33,
+  EntryDoubleEquals: 34,
+  EntryBomNotSupported: 35,
+  StructuredRefInvalid: 36,
+});
 export const ErrorCode = Object.freeze({
   Null: 0,
   Div0: 1,
@@ -563,36 +693,68 @@ export function mergeFunctionMetadata(base, entry, locale) {
 }
 
 /**
- * Maps a `Value` to its native JS value, as Python's `Value.to_python()` does:
- * Blank to `null`, Number to a number, Bool to a boolean and Text to a string;
- * an `ErrorValue`, `ArrayValue`, `RefValue` or `LambdaValue` is returned as it
- * is.
+ * An Excel cell error such as `#DIV/0!`, as the native reads return it. `code` is an `ErrorCode`; `toString()`
+ * spells it as `ErrorDisplayName` does.
+ */
+export class ExcelError {
+  /** @param {number} code An `ErrorCode`. */
+  constructor(code) {
+    if (typeof code !== 'number') throw new TypeError('ExcelError argument 1 must be an ErrorCode');
+    if (ErrorDisplayName[code] === undefined) throw new RangeError('ExcelError argument 1 must be an ErrorCode');
+    this.code = code;
+    Object.freeze(this);
+  }
+
+  toString() {
+    return ErrorDisplayName[this.code];
+  }
+}
+
+/**
+ * The key `value` has in the ordinal table `enumType`; `null` when no key has it.
+ *
+ * @param {object} enumType A frozen ordinal table such as `CfRuleType`.
+ * @param {number} value The ordinal.
+ * @returns {string | null}
+ */
+export function enumName(enumType, value) {
+  if (!isObject(enumType)) throw new TypeError('enumName argument 1 must be an ordinal table');
+  for (const [key, ordinal] of Object.entries(enumType)) if (ordinal === value) return key;
+  return null;
+}
+
+const NOT_A_VALUE = 'toNative argument 1 must be a Value';
+
+/**
+ * Maps a `Value` to its native JS value: Blank to `null`, Number to a number, Bool to a boolean, Text to a
+ * string, Error to an `ExcelError` and an `ArrayValue` to its rows. A `RefValue` or `LambdaValue`, which no
+ * read returns, and anything that is not a `Value` throw `TypeError`.
  *
  * @param {object} value A `Value`.
- * @returns {number | string | boolean | null | object} The native value.
- * @throws {TypeError} When `value` is not a `Value`.
+ * @returns {null | number | boolean | string | ExcelError | Array} The native value.
  */
 export function toNative(value) {
-  if (!isObject(value)) throw new TypeError('toNative argument 1 must be a Value');
+  if (!isObject(value)) throw new TypeError(NOT_A_VALUE);
   switch (value.kind) {
     case ValueKind.Blank:
       return null;
-    case ValueKind.Array:
-    case ValueKind.Ref:
-    case ValueKind.Lambda:
-      return value;
+    case ValueKind.Array: {
+      const { rows, cols, cells } = value;
+      if (!Number.isInteger(rows) || !Number.isInteger(cols) || !Array.isArray(cells)) throw new TypeError(NOT_A_VALUE);
+      if (cells.length !== rows * cols) throw new TypeError(NOT_A_VALUE);
+      return Array.from({ length: rows }, (_, r) => cells.slice(r * cols, (r + 1) * cols).map(toNative));
+    }
   }
   const [field, type] = SCALAR_VALUE_FIELDS[value.kind] ?? [];
-  if (field === undefined || typeof value[field] !== type) {
-    throw new TypeError('toNative argument 1 must be a Value');
-  }
-  return value.kind === ValueKind.Error ? value : value[field];
+  if (field === undefined || typeof value[field] !== type) throw new TypeError(NOT_A_VALUE);
+  return value.kind === ValueKind.Error ? new ExcelError(value.errorCode) : value[field];
 }
 
 /**
  * The error every host-side failure throws: an engine call that did not
  * complete, or a call on a disposed workbook. Failures are told apart by
- * `code`, a `StatusCode`; there are no subclasses.
+ * `code`, a `StatusCode`; there are no subclasses. A formula that does not
+ * parse carries where in `parseError`.
  *
  * `instanceof` holds only for the class of the package that threw, so code
  * handling errors from both packages tests `e.name === 'FormulonError'`.
@@ -602,12 +764,18 @@ export class FormulonError extends Error {
    * @param {number} code A `StatusCode`.
    * @param {string} message What went wrong, in English.
    * @param {string} [context] Structured `key=value` detail; `''` when none.
+   * @param {object} [parseError] `{code, start, end, line, column}` of a formula syntax error.
    */
-  constructor(code, message, context = '') {
+  constructor(code, message, context = '', parseError = undefined) {
     super(message);
     this.name = 'FormulonError';
     this.code = code;
     this.context = context;
+    this.parseError = parseError === undefined || parseError === null ? undefined : Object.freeze({ ...parseError });
+  }
+
+  toString() {
+    return `FormulonError [${enumName(StatusCode, this.code) ?? this.code}]: ${this.message}`;
   }
 }
 
@@ -618,8 +786,10 @@ export class FormulonError extends Error {
 export const FORMULON_MEMBERS = Object.freeze([
   'Workbook',
   'FormulonError',
+  'ExcelError',
   'ValueKind',
   'StatusCode',
+  'ParseErrorCode',
   'WorkbookFormat',
   'PivotCellKind',
   'PivotAxis',
@@ -632,6 +802,11 @@ export const FORMULON_MEMBERS = Object.freeze([
   'PivotReportLayout',
   'PivotFilterValueKind',
   'CfMatchKind',
+  'CfRuleType',
+  'CfOperator',
+  'CfTimePeriod',
+  'CfValueObjectType',
+  'IconSetName',
   'ErrorCode',
   'ErrorDisplayName',
   'CalcMode',
@@ -649,6 +824,8 @@ export const FORMULON_MEMBERS = Object.freeze([
   'SortMethod',
   'DateTimeGrouping',
   'ValidationErrorStyle',
+  'ValidationType',
+  'ValidationOperator',
   'ColorContext',
   'ImageFormat',
   'DrawingObjectKind',
@@ -701,13 +878,13 @@ export const FORMULON_MEMBERS = Object.freeze([
   'PIVOT_VALUES_FIELD',
   'mergeFunctionMetadata',
   'toNative',
+  'enumName',
+  'evaluateFormula',
+  'evaluateTypedFormula',
   'convertCivilToSerial',
   'convertSerialToCivil',
-  'evaluateFormula',
   'getVersion',
   'getStatusName',
-  'setLogMinLevel',
-  'setLogSink',
   'getFunctionMetadata',
   'listFunctionNames',
   'localizeFunctionName',
@@ -719,13 +896,14 @@ export const FORMULON_MEMBERS = Object.freeze([
   'compareText',
   'getCollationClasses',
   'getImageInfo',
+  'setLogMinLevel',
+  'setLogSink',
 ]);
 
 // Members the engine runtime (Emscripten module or addon) provides; every
 // other member comes from this module. The runtime's raw `Workbook` class is
 // not one of them: `buildFormulon` wraps it with `makeFacade`.
 const RUNTIME_MEMBERS = new Set([
-  'evaluateFormula',
   'getVersion',
   'getStatusName',
   'setLogMinLevel',
@@ -756,25 +934,63 @@ function dateSystem(date1904, where) {
 }
 
 const CIVIL_FIELDS = Object.freeze(['year', 'month', 'day', 'hour', 'minute', 'second']);
+const CIVIL_DATE_FIELDS = Object.freeze(['year', 'month', 'day']);
 
-// Members built over the runtime function of the same name, which takes a fixed argument count: the wrapper
-// defaults `date1904` and refuses what the fields cannot represent; the engine judges the calendar.
+/** The tagged form of a raw `{rows, cols, cells}` result (`cells` as rows): a 1x1 result is its one value. */
+function typedResult(result) {
+  if (result.rows === 1 && result.cols === 1) return result.cells[0][0];
+  return { kind: ValueKind.Array, rows: result.rows, cols: result.cols, cells: result.cells.flat() };
+}
+
+/** A string formula argument; anything else is a `TypeError` naming `where`. */
+function formulaText(formula, where) {
+  if (typeof formula !== 'string') throw new TypeError(`${where} must be a primitive string`);
+  return formula;
+}
+
+// Members built over a runtime function, keyed by member name: [the runtime function, the wrapper factory]. The
+// civil-date wrappers default `date1904` and the time of day and refuse what the fields cannot represent; the
+// engine judges the calendar. The evaluation wrappers fold the raw `{rows, cols, cells}` result.
 const RUNTIME_WRAPPERS = Object.freeze({
-  convertCivilToSerial: (convert) =>
-    function convertCivilToSerial(civil, date1904) {
-      const where = 'Formulon.convertCivilToSerial';
-      requireObject(civil, `${where} argument 1`);
-      const fields = {};
-      for (const field of CIVIL_FIELDS) fields[field] = int32Field(civil[field], `${where} ${field}`);
-      return convert(fields, dateSystem(date1904, where));
-    },
-  convertSerialToCivil: (convert) =>
-    function convertSerialToCivil(serial, date1904) {
-      const where = 'Formulon.convertSerialToCivil';
-      requireNumber(serial, `${where} argument 1`);
-      if (!Number.isFinite(serial)) throw new RangeError(`${where} argument 1 must be finite`);
-      return convert(serial, dateSystem(date1904, where));
-    },
+  convertCivilToSerial: [
+    'convertCivilToSerial',
+    (convert) =>
+      function convertCivilToSerial(civil, date1904) {
+        const where = 'Formulon.convertCivilToSerial';
+        requireObject(civil, `${where} argument 1`);
+        const fields = {};
+        for (const field of CIVIL_FIELDS) {
+          const value = civil[field];
+          fields[field] =
+            value === undefined && !CIVIL_DATE_FIELDS.includes(field) ? 0 : int32Field(value, `${where} ${field}`);
+        }
+        return convert(fields, dateSystem(date1904, where));
+      },
+  ],
+  convertSerialToCivil: [
+    'convertSerialToCivil',
+    (convert) =>
+      function convertSerialToCivil(serial, date1904) {
+        const where = 'Formulon.convertSerialToCivil';
+        requireNumber(serial, `${where} argument 1`);
+        if (!Number.isFinite(serial)) throw new RangeError(`${where} argument 1 must be finite`);
+        return convert(serial, dateSystem(date1904, where));
+      },
+  ],
+  evaluateFormula: [
+    'evaluateFormula',
+    (evaluate) =>
+      function evaluateFormula(formula) {
+        return toNative(typedResult(evaluate(formulaText(formula, 'Formulon.evaluateFormula argument 1'))));
+      },
+  ],
+  evaluateTypedFormula: [
+    'evaluateFormula',
+    (evaluate) =>
+      function evaluateTypedFormula(formula) {
+        return typedResult(evaluate(formulaText(formula, 'Formulon.evaluateTypedFormula argument 1')));
+      },
+  ],
 });
 
 /**
@@ -791,9 +1007,10 @@ export function buildFormulon(runtime, shared, registry) {
   for (const name of FORMULON_MEMBERS) {
     let value;
     if (name === 'Workbook') {
-      value = runtime.Workbook === undefined ? undefined : makeFacade(runtime.Workbook, registry);
+      value = runtime.Workbook === undefined ? undefined : makeFacade(runtime.Workbook, registry, runtime);
     } else if (Object.hasOwn(RUNTIME_WRAPPERS, name)) {
-      value = typeof runtime[name] === 'function' ? RUNTIME_WRAPPERS[name](runtime[name]) : undefined;
+      const [source, wrap] = RUNTIME_WRAPPERS[name];
+      value = typeof runtime[source] === 'function' ? wrap(runtime[source]) : undefined;
     } else {
       value = RUNTIME_MEMBERS.has(name) ? runtime[name] : shared[name];
     }
@@ -1893,11 +2110,10 @@ const PATCH_FIELDS = Object.freeze({
       'toColOffsetEmu',
       'widthEmu',
       'heightEmu',
-      'fillRgb',
-      'lineRgb',
       'lineWidthEmu',
       'rotation',
     ),
+    ...objects('fillColor', 'lineColor'),
   },
   'Slicer.update': {
     ...strings('caption'),
@@ -2140,8 +2356,17 @@ function invalidAddress(a1) {
 
 // The only A1 reader: whatever `parseReference` accepts as one unqualified
 // cell is an address; everything else is rejected.
-function cellAddress(raw, a1) {
+function cellAddress(raw, a1, where) {
   const ref = raw.parseReference(a1);
+  if (ref !== null && ref.sheetName !== null && where?.startsWith('Sheet.')) {
+    const local = a1.slice(a1.lastIndexOf('!') + 1);
+    const method = where.slice('Sheet.'.length);
+    throw new FormulonError(
+      StatusCode.InvalidArgument,
+      `${JSON.stringify(a1)} names a sheet; use wb.sheet(${JSON.stringify(ref.sheetName)}).${method}(${JSON.stringify(local)})`,
+      `address=${a1}`,
+    );
+  }
   if (ref === null || ref.sheetName !== null) throw invalidAddress(a1);
   const { rect } = ref;
   if (rect.firstRow !== rect.lastRow || rect.firstCol !== rect.lastCol) throw invalidAddress(a1);
@@ -2230,7 +2455,7 @@ function expandCells(raw, where, pairs, args) {
     if (typeof args[at] !== 'string') {
       throw new TypeError(`${where} argument ${at + 1} must be an A1 address when argument ${pairs[0][0] + 1} is one`);
     }
-    const cell = cellAddress(raw, args[at]);
+    const cell = cellAddress(raw, args[at], where);
     out.push(cell.firstRow, cell.firstCol);
     from = at + 1;
   });
@@ -2409,21 +2634,158 @@ const SCALAR_VALUE_FIELDS = Object.freeze({
 /** Throws unless `value` is something `Sheet.setValue` writes as one cell. */
 function checkCellValue(value, where) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+  if (value instanceof ExcelError) return;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new RangeError(`${where} is an invalid Date`);
+    return;
+  }
   let number = value;
   if (isObject(value)) {
     if (value.kind === ValueKind.Blank) return;
     const [field, type] = SCALAR_VALUE_FIELDS[value.kind] ?? [];
     if (field === undefined || typeof value[field] !== type) {
-      throw new TypeError(`${where} must be a number, string, boolean, null or a scalar Value`);
+      throw new TypeError(`${where} must be a number, string, boolean, null, Date, ExcelError or a scalar Value`);
     }
     if (value.kind !== ValueKind.Number) return;
     number = value.number;
   } else if (typeof value !== 'number') {
-    throw new TypeError(`${where} must be a number, string, boolean, null or a scalar Value`);
+    throw new TypeError(`${where} must be a number, string, boolean, null, Date, ExcelError or a scalar Value`);
   }
   if (!Number.isFinite(number)) {
     throw new FormulonError(StatusCode.InvalidArgument, `${where} is not a finite number`, `value=${number}`);
   }
+}
+
+/** `error` with the cell `row` / `col` in its context, unless the context already names a row. */
+function withCell(error, row, col) {
+  if (error?.name !== 'FormulonError' || /(?:^| )row=/.test(error.context)) return error;
+  const context = [error.context, `row=${row} col=${col}`].filter((part) => part !== '').join(' ');
+  return new FormulonError(error.code, error.message, context, error.parseError);
+}
+
+/** The native form of a value a read returned; a reference or `LAMBDA` value never reaches a read. */
+function nativeOf(value) {
+  if (value.kind === ValueKind.Ref || value.kind === ValueKind.Lambda) {
+    throw new Error(`formulon: internal error: a read returned a value of kind ${value.kind}`);
+  }
+  return toNative(value);
+}
+
+/** A `RangeCell` from a raw cell entry. */
+function rangeCell({ row, col, formula, value }) {
+  return { row, col, formula, value: nativeOf(value), kind: value.kind };
+}
+
+const WHOLE_SHEET = Object.freeze({ firstRow: 0, firstCol: 0, lastRow: GRID_ROWS - 1, lastCol: GRID_COLS - 1 });
+// The cells one `iterRows` block reads: one `getCellsInRange` page.
+const ITER_ROWS_CELLS = 65536;
+const MS_PER_DAY = 86400000;
+const DATE_FORMAT = 'm/d/yyyy';
+const DATE_TIME_FORMAT = 'm/d/yyyy h:mm';
+// The built-in number formats the en-US codes above name.
+const BUILTIN_NUM_FMT_IDS = Object.freeze({ [DATE_FORMAT]: 14, [DATE_TIME_FORMAT]: 22 });
+
+/**
+ * The serial of `date`'s UTC fields under the date system `date1904`, and whether it has a time of day. The
+ * engine converts the calendar date; the time of day is added here.
+ */
+function dateSerial(runtime, date, date1904) {
+  if (Number.isNaN(date.getTime())) throw new RangeError('the Date is invalid');
+  const civil = {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    hour: 0,
+    minute: 0,
+    second: 0,
+  };
+  const seconds = date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds();
+  const ms = date.getUTCMilliseconds();
+  const serial = runtime.convertCivilToSerial(civil, date1904) + seconds / 86400 + ms / MS_PER_DAY;
+  return [serial, seconds !== 0 || ms !== 0];
+}
+
+/** The `Date` whose UTC fields carry `serial` under the date system `date1904`, rounded to the millisecond. */
+function serialDate(runtime, serial, date1904) {
+  let days = Math.floor(serial);
+  let ms = Math.round((serial - days) * MS_PER_DAY);
+  if (ms === MS_PER_DAY) {
+    days += 1;
+    ms = 0;
+  }
+  const { year, month, day } = runtime.convertSerialToCivil(days, date1904);
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0, 0, 0, ms);
+  return date;
+}
+
+// Record keys whose value is a `ColorInput`; a colour string there becomes a `Color`.
+const COLOR_INPUT_KEYS = new Set([
+  'color',
+  'fg',
+  'bg',
+  'colors',
+  'fill',
+  'negativeFill',
+  'border',
+  'negativeBorder',
+  'axisColor',
+  'fillColor',
+  'lineColor',
+  'colorSeries',
+  'colorNegative',
+  'colorAxis',
+  'colorMarkers',
+  'colorFirst',
+  'colorLast',
+  'colorHigh',
+  'colorLow',
+  'fontColor',
+]);
+
+const asColor = (value, label) => (typeof value === 'string' ? formatColor(value, label) : value);
+
+/** `value` with every colour string at a `COLOR_INPUT_KEYS` key as a `Color`; `value` itself when it has none. */
+function colorInputs(value, label) {
+  if (Array.isArray(value)) {
+    let out = value;
+    value.forEach((item, i) => {
+      const next = colorInputs(item, `${label}[${i}]`);
+      if (next !== item) {
+        if (out === value) out = [...value];
+        out[i] = next;
+      }
+    });
+    return out;
+  }
+  if (!isObject(value) || Object.getPrototypeOf(value) !== Object.prototype) return value;
+  let out = value;
+  for (const [key, item] of Object.entries(value)) {
+    const path = `${label}.${key}`;
+    let next;
+    if (COLOR_INPUT_KEYS.has(key) && typeof item === 'string') next = formatColor(item, path);
+    else if (key === 'colors' && Array.isArray(item)) next = item.map((c, i) => asColor(c, `${path}[${i}]`));
+    else next = colorInputs(item, path);
+    if (next !== item && !(Array.isArray(next) && next.every((c, i) => c === item[i]))) {
+      if (out === value) out = { ...value };
+      out[key] = next;
+    }
+  }
+  return out;
+}
+
+/** `args` with the colour strings of its record arguments as `Color`s. */
+function colorArgs(args, where) {
+  let out = args;
+  args.forEach((arg, i) => {
+    const next = colorInputs(arg, `${where} argument ${i + 1}`);
+    if (next !== arg) {
+      if (out === args) out = [...args];
+      out[i] = next;
+    }
+  });
+  return out;
 }
 
 // Every populated cell of `rect`, read in pages.
@@ -2453,7 +2815,6 @@ const enumField = (table, nullable = false) => ({ kind: 'enum', max: Math.max(..
 const FORMAT_BOOLEAN = Object.freeze({ kind: 'boolean' });
 const FORMAT_FLAG = Object.freeze({ kind: 'boolean', nullable: true });
 const FORMAT_COLOR = Object.freeze({ kind: 'color' });
-const FORMAT_ARGB = Object.freeze({ kind: 'argb' });
 const FORMAT_SIDE = Object.freeze({ kind: 'side' });
 
 // How each key of each group of a `CellFormatPatch` is checked; a nullable key
@@ -2475,14 +2836,11 @@ const FORMAT_FIELDS = Object.freeze({
     charset: { kind: 'enum', max: 255, nullable: true },
     scheme: enumField(FontScheme),
     color: FORMAT_COLOR,
-    colorArgb: FORMAT_ARGB,
   },
   fill: {
     pattern: enumField(FillPattern),
     fg: FORMAT_COLOR,
     bg: FORMAT_COLOR,
-    fgArgb: FORMAT_ARGB,
-    bgArgb: FORMAT_ARGB,
     gradient: { kind: 'object' },
   },
   border: {
@@ -2494,7 +2852,7 @@ const FORMAT_FIELDS = Object.freeze({
     diagonalUp: FORMAT_BOOLEAN,
     diagonalDown: FORMAT_BOOLEAN,
   },
-  side: { style: enumField(BorderStyle), color: FORMAT_COLOR, colorArgb: FORMAT_ARGB },
+  side: { style: enumField(BorderStyle), color: FORMAT_COLOR },
   alignment: {
     horizontal: enumField(HorizontalAlign),
     vertical: enumField(VerticalAlign),
@@ -2577,12 +2935,6 @@ function formatValue(spec, value, label) {
       requireNumber(value, label);
       if (!Number.isFinite(value) || value < 0) throw new RangeError(`${label} must be finite and not negative`);
       return value;
-    case 'argb':
-      requireNumber(value, label);
-      if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
-        throw new RangeError(`${label} is outside uint32 range`);
-      }
-      return value;
     case 'enum':
       if (formatCount(value, label) > spec.max) throw outOfRange(label, value);
       return value;
@@ -2632,23 +2984,8 @@ function checkCellFormatPatch(patch) {
   return out;
 }
 
-// Writes the colour pair `colorKey` / `argbKey` of `patch` onto `target`; an RGB
-// `Color` also sets the literal ARGB, so the colour wins over a given `argbKey`.
-function mergeColor(target, patch, colorKey, argbKey) {
-  if (patch[argbKey] !== undefined) target[argbKey] = patch[argbKey];
-  const color = patch[colorKey];
-  if (color === undefined) return;
-  target[colorKey] = color;
-  if (color.kind === ColorKind.Rgb) target[argbKey] = color.rgb;
-}
-
 function mergeFont(current, patch) {
-  const out = { ...current };
-  for (const [key, value] of Object.entries(patch)) {
-    if (key !== 'color' && key !== 'colorArgb') out[key] = value;
-  }
-  mergeColor(out, patch, 'color', 'colorArgb');
-  return out;
+  return { ...current, ...patch };
 }
 
 // Setting a colour on a fill without a pattern makes it solid, Excel's "fill
@@ -2657,9 +2994,7 @@ function mergeFill(current, patch) {
   const out = { ...current };
   if (patch.gradient === undefined) delete out.gradient;
   else out.gradient = patch.gradient;
-  if (patch.pattern !== undefined) out.pattern = patch.pattern;
-  mergeColor(out, patch, 'fg', 'fgArgb');
-  mergeColor(out, patch, 'bg', 'bgArgb');
+  for (const key of ['pattern', 'fg', 'bg']) if (patch[key] !== undefined) out[key] = patch[key];
   const colored = patch.fg !== undefined || patch.bg !== undefined;
   if (colored && patch.pattern === undefined && out.pattern === FillPattern.None) out.pattern = FillPattern.Solid;
   return out;
@@ -2668,14 +3003,7 @@ function mergeFill(current, patch) {
 function mergeBorder(current, patch) {
   const out = { ...current };
   for (const [key, value] of Object.entries(patch)) {
-    if (key === 'diagonalUp' || key === 'diagonalDown') {
-      out[key] = value;
-      continue;
-    }
-    const side = { ...current[key] };
-    if (value.style !== undefined) side.style = value.style;
-    mergeColor(side, value, 'color', 'colorArgb');
-    out[key] = side;
+    out[key] = key === 'diagonalUp' || key === 'diagonalDown' ? value : { ...current[key], ...value };
   }
   return out;
 }
@@ -2821,9 +3149,10 @@ function resolveRuntimeId(resolve, message) {
  *
  * @param {Function} Raw The runtime's raw `Workbook` class.
  * @param {FinalizationRegistry} [registry] See `buildFormulon`.
+ * @param {object} runtime The runtime, for its civil-date conversions.
  * @returns {Function} The public `Workbook` class.
  */
-function makeFacade(Raw, registry) {
+function makeFacade(Raw, registry, runtime) {
   const token = Symbol('formulon.facade');
   let rawOf;
   let liveRaw;
@@ -2837,6 +3166,7 @@ function makeFacade(Raw, registry) {
   let pivotState;
   let cacheState;
   let drawingState;
+  let ooxmlState;
 
   class Table {
     #workbook;
@@ -3219,6 +3549,7 @@ function makeFacade(Raw, registry) {
   class Shape extends Drawing {
     update(patch) {
       const where = 'Shape.update';
+      patch = colorInputs(patch, `${where} argument 1`);
       checkDrawingPatch(where, patch);
       const input = appliedFields(patch, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
       for (const key of ['fillKind', 'lineKind']) if (input[key] === null) delete input[key];
@@ -3277,6 +3608,7 @@ function makeFacade(Raw, registry) {
     #name;
     #pivots = new Map();
     #drawings = new Map();
+    #ooxml;
 
     constructor(key, workbook, position, name) {
       if (key !== token) throw new TypeError('Sheet has no public constructor; use Workbook.sheet');
@@ -3329,6 +3661,12 @@ function makeFacade(Raw, registry) {
       moveSheet(this.#workbook, this.#current(), toIndex);
     }
 
+    get ooxml() {
+      this.#current();
+      this.#ooxml ??= ooxmlState.sheet(this);
+      return this.#ooxml;
+    }
+
     getFormula(row, col) {
       return rawOf(this.#workbook).getFormula(this.#current(), row, col);
     }
@@ -3337,8 +3675,24 @@ function makeFacade(Raw, registry) {
       return rawOf(this.#workbook).setFormula(this.#current(), row, col, formula);
     }
 
+    getValue(row, col) {
+      return nativeOf(rawOf(this.#workbook).getValue(this.#current(), row, col));
+    }
+
+    getTypedValue(row, col) {
+      return rawOf(this.#workbook).getValue(this.#current(), row, col);
+    }
+
     getValues(range) {
-      const where = 'Sheet.getValues';
+      return this.#typedGrid(range, 'Sheet.getValues').map((line) => line.map(nativeOf));
+    }
+
+    getTypedValues(range) {
+      return this.#typedGrid(range, 'Sheet.getTypedValues');
+    }
+
+    // The tagged values of `range` as rows, a blank cell `BLANK`.
+    #typedGrid(range, where) {
       requireObject(range, `${where} argument 1`);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
@@ -3361,6 +3715,107 @@ function makeFacade(Raw, registry) {
       return values ?? blank();
     }
 
+    getCellsInRange(range, ...rest) {
+      const page = rawOf(this.#workbook).getCellsInRange(this.#current(), range, ...rest);
+      return { cells: page.cells.map(rangeCell), nextCursor: page.nextCursor };
+    }
+
+    listCells(range) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const rect = range ?? { firstRow: 0, firstCol: 0, lastRow: GRID_ROWS - 1, lastCol: GRID_COLS - 1 };
+      const cells = [];
+      forEachCellIn(raw, sheet, rect, (cell) => cells.push(rangeCell(cell)));
+      return cells;
+    }
+
+    getUsedRange() {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      let used = null;
+      forEachCellIn(raw, sheet, WHOLE_SHEET, ({ row, col }) => {
+        if (used === null) {
+          used = { firstRow: row, firstCol: col, lastRow: row, lastCol: col };
+          return;
+        }
+        // Cells arrive row-major, so only the columns and the last row can widen.
+        used.firstCol = Math.min(used.firstCol, col);
+        used.lastCol = Math.max(used.lastCol, col);
+        used.lastRow = row;
+      });
+      return used;
+    }
+
+    // Reads the range in blocks of whole rows, each within one `getCellsInRange` page.
+    *iterRows(range) {
+      const rect = range === undefined || range === null ? this.getUsedRange() : range;
+      if (rect === null) return;
+      requireObject(rect, 'Sheet.iterRows argument 1');
+      const cols = rect.lastCol - rect.firstCol + 1;
+      const block = Math.max(1, Math.floor(ITER_ROWS_CELLS / cols));
+      for (let first = rect.firstRow; first <= rect.lastRow; first += block) {
+        const last = Math.min(rect.lastRow, first + block - 1);
+        const grid = this.#typedGrid({ ...rect, firstRow: first, lastRow: last }, 'Sheet.iterRows');
+        for (const line of grid) yield line.map(nativeOf);
+      }
+    }
+
+    getDate(row, col) {
+      const raw = rawOf(this.#workbook);
+      const value = raw.getValue(this.#current(), row, col);
+      if (value.kind === ValueKind.Blank) return null;
+      if (value.kind !== ValueKind.Number) {
+        throw new FormulonError(
+          StatusCode.InvalidArgument,
+          'Sheet.getDate reads a cell that holds no number',
+          `row=${row} col=${col}`,
+        );
+      }
+      return serialDate(runtime, value.number, raw.getDate1904());
+    }
+
+    evaluateFormula(row, col, formula) {
+      return toNative(typedResult(this.#evaluate(row, col, formula)));
+    }
+
+    evaluateTypedFormula(row, col, formula) {
+      return typedResult(this.#evaluate(row, col, formula));
+    }
+
+    evaluateFormulaArray(row, col, formula) {
+      return this.#evaluate(row, col, formula).cells.map((line) => line.map(nativeOf));
+    }
+
+    evaluateTypedFormulaArray(row, col, formula) {
+      return this.#evaluate(row, col, formula).cells;
+    }
+
+    #evaluate(row, col, formula) {
+      return rawOf(this.#workbook).evaluateFormulaArray(this.#current(), row, col, formula);
+    }
+
+    getTabColor() {
+      return rawOf(this.#workbook).getTabColor(this.#current());
+    }
+
+    setTabColor(color) {
+      const value = color === null || color === undefined ? color : formatColor(color, 'Sheet.setTabColor argument 1');
+      rawOf(this.#workbook).setTabColor(this.#current(), value);
+    }
+
+    listColumnOverrides() {
+      return rawOf(this.#workbook)
+        .listColumnOverrides(this.#current())
+        .map(({ styleXf, ...layout }) => layout);
+    }
+
+    listRowOverrides() {
+      return rawOf(this.#workbook)
+        .listRowOverrides(this.#current())
+        .map(({ styleXf, ...layout }) => layout);
+    }
+
+    // Each row is written in order; a failure leaves the cells before it written and names its cell.
     setValues(row, col, values) {
       const where = 'Sheet.setValues';
       requireInteger(row, `${where} argument 1`);
@@ -3386,17 +3841,14 @@ function makeFacade(Raw, registry) {
         );
       }
       for (const [i, line] of values.entries()) {
-        for (let j = 0; j < width; j++) this.setValue(row + i, col + j, line[j]);
+        for (let j = 0; j < width; j++) {
+          try {
+            this.setValue(row + i, col + j, line[j]);
+          } catch (e) {
+            throw withCell(e, row + i, col + j);
+          }
+        }
       }
-    }
-
-    listCells(range) {
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      const rect = range ?? { firstRow: 0, firstCol: 0, lastRow: GRID_ROWS - 1, lastCol: GRID_COLS - 1 };
-      const cells = [];
-      forEachCellIn(raw, sheet, rect, (cell) => cells.push(cell));
-      return cells;
     }
 
     getCellFormat(row, col) {
@@ -3588,13 +4040,13 @@ function makeFacade(Raw, registry) {
     addChart(options) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      return this.#added(raw, sheet, raw.addChart(sheet, options));
+      return this.#added(raw, sheet, raw.addChart(sheet, colorInputs(options, 'Sheet.addChart argument 1')));
     }
 
     addShape(spec) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      return this.#added(raw, sheet, raw.addShape(sheet, spec));
+      return this.#added(raw, sheet, raw.addShape(sheet, colorInputs(spec, 'Sheet.addShape argument 1')));
     }
 
     addSlicer(table, column, spec) {
@@ -3754,6 +4206,7 @@ function makeFacade(Raw, registry) {
     // raw call keeps the group's own.
     updateSparklineGroup(groupIndex, patch) {
       const where = 'Sheet.updateSparklineGroup';
+      patch = colorInputs(patch, `${where} argument 2`);
       checkSparklinePatch(where, patch);
       this.#patchOver(
         where,
@@ -3814,10 +4267,12 @@ function makeFacade(Raw, registry) {
         case 'number':
           return this.setNumber(row, col, value);
         case 'string':
-          return this.setText(row, col, value);
+          return value.startsWith('=') ? this.setFormula(row, col, value) : this.setText(row, col, value);
         case 'boolean':
           return this.setBool(row, col, value);
         case 'object':
+          if (value instanceof ExcelError) return this.setError(row, col, value.code);
+          if (value instanceof Date) return this.#setDate(row, col, value);
           if (Array.isArray(value)) break;
           switch (value.kind) {
             case ValueKind.Blank:
@@ -3833,7 +4288,26 @@ function makeFacade(Raw, registry) {
           }
           break;
       }
-      throw new TypeError('Sheet.setValue argument 3 must be a number, string, boolean, null or a scalar Value');
+      throw new TypeError(
+        'Sheet.setValue argument 3 must be a number, string, boolean, null, Date, ExcelError or a scalar Value',
+      );
+    }
+
+    // The serial of the date's UTC fields; a General cell also gets the built-in date format.
+    #setDate(row, col, date) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const [serial, timed] = dateSerial(runtime, date, raw.getDate1904());
+      this.setNumber(row, col, serial);
+      const { xfIndex } = raw.getEffectiveStyle(sheet, row, col);
+      if (raw.getCellXf(xfIndex).numFmtId !== 0) return;
+      const rect = { firstRow: row, firstCol: col, lastRow: row, lastCol: col };
+      const patch = { numberFormat: timed ? DATE_TIME_FORMAT : DATE_FORMAT };
+      const bases = raw.getRangeStyleBases(sheet, rect);
+      const xfs = bases.map((base) =>
+        raw.addCellXf(patchedXf(raw, raw.getCellXf(base), patch, BUILTIN_NUM_FMT_IDS[patch.numberFormat])),
+      );
+      raw.remapRangeStyle(sheet, rect, bases, xfs);
     }
 
     setComment(row, col, comment) {
@@ -3915,8 +4389,8 @@ function makeFacade(Raw, registry) {
     const optional = (field) => (link[field] === undefined ? '' : requireString(link[field], `${where} ${field}`));
     const target =
       link.target === undefined || link.target === null ? null : requireString(link.target, `${where} target`);
-    const location = optional('location');
-    if (target === null && link.location === undefined) {
+    const location = link.location === null ? '' : optional('location');
+    if (target === null && (link.location === undefined || link.location === null)) {
       throw new TypeError(`${where} location is required when target is null`);
     }
     return [target ?? '', optional('display'), optional('tooltip'), location];
@@ -3929,6 +4403,7 @@ function makeFacade(Raw, registry) {
     #pivotCaches = new Map();
     #disposed = false;
     #deleted = false;
+    #ooxml;
     // The registry's unregister token: an object of its own, so whoever sees the token cannot reach the workbook.
     #registration = {};
 
@@ -3958,6 +4433,10 @@ function makeFacade(Raw, registry) {
     }
 
     static load(bytes) {
+      if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
+      else if (ArrayBuffer.isView(bytes) && !(bytes instanceof Uint8Array)) {
+        bytes = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      }
       return new Workbook(token, Raw.load(bytes));
     }
 
@@ -3975,6 +4454,16 @@ function makeFacade(Raw, registry) {
 
     get disposed() {
       return this.#disposed;
+    }
+
+    get ooxml() {
+      this.#alive();
+      this.#ooxml ??= ooxmlState.workbook(this);
+      return this.#ooxml;
+    }
+
+    *[Symbol.iterator]() {
+      yield* this.listSheets();
     }
 
     // With a registry (the WASM entries), the raw object is deleted here as a collection would delete it.
@@ -4173,6 +4662,17 @@ function makeFacade(Raw, registry) {
     setPinnedNow(time) {
       if (time === null) return this.#raw.clearPinnedNow();
       const where = 'Workbook.setPinnedNow';
+      if (time instanceof Date) {
+        if (Number.isNaN(time.getTime())) throw new RangeError(`${where} argument 1 is an invalid Date`);
+        return this.#raw.setPinnedNow(
+          time.getUTCFullYear(),
+          time.getUTCMonth() + 1,
+          time.getUTCDate(),
+          time.getUTCHours(),
+          time.getUTCMinutes(),
+          time.getUTCSeconds(),
+        );
+      }
       requireObject(time, `${where} argument 1`);
       const fields = ['year', 'month', 'day', 'hour', 'minute', 'second'];
       return this.#raw.setPinnedNow(...fields.map((f) => requireInteger(time[f], `${where} ${f}`)));
@@ -4239,6 +4739,53 @@ function makeFacade(Raw, registry) {
     }
   }
 
+  class WorkbookOoxml {
+    #workbook;
+
+    constructor(key, workbook) {
+      if (key !== token) throw new TypeError('WorkbookOoxml has no public constructor; use Workbook.ooxml');
+      this.#workbook = workbook;
+    }
+
+    static {
+      ooxmlState = { ...ooxmlState, workbookOf: (ooxml) => ooxml.#workbook };
+    }
+  }
+
+  // The row and column XF indices are read from the layout overrides, whose facade records leave them out.
+  class SheetOoxml {
+    #sheet;
+
+    constructor(key, sheet) {
+      if (key !== token) throw new TypeError('SheetOoxml has no public constructor; use Sheet.ooxml');
+      this.#sheet = sheet;
+    }
+
+    static {
+      ooxmlState = { ...ooxmlState, sheetOf: (ooxml) => ooxml.#sheet };
+    }
+
+    getColumnStyle(col) {
+      requireIndex(col, 'Sheet.getColumnStyle argument 1');
+      const raw = rawOf(this.#sheet.workbook);
+      const span = raw.listColumnOverrides(sheetIndex(this.#sheet)).find((c) => c.first <= col && col <= c.last);
+      return span?.styleXf ?? null;
+    }
+
+    getRowStyle(row) {
+      requireIndex(row, 'Sheet.getRowStyle argument 1');
+      const raw = rawOf(this.#sheet.workbook);
+      const override = raw.listRowOverrides(sheetIndex(this.#sheet)).find((r) => r.row === row);
+      return override?.styleXf ?? null;
+    }
+  }
+
+  ooxmlState = {
+    ...ooxmlState,
+    workbook: (workbook) => new WorkbookOoxml(token, workbook),
+    sheet: (sheet) => new SheetOoxml(token, sheet),
+  };
+
   // `using` calls the same function as `dispose()`.
   Object.defineProperty(Workbook.prototype, Symbol.dispose, {
     value: Workbook.prototype.dispose,
@@ -4272,9 +4819,17 @@ function makeFacade(Raw, registry) {
     return out;
   };
 
+  const workbookCall = (self, name, args) => rawOf(self)[name](...args);
   const facadeClasses = [
-    ['Workbook', Workbook, (self, name, args) => rawOf(self)[name](...args), WORKBOOK_METHODS],
+    ['Workbook', Workbook, workbookCall, WORKBOOK_METHODS],
     ['Sheet', Sheet, sheetCall, SHEET_METHODS],
+    [
+      'Workbook',
+      WorkbookOoxml,
+      (self, name, args) => workbookCall(ooxmlState.workbookOf(self), name, args),
+      OOXML_WORKBOOK_METHODS,
+    ],
+    ['Sheet', SheetOoxml, (self, name, args) => sheetCall(ooxmlState.sheetOf(self), name, args), OOXML_SHEET_METHODS],
   ];
   for (const [owner, cls, call, names] of facadeClasses) {
     installForwarders(
@@ -4317,6 +4872,12 @@ function makeFacade(Raw, registry) {
     ['Workbook', Workbook, rawOf, () => undefined],
     ['Sheet', Sheet, (self) => rawOf(self.workbook), sheetIndex],
     ['Pivot', Pivot, (self) => rawOf(self.sheet.workbook), (self) => sheetIndex(self.sheet)],
+    [
+      'Sheet',
+      SheetOoxml,
+      (self) => rawOf(ooxmlState.sheetOf(self).workbook),
+      (self) => sheetIndex(ooxmlState.sheetOf(self)),
+    ],
   ];
   for (const [owner, cls, rawFor, sheetFor] of argumentForms) {
     installArgumentForms(cls.prototype, owner, rawFor, sheetFor, handleIndex);
@@ -4378,7 +4939,7 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
 function installForwarders(proto, owner, entries, Raw, call) {
   const facade = owner === 'Workbook' || owner === 'Sheet';
   for (const [name, rawName] of entries) {
-    if (Object.hasOwn(proto, name)) continue;
+    if (Object.hasOwn(proto, name === '[Symbol.iterator]' ? Symbol.iterator : name)) continue;
     const where = `${owner}.${name}`;
     const family = LIST_FAMILIES[where];
     if (family !== undefined) {
@@ -4387,6 +4948,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
         proto,
         name,
         namedFunction(name, function (args) {
+          args = colorArgs(args, where);
           const n = call(this, count, args);
           const out = [];
           for (let i = 0; i < n; i++) out.push(call(this, element, [...args, i]));
@@ -4406,6 +4968,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
         proto,
         name,
         namedFunction(name, function (args) {
+          args = colorArgs(args, where);
           checkForwardedPatch(where, args[position], fields);
           return call(this, rawName, args);
         }),
@@ -4418,9 +4981,10 @@ function installForwarders(proto, owner, entries, Raw, call) {
       name,
       absent === undefined
         ? namedFunction(name, function (args) {
-            return call(this, rawName, args);
+            return call(this, rawName, colorArgs(args, where));
           })
         : namedFunction(name, function (args) {
+            args = colorArgs(args, where);
             const [position, sentinel, optional = false] = absent;
             const value = args[position];
             if (value === null || (optional && value === undefined)) {

@@ -51,7 +51,7 @@ export function createFormulon(_options) {
 }
 export default createFormulon;
 
-// The value tables and the error class; everything else is a member of the
+// The value tables, the error classes and `enumName`; everything else is a member of the
 // `Formulon` object.
 export {
   AnchorEditAs,
@@ -61,6 +61,10 @@ export {
   CfDataBarAxisPosition,
   CfDataBarDirection,
   CfMatchKind,
+  CfOperator,
+  CfRuleType,
+  CfTimePeriod,
+  CfValueObjectType,
   ChartAxisCrosses,
   ChartAxisKind,
   ChartAxisPosition,
@@ -88,7 +92,9 @@ export {
   EffectiveStyleSource,
   ErrorCode,
   ErrorDisplayName,
+  ExcelError,
   ExternalLinkKind,
+  enumName,
   FillPattern,
   FilterKind,
   FilterOperator,
@@ -100,10 +106,12 @@ export {
   GeometryMode,
   GradientType,
   HorizontalAlign,
+  IconSetName,
   ImageFormat,
   LocaleDateOrder,
   LogLevel,
   PageOrientation,
+  ParseErrorCode,
   PIVOT_SHOW_AS_BASE_NEXT,
   PIVOT_SHOW_AS_BASE_PREVIOUS,
   PIVOT_VALUES_FIELD,
@@ -133,6 +141,8 @@ export {
   ThemeSource,
   UnderlineStyle,
   ValidationErrorStyle,
+  ValidationOperator,
+  ValidationType,
   ValueKind,
   VerticalAlign,
   WorkbookFormat,
