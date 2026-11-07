@@ -74,20 +74,33 @@ bool stdout_is_terminal() {
   return ::isatty(STDOUT_FILENO) != 0;
 }
 
-fm_status_t write_stdout(const std::uint8_t* bytes, std::size_t len) {
+namespace {
+
+/// Writes all `len` bytes to `fd`, retrying on EINTR. A write that makes no
+/// progress fails rather than looping.
+bool write_all(int fd, const std::uint8_t* bytes, std::size_t len) {
   std::size_t written = 0;
   while (written < len) {
     const std::size_t chunk = std::min(len - written, static_cast<std::size_t>(std::numeric_limits<ssize_t>::max()));
-    const ssize_t count = ::write(STDOUT_FILENO, bytes + written, chunk);
+    const ssize_t count = ::write(fd, bytes + written, chunk);
     if (count < 0) {
       if (errno == EINTR) {
         continue;
       }
-      return kExitIoError;
+      return false;
+    }
+    if (count == 0) {
+      return false;
     }
     written += static_cast<std::size_t>(count);
   }
-  return 0;
+  return true;
+}
+
+}  // namespace
+
+fm_status_t write_stdout(const std::uint8_t* bytes, std::size_t len) {
+  return write_all(STDOUT_FILENO, bytes, len) ? 0 : kExitIoError;
 }
 
 namespace {
@@ -200,21 +213,8 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
     return fail();
   }
 
-  std::size_t written = 0;
-  while (written < len) {
-    const std::size_t remaining = len - written;
-    const std::size_t chunk = std::min(remaining, static_cast<std::size_t>(std::numeric_limits<ssize_t>::max()));
-    const ssize_t count = ::write(tmp_fd.get(), bytes + written, chunk);
-    if (count < 0) {
-      if (errno == EINTR) {
-        continue;
-      }
-      return fail();
-    }
-    if (count == 0) {
-      return fail();
-    }
-    written += static_cast<std::size_t>(count);
+  if (!write_all(tmp_fd.get(), bytes, len)) {
+    return fail();
   }
   if (::fsync(tmp_fd.get()) != 0) {
     return fail();

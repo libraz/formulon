@@ -40,6 +40,9 @@ namespace cli {
 
 namespace {
 
+/// Largest worker count `--threads` accepts.
+constexpr std::uint32_t kMaxRecalcThreads = 8U;
+
 void print_recalc_usage(std::ostream& out) {
   out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] <in.xlsx-or-xlsb | -> -o <out.xlsx-or-xlsb | "
          "->\n"
@@ -48,8 +51,9 @@ void print_recalc_usage(std::ostream& out) {
       << "Load <in.xlsx-or-xlsb>, drive a full recalc, and write the result to <out.xlsx-or-xlsb>.\n"
       << "The output format is chosen from -o's extension: '.xlsb' writes MS-XLSB,\n"
       << "any other extension (or none) writes OOXML .xlsx.\n"
-      << "--threads N opts into parallel recalc: 0 selects automatic detection (capped at 8),\n"
-      << "1 stays on the caller thread, and 2..8 select the worker cap. Without --threads,\n"
+      << "--threads N opts into parallel recalc: 0 selects automatic detection (capped at " << kMaxRecalcThreads
+      << "),\n"
+      << "1 stays on the caller thread, and 2.." << kMaxRecalcThreads << " select the worker cap. Without --threads,\n"
       << "recalc remains serial.\n"
       << "Options must precede --; after --, exactly one input path is accepted.\n"
       << "An input of '-' reads the workbook from stdin; '-o -' writes it to stdout as .xlsx\n"
@@ -58,9 +62,6 @@ void print_recalc_usage(std::ostream& out) {
       << "--quiet is supplied; --quiet does not suppress load/save loss warnings.\n";
   print_shared_options(out);
 }
-
-/// Largest worker count `--threads` accepts.
-constexpr std::uint32_t kMaxRecalcThreads = 8U;
 
 bool parse_thread_count(std::string_view text, std::uint32_t* out) {
   std::uint32_t parsed = 0U;
@@ -81,11 +82,8 @@ fm_workbook_format_t format_from_extension(const std::string& path) {
   if (dot == std::string::npos) {
     return FM_WORKBOOK_FORMAT_XLSX;
   }
-  std::string ext = path.substr(dot + 1);
-  for (char& c : ext) {
-    c = strings::ascii_to_lower(c);
-  }
-  return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
+  return strings::case_insensitive_eq(std::string_view(path).substr(dot + 1), "xlsb") ? FM_WORKBOOK_FORMAT_XLSB
+                                                                                      : FM_WORKBOOK_FORMAT_XLSX;
 }
 
 }  // namespace
@@ -123,11 +121,11 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
     if (!options_ended && a == "--threads") {
       if (i + 1 >= args.size()) {
-        err << "formulon: recalc: --threads requires an integer from 0 to 8\n";
+        err << "formulon: recalc: --threads requires an integer from 0 to " << kMaxRecalcThreads << "\n";
         return kExitUsage;
       }
       if (!parse_thread_count(args[i + 1], &thread_count)) {
-        err << "formulon: recalc: --threads must be an integer from 0 to 8\n";
+        err << "formulon: recalc: --threads must be an integer from 0 to " << kMaxRecalcThreads << "\n";
         return kExitUsage;
       }
       parallel = true;

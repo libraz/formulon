@@ -152,7 +152,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   };
   if (!emit_breaks("horizontal_breaks", fm_pagination_get_row_break_count, fm_pagination_get_row_break_at) ||
       !emit_breaks("vertical_breaks", fm_pagination_get_column_break_count, fm_pagination_get_column_break_at)) {
-    return 1;
+    return kExitFailure;
   }
   return flush_output(out, err, "paginate");
 }

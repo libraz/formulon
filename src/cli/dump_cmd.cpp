@@ -197,7 +197,6 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
       return rc;
     }
     const int32_t local_sheet_id = entry.local_sheet_id;
-    const std::string rendered = escape_c_string(entry.name) + ' ' + escape_c_string(entry.formula);
     std::string scope;
     if (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < n_sheets) {
       const char* sheet_name = nullptr;
@@ -216,7 +215,7 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
       if (local_sheet_id >= 0) {
         snapshot << escape_single_line(scope) << '!';
       }
-      snapshot << rendered << '\n';
+      snapshot << escape_c_string(entry.name) << ' ' << escape_c_string(entry.formula) << '\n';
     }
   }
   snapshot << "[tables]\n";
