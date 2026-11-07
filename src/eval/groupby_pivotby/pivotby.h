@@ -11,11 +11,18 @@
 //
 //   PIVOTBY(row_fields, col_fields, values, function,
 //           [field_headers=auto], [row_total_depth=1], [row_sort_order=ascending],
-//           [col_total_depth=1], [col_sort_order=ascending], [filter_array])
+//           [col_total_depth=1], [col_sort_order=ascending], [filter_array],
+//           [relative_to=0])
 //
 // Argument defaults match GROUPBY's: omitted `field_headers` detects a header
 // row, omitted sort orders sort the keys ascending, and `col_total_depth`
 // defaults to `1` (grand-total column on the right).
+//
+// `relative_to` ∈ {0..4} picks the second argument of a two-parameter
+// aggregator (PERCENTOF): the rows of the cell's column total (0), row total
+// (1), the grand total (2), the parent column total (3) or the parent row
+// total (4). A leaf's parent is its outer group when the axis has two or more
+// levels; a subtotal's or a single-level leaf's is the grand total.
 //
 // See `eval/lazy_impls.h` for the shared `LazyImpl` signature. The PIVOTBY
 // impl is wired into the central `kLazyDispatch` table in
@@ -41,7 +48,7 @@ class FunctionRegistry;
 
 /// `PIVOTBY(row_fields, col_fields, values, function, [field_headers=3],
 ///          [row_total_depth=1], [row_sort_order=ascending], [col_total_depth=1],
-///          [col_sort_order=ascending], [filter_array])` — see the header preamble
+///          [col_sort_order=ascending], [filter_array], [relative_to])` — see the header preamble
 /// for the full contract.
 Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);

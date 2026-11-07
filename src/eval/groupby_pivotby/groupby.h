@@ -7,7 +7,7 @@
 //
 //   GROUPBY(row_fields, values, function,
 //           [field_headers=auto], [total_depth=1], [sort_order=ascending keys],
-//           [filter_array])
+//           [filter_array], [field_relationship=0])
 //
 //   * `row_fields` is a 1D or 2D rectangle whose rows are the group keys.
 //     A multi-column shape produces composite keys (column-major tuple).
@@ -40,7 +40,11 @@
 //     (descending by |N|-th column).
 //   * `filter_array`, when supplied, is a column-shaped boolean mask over
 //     the data rows (header row excluded if `field_headers` ∈ {1,3}). TRUE
-//     keeps the row; FALSE drops it.
+//     keeps the row; FALSE drops it. Omitted means no filter.
+//   * `field_relationship` ∈ {0,1}: 0 treats the key columns as a hierarchy
+//     (a value sort ranks each outer group by its aggregate and orders
+//     within it), 1 as a flat table (sort keys apply to the leaf rows, ties
+//     broken by the other key columns ascending; ±2 subtotals are #VALUE!).
 //
 // Per-group error isolation: unlike MAP / BYROW, an error returned by the
 // aggregator for ONE group does NOT abort the entire result. The error is
@@ -80,7 +84,7 @@ class EvalContext;
 class FunctionRegistry;
 
 /// `GROUPBY(row_fields, values, function, [field_headers], [total_depth],
-///          [sort_order], [filter_array])` — see the header preamble for the
+///          [sort_order], [filter_array], [field_relationship])` — see the header preamble for the
 /// full contract.
 Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);

@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -403,20 +404,19 @@ TEST(GroupBy, TotalDepthTwoWithOneKeyColumnKeepsTheGrandTotalOnlyLayout) {
 }
 
 TEST(GroupBy, SubtotalsKeepEachOuterGroupContiguousUnderASort) {
-  // The hierarchy is primary: sorting by the aggregate reorders groups
-  // within an outer group and reorders the outer groups themselves, but it
-  // never interleaves rows from different outer groups.
+  // The hierarchy is primary: a value sort ranks the outer groups by their
+  // own totals and orders the members within each, never interleaving them.
   const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"Y\",\"B\";\"X\",\"C\"}, {10;5;1}, SUM, 0, 2, 3)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 6U);
-  // Ascending by value: X/C (1) sorts first, so outer group X leads, with
-  // its own members ordered C then A.
-  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "C");
-  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "A");
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "X");
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 11.0);
-  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "B");
-  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y");
+  // Ascending: outer group Y (5) leads X (11); X's members run C (1), A (10).
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "B");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "Y");
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 5.0);
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "C");
+  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "X");
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 2).as_number(), 11.0);
 }
 
 TEST(GroupBy, TotalDepthTwoEmitsNoDiagnostic) {
@@ -1558,6 +1558,354 @@ TEST(PivotBy, VolatileAggregatorArgumentEvaluatedOnce) {
     ASSERT_EQ(v.as_array_cols(), 2U);
     EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 3.0) << "iteration " << i;
     EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 3.0) << "iteration " << i;
+  }
+}
+
+using excel_parity::ExactCell;
+
+// field_relationship 0 (or omitted) keeps the key columns a hierarchy: a value
+// sort ranks each outer group by its aggregate; an omitted filter keeps every row.
+TEST(GroupByFieldRelationship, HierarchyLayoutsMatchExcel) {
+  const std::vector<excel_parity::ExactCase> cases = {
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,1,,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-1,,0)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"),
+        ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,2,,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-2,,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("a"),
+        ExactCell(3.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,3,,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"),
+        ExactCell(5.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-3,,0)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("a"), ExactCell("q"),
+        ExactCell(2.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{1,2},,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,1},,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{-2,1},,0)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("a"),
+        ExactCell(3.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,-1},,0)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"),
+        ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,1,,,0)",
+       6,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0), ExactCell("合計"), ExactCell(""), ExactCell(15.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-1,,,0)",
+       6,
+       3,
+       {ExactCell("合計"), ExactCell(""), ExactCell(15.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0),
+        ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"),
+        ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,2,,,0)",
+       8,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"),    ExactCell("z"), ExactCell(4.0),
+        ExactCell("a"), ExactCell(""),  ExactCell(6.0), ExactCell("b"),    ExactCell("a"), ExactCell(3.0),
+        ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"),    ExactCell("q"), ExactCell(1.0),
+        ExactCell("b"), ExactCell(""),  ExactCell(9.0), ExactCell("総計"), ExactCell(""),  ExactCell(15.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-2,,,0)",
+       8,
+       3,
+       {ExactCell("総計"), ExactCell(""),  ExactCell(15.0), ExactCell("a"), ExactCell(""),  ExactCell(6.0),
+        ExactCell("a"),    ExactCell("q"), ExactCell(2.0),  ExactCell("a"), ExactCell("z"), ExactCell(4.0),
+        ExactCell("b"),    ExactCell(""),  ExactCell(9.0),  ExactCell("b"), ExactCell("a"), ExactCell(3.0),
+        ExactCell("b"),    ExactCell("p"), ExactCell(5.0),  ExactCell("b"), ExactCell("q"), ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,3,1,,,0)",
+       6,
+       3,
+       {ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"),
+        ExactCell("z"), ExactCell(4.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0), ExactCell("合計"), ExactCell(""), ExactCell(10.0)}},
+      {"GROUPBY({\"H1\",\"H2\";\"b\",\"p\";\"a\",\"q\";\"b\",\"p\"},{\"V\";1;2;3},SUM,3,1,2,,0)",
+       4,
+       3,
+       {ExactCell("H1"), ExactCell("H2"), ExactCell("V"), ExactCell("a"), ExactCell("q"), ExactCell(2.0),
+        ExactCell("b"), ExactCell("p"), ExactCell(4.0), ExactCell("合計"), ExactCell(""), ExactCell(6.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,0)",
+       5,
+       4,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0),
+        ExactCell(4.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell(1.0), ExactCell("b"), ExactCell("a"),
+        ExactCell(3.0), ExactCell(3.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0), ExactCell(5.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;"
+       "TRUE;TRUE},0)",
+       4,
+       3,
+       {ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"),
+        ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0)}},
+      {"GROUPBY({\"b\";\"a\";\"b\"},{1;2;3},SUM,0,1,-2,,0)",
+       3,
+       2,
+       {ExactCell("b"), ExactCell(4.0), ExactCell("a"), ExactCell(2.0), ExactCell("合計"), ExactCell(6.0)}},
+      {"GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,0)",
+       2,
+       2,
+       {ExactCell("A"), ExactCell(40.0), ExactCell("B"), ExactCell(20.0)}},
+      {"GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,)",
+       2,
+       2,
+       {ExactCell("A"), ExactCell(40.0), ExactCell("B"), ExactCell(20.0)}},
+      {"GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,2,,,0)",
+       7,
+       3,
+       {ExactCell("x"),    ExactCell("p"), ExactCell(1.0), ExactCell("x"), ExactCell("q"), ExactCell(3.0),
+        ExactCell("x"),    ExactCell(""),  ExactCell(4.0), ExactCell("y"), ExactCell("p"), ExactCell(4.0),
+        ExactCell("y"),    ExactCell("q"), ExactCell(2.0), ExactCell("y"), ExactCell(""),  ExactCell(6.0),
+        ExactCell("総計"), ExactCell(""),  ExactCell(10.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,2,,0)",
+       4,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,3,,0)",
+       4,
+       3,
+       {ExactCell("b"), ExactCell("p"), ExactCell(1.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("a"),
+        ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0)}},
+      {"GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,)",
+       2,
+       2,
+       {ExactCell("A"), ExactCell(40.0), ExactCell("B"), ExactCell(20.0)}},
+      {"GROUPBY({\"x\",\"p\";\"x\",\"q\";\"y\",\"p\";\"y\",\"q\";\"x\",\"p\"},{1;2;3;4;5},PERCENTOF,0,2)",
+       7,
+       3,
+       {ExactCell("x"),    ExactCell("p"), ExactCell(0.4),
+        ExactCell("x"),    ExactCell("q"), ExactCell(0.13333333333333333),
+        ExactCell("x"),    ExactCell(""),  ExactCell(0.5333333333333333),
+        ExactCell("y"),    ExactCell("p"), ExactCell(0.2),
+        ExactCell("y"),    ExactCell("q"), ExactCell(0.26666666666666666),
+        ExactCell("y"),    ExactCell(""),  ExactCell(0.4666666666666667),
+        ExactCell("総計"), ExactCell(""),  ExactCell(1.0)}},
+      {"GROUPBY({\"x\",\"p\";\"x\",\"q\";\"y\",\"p\";\"y\",\"q\";\"x\",\"p\"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2)",
+       7,
+       3,
+       {ExactCell("x"),    ExactCell("p"), ExactCell(5.0), ExactCell("x"), ExactCell("q"), ExactCell(5.0),
+        ExactCell("x"),    ExactCell(""),  ExactCell(5.0), ExactCell("y"), ExactCell("p"), ExactCell(5.0),
+        ExactCell("y"),    ExactCell("q"), ExactCell(5.0), ExactCell("y"), ExactCell(""),  ExactCell(5.0),
+        ExactCell("総計"), ExactCell(""),  ExactCell(5.0)}},
+  };
+  for (const excel_parity::ExactCase& c : cases) {
+    SCOPED_TRACE(c.formula);
+    excel_parity::ExpectExactCells(EvalSrc(c.formula), c);
+  }
+}
+
+// field_relationship 1 sorts the leaf rows as a flat table; ties fall to the
+// other key columns ascending.
+TEST(GroupByFieldRelationship, FlatTableLayoutsMatchExcel) {
+  const std::vector<excel_parity::ExactCase> cases = {
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,,1)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,1,,1)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-1,,1)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"),
+        ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,2,,1)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("a"),
+        ExactCell("q"), ExactCell(2.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("z"),
+        ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-2,,1)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("a"),
+        ExactCell(3.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,3,,1)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"), ExactCell("p"),
+        ExactCell(5.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-3,,1)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{1,2},,1)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,1},,1)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("a"),
+        ExactCell("q"), ExactCell(2.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("z"),
+        ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{-2,1},,1)",
+       5,
+       3,
+       {ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("a"),
+        ExactCell(3.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,-1},,1)",
+       5,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"),
+        ExactCell("q"), ExactCell(1.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"),
+        ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,1,,,1)",
+       6,
+       3,
+       {ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0), ExactCell("合計"), ExactCell(""), ExactCell(15.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-1,,,1)",
+       6,
+       3,
+       {ExactCell("合計"), ExactCell(""), ExactCell(15.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0),
+        ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"),
+        ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,3,1,,,1)",
+       6,
+       3,
+       {ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("a"),
+        ExactCell("z"), ExactCell(4.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("q"),
+        ExactCell(1.0), ExactCell("合計"), ExactCell(""), ExactCell(10.0)}},
+      {"GROUPBY({\"H1\",\"H2\";\"b\",\"p\";\"a\",\"q\";\"b\",\"p\"},{\"V\";1;2;3},SUM,3,1,2,,1)",
+       4,
+       3,
+       {ExactCell("H1"), ExactCell("H2"), ExactCell("V"), ExactCell("b"), ExactCell("p"), ExactCell(4.0),
+        ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("合計"), ExactCell(""), ExactCell(6.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,1)",
+       5,
+       4,
+       {ExactCell("b"), ExactCell("p"), ExactCell(5.0), ExactCell(1.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0),
+        ExactCell(2.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell(3.0), ExactCell("a"), ExactCell("z"),
+        ExactCell(4.0), ExactCell(4.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0), ExactCell(5.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;"
+       "TRUE;TRUE},1)",
+       4,
+       3,
+       {ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"),
+        ExactCell("p"), ExactCell(5.0), ExactCell("b"), ExactCell("q"), ExactCell(1.0)}},
+      {"GROUPBY({\"b\";\"a\";\"b\"},{1;2;3},SUM,0,1,-2,,1)",
+       3,
+       2,
+       {ExactCell("b"), ExactCell(4.0), ExactCell("a"), ExactCell(2.0), ExactCell("合計"), ExactCell(6.0)}},
+      {"GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,1)",
+       2,
+       2,
+       {ExactCell("A"), ExactCell(40.0), ExactCell("B"), ExactCell(20.0)}},
+      {"GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,0,,,1)",
+       4,
+       3,
+       {ExactCell("x"), ExactCell("p"), ExactCell(1.0), ExactCell("x"), ExactCell("q"), ExactCell(3.0), ExactCell("y"),
+        ExactCell("p"), ExactCell(4.0), ExactCell("y"), ExactCell("q"), ExactCell(2.0)}},
+      {"GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,1,,,1)",
+       5,
+       3,
+       {ExactCell("x"), ExactCell("p"), ExactCell(1.0), ExactCell("x"), ExactCell("q"), ExactCell(3.0), ExactCell("y"),
+        ExactCell("p"), ExactCell(4.0), ExactCell("y"), ExactCell("q"), ExactCell(2.0), ExactCell("合計"),
+        ExactCell(""), ExactCell(10.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,2,,1)",
+       4,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(1.0), ExactCell("a"),
+        ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,-2,,1)",
+       4,
+       3,
+       {ExactCell("a"), ExactCell("z"), ExactCell(4.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"),
+        ExactCell("p"), ExactCell(1.0), ExactCell("b"), ExactCell("a"), ExactCell(3.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,3,,1)",
+       4,
+       3,
+       {ExactCell("b"), ExactCell("p"), ExactCell(1.0), ExactCell("a"), ExactCell("q"), ExactCell(2.0), ExactCell("b"),
+        ExactCell("a"), ExactCell(3.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0)}},
+      {"GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,-1,,1)",
+       4,
+       3,
+       {ExactCell("b"), ExactCell("a"), ExactCell(3.0), ExactCell("b"), ExactCell("p"), ExactCell(1.0), ExactCell("a"),
+        ExactCell("q"), ExactCell(2.0), ExactCell("a"), ExactCell("z"), ExactCell(4.0)}},
+  };
+  for (const excel_parity::ExactCase& c : cases) {
+    SCOPED_TRACE(c.formula);
+    excel_parity::ExpectExactCells(EvalSrc(c.formula), c);
+  }
+}
+
+TEST(GroupByFieldRelationship, RejectsOutOfDomainValuesAndFlatSubtotals) {
+  const char* const formulas[] = {
+      "GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{3,1},,0)",
+      "GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{3,1},,1)",
+      "GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,2,,,1)",
+      "GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-2,,,1)",
+      "GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,2)",
+      "GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,-1)",
+      "GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,\"x\")",
+      "GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,2,,,1)",
+      "GROUPBY({\"F1\",\"F2\";\"x\",\"p\";\"y\",\"q\";\"x\",\"q\"},{\"V\";1;2;3},SUM,3,2,,,1)",
+  };
+  for (const char* formula : formulas) {
+    const Value v = EvalSrc(formula);
+    ASSERT_TRUE(v.is_error()) << formula << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
   }
 }
 

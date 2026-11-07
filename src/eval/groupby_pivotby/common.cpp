@@ -152,15 +152,22 @@ std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
 
 OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                    const std::vector<std::vector<std::uint32_t>>& group_rows) {
+  return build_prefix_grouping(keys, group_repr, group_rows, 1U);
+}
+
+OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                    const std::vector<std::vector<std::uint32_t>>& group_rows,
+                                    std::uint32_t prefix_cols) {
   OuterGrouping out;
   out.outer_of_group.resize(group_repr.size(), 0U);
-  // The outer level is the first key column alone.
   const std::uint32_t key_cols = keys.cols;
   std::unordered_map<std::string, std::size_t> outer_index;
   std::string key;
   for (std::size_t g = 0; g < group_repr.size(); ++g) {
     key.clear();
-    append_cell_group_key(&key, keys.cells[static_cast<std::size_t>(group_repr[g]) * key_cols], group_repr[g]);
+    for (std::uint32_t c = 0; c < prefix_cols; ++c) {
+      append_cell_group_key(&key, keys.cells[static_cast<std::size_t>(group_repr[g]) * key_cols + c], group_repr[g]);
+    }
     const auto [it, inserted] = outer_index.try_emplace(key, out.repr_of_outer.size());
     const std::size_t outer = it->second;
     if (inserted) {
@@ -323,10 +330,13 @@ bool read_optional_sort_spec(const parser::AstNode& call, std::uint32_t arg_inde
   return true;
 }
 
-bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::uint32_t val_cols, GroupSort* out) {
+bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::uint32_t val_cols, bool flat_table,
+                     GroupSort* out) {
   out->key_descending.assign(key_cols, false);
+  out->key_order.clear();
   out->value_col = 0U;
   out->value_descending = false;
+  std::vector<bool> named(key_cols, false);
   for (const int n : spec) {
     const std::int64_t magnitude = n > 0 ? static_cast<std::int64_t>(n) : -static_cast<std::int64_t>(n);
     if (magnitude > static_cast<std::int64_t>(key_cols) + val_cols || (magnitude > key_cols && spec.size() != 1U)) {
@@ -338,14 +348,58 @@ bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::
       out->value_descending = n < 0;
     } else {
       out->key_descending[column - 1U] = n < 0;
+      if (flat_table && !named[column - 1U]) {
+        named[column - 1U] = true;
+        out->key_order.push_back(column - 1U);
+      }
+    }
+  }
+  for (std::uint32_t c = 0; c < key_cols; ++c) {
+    if (!named[c]) {
+      out->key_order.push_back(c);
     }
   }
   return true;
 }
 
+std::vector<OuterSortLevel> build_outer_sort_levels(const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+                                                    const std::vector<std::vector<std::uint32_t>>& members,
+                                                    const ArrayValue& values, std::uint32_t value_col,
+                                                    const std::vector<const Aggregator*>& agg_of_group, Arena& arena,
+                                                    const FunctionRegistry& registry, const EvalContext& ctx) {
+  std::vector<OuterSortLevel> levels;
+  for (std::uint32_t prefix = 1U; prefix < keys.cols; ++prefix) {
+    const OuterGrouping grouping = build_prefix_grouping(keys, repr, members, prefix);
+    const std::size_t outer_count = grouping.rows_of_outer.size();
+    std::vector<const Aggregator*> agg_of_outer(outer_count, nullptr);
+    for (std::size_t g = 0; g < repr.size(); ++g) {
+      const std::size_t outer = grouping.outer_of_group[g];
+      if (agg_of_outer[outer] == nullptr) {
+        agg_of_outer[outer] = agg_of_group[g];
+      }
+    }
+    std::vector<Value> outer_values;
+    outer_values.reserve(outer_count);
+    for (std::size_t outer = 0; outer < outer_count; ++outer) {
+      const ArrayValue* slice = build_group_slice(values, value_col, grouping.rows_of_outer[outer], arena);
+      outer_values.push_back(
+          slice != nullptr ? invoke_aggregator_for_group(*agg_of_outer[outer], value_col, slice, arena, registry, ctx)
+                           : Value::error(ErrorCode::Num));
+    }
+    OuterSortLevel level;
+    level.prefix_of_group = grouping.outer_of_group;
+    level.value_of_group.reserve(repr.size());
+    for (const std::size_t outer : grouping.outer_of_group) {
+      level.value_of_group.push_back(outer_values[outer]);
+    }
+    levels.push_back(std::move(level));
+  }
+  return levels;
+}
+
 void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
                   const std::vector<bool>& is_error, const std::vector<Value>& value_keys,
-                  std::vector<std::size_t>* order) {
+                  const std::vector<OuterSortLevel>& outer_levels, std::vector<std::size_t>* order) {
   // Collation keys are computed once per representative cell rather than on
   // every comparison.
   const auto key_cell = [&](std::size_t g, std::uint32_t c) -> const Value& {
@@ -361,13 +415,20 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
   for (std::size_t g = 0; g < value_keys.size(); ++g) {
     value_text[g] = dynamic_array::sort_text_key(value_keys[g]);
   }
+  std::vector<std::vector<std::string>> outer_text(outer_levels.size());
+  for (std::size_t level = 0; level < outer_levels.size(); ++level) {
+    outer_text[level].reserve(outer_levels[level].value_of_group.size());
+    for (const Value& v : outer_levels[level].value_of_group) {
+      outer_text[level].push_back(dynamic_array::sort_text_key(v));
+    }
+  }
   const auto cmp_key_cell = [&](std::size_t a, std::size_t b, std::uint32_t c) {
     return dynamic_array::cmp_value_keyed(key_cell(a, c), key_cell(b, c), &key_text[a * keys.cols + c],
                                           &key_text[b * keys.cols + c]);
   };
   // First differing key column's order; `directional` applies each column's descending flag.
   const auto cmp_keys = [&](std::size_t a, std::size_t b, bool directional) {
-    for (std::uint32_t c = 0; c < keys.cols; ++c) {
+    for (const std::uint32_t c : plan.key_order) {
       const int r = cmp_key_cell(a, b, c);
       if (r != 0) {
         return directional && plan.key_descending[c] ? -r : r;
@@ -382,6 +443,23 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
       return !is_error[a];
     }
     if (plan.value_col != 0U) {
+      for (std::size_t level = 0; level < outer_levels.size(); ++level) {
+        const OuterSortLevel& outer = outer_levels[level];
+        if (outer.prefix_of_group[a] == outer.prefix_of_group[b]) {
+          continue;
+        }
+        const Value& va = outer.value_of_group[a];
+        const Value& vb = outer.value_of_group[b];
+        const int c = dynamic_array::cmp_value_keyed(va, vb, &outer_text[level][a], &outer_text[level][b]);
+        if (c != 0) {
+          return plan.value_descending ? (c > 0) : (c < 0);
+        }
+        // Equal aggregates: the prefix groups first differ at this key column.
+        const int k = cmp_key_cell(a, b, static_cast<std::uint32_t>(level));
+        if (k != 0) {
+          return k < 0;
+        }
+      }
       const int c = dynamic_array::cmp_value_keyed(value_keys[a], value_keys[b], &value_text[a], &value_text[b]);
       if (c != 0) {
         return plan.value_descending ? (c > 0) : (c < 0);
@@ -462,7 +540,7 @@ bool read_layout_and_mask(const parser::AstNode& call, std::uint32_t filter_arg_
   }
   *layout = layout_result.take();
   include_row->assign(layout->data_row_count, true);
-  if (arity == filter_arg_index + 1U) {
+  if (arity > filter_arg_index && !is_omitted_arg(call.as_call_arg(filter_arg_index))) {
     return read_filter_mask(call.as_call_arg(filter_arg_index), arena, registry, ctx, layout->data_row_count,
                             include_row, out_err);
   }

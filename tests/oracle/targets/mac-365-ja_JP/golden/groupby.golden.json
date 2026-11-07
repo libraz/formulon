@@ -2,11 +2,11 @@
   "suite": "groupby",
   "description": "GROUPBY dynamic-array group-and-aggregate (Excel 365). Perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T21:54:02Z"
+    "generated_at": "2026-11-07T20:23:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1960,6 +1960,1734 @@
           4,
           3
         ]
+      }
+    },
+    {
+      "id": "field_relationship_000",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_001",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,1,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_002",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-1,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_003",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,2,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_004",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-2,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "z",
+          4.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "q",
+          1.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "a",
+          3.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_005",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,3,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "q",
+          1.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_006",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-3,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "p",
+          5.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "q",
+          1.0,
+          "a",
+          "z",
+          4.0,
+          "a",
+          "q",
+          2.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_007",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{1,2},,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_008",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,1},,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_009",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{-2,1},,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "z",
+          4.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "q",
+          1.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "a",
+          3.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_010",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{3,1},,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_011",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,-1},,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_012",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,1,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0,
+          "合計",
+          "",
+          15.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_013",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-1,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "合計",
+          "",
+          15.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_014",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,2,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "a",
+          "",
+          6.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0,
+          "b",
+          "",
+          9.0,
+          "総計",
+          "",
+          15.0
+        ],
+        "shape": [
+          8,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_015",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-2,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "総計",
+          "",
+          15.0,
+          "a",
+          "",
+          6.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "",
+          9.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          8,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_016",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,3,1,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "p",
+          5.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "q",
+          1.0,
+          "合計",
+          "",
+          10.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_017",
+      "formula": "=GROUPBY({\"H1\",\"H2\";\"b\",\"p\";\"a\",\"q\";\"b\",\"p\"},{\"V\";1;2;3},SUM,3,1,2,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "H1",
+          "H2",
+          "V",
+          "a",
+          "q",
+          2.0,
+          "b",
+          "p",
+          4.0,
+          "合計",
+          "",
+          6.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_018",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          2.0,
+          "a",
+          "z",
+          4.0,
+          4.0,
+          "b",
+          "p",
+          5.0,
+          1.0,
+          "b",
+          "a",
+          3.0,
+          3.0,
+          "b",
+          "q",
+          1.0,
+          5.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_019",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;TRUE;TRUE},0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_020",
+      "formula": "=GROUPBY({\"b\";\"a\";\"b\"},{1;2;3},SUM,0,1,-2,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          4.0,
+          "a",
+          2.0,
+          "合計",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_021",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_022",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,1,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_023",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-1,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_024",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,2,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "q",
+          1.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_025",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-2,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "z",
+          4.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "q",
+          1.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "a",
+          3.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_026",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,3,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "q",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "a",
+          3.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "p",
+          5.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_027",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,-3,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "p",
+          5.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_028",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{1,2},,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_029",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,1},,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "q",
+          1.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_030",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{-2,1},,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "z",
+          4.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "q",
+          1.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "a",
+          3.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_031",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{3,1},,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_032",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,{2,-1},,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_033",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,1,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0,
+          "合計",
+          "",
+          15.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_034",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-1,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "合計",
+          "",
+          15.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_035",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,2,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_036",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,-2,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_037",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,3,1,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "p",
+          5.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "q",
+          1.0,
+          "合計",
+          "",
+          10.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_038",
+      "formula": "=GROUPBY({\"H1\",\"H2\";\"b\",\"p\";\"a\",\"q\";\"b\",\"p\"},{\"V\";1;2;3},SUM,3,1,2,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "H1",
+          "H2",
+          "V",
+          "b",
+          "p",
+          4.0,
+          "a",
+          "q",
+          2.0,
+          "合計",
+          "",
+          6.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_039",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "p",
+          5.0,
+          1.0,
+          "a",
+          "q",
+          2.0,
+          2.0,
+          "b",
+          "a",
+          3.0,
+          3.0,
+          "a",
+          "z",
+          4.0,
+          4.0,
+          "b",
+          "q",
+          1.0,
+          5.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_040",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;TRUE;TRUE},1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          5.0,
+          "b",
+          "q",
+          1.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_041",
+      "formula": "=GROUPBY({\"b\";\"a\";\"b\"},{1;2;3},SUM,0,1,-2,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          4.0,
+          "a",
+          2.0,
+          "合計",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_042",
+      "formula": "=GROUPBY({\"x\",\"p\";\"x\",\"q\";\"y\",\"p\";\"y\",\"q\";\"x\",\"p\"},{1;2;3;4;5},PERCENTOF,0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "p",
+          0.4,
+          "x",
+          "q",
+          0.13333333333333333,
+          "x",
+          "",
+          0.5333333333333333,
+          "y",
+          "p",
+          0.2,
+          "y",
+          "q",
+          0.26666666666666666,
+          "y",
+          "",
+          0.4666666666666667,
+          "総計",
+          "",
+          1.0
+        ],
+        "shape": [
+          7,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_043",
+      "formula": "=GROUPBY({\"x\",\"p\";\"x\",\"q\";\"y\",\"p\";\"y\",\"q\";\"x\",\"p\"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "p",
+          5.0,
+          "x",
+          "q",
+          5.0,
+          "x",
+          "",
+          5.0,
+          "y",
+          "p",
+          5.0,
+          "y",
+          "q",
+          5.0,
+          "y",
+          "",
+          5.0,
+          "総計",
+          "",
+          5.0
+        ],
+        "shape": [
+          7,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_044",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          40.0,
+          "B",
+          20.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_045",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          40.0,
+          "B",
+          20.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_046",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_047",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_048",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_049",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          40.0,
+          "B",
+          20.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_050",
+      "formula": "=GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,2,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "p",
+          1.0,
+          "x",
+          "q",
+          3.0,
+          "x",
+          "",
+          4.0,
+          "y",
+          "p",
+          4.0,
+          "y",
+          "q",
+          2.0,
+          "y",
+          "",
+          6.0,
+          "総計",
+          "",
+          10.0
+        ],
+        "shape": [
+          7,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_051",
+      "formula": "=GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,2,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_052",
+      "formula": "=GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,0,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "p",
+          1.0,
+          "x",
+          "q",
+          3.0,
+          "y",
+          "p",
+          4.0,
+          "y",
+          "q",
+          2.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_053",
+      "formula": "=GROUPBY({\"x\",\"p\";\"y\",\"q\";\"x\",\"q\";\"y\",\"p\"},{1;2;3;4},SUM,0,1,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "p",
+          1.0,
+          "x",
+          "q",
+          3.0,
+          "y",
+          "p",
+          4.0,
+          "y",
+          "q",
+          2.0,
+          "合計",
+          "",
+          10.0
+        ],
+        "shape": [
+          5,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_054",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,2,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0,
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          1.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_055",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,2,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_056",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,-2,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "z",
+          4.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "p",
+          1.0,
+          "b",
+          "a",
+          3.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_057",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,3,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "p",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "b",
+          "a",
+          3.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_058",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,3,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "p",
+          1.0,
+          "b",
+          "a",
+          3.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_059",
+      "formula": "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\"},{1;2;3;4},SUM,0,0,-1,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          "a",
+          3.0,
+          "b",
+          "p",
+          1.0,
+          "a",
+          "q",
+          2.0,
+          "a",
+          "z",
+          4.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_060",
+      "formula": "=GROUPBY({\"F1\",\"F2\";\"x\",\"p\";\"y\",\"q\";\"x\",\"q\"},{\"V\";1;2;3},SUM,3,2,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_061",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"},{10;20;30},SUM,0,0,,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          40.0,
+          "B",
+          20.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_extra_000",
+      "formula": "=GROUPBY({\"b\";\"a\";\"b\"},{1;2;3},SUM,0,2,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_extra_001",
+      "formula": "=GROUPBY({\"b\";\"a\";\"b\"},{1;2;3},SUM,0,-2,,,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "field_relationship_extra_002",
+      "formula": "=GROUPBY({\"x\",\"p\",\"m\";\"x\",\"q\",\"n\";\"y\",\"p\",\"m\";\"y\",\"q\",\"n\";\"x\",\"p\",\"n\";\"y\",\"p\",\"n\"},{1;2;3;4;5;6},SUM,0,0,4)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "q",
+          "n",
+          2.0,
+          "x",
+          "p",
+          "m",
+          1.0,
+          "x",
+          "p",
+          "n",
+          5.0,
+          "y",
+          "q",
+          "n",
+          4.0,
+          "y",
+          "p",
+          "m",
+          3.0,
+          "y",
+          "p",
+          "n",
+          6.0
+        ],
+        "shape": [
+          6,
+          4
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_extra_003",
+      "formula": "=GROUPBY({\"x\",\"p\",\"m\";\"x\",\"q\",\"n\";\"y\",\"p\",\"m\";\"y\",\"q\",\"n\";\"x\",\"p\",\"n\";\"y\",\"p\",\"n\"},{1;2;3;4;5;6},SUM,0,0,-4)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "y",
+          "p",
+          "n",
+          6.0,
+          "y",
+          "p",
+          "m",
+          3.0,
+          "y",
+          "q",
+          "n",
+          4.0,
+          "x",
+          "p",
+          "n",
+          5.0,
+          "x",
+          "p",
+          "m",
+          1.0,
+          "x",
+          "q",
+          "n",
+          2.0
+        ],
+        "shape": [
+          6,
+          4
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_extra_004",
+      "formula": "=GROUPBY({\"x\",\"p\",\"m\";\"x\",\"q\",\"n\";\"y\",\"p\",\"m\";\"y\",\"q\",\"n\";\"x\",\"p\",\"n\";\"y\",\"p\",\"n\"},{1;2;3;4;5;6},SUM,0,0,3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "p",
+          "m",
+          1.0,
+          "x",
+          "p",
+          "n",
+          5.0,
+          "x",
+          "q",
+          "n",
+          2.0,
+          "y",
+          "p",
+          "m",
+          3.0,
+          "y",
+          "p",
+          "n",
+          6.0,
+          "y",
+          "q",
+          "n",
+          4.0
+        ],
+        "shape": [
+          6,
+          4
+        ]
+      }
+    },
+    {
+      "id": "field_relationship_extra_005",
+      "formula": "=GROUPBY({\"x\",\"p\",\"m\";\"x\",\"q\",\"n\";\"y\",\"p\",\"m\";\"y\",\"q\",\"n\";\"x\",\"p\",\"n\";\"y\",\"p\",\"n\"},{1;2;3;4;5;6},SUM,0,0,{4,-3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

@@ -367,3 +367,275 @@ cases:
   - id: groupby_correl_two_value_columns
     setup: { B2: "a", B3: "a", B4: "b", B5: "b", B6: "c", B7: "c", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6, D2: 2, D3: 3, D4: 5, D5: 7, D6: 11, D7: 13 }
     formula: '=GROUPBY(B2:B7,C2:D7,CORREL)'
+
+  - id: field_relationship_000
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,,0)'
+
+  - id: field_relationship_001
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,1,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,1,,0)'
+
+  - id: field_relationship_002
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-1,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-1,,0)'
+
+  - id: field_relationship_003
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,2,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,2,,0)'
+
+  - id: field_relationship_004
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-2,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-2,,0)'
+
+  - id: field_relationship_005
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,3,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,3,,0)'
+
+  - id: field_relationship_006
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-3,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-3,,0)'
+
+  - id: field_relationship_007
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{1,2},,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{1,2},,0)'
+
+  - id: field_relationship_008
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,1},,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,1},,0)'
+
+  - id: field_relationship_009
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{-2,1},,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{-2,1},,0)'
+
+  - id: field_relationship_010
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{3,1},,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{3,1},,0)'
+
+  - id: field_relationship_011
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,-1},,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,-1},,0)'
+
+  - id: field_relationship_012
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,,0)'
+
+  - id: field_relationship_013
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-1,,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-1,,,0)'
+
+  - id: field_relationship_014
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,2,,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,2,,,0)'
+
+  - id: field_relationship_015
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-2,,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-2,,,0)'
+
+  - id: field_relationship_016
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,3,1,,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,3,1,,,0)'
+
+  - id: field_relationship_017
+    description: '=GROUPBY({"H1","H2";"b","p";"a","q";"b","p"},{"V";1;2;3},SUM,3,1,2,,0)'
+    formula: '=GROUPBY({"H1","H2";"b","p";"a","q";"b","p"},{"V";1;2;3},SUM,3,1,2,,0)'
+
+  - id: field_relationship_018
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,0)'
+
+  - id: field_relationship_019
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;TRUE;TRUE},0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;TRUE;TRUE},0)'
+
+  - id: field_relationship_020
+    description: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,1,-2,,0)'
+    formula: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,1,-2,,0)'
+
+  - id: field_relationship_021
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,,1)'
+
+  - id: field_relationship_022
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,1,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,1,,1)'
+
+  - id: field_relationship_023
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-1,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-1,,1)'
+
+  - id: field_relationship_024
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,2,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,2,,1)'
+
+  - id: field_relationship_025
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-2,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-2,,1)'
+
+  - id: field_relationship_026
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,3,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,3,,1)'
+
+  - id: field_relationship_027
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-3,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,-3,,1)'
+
+  - id: field_relationship_028
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{1,2},,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{1,2},,1)'
+
+  - id: field_relationship_029
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,1},,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,1},,1)'
+
+  - id: field_relationship_030
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{-2,1},,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{-2,1},,1)'
+
+  - id: field_relationship_031
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{3,1},,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{3,1},,1)'
+
+  - id: field_relationship_032
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,-1},,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,{2,-1},,1)'
+
+  - id: field_relationship_033
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,,1)'
+
+  - id: field_relationship_034
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-1,,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-1,,,1)'
+
+  - id: field_relationship_035
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,2,,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,2,,,1)'
+
+  - id: field_relationship_036
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-2,,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,-2,,,1)'
+
+  - id: field_relationship_037
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,3,1,,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,3,1,,,1)'
+
+  - id: field_relationship_038
+    description: '=GROUPBY({"H1","H2";"b","p";"a","q";"b","p"},{"V";1;2;3},SUM,3,1,2,,1)'
+    formula: '=GROUPBY({"H1","H2";"b","p";"a","q";"b","p"},{"V";1;2;3},SUM,3,1,2,,1)'
+
+  - id: field_relationship_039
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5,1;2,2;3,3;4,4;1,5},SUM,0,0,4,,1)'
+
+  - id: field_relationship_040
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;TRUE;TRUE},1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,0,,{TRUE;FALSE;TRUE;TRUE;TRUE},1)'
+
+  - id: field_relationship_041
+    description: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,1,-2,,1)'
+    formula: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,1,-2,,1)'
+
+  - id: field_relationship_042
+    description: '=GROUPBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{1;2;3;4;5},PERCENTOF,0,2)'
+    formula: '=GROUPBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{1;2;3;4;5},PERCENTOF,0,2)'
+
+  - id: field_relationship_043
+    description: '=GROUPBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2)'
+    formula: '=GROUPBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2)'
+
+  - id: field_relationship_044
+    description: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,0)'
+    formula: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,0)'
+
+  - id: field_relationship_045
+    description: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,1)'
+    formula: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,1)'
+
+  - id: field_relationship_046
+    description: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,2)'
+    formula: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,2)'
+
+  - id: field_relationship_047
+    description: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,-1)'
+    formula: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,-1)'
+
+  - id: field_relationship_048
+    description: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,"x")'
+    formula: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,"x")'
+
+  - id: field_relationship_049
+    description: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,)'
+    formula: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,,)'
+
+  - id: field_relationship_050
+    description: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,2,,,0)'
+    formula: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,2,,,0)'
+
+  - id: field_relationship_051
+    description: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,2,,,1)'
+    formula: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,2,,,1)'
+
+  - id: field_relationship_052
+    description: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,0,,,1)'
+    formula: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,0,,,1)'
+
+  - id: field_relationship_053
+    description: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,1,,,1)'
+    formula: '=GROUPBY({"x","p";"y","q";"x","q";"y","p"},{1;2;3;4},SUM,0,1,,,1)'
+
+  - id: field_relationship_054
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,2,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,2,,0)'
+
+  - id: field_relationship_055
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,2,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,2,,1)'
+
+  - id: field_relationship_056
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,-2,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,-2,,1)'
+
+  - id: field_relationship_057
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,3,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,3,,1)'
+
+  - id: field_relationship_058
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,3,,0)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,3,,0)'
+
+  - id: field_relationship_059
+    description: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,-1,,1)'
+    formula: '=GROUPBY({"b","p";"a","q";"b","a";"a","z"},{1;2;3;4},SUM,0,0,-1,,1)'
+
+  - id: field_relationship_060
+    description: '=GROUPBY({"F1","F2";"x","p";"y","q";"x","q"},{"V";1;2;3},SUM,3,2,,,1)'
+    formula: '=GROUPBY({"F1","F2";"x","p";"y","q";"x","q"},{"V";1;2;3},SUM,3,2,,,1)'
+
+  - id: field_relationship_061
+    description: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,)'
+    formula: '=GROUPBY({"A";"B";"A"},{10;20;30},SUM,0,0,,)'
+
+  - id: field_relationship_extra_000
+    description: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,2,,,1)'
+    formula: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,2,,,1)'
+
+  - id: field_relationship_extra_001
+    description: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,-2,,,1)'
+    formula: '=GROUPBY({"b";"a";"b"},{1;2;3},SUM,0,-2,,,1)'
+
+  - id: field_relationship_extra_002
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,4)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,4)'
+
+  - id: field_relationship_extra_003
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,-4)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,-4)'
+
+  - id: field_relationship_extra_004
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,3)'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,3)'
+
+  - id: field_relationship_extra_005
+    description: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,{4,-3})'
+    formula: '=GROUPBY({"x","p","m";"x","q","n";"y","p","m";"y","q","n";"x","p","n";"y","p","n"},{1;2;3;4;5;6},SUM,0,0,{4,-3})'

@@ -96,6 +96,12 @@ struct OuterGrouping {
 OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                    const std::vector<std::vector<std::uint32_t>>& group_rows);
 
+/// `build_outer_grouping` over the first `prefix_cols` key columns instead of
+/// the first one alone.
+OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                    const std::vector<std::vector<std::uint32_t>>& group_rows,
+                                    std::uint32_t prefix_cols);
+
 /// Orders the outer groups of `hierarchy` by their first member in `order` (a
 /// sorted list of flat-group indices) and lists each outer group's members in
 /// that same order. Overwrites `*groups_of_outer`; appends to `*outer_order`.
@@ -182,8 +188,11 @@ bool read_optional_sort_spec(const parser::AstNode& call, std::uint32_t arg_inde
 /// How one axis orders its groups. A sort spec numbers `key_cols` key
 /// columns first, then `val_cols` value columns.
 struct GroupSort {
-  /// Per key column; keys order the groups column by column, first outermost.
+  /// Per key column; keys order the groups column by column in `key_order`.
   std::vector<bool> key_descending;
+  /// Key columns in comparison order: left to right for a hierarchy, the
+  /// spec's key columns first for a flat table.
+  std::vector<std::uint32_t> key_order;
   /// 1-based value column to sort by, ties broken by the keys ascending; 0
   /// sorts by the keys.
   std::uint32_t value_col = 0U;
@@ -192,16 +201,35 @@ struct GroupSort {
 
 /// Plans `spec` over `key_cols` keys and `val_cols` values: key indices set
 /// the direction of their key column, a lone value index sorts by that value.
-/// False (#VALUE!) for an index past the last column or a vector naming a
-/// value column.
-bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::uint32_t val_cols, GroupSort* out);
+/// `flat_table` compares the named key columns first, in spec order, then the
+/// rest left to right. False (#VALUE!) for an index past the last column or a
+/// vector naming a value column.
+bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::uint32_t val_cols, bool flat_table,
+                     GroupSort* out);
+
+/// One outer level of a hierarchical value sort: the prefix group each group
+/// belongs to and that prefix group's aggregate.
+struct OuterSortLevel {
+  std::vector<std::size_t> prefix_of_group;
+  std::vector<Value> value_of_group;
+};
+
+/// Builds one `OuterSortLevel` per key prefix shorter than `keys.cols`, each
+/// prefix group aggregated over value column `value_col` with the aggregator
+/// of its first member group (`agg_of_group`). Empty for a single key column.
+std::vector<OuterSortLevel> build_outer_sort_levels(const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+                                                    const std::vector<std::vector<std::uint32_t>>& members,
+                                                    const ArrayValue& values, std::uint32_t value_col,
+                                                    const std::vector<const Aggregator*>& agg_of_group, Arena& arena,
+                                                    const FunctionRegistry& registry, const EvalContext& ctx);
 
 /// Fills `*order` with the group indices ordered by `plan`; error-keyed
 /// groups sink to the bottom. `value_keys[g]` is group g's sort value, read
-/// only for a value sort.
+/// only for a value sort. A value sort orders `outer_levels` first, outermost
+/// first, so each prefix group stays contiguous and ranks by its aggregate.
 void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
                   const std::vector<bool>& is_error, const std::vector<Value>& value_keys,
-                  std::vector<std::size_t>* order);
+                  const std::vector<OuterSortLevel>& outer_levels, std::vector<std::size_t>* order);
 
 /// `field_headers` value that requests header detection from the values
 /// argument; `resolve_auto_field_headers` turns it into a concrete mode.
@@ -222,9 +250,9 @@ bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionR
                       const EvalContext& ctx, std::uint32_t data_row_count, std::vector<bool>* include_row,
                       Value* out_err);
 
-/// Resolves the header layout for `field_headers` and, when the call carries
-/// the trailing filter argument (`arity == filter_arg_index + 1`), reads its
-/// mask. `*include_row` is sized to the layout's data row count.
+/// Resolves the header layout for `field_headers` and, when the call supplies
+/// the filter argument (present and not omitted), reads its mask.
+/// `*include_row` is sized to the layout's data row count.
 bool read_layout_and_mask(const parser::AstNode& call, std::uint32_t filter_arg_index, std::uint32_t arity,
                           int field_headers, std::uint32_t input_rows, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx, HeaderLayout* layout, std::vector<bool>* include_row, Value* out_err);

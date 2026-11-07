@@ -24,7 +24,7 @@ namespace eval {
 Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 3U || arity > 7U) {
+  if (arity < 3U || arity > 8U) {
     return Value::error(ErrorCode::Value);
   }
 
@@ -88,6 +88,20 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t data_start_row = layout.data_start_row;
   const std::uint32_t data_row_count = layout.data_row_count;
 
+  // -- arg 7: field_relationship; 0 hierarchy (default), 1 flat table -------
+  // A flat table has no levels to subtotal, so it rejects |total_depth| == 2.
+  static constexpr int kFieldRelationships[] = {0, 1};
+  int field_relationship = 0;
+  if (!read_optional_int_in_set(call, 7, arity, 0, arena, registry, ctx, kFieldRelationships,
+                                sizeof(kFieldRelationships) / sizeof(kFieldRelationships[0]), &field_relationship,
+                                &err)) {
+    return err;
+  }
+  const bool flat_table = field_relationship == 1;
+  if (flat_table && (total_depth == 2 || total_depth == -2)) {
+    return Value::error(ErrorCode::Value);
+  }
+
   // -- Build groups --------------------------------------------------------
   // Walk filtered data rows in input order. The canonical key folds each
   // text cell once and indexes the composite key, preserving first-occurrence
@@ -150,18 +164,26 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // sort_order numbers the output columns, key columns first; omitted sorts
   // by the keys ascending (see `plan_group_sort`).
   GroupSort sort_plan;
-  if (!plan_group_sort(sort_spec, key_cols, val_cols, &sort_plan)) {
+  if (!plan_group_sort(sort_spec, key_cols, val_cols, flat_table, &sort_plan)) {
     return Value::error(ErrorCode::Value);
   }
   std::vector<Value> value_keys;
+  std::vector<OuterSortLevel> outer_levels;
   if (sort_plan.value_col != 0U) {
+    const std::uint32_t v = sort_plan.value_col - 1U;
     value_keys.reserve(agg_rows.size());
     for (const std::vector<Value>& row : agg_rows) {
-      value_keys.push_back(row[key_cols + sort_plan.value_col - 1U]);
+      value_keys.push_back(row[key_cols + v]);
+    }
+    // A hierarchy ranks each prefix of the key columns by its own aggregate.
+    if (!flat_table) {
+      const std::vector<const Aggregator*> agg_of_group(group_repr.size(), &agg);
+      outer_levels =
+          build_outer_sort_levels(*row_fields, group_repr, group_rows, *values, v, agg_of_group, arena, registry, ctx);
     }
   }
   std::vector<std::size_t> order;
-  order_groups(sort_plan, *row_fields, group_repr, group_is_error, value_keys, &order);
+  order_groups(sort_plan, *row_fields, group_repr, group_is_error, value_keys, outer_levels, &order);
 
   // -- Compute grand total (if requested) ---------------------------------
   // The grand total aggregates over EVERY filtered data row. It is rendered
