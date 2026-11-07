@@ -16,6 +16,7 @@
 #include "parser/parser.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
@@ -31,7 +32,7 @@ bool IsOperatorCall(const AstNode& node, std::string_view name) {
 }
 
 bool IsStorageOperatorCall(const AstNode& node) {
-  return IsOperatorCall(node, "SINGLE") || IsOperatorCall(node, "ANCHORARRAY") ||
+  return IsOperatorCall(node, kSingleFn) || IsOperatorCall(node, kAnchorArrayFn) ||
          trim_ref_call_mode(node) != TrimRefMode::None;
 }
 
@@ -61,7 +62,7 @@ class OperatorRespeller {
       if (const TrimRefMode mode = trim_ref_call_mode(node); mode != TrimRefMode::None) {
         return trim_ref(node, arg, mode);
       }
-      if (IsOperatorCall(node, "SINGLE")) {
+      if (IsOperatorCall(node, kSingleFn)) {
         // `@` binds looser than `:`, ` ` and `%`, tighter than every infix operator.
         const bool wrap_arg = arg.kind() == NodeKind::BinaryOp ||
                               (arg.kind() == NodeKind::UnaryOp && arg.as_unary_op() == UnaryOp::Percent);
@@ -143,8 +144,8 @@ class OperatorRespeller {
 }  // namespace
 
 std::string spell_storage_operators(std::string_view formula) {
-  const std::size_t body_at = !formula.empty() && formula.front() == '=' ? 1U : 0U;
-  const std::string_view body = formula.substr(body_at);
+  const std::string_view body = strip_formula_prefix(formula);
+  const std::size_t body_at = formula.size() - body.size();
   if (!strings::case_insensitive_contains(body, "SINGLE(") &&
       !strings::case_insensitive_contains(body, "ANCHORARRAY(") && !strings::case_insensitive_contains(body, "_TRO_")) {
     return std::string(formula);
@@ -191,18 +192,7 @@ std::string display_cell_shaped_names(std::string_view formula) {
     }
     if (c == '"' || c == '\'') {
       // A string literal or a quoted sheet name; a doubled quote escapes one.
-      std::size_t end = i + 1;
-      while (end < formula.size()) {
-        if (formula[end] == c) {
-          if (end + 1 < formula.size() && formula[end + 1] == c) {
-            end += 2;
-            continue;
-          }
-          ++end;
-          break;
-        }
-        ++end;
-      }
+      const std::size_t end = quoted_run_end(formula, i, c);
       out.append(formula.substr(i, end - i));
       i = end;
       continue;

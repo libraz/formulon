@@ -16,19 +16,6 @@ namespace {
 
 constexpr std::size_t kMaxIndexDigits = 9;
 
-int HexValue(char c) noexcept {
-  if (strings::is_ascii_digit(c)) {
-    return c - '0';
-  }
-  if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  }
-  if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  }
-  return -1;
-}
-
 bool IsSeparator(char c) noexcept {
   return c == '/' || c == '\\';
 }
@@ -161,21 +148,12 @@ std::size_t ParseBareQualifier(std::string_view s, std::size_t pos, Qualifier* q
 // after the `!`, or npos when it is not an indexed external qualifier.
 std::size_t ParseQuotedQualifier(std::string_view s, std::size_t pos, std::string* content, Qualifier* q) {
   content->clear();
-  std::size_t i = pos + 1;
-  for (;; ++i) {
-    if (i >= s.size()) {
-      return std::string_view::npos;
-    }
-    if (s[i] == '\'') {
-      if (i + 1 < s.size() && s[i + 1] == '\'') {
-        ++i;
-      } else {
-        break;
-      }
-    }
-    content->push_back(s[i]);
+  const std::size_t close = quoted_run_close(s, pos, '\'');
+  if (close == std::string_view::npos) {
+    return std::string_view::npos;
   }
-  const std::size_t after = i + 1;
+  append_unquoted(s.substr(pos + 1, close - pos - 1), '\'', *content);
+  const std::size_t after = close + 1;
   if (after >= s.size() || s[after] != '!') {
     return std::string_view::npos;
   }
@@ -200,23 +178,6 @@ std::size_t ParseQuotedQualifier(std::string_view s, std::size_t pos, std::strin
     }
   }
   return after + 1;
-}
-
-// The index just past the `quote`-delimited run opening at `pos`, in which a
-// doubled quote is literal; the end of `s` when the run is unterminated.
-std::size_t QuotedRunEnd(std::string_view s, std::size_t pos, char quote) noexcept {
-  std::size_t j = pos + 1;
-  while (j < s.size()) {
-    if (s[j] == quote) {
-      if (j + 1 < s.size() && s[j + 1] == quote) {
-        ++j;
-      } else {
-        break;
-      }
-    }
-    ++j;
-  }
-  return j < s.size() ? j + 1 : s.size();
 }
 
 // True when a defined name (not a cell, area, number or boolean) starts at
@@ -269,8 +230,11 @@ std::string percent_decode(std::string_view s) {
   std::string out;
   out.reserve(s.size());
   for (std::size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '%' && i + 2 < s.size() && HexValue(s[i + 1]) >= 0 && HexValue(s[i + 2]) >= 0) {
-      out.push_back(static_cast<char>(HexValue(s[i + 1]) * 16 + HexValue(s[i + 2])));
+    const bool escape = s[i] == '%' && i + 2 < s.size();
+    const int high = escape ? strings::hex_digit_value(s[i + 1]) : -1;
+    const int low = escape ? strings::hex_digit_value(s[i + 2]) : -1;
+    if (high >= 0 && low >= 0) {
+      out.push_back(static_cast<char>(high * 16 + low));
       i += 2;
     } else {
       out.push_back(s[i]);
@@ -291,7 +255,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
   while (i < stored.size()) {
     const char c = stored[i];
     if (c == '"') {
-      const std::size_t j = QuotedRunEnd(stored, i, '"');
+      const std::size_t j = quoted_run_end(stored, i, '"');
       out.append(stored.substr(i, j - i));
       i = j;
       continue;
@@ -305,7 +269,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
         continue;
       }
       // Copy the quoted name whole so brackets inside it are not scanned.
-      const std::size_t j = QuotedRunEnd(stored, i, '\'');
+      const std::size_t j = quoted_run_end(stored, i, '\'');
       out.append(stored.substr(i, j - i));
       i = j;
       continue;
@@ -332,9 +296,10 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
 }
 
 std::string spell_self_book_names(std::string_view text, std::string_view file_name) {
-  if (file_name.empty() || text.find("[0]!") == std::string_view::npos) {
+  if (file_name.empty() || text.find(detail::kSelfBookQualifier) == std::string_view::npos) {
     return std::string(text);
   }
+  constexpr std::size_t kQualifierLen = detail::kSelfBookQualifier.size();
   std::string book;
   append_sheet_name_quoted_if(file_name, self_book_name_needs_quoting(file_name), book);
   std::string out;
@@ -343,15 +308,16 @@ std::string spell_self_book_names(std::string_view text, std::string_view file_n
   while (i < text.size()) {
     const char c = text[i];
     if (c == '"' || c == '\'') {
-      const std::size_t j = QuotedRunEnd(text, i, c);
+      const std::size_t j = quoted_run_end(text, i, c);
       out.append(text.substr(i, j - i));
       i = j;
       continue;
     }
-    if (text.compare(i, 4, "[0]!") == 0 && (i == 0 || !ContinuesOperand(text[i - 1])) && NameStartsAt(text, i + 4)) {
+    if (text.compare(i, kQualifierLen, detail::kSelfBookQualifier) == 0 && (i == 0 || !ContinuesOperand(text[i - 1])) &&
+        NameStartsAt(text, i + kQualifierLen)) {
       out.append(book);
       out.push_back('!');
-      i += 4;
+      i += kQualifierLen;
       continue;
     }
     out.push_back(c);
@@ -372,24 +338,21 @@ std::string bind_self_book_names(std::string_view text, std::string_view file_na
   while (i < text.size()) {
     const char c = text[i];
     if (c == '"') {
-      const std::size_t j = QuotedRunEnd(text, i, '"');
+      const std::size_t j = quoted_run_end(text, i, '"');
       out.append(text.substr(i, j - i));
       i = j;
       continue;
     }
     if (c == '\'' && depth == 0) {
-      const std::size_t j = QuotedRunEnd(text, i, '\'');
+      const std::size_t j = quoted_run_end(text, i, '\'');
       const bool closed = j - i >= 2 && text[j - 1] == '\'';
       content.clear();
-      for (std::size_t k = i + 1; closed && k + 1 < j; ++k) {
-        content.push_back(text[k]);
-        if (text[k] == '\'') {
-          ++k;
-        }
+      if (closed) {
+        append_unquoted(text.substr(i + 1, j - i - 2), '\'', content);
       }
       if (closed && j < text.size() && text[j] == '!') {
         if (strings::case_insensitive_eq(content, file_name) && NameStartsAt(text, j + 1)) {
-          out.append("[0]!");
+          out.append(detail::kSelfBookQualifier);
           i = j + 1;
           continue;
         }
@@ -423,7 +386,7 @@ std::string bind_self_book_names(std::string_view text, std::string_view file_na
       const std::size_t end = ScanRun(text, i);
       if (end < text.size() && text[end] == '!' && strings::case_insensitive_eq(text.substr(i, end - i), file_name) &&
           NameStartsAt(text, end + 1)) {
-        out.append("[0]!");
+        out.append(detail::kSelfBookQualifier);
         i = end + 1;
         continue;
       }

@@ -22,9 +22,9 @@ using detail::SpanRange;
 
 namespace {
 
-// Returns true iff `name` starts with `[A-Za-z_\]` or any non-ASCII (UTF-8
-// continuation) byte, and continues with `[A-Za-z0-9_.?]` plus non-ASCII
-// bytes. Length must be non-zero and within kMaxDefinedNameBytes. This mirrors the
+// Returns true iff `name` starts with `[A-Za-z_\]` or any non-ASCII byte, and
+// continues with `[A-Za-z0-9_.?]` plus non-ASCII bytes. Length must be non-zero
+// and within kMaxDefinedNameBytes. This mirrors the
 // tokenizer's identifier rule (`Tokenizer::is_ident_start_byte` /
 // `formula_prefix_is_ident_byte`) and matches the identifier shape Excel accepts for
 // LET bindings and defined names, including hiragana / katakana / kanji and
@@ -60,32 +60,6 @@ bool IsBindingName(std::string_view name) noexcept {
 // ---------------------------------------------------------------------------
 // LET bindings
 // ---------------------------------------------------------------------------
-
-bool Parser::parse_let_binding_name(std::string_view* out_name, TextRange* out_range) {
-  // The binding-name slot accepts a single Ident token. CellRef tokens
-  // (produced for patterns that match the A1 shape) are rejected because the
-  // tokenizer already routed them away from Ident; this is the expected
-  // behaviour for names like `A1` that collide with cell refs.
-  const Token& tok = peek();
-  if (tok.kind == TokenKind::CellRef) {
-    record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
-    advance();
-    return false;
-  }
-  if (tok.kind != TokenKind::Ident) {
-    record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
-    return false;
-  }
-  if (!IsBindingName(tok.lexeme)) {
-    record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
-    advance();
-    return false;
-  }
-  *out_name = tok.lexeme;
-  *out_range = tok.range;
-  advance();
-  return true;
-}
 
 AstNode* Parser::parse_let_call(const Token& name_tok) {
   const TextRange call_start = name_tok.range;
@@ -149,21 +123,8 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
     const bool is_name_slot =
         (peek_kind() == TokenKind::Ident) && IsBindingName(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
     if (is_name_slot) {
-      std::string_view name;
-      // The name's source span is written via parse_let_binding_name; we do
-      // not currently attach it to the LetBinding node, but keeping the slot
-      // lets that diagnostic link land without another signature change.
-      TextRange name_range{};
-      if (!parse_let_binding_name(&name, &name_range)) {
-        (void)name_range;
-        skip_to_sync(SyncContext::CallArg);
-        if (peek_kind() == TokenKind::Comma) {
-          advance();
-        }
-        continue;
-      }
-      // parse_let_binding_name already advanced over the name; the next
-      // token is the comma guaranteed by `is_name_slot`.
+      const std::string_view name = peek().lexeme;
+      advance();  // Ident
       advance();  // Comma
       AstNode* expr = parse_expression(0, SyncContext::CallArg);
       if (expr == nullptr) {
@@ -287,14 +248,7 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
       // Reject duplicates within a single LAMBDA: the second occurrence
       // would shadow the first at runtime, which is almost certainly a bug
       // and which Excel itself rejects.
-      bool duplicate = false;
-      for (const auto& existing : params) {
-        if (strings::case_insensitive_eq(existing, pname)) {
-          duplicate = true;
-          break;
-        }
-      }
-      if (duplicate) {
+      if (detail::ContainsNameIgnoreCase(params, pname)) {
         record_error_with_token(ParseErrorCode::LambdaDuplicateParam, tok.range, tok.lexeme);
         if (optional) {
           advance();  // LBracket

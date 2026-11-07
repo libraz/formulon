@@ -29,6 +29,13 @@ struct StructuredRefSpecifiers {
   static constexpr std::uint8_t kHeaders = 1u << 2u;
   static constexpr std::uint8_t kTotals = 1u << 3u;
   static constexpr std::uint8_t kThisRow = 1u << 4u;
+
+  /// The spellings of the specifiers, as Excel stores them.
+  static constexpr std::string_view kAllWord = "#All";
+  static constexpr std::string_view kHeadersWord = "#Headers";
+  static constexpr std::string_view kDataWord = "#Data";
+  static constexpr std::string_view kTotalsWord = "#Totals";
+  static constexpr std::string_view kThisRowWord = "#This Row";
 };
 
 /// A parsed bracket payload.

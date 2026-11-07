@@ -71,6 +71,37 @@ inline constexpr std::size_t kMaxDefinedNameBytes = 255;
 inline constexpr std::string_view kIdeographicSpace = "\xE3\x80\x80";
 inline constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
 
+// Book index and `[index]!` spelling of the formula's own workbook in a stored
+// defined-name reference (`[0]!Name`).
+inline constexpr std::string_view kSelfBookIndex = "0";
+inline constexpr std::string_view kSelfBookQualifier = "[0]!";
+
+// Sentinel for a lexer error with no source byte position.
+inline constexpr std::uint32_t kNoBytePos = 0xFFFFFFFFU;
+
+// True for the token shape `[ Number ] !` that opens a workbook-index qualifier.
+inline constexpr bool IsBookIndexQualifier(TokenKind first, TokenKind second, TokenKind third,
+                                           TokenKind fourth) noexcept {
+  return first == TokenKind::LBracket && second == TokenKind::Number && third == TokenKind::RBracket &&
+         fourth == TokenKind::Bang;
+}
+
+// ASCII space, tab, CR and LF: the formula whitespace Excel accepts.
+inline constexpr bool IsFormulaWhitespace(char c) noexcept {
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+// True when `names` holds `name` under ASCII case folding.
+template <typename Names>
+inline bool ContainsNameIgnoreCase(const Names& names, std::string_view name) noexcept {
+  for (const std::string_view existing : names) {
+    if (strings::case_insensitive_eq(existing, name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // True when every byte of `text` is an ASCII digit (vacuously for empty text).
 inline bool IsAllAsciiDigits(std::string_view text) noexcept {
   for (const char c : text) {

@@ -231,8 +231,8 @@ void FilterWhitespaceTokens(const std::vector<Token>& raw, std::vector<Token>& t
   // A `[` opens an intersection RHS only as a workbook-index name qualifier
   // (`A1:A5 [0]!Rng`); any other bracket belongs to a structured reference.
   auto is_book_qualifier_at = [&raw](std::size_t j) noexcept {
-    return j + 3 < raw.size() && raw[j].kind == TokenKind::LBracket && raw[j + 1].kind == TokenKind::Number &&
-           raw[j + 2].kind == TokenKind::RBracket && raw[j + 3].kind == TokenKind::Bang;
+    return j + 3 < raw.size() &&
+           detail::IsBookIndexQualifier(raw[j].kind, raw[j + 1].kind, raw[j + 2].kind, raw[j + 3].kind);
   };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
@@ -500,7 +500,7 @@ AstNode* Parser::parse() {
       // Fallback: errors without a lexeme cannot be range-correlated; flag
       // them as "always preserve" by writing a sentinel that no span will
       // match.
-      lexer_error_byte_starts.push_back(static_cast<std::uint32_t>(-1));
+      lexer_error_byte_starts.push_back(detail::kNoBytePos);
     }
   }
 
@@ -569,7 +569,7 @@ AstNode* Parser::parse() {
   // not surface as user-visible diagnostics.
   if (!struct_ref_byte_spans_.empty() && lexer_errors_last > lexer_errors_first) {
     auto in_struct_span = [this](std::uint32_t byte_pos) noexcept {
-      if (byte_pos == static_cast<std::uint32_t>(-1)) {
+      if (byte_pos == detail::kNoBytePos) {
         return false;
       }
       for (const auto& span : struct_ref_byte_spans_) {
@@ -835,10 +835,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     // Ident-like at the byte level only when treated as literal noise) but
     // must still parse as two separate atoms with the whitespace dropped.
     if (kind == TokenKind::Whitespace) {
-      const NodeKind lk = lhs->kind();
-      const bool lhs_ref_shaped = lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::NameRef ||
-                                  lk == NodeKind::StructuredRef || lk == NodeKind::Call ||
-                                  lk == NodeKind::IntersectOp || lk == NodeKind::UnionOp || is_self_book_name_ref(*lhs);
+      const bool lhs_ref_shaped = lhs->kind() != NodeKind::ErrorPlaceholder && IsRangeOperand(*lhs);
       if (!lhs_ref_shaped) {
         // Treat the retained whitespace as layout: drop it and continue.
         advance();
@@ -874,9 +871,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const bool chain_open = chain_.open(mark);
       const NodeKind lk = chain_open ? NodeKind::RangeOp : lhs->kind();
       const NodeKind rk = rhs->kind();
-      if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
-        record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
-      } else if (!(chain_open || IsRangeOperand(*lhs)) || !IsRangeOperand(*rhs)) {
+      if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef || !(chain_open || IsRangeOperand(*lhs)) ||
+          !IsRangeOperand(*rhs)) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       if (!chain_open) {
@@ -895,15 +891,9 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       node = wrap_trim_ref(lhs, op_tok.trim);
     } else if (kind == TokenKind::Whitespace) {
       // Space-as-intersection. The LHS shape was already validated above.
-      // Validate the RHS shape with the same rules used for `:`, widened by
-      // `UnionOp`: a parenthesised comma list is a reference and therefore a
-      // legal intersection operand (`A1 (B1,C1)`) even though it cannot
-      // close a `:` range. A non-reference RHS records `InvalidRange` but we
-      // still wrap the children so siblings keep parsing.
-      const NodeKind rk = rhs->kind();
-      if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp &&
-          rk != NodeKind::Call && rk != NodeKind::IntersectOp && rk != NodeKind::UnionOp &&
-          rk != NodeKind::ErrorPlaceholder && !is_self_book_name_ref(*rhs)) {
+      // A non-reference RHS records `InvalidRange` but we still wrap the
+      // children so siblings keep parsing.
+      if (!IsRangeOperand(*rhs)) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_intersect_op(arena_, lhs, rhs);
@@ -1008,8 +998,8 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       // never reach this arm: they dispatch through `TokenKind::Ident`
       // to `parse_ident_or_call_or_full_col`, which builds a real
       // `StructuredRef` node.
-      if (peek_kind_at(1) == TokenKind::Number && peek_at(1).lexeme == "0" && peek_kind_at(2) == TokenKind::RBracket &&
-          peek_kind_at(3) == TokenKind::Bang) {
+      if (detail::IsBookIndexQualifier(peek_kind(), peek_kind_at(1), peek_kind_at(2), peek_kind_at(3)) &&
+          peek_at(1).lexeme == detail::kSelfBookIndex) {
         const Token& open = advance();  // LBracket
         const Token& index = advance();
         advance();  // RBracket
@@ -1025,22 +1015,7 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       const bool found_close = close_offset != 0;
       if (found_close && !opts_.bare_structured_ref_table.empty()) {
         // Inside a table, `[...]` names that table.
-        const Token& rbracket = peek_at(close_offset);
-        const auto payload_start = static_cast<std::size_t>(lbracket.lexeme.data() + 1 - source_.data());
-        const auto payload_end = static_cast<std::size_t>(rbracket.lexeme.data() - source_.data());
-        struct_ref_byte_spans_.emplace_back(static_cast<std::uint32_t>(payload_start),
-                                            static_cast<std::uint32_t>(payload_end));
-        const TextRange span = SpanRange(lbracket.range, rbracket.range);
-        for (std::size_t i = 0; i <= close_offset; ++i) {
-          advance();
-        }
-        AstNode* n = make_structured_ref(arena_, opts_.bare_structured_ref_table,
-                                         source_.substr(payload_start, payload_end - payload_start),
-                                         StructuredRefModifier::None);
-        if (n != nullptr) {
-          n->set_range(span);
-        }
-        return n;
+        return consume_structured_ref(opts_.bare_structured_ref_table, lbracket.range, 0, close_offset);
       }
       const ParseErrorCode code =
           found_close ? ParseErrorCode::UnsupportedConstruct : ParseErrorCode::UnbalancedBrackets;

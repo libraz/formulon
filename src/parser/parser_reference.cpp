@@ -110,6 +110,21 @@ bool Parser::decode_full_col_endpoint(const Token& tok, Reference* out) noexcept
   return true;
 }
 
+bool Parser::decode_whole_axis_pair(std::size_t offset, Reference* first, Reference* last) const noexcept {
+  if (peek_kind_at(offset + 1) != TokenKind::Colon) {
+    return false;
+  }
+  const Token& lhs = peek_at(offset);
+  const Token& rhs = peek_at(offset + 2);
+  if (lhs.kind == TokenKind::Ident && rhs.kind == TokenKind::Ident) {
+    return decode_full_col_endpoint(lhs, first) && decode_full_col_endpoint(rhs, last);
+  }
+  if (lhs.kind == TokenKind::Number && rhs.kind == TokenKind::Number) {
+    return decode_full_row_endpoint(lhs, first) && decode_full_row_endpoint(rhs, last);
+  }
+  return false;
+}
+
 bool Parser::decode_full_row_endpoint(const Token& tok, Reference* out) noexcept {
   // The tokenizer keeps an absolute anchor's `$` in the Number lexeme.
   std::string_view lex = tok.lexeme;
@@ -172,12 +187,9 @@ bool Parser::defined_name_at(std::size_t offset) const noexcept {
   if (peek_kind_at(offset) != TokenKind::Ident) {
     return false;
   }
-  if (peek_kind_at(offset + 1) == TokenKind::Colon && peek_kind_at(offset + 2) == TokenKind::Ident) {
-    Reference lhs;
-    Reference rhs;
-    return !(decode_full_col_endpoint(peek_at(offset), &lhs) && decode_full_col_endpoint(peek_at(offset + 2), &rhs));
-  }
-  return true;
+  Reference lhs;
+  Reference rhs;
+  return !decode_whole_axis_pair(offset, &lhs, &rhs);
 }
 
 bool Parser::sheet_span_end_at(std::size_t offset) const noexcept {
@@ -272,7 +284,7 @@ AstNode* Parser::parse_external_ref_tail(std::string_view path, std::string_view
 
   // `[0]` is the formula's own workbook, which Excel only writes in the
   // name form (`[0]!Name`, the storage spelling of `Book!Name`).
-  if (book == "0" && path.empty() && !sheet.empty()) {
+  if (book == detail::kSelfBookIndex && path.empty() && !sheet.empty()) {
     record_error_with_token(ParseErrorCode::InvalidReference, start_range, "[0]");
     return nullptr;
   }
@@ -394,28 +406,17 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   // `Sheet1!A:C` / `Sheet1!1:3`. The sheet qualifier stays on the left
   // endpoint, matching how `Sheet1!A1:B2` parses. Columns that fail to
   // decode fall through to the defined-name case below.
-  const bool col_pair =
-      k == TokenKind::Ident && peek_kind_at(1) == TokenKind::Colon && peek_kind_at(2) == TokenKind::Ident;
-  const bool row_pair =
-      k == TokenKind::Number && peek_kind_at(1) == TokenKind::Colon && peek_kind_at(2) == TokenKind::Number;
-  if (col_pair || row_pair) {
-    const Token& lhs_tok = peek();
-    const Token& rhs_tok = peek_at(2);
-    Reference lhs_ref;
-    Reference rhs_ref;
-    const bool decoded =
-        col_pair ? decode_full_col_endpoint(lhs_tok, &lhs_ref) && decode_full_col_endpoint(rhs_tok, &rhs_ref)
-                 : decode_full_row_endpoint(lhs_tok, &lhs_ref) && decode_full_row_endpoint(rhs_tok, &rhs_ref);
-    if (decoded) {
-      const TextRange lhs_range = SpanRange(sheet_range, lhs_tok.range);
-      const TextRange rhs_range = rhs_tok.range;
-      advance();
-      advance();
-      advance();
-      lhs_ref.sheet = sheet;
-      lhs_ref.sheet_quoted = quoted;
-      return make_whole_axis_ref(lhs_ref, rhs_ref, lhs_range, rhs_range);
-    }
+  Reference lhs_ref;
+  Reference rhs_ref;
+  if (decode_whole_axis_pair(0, &lhs_ref, &rhs_ref)) {
+    const TextRange lhs_range = SpanRange(sheet_range, peek().range);
+    const TextRange rhs_range = peek_at(2).range;
+    advance();
+    advance();
+    advance();
+    lhs_ref.sheet = sheet;
+    lhs_ref.sheet_quoted = quoted;
+    return make_whole_axis_ref(lhs_ref, rhs_ref, lhs_range, rhs_range);
   }
   if (k == TokenKind::Ident) {
     const Token& name = advance();
@@ -458,23 +459,11 @@ bool Parser::parse_3d_ref_tail(Reference* first, Reference* last, bool* is_range
     }
     return true;
   }
-  const bool col_pair =
-      peek_kind() == TokenKind::Ident && peek_kind_at(1) == TokenKind::Colon && peek_kind_at(2) == TokenKind::Ident;
-  const bool row_pair =
-      peek_kind() == TokenKind::Number && peek_kind_at(1) == TokenKind::Colon && peek_kind_at(2) == TokenKind::Number;
-  if (!col_pair && !row_pair) {
+  if (!decode_whole_axis_pair(0, first, last)) {
     record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
     return false;
   }
-  const Token& lhs = peek();
-  const Token& rhs = peek_at(2);
-  const bool decoded = col_pair ? decode_full_col_endpoint(lhs, first) && decode_full_col_endpoint(rhs, last)
-                                : decode_full_row_endpoint(lhs, first) && decode_full_row_endpoint(rhs, last);
-  if (!decoded) {
-    record_error_with_token(ParseErrorCode::InvalidReference, lhs.range, lhs.lexeme);
-    return false;
-  }
-  *tail_range = rhs.range;
+  *tail_range = peek_at(2).range;
   advance();
   advance();
   advance();

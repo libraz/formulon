@@ -16,6 +16,7 @@
 
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/ast_format_internal.h"
 #include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
@@ -138,8 +139,7 @@ struct Emitter {
       default:
         break;
     }
-    const auto it = parens.find(&node);
-    const std::uint16_t n = it == parens.end() ? 0U : it->second;
+    const std::uint16_t n = detail::ParenCount(parens, node);
     out.append(n, '(');
     emit_bare(node, out);
     out.append(n, ')');
@@ -178,16 +178,6 @@ struct Emitter {
     }
     const bool inside = !display->own_table.empty() && strings::case_insensitive_eq(table, display->own_table);
     out.append(display_structured_ref(table, *payload, inside));
-  }
-
-  void emit_args(std::uint32_t count, const AstNode& (AstNode::*arg)(std::uint32_t) const, const AstNode& node,
-                 std::string& out) const {
-    for (std::uint32_t i = 0; i < count; ++i) {
-      if (i > 0) {
-        out.push_back(',');
-      }
-      emit((node.*arg)(i), out);
-    }
   }
 
   void emit_bare(const AstNode& node, std::string& out) const {
@@ -236,7 +226,7 @@ struct Emitter {
         }
         return;
       case NodeKind::UnionOp:
-        emit_args(node.as_union_arity(), &AstNode::as_union_child, node, out);
+        detail::EmitCommaList(node.as_union_arity(), out, [&](std::uint32_t i) { emit(node.as_union_child(i), out); });
         return;
       case NodeKind::IntersectOp:
         emit(node.as_intersect_lhs(), out);
@@ -265,7 +255,7 @@ struct Emitter {
         }
         out.append(cell_shaped_name_bare(node.as_call_name()));
         out.push_back('(');
-        emit_args(node.as_call_arity(), &AstNode::as_call_arg, node, out);
+        detail::EmitCommaList(node.as_call_arity(), out, [&](std::uint32_t i) { emit(node.as_call_arg(i), out); });
         out.push_back(')');
         return;
       case NodeKind::Lambda: {
@@ -306,7 +296,8 @@ struct Emitter {
       case NodeKind::LambdaCall:
         emit(node.as_lambda_call_callee(), out);
         out.push_back('(');
-        emit_args(node.as_lambda_call_arity(), &AstNode::as_lambda_call_arg, node, out);
+        detail::EmitCommaList(node.as_lambda_call_arity(), out,
+                              [&](std::uint32_t i) { emit(node.as_lambda_call_arg(i), out); });
         out.push_back(')');
         return;
       case NodeKind::NameRef:
@@ -334,7 +325,7 @@ struct Emitter {
 std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, std::uint32_t anchor_col,
                                 const StructuredRefDisplay* display) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
-    return "#REF!";
+    return std::string(display_name(ErrorCode::Ref));
   }
   Emitter emitter{{static_cast<std::int64_t>(anchor_row), static_cast<std::int64_t>(anchor_col)}, {}, display};
   collect_parenthesized_nodes(node, emitter.parens);

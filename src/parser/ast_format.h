@@ -140,11 +140,6 @@ enum class StoragePrefixKind {
   XlfnXlws,  ///< Worksheet-only dynamic-array function: `_xlfn._xlws.` prefix.
 };
 
-/// Classifies a canonical (unprefixed, upper-case) function name into the
-/// storage prefix Excel writes for it. Supplied by the writer so this
-/// header stays free of the function catalog.
-using StoragePrefixClassifier = StoragePrefixKind (*)(std::string_view canonical_name);
-
 /// Spells the exact function name a stored formula carries for a call
 /// written as `name`: the storage prefix plus whatever spelling Excel
 /// itself stores, which is not always the one the user typed (a

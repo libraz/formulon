@@ -271,13 +271,13 @@ class Parser {
   // matches Mac Excel by parsing as the body-only form. On any validation
   // failure the helper records a diagnostic and returns an `ErrorPlaceholder`.
   AstNode* parse_lambda_call(const Token& name_tok);
-  // Parses a bare identifier in a LET binding-name slot. Enforces Excel's
-  // name-shape rules (leading letter/underscore, subsequent letters/digits/
-  // underscore/period/question-mark, length <= 255) and forbids names that
-  // would parse as A1-style cell references. Records diagnostics and returns
-  // false on failure; on success writes the identifier text into `*out_name`
-  // and the token range into `*out_range`.
-  bool parse_let_binding_name(std::string_view* out_name, TextRange* out_range);
+
+  // Consumes a balanced bracket group (`[` at `peek_at(lbracket_offset)`, `]` at
+  // `peek_at(close_offset)`) and every token before it as a StructuredRef of
+  // `table_name`, spanning from `start_range`. Records the payload byte span so
+  // lexer diagnostics inside it are dropped.
+  AstNode* consume_structured_ref(std::string_view table_name, const TextRange& start_range,
+                                  std::size_t lbracket_offset, std::size_t close_offset);
 
   // Builds a Reference from a CellRef token's lexeme.
   bool decode_cellref_lexeme(std::string_view lex, Reference* out) noexcept;
@@ -290,18 +290,15 @@ class Parser {
   // Decodes a whole-row endpoint (`1`, `$3`) from an integer Number token
   // into `out`'s row fields. Returns false when it is not a valid row.
   static bool decode_full_row_endpoint(const Token& tok, Reference* out) noexcept;
+  // True when the three tokens at `offset` are a whole-column (`A:C`) or
+  // whole-row (`1:3`) pair whose endpoints both decode; fills `first` / `last`.
+  bool decode_whole_axis_pair(std::size_t offset, Reference* first, Reference* last) const noexcept;
   // Builds the node for a whole-column / whole-row pair: `lhs` alone when
   // both endpoints name the same column or row, otherwise a RangeOp over
   // the two. The result spans [`lhs_range`, `rhs_range`].
   AstNode* make_whole_axis_ref(const Reference& lhs, const Reference& rhs, TextRange lhs_range, TextRange rhs_range);
 
-  // Promotes any tokenizer-level errors into `errors_`. Errors whose
-  // source byte-range falls inside one of the parser-recognised
-  // structured-reference bracket payloads (see `struct_ref_byte_spans_`)
-  // are suppressed: the tokenizer flags `[#All]`, `[#Headers]`, ... as
-  // `InvalidErrorLiteral` because they do not match the canonical error
-  // catalogue, but the parser handles them as opaque payload bytes so
-  // they should not surface as user-visible diagnostics.
+  // Promotes the tokenizer-level errors into `errors_`.
   void promote_lexer_errors(const std::vector<LexerError>& lex_errors);
 
   // Source + token storage.

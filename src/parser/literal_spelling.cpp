@@ -11,6 +11,7 @@
 #include "parser/token.h"
 #include "parser/tokenizer.h"
 #include "utils/double_format.h"
+#include "utils/formula_text.h"
 
 namespace formulon {
 namespace parser {
@@ -32,7 +33,7 @@ struct TokenWalk {
 };
 
 [[gnu::noinline]] TokenWalk::TokenWalk(std::string_view formula)
-    : tokenizer(formula.substr(!formula.empty() && formula.front() == '=' ? 1U : 0U)), tokens(tokenizer.tokens()) {}
+    : tokenizer(strip_formula_prefix(formula)), tokens(tokenizer.tokens()) {}
 
 [[gnu::noinline]] bool TokenWalk::advance() noexcept {
   if (++i >= tokens.size() || tokens[i].kind == TokenKind::Eof) {

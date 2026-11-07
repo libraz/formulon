@@ -66,6 +66,16 @@ struct Reference {
 /// doubled per Excel's escaping convention.
 std::string format_a1(const Reference& r);
 
+/// Appends `format_a1(r)` to `out`.
+void append_a1(const Reference& r, std::string& out);
+
+/// `r` without its sheet qualifier.
+inline Reference without_sheet(Reference r) {
+  r.sheet = {};
+  r.sheet_quoted = false;
+  return r;
+}
+
 /// True iff `lhs` and `rhs`, the two halves of a whole-column or whole-row
 /// token (`A:C`, `1:3`), name one axis index with the same anchoring, so the
 /// token is the single whole-axis `Reference` (`A:A`, `$1:$1`). `$A:A`

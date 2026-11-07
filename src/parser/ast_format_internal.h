@@ -30,6 +30,24 @@ void AppendBindingName(std::string_view raw, bool storage, std::string& out);
 bool AppendCellShapedCallName(std::string_view raw, const NameScope& scope, std::string& out);
 void AppendNameRef(const AstNode& node, const NameScope& scope, std::string& out);
 
+// The parentheses printed around `node`; `ParenCounts` is decided once by
+// `CollectParens` for the formatters and the XLSB encoder alike.
+inline std::uint16_t ParenCount(const ParenCounts& parens, const AstNode& node) {
+  const auto it = parens.find(&node);
+  return it == parens.end() ? 0U : it->second;
+}
+
+// Emits `count` items separated by commas; `emit_at(i)` writes item `i`.
+template <typename EmitAt>
+void EmitCommaList(std::uint32_t count, std::string& out, EmitAt&& emit_at) {
+  for (std::uint32_t i = 0; i < count; ++i) {
+    if (i > 0) {
+      out.push_back(',');
+    }
+    emit_at(i);
+  }
+}
+
 void CollectParens(const AstNode& node, int min_bp, ParenCounts& out);
 bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept;
 

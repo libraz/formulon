@@ -17,9 +17,11 @@
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
+#include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 
 namespace formulon {
 namespace parser {
@@ -173,10 +175,7 @@ const AstNode* MakeSingleSheetRef(Arena& arena, std::string_view sheet, const Re
   if (lhs_node == nullptr || last == nullptr) {
     return lhs_node;
   }
-  Reference rhs = *last;
-  rhs.sheet = {};
-  rhs.sheet_quoted = false;
-  AstNode* rhs_node = make_ref(arena, rhs);
+  AstNode* rhs_node = make_ref(arena, without_sheet(*last));
   if (rhs_node == nullptr) {
     return nullptr;
   }
@@ -263,7 +262,7 @@ const AstNode* TransformNameRef(const AstNode& node, Arena& arena, const RefTran
   const std::optional<std::string_view> mapped = transform.apply_name_sheet(sheet);
   if (!mapped.has_value()) {
     if (transform.rebinds_name_to_book(sheet, node.as_name())) {
-      return make_external_name_ref(arena, "", "0", "", node.as_name());
+      return make_external_name_ref(arena, "", detail::kSelfBookIndex, "", node.as_name());
     }
     return MakeRefError(arena);
   }
@@ -349,11 +348,7 @@ Reference OnSheetOf(const Reference& ref, const Reference* owner) noexcept {
 // by its name alone, so the lent qualifier came back as the owner's image
 // and the operand keeps Excel's bare spelling (`Sheet1!A1:A10`).
 Reference BareAgain(const Reference& orig, Reference rewritten) noexcept {
-  if (orig.sheet.empty()) {
-    rewritten.sheet = {};
-    rewritten.sheet_quoted = false;
-  }
-  return rewritten;
+  return orig.sheet.empty() ? without_sheet(rewritten) : rewritten;
 }
 
 // Rewrites a `:` chain token by token, as Excel tokenises it. An area token
@@ -711,19 +706,14 @@ const AstNode* shift_refs(const AstNode& root, Arena& arena, const RefTransform&
 FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransform& transform) {
   FormulaRewriteResult out;
   out.text.assign(formula);
-  std::string_view body = formula;
-  bool had_equals = false;
-  if (!body.empty() && body.front() == '=') {
-    body = body.substr(1);
-    had_equals = true;
-  }
+  const std::string_view body = strip_formula_prefix(formula);
+  const bool had_equals = body.size() != formula.size();
   if (body.empty()) {
     return out;
   }
   Arena arena;
-  Parser parser(body, arena);
-  AstNode* root = parser.parse();
-  if (root == nullptr || !parser.errors().empty()) {
+  const AstNode* root = parse_strict(body, arena);
+  if (root == nullptr) {
     out.error = true;
     return out;
   }
@@ -749,8 +739,7 @@ const AstNode* shift_relative_refs(const AstNode& root, Arena& arena, std::int32
   if (!ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
     return MakeRefError(arena);
   }
-  RelativeShiftTransform transform(row_delta, col_delta);
-  return TransformNode(root, arena, transform);
+  return shift_refs(root, arena, RelativeShiftTransform(row_delta, col_delta));
 }
 
 }  // namespace parser

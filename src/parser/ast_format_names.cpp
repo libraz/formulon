@@ -10,6 +10,7 @@
 #include "parser/ast_format.h"
 #include "parser/ast_format_internal.h"
 #include "parser/formula_prefix.h"
+#include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "utils/strings.h"
 
@@ -57,12 +58,7 @@ void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
 
 // Case-insensitive: Excel folds ASCII case on name resolution.
 bool InScope(const NameScope& scope, std::string_view bare) {
-  for (const std::string_view s : scope) {
-    if (strings::case_insensitive_eq(s, bare)) {
-      return true;
-    }
-  }
-  return false;
+  return detail::ContainsNameIgnoreCase(scope, bare);
 }
 
 bool HasParamPrefix(std::string_view name) noexcept {

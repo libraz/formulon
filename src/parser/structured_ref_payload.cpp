@@ -12,7 +12,6 @@
 #include <utility>
 #include <vector>
 
-#include "parser/parser_detail.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -27,8 +26,8 @@ struct SpecWord {
   std::string_view word;
 };
 constexpr SpecWord kSpecWords[] = {
-    {Specs::kAll, "#All"},       {Specs::kHeaders, "#Headers"},  {Specs::kData, "#Data"},
-    {Specs::kTotals, "#Totals"}, {Specs::kThisRow, "#This Row"},
+    {Specs::kAll, Specs::kAllWord},       {Specs::kHeaders, Specs::kHeadersWord}, {Specs::kData, Specs::kDataWord},
+    {Specs::kTotals, Specs::kTotalsWord}, {Specs::kThisRow, Specs::kThisRowWord},
 };
 
 std::uint8_t ClassifySpecifier(std::string_view text) noexcept {

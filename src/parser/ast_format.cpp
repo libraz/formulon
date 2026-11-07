@@ -20,6 +20,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
+#include "parser/structured_ref_payload.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -35,6 +36,7 @@ using detail::AppendCellShapedCallName;
 using detail::AppendNameRef;
 using detail::AppendParamName;
 using detail::CollectParens;
+using detail::EmitCommaList;
 using detail::HasParamPrefix;
 using detail::InScope;
 using detail::kBpAtPrefix;
@@ -44,14 +46,8 @@ using detail::kBpPostfixPercent;
 using detail::kBpRange;
 using detail::kBpUnaryPrefix;
 using detail::NameScope;
+using detail::ParenCount;
 using detail::PrintsSpliced;
-
-// `ParenCounts` is decided once by `CollectParens` for the formatters and the
-// XLSB encoder alike.
-std::uint16_t ParenCount(const ParenCounts& parens, const AstNode& node) {
-  const auto it = parens.find(&node);
-  return it == parens.end() ? 0U : it->second;
-}
 
 // What the canonical formatter prints around each node besides its text.
 struct Layout {
@@ -142,35 +138,31 @@ void FormatLiteral(const Value& v, std::string& out, bool parenthesise_negative 
 }
 
 void FormatRef(const Reference& r, std::string& out) {
-  // format_a1 already handles sheet-quoted vs bare and full-col / full-row.
-  out.append(format_a1(r));
+  // append_a1 already handles sheet-quoted vs bare and full-col / full-row.
+  append_a1(r, out);
 }
 
 // Appends the sheet-less cell part of a reference tail in A1 notation: a
 // cell, a rectangle, or a whole column / row span (`A:C`, never `A:A:C:C`).
 void AppendSheetlessArea(const Reference& first, const Reference& last, bool is_range, std::string& out) {
-  Reference cell_no_sheet = first;
-  cell_no_sheet.sheet = {};
-  cell_no_sheet.sheet_quoted = false;
-  const std::string first_text = format_a1(cell_no_sheet);
+  const Reference first_ref = without_sheet(first);
+  const std::size_t first_start = out.size();
+  append_a1(first_ref, out);
   if (!is_range) {
-    out.append(first_text);
     return;
   }
-  Reference end_no_sheet = last;
-  end_no_sheet.sheet = {};
-  end_no_sheet.sheet_quoted = false;
-  const std::string end_text = format_a1(end_no_sheet);
-  if ((cell_no_sheet.is_full_col && end_no_sheet.is_full_col) ||
-      (cell_no_sheet.is_full_row && end_no_sheet.is_full_row)) {
-    out.append(first_text, 0, first_text.find(':'));
-    out.push_back(':');
-    out.append(end_text, 0, end_text.find(':'));
-    return;
+  const Reference end_ref = without_sheet(last);
+  const bool axis_span =
+      (first_ref.is_full_col && end_ref.is_full_col) || (first_ref.is_full_row && end_ref.is_full_row);
+  if (axis_span) {
+    out.resize(out.find(':', first_start));
   }
-  out.append(first_text);
   out.push_back(':');
-  out.append(end_text);
+  const std::size_t end_start = out.size();
+  append_a1(end_ref, out);
+  if (axis_span) {
+    out.resize(out.find(':', end_start));
+  }
 }
 
 // A `#REF!` with its collapse site: `Sheet3!#REF!` in both forms; a dead
@@ -201,7 +193,7 @@ bool IsDecimal(std::string_view text) noexcept {
 // shape a stored formula carries.
 void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookIndexer* indexer, std::string& out) {
   if (is_self_book_name_ref(node)) {
-    out.append("[0]!");
+    out.append(detail::kSelfBookQualifier);
     return;
   }
   std::string_view path = node.as_external_ref_path();
@@ -323,19 +315,19 @@ void FormatStructuredRef(const AstNode& node, std::string& out) {
     out.push_back(']');
     return;
   }
-  const char* spec = nullptr;
+  std::string_view spec;
   switch (mod) {
     case StructuredRefModifier::Headers:
-      spec = "#Headers";
+      spec = StructuredRefSpecifiers::kHeadersWord;
       break;
     case StructuredRefModifier::Data:
-      spec = "#Data";
+      spec = StructuredRefSpecifiers::kDataWord;
       break;
     case StructuredRefModifier::Totals:
-      spec = "#Totals";
+      spec = StructuredRefSpecifiers::kTotalsWord;
       break;
     case StructuredRefModifier::All:
-      spec = "#All";
+      spec = StructuredRefSpecifiers::kAllWord;
       break;
     case StructuredRefModifier::None:
     case StructuredRefModifier::At:
@@ -411,17 +403,6 @@ void FormatIntersect(const AstNode& node, std::string& out, const Layout& layout
   AppendWhitespace(layout, node, WhitespaceSlot::kBeforeOperator, 0, out);
   out.push_back(' ');
   FormatNode(node.as_intersect_rhs(), out, layout);
-}
-
-// Emits `count` items separated by commas; `emit_at(i)` writes item `i`.
-template <typename EmitAt>
-void EmitCommaList(std::uint32_t count, std::string& out, EmitAt&& emit_at) {
-  for (std::uint32_t i = 0; i < count; ++i) {
-    if (i > 0) {
-      out.push_back(',');
-    }
-    emit_at(i);
-  }
 }
 
 // Emits an array constant; `emit_element` writes one element.
@@ -679,7 +660,7 @@ struct StorageEmitter {
         // eval/dynamic_array/anchor.h), not the bare `<ref>#` the canonical
         // formatter uses. `append_function_name` supplies the `_xlfn.`
         // prefix the same way it does for any other future function.
-        append_function_name(out, "ANCHORARRAY");
+        append_function_name(out, kAnchorArrayFn);
         out.push_back('(');
         if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
           emit(*anchor, out);
@@ -761,7 +742,7 @@ struct StorageEmitter {
           return;
         }
         // Excel stores a written `@` as a call to `_xlfn.SINGLE`.
-        append_function_name(out, "SINGLE");
+        append_function_name(out, kSingleFn);
         out.push_back('(');
         emit(node.as_implicit_intersection_operand(), out);
         out.push_back(')');
@@ -931,7 +912,7 @@ std::string format_formula(const AstNode& node, const FormulaWhitespace* whitesp
 std::string format_formula_in_scope(const AstNode& node, const std::vector<std::string_view>& scope_names,
                                     const FormulaWhitespace* whitespace) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
-    return "#REF!";
+    return std::string(display_name(ErrorCode::Ref));
   }
   NameScope scope;
   scope.reserve(scope_names.size());
@@ -952,7 +933,7 @@ std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpell
                                    const std::vector<const AstNode*>* omitted_at, const ExternalBookIndexer* indexer,
                                    const std::vector<const AstNode*>* function_values) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
-    return "#REF!";
+    return std::string(display_name(ErrorCode::Ref));
   }
   StorageEmitter emitter{spell, {}, omitted_at, indexer, function_values, {}};
   CollectParens(node, 0, emitter.parens);

@@ -31,11 +31,15 @@ bool InternChecked(Arena& arena, std::string_view source, std::string_view* dest
   return source.empty() || !destination->empty();
 }
 
-// `ref` without its sheet qualifier.
-Reference SheetlessCopy(Reference ref) {
-  ref.sheet = {};
-  ref.sheet_quoted = false;
-  return ref;
+// A fresh external-ref payload holding the interned qualifier; null on failure.
+template <typename Payload>
+Payload* NewExternalPayload(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet) {
+  auto* payload = arena.create<Payload>();
+  if (payload == nullptr || !InternChecked(arena, path, &payload->path) ||
+      !InternChecked(arena, book, &payload->book) || !InternChecked(arena, sheet, &payload->sheet)) {
+    return nullptr;
+  }
+  return payload;
 }
 
 // Copies an array of N const AstNode pointers into arena-owned storage.
@@ -334,8 +338,8 @@ AstNode* AstNode::make_ref3d_node(Arena& arena, std::string_view sheet_begin, st
   }
   // The span endpoints carry the sheet identity; the inner cell refs are
   // always sheet-less.
-  payload->cell = SheetlessCopy(cell);
-  payload->cell_end = SheetlessCopy(cell_end);
+  payload->cell = without_sheet(cell);
+  payload->cell_end = without_sheet(cell_end);
   payload->is_range = is_range;
   AstNode* n = make_node(arena, NodeKind::Ref3D);
   if (n == nullptr) {
@@ -359,19 +363,15 @@ AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view
                            bool is_range) {
   // Heap-allocate the payload for the same reason `make_ref3d` does: the
   // AstNode union has a size budget asserted in ast.h.
-  auto* payload = arena.create<AstNode::ExternalRefPayload>();
-  if (payload == nullptr) {
-    return nullptr;
-  }
-  if (!InternChecked(arena, path, &payload->path) || !InternChecked(arena, book, &payload->book) ||
-      !InternChecked(arena, sheet, &payload->sheet) || !InternChecked(arena, sheet_end, &payload->sheet_end)) {
+  auto* payload = NewExternalPayload<AstNode::ExternalRefPayload>(arena, path, book, sheet);
+  if (payload == nullptr || !InternChecked(arena, sheet_end, &payload->sheet_end)) {
     return nullptr;
   }
   payload->name = {};
   // The payload's `sheet` carries the identity; the corner refs are
   // always sheet-less, matching `make_ref3d`.
-  payload->cell = SheetlessCopy(cell);
-  payload->cell_end = SheetlessCopy(is_range ? cell_end : cell);
+  payload->cell = without_sheet(cell);
+  payload->cell_end = without_sheet(is_range ? cell_end : cell);
   payload->is_range = is_range;
   AstNode* n = AstNode::make_node(arena, NodeKind::ExternalRef);
   if (n == nullptr) {
@@ -383,12 +383,8 @@ AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view
 
 AstNode* make_external_name_ref(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
                                 std::string_view name) {
-  auto* payload = arena.create<AstNode::ExternalRefPayload>();
-  if (payload == nullptr) {
-    return nullptr;
-  }
-  if (!InternChecked(arena, path, &payload->path) || !InternChecked(arena, book, &payload->book) ||
-      !InternChecked(arena, sheet, &payload->sheet) || !InternChecked(arena, name, &payload->name)) {
+  auto* payload = NewExternalPayload<AstNode::ExternalRefPayload>(arena, path, book, sheet);
+  if (payload == nullptr || !InternChecked(arena, name, &payload->name)) {
     return nullptr;
   }
   payload->sheet_end = {};
@@ -780,9 +776,9 @@ AstNode* make_dead_sheet_ref_error(Arena& arena, const Reference* first, const R
   site->form = RefErrorSite::Form::kDeadSheet;
   site->has_address = first != nullptr;
   if (first != nullptr) {
-    site->first = SheetlessCopy(*first);
+    site->first = without_sheet(*first);
     site->is_range = last != nullptr;
-    site->last = SheetlessCopy(last != nullptr ? *last : *first);
+    site->last = without_sheet(last != nullptr ? *last : *first);
   }
   AstNode* n = AstNode::make_node(arena, NodeKind::ErrorLiteral);
   if (n == nullptr) {
@@ -862,7 +858,7 @@ std::vector<const AstNode*> child_nodes(const AstNode& node) {
 }
 
 bool is_self_book_name_ref(const AstNode& node) noexcept {
-  return node.kind() == NodeKind::ExternalRef && node.as_external_ref_book() == "0" &&
+  return node.kind() == NodeKind::ExternalRef && node.as_external_ref_book() == detail::kSelfBookIndex &&
          node.as_external_ref_path().empty() && node.as_external_ref_sheet().empty() &&
          !node.as_external_ref_name().empty();
 }

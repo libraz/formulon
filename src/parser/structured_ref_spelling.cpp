@@ -14,8 +14,10 @@
 
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "parser/parser_detail.h"
 #include "parser/structured_ref_payload.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 
@@ -30,19 +32,15 @@ struct Edit {
   std::string text;
 };
 
-bool IsFormulaSpace(char c) noexcept {
-  return c == ' ' || c == '\n' || c == '\r' || c == '\t';
-}
-
 // Byte span of `node` in `body`, without the parentheses written around it.
 Edit NodeSpan(const AstNode& node, std::string_view body) {
   std::size_t start = utf16_to_byte_offset(body, node.range().start);
   std::size_t end = utf16_to_byte_offset(body, node.range().end);
   if (node.paren_depth() > 0U) {
-    while (start < end && (body[start] == '(' || IsFormulaSpace(body[start]))) {
+    while (start < end && (body[start] == '(' || detail::IsFormulaWhitespace(body[start]))) {
       ++start;
     }
-    while (end > start && (body[end - 1U] == ')' || IsFormulaSpace(body[end - 1U]))) {
+    while (end > start && (body[end - 1U] == ')' || detail::IsFormulaWhitespace(body[end - 1U]))) {
       --end;
     }
   }
@@ -50,7 +48,7 @@ Edit NodeSpan(const AstNode& node, std::string_view body) {
 }
 
 std::size_t BodyOffset(std::string_view text) noexcept {
-  return !text.empty() && text.front() == '=' ? 1U : 0U;
+  return text.size() - strip_formula_prefix(text).size();
 }
 
 // Leaves are visited in source order, so the edits are ascending; applying
@@ -92,14 +90,7 @@ struct BindWalk {
   std::vector<std::string_view> bound;
   std::vector<Edit> edits;
 
-  bool is_bound(std::string_view name) const noexcept {
-    for (const std::string_view b : bound) {
-      if (strings::case_insensitive_eq(b, name)) {
-        return true;
-      }
-    }
-    return false;
-  }
+  bool is_bound(std::string_view name) const noexcept { return detail::ContainsNameIgnoreCase(bound, name); }
 
   void bind_structured_ref(const AstNode& node) {
     Edit edit = NodeSpan(node, body);

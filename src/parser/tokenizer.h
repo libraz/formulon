@@ -214,7 +214,6 @@ class Tokenizer {
   std::vector<LexerError> errors_;
   Arena arena_;
   bool done_ = false;
-  bool truncated_ = false;
 
   // The byte offset at which the most recent token that can end a spill
   // anchor finished. Used to disambiguate a trailing `#` into the

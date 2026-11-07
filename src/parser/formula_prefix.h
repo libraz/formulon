@@ -34,6 +34,38 @@
 namespace formulon {
 namespace parser {
 
+/// Index of the `quote` closing the run opened at `pos`, where a doubled
+/// `quote` is literal; `npos` when the run is unterminated.
+inline std::size_t quoted_run_close(std::string_view s, std::size_t pos, char quote) noexcept {
+  for (std::size_t j = pos + 1; j < s.size(); ++j) {
+    if (s[j] == quote) {
+      if (j + 1 >= s.size() || s[j + 1] != quote) {
+        return j;
+      }
+      ++j;
+    }
+  }
+  return std::string_view::npos;
+}
+
+/// The index just past the run opened at `pos`; the end of `s` when it is
+/// unterminated.
+inline std::size_t quoted_run_end(std::string_view s, std::size_t pos, char quote) noexcept {
+  const std::size_t close = quoted_run_close(s, pos, quote);
+  return close == std::string_view::npos ? s.size() : close + 1;
+}
+
+/// Appends `inner`, the text between a quoted run's delimiters, with each
+/// doubled `quote` collapsed to one.
+inline void append_unquoted(std::string_view inner, char quote, std::string& out) {
+  for (std::size_t k = 0; k < inner.size(); ++k) {
+    out.push_back(inner[k]);
+    if (inner[k] == quote) {
+      ++k;
+    }
+  }
+}
+
 /// Storage prefix of a LET / LAMBDA parameter name.
 inline constexpr std::string_view kParamPrefix = "_xlpm.";
 /// Storage prefix of a cell-shaped defined name.
@@ -42,6 +74,9 @@ inline constexpr std::string_view kNamePrefix = "_xlnm.";
 inline constexpr std::string_view kFnPrefix = "_xlfn.";
 /// Storage prefix of a built-in function named as a value.
 inline constexpr std::string_view kEtaPrefix = "_xleta.";
+/// Storage calls that stand for the `@x` and `x#` operators.
+inline constexpr std::string_view kSingleFn = "SINGLE";
+inline constexpr std::string_view kAnchorArrayFn = "ANCHORARRAY";
 
 /// True when `c` can continue an identifier (letters, digits, `_`, `.`,
 /// plus any non-ASCII UTF-8 byte, matching the tokenizer's identifier
@@ -74,27 +109,12 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
                                                                 kEtaPrefix};
   std::string out;
   out.reserve(formula.size());
-  bool in_string = false;
   for (std::size_t i = 0; i < formula.size();) {
     const char c = formula[i];
-    if (in_string) {
-      out.push_back(c);
-      if (c == '"') {
-        // A doubled `""` is an escaped quote, not a string terminator.
-        if (i + 1 < formula.size() && formula[i + 1] == '"') {
-          out.push_back('"');
-          i += 2;
-          continue;
-        }
-        in_string = false;
-      }
-      ++i;
-      continue;
-    }
     if (c == '"') {
-      in_string = true;
-      out.push_back(c);
-      ++i;
+      const std::size_t end = quoted_run_end(formula, i, '"');
+      out.append(formula.substr(i, end - i));
+      i = end;
       continue;
     }
     if (c == '_') {

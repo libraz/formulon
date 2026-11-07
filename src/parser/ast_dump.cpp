@@ -106,7 +106,7 @@ void DumpInto(const AstNode& node, std::string& out) {
 
     case NodeKind::Ref:
       out.append("(ref ");
-      out.append(format_a1(node.as_ref()));
+      append_a1(node.as_ref(), out);
       out.push_back(')');
       return;
 
@@ -119,7 +119,7 @@ void DumpInto(const AstNode& node, std::string& out) {
       if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
         DumpInto(*anchor, out);
       } else {
-        out.append(format_a1(node.as_spill_ref()));
+        append_a1(node.as_spill_ref(), out);
       }
       out.append("#)");
       return;
@@ -130,19 +130,19 @@ void DumpInto(const AstNode& node, std::string& out) {
       out.push_back(':');
       out.append(node.as_ref3d_sheet_end());
       out.push_back(' ');
-      out.append(format_a1(node.as_ref3d_cell()));
+      append_a1(node.as_ref3d_cell(), out);
       if (node.as_ref3d_is_range()) {
         const Reference& begin = node.as_ref3d_cell();
         const Reference& end = node.as_ref3d_cell_end();
         if ((begin.is_full_col && end.is_full_col) || (begin.is_full_row && end.is_full_row)) {
-          const std::string end_text = format_a1(end);
-          const std::size_t begin_axis_end = out.rfind(':');
-          out.erase(begin_axis_end);
+          out.erase(out.rfind(':'));
           out.push_back(':');
-          out.append(end_text, 0, end_text.find(':'));
+          const std::size_t end_start = out.size();
+          append_a1(end, out);
+          out.resize(out.find(':', end_start));
         } else {
           out.push_back(':');
-          out.append(format_a1(end));
+          append_a1(end, out);
         }
       }
       out.push_back(')');
@@ -170,10 +170,10 @@ void DumpInto(const AstNode& node, std::string& out) {
         return;
       }
       out.push_back(' ');
-      out.append(format_a1(node.as_external_ref_cell()));
+      append_a1(node.as_external_ref_cell(), out);
       if (node.as_external_ref_is_range()) {
         out.push_back(':');
-        out.append(format_a1(node.as_external_ref_cell_end()));
+        append_a1(node.as_external_ref_cell_end(), out);
       }
       out.push_back(')');
       return;

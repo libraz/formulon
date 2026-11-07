@@ -230,7 +230,7 @@ std::optional<std::uint32_t> RowColShiftTransform::shift_axis(std::uint32_t coor
 
 std::optional<std::pair<std::uint32_t, std::uint32_t>> RowColShiftTransform::shift_interval(
     std::uint32_t first, std::uint32_t last) const noexcept {
-  const std::uint32_t bound = axis_ == RowColAxis::kRow ? a1::kMaxRows : a1::kMaxCols;
+  const std::uint32_t bound = a1::axis_extent(axis_ == RowColAxis::kRow);
   const std::uint32_t low = std::min(first, last);
   const std::uint32_t high = std::max(first, last);
   const std::uint64_t delete_begin = index_;

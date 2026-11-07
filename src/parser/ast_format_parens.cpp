@@ -12,7 +12,6 @@
 #include "parser/ast_format_internal.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
-#include "utils/a1_ref.h"
 
 namespace formulon {
 namespace parser {

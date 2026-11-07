@@ -138,13 +138,7 @@ TextRange Parser::consume_ref_error_glued_tail(TextRange base_range, GluedRefErr
   }
   // A whole column or row pair (`A:A`, `$A:$B`, `1:3`); a lone `A` or `1` is
   // left for the caller to reject.
-  const bool col_pair = k == TokenKind::Ident && peek_kind_at(1) == TokenKind::Colon &&
-                        peek_kind_at(2) == TokenKind::Ident && decode_full_col_endpoint(peek(), &tail->first) &&
-                        decode_full_col_endpoint(peek_at(2), &tail->last);
-  const bool row_pair = !col_pair && k == TokenKind::Number && peek_kind_at(1) == TokenKind::Colon &&
-                        peek_kind_at(2) == TokenKind::Number && decode_full_row_endpoint(peek(), &tail->first) &&
-                        decode_full_row_endpoint(peek_at(2), &tail->last);
-  if (!col_pair && !row_pair) {
+  if (!decode_whole_axis_pair(0, &tail->first, &tail->last)) {
     *tail = GluedRefErrorTail{};
     return base_range;
   }
@@ -485,6 +479,33 @@ bool Parser::parse_call_args(std::vector<const AstNode*>* args, TextRange open_r
   return true;
 }
 
+AstNode* Parser::consume_structured_ref(std::string_view table_name, const TextRange& start_range,
+                                        std::size_t lbracket_offset, std::size_t close_offset) {
+  const Token& lbracket = peek_at(lbracket_offset);
+  const Token& rbracket = peek_at(close_offset);
+  // The lexemes are views into `source_`, so pointer arithmetic gives the
+  // payload's byte span (after `[`, before `]`), whitespace runs the tokenizer
+  // dropped included.
+  const auto payload_start = static_cast<std::size_t>(lbracket.lexeme.data() + lbracket.lexeme.size() - source_.data());
+  const auto payload_end = static_cast<std::size_t>(rbracket.lexeme.data() - source_.data());
+  // Lexer diagnostics inside the payload (`#All`, `#Headers`, ...) are
+  // dropped via this span.
+  struct_ref_byte_spans_.emplace_back(static_cast<std::uint32_t>(payload_start),
+                                      static_cast<std::uint32_t>(payload_end));
+  const TextRange span = SpanRange(start_range, rbracket.range);
+  for (std::size_t i = 0; i <= close_offset; ++i) {
+    advance();
+  }
+  // The payload goes into the node verbatim; the resolver re-parses its
+  // specifiers, column ranges and `@` shorthand at evaluation time.
+  AstNode* n = make_structured_ref(arena_, table_name, source_.substr(payload_start, payload_end - payload_start),
+                                   StructuredRefModifier::None);
+  if (n != nullptr) {
+    n->set_range(span);
+  }
+  return n;
+}
+
 AstNode* Parser::parse_ident_or_call_or_full_col() {
   // Ident followed by:
   //   `(`   -> function call (preserving Ident lexeme as the function name).
@@ -510,40 +531,7 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
       record_error_with_token(ParseErrorCode::UnbalancedBrackets, lbracket.range, lbracket.lexeme);
       return make_recovery_placeholder(lbracket.range);
     }
-    const Token& rbracket = peek_at(close_offset);
-    // Compute the byte slice of the bracket payload from the source buffer.
-    // The tokenizer's `lexeme` field is a view into `source_`, so pointer
-    // arithmetic gives us absolute byte offsets without re-walking the
-    // formula text. The payload spans (after `[`, before `]`).
-    const char* src_begin = source_.data();
-    const char* lbracket_end = lbracket.lexeme.data() + lbracket.lexeme.size();
-    const char* rbracket_begin = rbracket.lexeme.data();
-    const std::size_t payload_start = static_cast<std::size_t>(lbracket_end - src_begin);
-    const std::size_t payload_end = static_cast<std::size_t>(rbracket_begin - src_begin);
-    const std::string_view payload = source_.substr(payload_start, payload_end - payload_start);
-    // Record the payload byte span so `promote_lexer_errors` can suppress
-    // any `#All` / `#Headers` / ... diagnostics emitted by `scan_error_literal`
-    // for tokens that fall inside this structured reference.
-    struct_ref_byte_spans_.emplace_back(static_cast<std::uint32_t>(payload_start),
-                                        static_cast<std::uint32_t>(payload_end));
-    const std::string_view table_name = ident.lexeme;
-    const TextRange span = SpanRange(ident.range, rbracket.range);
-    advance();                                             // Ident
-    for (std::size_t i = 0; i <= close_offset - 1; ++i) {  // LBracket .. RBracket
-      advance();
-    }
-    // Pack the entire bracket payload into the AST node's `column` slot.
-    // The resolver in `eval/structured_ref.cpp` re-parses it at evaluation
-    // time — splitting specifier fragments, column ranges, and the `@`
-    // shorthand — and produces the final rectangle. Keeping the payload
-    // verbatim here means the parser does not need to know about specifier
-    // names or multi-fragment grammar.
-    AstNode* n = make_structured_ref(arena_, table_name, payload, StructuredRefModifier::None);
-    if (n == nullptr) {
-      return nullptr;
-    }
-    n->set_range(span);
-    return n;
+    return consume_structured_ref(ident.lexeme, ident.range, 1, close_offset);
   }
 
   if (next == TokenKind::LParen) {
@@ -567,26 +555,18 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     if (!parse_call_args(&args, call_start, fn_name)) {
       return nullptr;
     }
-    if (peek_kind() != TokenKind::RParen) {
-      // Recovery already handled the diagnostic for the EOF case; only emit
-      // here if we somehow stopped on a non-RParen non-EOF token.
-      if (peek_kind() != TokenKind::Eof) {
-        record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, fn_name);
-      }
-      AstNode* n =
-          make_call(arena_, fn_name, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()));
-      if (n != nullptr) {
-        n->set_range(call_start);
-      }
-      return n;
+    const bool closed = peek_kind() == TokenKind::RParen;
+    // Recovery already handled the diagnostic for the EOF case; only emit
+    // here if we somehow stopped on a non-RParen non-EOF token.
+    if (!closed && peek_kind() != TokenKind::Eof) {
+      record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, fn_name);
     }
-    const Token& rparen = advance();
+    const TextRange range = closed ? SpanRange(call_start, advance().range) : call_start;
     AstNode* n =
         make_call(arena_, fn_name, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()));
-    if (n == nullptr) {
-      return nullptr;
+    if (n != nullptr) {
+      n->set_range(range);
     }
-    n->set_range(SpanRange(call_start, rparen.range));
     return n;
   }
 
@@ -622,20 +602,18 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     return make_recovery_placeholder(sheet1_range);
   }
 
-  if (next == TokenKind::Colon && peek_kind_at(2) == TokenKind::Ident) {
+  Reference lhs_ref;
+  Reference rhs_ref;
+  if (decode_whole_axis_pair(0, &lhs_ref, &rhs_ref)) {
+    // `A:A` is a single whole-column Ref, `A:C` a range spanning two.
     const Token& rhs = peek_at(2);
-    Reference lhs_ref;
-    Reference rhs_ref;
-    if (decode_full_col_endpoint(ident, &lhs_ref) && decode_full_col_endpoint(rhs, &rhs_ref)) {
-      // `A:A` is a single whole-column Ref, `A:C` a range spanning two.
-      advance();  // Ident
-      advance();  // Colon
-      advance();  // Ident
-      return make_whole_axis_ref(lhs_ref, rhs_ref, ident.range, rhs.range);
-    }
-    // Fall through: the Ident is a defined name; the binary `:` rule will
-    // pair it with whatever the RHS atom parses to.
+    advance();  // Ident
+    advance();  // Colon
+    advance();  // Ident
+    return make_whole_axis_ref(lhs_ref, rhs_ref, ident.range, rhs.range);
   }
+  // Otherwise the Ident is a defined name; the binary `:` rule will pair it
+  // with whatever the RHS atom parses to.
 
   // Default: NameRef.
   advance();

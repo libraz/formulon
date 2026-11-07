@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <string_view>
 
@@ -38,33 +39,8 @@ namespace {
 // UTF-8 BOM and UTF-16 LE BOM (as 2 bytes) for the source-prefix check.
 constexpr std::string_view kUtf16LeBom = "\xFF\xFE";
 
-// Lookup for the 17 canonical Excel error literals. Kept sorted by the
-// longest-prefix-first ordering so scan_error_literal can commit on first
-// match without ambiguity.
-struct ErrorLiteralEntry {
-  std::string_view text;
-  ErrorCode code;
-};
-
-constexpr ErrorLiteralEntry kErrorLiterals[] = {
-    {"#GETTING_DATA", ErrorCode::GettingData},  // 13
-    {"#EXTERNAL!", ErrorCode::External},        // 10
-    {"#BLOCKED!", ErrorCode::Blocked},          //  9
-    {"#CONNECT!", ErrorCode::Connect},          //  9
-    {"#UNKNOWN!", ErrorCode::Unknown},          //  9
-    {"#PYTHON!", ErrorCode::Python},            //  8
-    {"#DIV/0!", ErrorCode::Div0},               //  7
-    {"#VALUE!", ErrorCode::Value},              //  7
-    {"#SPILL!", ErrorCode::Spill},              //  7
-    {"#FIELD!", ErrorCode::Field},              //  7
-    {"#BUSY!", ErrorCode::Busy},                //  6
-    {"#CALC!", ErrorCode::Calc},                //  6
-    {"#NAME?", ErrorCode::Name},                //  6
-    {"#NULL!", ErrorCode::Null},                //  6
-    {"#NUM!", ErrorCode::Num},                  //  5
-    {"#REF!", ErrorCode::Ref},                  //  5
-    {"#N/A", ErrorCode::NA},                    //  4
-};
+constexpr std::uint32_t kBomCodepoint = 0xFEFF;
+constexpr std::uint32_t kIdeographicSpaceCodepoint = 0x3000;
 
 // Byte length of a `[Book]Name` written with no `!` at the `[` at `pos`, a
 // name Excel stores verbatim; 0 when the text there is not that shape. A
@@ -109,20 +85,17 @@ bool Tokenizer::is_formula_whitespace(char c) noexcept {
   // Excel accepts ASCII space / tab / CR / LF as formula whitespace. The
   // full-width space U+3000 is intentionally *not* accepted here; it is
   // flagged as InvalidCharacter by the main loop.
-  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+  return detail::IsFormulaWhitespace(c);
 }
 
 bool Tokenizer::is_bool_word(std::string_view word, bool* out) noexcept {
-  if (word.size() == 4) {
-    if (strings::case_insensitive_starts_with(word, "TRUE")) {
-      *out = true;
-      return true;
-    }
-  } else if (word.size() == 5) {
-    if (strings::case_insensitive_starts_with(word, "FALSE")) {
-      *out = false;
-      return true;
-    }
+  if (strings::case_insensitive_eq(word, "TRUE")) {
+    *out = true;
+    return true;
+  }
+  if (strings::case_insensitive_eq(word, "FALSE")) {
+    *out = false;
+    return true;
   }
   return false;
 }
@@ -135,11 +108,11 @@ bool Tokenizer::is_bool_name(std::string_view word, bool* out) const noexcept {
     return false;
   }
   const LocaleFacts& f = *opts_.locale;
-  if (word.size() == f.true_name.size() && strings::case_insensitive_starts_with(word, f.true_name)) {
+  if (strings::case_insensitive_eq(word, f.true_name)) {
     *out = true;
     return true;
   }
-  if (word.size() == f.false_name.size() && strings::case_insensitive_starts_with(word, f.false_name)) {
+  if (strings::case_insensitive_eq(word, f.false_name)) {
     *out = false;
     return true;
   }
@@ -186,20 +159,21 @@ bool Tokenizer::scan_locale_char(unsigned char c) {
 }
 
 bool Tokenizer::match_error_literal(std::string_view run, ErrorCode* out, std::size_t* match_len) noexcept {
-  // Longest-match against the catalog (declared longest-first) so an error
-  // literal immediately followed by an operator or reference — `#REF!/2`,
-  // `#N/A/B1`, `#DIV/0!/A1` — commits on the literal alone and leaves the
-  // trailing bytes to the main dispatch loop. `#DIV/0!` itself contains a
-  // `/`, so an exact-length scan would over-consume the run; longest-prefix
-  // matching against the sorted catalog resolves both cases in one pass.
-  for (const auto& e : kErrorLiterals) {
-    if (strings::case_insensitive_starts_with(run, e.text)) {
-      *out = e.code;
-      *match_len = e.text.size();
-      return true;
+  // Longest prefix wins so an error literal followed by an operator or
+  // reference (`#REF!/2`, `#N/A/B1`, `#DIV/0!/A1`) commits on the literal alone.
+  std::size_t best_len = 0;
+  for (std::size_t i = 0; i < std::size(kErrorTable); ++i) {
+    const std::string_view text = kErrorTable[i].display_name;
+    if (text.size() > best_len && strings::case_insensitive_starts_with(run, text)) {
+      *out = static_cast<ErrorCode>(i);
+      best_len = text.size();
     }
   }
-  return false;
+  if (best_len == 0) {
+    return false;
+  }
+  *match_len = best_len;
+  return true;
 }
 
 bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noexcept {
@@ -288,31 +262,11 @@ const std::vector<Token>& Tokenizer::tokens() {
   }
 
   while (byte_pos_ < source_.size()) {
-    // Enforce the UTF-16 length cap. The comparison is against the offset
-    // *before* consuming the next codepoint, which means the last accepted
-    // token ends at exactly max_formula_length_utf16 code units.
-    if (utf16_pos_ >= opts_.max_formula_length_utf16) {
-      if (!truncated_) {
-        const std::size_t err_start = byte_pos_;
-        // Mark the range start at the cap boundary before jumping `byte_pos_`
-        // to the end of source, so the diagnostic points at where the limit
-        // was hit rather than at whatever token was scanned immediately
-        // before it (`start_utf16_` otherwise retains that stale value).
-        mark_start();
-        // Advance to end of source so the error lexeme covers the overflow.
-        byte_pos_ = source_.size();
-        record_error(LexerErrorCode::ExcessiveLength, err_start);
-        truncated_ = true;
-      }
-      break;
-    }
-
     const unsigned char c = static_cast<unsigned char>(source_[byte_pos_]);
 
     // Mid-input BOM: consume the 3 bytes (or 2 for UTF-16 LE) and record an
     // error. We handle UTF-8 BOM here because the sentinel is unambiguous.
-    if (c == 0xEF && byte_pos_ + 2 < source_.size() && static_cast<unsigned char>(source_[byte_pos_ + 1]) == 0xBB &&
-        static_cast<unsigned char>(source_[byte_pos_ + 2]) == 0xBF) {
+    if (source_.substr(byte_pos_, detail::kUtf8Bom.size()) == detail::kUtf8Bom) {
       const std::size_t err_start = byte_pos_;
       mark_start();
       // `advance_one()` (rather than a manual `byte_pos_ += 3`) is required
@@ -336,8 +290,7 @@ const std::vector<Token>& Tokenizer::tokens() {
     // Non-whitespace "space-like" bytes that Excel doesn't accept. Fullwidth
     // space U+3000 (0xE3 0x80 0x80) falls into this bucket because we must
     // not confuse it with the intersection operator.
-    if (c == 0xE3 && byte_pos_ + 2 < source_.size() && static_cast<unsigned char>(source_[byte_pos_ + 1]) == 0x80 &&
-        static_cast<unsigned char>(source_[byte_pos_ + 2]) == 0x80) {
+    if (source_.substr(byte_pos_, detail::kIdeographicSpace.size()) == detail::kIdeographicSpace) {
       const std::size_t err_start = byte_pos_;
       // Mark the range start before advancing past the codepoint, so
       // `start_utf16_` reflects `err_start` rather than the previous token.
@@ -537,15 +490,11 @@ const std::vector<Token>& Tokenizer::tokens() {
     }
   }
 
-  // Input trimmed above but never reported: the loop records the error
-  // itself when it stops on the cap between tokens, which is the common
-  // case. It does not when the trim landed mid-token (the scanner then
-  // consumed the remainder and left the loop with nothing to check), so
-  // report it here instead of letting the truncation pass silently.
-  if (over_length && !truncated_) {
+  // The scan was bounded above, so the loop ends at the cap without noticing;
+  // report the truncation here.
+  if (over_length) {
     mark_start();
     record_error(LexerErrorCode::ExcessiveLength, byte_pos_);
-    truncated_ = true;
   }
 
   // Always terminate with Eof. The range is a zero-width slice at the
@@ -945,7 +894,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     if (!info.valid) {
       break;
     }
-    if (info.codepoint == 0xFEFF || info.codepoint == 0x3000) {
+    if (info.codepoint == kBomCodepoint || info.codepoint == kIdeographicSpaceCodepoint) {
       break;
     }
     advance_one();

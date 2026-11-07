@@ -179,9 +179,8 @@ bool external_sheet_needs_quoting_display(std::string_view sheet, const LocaleFa
   return !sheet.empty() && (OpensLikeNumber(sheet) || !IsBareRunIn(sheet, facts.dbcs_codepage != DbcsCodepage::kNone));
 }
 
-std::string format_a1(const Reference& r) {
+void append_a1(const Reference& r, std::string& out) {
   FM_CHECK(!(r.is_full_col && r.is_full_row), "format_a1: is_full_col and is_full_row must not both be set");
-  std::string out;
   if (!r.sheet.empty()) {
     append_sheet_name(r.sheet, r.sheet_quoted, out);
     out.push_back('!');
@@ -196,7 +195,7 @@ std::string format_a1(const Reference& r) {
       out.push_back('$');
     }
     FM_CHECK(a1::append_column_letters(out, r.col), "reference column is outside Excel's grid");
-    return out;
+    return;
   }
   if (r.is_full_row) {
     if (r.row_abs) {
@@ -208,7 +207,7 @@ std::string format_a1(const Reference& r) {
       out.push_back('$');
     }
     out.append(std::to_string(r.row + 1));
-    return out;
+    return;
   }
   if (r.col_abs) {
     out.push_back('$');
@@ -218,6 +217,11 @@ std::string format_a1(const Reference& r) {
     out.push_back('$');
   }
   out.append(std::to_string(r.row + 1));
+}
+
+std::string format_a1(const Reference& r) {
+  std::string out;
+  append_a1(r, out);
   return out;
 }
 
