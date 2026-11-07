@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_context.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/dynamic_array/anchor.h"
@@ -21,7 +22,6 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
-#include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"

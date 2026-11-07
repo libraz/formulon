@@ -489,6 +489,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/lambda_helpers_lazy.cpp
   src/eval/matrix_ops_lazy.cpp
   src/eval/shape_ops_lazy.cpp
+  src/eval/array_context.cpp
   src/eval/workdays_lazy.cpp
   src/eval/financial_lazy.cpp
   src/eval/forecast_ets_lazy.cpp

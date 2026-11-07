@@ -7,12 +7,12 @@
 #include <string_view>
 
 #include "eval/array_alloc.h"
+#include "eval/array_context.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_resolvers.h"
 #include "eval/scalar_args.h"
-#include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "parser/reference.h"

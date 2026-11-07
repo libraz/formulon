@@ -7,12 +7,12 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_context.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
-#include "eval/shape_ops_lazy.h"
 #include "eval/tail_array.h"
 #include "parser/ast.h"
 #include "utils/arena.h"

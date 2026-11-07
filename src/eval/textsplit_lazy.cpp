@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/array_context.h"
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/scalar_args.h"
-#include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"

@@ -15,10 +15,10 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/array_context.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
-#include "eval/shape_ops_lazy.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"

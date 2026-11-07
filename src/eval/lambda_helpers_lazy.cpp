@@ -7,13 +7,13 @@
 #include <cstdint>
 
 #include "eval/array_alloc.h"
+#include "eval/array_context.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
-#include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/a1_ref.h"

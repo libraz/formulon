@@ -8,13 +8,13 @@
 #include <string_view>
 
 #include "defined_name.h"
+#include "eval/array_context.h"
 #include "eval/builtin_names.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"        // eval_node, eval_node_shaped
 #include "eval/name_env_resolve.h"  // is_range_shaped_ast
-#include "eval/shape_ops_lazy.h"    // eval_node_as_array
 #include "external_book.h"
 #include "external_link.h"
 #include "parser/ast.h"

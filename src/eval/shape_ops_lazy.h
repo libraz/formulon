@@ -1,6 +1,6 @@
 //
 // Lazy impls for shape / geometry-inspection builtins: `ROWS`, `COLUMNS`,
-// `ROW`, `COLUMN`, and `SUMPRODUCT`. These all require per-argument AST
+// `ROW`, `COLUMN`, `SUMPRODUCT`, and `TRANSPOSE`. These all require per-argument AST
 // shape to distinguish a `Ref` (single cell), a `RangeOp` (rectangle),
 // and an `ArrayLiteral` (inline `{...}` literal) — information the eager
 // dispatcher would already have discarded by flattening each arg to a
@@ -69,51 +69,6 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
 /// reference whatever storage their source held (arena or SpillRegion).
 Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
-
-/// Evaluates `node` in array context, always returning a `Value::Array`
-/// (or a scalar `Value::error(...)` on failure).
-///
-/// Dispatch by AST kind:
-///   * `Ref` / `RangeOp` / `Call(OFFSET|CHOOSE|IF|ROW|COLUMN)` -> expand
-///     via `resolve_range_arg`; wrap the resulting flat cells + shape in
-///     a freshly arena-allocated `ArrayValue`.
-///   * `ArrayLiteral` -> walk via the existing `resolve_error_free_range`
-///     pattern; wrap into an `ArrayValue`.
-///   * `BinaryOp` -> recurse into `eval_binop_array_ctx`.
-///   * `UnaryOp` -> recurse into the operand via `eval_node_as_array`,
-///     then apply the unary op cellwise.
-///   * Anything else (Number / Text / Bool literal, function `Call`
-///     other than the reference-shaped ones above) -> evaluate via plain
-///     `eval_node`; if scalar, wrap into a 1x1 `ArrayValue`; if Array,
-///     forward (this can only happen if a future array-aware function
-///     starts producing Arrays). Errors propagate as scalar `Value::error`.
-///
-/// Lifetime: the returned `ArrayValue` and its cells live in `arena`;
-/// the caller must keep `arena` alive for the lifetime of the value.
-Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx);
-
-/// Evaluates a `BinaryOp` AST in array context, broadcasting cellwise.
-///
-/// Recursively evaluates both operands via `eval_node_as_array`. Shape
-/// rules:
-///   * 1x1 broadcasts against any shape (the 1x1 cell is repeated).
-///   * Non-1x1 shapes must match exactly; mismatch yields a scalar
-///     `#VALUE!` (NOT an `ArrayValue` of `#VALUE!` cells - Mac Excel
-///     short-circuits the whole expression).
-///   * Errors in either operand short-circuit and propagate as scalar.
-///
-/// For each output cell, dispatches to the appropriate scalar helper
-/// from `eval/scalar_ops.h`:
-///   * arithmetic ops (Add/Sub/Mul/Div/Pow): coerce both cells to
-///     numbers via `coerce_to_number`, then `apply_arithmetic`. Cell-
-///     level coercion errors become per-cell `Value::error`, which
-///     populates the output array (arithmetic over an Array of error
-///     cells preserves the errors verbatim).
-///   * concat (`&`): `apply_concat`.
-///   * comparison ops: `apply_comparison`.
-Value eval_binop_array_ctx(const parser::AstNode& binary_op_node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

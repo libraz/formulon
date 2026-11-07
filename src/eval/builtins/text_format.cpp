@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/array_context.h"
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
@@ -26,7 +27,6 @@
 #include "eval/function_registry.h"
 #include "eval/locale_text.h"
 #include "eval/number_parse.h"
-#include "eval/shape_ops_lazy.h"
 #include "eval/text_format/number_format.h"
 #include "eval/text_format/rounding.h"
 #include "excel_locale.h"
