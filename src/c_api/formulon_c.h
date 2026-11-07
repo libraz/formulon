@@ -3,7 +3,8 @@
  *
  * This is a pure C11 header: every declaration sits inside `extern "C"`
  * when included from C++, no `bool` / `nullptr` / templates leak across
- * the boundary, and every type is either an opaque struct, a primitive
+ * the boundary (the C++-only `FM_STRUCT_INIT` helper is inline and exports
+ * nothing), and every type is either an opaque struct, a primitive
  * integer, a `const char*` (NUL-terminated UTF-8), or a small fixed
  * `fm_value_t` POD.
  *
@@ -47,9 +48,11 @@
  * describe the most recent failing call on the calling thread. Both are
  * thread-local views, valid until the next API call on that thread; copy them
  * out to keep the diagnostic. A call that succeeds resets the message to the
- * empty string. The functions that read or release error state leave it
- * untouched: `fm_get_last_error_message`, `fm_get_last_error_context`,
- * `fm_get_status_name`, `fm_get_version`, `fm_get_version_number`,
+ * empty string. A formula syntax failure also records its position, read with
+ * `fm_get_last_parse_error()`; every other call clears that record. The
+ * functions that read or release error state leave it untouched:
+ * `fm_get_last_error_message`, `fm_get_last_error_context`,
+ * `fm_get_last_parse_error`, `fm_get_status_name`, `fm_get_version`, `fm_get_version_number`,
  * `fm_get_error_display_name` and every `*_destroy`.
  *
  * Message text is for display only: it is an English sentence meant for a
@@ -70,6 +73,14 @@
  *     one call. Those implementation threads do not make cross-call handle
  *     access safe, and the same-handle external-concurrency restriction
  *     remains in force.
+ *   * A value read can calculate: under `FM_CALC_MODE_AUTO` /
+ *     `FM_CALC_MODE_AUTO_NO_TABLE` it first recalculates pending cells, so the
+ *     owner-thread contract covers reads exactly as it covers mutations. Such a
+ *     read can invoke the caller's progress callback and can return any
+ *     `FM_STATUS_GRAPH_*` recalc status (4000-4006); called from inside a
+ *     progress callback it returns `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005).
+ *     A failed calculation is returned as is and leaves the cells it did not
+ *     finish dirty, so the next read tries again.
  *   * The last-error storage is thread-local, so two threads driving
  *     two distinct workbooks can read their own diagnostics
  *     independently.
@@ -83,8 +94,7 @@
  * thread-local view:
  *   * A **model-backed view** points into workbook-owned model storage. Its
  *     lifetime ends at the invalidating mutation named by that API, or when
- *     `fm_workbook_destroy` releases the handle. A read on the same handle
- *     does not invalidate a model-backed view.
+ *     `fm_workbook_destroy` releases the handle.
  *   * A **read-scratch-backed view** points into transient per-handle read
  *     storage. The next successful scratch-backed read on the same handle
  *     may invalidate it; a validation-rejected call does not refresh this
@@ -116,9 +126,21 @@
  * Versioning and stability: `FM_VERSION_MAJOR`, `FM_VERSION_MINOR` and
  * `FM_VERSION_PATCH` give the library version at compile time, and
  * `FM_VERSION_NUMBER` packs them into one integer;
- * `fm_get_version()` and `fm_get_version_number()` return it at run time. From 1.0 on, no function is
- * removed or changed in meaning, and no public struct gains, loses or
- * reorders a field. New data arrives through new functions.
+ * `fm_get_version()` and `fm_get_version_number()` return it at run time;
+ * `FM_CHECK_VERSION()` compares the two. From 1.0 on, no function is removed
+ * or changed in meaning; otherwise new data arrives through new functions.
+ *
+ * Records and value types: a struct whose first member is
+ * `uint32_t struct_size` is a record. From 1.0 on, a record may gain fields
+ * only at its end, and `struct_size` tells them apart. The caller sets
+ * `struct_size` to `sizeof` the record it was compiled against
+ * (`FM_STRUCT_INIT(T)`), on input and output records alike; a value below
+ * this library's first layout of the record is `FM_STATUS_INVALID_ARGUMENT`
+ * (2), a larger one is read and written only up to the fields this library
+ * knows, and the library never rewrites an output's `struct_size`. Every
+ * other struct is a value type (coordinates, values, colours, array elements
+ * and structs embedded by value) and is frozen: it never gains, loses or
+ * reorders a field.
  */
 
 #ifndef FORMULON_C_API_H
@@ -136,6 +158,31 @@
 
 /** @brief Numeric library version, `MAJOR * 10000 + MINOR * 100 + PATCH`; equals `fm_get_version_number()`. */
 #define FM_VERSION_NUMBER (FM_VERSION_MAJOR * 10000 + FM_VERSION_MINOR * 100 + FM_VERSION_PATCH)
+
+/**
+ * @brief Initialiser for a record: `struct_size` set to `sizeof(T)`, every
+ *        other field zero. `fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);`
+ *
+ * C uses a designated initialiser and C++ a value-initialising helper, so
+ * neither trips `-Wmissing-field-initializers`.
+ */
+#ifdef __cplusplus
+template <typename T>
+inline T fm_struct_init() {
+  T record{};
+  record.struct_size = static_cast<decltype(record.struct_size)>(sizeof(T));
+  return record;
+}
+#define FM_STRUCT_INIT(T) (fm_struct_init<T>())
+#else
+#define FM_STRUCT_INIT(T) {.struct_size = sizeof(T)}
+#endif
+
+/**
+ * @brief Nonzero when the linked library has the same major and minor version
+ *        as this header.
+ */
+#define FM_CHECK_VERSION() (fm_get_version_number() / 100 == FM_VERSION_NUMBER / 100)
 
 #ifdef __cplusplus
 extern "C" {
@@ -194,6 +241,33 @@ typedef struct {
   uint32_t sheet_index;
   fm_cell_rect_t rect;
 } fm_sheet_rect_t;
+
+/** @brief Discriminator for `fm_color_spec_t::kind`, mirroring `formulon::ColorSpec::Kind`. */
+typedef enum {
+  kFmColorNone = 0,    /**< No colour. */
+  kFmColorRgb = 1,     /**< `rgb="AARRGGBB"`. */
+  kFmColorTheme = 2,   /**< `theme="N"` with optional `tint`. */
+  kFmColorIndexed = 3, /**< `indexed="N"` legacy palette index. */
+  kFmColorAuto = 4,    /**< `auto="1"` system foreground / background. */
+} fm_color_kind_t;
+
+/**
+ * @brief A colour as the workbook specifies it; every colour field of the
+ *        API takes this type.
+ *
+ * Only the members `kind` names are meaningful. A theme,
+ * indexed or auto colour is a selector, not a rendered colour: resolve it
+ * with `fm_workbook_resolve_color`. A field documented as "None or Rgb"
+ * (chart, shape and CF evaluation colours) never carries a selector, and
+ * its `rgb` is the colour as drawn.
+ */
+typedef struct {
+  double tint;      /* theme tint (-1..1); meaningful when kind == kFmColorTheme */
+  uint32_t rgb;     /* AARRGGBB; meaningful when kind == kFmColorRgb */
+  uint32_t theme;   /* theme index; meaningful when kind == kFmColorTheme */
+  uint32_t indexed; /* palette index; meaningful when kind == kFmColorIndexed */
+  uint8_t kind;     /* fm_color_kind_t */
+} fm_color_spec_t;
 
 /** @brief Opaque result of one sheet pagination operation. */
 typedef struct fm_pagination fm_pagination_t;
@@ -261,6 +335,8 @@ typedef struct {
 /**
  * @brief Builds a default workbook (a single sheet named `"Sheet1"`).
  *
+ * Lifetime: owned (until fm_workbook_destroy).
+ *
  * @param out  On success receives a freshly allocated handle. The
  *             caller owns the handle and must release it with
  *             `fm_workbook_destroy`.
@@ -291,7 +367,9 @@ FM_API fm_status_t fm_workbook_create_default(fm_workbook_t** out);
  * Changing font 0 afterwards (`fm_workbook_set_default_font`) leaves the
  * phonetic font (font 1) as it was.
  *
- * @param profile_id  An id from `fm_workbook_set_excel_profile_id`,
+ * Lifetime: owned (until fm_workbook_destroy).
+ *
+ * @param profile_id  An id from `fm_workbook_set_profile_id`,
  *                    e.g. `"mac-365-ja_JP"`.
  * @param out         On success receives a freshly allocated handle owned by
  *                    the caller (release with `fm_workbook_destroy`).
@@ -318,6 +396,8 @@ FM_API fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm_wor
  * a new one past it; see `fm_workbook_add_font`'s own doc for the dedup
  * rule.
  *
+ * Lifetime: owned (until fm_workbook_destroy).
+ *
  * @param out  On success receives a freshly allocated handle.
  * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`.
  */
@@ -332,6 +412,8 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
  *
  * The container is auto-detected from its package contents; the caller does
  * not need to provide a filename or extension.
+ *
+ * Lifetime: owned (until fm_workbook_destroy).
  *
  * @param bytes  Pointer to the first byte of the OOXML or MS-XLSB archive.
  * @param len    Length of the buffer in bytes.
@@ -364,7 +446,7 @@ FM_API fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workboo
  *     therefore means "none of the losses enumerated below occurred",
  *     not "nothing at all went wrong".
  *   * The counters are `uint32_t`, not `size_t`, so both structs have the
- *     same layout on native and wasm32 (20 bytes, 4-aligned) and a
+ *     same layout on native and wasm32 (24 bytes, 4-aligned) and a
  *     binding's hand-written layout cannot silently disagree with the
  *     native one.
  */
@@ -374,6 +456,7 @@ FM_API fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workboo
  *        workbook handle.
  */
 typedef struct {
+  uint32_t struct_size;
   /** Formula cells whose stored formula could not be decoded; the cached
    *  value survives, the formula does not. XLSB only.
    *  Fed by: `xlsb.formula.not_decoded`. */
@@ -477,6 +560,8 @@ FM_API void fm_workbook_destroy(fm_workbook_t* wb);
  * XLSB) and `fm_workbook_save_with_diagnostics` alike. Mixing allocators
  * across the boundary is undefined.
  *
+ * Lifetime: owned (until fm_buffer_destroy).
+ *
  * @param wb         Workbook handle. Must be non-NULL.
  * @param out_bytes  Receives a pointer to the freshly allocated buffer.
  * @param out_len    Receives the buffer length in bytes.
@@ -516,6 +601,8 @@ typedef enum {
  * and `fm_workbook_save_with_diagnostics`. Mixing allocators across the
  * boundary is undefined.
  *
+ * Lifetime: owned (until fm_buffer_destroy).
+ *
  * @param wb         Workbook handle. Must be non-NULL.
  * @param format     Target container format.
  * @param out_bytes  Receives a pointer to the freshly allocated buffer.
@@ -539,6 +626,7 @@ FM_API fm_status_t fm_workbook_save_as(const fm_workbook_t* wb, int32_t format, 
  * both rise for one dropped part. See `dropped_relationship_count`.
  */
 typedef struct {
+  uint32_t struct_size;
   /** Formula cells emitted as their cached literal because the AST could
    *  not be lowered to the container's encoding. XLSB only: the OOXML
    *  writer emits formula text verbatim.
@@ -596,6 +684,8 @@ typedef struct {
  *
  * The returned `out_bytes` buffer follows the `fm_buffer_destroy` ownership
  * rule documented above.
+ *
+ * Lifetime: owned (until fm_buffer_destroy).
  */
 FM_API fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb, int32_t format, uint8_t** out_bytes,
                                                      size_t* out_len, fm_save_diagnostics_t* out_diagnostics);
@@ -629,6 +719,8 @@ FM_API fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size_t* 
  * valid until a mutation that touches the sheet list (for example
  * `fm_workbook_add_sheet`) or until the handle is destroyed. Reads on the
  * same handle, including read-scratch-backed reads, do not invalidate it.
+ *
+ * Lifetime: transient.
  *
  * @param wb         Workbook handle. Must be non-NULL.
  * @param sheet_index      0-based sheet index. Must be `< sheet_count`.
@@ -816,6 +908,7 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t sheet_inde
 
 /** @brief A defined name to set (`fm_workbook_set_defined_name`). */
 typedef struct {
+  uint32_t struct_size;
   const char* name;       /* UTF-8; non-empty */
   const char* formula;    /* UTF-8; non-empty; one leading `=` is accepted and dropped */
   int32_t local_sheet_id; /* -1 = workbook scope, else the 0-based sheet index of the scope */
@@ -844,7 +937,8 @@ typedef struct {
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` or `formula` is empty, a new `name`
  *         is invalid or names a table, or `local_sheet_id` is outside `[-1, sheet_count)`;
- *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when `formula` does not parse.
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
+ * parse.
  */
 FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_input_t* input);
 
@@ -1178,7 +1272,8 @@ FM_API fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index, uin
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when `formula` does not parse.
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
+ * parse.
  */
 FM_API fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         const char* formula);
@@ -1200,6 +1295,8 @@ FM_API fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_index, u
  * handle destruction. The scratch is reset on each successful producer so a
  * long-lived read loop does not accumulate memory. Callers that need to
  * retain the string must copy it before another call.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -1224,6 +1321,8 @@ FM_API fm_status_t fm_sheet_get_value(const fm_workbook_t* wb, size_t sheet_inde
  * on this handle; a validation-rejected call does not refresh the storage.
  * It is also invalid after a mutation or handle destruction. Copy it before
  * another call when it must outlive that window.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_text` is `NULL`;
@@ -1252,6 +1351,8 @@ FM_API fm_status_t fm_sheet_get_cell_phonetic_run_count(const fm_workbook_t* wb,
  * `fm_sheet_get_cell_phonetic`'s: the next successful scratch-backed read
  * on this handle may invalidate it, so a caller collecting every run must
  * copy each one before asking for the next.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
@@ -1329,6 +1430,8 @@ FM_API fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, size
  * long-lived handle does not accumulate memory. Callers that need to retain
  * the string must copy it before another call.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
@@ -1374,6 +1477,8 @@ FM_API fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t shee
  *       iterative calc. This diverges from true in-cell F9 entry;
  *       self-reference detection is out of scope for this API.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `formula`, or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -1400,6 +1505,8 @@ FM_API fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t she
  * @note The same self-reference caveat as `fm_sheet_evaluate_formula`
  *       applies: a rule that reads its own anchored cell sees the cached
  *       value rather than raising `#REF!`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `formula`, or `out` is `NULL`;
@@ -1442,6 +1549,8 @@ typedef struct fm_value_array fm_value_array_t;
  * @note The same self-reference caveat as `fm_sheet_evaluate_formula`
  *       applies: a self-reference reads the target cell's cached value.
  *
+ * Lifetime: owned (until fm_value_array_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `formula`, or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -1480,6 +1589,8 @@ FM_API fm_status_t fm_value_array_get_value_count(const fm_value_array_t* array,
  * For a `FM_VAL_TEXT` cell, `out->u.text` is an owned-snapshot view: it stays
  * valid until `fm_value_array_destroy`.
  *
+ * Lifetime: owned (until fm_value_array_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `array` or `out` is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is not below the cell count.
@@ -1500,6 +1611,7 @@ FM_API fm_status_t fm_value_array_get_value_at(const fm_value_array_t* array, si
  * is expanded to the grid edge in `rect`.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t valid;
   int32_t has_sheet;
   const char* sheet_name;
@@ -1514,12 +1626,17 @@ typedef struct {
  * Accepts an optional local sheet qualifier (quoted with `''` escaping, or
  * bare), `$` markers (dropped), a `:` range in either order, and whole
  * columns / rows. 3D, external, named, structured and multi-area
- * references, surrounding whitespace, and a sheet name longer than 31
- * UTF-16 units read as `valid = 0`. With `has_base` 1, R1C1 relative axes
- * are measured from `(base_row, base_col)` and wrap at the grid edge; with
- * `has_base` 0 a relative axis reads as `valid = 0`.
+ * references, surrounding whitespace, a sheet name longer than 31 UTF-16
+ * units, and (with `has_base` 0) an R1C1 relative axis are not references:
+ * the call fails, and `fm_get_last_parse_error` reports
+ * `FM_PARSE_ERROR_INVALID_REFERENCE` over the whole text. With `has_base` 1,
+ * R1C1 relative axes are measured from `(base_row, base_col)` and wrap at
+ * the grid edge.
  *
- * @return `FM_STATUS_OK` (0) on success, including text that is not a reference;
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_PARSER_INVALID_REFERENCE` (1004) when `text` is not a reference;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `text` or `out` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `text` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `r1c1` or `has_base` is not 0/1, or
@@ -1539,6 +1656,8 @@ FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const ch
  * every row writes columns (`B:D`), one spanning every column writes rows
  * (`2:11`). `absolute` 1 prefixes each component with `$`. `*out_text` is
  * a read-scratch-backed view.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `range` or `out_text` is `NULL`;
@@ -1596,6 +1715,8 @@ FM_API fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t sheet
  * The scratch is refreshed by each successful producer so iterating
  * `cell_at` does not accumulate memory.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_row`, `out_col`, or
  *         `out_value` is `NULL`;
@@ -1626,6 +1747,8 @@ FM_API fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t sheet_in
  * `*out_formula` is a read-scratch-backed view: valid until the next
  * successful scratch-backed read, any mutation, or handle destruction.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -1649,6 +1772,8 @@ FM_API fm_status_t fm_sheet_get_formula(const fm_workbook_t* wb, size_t sheet_in
  * A formula loaded from a file that does not parse is kept verbatim: it
  * evaluates to `#NAME?` and fails here with `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000).
  * `fm_sheet_set_formula` never produces that state.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -1680,6 +1805,8 @@ typedef struct fm_cell_range fm_cell_range_t;
  * `fm_cell_range_destroy`; it is a snapshot, so later mutations do not
  * change it.
  *
+ * Lifetime: owned (until fm_cell_range_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `range` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -1704,6 +1831,8 @@ FM_API fm_status_t fm_cell_range_get_cell_count(const fm_cell_range_t* range, si
  * reports it), or `NULL` when the cell holds no formula; `out_formula` may
  * be `NULL` to skip it. Both the formula and a `FM_VAL_TEXT` payload are an
  * owned snapshot held by the handle and stay valid until `fm_cell_range_destroy`.
+ *
+ * Lifetime: owned (until fm_cell_range_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `range`, `out_row`, `out_col`, or
@@ -1752,6 +1881,8 @@ typedef enum {
  * A coordinate with no value or spill result is `""`. `*out_text` is a
  * read-scratch-backed view.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -1767,6 +1898,8 @@ FM_API fm_status_t fm_sheet_get_display_text(const fm_workbook_t* wb, size_t she
  *
  * An empty `format_code` means General. `value` must be blank, a number,
  * a boolean, text, or an error. `*out_text` is a read-scratch-backed view.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`, or a
@@ -1791,6 +1924,7 @@ FM_API fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, s
 
 /** @brief One defined name as `fm_workbook_get_defined_name_at` reads it. */
 typedef struct {
+  uint32_t struct_size;
   const char* name;       /* stored spelling; model-backed view */
   const char* formula;    /* as `fm_sheet_get_formula` spells it, `=` included; see the getter for its lifetime */
   int32_t local_sheet_id; /* -1 = workbook scope, else the 0-based sheet index of the scope */
@@ -1810,6 +1944,8 @@ typedef struct {
  * scratch-backed read on this handle, the next mutation, or handle
  * destruction.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
@@ -1828,6 +1964,8 @@ FM_API fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size
  * `fm_workbook_get_defined_name_at`'s `formula`;
  * `*out_comment` is a model-backed view, `""` when the name has no comment.
  * `*out_hidden` is 0/1.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -1867,6 +2005,8 @@ FM_API fm_status_t fm_workbook_get_table_count(const fm_workbook_t* wb, size_t* 
  * effect (a structural row/column insert/delete, or a sheet rename/removal)
  * -- or until the handle is destroyed. Reads do not invalidate them.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `table_index` is out of range, or a loaded table's `ref`
@@ -1904,18 +2044,19 @@ FM_API fm_status_t fm_workbook_resolve_table_runtime_id(const fm_workbook_t* wb,
 
 /** Creates a worksheet table (`xl/tables/tableN.xml`) over `rect` (an
  * inverted or out-of-grid rectangle is `FM_STATUS_INVALID_ARGUMENT`).
- * `column_names` must contain one non-empty header for every column of the
- * range; each name must be unique within the table, and `column_count` must
- * equal the range's width. `display_name` follows Excel's name syntax (a
+ * `column_names` NULL takes the headers from the first row's displayed
+ * text, naming a blank cell with the locale's column word and the first
+ * free number and writing that name into the cell. Otherwise it holds one
+ * non-empty header for every column of the range (`column_count` equals the
+ * range's width), each must equal its non-blank header cell, and a blank
+ * header cell receives its name. Names must be unique within the table. `display_name` follows Excel's name syntax (a
  * letter, `_` or `\` first; letters, digits, `_`, `.`, `?` and `\` after;
  * at most 255 UTF-16 units; not TRUE / FALSE, an A1 cell such as `T1`, or a
  * name opening with an R1C1 reference such as `R2D2`). `name` must be
  * non-empty, and neither name may be used by another table or by a defined
  * name of any scope (case-insensitive). The range may not overlap another
  * table on the sheet. `style_name` may be NULL or empty to omit table
- * styling. The table's filter definition is created automatically. When
- * `header_row` is set, the caller still owns the header cells: Excel expects
- * the first row of the range to hold exactly the column names. */
+ * styling. The table's filter definition is created automatically. */
 FM_API fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* rect,
                                          const char* name, const char* display_name, const char* const* column_names,
                                          size_t column_count, const char* style_name, int32_t header_row,
@@ -1952,6 +2093,7 @@ FM_API fm_status_t fm_workbook_remove_table(fm_workbook_t* wb, size_t table_inde
  * Views share the lifetime of `fm_workbook_get_table`'s.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* style_name;
   int32_t style_present;
   int32_t show_first_column;
@@ -1981,6 +2123,7 @@ typedef struct {
  * non-empty `totals_row_formula` is read-scratch-backed instead.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* name;
   const char* totals_row_function;
   const char* totals_row_label;
@@ -1990,6 +2133,8 @@ typedef struct {
 /**
  * @brief Reads the style, row counts and column count of table `table_index`.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `table_index` is out of range.
@@ -1998,6 +2143,8 @@ FM_API fm_status_t fm_workbook_get_table_info(const fm_workbook_t* wb, size_t ta
 
 /**
  * @brief Reads column `column` (0-based, left to right) of table `table_index`.
+ *
+ * Lifetime: transient.
  *
  * @return As `fm_workbook_get_table_info`, with `FM_STATUS_INVALID_ARGUMENT` (2) also for an
  *         out-of-range `column`.
@@ -2058,6 +2205,8 @@ FM_API fm_status_t fm_workbook_rename_table(fm_workbook_t* wb, size_t table_inde
  * `*out_name` receives the final name, read-scratch-backed: valid until the
  * next successful scratch-backed read, any mutation, or handle destruction.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name` or `out_name` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `table_index` or `column` is out of range;
@@ -2086,7 +2235,8 @@ FM_API fm_status_t fm_workbook_rename_table_column(fm_workbook_t* wb, size_t tab
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `table_index` or `column` is out of range, the
  *         token is unknown, or `custom` has no formula;
- *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when `formula` does not parse.
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
+ * parse.
  */
 FM_API fm_status_t fm_workbook_set_table_column_totals(fm_workbook_t* wb, size_t table_index, size_t column,
                                                        const char* function, const char* label, const char* formula);
@@ -2107,6 +2257,8 @@ FM_API fm_status_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb, si
  * passthrough-part list. It remains valid until the passthrough list is
  * replaced by a reader/writer round-trip, another invalidating workbook
  * mutation, or handle destruction. Reads do not invalidate it.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -2139,6 +2291,7 @@ FM_API fm_status_t fm_workbook_get_passthrough(const fm_workbook_t* wb, const ch
  *        `location` to mean "empty".
  */
 typedef struct {
+  uint32_t struct_size;
   fm_cell_rect_t rect;
   const char* target;
   const char* location;
@@ -2151,6 +2304,7 @@ typedef struct {
  *        views with the same lifetime contract as `fm_hyperlink_t`.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t row;
   uint32_t col;
   const char* author;
@@ -2256,6 +2410,8 @@ FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, size_t sheet_index);
  * handle. Both are valid until the next mutation that touches the sheet's
  * comment list or until the handle is destroyed. Reads do not invalidate
  * them.
+ *
+ * Lifetime: transient.
  */
 FM_API fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         int32_t* out_present, fm_comment_t* out);
@@ -2280,6 +2436,8 @@ FM_API fm_status_t fm_sheet_get_comment_count(const fm_workbook_t* wb, size_t sh
  * `out->author` and `out->text` are model-backed views into the workbook
  * handle, with the same lifetime contract as `fm_sheet_get_comment`.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -2292,6 +2450,8 @@ FM_API fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, size_t sheet
  * @brief Reads the `index`-th hyperlink on `sheet_index` into `out`.
  *
  * String fields in `out` are model-backed views (see `fm_hyperlink_t`).
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -2308,6 +2468,8 @@ FM_API fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, size_t she
  *        one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)).
  *
  * String fields in `out` are model-backed views (see `fm_hyperlink_t`).
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -2415,6 +2577,7 @@ FM_API fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, size_t sheet_
  *        scratch-backed read on the handle.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t lock_structure;
   int32_t lock_windows;
   int32_t lock_revision;
@@ -2434,6 +2597,8 @@ typedef struct {
 /**
  * @brief Reads the workbook's `<workbookProtection>`; every field is zero or
  *        empty when the workbook has none.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`.
@@ -2458,6 +2623,7 @@ FM_API fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb, const 
  *        range that does not parse is left out of them.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t spin_count;
   const char* name;
   const fm_cell_rect_t* ranges;
@@ -2480,6 +2646,8 @@ FM_API fm_status_t fm_sheet_get_protected_range_count(const fm_workbook_t* wb, s
 
 /**
  * @brief Reads protected range `protected_range_index` in file order.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
@@ -2535,6 +2703,30 @@ typedef enum {
   FM_VALIDATION_ERROR_STYLE_INFORMATION = 2,
 } fm_validation_error_style_t;
 
+/** @brief Data-validation rule type (`fm_data_validation_t::type`), OOXML `ST_DataValidationType` order. */
+typedef enum {
+  FM_VALIDATION_TYPE_NONE = 0,
+  FM_VALIDATION_TYPE_WHOLE = 1,
+  FM_VALIDATION_TYPE_DECIMAL = 2,
+  FM_VALIDATION_TYPE_LIST = 3,
+  FM_VALIDATION_TYPE_DATE = 4,
+  FM_VALIDATION_TYPE_TIME = 5,
+  FM_VALIDATION_TYPE_TEXT_LENGTH = 6,
+  FM_VALIDATION_TYPE_CUSTOM = 7,
+} fm_validation_type_t;
+
+/** @brief Data-validation comparison (`fm_data_validation_t::op`), OOXML `ST_DataValidationOperator` order. */
+typedef enum {
+  FM_VALIDATION_OPERATOR_BETWEEN = 0,
+  FM_VALIDATION_OPERATOR_NOT_BETWEEN = 1,
+  FM_VALIDATION_OPERATOR_EQUAL = 2,
+  FM_VALIDATION_OPERATOR_NOT_EQUAL = 3,
+  FM_VALIDATION_OPERATOR_GREATER_THAN = 4,
+  FM_VALIDATION_OPERATOR_LESS_THAN = 5,
+  FM_VALIDATION_OPERATOR_GREATER_THAN_OR_EQUAL = 6,
+  FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL = 7,
+} fm_validation_operator_t;
+
 /**
  * @brief Data-validation rule descriptor.
  *
@@ -2546,10 +2738,8 @@ typedef enum {
  *     must keep
  *     it alive for the duration of the call only; the implementation
  *     deep-copies every range into the sheet's owned storage.
- *   * `type` — 0 none, 1 whole, 2 decimal, 3 list, 4 date, 5 time,
- *     6 textLength, 7 custom.
- *   * `op`   — 0 between, 1 notBetween, 2 equal, 3 notEqual,
- *     4 greaterThan, 5 lessThan, 6 greaterThanOrEqual, 7 lessThanOrEqual.
+ *   * `type` — an `fm_validation_type_t`.
+ *   * `op`   — an `fm_validation_operator_t`.
  *   * `error_style` — an `fm_validation_error_style_t`.
  *   * `allow_blank` / `show_input_message` / `show_error_message` /
  *     `show_dropdown` — 0 = false, 1 = true. `show_dropdown` is the
@@ -2567,11 +2757,12 @@ typedef enum {
  *     or without one.
  */
 typedef struct {
+  uint32_t struct_size;
   const fm_cell_rect_t* ranges;
   uint32_t range_count;
-  uint8_t type;
-  uint8_t op;
-  uint8_t error_style;
+  uint8_t type;        /* fm_validation_type_t */
+  uint8_t op;          /* fm_validation_operator_t */
+  uint8_t error_style; /* fm_validation_error_style_t */
   int32_t allow_blank;
   int32_t show_input_message;
   int32_t show_error_message;
@@ -2607,6 +2798,8 @@ FM_API fm_status_t fm_sheet_get_validation_count(const fm_workbook_t* wb, size_t
  * (an absent formula is `""`); unless both are empty they are
  * read-scratch-backed, valid until the next scratch-backed read.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -2638,8 +2831,8 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  *         exceeds the per-call range cap, when any supplied range is
  *         outside the Excel grid, or when `v.type`, `v.op` or
  *         `v.error_style` is outside the domain listed above;
- *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `v.formula1` or
- *         `v.formula2` does not parse (the rule is not stored).
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a non-empty
+ * `v.formula1` or `v.formula2` does not parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, size_t sheet_index, const fm_data_validation_t* v,
                                            size_t* out_validation_index);
@@ -2674,6 +2867,7 @@ FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, size_t sheet_in
  * `fm_validation_error_style_t`).
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t has_rule;
   int32_t valid;
   uint32_t rule_index;
@@ -2712,6 +2906,8 @@ FM_API fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t sheet
  * for the first page and `fm_cell_range_next_cursor`'s value for each
  * following one, which is `UINT64_MAX` once no further invalid cell exists.
  *
+ * Lifetime: owned (until fm_cell_range_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -2748,6 +2944,7 @@ typedef struct {
  * empty, and `mentions` may be `NULL` only with a zero `mention_count`.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* id;
   uint32_t row;
   uint32_t col;
@@ -2762,6 +2959,7 @@ typedef struct {
 
 /** @brief One entry of the workbook's person list. */
 typedef struct {
+  uint32_t struct_size;
   const char* id;
   const char* display_name;
   const char* user_id;
@@ -2784,6 +2982,8 @@ FM_API fm_status_t fm_sheet_get_threaded_comment_count(const fm_workbook_t* wb, 
  * Every string and the `mentions` array are read-scratch-backed views, with
  * the lifetime `fm_sheet_get_auto_filter` describes.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -2799,6 +2999,8 @@ FM_API fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb, siz
  *
  * The views in `out` have the lifetime `fm_sheet_get_threaded_comment_at`
  * describes.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -2840,6 +3042,7 @@ FM_API fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet
  *                          sets it. Only an opening comment carries it.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* text;
   const fm_mention_t* mentions;
   uint32_t mention_count;
@@ -2885,6 +3088,8 @@ FM_API fm_status_t fm_workbook_get_person_count(const fm_workbook_t* wb, size_t*
  * @brief Reads person `index`, in file order. The strings are
  *        read-scratch-backed views.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
@@ -2895,6 +3100,8 @@ FM_API fm_status_t fm_workbook_get_person_at(const fm_workbook_t* wb, size_t ind
  * @brief Reads the person whose id is `id`. `*out_present` is `1` and `*out`
  *        filled when there is one, else `0` and `*out` zeroed (still
  *        `FM_STATUS_OK` (0)). The strings are read-scratch-backed views.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
@@ -2964,6 +3171,7 @@ FM_API fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int32_t*
 
 /** @brief Per-call telemetry returned by `fm_workbook_recalc_parallel`. */
 typedef struct {
+  uint32_t struct_size;
   uint64_t cells_evaluated;
   uint64_t sccs_processed;
   uint64_t parallel_steps;
@@ -3007,6 +3215,7 @@ FM_API fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t threa
  *        unchanged.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t enabled;        /* 0 disables iterative calc (the default: cyclic SCCs surface `#REF!`); positive enables */
   int32_t max_iterations; /* iteration cap; 0 is treated as 1 and values above 32767 (Excel's limit) as 32767 */
   double max_change;      /* absolute convergence threshold; must be finite */
@@ -3043,14 +3252,14 @@ FM_API fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_t* o
  * @brief Workbook-level calculation mode.
  *
  * Mirrors Excel's "Calculation options" workbook setting and the
- * `calcMode` attribute on the `<calcPr>` element. `kAuto` is the
- * default; `kManual` suppresses automatic recalc on input;
- * `kAutoNoTable` recalcs everything except data-table cells.
+ * `calcMode` attribute on the `<calcPr>` element.
+ *   * `FM_CALC_MODE_AUTO` (the default): pending cells are calculated before
+ *     a value is read and before the workbook is saved.
+ *   * `FM_CALC_MODE_MANUAL`: nothing is calculated until `fm_workbook_recalc`.
+ *   * `FM_CALC_MODE_AUTO_NO_TABLE`: as Auto, but data tables are skipped.
  *
- * The engine itself does NOT gate evaluation on this enum (every
- * `fm_workbook_recalc` call honours all dirty cells); it is preserved
- * as round-trip metadata and surfaced through this API so the host UI
- * can mirror Excel's user-visible state.
+ * Volatile functions (`NOW()`, `RAND()`) are re-evaluated when an edit or a
+ * `fm_workbook_recalc` recalculates them, not on every read.
  */
 typedef enum {
   FM_CALC_MODE_AUTO = 0,
@@ -3072,7 +3281,8 @@ FM_API fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, int32_t* o
 /**
  * @brief Sets the workbook's calc mode.
  *
- * Plain metadata — does not affect evaluation. The value is a raw signed
+ * Decides whether value reads and saves calculate pending cells first (see
+ * `fm_calc_mode_t`). The value is a raw signed
  * 32-bit enum ordinal so FFI callers can pass an arbitrary value without
  * first constructing an out-of-domain C enum. Unknown values (outside the
  * documented range) return `FM_STATUS_INVALID_ARGUMENT` (2).
@@ -3093,8 +3303,8 @@ typedef enum {
  * @brief Reads `<calcPr fullPrecision>`: 1 for full precision (the default),
  *        0 for "set precision as displayed".
  *
- * Plain metadata like the calc mode: the engine evaluates at full precision
- * whatever this holds.
+ * Plain metadata: the engine evaluates at full precision whatever this
+ * holds.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is NULL.
@@ -3282,10 +3492,12 @@ FM_API fm_status_t fm_convert_serial_to_civil(double serial, int32_t date1904, f
  * `es_ES`, `es_MX`, `pt_BR`, `ru_RU`, `zh_TW`, `it_IT` or `nl_NL` (28 ids); the corresponding setter accepts exactly
  * that set.
  *
+ * Lifetime: static.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_profile_id` is NULL.
  */
-FM_API fm_status_t fm_workbook_get_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id);
+FM_API fm_status_t fm_workbook_get_profile_id(const fm_workbook_t* wb, const char** out_profile_id);
 
 /**
  * @brief Sets the workbook's Excel formula profile by id.
@@ -3303,7 +3515,7 @@ FM_API fm_status_t fm_workbook_get_excel_profile_id(const fm_workbook_t* wb, con
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `profile_id` is NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `profile_id` is not a documented profile.
  */
-FM_API fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id);
+FM_API fm_status_t fm_workbook_set_profile_id(fm_workbook_t* wb, const char* profile_id);
 
 /**
  * @brief Reads the file name the workbook is shown under, extension included
@@ -3314,6 +3526,8 @@ FM_API fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const cha
  * as Excel's formula bar does: `M5.xlsx!Name`, quoted when the name needs it
  * (`'M5 b-1.xlsx'!Name`). Unset, they return `[0]!Name`. Loading from bytes
  * leaves the name unset. `*out_name` is read-scratch-backed.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_name` is NULL.
@@ -3366,6 +3580,7 @@ FM_API fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name
  * the other fields are then preserved in memory but not written.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t enabled;
   const char* algorithm_name;
   const char* hash_value;
@@ -3392,6 +3607,8 @@ typedef struct {
 
 /**
  * @brief Reads the sheet's protection state.
+ *
+ * Lifetime: transient.
  *
  * @param wb           Workbook handle. Must not be NULL.
  * @param sheet_index  Sheet index, 0-based.
@@ -3502,14 +3719,29 @@ typedef enum {
 } fm_cf_match_kind_t;
 
 /**
- * @brief Plain RGBA colour. Channels are 0-255 (sRGB).
+ * @brief Built-in icon set (`fm_cf_rule_t::icon_set_name`,
+ *        `fm_cf_match_t::icon_set_name`). Mirrors `formulon::cf::IconSetName`,
+ *        in OOXML `ST_IconSetType` order.
  */
-typedef struct {
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-  uint8_t a;
-} fm_cf_color_t;
+typedef enum {
+  FM_ICON_SET_3_ARROWS = 0,
+  FM_ICON_SET_3_ARROWS_GRAY = 1,
+  FM_ICON_SET_3_FLAGS = 2,
+  FM_ICON_SET_3_TRAFFIC_LIGHTS_1 = 3,
+  FM_ICON_SET_3_TRAFFIC_LIGHTS_2 = 4,
+  FM_ICON_SET_3_SIGNS = 5,
+  FM_ICON_SET_3_SYMBOLS = 6,
+  FM_ICON_SET_3_SYMBOLS_2 = 7,
+  FM_ICON_SET_4_ARROWS = 8,
+  FM_ICON_SET_4_ARROWS_GRAY = 9,
+  FM_ICON_SET_4_RED_TO_BLACK = 10,
+  FM_ICON_SET_4_RATING = 11,
+  FM_ICON_SET_4_TRAFFIC_LIGHTS = 12,
+  FM_ICON_SET_5_ARROWS = 13,
+  FM_ICON_SET_5_ARROWS_GRAY = 14,
+  FM_ICON_SET_5_RATING = 15,
+  FM_ICON_SET_5_QUARTERS = 16,
+} fm_icon_set_t;
 
 /**
  * @brief The icon drawn for one level of a custom icon set (x14 `cfIcon`).
@@ -3545,16 +3777,18 @@ typedef enum {
  *   * `FM_CF_DIFFERENTIAL_FORMAT` — `dxf_id_engaged` is `1` when the
  *     rule carries a dxf reference, in which case `dxf_id` indexes
  *     `styles.dxfs[]`.
- *   * `FM_CF_COLOR_SCALE` — `color` is the interpolated cell-fill RGBA.
+ *   * `FM_CF_COLOR_SCALE` — `color` is the interpolated cell fill.
  *   * `FM_CF_DATA_BAR` — `bar_length_pct`, `bar_axis_position_pct`,
  *     `bar_is_negative`, `bar_fill`, `bar_border_engaged` (and
  *     `bar_border` when engaged), `bar_gradient`, and `bar_direction`
  *     (the rule's `data_bar_direction`; the geometry is stated from the
  *     left edge, and a host mirrors it for a right-to-left bar).
- *   * `FM_CF_ICON_SET` — `icon_set_name` is the
- *     `formulon::cf::IconSetName` ordinal; `icon_index` is `0..N-1`
- *     after the rule's `reverse` flag has been applied.
+ *   * `FM_CF_ICON_SET` — `icon_set_name` is an `fm_icon_set_t`;
+ *     `icon_index` is `0..N-1` after the rule's `reverse` flag has been
+ *     applied.
  *
+ * The colours are resolved against the workbook theme and palette, so
+ * their kind is `kFmColorRgb` (`kFmColorNone` when inactive).
  * All non-active fields carry default-zero values. `priority` is the
  * workbook-global priority lifted from `CFRule::priority` (smaller
  * numbers ranked higher); per-cell match lists are returned in
@@ -3565,19 +3799,20 @@ typedef enum {
  * it.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t kind; /* fm_cf_match_kind_t */
   int32_t priority;
   int32_t dxf_id_engaged; /* 0/1 */
   uint32_t dxf_id;
-  fm_cf_color_t color; /* ColorScale fill */
+  fm_color_spec_t color; /* ColorScale fill */
   double bar_length_pct;
   double bar_axis_position_pct;
   int32_t bar_is_negative; /* 0/1 */
-  fm_cf_color_t bar_fill;
+  fm_color_spec_t bar_fill;
   int32_t bar_border_engaged; /* 0/1 */
-  fm_cf_color_t bar_border;
+  fm_color_spec_t bar_border;
   int32_t bar_gradient;  /* 0/1 */
-  int32_t icon_set_name; /* formulon::cf::IconSetName ordinal */
+  int32_t icon_set_name; /* fm_icon_set_t */
   uint8_t icon_index;
   uint8_t bar_direction; /* fm_cf_data_bar_direction_t */
   uint8_t _pad[2];       /* padding for alignment determinism */
@@ -3599,6 +3834,8 @@ typedef struct {
  * break before nearly every row and column can reach. On success the count
  * `fm_pagination_get_page_count` reports is the true total; it is never a
  * truncated one.
+ *
+ * Lifetime: owned (until fm_pagination_destroy).
  */
 FM_API fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out);
 
@@ -3641,6 +3878,7 @@ FM_API fm_status_t fm_pagination_get_column_break_at(const fm_pagination_t* pagi
 /** @brief A rectangle in points. Sheet geometry measures from the top-left
  *         of cell A1; pagination measures from the page's top-left corner. */
 typedef struct {
+  uint32_t struct_size;
   double x;
   double y;
   double width;
@@ -3649,6 +3887,7 @@ typedef struct {
 
 /** @brief The paper a sheet prints on, after the orientation swap. */
 typedef struct {
+  uint32_t struct_size;
   double width_pt;
   double height_pt;
   int32_t landscape; /* 0/1 */
@@ -3658,6 +3897,7 @@ typedef struct {
 /** @brief Page margins in points; `header` / `footer` are measured from the
  *         page edge to the header / footer band. */
 typedef struct {
+  uint32_t struct_size;
   double left;
   double right;
   double top;
@@ -3671,6 +3911,7 @@ typedef struct {
  *         and `fm_pagination_get_print_titles` report them. A span is
  *         meaningful only when its `has_*` flag is non-zero. */
 typedef struct {
+  uint32_t struct_size;
   int32_t has_rows; /* 0/1 */
   uint32_t first_row;
   uint32_t last_row;
@@ -3688,6 +3929,7 @@ typedef struct {
  * top-left corner on the paper.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t area_index;
   fm_cell_rect_t rect;
   double origin_x_pt;
@@ -3790,6 +4032,8 @@ FM_API fm_status_t fm_pagination_is_column_break_manual(const fm_pagination_t* p
  * scratch-backed read, any mutation, or handle destruction on the same
  * handle.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
@@ -3826,6 +4070,8 @@ FM_API fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_i
 /** @brief Reads `<pageMargins>` as raw XML. `*out_xml` is a read-scratch-backed
  *         view; see `fm_sheet_get_page_setup_xml` for the shared contract.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range. */
@@ -3846,6 +4092,8 @@ FM_API fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet
 /** @brief Reads `<printOptions>` as raw XML. `*out_xml` is a read-scratch-backed
  *         view; see `fm_sheet_get_page_setup_xml` for the shared contract.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range. */
@@ -3864,6 +4112,8 @@ FM_API fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t shee
 
 /** @brief Reads `<headerFooter>` as raw XML. `*out_xml` is a read-scratch-backed
  *         view; see `fm_sheet_get_page_setup_xml` for the shared contract.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xml` is `NULL`;
@@ -3895,7 +4145,9 @@ FM_API fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t shee
  * `<sheetPr>` is not print-only: it also carries `tabColor` (sheet tab
  * colour) and `codeName` (VBA binding). Replacing it wholesale to toggle
  * `fitToPage` would drop those; `fm_sheet_set_page_setup` with
- * `fit_to_page_engaged` exists to avoid exactly that.
+ * `fit_to_page_engaged` and `fm_sheet_set_tab_color` edit one child each.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xml` is `NULL`;
@@ -3946,6 +4198,8 @@ FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index
  * paginator, and this getter reports the resolved form. `*out_ranges` is a
  * read-scratch-backed view, `NULL` when the count is 0.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_ranges` or `out_range_count` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -3987,6 +4241,7 @@ FM_API fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t she
 
 /** @brief One manual page break as the worksheet declares it. */
 typedef struct {
+  uint32_t struct_size;
   uint32_t id;    /* 0-based row / column index the break precedes */
   uint32_t min;   /* span start on the perpendicular axis */
   uint32_t max;   /* span end on the perpendicular axis */
@@ -4094,6 +4349,7 @@ typedef enum { FM_PAGE_ORIENTATION_PORTRAIT = 0, FM_PAGE_ORIENTATION_LANDSCAPE =
  * `default`.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t orientation_engaged;
   int32_t orientation; /* fm_page_orientation_t */
   int32_t paper_size_engaged;
@@ -4111,6 +4367,7 @@ typedef struct {
 /** @brief Partial `<pageMargins>` update, in inches. Same `_engaged`
  *         semantics as `fm_page_setup_t`. */
 typedef struct {
+  uint32_t struct_size;
   int32_t left_engaged;
   double left;
   int32_t right_engaged;
@@ -4127,6 +4384,7 @@ typedef struct {
 
 /** @brief Partial `<printOptions>` update. Same `_engaged` semantics. */
 typedef struct {
+  uint32_t struct_size;
   int32_t grid_lines_engaged;
   int32_t grid_lines;
   int32_t headings_engaged;
@@ -4149,6 +4407,7 @@ typedef struct {
  * into the `&amp;` Excel itself stores.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* odd_header;
   const char* odd_footer;
   const char* even_header;
@@ -4223,6 +4482,8 @@ FM_API fm_status_t fm_sheet_get_print_options(const fm_workbook_t* wb, size_t sh
  * decoded text, as `fm_sheet_set_header_footer` takes it. The section
  * strings are read-scratch-backed views.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
@@ -4249,6 +4510,8 @@ typedef struct fm_cf_results fm_cf_results_t;
  *
  * `today_serial` pins the date reference for `TimePeriod` rules. Pass
  * `NaN` to disable (in which case `TimePeriod` rules will not match).
+ *
+ * Lifetime: owned (until fm_cf_results_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `range` or `out` is `NULL`;
@@ -4296,17 +4559,75 @@ FM_API fm_status_t fm_cf_results_get_match_at(const fm_cf_results_t* results, si
 /* Conditional formatting — mutation                                          */
 /* -------------------------------------------------------------------------- */
 
+/** @brief CF rule type (`fm_cf_rule_t::type`). Mirrors `formulon::cf::RuleType`. */
+typedef enum {
+  FM_CF_RULE_TYPE_EXPRESSION = 0,
+  FM_CF_RULE_TYPE_CELL_IS = 1,
+  FM_CF_RULE_TYPE_COLOR_SCALE = 2,
+  FM_CF_RULE_TYPE_DATA_BAR = 3,
+  FM_CF_RULE_TYPE_ICON_SET = 4,
+  FM_CF_RULE_TYPE_TOP10 = 5,
+  FM_CF_RULE_TYPE_ABOVE_AVERAGE = 6,
+  FM_CF_RULE_TYPE_CONTAINS_TEXT = 7,
+  FM_CF_RULE_TYPE_NOT_CONTAINS_TEXT = 8,
+  FM_CF_RULE_TYPE_BEGINS_WITH = 9,
+  FM_CF_RULE_TYPE_ENDS_WITH = 10,
+  FM_CF_RULE_TYPE_CONTAINS_BLANKS = 11,
+  FM_CF_RULE_TYPE_NOT_CONTAINS_BLANKS = 12,
+  FM_CF_RULE_TYPE_CONTAINS_ERRORS = 13,
+  FM_CF_RULE_TYPE_NOT_CONTAINS_ERRORS = 14,
+  FM_CF_RULE_TYPE_TIME_PERIOD = 15,
+  FM_CF_RULE_TYPE_DUPLICATE_VALUES = 16,
+  FM_CF_RULE_TYPE_UNIQUE_VALUES = 17,
+} fm_cf_rule_type_t;
+
+/** @brief `cellIs` comparison (`fm_cf_rule_t::op`). Mirrors `formulon::cf::CellIsOperator`. */
+typedef enum {
+  FM_CF_OPERATOR_LESS_THAN = 0,
+  FM_CF_OPERATOR_LESS_THAN_OR_EQUAL = 1,
+  FM_CF_OPERATOR_EQUAL = 2,
+  FM_CF_OPERATOR_NOT_EQUAL = 3,
+  FM_CF_OPERATOR_GREATER_THAN_OR_EQUAL = 4,
+  FM_CF_OPERATOR_GREATER_THAN = 5,
+  FM_CF_OPERATOR_BETWEEN = 6,
+  FM_CF_OPERATOR_NOT_BETWEEN = 7,
+} fm_cf_operator_t;
+
+/** @brief `timePeriod` bucket (`fm_cf_rule_t::time_period`). Mirrors `formulon::cf::TimePeriod`. */
+typedef enum {
+  FM_CF_TIME_PERIOD_TODAY = 0,
+  FM_CF_TIME_PERIOD_YESTERDAY = 1,
+  FM_CF_TIME_PERIOD_TOMORROW = 2,
+  FM_CF_TIME_PERIOD_LAST_7_DAYS = 3,
+  FM_CF_TIME_PERIOD_THIS_WEEK = 4,
+  FM_CF_TIME_PERIOD_LAST_WEEK = 5,
+  FM_CF_TIME_PERIOD_NEXT_WEEK = 6,
+  FM_CF_TIME_PERIOD_THIS_MONTH = 7,
+  FM_CF_TIME_PERIOD_LAST_MONTH = 8,
+  FM_CF_TIME_PERIOD_NEXT_MONTH = 9,
+} fm_cf_time_period_t;
+
+/** @brief `<cfvo type>` (`fm_cfvo_t::type`). Mirrors `formulon::cf::CfvoType`. */
+typedef enum {
+  FM_CF_VALUE_OBJECT_TYPE_NUMBER = 0,
+  FM_CF_VALUE_OBJECT_TYPE_PERCENT = 1,
+  FM_CF_VALUE_OBJECT_TYPE_PERCENTILE = 2,
+  FM_CF_VALUE_OBJECT_TYPE_MIN = 3,
+  FM_CF_VALUE_OBJECT_TYPE_MAX = 4,
+  FM_CF_VALUE_OBJECT_TYPE_FORMULA = 5,
+  FM_CF_VALUE_OBJECT_TYPE_AUTO_MIN = 6,
+  FM_CF_VALUE_OBJECT_TYPE_AUTO_MAX = 7,
+} fm_cf_value_object_type_t;
+
 /**
  * @brief Conditional-format value object used by visual rule authoring.
  *
- * `type` is the `formulon::cf::CfvoType` ordinal:
- * `0=number`, `1=percent`, `2=percentile`, `3=min`, `4=max`,
- * `5=formula`, `6=autoMin`, `7=autoMax`. `value` is optional and is
+ * `type` is an `fm_cf_value_object_type_t`. `value` is optional and is
  * copied by `fm_sheet_add_cf_rule`; pass `NULL` for valueless min/max
  * thresholds. `gte` maps to OOXML `gte` (`1` by default).
  */
 typedef struct {
-  uint8_t type;
+  uint8_t type; /* fm_cf_value_object_type_t */
   uint8_t _pad[3];
   int32_t gte; /* 0/1 */
   const char* value;
@@ -4357,6 +4678,7 @@ typedef struct {
  * (see its doc), not the workbook model.
  */
 typedef struct {
+  uint32_t struct_size;
   /* Stable rule id, linking the rule to the `<x14:cfRule id="...">`
    * block that carries whatever settings the legacy OOXML schema cannot
    * express. On input, pass `NULL` or `""` to auto-generate one; a
@@ -4368,9 +4690,9 @@ typedef struct {
    * Only rules that need such a block put their id in the saved file, so
    * for most rules this is an in-memory handle and nothing more. */
   const char* id;
-  uint8_t type;        /* `formulon::cf::RuleType` ordinal */
-  uint8_t op;          /* `formulon::cf::CellIsOperator` ordinal */
-  uint8_t time_period; /* `formulon::cf::TimePeriod` ordinal */
+  uint8_t type;        /* fm_cf_rule_type_t */
+  uint8_t op;          /* fm_cf_operator_t */
+  uint8_t time_period; /* fm_cf_time_period_t */
   uint8_t _pad0;       /* alignment */
   int32_t priority;
   int32_t stop_if_true;   /* 0/1 */
@@ -4410,14 +4732,14 @@ typedef struct {
 
   /* ColorScale payload. Counts must match and be 2 or 3 on input. */
   const fm_cfvo_t* color_scale_thresholds;
-  const fm_cf_color_t* color_scale_colors;
+  const fm_color_spec_t* color_scale_colors;
   uint32_t color_scale_count;
 
   /* DataBar payload. */
   int32_t data_bar_engaged; /* 0/1 */
   fm_cfvo_t data_bar_min;
   fm_cfvo_t data_bar_max;
-  fm_cf_color_t data_bar_fill;
+  fm_color_spec_t data_bar_fill;
   int32_t data_bar_show_value; /* 0/1, default 1 */
   uint8_t data_bar_min_length_pct;
   uint8_t data_bar_max_length_pct;
@@ -4425,7 +4747,7 @@ typedef struct {
 
   /* IconSet payload. */
   int32_t icon_set_engaged; /* 0/1 */
-  uint8_t icon_set_name;    /* `formulon::cf::IconSetName` ordinal */
+  uint8_t icon_set_name;    /* fm_icon_set_t */
   uint8_t _pad2[3];
   const fm_cfvo_t* icon_set_thresholds;
   uint32_t icon_set_threshold_count;
@@ -4461,13 +4783,13 @@ typedef struct {
   uint8_t data_bar_axis_position;         /* fm_cf_data_bar_axis_position_t */
   uint8_t _pad3[3];
   int32_t data_bar_negative_fill_engaged; /* 0/1; when 0 the positive fill is reused */
-  fm_cf_color_t data_bar_negative_fill;
+  fm_color_spec_t data_bar_negative_fill;
   int32_t data_bar_border_engaged; /* 0/1; when 0 the bar has no border */
-  fm_cf_color_t data_bar_border;
+  fm_color_spec_t data_bar_border;
   int32_t data_bar_negative_border_engaged; /* 0/1; when 0 the bar has no negative border */
-  fm_cf_color_t data_bar_negative_border;
+  fm_color_spec_t data_bar_negative_border;
   int32_t data_bar_axis_color_engaged; /* 0/1; when 0 the axis is black */
-  fm_cf_color_t data_bar_axis_color;
+  fm_color_spec_t data_bar_axis_color;
 
   /* Appended after the extension block for the same reason: every earlier
    * field keeps its offset.
@@ -4528,6 +4850,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule_count(const fm_workbook_t* wb, size_t sh
  * refuse. The record therefore always feeds straight back into
  * `fm_sheet_add_cf_rule`.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -4584,8 +4908,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  *           when any `rule.ranges` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,
  *           `col >= 16384`) and therefore has no A1 spelling, when
- *           `rule.id` is non-empty but not GUID-shaped or already names a
- *           rule on the sheet, when `rule.type`
+ *           `rule.id` is non-empty but not GUID-shaped (an id that already
+ *           names a rule on the sheet is replaced by a fresh GUID), when `rule.type`
  *           / `rule.op` / `rule.time_period` / `rule.icon_set_name` /
  *           `rule.data_bar_axis_position` or any engaged `fm_cfvo_t`
  *           `type` names no declared enumerator, when `rule.dxf_id` is
@@ -4593,9 +4917,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  *           when a visual payload is missing / malformed, or when
  *           `rule.priority <= 0` and an existing rule already holds
  *           `INT32_MAX`, so the auto-assigned priority would overflow;
- *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `rule.formula1`,
- *           `rule.formula2` or formula-typed `fm_cfvo_t` value does not
- *           parse (the rule is not stored).
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a non-empty
+ * `rule.formula1`, `rule.formula2` or formula-typed `fm_cfvo_t` value does not parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, size_t sheet_index, const fm_cf_rule_t* rule,
                                         size_t* out_cf_rule_index);
@@ -4631,6 +4954,7 @@ FM_API fm_status_t fm_sheet_clear_cf_rules(fm_workbook_t* wb, size_t sheet_index
  * index, `row` and `col` are 0-based cell coordinates.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t sheet;
   uint32_t row;
   uint32_t col;
@@ -4654,6 +4978,8 @@ typedef struct fm_cell_nodes fm_cell_nodes_t;
  * The set excludes the seed cell itself. Order is unspecified but
  * stable for a given graph state.
  *
+ * Lifetime: owned (until fm_cell_nodes_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
@@ -4672,6 +4998,8 @@ FM_API fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, size_t sheet
  *
  * Same semantics as `fm_sheet_get_precedents` for ownership and seed
  * exclusion.
+ *
+ * Lifetime: owned (until fm_cell_nodes_destroy).
  */
 FM_API fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            uint32_t depth, fm_cell_nodes_t** out);
@@ -4726,6 +5054,7 @@ typedef enum {
  * `number_format` is the cell's format code, `""` for none.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t row;
   uint32_t col;
   fm_value_t value;
@@ -4758,6 +5087,8 @@ FM_API fm_status_t fm_sheet_get_pivot_count(const fm_workbook_t* wb, size_t shee
  *
  * On success the caller owns `*out` and must free it with
  * `fm_pivot_cells_destroy`.
+ *
+ * Lifetime: owned (until fm_pivot_cells_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out` is `NULL`;
@@ -4797,6 +5128,8 @@ FM_API fm_status_t fm_pivot_cells_get_bounds(const fm_pivot_cells_t* cells, int3
 
 /**
  * @brief Reads projected cell `index`.
+ *
+ * Lifetime: owned (until fm_pivot_cells_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -5029,6 +5362,7 @@ typedef enum {
  *                       a format code, not an id.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* source_name;
   const char* custom_name;
   int32_t axis; /* fm_pivot_axis_t */
@@ -5062,6 +5396,7 @@ typedef struct {
  *                       index into the base field's `items[]`.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* name;
   uint32_t field_index;
   int32_t aggregation; /* fm_pivot_aggregation_t */
@@ -5110,6 +5445,7 @@ typedef struct {
  *                           field created through the API starts at `0`).
  */
 typedef struct {
+  uint32_t struct_size;
   const char* source_name;
   const char* custom_name;
   int32_t axis;
@@ -5143,6 +5479,7 @@ typedef struct {
  *                     collapsed.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* name;
   int32_t cache_index;
   int32_t visible;
@@ -5160,6 +5497,7 @@ typedef struct {
  *   * the `show_*` flags are `0` or `1`, and `0` when `present` is `0`.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* name;
   int32_t present;
   int32_t show_row_headers;
@@ -5197,6 +5535,7 @@ typedef struct {
  *                        NULL for every other type.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t axis; /* fm_pivot_axis_t */
   const char* field_name;
   int32_t type;       /* fm_pivot_filter_type_t */
@@ -5269,6 +5608,7 @@ typedef struct {
  * `indent` 0 and `multiple_field_filters` off, as Excel creates one.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t show_error;
   const char* error_caption;
   int32_t show_missing;
@@ -5313,6 +5653,7 @@ typedef struct {
  *                             (`refreshOnLoad`).
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t save_data;
   int32_t missing_items_limit;
   int32_t refresh_on_load;
@@ -5331,6 +5672,7 @@ typedef struct {
  *                     fields.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t field_index;
   const char* name;
   const char* formula;
@@ -5396,6 +5738,8 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, uint32_t ca
  * `out_ref`, `out_sheet`, and `out_name` are model-backed strings owned by
  * the workbook handle and remain valid until the cache is mutated or the
  * handle is destroyed. Reads do not invalidate them.
+ *
+ * Lifetime: transient.
  */
 FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workbook_t* wb, uint32_t cache_id,
                                                                 int32_t* out_present, const char** out_ref,
@@ -5421,6 +5765,8 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_count(const fm_workbook_t* 
  *        model-backed view into the workbook handle and remains valid until
  *        the cache field list is mutated or the handle is destroyed. Reads
  *        do not invalidate it.
+ *
+ * Lifetime: transient.
  */
 FM_API fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_t* wb, uint32_t cache_id,
                                                           size_t field_index, const char** out_name);
@@ -5448,6 +5794,8 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_shared_item_count(const fm_
  *        to tell them from plain numbers. Text is read-scratch backed: the pointer remains
  *        valid until the next scratch-backed read, any mutation, or handle
  *        destruction. `item_index >= count` is `FM_STATUS_INDEX_OUT_OF_RANGE` (5054).
+ *
+ * Lifetime: transient.
  */
 FM_API fm_status_t fm_workbook_get_pivot_cache_field_shared_item_value(const fm_workbook_t* wb, uint32_t cache_id,
                                                                        size_t field_index, size_t item_index,
@@ -5630,6 +5978,8 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache_calculated_field(fm_workbook_t
  *        into `*out_formula`: an empty string when the field is not calculated.
  *        A non-empty formula is a read-scratch-backed view, spelled as
  *        `fm_sheet_get_formula` spells formulas (see `fm_workbook_get_file_name`).
+ *
+ * Lifetime: transient.
  */
 FM_API fm_status_t fm_workbook_get_pivot_cache_field_formula(const fm_workbook_t* wb, uint32_t cache_id,
                                                              size_t field_index, const char** out_formula);
@@ -5668,6 +6018,8 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_calculated_item_count(const fm_wo
 
 /**
  * @brief Reads calculated item `item_index` (in solve order) into `out`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
@@ -6123,6 +6475,8 @@ FM_API fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, size_t sheet
  *        not counted as taken; `SIZE_MAX` for none (the add case). The string
  *        is a read-scratch-backed view.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -6162,6 +6516,8 @@ FM_API fm_status_t fm_sheet_get_pivot_cache_id(const fm_workbook_t* wb, size_t s
  *        model-backed view, valid until the next mutation of the pivot or its
  *        sheet, or until the handle is destroyed.
  *
+ * Lifetime: transient.
+ *
  * @return As `fm_sheet_get_pivot_cache_id`, with `out_name` in place of
  *         `out_cache_id`.
  */
@@ -6196,6 +6552,8 @@ FM_API fm_status_t fm_sheet_resolve_pivot_runtime_id(const fm_workbook_t* wb, si
 
 /**
  * @brief Reads the pivot's options into `out`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
@@ -6285,6 +6643,8 @@ FM_API fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, size
  * @brief Reads the pivot's table style into `out`, the values
  *        `fm_sheet_set_pivot_style_info` writes.
  *
+ * Lifetime: transient.
+ *
  * @return As `fm_sheet_get_pivot_grand_totals`, with `out` in place of
  *         `out_rows` / `out_cols`.
  */
@@ -6293,6 +6653,8 @@ FM_API fm_status_t fm_sheet_get_pivot_style_info(const fm_workbook_t* wb, size_t
 
 /**
  * @brief Reads the definition of pivot field `field_index` into `out`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
@@ -6315,6 +6677,8 @@ FM_API fm_status_t fm_sheet_get_pivot_field_item_count(const fm_workbook_t* wb, 
  * @brief Reads item `item_index` of pivot field `field_index` into `out`. The
  *        index is the one `fm_sheet_set_pivot_field_item_visible` takes.
  *
+ * Lifetime: transient.
+ *
  * @return As `fm_sheet_get_pivot_field`, plus `FM_STATUS_INVALID_ARGUMENT` (2) when
  *         `item_index` is out of range.
  */
@@ -6328,6 +6692,8 @@ FM_API fm_status_t fm_sheet_get_pivot_field_item(const fm_workbook_t* wb, size_t
  *        mutation, and never `NULL`; `number_format` is the format code as
  *        `fm_pivot_field_info_t::number_format` resolves it (`""` for none).
  *        An unset `show_as_base_field` / `show_as_base_item` is `-1`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
@@ -6345,6 +6711,8 @@ FM_API fm_status_t fm_sheet_get_pivot_data_field(const fm_workbook_t* wb, size_t
  *        axis holding the Values level lists `FM_PIVOT_VALUES_FIELD` at its
  *        position; when it is listed the view is read-scratch-backed.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_indices` or `out_count` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) if `sheet_index` is out of range;
@@ -6353,7 +6721,11 @@ FM_API fm_status_t fm_sheet_get_pivot_data_field(const fm_workbook_t* wb, size_t
 FM_API fm_status_t fm_sheet_get_pivot_row_field_order(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                       const uint32_t** out_indices, size_t* out_count);
 
-/** @brief Reads the column-axis field order. Same contract as rows. */
+/**
+ * @brief Reads the column-axis field order. Same contract as rows.
+ *
+ * Lifetime: transient.
+ */
 FM_API fm_status_t fm_sheet_get_pivot_column_field_order(const fm_workbook_t* wb, size_t sheet_index,
                                                          size_t pivot_index, const uint32_t** out_indices,
                                                          size_t* out_count);
@@ -6393,6 +6765,8 @@ FM_API fm_status_t fm_sheet_get_pivot_filter_count(const fm_workbook_t* wb, size
  * they must outlive those events. For non-text primary values,
  * `value_text` is `NULL`; an unset upper bound has kind
  * `FM_PIVOT_FILTER_VALUE_NONE` and zero numeric payloads.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
@@ -6461,6 +6835,7 @@ FM_API fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, size_t sheet_
  * spill-aware and returns the per-cell value verbatim.
  */
 typedef struct {
+  uint32_t struct_size;
   fm_cell_rect_t rect;
   int32_t engaged; /* 0/1 */
   int32_t blocked; /* 0/1 */
@@ -6499,6 +6874,7 @@ FM_API fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, size_t sheet
  * Every cell of the block reports the same values.
  */
 typedef struct {
+  uint32_t struct_size;
   fm_cell_rect_t rect;
   const char* formula;
   int32_t engaged; /* 0/1 */
@@ -6510,6 +6886,8 @@ typedef struct {
  * A dynamic-array spill is not a legacy array formula; use
  * `fm_sheet_get_spill_info` for that. When the cell is outside any block,
  * sets `out->engaged = 0` and leaves the remaining fields zero / `NULL`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -6602,6 +6980,7 @@ typedef enum {
  * static-init time); callers do not free the returned pointers.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* canonical_name;
   uint32_t min_arity;
   uint32_t max_arity;
@@ -6620,6 +6999,8 @@ typedef struct {
  * view into the catalog's static storage, valid for the lifetime of the
  * process; otherwise `*out_present` is `0` and `*out` zeroed (still
  * `FM_STATUS_OK` (0)). The metadata is locale-invariant.
+ *
+ * Lifetime: static.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `name`, `out_present` or `out` is `NULL`;
@@ -6643,6 +7024,8 @@ FM_API fm_status_t fm_get_function_count(size_t* out_count);
  * lists. `*out_name` is a static view into the catalog's process-static
  * storage.
  *
+ * Lifetime: static.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out_name` is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
@@ -6663,6 +7046,8 @@ FM_API fm_status_t fm_get_function_name_at(size_t index, const char** out_name);
  * `ja-JP` renames only `DOLLAR` (`YEN`), `USDOLLAR` (`DOLLAR`) and `DBCS`
  * (`JIS`); `zh-TW` renames only `DBCS` (`BIG5`).
  *
+ * Lifetime: static.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
@@ -6681,6 +7066,8 @@ FM_API fm_status_t fm_localize_function_name(const char* canonical_name, const c
  * (ASCII case-insensitive), accepting the canonical spelling as a fallback; a
  * locale without renames reduces to that canonical match. `*out_canonical` is a
  * static view into process-static storage and must not be freed.
+ *
+ * Lifetime: static.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -6705,6 +7092,8 @@ FM_API fm_status_t fm_canonicalize_function_name(const char* localized_name, con
  * `fm_localize_formula` / `fm_canonicalize_formula` call on the same
  * thread. Copy it before making another call when it must be retained.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
@@ -6718,6 +7107,8 @@ FM_API fm_status_t fm_localize_formula(const char* formula, const char* profile_
  *
  * `*out_formula` is the same thread-local view as `fm_localize_formula`
  * returns; the rewrite scope and status codes are also the same.
+ *
+ * Lifetime: transient.
  */
 FM_API fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id, const char** out_formula);
 
@@ -6735,6 +7126,7 @@ typedef enum { FM_DATE_ORDER_MDY = 0, FM_DATE_ORDER_YMD = 1, FM_DATE_ORDER_DMY =
  * `win-365-ja_JP` is Excel-backed for facts but its collation order is estimated.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* decimal_separator;
   const char* group_separator;
   const char* list_separator;
@@ -6753,6 +7145,8 @@ typedef struct {
 
 /**
  * @brief Fills `*out` with the locale facts of `profile_id`.
+ *
+ * Lifetime: static.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `profile_id` or `out` is `NULL`;
@@ -6784,7 +7178,7 @@ typedef enum {
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           (context `profile_id=<id>`) or `strength` is out of range.
  */
-FM_API fm_status_t fm_compare_text(const char* a, const char* b, const char* profile_id, int32_t strength,
+FM_API fm_status_t fm_compare_text(const char* a, const char* b, int32_t strength, const char* profile_id,
                                    int32_t* out_order);
 
 /**
@@ -6813,8 +7207,8 @@ FM_API fm_status_t fm_compare_text(const char* a, const char* b, const char* pro
  *           value is a non-finite number, text with a `NULL` pointer, an
  *           out-of-range error code, or an array / reference / lambda kind.
  */
-FM_API fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, const char* profile_id,
-                                            int32_t strength, uint32_t* out_class_ids, uint32_t* out_class_count);
+FM_API fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, int32_t strength,
+                                            const char* profile_id, uint32_t* out_class_ids, uint32_t* out_class_count);
 
 /**
  * @brief Writes the number of error values, the bound of `index` in
@@ -6832,6 +7226,8 @@ FM_API fm_status_t fm_get_locale_error_name_count(size_t* out_count);
  * Both strings are static views into process-static storage. `*out_measured` is `1` when the
  * localized spelling comes from Excel under an Excel-backed profile and
  * `0` when it is assumed.
+ *
+ * Lifetime: static.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -6887,6 +7283,7 @@ typedef enum {
  * OOXML set reads as `FM_SHEET_VIEW_MODE_NORMAL` and is kept verbatim on save.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t zoom_scale;
   uint32_t freeze_rows;
   uint32_t freeze_cols;
@@ -6918,6 +7315,7 @@ typedef struct {
  * style attribute presence, including explicit style="0".
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t first;
   uint32_t last;
   double width;
@@ -6946,6 +7344,7 @@ typedef struct {
  * auto height that merely caches `ht`, which Excel recomputes on its own.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t row;
   double height;
   int32_t hidden; /* 0/1 */
@@ -7107,6 +7506,8 @@ FM_API fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index,
  * payload carried by the OOXML reader so callers can preserve definitions
  * they do not otherwise interpret.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
  */
@@ -7250,7 +7651,7 @@ typedef struct {
  *     `max_val_iso` their ISO spellings.
  *   * color -- `dxf_id` names the differential format whose fill
  *     (`cell_color` set) or font colour matches; `UINT32_MAX` means absent.
- *   * icon -- `icon_set` is the `formulon::cf::IconSetName` ordinal and
+ *   * icon -- `icon_set` is an `fm_icon_set_t` and
  *     `icon_id` the icon index when `has_icon_id` (else "no icon").
  *
  * On input every `const char*` may be `NULL`, meaning empty, and an array
@@ -7296,7 +7697,7 @@ typedef struct {
  *
  * `sort_by` is an `fm_sort_by_t`. `dxf_id` is read
  * only when `has_dxf_id`, `icon_id` only when `has_icon_id`; `icon_set` is
- * the `formulon::cf::IconSetName` ordinal.
+ * an `fm_icon_set_t`.
  */
 typedef struct {
   fm_cell_rect_t ref;
@@ -7324,6 +7725,7 @@ typedef struct {
  * set of the unchanged record leaves the stored element as it was.
  */
 typedef struct {
+  uint32_t struct_size;
   fm_cell_rect_t range;
   const fm_filter_column_t* columns;
   uint32_t column_count;
@@ -7343,6 +7745,8 @@ typedef struct {
  * Every string and array reachable from `*out` is a read-scratch-backed view
  * and may be invalidated by the next successful scratch-backed read on the
  * same handle, by a mutation, or by handle destruction.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -7434,6 +7838,8 @@ FM_API fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t
 /**
  * @brief Reads the AutoFilter of table `table_index`, as
  *        `fm_sheet_get_auto_filter` reads a sheet's.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -7784,6 +8190,8 @@ FM_API fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_in
  * that MUST be released with `fm_buffer_destroy`. Both are zeroed before
  * validation and stay zero on failure.
  *
+ * Lifetime: owned (until fm_buffer_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -7852,6 +8260,7 @@ FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_ind
  * is `<sheetFormatPr zeroHeight>`: rows are hidden unless they say otherwise.
  */
 typedef struct {
+  uint32_t struct_size;
   double default_col_width;
   double default_row_height;
   double base_col_width;
@@ -7916,6 +8325,7 @@ typedef enum {
  * read-scratch-backed view; `platform` is a static view (`"win"`).
  */
 typedef struct {
+  uint32_t struct_size;
   double points_per_char;
   double padding_pt;
   double normal_font_size;
@@ -7968,6 +8378,8 @@ FM_API fm_status_t fm_sheet_get_row_height_pt(const fm_workbook_t* wb, size_t sh
 
 /**
  * @brief Reads the column-width conversion model in `mode`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -8145,6 +8557,8 @@ FM_API fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index,
  * must be retained.
  * Returns an empty string (never `NULL`) when no error has been
  * recorded yet.
+ *
+ * Lifetime: transient.
  */
 FM_API const char* fm_get_last_error_message(void);
 
@@ -8153,8 +8567,97 @@ FM_API const char* fm_get_last_error_message(void);
  *        most recent error on the current thread.
  *
  * Same lifetime / non-NULL guarantees as `fm_get_last_error_message`.
+ *
+ * Lifetime: transient.
  */
 FM_API const char* fm_get_last_error_context(void);
+
+/**
+ * @brief Why a formula failed to parse; the values of
+ *        `fm_parse_error_t::code`.
+ *
+ * The values are fixed: new codes are only appended. A status of 1000-1014
+ * from a formula entry point carries one of these; 1002, 1008, 1011 and 1012
+ * are never returned for a syntax failure.
+ */
+typedef enum {
+  FM_PARSE_ERROR_LEXER_INVALID_CHARACTER = 0,
+  FM_PARSE_ERROR_LEXER_UNTERMINATED_STRING = 1,
+  FM_PARSE_ERROR_LEXER_UNTERMINATED_SHEET_QUOTE = 2,
+  FM_PARSE_ERROR_LEXER_INVALID_NUMBER_LITERAL = 3,
+  FM_PARSE_ERROR_LEXER_INVALID_ERROR_LITERAL = 4,
+  FM_PARSE_ERROR_LEXER_INVALID_ESCAPE = 5,
+  FM_PARSE_ERROR_LEXER_INVALID_REFERENCE = 6,
+  FM_PARSE_ERROR_LEXER_EXCESSIVE_LENGTH = 7,
+  FM_PARSE_ERROR_UNEXPECTED_TOKEN = 8,
+  FM_PARSE_ERROR_UNEXPECTED_EOF = 9,
+  FM_PARSE_ERROR_EXPECTED_EXPRESSION = 10,
+  FM_PARSE_ERROR_EXPECTED_CLOSE_PAREN = 11,
+  FM_PARSE_ERROR_UNBALANCED_BRACES = 12,
+  FM_PARSE_ERROR_ARRAY_ROW_MISMATCH = 13,
+  FM_PARSE_ERROR_EXPECTED_RPAREN_OR_COMMA = 14,
+  FM_PARSE_ERROR_EXPECTED_COMMA_OR_SEMI_IN_ARRAY = 15,
+  FM_PARSE_ERROR_INVALID_REFERENCE = 16,
+  FM_PARSE_ERROR_UNSUPPORTED_CONSTRUCT = 17,
+  FM_PARSE_ERROR_EXPECTED_OPEN_PAREN = 18,
+  FM_PARSE_ERROR_EXPECTED_COMMA = 19,
+  FM_PARSE_ERROR_UNBALANCED_BRACKETS = 20,
+  FM_PARSE_ERROR_INVALID_RANGE = 21,
+  FM_PARSE_ERROR_NESTED_FORMULA_TOO_DEEP = 22,
+  FM_PARSE_ERROR_TOO_MANY_ERRORS = 23,
+  FM_PARSE_ERROR_LET_INVALID_NAME = 24,
+  FM_PARSE_ERROR_LET_WRONG_ARITY = 25,
+  FM_PARSE_ERROR_LAMBDA_INVALID_PARAM = 26,
+  FM_PARSE_ERROR_LAMBDA_EMPTY = 27,
+  FM_PARSE_ERROR_LAMBDA_DUPLICATE_PARAM = 28,
+  FM_PARSE_ERROR_ENTRY_WRONG_ARITY = 29,        /* a built-in called with an argument count it refuses */
+  FM_PARSE_ERROR_ENTRY_REFERENCE_REQUIRED = 30, /* a reference-only parameter given a non-reference */
+  FM_PARSE_ERROR_ENTRY_QUALIFIED_BUILTIN = 31,  /* a built-in name typed with a sheet or book qualifier */
+  FM_PARSE_ERROR_ENTRY_REFUSED_WHITESPACE = 32, /* a tab, a carriage return, or a gap before a call's `(` */
+  FM_PARSE_ERROR_ENTRY_PARAM_SHAPED_NAME = 33,  /* typed `_xlpm.` before a cell-shaped name */
+  FM_PARSE_ERROR_ENTRY_DOUBLE_EQUALS = 34,      /* a second leading `=` */
+  FM_PARSE_ERROR_ENTRY_BOM_NOT_SUPPORTED = 35,  /* a leading byte-order mark */
+  FM_PARSE_ERROR_STRUCTURED_REF_INVALID = 36    /* a malformed structured reference */
+} fm_parse_error_code_t;
+
+/**
+ * @brief Where and why the most recent formula syntax failure happened.
+ *
+ * `start` / `end` are UTF-16 code-unit offsets into the text the caller
+ * passed (a supplementary-plane character counts 2); `line` and `column` are
+ * 1-based, `column` in UTF-16 code units. When the failure cannot be placed
+ * in the caller's text the range covers all of it.
+ */
+typedef struct {
+  uint32_t struct_size;
+  int32_t code;   /* fm_parse_error_code_t */
+  uint32_t start; /* first UTF-16 code unit of the offending span */
+  uint32_t end;   /* one past its last UTF-16 code unit */
+  uint32_t line;  /* 1-based */
+  uint32_t column;
+} fm_parse_error_t;
+
+/**
+ * @brief Reads the position of the most recent formula syntax failure on the
+ *        calling thread.
+ *
+ * A failing formula entry point (cell formulas, ad-hoc evaluation, defined
+ * names, conditional-format and data-validation formulas, table column
+ * formulas, pivot calculated fields and items, `fm_workbook_parse_reference`) records
+ * the position beside its status and message; for a record argument the
+ * context names the field (`field=formula2`). The record is thread-local and
+ * cleared by every other call, so read it right after the failing call. This
+ * function, `fm_get_last_error_message` and `fm_get_last_error_context`
+ * leave each other's state untouched, in any order. `out->struct_size` must be
+ * set by the caller.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `out->struct_size` is below the size of
+ *           this version's layout;
+ *         `FM_STATUS_NOT_FOUND` (6) when the last call recorded no syntax failure.
+ */
+FM_API fm_status_t fm_get_last_parse_error(fm_parse_error_t* out);
 
 /**
  * @brief Returns a static C string describing `status`.
@@ -8163,6 +8666,8 @@ FM_API const char* fm_get_last_error_context(void);
  * prefix (e.g. `"INVALID_ARGUMENT"` for `FM_STATUS_INVALID_ARGUMENT`);
  * unknown codes yield `"UNRECOGNIZED_STATUS"`.
  * Always non-NULL with program lifetime.
+ *
+ * Lifetime: static.
  */
 FM_API const char* fm_get_status_name(fm_status_t status);
 
@@ -8172,6 +8677,8 @@ FM_API const char* fm_get_status_name(fm_status_t status);
  * Known values return literals such as `"#DIV/0!"` and `"#REF!"`.
  * Unknown numeric values return `"#UNKNOWN!"`. The returned pointer is
  * never `NULL` and has program lifetime.
+ *
+ * Lifetime: static.
  */
 FM_API const char* fm_get_error_display_name(fm_error_code_t error);
 
@@ -8329,34 +8836,6 @@ typedef struct {
   int32_t hidden;                /* 0/1; ignored unless has_protection */
 } fm_cell_xf_t;
 
-/** Discriminator for `fm_color_spec_t::kind`, mirroring
- *  `formulon::io::ColorSpec::Kind`. */
-typedef enum {
-  kFmColorNone = 0,    /**< No selector; the writer emits sibling `*_argb` as `rgb`. */
-  kFmColorRgb = 1,     /**< `rgb="AARRGGBB"`. */
-  kFmColorTheme = 2,   /**< `theme="N"` with optional `tint`. */
-  kFmColorIndexed = 3, /**< `indexed="N"` legacy palette index. */
-  kFmColorAuto = 4,    /**< `auto="1"` system foreground / background. */
-} fm_color_kind_t;
-
-/**
- * @brief Plain-data projection of a `formulon::io::ColorSpec`.
- *
- * How the OOXML `<color>` element expressed its value. When `kind` is not
- * `kFmColorNone`, this selector is authoritative and the writer re-emits it;
- * the sibling `*_argb` field is not an Excel-rendered colour for theme,
- * indexed, or auto selectors. It is literal RGB for `kFmColorRgb`, or a
- * compatibility fallback otherwise. `kind == kFmColorNone` makes the
- * writer emit the sibling `*_argb` value as `rgb`.
- */
-typedef struct {
-  double tint;      /* theme tint (-1..1); meaningful when kind == kFmColorTheme */
-  uint32_t rgb;     /* AARRGGBB; meaningful when kind == kFmColorRgb */
-  uint32_t theme;   /* theme index; meaningful when kind == kFmColorTheme */
-  uint32_t indexed; /* palette index; meaningful when kind == kFmColorIndexed */
-  uint8_t kind;     /* fm_color_kind_t ordinal */
-} fm_color_spec_t;
-
 /** @brief `fm_font_record_t::underline` values (OOXML `ST_UnderlineValues` order). */
 typedef enum {
   FM_UNDERLINE_STYLE_NONE = 0,
@@ -8403,6 +8882,8 @@ typedef enum {
  * `outline`, `shadow`, `condense` and `extend` are the matching toggle
  * elements and follow the same `has_*` rule as `bold`.
  *
+ * `color` is the `<color>` element, `kFmColorNone` when absent.
+ *
  * `has_size` is honoured by `fm_workbook_add_dxf` alone: a differential font
  * with `has_size == 0` leaves the size unchanged, while every cell-font
  * entry point writes `size` regardless.
@@ -8416,9 +8897,6 @@ typedef enum {
 typedef struct {
   const char* name; /* NUL-terminated UTF-8, model-backed view */
   double size;
-  /* Literal RGB for color.kind == kFmColorRgb; compatibility fallback for
-   * theme/indexed/auto selectors (not an Excel-rendered colour). */
-  uint32_t color_argb;
   int32_t bold;         /* 0=false, 1=true */
   int32_t italic;       /* 0=false, 1=true */
   int32_t strike;       /* 0=false, 1=true */
@@ -8444,15 +8922,9 @@ typedef struct {
   fm_color_spec_t color;
 } fm_font_record_t;
 
-/**
- * @brief One `<stop>` of a gradient fill: a colour at `position` (0..1).
- *
- * `color_argb` is literal RGB when `color.kind` is kFmColorRgb and a
- * compatibility fallback otherwise.
- */
+/** @brief One `<stop>` of a gradient fill: a colour at `position` (0..1). */
 typedef struct {
   double position;
-  uint32_t color_argb;
   fm_color_spec_t color;
 } fm_gradient_stop_t;
 
@@ -8486,9 +8958,8 @@ typedef enum {
  * @brief Plain-data projection of a `formulon::io::FillRecord`.
  *
  * `pattern` is the OOXML pattern index: `0=none`, `1=solid`,
- * `2..18=standard pattern set`. `fg_argb` and `bg_argb` are AARRGGBB
- * packed literal RGB or compatibility fallback values; `fg` and `bg` carry
- * the authoritative `<fgColor>` / `<bgColor>` specifications.
+ * `2..18=standard pattern set`. `fg` and `bg` are the `<fgColor>` /
+ * `<bgColor>` colours, `kFmColorNone` when the element is absent.
  *
  * With `has_gradient` set the record is a `<gradientFill>` and the pattern
  * fields are ignored: `gradient_type` is FM_GRADIENT_LINEAR or
@@ -8501,10 +8972,6 @@ typedef enum {
  */
 typedef struct {
   uint8_t pattern; /* fm_fill_pattern_t */
-  /* Literal RGB when the matching spec kind is kFmColorRgb; compatibility
-   * fallbacks otherwise (not Excel-rendered theme/indexed/auto colours). */
-  uint32_t fg_argb;
-  uint32_t bg_argb;
   fm_color_spec_t fg;
   fm_color_spec_t bg;
   int32_t has_gradient;  /* 0=pattern fill, 1=`<gradientFill>` */
@@ -8541,14 +9008,11 @@ typedef enum {
  *        `formulon::io::BorderRecord`.
  *
  * `style` is the OOXML border-style ordinal: `0=none`, `1=thin`,
- * `2=medium`, `3=dashed`, ..., `13=slantDashDot`. `color` carries the
- * original `<color>` specification. `color_argb` is literal RGB for
- * `color.kind == kFmColorRgb`, or a compatibility fallback otherwise; it is
- * not a resolved theme/indexed/auto render colour.
+ * `2=medium`, `3=dashed`, ..., `13=slantDashDot`. `color` is the side's
+ * `<color>`, `kFmColorNone` when absent.
  */
 typedef struct {
-  uint8_t style;       /* fm_border_style_t */
-  uint32_t color_argb; /* literal RGB or compatibility fallback, AARRGGBB */
+  uint8_t style; /* fm_border_style_t */
   fm_color_spec_t color;
 } fm_border_side_t;
 
@@ -8582,6 +9046,7 @@ typedef struct {
  * `has_*` flag is set, and the value is ignored otherwise.
  */
 typedef struct {
+  uint32_t struct_size;
   const fm_font_record_t* fonts;
   uint32_t font_count;
   uint32_t* font_indices;
@@ -8748,6 +9213,8 @@ FM_API fm_status_t fm_workbook_get_cell_xf(const fm_workbook_t* wb, size_t xf_in
  * @brief Reads the `font_index`-th font record from the workbook's
  *        styles table.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `font_index >= fonts.size()`.
@@ -8763,7 +9230,7 @@ FM_API fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font_ind
  * `0..163` range is used as the fallback. A built-in id with no ECMA-376 code
  * (the East Asian date ids, the Thai-digit ids, the currency ids 5-8)
  * resolves to the code the workbook's Excel profile renders it with, so the
- * result for those ids follows `fm_workbook_set_excel_profile_id`. When present, `*out` is either a
+ * result for those ids follows `fm_workbook_set_profile_id`. When present, `*out` is either a
  * model-backed view into the custom record's format string (valid until the
  * next mutation of the numFmt list, `fm_workbook_add_num_fmt`, or until
  * handle destruction), or a static built-in view with program lifetime.
@@ -8771,6 +9238,8 @@ FM_API fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font_ind
  * only custom records with ids >= 164, so a below-164 override is not
  * promised to survive save/load. `*out_present` is `0` and `*out` `NULL`
  * (still `FM_STATUS_OK` (0)) when no effective mapping exists for `num_fmt_id`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
@@ -8781,6 +9250,8 @@ FM_API fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, uint3
 /**
  * @brief Reads the `fill_index`-th fill record from the workbook's
  *        styles table.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -8809,6 +9280,8 @@ FM_API fm_status_t fm_workbook_get_dxf_count(const fm_workbook_t* wb, size_t* ou
 
 /**
  * @brief Reads the `dxf_index`-th differential-format record.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -8864,6 +9337,7 @@ typedef struct {
  * the next styles mutation, and `elements` is a read-scratch-backed array.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* name;
   int32_t pivot;
   int32_t table;
@@ -8882,6 +9356,8 @@ FM_API fm_status_t fm_workbook_get_table_style_count(const fm_workbook_t* wb, si
 /**
  * @brief Reads the `index`-th custom table style.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
@@ -8893,6 +9369,8 @@ FM_API fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, size_
  *        as `fm_workbook_remove_table_style` matches). `*out_present` is `1`
  *        and `*out` filled when there is one, else `0` and `*out` zeroed
  *        (still `FM_STATUS_OK` (0)).
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -8936,6 +9414,8 @@ FM_API fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const char*
 /**
  * @brief Reads the default table and PivotTable style names (model-backed
  *        views, empty when unset).
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
@@ -9005,6 +9485,8 @@ FM_API fm_status_t fm_workbook_get_cell_style_count(const fm_workbook_t* wb, siz
  *        model-backed view into storage owned by the workbook; see
  *        `fm_cell_style_record_t` for lifetime rules.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index >= cell_styles.size()`.
@@ -9016,6 +9498,8 @@ FM_API fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, size_t
  *        `fm_workbook_remove_cell_style` matches). `*out_present` is `1` and
  *        `*out` filled when there is one, else `0` and `*out` zeroed (still
  *        `FM_STATUS_OK` (0)). Lifetimes as `fm_workbook_get_cell_style_at`.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -9287,6 +9771,7 @@ FM_API fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_batc
  * (0=lt1, 1=dk1, 2=lt2, 3=dk2).
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t argb[12];
 } fm_theme_colors_t;
 
@@ -9297,6 +9782,7 @@ typedef struct {
  * `a:font script="Jpan"` face. Getter strings are read-scratch-backed views.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* major_latin;
   const char* major_east_asian;
   const char* minor_latin;
@@ -9345,6 +9831,7 @@ typedef enum {
  * read-scratch-backed view.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t xf_index;
   int32_t source; /* 0=cell, 1=row, 2=column, 3=default */
   uint32_t font_index;
@@ -9395,6 +9882,8 @@ FM_API fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_them
  *        faces are reported when the theme part is absent or unparseable
  *        (see `fm_workbook_get_theme_colors` for telling the cases apart).
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
@@ -9439,6 +9928,8 @@ FM_API fm_status_t fm_workbook_get_theme_script_font_count(const fm_workbook_t* 
  * entry). Use the same table when choosing by the script of the characters
  * in the text.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is not below the count.
@@ -9454,6 +9945,8 @@ FM_API fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t* wb,
  *
  * `*out_typeface` is a read-scratch-backed view with the lifetime
  * `fm_workbook_get_theme_script_font_at` describes.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -9520,6 +10013,8 @@ FM_API fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const fm_c
  * @brief Reads the effective style of the cell at `(row, col)`; see
  *        `fm_effective_style_t`. The cell need not exist.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -9528,6 +10023,35 @@ FM_API fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const fm_c
  */
 FM_API fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                 fm_effective_style_t* out);
+
+/* -------------------------------------------------------------------------- */
+/* Sheet tab colour                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Reads the sheet's tab colour (`<sheetPr><tabColor>`).
+ *
+ * `*out` is the colour as stored; `kind` is `kFmColorNone` when the sheet has
+ * no tab colour.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sheet_index, fm_color_spec_t* out);
+
+/**
+ * @brief Sets or clears the sheet's tab colour (`<sheetPr><tabColor>`).
+ *
+ * `color == NULL` or `kind == kFmColorNone` removes the tab colour. Only the
+ * `<tabColor>` child is rewritten; the rest of `<sheetPr>` is kept.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an unknown `kind` or a non-finite theme tint.
+ */
+FM_API fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_index, const fm_color_spec_t* color);
 
 /* -------------------------------------------------------------------------- */
 /* External links                                                             */
@@ -9561,6 +10085,7 @@ typedef enum {
  * `target[0] != '\0'` before using it.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t index;          /* 1-based document order */
   const char* rel_id;      /* workbook.xml.rels rId for this link */
   const char* part_path;   /* resolved package-relative body path */
@@ -9592,6 +10117,8 @@ FM_API fm_status_t fm_workbook_get_external_link_count(const fm_workbook_t* wb, 
  *
  * The returned string pointers are model-backed views into workbook-owned
  * storage; see `fm_external_link_record_t` for lifetime rules.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -9643,6 +10170,7 @@ typedef enum {
  *        `fm_image_format_t`.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t format;
   uint32_t px_width;
   uint32_t px_height;
@@ -9663,6 +10191,7 @@ typedef struct {
  * describes); `media_path` is empty for a non-picture.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t object_id;
   int32_t kind;
   int32_t anchor_kind;
@@ -9750,6 +10279,8 @@ FM_API fm_status_t fm_sheet_get_drawing_object_count(const fm_workbook_t* wb, si
  *
  * The three strings are read-scratch-backed views.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -9765,6 +10296,8 @@ FM_API fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, size_
  *        one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)).
  *
  * The three strings are read-scratch-backed views.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -9784,6 +10317,8 @@ FM_API fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size_t s
  * NUL-terminated: it stays valid until the next call that mutates the
  * workbook (insert, remove, any edit) or the handle is destroyed; unrelated
  * reads do not invalidate it. Copy it to keep it longer.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -9910,6 +10445,8 @@ FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_
  * validation and stay zero on failure. Hand the bytes to
  * `fm_sheet_restore_drawing` to put the object back.
  *
+ * Lifetime: owned (until fm_buffer_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -9957,7 +10494,7 @@ FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_inde
 /** @brief How a shape's fill or outline is specified (`fm_shape_t::fill_kind`, `line_kind`). */
 typedef enum {
   FM_SHAPE_PAINT_UNSET = -1, /**< No fill or outline element. */
-  FM_SHAPE_PAINT_SOLID = 0,  /**< Solid `srgbClr`; the colour is `fill_rgb` / `line_rgb`. */
+  FM_SHAPE_PAINT_SOLID = 0,  /**< Solid `srgbClr`; the colour is `fill_color` / `line_color`. */
   FM_SHAPE_PAINT_NONE = 1,   /**< `noFill`. */
   FM_SHAPE_PAINT_OTHER = 2,  /**< Gradient, pattern, picture or theme colour; read only. */
 } fm_shape_paint_t;
@@ -9968,8 +10505,8 @@ typedef enum {
 #define FM_SHAPE_FIELD_ANCHOR 0x4u /* anchor_kind, edit_as, from_*, to_*, width_emu, height_emu */
 #define FM_SHAPE_FIELD_TEXT 0x8u
 #define FM_SHAPE_FIELD_TEXT_BOX 0x10u
-#define FM_SHAPE_FIELD_FILL 0x20u /* fill_kind (SOLID or NONE) and fill_rgb */
-#define FM_SHAPE_FIELD_LINE 0x40u /* line_kind (SOLID or NONE) and line_rgb */
+#define FM_SHAPE_FIELD_FILL 0x20u /* fill_kind (SOLID or NONE) and fill_color */
+#define FM_SHAPE_FIELD_LINE 0x40u /* line_kind (SOLID or NONE) and line_color */
 #define FM_SHAPE_FIELD_LINE_WIDTH 0x80u
 #define FM_SHAPE_FIELD_ROTATION 0x100u
 #define FM_SHAPE_FIELD_HIDDEN 0x200u
@@ -9983,8 +10520,8 @@ typedef enum {
  * reports its position as `from_col_offset_emu` = x and `from_row_offset_emu`
  * = y, and `width_emu`/`height_emu` are the size. `fill_kind` / `line_kind`
  * are `fm_shape_paint_t` (`-1` when the element is absent);
- * `fill_rgb` / `line_rgb` are 0xRRGGBB when the kind is
- * solid. `rotation` is in 60000ths of a degree and `line_width_emu` is `0`
+ * `fill_color` / `line_color` are None or Rgb: Rgb when the kind is solid,
+ * None otherwise. `rotation` is in 60000ths of a degree and `line_width_emu` is `0`
  * without a width. `preset_geometry` is the `prst` name, empty for custom
  * geometry or a group; `text` joins paragraphs with `\n`.
  *
@@ -9997,6 +10534,7 @@ typedef enum {
  * input.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t fields;
   uint32_t object_id;
   int32_t kind;
@@ -10007,9 +10545,9 @@ typedef struct {
   uint32_t to_row;
   uint32_t to_col;
   int32_t fill_kind;
-  uint32_t fill_rgb;
+  fm_color_spec_t fill_color;
   int32_t line_kind;
-  uint32_t line_rgb;
+  fm_color_spec_t line_color;
   int32_t rotation;
   int32_t hidden;
   int32_t text_box;
@@ -10044,6 +10582,8 @@ FM_API fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t shee
  * and pass through a save untouched. The three strings are read-scratch-backed
  * views.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -10058,6 +10598,8 @@ FM_API fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t sheet_i
  *        (still `FM_STATUS_OK` (0)).
  *
  * The three strings are read-scratch-backed views.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -10159,6 +10701,7 @@ typedef enum {
  * input.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t fields;
   uint32_t object_id;
   uint32_t column_count;
@@ -10197,6 +10740,8 @@ FM_API fm_status_t fm_sheet_get_slicer_count(const fm_workbook_t* wb, size_t she
  * @brief Reads slicer `index` of the sheet. The strings are read-scratch-backed
  *        views.
  *
+ * Lifetime: transient.
+ *
  * @return As `fm_sheet_get_slicer_count`, with `FM_STATUS_INVALID_ARGUMENT` (2) also for an
  *         out-of-range `index`.
  */
@@ -10208,6 +10753,8 @@ FM_API fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sheet_
  *        filled when there is one, else `0` and `*out` zeroed (still
  *        `FM_STATUS_OK` (0)). A slicer without a frame has no id and is not
  *        found. The strings are read-scratch-backed views.
+ *
+ * Lifetime: transient.
  *
  * @return As `fm_sheet_get_slicer_count`.
  */
@@ -10306,6 +10853,7 @@ typedef struct {
  * `fm_sparkline_*_t` types; flags are 0/1.
  */
 typedef struct {
+  uint32_t struct_size;
   fm_color_spec_t color_series;
   fm_color_spec_t color_negative;
   fm_color_spec_t color_axis;
@@ -10353,6 +10901,8 @@ FM_API fm_status_t fm_sheet_get_sparkline_group_count(const fm_workbook_t* wb, s
 /**
  * @brief Reads sparkline group `group_index`; `date_axis_ref` is a read-scratch-backed view.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -10364,6 +10914,8 @@ FM_API fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, size_t 
 /**
  * @brief Reads sparkline `sparkline_index` of group `group_index`; both strings are
  *        read-scratch-backed views.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
@@ -10640,21 +11192,23 @@ typedef struct {
   const char* formula;
 } fm_chart_title_t;
 
-/** @brief Solid fill; `transparency_pct` is NaN when the color has no alpha. */
+/**
+ * @brief Solid fill. `color` is None or Rgb (`kFmColorNone` without a solid
+ *        colour); `transparency_pct` is NaN when the color has no alpha.
+ */
 typedef struct {
-  int32_t has_color;
-  uint32_t color;
+  fm_color_spec_t color;
   double transparency_pct;
 } fm_chart_fill_t;
 
 /**
- * @brief Outline. `width_pt` and `transparency_pct` are NaN when absent;
+ * @brief Outline. `color` is None or Rgb (`kFmColorNone` without a solid
+ *        colour); `width_pt` and `transparency_pct` are NaN when absent;
  *        `dash` (an `fm_chart_line_dash_t`) is meaningful when `has_dash`;
  *        `none` is non-zero for an explicit no-line.
  */
 typedef struct {
-  int32_t has_color;
-  uint32_t color;
+  fm_color_spec_t color;
   double transparency_pct;
   double width_pt;
   int32_t has_dash;
@@ -10674,7 +11228,8 @@ typedef struct {
 /**
  * @brief Data labels of a series. `separator` and `number_format` are
  *        `NULL` when absent; `position` (an `fm_chart_label_position_t`) is
- *        meaningful when `has_position`; `font_size_pt` is NaN when absent.
+ *        meaningful when `has_position`; `font_color` is None or Rgb
+ *        (`kFmColorNone` when absent); `font_size_pt` is NaN when absent.
  */
 typedef struct {
   int32_t show_value;
@@ -10687,8 +11242,7 @@ typedef struct {
   int32_t position;
   const char* number_format;
   int32_t source_linked;
-  int32_t has_font_color;
-  uint32_t font_color;
+  fm_color_spec_t font_color;
   double font_size_pt;
   int32_t deleted;
 } fm_chart_labels_t;
@@ -10705,6 +11259,7 @@ typedef struct {
  * zero) when the series share no such rectangle.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t object_id;
   const char* name;
   const char* description;
@@ -10749,6 +11304,7 @@ typedef struct {
  *        `chartex_layout` is empty unless the plot is chartex.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t type;
   const char* chartex_layout;
   int32_t bar_dir;
@@ -10793,6 +11349,7 @@ typedef struct {
  *        `fm_chart_get_series_point_at` reads.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t idx;
   uint32_t order;
   int32_t filtered;
@@ -10814,6 +11371,7 @@ typedef struct {
 
 /** @brief A literal point: a number, or `text` when `is_text`. */
 typedef struct {
+  uint32_t struct_size;
   uint32_t idx;
   int32_t is_text;
   double number;
@@ -10822,6 +11380,7 @@ typedef struct {
 
 /** @brief One formatted data point (`c:dPt`). */
 typedef struct {
+  uint32_t struct_size;
   uint32_t idx;
   fm_chart_fill_t fill;
   fm_chart_line_t line;
@@ -10837,6 +11396,7 @@ typedef struct {
  *        `tick_label_pos` are `NULL` when absent.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t id;
   int32_t kind;
   int32_t position;
@@ -10867,6 +11427,8 @@ typedef struct {
  * `NULL` (still `FM_STATUS_OK` (0)). Later workbook edits do not change the
  * snapshot.
  *
+ * Lifetime: owned (until fm_chart_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out_present` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -10881,6 +11443,8 @@ FM_API void fm_chart_destroy(fm_chart_t* chart);
 
 /**
  * @brief Reads the chart's top-level fields.
+ *
+ * Lifetime: owned (until fm_chart_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`.
  */
@@ -10909,6 +11473,8 @@ FM_API fm_status_t fm_chart_get_hidden_category_at(const fm_chart_t* chart, size
 /**
  * @brief Reads plot group `plot` (`plot < plot_count`).
  *
+ * Lifetime: owned (until fm_chart_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `plot` is out of range.
@@ -10928,6 +11494,8 @@ FM_API fm_status_t fm_chart_get_plot_axis_id_at(const fm_chart_t* chart, size_t 
  * @brief Reads series `series` of plot group `plot`, in document order
  *        (`series < series_count`).
  *
+ * Lifetime: owned (until fm_chart_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `plot` or `series` is out of range.
@@ -10937,6 +11505,8 @@ FM_API fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t plot, 
 /**
  * @brief Reads literal point `index` of input `role` (an `fm_chart_role_t`)
  *        of a series (`index < literal_count`).
+ *
+ * Lifetime: owned (until fm_chart_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -10959,6 +11529,8 @@ FM_API fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, size_t 
 /**
  * @brief Reads axis `index` (`index < axis_count`).
  *
+ * Lifetime: owned (until fm_chart_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
@@ -10979,6 +11551,7 @@ typedef struct fm_chart_data fm_chart_data_t;
  *        `na_as_blank` overrides whether `#N/A` points draw as blank cells.
  */
 typedef struct {
+  uint32_t struct_size;
   const char* source;
   int32_t direction_op;
   int32_t direction;
@@ -11005,6 +11578,7 @@ typedef struct {
  * title text.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t is_xy;
   uint32_t point_count;
   uint32_t series_count;
@@ -11028,6 +11602,7 @@ typedef struct {
  *        outside the XY domain.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t plot_index;
   uint32_t idx;
   const char* name;
@@ -11047,6 +11622,7 @@ typedef struct {
  * XY domain; `sizes` is `NULL` unless the series is a bubble series.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t count;
   const double* values;
   const uint8_t* states;
@@ -11056,6 +11632,7 @@ typedef struct {
 
 /** @brief Resolved title text of one axis. */
 typedef struct {
+  uint32_t struct_size;
   uint32_t axis_id;
   const char* text;
 } fm_chart_axis_title_text_t;
@@ -11067,6 +11644,7 @@ typedef struct {
  *        and `axis_id` the axis of an `axis_title`.
  */
 typedef struct {
+  uint32_t struct_size;
   uint32_t series_index;
   const char* source;
   uint32_t axis_id;
@@ -11078,6 +11656,8 @@ typedef struct {
  *
  * `*out` is set to `NULL` before validation; on success the caller owns it
  * and releases it with `fm_chart_data_destroy`.
+ *
+ * Lifetime: owned (until fm_chart_data_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out` is `NULL`;
@@ -11098,6 +11678,8 @@ FM_API fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t sheet
  * direction or header is auto), else over the chart's derived range (unset
  * ones as derived).
  *
+ * Lifetime: owned (until fm_chart_data_destroy).
+ *
  * @return as `fm_sheet_get_chart_data` (an absent id is
  *         `FM_STATUS_NOT_FOUND` (6) whatever `overrides` holds), and
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `overrides` is `NULL`;
@@ -11114,6 +11696,8 @@ FM_API void fm_chart_data_destroy(fm_chart_data_t* data);
 /**
  * @brief Reads the data summary.
  *
+ * Lifetime: owned (until fm_chart_data_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_chart_data_info_t* out);
@@ -11124,6 +11708,8 @@ FM_API fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_chart_
  *
  * `*out_label` is an owned snapshot held by `data`, valid until
  * `fm_chart_data_destroy`.
+ *
+ * Lifetime: owned (until fm_chart_data_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -11148,6 +11734,8 @@ FM_API fm_status_t fm_chart_data_get_category_level_size(const fm_chart_data_t* 
  * `*out_label` is an owned snapshot held by `data`, valid until
  * `fm_chart_data_destroy`.
  *
+ * Lifetime: owned (until fm_chart_data_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `level` or `index` is out of range.
@@ -11158,6 +11746,8 @@ FM_API fm_status_t fm_chart_data_get_category_level_at(const fm_chart_data_t* da
 /**
  * @brief Reads resolved series `series` (`series < series_count`).
  *
+ * Lifetime: owned (until fm_chart_data_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `series` is out of range.
@@ -11166,6 +11756,8 @@ FM_API fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, size
 
 /**
  * @brief Returns the point arrays of series `series`.
+ *
+ * Lifetime: owned (until fm_chart_data_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -11188,6 +11780,8 @@ FM_API fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, size_
 /**
  * @brief Reads axis title `index` (`index < axis_title_count`).
  *
+ * Lifetime: owned (until fm_chart_data_destroy).
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
@@ -11197,6 +11791,8 @@ FM_API fm_status_t fm_chart_data_get_axis_title_at(const fm_chart_data_t* data, 
 
 /**
  * @brief Reads unresolved input `index` (`index < unresolved_count`).
+ *
+ * Lifetime: owned (until fm_chart_data_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -11223,6 +11819,7 @@ FM_API fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, 
  * two-cell anchor.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t kind;
   int32_t grouping;
   const char* source;
@@ -11234,18 +11831,24 @@ typedef struct {
   fm_image_insert_t placement;
 } fm_chart_insert_t;
 
-/** @brief Solid fill patch; `transparency_pct` needs a solid color. */
+/**
+ * @brief Solid fill patch; a `SET` `color` is kind Rgb, and
+ *        `transparency_pct` needs a solid color.
+ */
 typedef struct {
   int32_t color_op;
-  uint32_t color;
+  fm_color_spec_t color;
   int32_t transparency_op;
   double transparency_pct;
 } fm_chart_fill_patch_t;
 
-/** @brief Outline patch; `dash` is an `fm_chart_line_dash_t`, `none` 0/1 (`CLEAR` rejected). */
+/**
+ * @brief Outline patch; a `SET` `color` is kind Rgb, `dash` is an
+ *        `fm_chart_line_dash_t`, `none` 0/1 (`CLEAR` rejected).
+ */
 typedef struct {
   int32_t color_op;
-  uint32_t color;
+  fm_color_spec_t color;
   int32_t transparency_op;
   double transparency_pct;
   int32_t width_op;
@@ -11269,7 +11872,8 @@ typedef struct {
 
 /**
  * @brief Data-label patch. The `show_*` flags are 0/1 (`CLEAR` rejected);
- *        `position` is an `fm_chart_label_position_t`.
+ *        `position` is an `fm_chart_label_position_t`; a `SET` `font_color`
+ *        is kind Rgb.
  */
 typedef struct {
   int32_t show_value_op;
@@ -11289,7 +11893,7 @@ typedef struct {
   int32_t number_format_op;
   const char* number_format;
   int32_t font_color_op;
-  uint32_t font_color;
+  fm_color_spec_t font_color;
   int32_t font_size_op;
   double font_size_pt;
 } fm_chart_labels_patch_t;
@@ -11303,6 +11907,7 @@ typedef struct {
  * the marker or the data labels; `smooth` is 0/1 (`CLEAR` rejected).
  */
 typedef struct {
+  uint32_t struct_size;
   const char* name;
   const char* categories;
   const char* values;
@@ -11321,6 +11926,7 @@ typedef struct {
 
 /** @brief Data-point patch; a patch that changes nothing removes the point's formatting. */
 typedef struct {
+  uint32_t struct_size;
   fm_chart_fill_patch_t fill;
   fm_chart_line_patch_t line;
   int32_t marker_op;
@@ -11333,6 +11939,7 @@ typedef struct {
  *        10..90 and doughnut only.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t gap_width_op;
   uint32_t gap_width;
   int32_t overlap_op;
@@ -11357,6 +11964,7 @@ typedef struct {
  * (`nextTo`, `low`, `high`, `none`) restores the default.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t visible_op;
   int32_t visible;
   int32_t title_op;
@@ -11390,6 +11998,7 @@ typedef struct {
  *        is 0); `KEEP` leaves them alone.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t position;
   int32_t overlay;
   int32_t hidden_series_op;
@@ -11405,6 +12014,7 @@ typedef struct {
  *        `na_as_blank` set to 0 removes it too, as Excel writes it.
  */
 typedef struct {
+  uint32_t struct_size;
   int32_t blanks_as_op;
   int32_t blanks_as;
   int32_t plot_vis_only_op;
@@ -11593,6 +12203,7 @@ FM_API fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet_ind
  * absent reads as row and column 0.
  */
 typedef struct {
+  uint32_t struct_size;
   fm_cell_rect_t rect;
   uint32_t row_input_row;
   uint32_t row_input_col;
@@ -11662,6 +12273,8 @@ FM_API fm_status_t fm_workbook_recalc_data_tables(fm_workbook_t* wb);
 /**
  * @brief Returns the Formulon library version as a NUL-terminated
  *        UTF-8 string. Always non-NULL with program lifetime.
+ *
+ * Lifetime: static.
  */
 FM_API const char* fm_get_version(void);
 

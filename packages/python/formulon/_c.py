@@ -49,18 +49,22 @@ import struct
 import threading
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import NamedTuple, Optional, Tuple, Union
 
 import wasmtime
 
 from ._status import INDEX_OUT_OF_RANGE_CODES, NOT_FOUND_CODES, StatusCode
+from ._structs import PARSE_ERROR
 
 __all__ = [
     "LIB",
     "FormulonError",
     "IndexOutOfRangeError",
+    "FormulaSyntaxError",
     "InvalidArgumentError",
     "NotFoundError",
+    "ParseError",
+    "ParseErrorCode",
     "WorkbookClosedError",
     "ValueKind",
     "decode_cstr",
@@ -148,6 +152,67 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
     return ivalue
 
 
+class ParseErrorCode(IntEnum):
+    """Mirror of ``fm_parse_error_code_t`` in ``formulon_c.h``."""
+
+    LEXER_INVALID_CHARACTER = 0
+    LEXER_UNTERMINATED_STRING = 1
+    LEXER_UNTERMINATED_SHEET_QUOTE = 2
+    LEXER_INVALID_NUMBER_LITERAL = 3
+    LEXER_INVALID_ERROR_LITERAL = 4
+    LEXER_INVALID_ESCAPE = 5
+    LEXER_INVALID_REFERENCE = 6
+    LEXER_EXCESSIVE_LENGTH = 7
+    UNEXPECTED_TOKEN = 8
+    UNEXPECTED_EOF = 9
+    EXPECTED_EXPRESSION = 10
+    EXPECTED_CLOSE_PAREN = 11
+    UNBALANCED_BRACES = 12
+    ARRAY_ROW_MISMATCH = 13
+    EXPECTED_RPAREN_OR_COMMA = 14
+    EXPECTED_COMMA_OR_SEMI_IN_ARRAY = 15
+    INVALID_REFERENCE = 16
+    UNSUPPORTED_CONSTRUCT = 17
+    EXPECTED_OPEN_PAREN = 18
+    EXPECTED_COMMA = 19
+    UNBALANCED_BRACKETS = 20
+    INVALID_RANGE = 21
+    NESTED_FORMULA_TOO_DEEP = 22
+    TOO_MANY_ERRORS = 23
+    LET_INVALID_NAME = 24
+    LET_WRONG_ARITY = 25
+    LAMBDA_INVALID_PARAM = 26
+    LAMBDA_EMPTY = 27
+    LAMBDA_DUPLICATE_PARAM = 28
+    ENTRY_WRONG_ARITY = 29
+    ENTRY_REFERENCE_REQUIRED = 30
+    ENTRY_QUALIFIED_BUILTIN = 31
+    ENTRY_REFUSED_WHITESPACE = 32
+    ENTRY_PARAM_SHAPED_NAME = 33
+    ENTRY_DOUBLE_EQUALS = 34
+    ENTRY_BOM_NOT_SUPPORTED = 35
+    STRUCTURED_REF_INVALID = 36
+
+
+class ParseError(NamedTuple):
+    """Position of a formula syntax failure (``fm_parse_error_t``).
+
+    ``start`` / ``end`` are UTF-16 code units into the text the caller passed;
+    ``line`` and ``column`` are 1-based.
+    """
+
+    code: Union[ParseErrorCode, int]
+    start: int
+    end: int
+    line: int
+    column: int
+
+
+# Statuses 1000..1014 are formula syntax failures; each records a ParseError.
+_SYNTAX_STATUS_FIRST = 1000
+_SYNTAX_STATUS_LAST = 1014
+
+
 class FormulonError(Exception):
     """Raised for host-side failures of the Formulon engine.
 
@@ -178,10 +243,13 @@ class FormulonError(Exception):
     code: Union[StatusCode, int]
     message: str
     context: str
+    parse_error: Optional[ParseError]
 
     def __new__(cls, status: int, *args: object, **kwargs: object) -> "FormulonError":
         if cls is FormulonError:
-            if status in INDEX_OUT_OF_RANGE_CODES:
+            if _SYNTAX_STATUS_FIRST <= status <= _SYNTAX_STATUS_LAST:
+                cls = FormulaSyntaxError
+            elif status in INDEX_OUT_OF_RANGE_CODES:
                 cls = IndexOutOfRangeError
             elif status == StatusCode.INVALID_ARGUMENT:
                 cls = InvalidArgumentError
@@ -202,6 +270,7 @@ class FormulonError(Exception):
             self.code = StatusCode(int(status))
         except ValueError:
             self.code = int(status)
+        self.parse_error = None
         if _host_only:
             # A trap leaves the module instance poisoned (see `_wrapped`
             # below); reading the diagnostic buffers would call back into
@@ -214,6 +283,7 @@ class FormulonError(Exception):
             if _diagnostic_override is not None:
                 message, context = _diagnostic_override
             self.message, self.context = message, context
+            self.parse_error = LIB.last_parse_error(int(status))
         text = self.message
         if self.context:
             text += f" [{self.context}]"
@@ -227,6 +297,35 @@ class FormulonError(Exception):
 
 class InvalidArgumentError(FormulonError, ValueError):
     """The engine refused an argument (``StatusCode.INVALID_ARGUMENT``)."""
+
+
+class FormulaSyntaxError(InvalidArgumentError):
+    """A formula or reference text failed to parse (statuses 1000 to 1014).
+
+    ``parse_error_code``, ``start``, ``end``, ``line`` and ``column`` describe
+    the offending span (see :class:`ParseError`) and are ``None`` when the
+    engine recorded no position.
+    """
+
+    @property
+    def parse_error_code(self) -> Optional[Union[ParseErrorCode, int]]:
+        return None if self.parse_error is None else self.parse_error.code
+
+    @property
+    def start(self) -> Optional[int]:
+        return None if self.parse_error is None else self.parse_error.start
+
+    @property
+    def end(self) -> Optional[int]:
+        return None if self.parse_error is None else self.parse_error.end
+
+    @property
+    def line(self) -> Optional[int]:
+        return None if self.parse_error is None else self.parse_error.line
+
+    @property
+    def column(self) -> Optional[int]:
+        return None if self.parse_error is None else self.parse_error.column
 
 
 class NotFoundError(FormulonError, KeyError):
@@ -246,6 +345,9 @@ class WorkbookClosedError(FormulonError, ValueError):
 # {tools/wasm/capi_exports.txt}. Keep this literal so the drift checker can
 # validate the binding without importing this module (or wasmtime).
 _STATUS_RETURNING_EXPORT_NAMES = (
+    "fm_get_last_parse_error",
+    "fm_sheet_get_tab_color",
+    "fm_sheet_set_tab_color",
     "fm_sheet_clear_cell_xf_index",
     "fm_sheet_get_cell_xf_index",
     "fm_cell_nodes_get_node_at",
@@ -546,7 +648,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_value_array_get_dimensions",
     "fm_value_array_get_value_count",
     "fm_value_array_get_value_at",
-    "fm_workbook_get_excel_profile_id",
+    "fm_workbook_get_profile_id",
     "fm_workbook_get_external_link",
     "fm_workbook_get_external_link_count",
     "fm_workbook_get_file_name",
@@ -716,7 +818,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_set_default_font",
     "fm_workbook_set_defined_name",
     "fm_sheet_set_error",
-    "fm_workbook_set_excel_profile_id",
+    "fm_workbook_set_profile_id",
     "fm_workbook_set_file_name",
     "fm_sheet_set_formula",
     "fm_workbook_set_full_precision",
@@ -966,6 +1068,8 @@ class _WasmInstance:
                 raise AttributeError(f"WASM export '{name}' not found")
             lock = self._call_lock
             captures_diagnostics = name in _STATUS_RETURNING_EXPORTS
+            captures_parse_error = name != "fm_get_last_parse_error"
+            parse_slot = self._parse_error_slot()
 
             # Wrap so the caller can use a ctypes-like call syntax. Cache the
             # wrapper: besides avoiding a closure allocation on every lookup,
@@ -980,6 +1084,7 @@ class _WasmInstance:
                         # before every status-returning call so success cannot
                         # leave a previous failure pending.
                         self._last_diagnostic.value = None
+                        parse_slot.value = None
                     result = self._call_or_poison(fn, name, *args)
                     # Only status-returning exports are allowed to populate
                     # the snapshot. Counts, indices, and pointers are all
@@ -994,6 +1099,8 @@ class _WasmInstance:
                                 self._read_cstr_unlocked(message_fn(self._store)),
                                 self._read_cstr_unlocked(context_fn(self._store)),
                             )
+                        if captures_parse_error and _SYNTAX_STATUS_FIRST <= result <= _SYNTAX_STATUS_LAST:
+                            parse_slot.value = (result, self._read_parse_error_unlocked())
                     return result
 
             # Tracebacks and reprs name the C ABI entry point, not this
@@ -1097,6 +1204,47 @@ class _WasmInstance:
         if snapshot is not None and snapshot[0] == status:
             return snapshot[1], snapshot[2]
         return "", ""
+
+    def _read_parse_error_unlocked(self) -> Optional[ParseError]:
+        """Read ``fm_get_last_parse_error`` while the caller owns ``_call_lock``.
+
+        The engine clears the record on the next ``fm_*`` call, so it is read
+        in the failing call's critical section.
+        """
+        getter = self._exports.get("fm_get_last_parse_error")
+        if getter is None:
+            return None
+        ptr = self._call_or_poison(self._exports["malloc"], "malloc", PARSE_ERROR.size)
+        if ptr == 0:
+            return None
+        try:
+            assert self._memory is not None
+            self._memory.write(self._store, PARSE_ERROR.blank(), ptr)
+            if self._call_or_poison(getter, "fm_get_last_parse_error", ptr) != 0:
+                return None
+            raw = bytes(self._memory.read(self._store, ptr, ptr + PARSE_ERROR.size))
+        finally:
+            self._call_or_poison(self._exports["free"], "free", ptr)
+        d = PARSE_ERROR.unpack_from(raw)
+        try:
+            code: Union[ParseErrorCode, int] = ParseErrorCode(d["code"])
+        except ValueError:
+            code = d["code"]
+        return ParseError(code, d["start"], d["end"], d["line"], d["column"])
+
+    def _parse_error_slot(self) -> threading.local:
+        # Lazy for the same seam as `_export_wrappers`: tests build this
+        # wrapper with object.__new__.
+        return self.__dict__.setdefault("_last_parse_error", threading.local())
+
+    def last_parse_error(self, status: int) -> Optional[ParseError]:
+        """Take the parse error captured for ``status`` once, if any."""
+        slot = self._parse_error_slot()
+        snapshot = getattr(slot, "value", None)
+        slot.value = None
+        if snapshot is not None and snapshot[0] == status:
+            return snapshot[1]
+        return None
 
     def alloc(self, size: int) -> int:
         """Allocate ``size`` bytes in WASM memory; return the pointer.

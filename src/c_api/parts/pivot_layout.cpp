@@ -20,6 +20,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "eval/pivot_formula.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
@@ -31,7 +32,9 @@
 
 using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_num_fmt_code;
 using formulon::c_api::parts::resolve_pivot;
@@ -90,6 +93,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
   if (auto rc = resolve_pivot(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
 
   // Resolved before evaluation, not just before projection: the label of an
   // axis group with no source value is baked into the result rather than
@@ -134,7 +140,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
   handle->cols = projected.cols;
   handle->cells.reserve(projected.cells.size());
   for (const formulon::pivot::PivotCell& src : projected.cells) {
-    fm_pivot_cell_t dst{};
+    fm_pivot_cell_t dst = FM_STRUCT_INIT(fm_pivot_cell_t);
     dst.row = src.row;
     dst.col = src.col;
     value_to_fm(src.value, handle->text_store, &dst.value);
@@ -193,6 +199,11 @@ extern "C" fm_status_t fm_pivot_cells_get_cell_at(const fm_pivot_cells_t* cells,
   if (auto rc = check_index(idx, cells->cells.size(), "index"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
   *out = cells->cells[idx];
+  out->struct_size = struct_size;
   return 0;
 }

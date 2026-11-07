@@ -32,12 +32,14 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "eval/builtin_names.h"
 #include "eval/formula_localize.h"
 #include "eval/function_registry.h"
@@ -49,6 +51,7 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
@@ -117,8 +120,13 @@ extern "C" fm_status_t fm_get_function_metadata(const char* name, int32_t* out_p
   if (name == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_function_metadata_t{};
+  out->struct_size = struct_size;
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }

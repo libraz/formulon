@@ -18,6 +18,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
 #include "utils/error.h"
@@ -25,8 +26,10 @@
 
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 
 struct fm_cell_nodes {
@@ -78,10 +81,9 @@ std::vector<formulon::eval::CellNodeId> bfs_collect(formulon::eval::CellNodeId s
   return ordered;
 }
 
-// The direction is a runtime flag rather than a template parameter so the
-// BFS body and its hash set are linked once for both entry points.
-fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                       std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
+// Shared argument checks of the two trace entry points; `*out` is NULL on failure.
+fm_status_t check_trace_args(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                             fm_cell_nodes_t** out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
@@ -90,9 +92,13 @@ fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::size_t she
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col); rc != 0) {
-    return rc;
-  }
+  return check_cell_coord(row, col);
+}
+
+// The direction is a runtime flag rather than a template parameter so the
+// BFS body and its hash set are linked once for both entry points.
+fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
+                       std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   const auto& workbook = wb->workbook();
   const auto& engine = workbook.recalc_engine();
   const auto& graph = engine.dep_graph();
@@ -122,11 +128,25 @@ fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::size_t she
 
 extern "C" fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
+  if (auto rc = check_trace_args(wb, sheet_index, row, col, out); rc != 0) {
+    return rc;
+  }
+  // INDIRECT / OFFSET edges exist only once the formulas are calculated.
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
   return trace_impl(true, wb, sheet_index, row, col, depth, out);
 }
 
 extern "C" fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
+  if (auto rc = check_trace_args(wb, sheet_index, row, col, out); rc != 0) {
+    return rc;
+  }
+  // INDIRECT / OFFSET edges exist only once the formulas are calculated.
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
   return trace_impl(false, wb, sheet_index, row, col, depth, out);
 }
 
@@ -149,6 +169,9 @@ extern "C" fm_status_t fm_cell_nodes_get_node_at(const fm_cell_nodes_t* nodes, s
     return null_argument();
   }
   if (auto rc = check_index(idx, nodes->nodes.size(), "index"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   out->sheet = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);

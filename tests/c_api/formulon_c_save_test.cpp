@@ -233,7 +233,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   // The OOXML writer represents all of the above, so a clean XLSX save
   // reports nothing lost -- including on the two fields both writers own.
   BufferGuard xlsx_buf;
-  fm_save_diagnostics_t xlsx{99U, 99U, 99U, 99U, 99U};
+  fm_save_diagnostics_t xlsx{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len, &xlsx),
             0);
   EXPECT_EQ(xlsx.downgraded_formula_count, 0U);
@@ -243,7 +243,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   EXPECT_EQ(xlsx.renumbered_part_count, 0U);
 
   BufferGuard xlsb_buf;
-  fm_save_diagnostics_t xlsb{};
+  fm_save_diagnostics_t xlsb = FM_STRUCT_INIT(fm_save_diagnostics_t);
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len, &xlsb),
             0);
   EXPECT_EQ(xlsb.downgraded_formula_count, 1U);
@@ -277,7 +277,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi)
   wb.handle->workbook().set_unknown_workbook_rels({std::move(orphan)});
 
   BufferGuard buf;
-  fm_save_diagnostics_t d{99U, 99U, 99U, 99U, 99U};
+  fm_save_diagnostics_t d{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len, &d), 0);
   EXPECT_GT(buf.len, 0U);
   EXPECT_EQ(d.dropped_part_count, 1U);
@@ -297,7 +297,7 @@ TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
     WorkbookGuard loaded;
     ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
 
-    fm_read_diagnostics_t d{99U, 99U, 99U, 99U, 99U};
+    fm_read_diagnostics_t d{sizeof(fm_read_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
     ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
     EXPECT_EQ(d.undecoded_formula_count, 0U) << "format=" << format;
     EXPECT_EQ(d.undecoded_defined_name_count, 0U) << "format=" << format;
@@ -312,14 +312,14 @@ TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
 
   // A workbook that was never loaded reports every counter as zero rather
   // than leaving the caller's struct untouched.
-  fm_read_diagnostics_t read{99U, 99U, 99U, 99U, 99U};
+  fm_read_diagnostics_t read{sizeof(fm_read_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
   ASSERT_EQ(fm_workbook_get_diagnostics(wb.handle, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.skipped_feature_count, 0U);
 
   uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   size_t len = 99U;
-  fm_save_diagnostics_t save{99U, 99U, 99U, 99U, 99U};
+  fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
   EXPECT_NE(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
@@ -329,7 +329,7 @@ TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
   EXPECT_EQ(save.dropped_relationship_count, 0U);
   EXPECT_EQ(save.renumbered_part_count, 0U);
 
-  read = fm_read_diagnostics_t{99U, 99U, 99U, 99U, 99U};
+  read = fm_read_diagnostics_t{sizeof(fm_read_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
   EXPECT_NE(fm_workbook_get_diagnostics(nullptr, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.undecoded_defined_name_count, 0U);
@@ -347,7 +347,7 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
   ASSERT_FALSE(fixture.empty());
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(fixture.data(), fixture.size(), &loaded.handle), 0);
-  fm_read_diagnostics_t d{};
+  fm_read_diagnostics_t d = FM_STRUCT_INIT(fm_read_diagnostics_t);
   ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
   EXPECT_EQ(d.undecoded_formula_count, 0U);
   EXPECT_EQ(d.undecoded_defined_name_count, 0U);
@@ -356,7 +356,7 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
   EXPECT_EQ(d.undecoded_part_count, 0U);
 }
 TEST(FormulonCApi, DiagnosticFailuresReportTheNullArgument) {
-  fm_read_diagnostics_t read{77U, 77U, 77U, 77U, 77U};
+  fm_read_diagnostics_t read{sizeof(fm_read_diagnostics_t), 77U, 77U, 77U, 77U, 77U};
   EXPECT_NE(fm_workbook_get_diagnostics(nullptr, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.skipped_feature_count, 0U);
@@ -369,7 +369,7 @@ TEST(FormulonCApi, DiagnosticFailuresReportTheNullArgument) {
   EXPECT_EQ(len, 0U);
   EXPECT_NE(std::string(fm_get_last_error_message()).find("NULL"), std::string::npos);
 
-  fm_save_diagnostics_t save{77U, 77U, 77U, 77U, 77U};
+  fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 77U, 77U, 77U, 77U, 77U};
   bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   len = 77U;
   EXPECT_NE(fm_workbook_save_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len, &save), 0);
@@ -401,7 +401,7 @@ TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
 
   bytes = poison;
   len = 77U;
-  fm_save_diagnostics_t save{77U, 77U, 77U, 77U, 77U};
+  fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 77U, 77U, 77U, 77U, 77U};
   EXPECT_NE(fm_workbook_save_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
@@ -502,7 +502,7 @@ TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
     EXPECT_EQ(buf.data, nullptr);
     EXPECT_EQ(buf.len, 0U);
-    fm_save_diagnostics_t save{99U, 99U, 99U, 99U, 99U};
+    fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
     EXPECT_EQ(fm_workbook_save_with_diagnostics(wb.handle, raw, &buf.data, &buf.len, &save),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
     EXPECT_EQ(buf.data, nullptr);

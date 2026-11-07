@@ -430,7 +430,7 @@ TEST(FormulonCApiStyles, ClearXfIndexRestoresColumnInheritance) {
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0, 0, 1), 0);
 
-  fm_effective_style_t style{};
+  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, 2), 0);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
   EXPECT_EQ(style.source, 0);
@@ -460,7 +460,7 @@ TEST(FormulonCApiStyles, ClearXfIndexRestoresRowAndDefaultInheritance) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4, 4, 1), 0);
-  fm_effective_style_t style{};
+  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
 
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 4, 3, 2), 0);
   ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 4, 3), 0);
@@ -494,7 +494,7 @@ TEST(FormulonCApiStyles, ClearXfIndexKeepsValueAndFormula) {
   EXPECT_EQ(sheet.cell_at(0, 1)->formula_text, "=A1*2");
   EXPECT_EQ(sheet.cell_at(0, 1)->cached_value.as_number(), 10.0);
   // A value cell owns its style, so a cleared one is a cell-sourced Normal.
-  fm_effective_style_t style{};
+  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, 0U);
@@ -529,7 +529,7 @@ TEST(FormulonCApiStyles, ClearedCellKeepsInheritanceAcrossSaveLoad) {
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
-  fm_effective_style_t style{};
+  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 0, &style), 0);
   EXPECT_EQ(style.source, 2);
   EXPECT_EQ(style.xf_index, 1U);

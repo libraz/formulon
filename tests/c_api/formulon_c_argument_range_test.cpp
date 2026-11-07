@@ -16,7 +16,7 @@ namespace {
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 
 fm_sheet_view_t View(const WorkbookGuard& wb, std::size_t sheet) {
-  fm_sheet_view_t view{};
+  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
   EXPECT_EQ(fm_sheet_get_view(wb.handle, sheet, &view), 0) << fm_get_last_error_message();
   return view;
 }
@@ -90,11 +90,11 @@ TEST(FormulonCApiArgumentRange, OutlineLevelSevenRoundTripsThroughBothFormats) {
   for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     WorkbookGuard reloaded;
     SaveAndReload(wb, format, &reloaded);
-    fm_row_layout_t row{};
+    fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
     ASSERT_EQ(fm_sheet_get_row_override_at(reloaded.handle, 0, 0U, &row), 0) << format;
     EXPECT_EQ(row.row, 3U) << format;
     EXPECT_EQ(row.outline_level, 7U) << format;
-    fm_column_layout_t column{};
+    fm_column_layout_t column = FM_STRUCT_INIT(fm_column_layout_t);
     ASSERT_EQ(fm_sheet_get_column_override_at(reloaded.handle, 0, 0U, &column), 0) << format;
     EXPECT_EQ(column.first, 2U) << format;
     EXPECT_EQ(column.outline_level, 7U) << format;
@@ -137,7 +137,7 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot, &field_count), 0);
   ASSERT_EQ(field_count, 2U);
 
-  fm_pivot_data_field_spec_t spec{};
+  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   spec.name = "Explicit";
   spec.field_index = 1U;
   spec.aggregation = FM_PIVOT_AGG_SUM;
@@ -159,7 +159,7 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
   std::size_t data_fields = 0U;
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0, pivot, &data_fields), 0);
   EXPECT_EQ(data_fields, 1U);
-  fm_pivot_data_field_spec_t read{};
+  fm_pivot_data_field_spec_t read = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot, 0U, &read), 0);
   EXPECT_STREQ(read.name, "Sum of Amount");
 
@@ -275,10 +275,10 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     std::uint32_t alignment = 0;
     std::int32_t flag = 0;
     const char* lambda = nullptr;
-    fm_spill_info_t spill{};
-    fm_data_table_t table{};
-    fm_hyperlink_t link{};
-    fm_comment_t comment{};
+    fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+    fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
+    fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
+    fm_comment_t comment = FM_STRUCT_INIT(fm_comment_t);
     std::size_t xf = 0;
     EXPECT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, row, col, &text), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, row, col, &count), kInvalidArgument);
@@ -306,7 +306,7 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     fm_value_t proposed{};
     proposed.kind = FM_VAL_NUMBER;
     proposed.u.number = 1.0;
-    fm_validation_outcome_t outcome{};
+    fm_validation_outcome_t outcome = FM_STRUCT_INIT(fm_validation_outcome_t);
     EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, row, col, &proposed, &outcome), kInvalidArgument);
     EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 0, row, col), kInvalidArgument);
   }
@@ -322,10 +322,10 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   std::uint32_t alignment = 0;
   std::int32_t flag = 0;
   const char* lambda = nullptr;
-  fm_spill_info_t spill{};
-  fm_data_table_t table{};
-  fm_hyperlink_t link{};
-  fm_comment_t comment{};
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
+  fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
+  fm_comment_t comment = FM_STRUCT_INIT(fm_comment_t);
   std::size_t xf = 0;
   EXPECT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, kLastRow, kLastCol, &text), 0);
   EXPECT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, kLastRow, kLastCol, &count), 0);
@@ -353,7 +353,7 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   fm_value_t proposed{};
   proposed.kind = FM_VAL_NUMBER;
   proposed.u.number = 1.0;
-  fm_validation_outcome_t outcome{};
+  fm_validation_outcome_t outcome = FM_STRUCT_INIT(fm_validation_outcome_t);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, kLastRow, kLastCol, &proposed, &outcome), 0);
   EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 0, kLastRow, kLastCol), 0);
 }

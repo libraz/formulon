@@ -202,9 +202,8 @@ enum class FormulonErrorCode : int32_t {
   kBindingUtf8EncodingError = 7002,
   kBindingCallbackException = 7003,
   kBindingWasmInitFailed = 7004,
-  kCliInvalidArgs = 7005,
-  kCliFileNotFound = 7006,
-  kCliOutputFailed = 7007,
+  // 7005-7007 are retired and stay unassigned: they named command-line
+  // failures, which the CLI reports through its exit status instead.
 
   // ===== 8000-8999: Pivot / Advanced =====
   kPivotSourceInvalid = 8000,
@@ -502,12 +501,6 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kBindingCallbackException";
     case FormulonErrorCode::kBindingWasmInitFailed:
       return "kBindingWasmInitFailed";
-    case FormulonErrorCode::kCliInvalidArgs:
-      return "kCliInvalidArgs";
-    case FormulonErrorCode::kCliFileNotFound:
-      return "kCliFileNotFound";
-    case FormulonErrorCode::kCliOutputFailed:
-      return "kCliOutputFailed";
 
     // Pivot / Advanced
     case FormulonErrorCode::kPivotSourceInvalid:

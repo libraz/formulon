@@ -17,7 +17,12 @@ static int32_t ContinueIteration(uint32_t iteration, double max_residual, uint32
 
 int main(void) {
   fm_iterative_progress_cb callback = ContinueIteration;
-  fm_parallel_recalc_stats_t stats = {0};
+  fm_parallel_recalc_stats_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
+  // A record initialised from C: `struct_size` leads, every other field is
+  // zero, and the version macro links against the run-time query.
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  _Static_assert(offsetof(fm_cf_rule_t, struct_size) == 0, "struct_size must lead a record");
+  int version_matches = FM_CHECK_VERSION();
   fm_status_t (*parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_t*) = fm_workbook_recalc_parallel;
   fm_status_t (*save_diagnostics)(const fm_workbook_t*, int32_t, uint8_t**, size_t*, fm_save_diagnostics_t*) =
       fm_workbook_save_with_diagnostics;
@@ -41,35 +46,35 @@ int main(void) {
   fm_status_t (*add_styles_batch)(fm_workbook_t*, const fm_styles_batch_t*) = fm_workbook_add_batch;
   fm_status_t (*print_area_at)(const fm_pagination_t*, size_t, fm_cell_rect_t*) = fm_pagination_get_print_area_at;
   // Both counter structs must lay out identically on native and wasm32, so a
-  // binding's hand-written offsets cannot drift from the compiler's. Five
-  // 4-byte counters, no padding, in either target.
-  _Static_assert(sizeof(fm_read_diagnostics_t) == 5 * sizeof(uint32_t), "fm_read_diagnostics_t must be packed");
-  _Static_assert(sizeof(fm_save_diagnostics_t) == 5 * sizeof(uint32_t), "fm_save_diagnostics_t must be packed");
+  // binding's hand-written offsets cannot drift from the compiler's.
+  // `struct_size` and five 4-byte counters, no padding, in either target.
+  _Static_assert(sizeof(fm_read_diagnostics_t) == 6 * sizeof(uint32_t), "fm_read_diagnostics_t must be packed");
+  _Static_assert(sizeof(fm_save_diagnostics_t) == 6 * sizeof(uint32_t), "fm_save_diagnostics_t must be packed");
   // Pinned from C as well as C++: a C consumer built against a narrower
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf_t) == 128, "fm_cell_xf_t ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_t) == 80, "fm_sheet_view_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_t) == 88, "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_cell_rect_t` from
-  // pagination, and `fm_styles_batch_t` is passed in by pointer with fifteen
-  // pointer-width slots. The first two are target-independent; the batch is
+  // pagination, and `fm_styles_batch_t` is passed in by pointer with
+  // `struct_size` and fifteen pointers, sixteen pointer-width slots. The first two are target-independent; the batch is
   // pinned in terms of `sizeof(void*)` because its pointers are not.
   _Static_assert(sizeof(fm_value_t) == 16, "fm_value_t ABI layout changed");
   _Static_assert(offsetof(fm_value_t, u) == 8, "fm_value_t.u offset changed");
   _Static_assert(sizeof(fm_cell_rect_t) == 16, "fm_cell_rect_t ABI layout changed");
   _Static_assert(offsetof(fm_cell_rect_t, last_col) == 12, "fm_cell_rect_t.last_col offset changed");
-  _Static_assert(sizeof(fm_styles_batch_t) == 15 * sizeof(void*), "fm_styles_batch_t ABI layout changed");
-  _Static_assert(offsetof(fm_styles_batch_t, num_fmt_ids) == 14 * sizeof(void*),
+  _Static_assert(sizeof(fm_styles_batch_t) == 16 * sizeof(void*), "fm_styles_batch_t ABI layout changed");
+  _Static_assert(offsetof(fm_styles_batch_t, num_fmt_ids) == 15 * sizeof(void*),
                  "fm_styles_batch_t.num_fmt_ids offset changed");
   // Records the geometry, display and pagination-detail entry points write
   // through caller pointers. All but the width model are target-independent.
-  _Static_assert(sizeof(fm_sheet_format_defaults_t) == 56, "fm_sheet_format_defaults_t ABI layout changed");
-  _Static_assert(sizeof(fm_rect_pt_t) == 32, "fm_rect_pt_t ABI layout changed");
-  _Static_assert(sizeof(fm_width_model_t) == (sizeof(void*) == 4 ? 40 : 48), "fm_width_model_t ABI layout changed");
-  _Static_assert(sizeof(fm_paper_info_t) == 24, "fm_paper_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_margins_pt_t) == 48, "fm_margins_pt_t ABI layout changed");
-  _Static_assert(sizeof(fm_print_titles_t) == 24, "fm_print_titles_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_format_defaults_t) == 64, "fm_sheet_format_defaults_t ABI layout changed");
+  _Static_assert(sizeof(fm_rect_pt_t) == 40, "fm_rect_pt_t ABI layout changed");
+  _Static_assert(sizeof(fm_width_model_t) == (sizeof(void*) == 4 ? 48 : 56), "fm_width_model_t ABI layout changed");
+  _Static_assert(sizeof(fm_paper_info_t) == 32, "fm_paper_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_margins_pt_t) == 56, "fm_margins_pt_t ABI layout changed");
+  _Static_assert(sizeof(fm_print_titles_t) == 28, "fm_print_titles_t ABI layout changed");
   _Static_assert(sizeof(fm_page_layout_t) == 56, "fm_page_layout_t ABI layout changed");
   fm_status_t (*cells_in_range)(const fm_workbook_t*, size_t, const fm_cell_rect_t*, uint64_t, uint32_t,
                                 fm_cell_range_t**) = fm_sheet_get_cells_in_range;
@@ -82,34 +87,34 @@ int main(void) {
                  "fm_filter_column_t ABI layout changed");
   _Static_assert(sizeof(fm_sort_condition_t) == (sizeof(void*) == 4 ? 48 : 56),
                  "fm_sort_condition_t ABI layout changed");
-  _Static_assert(sizeof(fm_auto_filter_t) == (sizeof(void*) == 4 ? 64 : 80), "fm_auto_filter_t ABI layout changed");
-  _Static_assert(sizeof(fm_validation_outcome_t) == 16, "fm_validation_outcome_t ABI layout changed");
+  _Static_assert(sizeof(fm_auto_filter_t) == (sizeof(void*) == 4 ? 68 : 88), "fm_auto_filter_t ABI layout changed");
+  _Static_assert(sizeof(fm_validation_outcome_t) == 20, "fm_validation_outcome_t ABI layout changed");
   _Static_assert(sizeof(fm_mention_t) == (sizeof(void*) == 4 ? 16 : 24), "fm_mention_t ABI layout changed");
-  _Static_assert(sizeof(fm_threaded_comment_t) == (sizeof(void*) == 4 ? 40 : 72),
+  _Static_assert(sizeof(fm_threaded_comment_t) == (sizeof(void*) == 4 ? 44 : 80),
                  "fm_threaded_comment_t ABI layout changed");
-  _Static_assert(sizeof(fm_person_t) == 4 * sizeof(void*), "fm_person_t ABI layout changed");
-  _Static_assert(sizeof(fm_image_info_t) == 12, "fm_image_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_drawing_object_t) == (sizeof(void*) == 4 ? 96 : 112),
+  _Static_assert(sizeof(fm_person_t) == 5 * sizeof(void*), "fm_person_t ABI layout changed");
+  _Static_assert(sizeof(fm_image_info_t) == 16, "fm_image_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_object_t) == (sizeof(void*) == 4 ? 104 : 120),
                  "fm_drawing_object_t ABI layout changed");
   _Static_assert(sizeof(fm_image_insert_t) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert_t ABI layout changed");
   _Static_assert(sizeof(fm_drawing_anchor_t) == 48, "fm_drawing_anchor_t ABI layout changed");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
-  _Static_assert(sizeof(fm_shape_t) == (sizeof(void*) == 4 ? 136 : 144), "fm_shape_t ABI layout changed");
-  _Static_assert(sizeof(fm_slicer_t) == (sizeof(void*) == 4 ? 104 : 128), "fm_slicer_t ABI layout changed");
-  _Static_assert(sizeof(fm_data_table_t) == 56, "fm_data_table_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_t) == (sizeof(void*) == 4 ? 192 : 200), "fm_shape_t ABI layout changed");
+  _Static_assert(sizeof(fm_slicer_t) == (sizeof(void*) == 4 ? 112 : 136), "fm_slicer_t ABI layout changed");
+  _Static_assert(sizeof(fm_data_table_t) == 60, "fm_data_table_t ABI layout changed");
   _Static_assert(sizeof(fm_sparkline_t) == 2 * sizeof(void*), "fm_sparkline_t ABI layout changed");
-  _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 288 : 296),
+  _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 296 : 304),
                  "fm_sparkline_group_t ABI layout changed");
   // Table and custom table-style records, pinned per target.
-  _Static_assert(sizeof(fm_table_info_t) == (sizeof(void*) == 4 ? 36 : 40), "fm_table_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_table_column_info_t) == 4 * sizeof(void*), "fm_table_column_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_info_t) == (sizeof(void*) == 4 ? 40 : 48), "fm_table_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_column_info_t) == 5 * sizeof(void*), "fm_table_column_info_t ABI layout changed");
   _Static_assert(sizeof(fm_table_style_element_t) == (sizeof(void*) == 4 ? 16 : 24),
                  "fm_table_style_element_t ABI layout changed");
-  _Static_assert(sizeof(fm_table_style_t) == (sizeof(void*) == 4 ? 20 : 32), "fm_table_style_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_style_t) == (sizeof(void*) == 4 ? 24 : 40), "fm_table_style_t ABI layout changed");
   // Protection records, pinned per target.
-  _Static_assert(sizeof(fm_workbook_protection_t) == (sizeof(void*) == 4 ? 52 : 88),
+  _Static_assert(sizeof(fm_workbook_protection_t) == (sizeof(void*) == 4 ? 56 : 88),
                  "fm_workbook_protection_t ABI layout changed");
-  _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 36 : 72),
+  _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 40 : 72),
                  "fm_protected_range_t ABI layout changed");
   fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter_t*, int32_t*) = fm_sheet_get_auto_filter;
   fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter_t*) =
@@ -173,5 +178,7 @@ int main(void) {
   (void)print_area_at;
   (void)parallel_recalc;
   (void)stats;
+  (void)rule;
+  (void)version_matches;
   return callback(1U, 0.0, 1U, 0) ? 0 : 1;
 }

@@ -12,6 +12,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "drawing/image_header.h"
@@ -23,6 +24,7 @@
 using formulon::c_api::parts::anchor_kind_from_c;
 using formulon::c_api::parts::check_anchor_enums;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -41,8 +43,11 @@ using formulon::c_api::parts::to_c;
 
 namespace {
 
-fm_image_info_t to_fm(const formulon::ImageInfo& info) {
-  return fm_image_info_t{static_cast<int32_t>(info.format), info.px_width, info.px_height};
+// Fills `out` without touching its `struct_size`.
+void fill_image_info(const formulon::ImageInfo& info, fm_image_info_t* out) {
+  out->format = static_cast<int32_t>(info.format);
+  out->px_width = info.px_width;
+  out->px_height = info.px_height;
 }
 
 }  // namespace
@@ -52,11 +57,14 @@ extern "C" fm_status_t fm_get_image_info(const uint8_t* bytes, size_t len, fm_im
   if (bytes == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   auto info = formulon::probe_image(bytes, len);
   if (!info) {
     return set_last_error(info.error());
   }
-  *out = to_fm(info.value());
+  fill_image_info(info.value(), out);
   return 0;
 }
 
@@ -83,6 +91,9 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -96,7 +107,9 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   }
   const formulon::DrawingObject& obj = list[idx];
   TextStore& store = fresh_read_scratch(wb);
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_drawing_object_t{};
+  out->struct_size = struct_size;
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
   out->edit_as = to_c(obj.edit_as);
@@ -116,11 +129,16 @@ extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size
   if (out_present == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_drawing_object_t{};
+  out->struct_size = struct_size;
   auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
   if (!objects) {
     return set_last_error(objects.error());
@@ -142,10 +160,17 @@ extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_
   if (out_present == nullptr || out_bytes == nullptr || out_len == nullptr || out_info == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "output pointer is NULL");
   }
+  if (auto rc = check_record_size(*out_info); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
   *out_bytes = nullptr;
   *out_len = 0;
-  *out_info = fm_image_info_t{};
+  {
+    const std::uint32_t struct_size = out_info->struct_size;
+    *out_info = fm_image_info_t{};
+    out_info->struct_size = struct_size;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -167,7 +192,7 @@ extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_
     }
     *out_bytes = media->bytes.data();
     *out_len = media->bytes.size();
-    *out_info = to_fm(info.value());
+    fill_image_info(info.value(), out_info);
     *out_present = 1;
     return 0;
   }

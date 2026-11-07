@@ -108,7 +108,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "\xE5\xA3\xB2\xE4\xB8\x8A"), 0);  // 売上
 
-  fm_page_setup_t setup{};
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   setup.paper_size_engaged = 1;
   setup.paper_size = 9;  // A4
   setup.orientation_engaged = 1;
@@ -121,7 +121,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   setup.fit_to_height = 0;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &setup), 0);
 
-  fm_page_margins_t margins{};
+  fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
   margins.left_engaged = 1;
   margins.left = 0.5;
   margins.right_engaged = 1;
@@ -136,19 +136,19 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   margins.footer = 0.3;
   ASSERT_EQ(fm_sheet_set_page_margins(wb.handle, 0, &margins), 0);
 
-  fm_print_options_t options{};
+  fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
   options.horizontal_centered_engaged = 1;
   options.horizontal_centered = 1;
   ASSERT_EQ(fm_sheet_set_print_options(wb.handle, 0, &options), 0);
 
-  fm_header_footer_t hf{};
+  fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
   hf.odd_header = "&C\xE6\x9C\x88\xE6\xAC\xA1\xE5\xA0\xB1\xE5\x91\x8A";  // "&C月次報告"
   hf.odd_footer = "&R&P / &N";
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &hf), 0);
 
   const fm_cell_rect_t print_area{0, 0, 79, 5};
   ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &print_area, 1), 0);
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   titles.has_rows = 1;
   titles.first_row = 0;
   titles.last_row = 1;
@@ -204,7 +204,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
 
-  fm_page_setup_t read_setup{};
+  fm_page_setup_t read_setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(reloaded.handle, 0, &read_setup), 0);
   EXPECT_EQ(read_setup.paper_size, 9U);
   EXPECT_EQ(read_setup.orientation, FM_PAGE_ORIENTATION_PORTRAIT);
@@ -212,7 +212,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_EQ(read_setup.fit_to_width, 1U);
   EXPECT_EQ(read_setup.fit_to_height, 0U);
 
-  fm_page_margins_t read_margins{};
+  fm_page_margins_t read_margins = FM_STRUCT_INIT(fm_page_margins_t);
   ASSERT_EQ(fm_sheet_get_page_margins(reloaded.handle, 0, &read_margins), 0);
   EXPECT_DOUBLE_EQ(read_margins.left, 0.5);
   EXPECT_DOUBLE_EQ(read_margins.top, 0.8);
@@ -224,7 +224,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_EQ(ranges[0].last_row, 79U);
   EXPECT_EQ(ranges[0].last_col, 5U);
 
-  fm_print_titles_t read_titles{};
+  fm_print_titles_t read_titles = FM_STRUCT_INIT(fm_print_titles_t);
   ASSERT_EQ(fm_sheet_get_print_titles(reloaded.handle, 0, &read_titles), 0);
   EXPECT_EQ(read_titles.has_rows, 1);
   EXPECT_EQ(read_titles.first_row, 0U);
@@ -234,7 +234,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   std::size_t row_break_count = 0;
   ASSERT_EQ(fm_sheet_get_row_break_count(reloaded.handle, 0, &row_break_count), 0);
   ASSERT_EQ(row_break_count, 1U);
-  fm_page_break_t brk{};
+  fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(reloaded.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.id, 39U);
   EXPECT_EQ(brk.manual, 1);
@@ -335,13 +335,13 @@ TEST(OoxmlPrintAuthoring, TypedPatchOnATemplateKeepsEverythingItDoesNotState) {
   ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0);
 
   // Change exactly one attribute.
-  fm_page_setup_t patch{};
+  fm_page_setup_t patch = FM_STRUCT_INIT(fm_page_setup_t);
   patch.orientation_engaged = 1;
   patch.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &patch), 0);
 
   BufferGuard saved;
-  fm_save_diagnostics_t diagnostics{};
+  fm_save_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
   ASSERT_EQ(
       fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len, &diagnostics), 0);
   // The consumer-visible contract for the template route: rewriting print
@@ -385,7 +385,7 @@ TEST(OoxmlPrintAuthoring, FitToPageOnATemplateKeepsTabColorAndCodeName) {
   const std::vector<std::uint8_t> source = BuildTemplatePackage();
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0);
-  fm_page_setup_t fit{};
+  fm_page_setup_t fit = FM_STRUCT_INIT(fm_page_setup_t);
   fit.fit_to_page_engaged = 1;
   fit.fit_to_page = 1;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &fit), 0);

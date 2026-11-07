@@ -100,7 +100,7 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   fm_fill_record_t reloaded_fill{};
   ASSERT_EQ(fm_workbook_get_fill(wb2.handle, reloaded.fill_index, &reloaded_fill), 0);
   EXPECT_EQ(reloaded_fill.pattern, 1U);
-  EXPECT_EQ(reloaded_fill.fg_argb, 0xFFFF0000U);
+  EXPECT_EQ(reloaded_fill.fg.rgb, 0xFFFF0000U);
 
   const char* reloaded_fmt = nullptr;
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb2.handle, reloaded.num_fmt_id, &present, &reloaded_fmt), 0);
@@ -231,7 +231,7 @@ TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {
   const fm_fill_record_t fills[] = {MakeRedFill(), MakeRedFill()};
   fm_border_record_t border{};
   border.left.style = 1;
-  border.left.color_argb = 0xFF000000U;
+  border.left.color = RgbColor(0xFF000000U);
   const fm_border_record_t borders[] = {border, border};
   uint32_t font_indices[2]{};
   uint32_t fill_indices[2]{};
@@ -244,8 +244,22 @@ TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {
   xf.border_index = 1U;
   const fm_cell_xf_t xfs[] = {xf, xf};
   uint32_t xf_indices[2]{};
-  const fm_styles_batch_t batch{fonts, 2U, font_indices, fills,         2U, fill_indices, borders, 2U, border_indices,
-                                xfs,   2U, xf_indices,   num_fmt_codes, 2U, num_fmt_ids};
+  fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+  batch.fonts = fonts;
+  batch.font_count = 2U;
+  batch.font_indices = font_indices;
+  batch.fills = fills;
+  batch.fill_count = 2U;
+  batch.fill_indices = fill_indices;
+  batch.borders = borders;
+  batch.border_count = 2U;
+  batch.border_indices = border_indices;
+  batch.cell_xfs = xfs;
+  batch.cell_xf_count = 2U;
+  batch.cell_xf_indices = xf_indices;
+  batch.num_fmt_codes = num_fmt_codes;
+  batch.num_fmt_count = 2U;
+  batch.num_fmt_ids = num_fmt_ids;
 
   ASSERT_EQ(fm_workbook_add_batch(wb.handle, &batch), 0);
   EXPECT_EQ(font_indices[0], font_indices[1]);
@@ -267,8 +281,16 @@ TEST(FormulonCApiStyles, AddBatchCommitsNumFmtReferencesTransactionally) {
   xf.font_index = 1U;  // default root plus the staged font
   xf.num_fmt_id = 164U;
   uint32_t xf_indices[] = {0xDEADBEEFU};
-  const fm_styles_batch_t batch{&font,   1U,  &font_index, nullptr,    0U,    nullptr, nullptr,    0U,
-                                nullptr, &xf, 1U,          xf_indices, codes, 1U,      num_fmt_ids};
+  fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+  batch.fonts = &font;
+  batch.font_count = 1U;
+  batch.font_indices = &font_index;
+  batch.cell_xfs = &xf;
+  batch.cell_xf_count = 1U;
+  batch.cell_xf_indices = xf_indices;
+  batch.num_fmt_codes = codes;
+  batch.num_fmt_count = 1U;
+  batch.num_fmt_ids = num_fmt_ids;
 
   ASSERT_EQ(fm_workbook_add_batch(wb.handle, &batch), 0);
   EXPECT_EQ(font_index, 1U);
@@ -297,8 +319,16 @@ TEST(FormulonCApiStyles, AddBatchFailureLeavesTableAndOutputsUnchanged) {
   xf.font_index = 1U;    // valid after staging the font
   xf.num_fmt_id = 999U;  // neither built-in nor registered
   uint32_t xf_indices[] = {0xDEADBEEFU};
-  const fm_styles_batch_t batch{&font,   1U,  &font_index, nullptr,    0U,    nullptr, nullptr,    0U,
-                                nullptr, &xf, 1U,          xf_indices, codes, 1U,      num_fmt_ids};
+  fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+  batch.fonts = &font;
+  batch.font_count = 1U;
+  batch.font_indices = &font_index;
+  batch.cell_xfs = &xf;
+  batch.cell_xf_count = 1U;
+  batch.cell_xf_indices = xf_indices;
+  batch.num_fmt_codes = codes;
+  batch.num_fmt_count = 1U;
+  batch.num_fmt_ids = num_fmt_ids;
 
   EXPECT_NE(fm_workbook_add_batch(wb.handle, &batch), 0);
   EXPECT_EQ(font_index, 0xA1A2A3A4U);

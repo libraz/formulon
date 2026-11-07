@@ -13,7 +13,8 @@
 #     in front of the out param.
 #
 # Each entry describes one C ABI function plus its embind and N-API
-# JS-facing method names. The JS surface (method name on the Workbook
+# JS-facing method names. `reads_values: true` (status_sizet_out_with_sheet
+# only) makes the C body bring pending results up to date first. The JS surface (method name on the Workbook
 # class) is identical across embind / N-API; only the C++ identifier
 # casing differs (camelCase for embind, PascalCase for N-API).
 
@@ -75,6 +76,7 @@ functions:
     area: sheet_counts
     body: status_sizet_out_with_sheet
     accessor: "wb->workbook().sheet(sheet_index).cell_count()"
+    reads_values: true
     js_method: cellCount
     embind_cpp: cellCount
     node_cpp: CellCount

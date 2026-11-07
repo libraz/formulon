@@ -16,7 +16,7 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   sqref.last_row = 9;
   sqref.last_col = 0;
 
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
@@ -34,7 +34,7 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.type, 1U);
   EXPECT_EQ(out.op_engaged, 1);
@@ -58,7 +58,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
   SeedDxfs(wb.handle, 2);
 
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
@@ -93,7 +93,7 @@ TEST(FormulonCApiCfMutate, AddRuleWithoutDxfIdIgnoresTheEmptyStylesTable) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
@@ -105,7 +105,7 @@ TEST(FormulonCApiCfMutate, AddRuleWithoutDxfIdIgnoresTheEmptyStylesTable) {
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(rule_index, 0U);
 
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.dxf_id_engaged, 0);
 }
@@ -116,7 +116,7 @@ TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {
 
   fm_cell_rect_t sqref{0, 0, 0, 0};
   for (int i = 0; i < 3; ++i) {
-    fm_cf_rule_t rule{};
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
     rule.type = 0;  // Expression
     std::string f = "TRUE";
     rule.formula1 = f.c_str();
@@ -131,7 +131,7 @@ TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 3U);
   for (std::size_t i = 0; i < 3; ++i) {
-    fm_cf_rule_t out{};
+    fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, i, &out), 0);
     EXPECT_EQ(out.priority, static_cast<int32_t>(i + 1));
   }
@@ -142,7 +142,7 @@ TEST(FormulonCApiCfMutate, AutoPriorityRejectsExhaustedInt32RangeAtomically) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_cell_rect_t sqref{0, 0, 0, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "TRUE";
   rule.ranges = &sqref;
@@ -172,7 +172,7 @@ TEST(FormulonCApiCfMutate, AutoPriorityMayReachMaxThenExplicitPriorityStillWorks
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_cell_rect_t sqref{0, 0, 0, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "TRUE";
   rule.ranges = &sqref;
@@ -186,7 +186,7 @@ TEST(FormulonCApiCfMutate, AutoPriorityMayReachMaxThenExplicitPriorityStillWorks
   rule.priority = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(rule_index, 1U);
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_index, &out), 0);
   EXPECT_EQ(out.priority, std::numeric_limits<std::int32_t>::max());
 
@@ -217,7 +217,7 @@ TEST(FormulonCApiCfMutate, RemoveAtFlattensIndices) {
   std::vector<std::string> formulas{"A1", "A2", "A3"};
   std::size_t expected_index = 0;
   for (const auto& f : formulas) {
-    fm_cf_rule_t rule{};
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
     rule.type = 0;  // Expression
     rule.formula1 = f.c_str();
     rule.ranges = &sqref;
@@ -237,10 +237,10 @@ TEST(FormulonCApiCfMutate, RemoveAtFlattensIndices) {
 
   // A record's storage belongs to the handle and the next get takes it
   // back, so each rule is read before the following one is fetched.
-  fm_cf_rule_t out0{};
+  fm_cf_rule_t out0 = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out0), 0);
   EXPECT_STREQ(out0.formula1, "=A1");
-  fm_cf_rule_t out1{};
+  fm_cf_rule_t out1 = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out1), 0);
   EXPECT_STREQ(out1.formula1, "=A3");
 }
@@ -249,7 +249,7 @@ TEST(FormulonCApiCfMutate, ClearRemovesAllBlocks) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 0, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;
   std::string f = "TRUE";
   rule.formula1 = f.c_str();
@@ -270,7 +270,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 0, 0};
 
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 2;  // ColorScale
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -282,7 +282,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   thresholds[1].gte = 1;
   thresholds[2].type = 4;  // Max
   thresholds[2].gte = 1;
-  fm_cf_color_t colors[3]{{255, 0, 0, 255}, {255, 255, 0, 255}, {0, 255, 0, 255}};
+  fm_color_spec_t colors[3]{CfRgb(255, 0, 0, 255), CfRgb(255, 255, 0, 255), CfRgb(0, 255, 0, 255)};
   rule.color_scale_thresholds = thresholds;
   rule.color_scale_colors = colors;
   rule.color_scale_count = 3;
@@ -291,7 +291,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   EXPECT_EQ(color_rule_index, 0U);
 
   fm_cell_rect_t db_sqref{1, 0, 1, 0};
-  fm_cf_rule_t db_rule{};
+  fm_cf_rule_t db_rule = FM_STRUCT_INIT(fm_cf_rule_t);
   db_rule.type = 3;  // DataBar
   db_rule.ranges = &db_sqref;
   db_rule.range_count = 1;
@@ -300,7 +300,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   db_rule.data_bar_min.gte = 1;
   db_rule.data_bar_max.type = 4;  // Max
   db_rule.data_bar_max.gte = 1;
-  db_rule.data_bar_fill = fm_cf_color_t{99, 142, 198, 255};
+  db_rule.data_bar_fill = CfRgb(99, 142, 198, 255);
   db_rule.data_bar_show_value = 1;
   db_rule.data_bar_min_length_pct = 10;
   db_rule.data_bar_max_length_pct = 90;
@@ -309,7 +309,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   EXPECT_EQ(data_bar_rule_index, 1U);
 
   fm_cell_rect_t icon_sqref{2, 0, 2, 0};
-  fm_cf_rule_t icon_rule{};
+  fm_cf_rule_t icon_rule = FM_STRUCT_INIT(fm_cf_rule_t);
   icon_rule.type = 4;  // IconSet
   icon_rule.ranges = &icon_sqref;
   icon_rule.range_count = 1;
@@ -342,23 +342,23 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   ASSERT_TRUE(blocks[2].rules[0].icon_set.has_value());
   EXPECT_EQ(blocks[2].rules[0].icon_set->thresholds[1].value, "67");
 
-  fm_cf_rule_t out_color{};
+  fm_cf_rule_t out_color = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out_color), 0);
   ASSERT_EQ(out_color.color_scale_count, 3U);
   ASSERT_NE(out_color.color_scale_thresholds, nullptr);
   ASSERT_NE(out_color.color_scale_colors, nullptr);
   EXPECT_EQ(out_color.color_scale_thresholds[1].type, 1U);
   EXPECT_STREQ(out_color.color_scale_thresholds[1].value, "50");
-  EXPECT_EQ(out_color.color_scale_colors[2].g, 255U);
+  EXPECT_EQ(CfG(out_color.color_scale_colors[2]), 255U);
 
-  fm_cf_rule_t out_bar{};
+  fm_cf_rule_t out_bar = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out_bar), 0);
   EXPECT_EQ(out_bar.data_bar_engaged, 1);
-  EXPECT_EQ(out_bar.data_bar_fill.b, 198U);
+  EXPECT_EQ(CfB(out_bar.data_bar_fill), 198U);
   EXPECT_EQ(out_bar.data_bar_min_length_pct, 10U);
   EXPECT_EQ(out_bar.data_bar_max_length_pct, 90U);
 
-  fm_cf_rule_t out_icon{};
+  fm_cf_rule_t out_icon = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 2, &out_icon), 0);
   EXPECT_EQ(out_icon.icon_set_engaged, 1);
   EXPECT_EQ(out_icon.icon_set_threshold_count, 2U);
@@ -388,7 +388,7 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
   rule.op = 6;  // Between
@@ -405,8 +405,8 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   thresholds[0].gte = 1;
   thresholds[1].type = 4;  // Max
   thresholds[1].gte = 1;
-  fm_cf_color_t colors[2]{{255, 0, 0, 255}, {0, 255, 0, 255}};
-  fm_cf_rule_t scale{};
+  fm_color_spec_t colors[2]{CfRgb(255, 0, 0, 255), CfRgb(0, 255, 0, 255)};
+  fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
   scale.type = 2;  // ColorScale
   scale.ranges = &sqref;
   scale.range_count = 1;
@@ -415,7 +415,7 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   scale.color_scale_count = 2;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, &index), 0) << fm_get_last_error_message();
 
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.formula1, "=$B1>100");
   EXPECT_STREQ(out.formula2, "=SUM($C$1:$C$2)");
@@ -452,7 +452,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusO
     t.value = "50";
     t.gte = 1;
   }
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 4;  // IconSet
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -509,7 +509,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
       {11, nullptr, -1, "=ISBLANK(B2)", "ISBLANK(B2)"},
   };
   for (const Case& c : cases) {
-    fm_cf_rule_t rule{};
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
     rule.type = c.type;
     rule.text = c.text;
     rule.formula1 = c.formula1;
@@ -521,7 +521,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
     rule.range_count = 2;
     std::size_t index = 0;
     ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
-    fm_cf_rule_t out{};
+    fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, index, &out), 0);
     ASSERT_NE(out.formula1, nullptr) << "type=" << static_cast<int>(c.type);
     EXPECT_EQ(std::string(out.formula1), std::string("=") + c.expected);
@@ -539,7 +539,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
     ASSERT_EQ(fm_sheet_get_cf_rule_count(reloaded.handle, 0, &count), 0);
     ASSERT_EQ(count, std::size(cases));
     for (std::size_t i = 0; i < count; ++i) {
-      fm_cf_rule_t out{};
+      fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
       ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, i, &out), 0);
       ASSERT_NE(out.formula1, nullptr) << "format=" << format << " rule=" << i;
       EXPECT_EQ(std::string(out.formula1), std::string("=") + cases[i].expected)
@@ -555,14 +555,14 @@ TEST(FormulonCApiCfMutate, DerivedFormulaAnchorsAtSqrefBoundingBox) {
   for (const fm_cell_rect_t* ranges : {d5_then_b2, b5_then_d2}) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-    fm_cf_rule_t rule{};
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
     rule.type = 7;
     rule.text = "x";
     rule.ranges = ranges;
     rule.range_count = 2;
     std::size_t index = 0;
     ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
-    fm_cf_rule_t out{};
+    fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, index, &out), 0);
     ASSERT_NE(out.formula1, nullptr);
     EXPECT_STREQ(out.formula1, "=NOT(ISERROR(SEARCH(\"x\",B2)))");

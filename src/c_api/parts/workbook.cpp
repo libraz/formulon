@@ -18,6 +18,9 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
+#include "c_api/parts/struct_v1_sizes.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -32,12 +35,14 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_profile_id;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::display_formula_text;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
@@ -55,7 +60,7 @@ namespace {
 // explicit so a field added on one side fails to compile rather than
 // silently reading zero on the other.
 fm_save_diagnostics_t to_c_save_diagnostics(const formulon::io::WriteDiagnostics& src) {
-  fm_save_diagnostics_t out{};
+  fm_save_diagnostics_t out = FM_STRUCT_INIT(fm_save_diagnostics_t);
   out.downgraded_formula_count = src.downgraded_formula_count;
   out.deferred_feature_count = src.deferred_feature_count;
   out.dropped_part_count = src.dropped_part_count;
@@ -64,8 +69,10 @@ fm_save_diagnostics_t to_c_save_diagnostics(const formulon::io::WriteDiagnostics
   return out;
 }
 
-fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
-                                       size_t* out_len, fm_save_diagnostics_t* out_diagnostics) {
+// Zeroes the save out-params (a diagnostics record keeps its `struct_size`)
+// and validates them and `format`; they stay zeroed on every failure.
+fm_status_t begin_save(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes, size_t* out_len,
+                       fm_save_diagnostics_t* out_diagnostics) {
   clear_last_error();
   if (out_bytes != nullptr) {
     *out_bytes = nullptr;
@@ -74,47 +81,63 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
     *out_len = 0;
   }
   if (out_diagnostics != nullptr) {
-    *out_diagnostics = fm_save_diagnostics_t{};
+    if (auto rc = check_record_size(*out_diagnostics); rc != 0) {
+      return rc;
+    }
+    const std::uint32_t struct_size = out_diagnostics->struct_size;
+    *out_diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
+    out_diagnostics->struct_size = struct_size;
   }
   if (wb == nullptr || !wb->wb.has_value() || out_bytes == nullptr || out_len == nullptr ||
       out_diagnostics == nullptr) {
     return null_argument();
   }
+  if (format != FM_WORKBOOK_FORMAT_XLSX && format != FM_WORKBOOK_FORMAT_XLSB) {
+    return invalid_argument("unsupported format", "format=" + std::to_string(static_cast<int>(format)));
+  }
+  return 0;
+}
 
+// The calculation a save adds to `ensure_calculated`: a manual workbook
+// with `calcOnSave` computes its pending cells before it is written.
+fm_status_t calculate_on_save(const fm_workbook_t* wb) {
+  formulon::Workbook& book = const_cast<fm_workbook_t*>(wb)->workbook();
+  if (book.calc_mode() != formulon::CalcMode::kManual || !book.calc_options().calc_on_save ||
+      book.recalc_engine().dirty().size() == 0U) {
+    return 0;
+  }
+  auto r = book.recalc(formulon::eval::default_registry());
+  return r ? 0 : set_last_error(r.error());
+}
+
+// Writes `wb` as `format`, which `begin_save` accepted, into the out-params.
+fm_status_t write_workbook(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes, size_t* out_len,
+                           fm_save_diagnostics_t* out_diagnostics) {
   // Pivots left stale by a cache edit are projected into their cells first. The
   // handle is never a const object, so the cast is well-defined.
-  if (format == FM_WORKBOOK_FORMAT_XLSX || format == FM_WORKBOOK_FORMAT_XLSB) {
-    formulon::c_api::parts::project_pending_pivots(const_cast<fm_workbook_t*>(wb)->workbook());
-  }
+  formulon::c_api::parts::project_pending_pivots(const_cast<fm_workbook_t*>(wb)->workbook());
   std::vector<std::uint8_t> bytes;
-  fm_save_diagnostics_t diagnostics{};
-  switch (format) {
-    case FM_WORKBOOK_FORMAT_XLSX: {
-      auto result = formulon::io::write_ooxml_with_result(wb->workbook());
-      if (!result) {
-        return set_last_error(result.error());
-      }
-      formulon::io::OoxmlWriteResult write_result = std::move(result.value());
-      bytes = std::move(write_result.bytes);
-      diagnostics = to_c_save_diagnostics(write_result.diagnostics);
-      break;
+  fm_save_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  if (format == FM_WORKBOOK_FORMAT_XLSX) {
+    auto result = formulon::io::write_ooxml_with_result(wb->workbook());
+    if (!result) {
+      return set_last_error(result.error());
     }
-    case FM_WORKBOOK_FORMAT_XLSB: {
-      auto result = formulon::io::xlsb::write_xlsb_with_result(wb->workbook());
-      if (!result) {
-        return set_last_error(result.error());
-      }
-      formulon::io::xlsb::XlsbWriteResult write_result = std::move(result.value());
-      bytes = std::move(write_result.bytes);
-      diagnostics = to_c_save_diagnostics(write_result.diagnostics);
-      break;
+    formulon::io::OoxmlWriteResult write_result = std::move(result.value());
+    bytes = std::move(write_result.bytes);
+    diagnostics = to_c_save_diagnostics(write_result.diagnostics);
+  } else {
+    auto result = formulon::io::xlsb::write_xlsb_with_result(wb->workbook());
+    if (!result) {
+      return set_last_error(result.error());
     }
-    case FM_WORKBOOK_FORMAT_UNKNOWN:
-    default:
-      return invalid_argument("unsupported format", "format=" + std::to_string(static_cast<int>(format)));
+    formulon::io::xlsb::XlsbWriteResult write_result = std::move(result.value());
+    bytes = std::move(write_result.bytes);
+    diagnostics = to_c_save_diagnostics(write_result.diagnostics);
   }
 
   copy_owned_bytes(bytes, out_bytes, out_len);
+  diagnostics.struct_size = out_diagnostics->struct_size;
   *out_diagnostics = diagnostics;
   return 0;
 }
@@ -216,13 +239,20 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
 
 extern "C" fm_status_t fm_workbook_get_diagnostics(const fm_workbook_t* wb, fm_read_diagnostics_t* out_diagnostics) {
   clear_last_error();
-  if (out_diagnostics != nullptr) {
-    *out_diagnostics = fm_read_diagnostics_t{};
+  if (out_diagnostics == nullptr) {
+    return null_argument();
   }
-  if (wb == nullptr || out_diagnostics == nullptr) {
+  if (auto rc = check_record_size(*out_diagnostics); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out_diagnostics->struct_size;
+  *out_diagnostics = FM_STRUCT_INIT(fm_read_diagnostics_t);
+  out_diagnostics->struct_size = struct_size;
+  if (wb == nullptr) {
     return null_argument();
   }
   *out_diagnostics = wb->read_diagnostics;
+  out_diagnostics->struct_size = struct_size;
   return 0;
 }
 
@@ -245,24 +275,51 @@ extern "C" void fm_workbook_destroy(fm_workbook_t* wb) {
 // ---------------------------------------------------------------------------
 
 extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len) {
-  // Delegates so the whole save family shares one failure-path contract:
-  // every out-param is zeroed before validation and stays zeroed on every
-  // non-`kOk` return. `Workbook::save()` is itself `save_as(Ooxml)`, so the
-  // produced bytes are unchanged.
-  fm_save_diagnostics_t diagnostics{};
-  return save_with_diagnostics_impl(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &diagnostics);
+  // The whole save family shares one failure-path contract: every out-param
+  // is zeroed before validation and stays zeroed on every non-`kOk` return.
+  // `Workbook::save()` is itself `save_as(Ooxml)`, so the produced bytes are
+  // unchanged.
+  fm_save_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  if (auto rc = begin_save(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &diagnostics); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  if (auto rc = calculate_on_save(wb); rc != 0) {
+    return rc;
+  }
+  return write_workbook(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &diagnostics);
 }
 
 extern "C" fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb, std::int32_t format,
                                                          uint8_t** out_bytes, size_t* out_len,
                                                          fm_save_diagnostics_t* out_diagnostics) {
-  return save_with_diagnostics_impl(wb, format, out_bytes, out_len, out_diagnostics);
+  if (auto rc = begin_save(wb, format, out_bytes, out_len, out_diagnostics); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  if (auto rc = calculate_on_save(wb); rc != 0) {
+    return rc;
+  }
+  return write_workbook(wb, format, out_bytes, out_len, out_diagnostics);
 }
 
 extern "C" fm_status_t fm_workbook_save_as(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
                                            size_t* out_len) {
-  fm_save_diagnostics_t diagnostics{};
-  return save_with_diagnostics_impl(wb, format, out_bytes, out_len, &diagnostics);
+  fm_save_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  if (auto rc = begin_save(wb, format, out_bytes, out_len, &diagnostics); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  if (auto rc = calculate_on_save(wb); rc != 0) {
+    return rc;
+  }
+  return write_workbook(wb, format, out_bytes, out_len, &diagnostics);
 }
 
 extern "C" void fm_buffer_destroy(uint8_t* bytes) {
@@ -426,14 +483,20 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t index,
 
 extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_input_t* input) {
   clear_last_error();
-  if (wb == nullptr || input == nullptr || input->name == nullptr || input->formula == nullptr) {
+  if (wb == nullptr || input == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_record_size(*input); rc != 0) {
+    return rc;
+  }
+  if (input->name == nullptr || input->formula == nullptr) {
     return null_argument();
   }
   if (auto rc = check_utf8({input->name, input->comment}); rc != 0) {
     return rc;
   }
   std::string stored;
-  if (auto rc = check_stored_formula(input->formula, "name=" + std::string(input->name), &stored); rc != 0) {
+  if (auto rc = check_stored_formula(input->formula, "field=formula", &stored); rc != 0) {
     return rc;
   }
   // The model reads an empty formula as a removal; a name always has one.
@@ -521,6 +584,9 @@ extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, 
   if (auto rc = check_index(idx, names.size(), "index"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const auto& entry = names[idx];
   out->name = entry.name.c_str();
   out->formula = publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), entry.formula, {})));
@@ -566,7 +632,7 @@ extern "C" fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, con
   if (idx == wb->workbook().defined_names().size()) {
     return 0;
   }
-  fm_defined_name_t entry{};
+  fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
   if (auto rc = fm_workbook_get_defined_name_at(wb, idx, &entry); rc != 0) {
     return rc;
   }

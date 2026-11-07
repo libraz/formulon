@@ -53,13 +53,13 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsReachTheModelWhenEngaged) {
   rule.data_bar_axis_position_engaged = 1;
   rule.data_bar_axis_position = 1;  // middle
   rule.data_bar_negative_fill_engaged = 1;
-  rule.data_bar_negative_fill = fm_cf_color_t{255, 0, 0, 255};
+  rule.data_bar_negative_fill = CfRgb(255, 0, 0, 255);
   rule.data_bar_border_engaged = 1;
-  rule.data_bar_border = fm_cf_color_t{1, 2, 3, 255};
+  rule.data_bar_border = CfRgb(1, 2, 3, 255);
   rule.data_bar_negative_border_engaged = 1;
-  rule.data_bar_negative_border = fm_cf_color_t{4, 5, 6, 255};
+  rule.data_bar_negative_border = CfRgb(4, 5, 6, 255);
   rule.data_bar_axis_color_engaged = 1;
-  rule.data_bar_axis_color = fm_cf_color_t{7, 8, 9, 255};
+  rule.data_bar_axis_color = CfRgb(7, 8, 9, 255);
 
   std::size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
@@ -95,30 +95,30 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   seed.data_bar_axis_position_engaged = 1;
   seed.data_bar_axis_position = 1;  // middle
   seed.data_bar_negative_fill_engaged = 1;
-  seed.data_bar_negative_fill = fm_cf_color_t{200, 30, 40, 255};
+  seed.data_bar_negative_fill = CfRgb(200, 30, 40, 255);
   seed.data_bar_border_engaged = 1;
-  seed.data_bar_border = fm_cf_color_t{11, 22, 33, 255};
+  seed.data_bar_border = CfRgb(11, 22, 33, 255);
   seed.data_bar_axis_color_engaged = 1;
-  seed.data_bar_axis_color = fm_cf_color_t{44, 55, 66, 255};
+  seed.data_bar_axis_color = CfRgb(44, 55, 66, 255);
   std::size_t seed_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_index), 0) << fm_get_last_error_message();
 
   // Read it back, change one unrelated field, and write it out again.
-  fm_cf_rule_t round_trip{};
+  fm_cf_rule_t round_trip = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &round_trip), 0);
   EXPECT_EQ(round_trip.data_bar_gradient_engaged, 1);
   EXPECT_EQ(round_trip.data_bar_gradient, 0);
   EXPECT_EQ(round_trip.data_bar_axis_position_engaged, 1);
   EXPECT_EQ(round_trip.data_bar_axis_position, 1U);
   EXPECT_EQ(round_trip.data_bar_negative_fill_engaged, 1);
-  EXPECT_EQ(round_trip.data_bar_negative_fill.r, 200U);
+  EXPECT_EQ(CfR(round_trip.data_bar_negative_fill), 200U);
   EXPECT_EQ(round_trip.data_bar_border_engaged, 1);
-  EXPECT_EQ(round_trip.data_bar_border.g, 22U);
+  EXPECT_EQ(CfG(round_trip.data_bar_border), 22U);
   // No negative border was set, so the getter must report it absent
   // rather than handing back an engaged black.
   EXPECT_EQ(round_trip.data_bar_negative_border_engaged, 0);
   EXPECT_EQ(round_trip.data_bar_axis_color_engaged, 1);
-  EXPECT_EQ(round_trip.data_bar_axis_color.b, 66U);
+  EXPECT_EQ(CfB(round_trip.data_bar_axis_color), 66U);
 
   round_trip.stop_if_true = 1;
   ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
@@ -146,7 +146,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 5, 5, "unrelated"), 0);
 
   fm_cell_rect_t sqref[2]{{0, 0, 9, 0}, {4, 3, 14, 3}};
-  fm_cf_rule_t seed{};
+  fm_cf_rule_t seed = FM_STRUCT_INIT(fm_cf_rule_t);
   seed.id = "{AB000000-0000-0000-0000-000000000001}";
   seed.type = 2;  // ColorScale
   seed.ranges = sqref;
@@ -157,14 +157,14 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   thresholds[0].value = "11";
   thresholds[1].type = 0;
   thresholds[1].value = "33";
-  fm_cf_color_t colors[2]{{255, 0, 0, 255}, {0, 255, 0, 255}};
+  fm_color_spec_t colors[2]{CfRgb(255, 0, 0, 255), CfRgb(0, 255, 0, 255)};
   seed.color_scale_thresholds = thresholds;
   seed.color_scale_colors = colors;
   seed.color_scale_count = 2;
   std::size_t seed_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_index), 0) << fm_get_last_error_message();
 
-  fm_cf_rule_t held{};
+  fm_cf_rule_t held = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &held), 0);
   ASSERT_NE(held.ranges, nullptr);
   ASSERT_EQ(held.range_count, 2U);
@@ -238,7 +238,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   formulon::c_api::BorrowedStringArena strings;
 
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 2;  // ColorScale
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -250,7 +250,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
     thresholds[i].gte = 1;
     thresholds[i].value = strings.emplace(kThresholdValues[i]);
   }
-  fm_cf_color_t colors[3]{{255, 0, 0, 255}, {255, 255, 0, 255}, {0, 255, 0, 255}};
+  fm_color_spec_t colors[3]{CfRgb(255, 0, 0, 255), CfRgb(255, 255, 0, 255), CfRgb(0, 255, 0, 255)};
   rule.color_scale_thresholds = thresholds;
   rule.color_scale_colors = colors;
   rule.color_scale_count = 3;
@@ -332,7 +332,7 @@ TEST(FormulonCApiCfMutate, RuleEngagingSeveralVisualPayloadsSurfacesLivePointers
   block.rules.push_back(std::move(rule));
   sheet.mutable_conditional_formats().push_back(std::move(block));
 
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   ASSERT_EQ(out.color_scale_count, 3U);
   ASSERT_NE(out.color_scale_thresholds, nullptr);
@@ -341,7 +341,7 @@ TEST(FormulonCApiCfMutate, RuleEngagingSeveralVisualPayloadsSurfacesLivePointers
   // not have moved out from under the pointer already in the record.
   EXPECT_STREQ(out.color_scale_thresholds[0].value, "11");
   EXPECT_STREQ(out.color_scale_thresholds[2].value, "33");
-  EXPECT_EQ(out.color_scale_colors[0].r, 255U);
+  EXPECT_EQ(CfR(out.color_scale_colors[0]), 255U);
   ASSERT_EQ(out.icon_set_threshold_count, 2U);
   ASSERT_NE(out.icon_set_thresholds, nullptr);
   EXPECT_STREQ(out.icon_set_thresholds[1].value, "80");

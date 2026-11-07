@@ -28,10 +28,10 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "cf/cf_authoring.h"
 #include "cf/cf_types.h"
 #include "cf/cf_x14_id.h"
-#include "color_resolve.h"
 #include "io/cf_overlay.h"
 #include "parser/formula_prefix.h"
 #include "utils/error.h"
@@ -40,10 +40,14 @@
 
 using formulon::c_api::BorrowedArrayArena;
 using formulon::c_api::BorrowedStringArena;
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::color_spec_from_c;
+using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::data_bar_axis_position_from_c;
 using formulon::c_api::parts::data_bar_direction_from_c;
 using formulon::c_api::parts::fresh_arena;
@@ -100,16 +104,16 @@ fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat
 // does not move as later payloads are adopted, so a rule engaging more
 // than one visual payload cannot invalidate a pointer already written
 // into `*out`.
-// The C payload carries literal channels only, so a theme / indexed / auto
-// colour is reported as its effective value in `wb`.
-fm_cf_color_t from_cf_color(const formulon::Workbook& wb, formulon::cf::Color color, formulon::ColorContext context) {
+// A theme / indexed / auto colour keeps its kind; a literal one reads as
+// `kFmColorRgb`, or `kFmColorNone` when all four channels are zero.
+fm_color_spec_t cf_color_to_c(const formulon::cf::Color& color) {
   if (color.is_symbolic()) {
-    const std::uint32_t argb = formulon::resolve_color(wb, color.spec, context).argb;
-    return fm_cf_color_t{static_cast<std::uint8_t>((argb >> 16U) & 0xFFU),
-                         static_cast<std::uint8_t>((argb >> 8U) & 0xFFU), static_cast<std::uint8_t>(argb & 0xFFU),
-                         static_cast<std::uint8_t>((argb >> 24U) & 0xFFU)};
+    return color_spec_to_c(color.spec);
   }
-  return fm_cf_color_t{color.r, color.g, color.b, color.a};
+  const std::uint32_t argb = (static_cast<std::uint32_t>(color.a) << 24U) |
+                             (static_cast<std::uint32_t>(color.r) << 16U) |
+                             (static_cast<std::uint32_t>(color.g) << 8U) | static_cast<std::uint32_t>(color.b);
+  return color_spec_to_c(formulon::ColorSpec{}, argb);
 }
 
 fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObject& src,
@@ -129,9 +133,11 @@ fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObj
 void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalFormat& block,
                const formulon::cf::CFRule& rule, std::size_t dxf_count, BorrowedStringArena& text_arena,
                BorrowedArrayArena<fm_cell_rect_t>& range_arena, BorrowedArrayArena<fm_cfvo_t>& cfvo_arena,
-               BorrowedArrayArena<fm_cf_color_t>& color_arena, BorrowedArrayArena<fm_cf_icon_t>& icon_arena,
+               BorrowedArrayArena<fm_color_spec_t>& color_arena, BorrowedArrayArena<fm_cf_icon_t>& icon_arena,
                fm_cf_rule_t* out) {
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_cf_rule_t{};
+  out->struct_size = struct_size;
   out->id = text_arena.emplace(rule.id);
   out->type = static_cast<std::uint8_t>(rule.type);
   out->priority = rule.priority;
@@ -186,12 +192,12 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     const auto& spec = *rule.color_scale;
     const std::size_t count = std::min(spec.thresholds.size(), spec.colors.size());
     std::vector<fm_cfvo_t> thresholds;
-    std::vector<fm_cf_color_t> colors;
+    std::vector<fm_color_spec_t> colors;
     thresholds.reserve(count);
     colors.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
       thresholds.push_back(from_cfvo(wb, spec.thresholds[i], text_arena));
-      colors.push_back(from_cf_color(wb, spec.colors[i], formulon::ColorContext::kFillForeground));
+      colors.push_back(cf_color_to_c(spec.colors[i]));
     }
     out->color_scale_thresholds = cfvo_arena.adopt(std::move(thresholds));
     out->color_scale_colors = color_arena.adopt(std::move(colors));
@@ -202,7 +208,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->data_bar_engaged = 1;
     out->data_bar_min = from_cfvo(wb, spec.min, text_arena);
     out->data_bar_max = from_cfvo(wb, spec.max, text_arena);
-    out->data_bar_fill = from_cf_color(wb, spec.fill, formulon::ColorContext::kFillForeground);
+    out->data_bar_fill = cf_color_to_c(spec.fill);
     out->data_bar_show_value = spec.show_value ? 1 : 0;
     out->data_bar_min_length_pct = spec.min_length_pct;
     out->data_bar_max_length_pct = spec.max_length_pct;
@@ -215,17 +221,17 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->data_bar_axis_position_engaged = 1;
     out->data_bar_axis_position = to_c(spec.axis_position);
     out->data_bar_negative_fill_engaged = 1;
-    out->data_bar_negative_fill = from_cf_color(wb, spec.negative_fill, formulon::ColorContext::kFillForeground);
+    out->data_bar_negative_fill = cf_color_to_c(spec.negative_fill);
     out->data_bar_border_engaged = spec.border.has_value() ? 1 : 0;
     if (spec.border.has_value()) {
-      out->data_bar_border = from_cf_color(wb, *spec.border, formulon::ColorContext::kBorder);
+      out->data_bar_border = cf_color_to_c(*spec.border);
     }
     out->data_bar_negative_border_engaged = spec.negative_border.has_value() ? 1 : 0;
     if (spec.negative_border.has_value()) {
-      out->data_bar_negative_border = from_cf_color(wb, *spec.negative_border, formulon::ColorContext::kBorder);
+      out->data_bar_negative_border = cf_color_to_c(*spec.negative_border);
     }
     out->data_bar_axis_color_engaged = 1;
-    out->data_bar_axis_color = from_cf_color(wb, spec.axis_color, formulon::ColorContext::kBorder);
+    out->data_bar_axis_color = cf_color_to_c(spec.axis_color);
     out->data_bar_direction = to_c(spec.direction);
   }
   if (rule.icon_set.has_value()) {
@@ -254,8 +260,64 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   }
 }
 
-formulon::cf::Color to_cf_color(fm_cf_color_t color) {
-  return formulon::cf::Color{color.r, color.g, color.b, color.a};
+// Inverse of `cf_color_to_c`: `kFmColorNone` is the literal colour with all
+// four channels zero. The kind is checked by `check_payload_colors`.
+formulon::cf::Color cf_color_from_c(const fm_color_spec_t& src) {
+  std::uint32_t argb = 0;
+  const formulon::ColorSpec spec = color_spec_from_c(src, &argb);
+  formulon::cf::Color out;
+  out.spec = spec;
+  if (out.is_symbolic()) {
+    return out;
+  }
+  out.spec = formulon::ColorSpec{};
+  out.a = static_cast<std::uint8_t>((argb >> 24U) & 0xFFU);
+  out.r = static_cast<std::uint8_t>((argb >> 16U) & 0xFFU);
+  out.g = static_cast<std::uint8_t>((argb >> 8U) & 0xFFU);
+  out.b = static_cast<std::uint8_t>(argb & 0xFFU);
+  return out;
+}
+
+fm_status_t check_color_kind(const fm_color_spec_t& color, const char* field) {
+  return check_enum_domain(color.kind, kFmColorNone, kFmColorAuto, field);
+}
+
+// Rejects a colour of the engaged payloads whose `kind` names no
+// `fm_color_kind_t`. The colour-scale array is scanned only in the shape
+// `copy_color_scale_payload` accepts.
+fm_status_t check_payload_colors(const fm_cf_rule_t& rule) {
+  if (rule.color_scale_colors != nullptr && rule.color_scale_count >= 2U && rule.color_scale_count <= 3U) {
+    for (std::uint32_t i = 0; i < rule.color_scale_count; ++i) {
+      if (auto rc = check_color_kind(rule.color_scale_colors[i], "color_scale_colors[].kind"); rc != 0) {
+        return rc;
+      }
+    }
+  }
+  if (rule.data_bar_engaged == 0) {
+    return 0;
+  }
+  if (auto rc = check_color_kind(rule.data_bar_fill, "data_bar_fill.kind"); rc != 0) {
+    return rc;
+  }
+  if (rule.data_bar_negative_fill_engaged != 0) {
+    if (auto rc = check_color_kind(rule.data_bar_negative_fill, "data_bar_negative_fill.kind"); rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.data_bar_border_engaged != 0) {
+    if (auto rc = check_color_kind(rule.data_bar_border, "data_bar_border.kind"); rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.data_bar_negative_border_engaged != 0) {
+    if (auto rc = check_color_kind(rule.data_bar_negative_border, "data_bar_negative_border.kind"); rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.data_bar_axis_color_engaged != 0) {
+    return check_color_kind(rule.data_bar_axis_color, "data_bar_axis_color.kind");
+  }
+  return 0;
 }
 
 formulon::cf::CfValueObject to_cfvo(const fm_cfvo_t& src) {
@@ -282,7 +344,7 @@ bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* ou
   spec.colors.reserve(rule.color_scale_count);
   for (std::uint32_t i = 0; i < rule.color_scale_count; ++i) {
     spec.thresholds.push_back(to_cfvo(rule.color_scale_thresholds[i]));
-    spec.colors.push_back(to_cf_color(rule.color_scale_colors[i]));
+    spec.colors.push_back(cf_color_from_c(rule.color_scale_colors[i]));
   }
   out_rule->color_scale = std::move(spec);
   return true;
@@ -299,19 +361,20 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   formulon::cf::DataBarSpec spec;
   spec.min = to_cfvo(rule.data_bar_min);
   spec.max = to_cfvo(rule.data_bar_max);
-  spec.fill = to_cf_color(rule.data_bar_fill);
-  spec.negative_fill = rule.data_bar_negative_fill_engaged != 0 ? to_cf_color(rule.data_bar_negative_fill) : spec.fill;
+  spec.fill = cf_color_from_c(rule.data_bar_fill);
+  spec.negative_fill =
+      rule.data_bar_negative_fill_engaged != 0 ? cf_color_from_c(rule.data_bar_negative_fill) : spec.fill;
   if (rule.data_bar_border_engaged != 0) {
-    spec.border = to_cf_color(rule.data_bar_border);
+    spec.border = cf_color_from_c(rule.data_bar_border);
   }
   if (rule.data_bar_negative_border_engaged != 0) {
-    spec.negative_border = to_cf_color(rule.data_bar_negative_border);
+    spec.negative_border = cf_color_from_c(rule.data_bar_negative_border);
   }
   if (rule.data_bar_axis_position_engaged != 0) {
     spec.axis_position = data_bar_axis_position_from_c(rule.data_bar_axis_position);
   }
   if (rule.data_bar_axis_color_engaged != 0) {
-    spec.axis_color = to_cf_color(rule.data_bar_axis_color);
+    spec.axis_color = cf_color_from_c(rule.data_bar_axis_color);
   }
   if (rule.data_bar_gradient_engaged != 0) {
     spec.gradient = rule.data_bar_gradient != 0;
@@ -358,34 +421,35 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
 // Checks every formula-typed threshold of `out_rule`'s visual payload, then
 // stores each the way files carry it (see `ingest_entered_formula`).
 fm_status_t store_cfvo_formulas(fm_workbook_t* wb, formulon::cf::CFRule* out_rule) {
-  std::vector<formulon::cf::CfValueObject*> cfvos;
+  // Each threshold with the `field=<name>` its parse failure reports.
+  std::vector<std::pair<formulon::cf::CfValueObject*, const char*>> cfvos;
   if (out_rule->color_scale.has_value()) {
     for (auto& v : out_rule->color_scale->thresholds) {
-      cfvos.push_back(&v);
+      cfvos.emplace_back(&v, "field=color_scale_threshold");
     }
   }
   if (out_rule->data_bar.has_value()) {
-    cfvos.push_back(&out_rule->data_bar->min);
-    cfvos.push_back(&out_rule->data_bar->max);
+    cfvos.emplace_back(&out_rule->data_bar->min, "field=data_bar_min");
+    cfvos.emplace_back(&out_rule->data_bar->max, "field=data_bar_max");
   }
   if (out_rule->icon_set.has_value()) {
-    cfvos.push_back(&out_rule->icon_set->floor);
+    cfvos.emplace_back(&out_rule->icon_set->floor, "field=icon_floor");
     for (auto& v : out_rule->icon_set->thresholds) {
-      cfvos.push_back(&v);
+      cfvos.emplace_back(&v, "field=icon_threshold");
     }
   }
-  for (const formulon::cf::CfValueObject* v : cfvos) {
+  for (const auto& [v, context] : cfvos) {
     if (v->type != formulon::cf::CfvoType::Formula) {
       continue;
     }
     std::string stored;
-    if (auto rc = check_stored_formula(v->value, "field=cfvo.value", &stored); rc != 0) {
+    if (auto rc = check_stored_formula(v->value, context, &stored); rc != 0) {
       return rc;
     }
   }
-  for (formulon::cf::CfValueObject* v : cfvos) {
-    if (v->type == formulon::cf::CfvoType::Formula) {
-      v->value = ingest_entered_formula(wb, v->value);
+  for (const auto& entry : cfvos) {
+    if (entry.first->type == formulon::cf::CfvoType::Formula) {
+      entry.first->value = ingest_entered_formula(wb, entry.first->value);
     }
   }
   return 0;
@@ -417,6 +481,9 @@ extern "C" fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, std::size_t
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   const auto& blocks = wb->workbook().sheet(sheet_index).conditional_formats();
@@ -463,21 +530,23 @@ fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& she
   return 0;
 }
 
-// The rule's id: the caller's when given (unique on the sheet), else one
-// derived from the priority so add-then-list is deterministic.
-fm_status_t assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size_t sheet_index,
-                      formulon::cf::CFRule* out) {
+// The rule's id: the caller's when given and not on the sheet yet, else one
+// derived from the priority so add-then-list is deterministic. A colliding id
+// is replaced rather than refused, so a read rule re-adds to its own sheet.
+void assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size_t sheet_index,
+               formulon::cf::CFRule* out) {
   if (rule.id != nullptr && rule.id[0] != '\0') {
     // Already checked against the `ST_Guid` shape by `validate`; a GUID's hex digits match in either case.
+    bool collides = false;
     for (const auto& block : sheet.conditional_formats()) {
       for (const auto& existing : block.rules) {
-        if (formulon::strings::case_insensitive_eq(existing.id, rule.id)) {
-          return invalid_argument("CF rule id is already on the sheet", "id=" + std::string(rule.id));
-        }
+        collides = collides || formulon::strings::case_insensitive_eq(existing.id, rule.id);
       }
     }
-    out->id = rule.id;
-    return 0;
+    if (!collides) {
+      out->id = rule.id;
+      return;
+    }
   }
   std::unordered_set<std::string> used_ids;
   for (const auto& block : sheet.conditional_formats()) {
@@ -486,7 +555,6 @@ fm_status_t assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, st
     }
   }
   out->id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out->priority), used_ids);
-  return 0;
 }
 
 // The colour-scale, data-bar or icon-set payload the rule's type carries.
@@ -517,7 +585,13 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*rule); rc != 0) {
+    return rc;
+  }
   if (auto rc = validate(*rule); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_payload_colors(*rule); rc != 0) {
     return rc;
   }
 
@@ -550,9 +624,7 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     }
     out_rule.dxf_id = rule->dxf_id;
   }
-  if (auto rc = assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule); rc != 0) {
-    return rc;
-  }
+  assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule);
   if (rule->formula1 != nullptr) {
     if (auto rc = check_stored_formula(rule->formula1, "field=formula1", &out_rule.formula1.emplace()); rc != 0) {
       return rc;

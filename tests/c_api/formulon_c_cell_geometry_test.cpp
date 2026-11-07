@@ -21,16 +21,16 @@
 
 namespace {
 
-static_assert(sizeof(fm_rect_pt_t) == 32U);
-static_assert(sizeof(fm_sheet_format_defaults_t) == 56U);
-static_assert(offsetof(fm_sheet_format_defaults_t, custom_height) == 32U);
-static_assert(offsetof(fm_sheet_format_defaults_t, zero_height) == 36U);
+static_assert(sizeof(fm_rect_pt_t) == 40U);
+static_assert(sizeof(fm_sheet_format_defaults_t) == 64U);
+static_assert(offsetof(fm_sheet_format_defaults_t, custom_height) == 40U);
+static_assert(offsetof(fm_sheet_format_defaults_t, zero_height) == 44U);
 static_assert(sizeof(fm_page_layout_t) == 56U);
 static_assert(offsetof(fm_page_layout_t, origin_x_pt) == 24U);
-static_assert(sizeof(fm_print_titles_t) == 24U);
-static_assert(sizeof(fm_paper_info_t) == 24U);
-static_assert(sizeof(fm_margins_pt_t) == 48U);
-static_assert(offsetof(fm_width_model_t, normal_font_name) == 32U);
+static_assert(sizeof(fm_print_titles_t) == 28U);
+static_assert(sizeof(fm_paper_info_t) == 32U);
+static_assert(sizeof(fm_margins_pt_t) == 56U);
+static_assert(offsetof(fm_width_model_t, normal_font_name) == 40U);
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr std::uint64_t kCursorEnd = std::numeric_limits<std::uint64_t>::max();
@@ -127,7 +127,7 @@ void SeedSparseSheet(fm_workbook_t* wb) {
 TEST(FormulonCApiCellGeometry, WidthModelReportsCalibratedCalibri) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_width_model_t display{};
+  fm_width_model_t display = FM_STRUCT_INIT(fm_width_model_t);
   ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_DISPLAY, &display), 0);
   EXPECT_DOUBLE_EQ(display.points_per_char, 5.25);
   EXPECT_DOUBLE_EQ(display.padding_pt, 3.75);
@@ -136,7 +136,7 @@ TEST(FormulonCApiCellGeometry, WidthModelReportsCalibratedCalibri) {
   EXPECT_DOUBLE_EQ(display.normal_font_size, 11.0);
   EXPECT_STREQ(display.platform, "win");
 
-  fm_width_model_t print{};
+  fm_width_model_t print = FM_STRUCT_INIT(fm_width_model_t);
   ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_PRINT, &print), 0);
   EXPECT_DOUBLE_EQ(print.points_per_char, 39.0 / 7.0);
   EXPECT_DOUBLE_EQ(print.padding_pt, 27.0 / 7.0);
@@ -205,7 +205,7 @@ TEST(FormulonCApiCellGeometry, CellRectSpansRangeAndSkipsHiddenTracks) {
   ASSERT_EQ(fm_sheet_get_row_height_pt(wb.handle, 0, 2U, &row_3), 0);
 
   // B2:C3 -- column C is hidden and contributes nothing.
-  fm_rect_pt_t rect{};
+  fm_rect_pt_t rect = FM_STRUCT_INIT(fm_rect_pt_t);
   ASSERT_EQ(
       fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 2U, 2U}), FM_GEOMETRY_DISPLAY, &rect),
       0);
@@ -235,7 +235,7 @@ TEST(FormulonCApiCellGeometry, CellRectSpansRangeAndSkipsHiddenTracks) {
 TEST(FormulonCApiCellGeometry, DefaultsDriveUnoverriddenTracks) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_format_defaults_t defaults{};
+  fm_sheet_format_defaults_t defaults = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   defaults.default_col_width = 12.0;
   defaults.default_row_height = 21.0;
   defaults.base_col_width = 8.0;
@@ -438,24 +438,24 @@ TEST(FormulonCApiPaginationDetail, ReportsPaperMarginsScaleAndTitles) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, "<pageSetup paperSize=\"9\" orientation=\"landscape\"/>"), 0);
-  fm_print_titles_t repeat{};
+  fm_print_titles_t repeat = FM_STRUCT_INIT(fm_print_titles_t);
   repeat.has_rows = 1;
   ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &repeat), 0);
 
   PaginationGuard p;
   ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &p.handle), 0);
-  fm_paper_info_t paper{};
+  fm_paper_info_t paper = FM_STRUCT_INIT(fm_paper_info_t);
   ASSERT_EQ(fm_pagination_get_paper(p.handle, &paper), 0);
   EXPECT_EQ(paper.landscape, 1);
   EXPECT_EQ(paper.known, 1);
   EXPECT_GT(paper.width_pt, paper.height_pt);
 
-  fm_margins_pt_t margins{};
+  fm_margins_pt_t margins = FM_STRUCT_INIT(fm_margins_pt_t);
   ASSERT_EQ(fm_pagination_get_margins(p.handle, &margins), 0);
   EXPECT_DOUBLE_EQ(margins.left, 0.7 * 72.0);
   EXPECT_DOUBLE_EQ(margins.top, 0.75 * 72.0);
 
-  fm_rect_pt_t printable{};
+  fm_rect_pt_t printable = FM_STRUCT_INIT(fm_rect_pt_t);
   ASSERT_EQ(fm_pagination_get_printable(p.handle, &printable), 0);
   EXPECT_DOUBLE_EQ(printable.x, margins.left);
   EXPECT_GT(printable.width, 0.0);
@@ -464,7 +464,7 @@ TEST(FormulonCApiPaginationDetail, ReportsPaperMarginsScaleAndTitles) {
   ASSERT_EQ(fm_pagination_get_scale(p.handle, &scale), 0);
   EXPECT_EQ(scale, 1.0);
 
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   ASSERT_EQ(fm_pagination_get_print_titles(p.handle, &titles), 0);
   EXPECT_EQ(titles.has_rows, 1);
   EXPECT_EQ(titles.first_row, 0U);
@@ -485,7 +485,7 @@ TEST(FormulonCApiPaginationDetail, UnknownPaperFallsBackAndSaysSo) {
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, "<pageSetup paperSize=\"999\"/>"), 0);
   PaginationGuard p;
   ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &p.handle), 0);
-  fm_paper_info_t paper{};
+  fm_paper_info_t paper = FM_STRUCT_INIT(fm_paper_info_t);
   ASSERT_EQ(fm_pagination_get_paper(p.handle, &paper), 0);
   EXPECT_EQ(paper.known, 0);
 }
@@ -505,7 +505,7 @@ TEST(FormulonCApiPaginationDetail, PagesFollowPageOrderAndCoverEveryPage) {
   const std::size_t page_count = count_of(fm_pagination_get_page_count, p.handle);
   ASSERT_GT(count_of(fm_pagination_get_column_break_count, p.handle), 0U);
   ASSERT_GT(page_count, 2U);
-  std::vector<fm_page_layout_t> pages(page_count);
+  std::vector<fm_page_layout_t> pages(page_count, FM_STRUCT_INIT(fm_page_layout_t));
   for (std::uint32_t i = 0; i < page_count; ++i) {
     ASSERT_EQ(fm_pagination_get_page_at(p.handle, i, &pages[i]), 0);
     EXPECT_GT(pages[i].width_pt, 0.0);
@@ -514,7 +514,7 @@ TEST(FormulonCApiPaginationDetail, PagesFollowPageOrderAndCoverEveryPage) {
   // Over then down: the second page sits right of the first, same row band.
   EXPECT_EQ(pages[1].rect.first_row, pages[0].rect.first_row);
   EXPECT_GT(pages[1].rect.first_col, pages[0].rect.last_col);
-  fm_page_layout_t extra{};
+  fm_page_layout_t extra = FM_STRUCT_INIT(fm_page_layout_t);
   EXPECT_EQ(fm_pagination_get_page_at(p.handle, page_count, &extra), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_pagination_get_page_order(nullptr, &order), 0);
 }

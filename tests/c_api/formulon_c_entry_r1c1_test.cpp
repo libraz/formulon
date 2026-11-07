@@ -16,6 +16,7 @@
 #include "formulon_c_out_index.h"
 #include "formulon_c_setters.h"
 #include "gtest/gtest.h"
+#include "parser/parse_status.h"
 #include "table.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -158,6 +159,14 @@ void BuildProbeSheet(WorkbookGuard* wb, const ProbeRow (&rows)[N], bool with_b1,
     const std::uint32_t row0 = r.row - 1U;
     ASSERT_EQ(fm_sheet_set_number(wb->handle, 0, row0, kColD, 7.0), 0);
     status->push_back(fm_sheet_set_formula(wb->handle, 0, row0, kColE, r.formula));
+    if (status->back() != 0) {
+      // A refusal carries the parser status of the parse error it records.
+      fm_parse_error_t err = FM_STRUCT_INIT(fm_parse_error_t);
+      ASSERT_EQ(fm_get_last_parse_error(&err), 0) << r.formula;
+      EXPECT_EQ(status->back(), static_cast<fm_status_t>(formulon::parser::parse_error_status(
+                                    static_cast<formulon::parser::ParseErrorCode>(err.code))))
+          << r.formula;
+    }
     const std::string e = ProbeCell(r.row, 'E');
     ASSERT_EQ(fm_sheet_set_formula(wb->handle, 0, row0, kColF, ("=IFERROR(ERROR.TYPE(" + e + "),-1)").c_str()), 0)
         << fm_get_last_error_message();
@@ -188,7 +197,7 @@ void ExpectRowMatches(const fm_workbook_t* wb, const ProbeRow& r, fm_status_t st
   ASSERT_EQ(f.kind, FM_VAL_NUMBER);
   EXPECT_EQ(f.u.number, static_cast<double>(r.error_type));
   if (r.stored == nullptr) {
-    EXPECT_EQ(status, kParserUnexpectedToken);
+    EXPECT_NE(status, 0);
     EXPECT_EQ(FormulaAt(wb, row0, kColE), "");
     EXPECT_EQ(ValueAt(wb, row0, kColE).kind, FM_VAL_BLANK);
     return;
@@ -295,7 +304,7 @@ TEST(FormulonCApiEntryR1C1, ArrayFormulaReadsR1C1AtItsTopLeft) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_cell_rect_t rect{2, 4, 3, 4};
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, &rect, "=RC[-1]"), 0) << fm_get_last_error_message();
-  fm_array_formula_t info{};
+  fm_array_formula_t info = FM_STRUCT_INIT(fm_array_formula_t);
   ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 3, 4, &info), 0);
   ASSERT_EQ(info.engaged, 1);
   EXPECT_STREQ(info.formula, "=D3");

@@ -15,9 +15,9 @@ namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_mention_t) == (kWasm32 ? 16U : 24U), "fm_mention_t ABI layout changed");
-static_assert(sizeof(fm_threaded_comment_t) == (kWasm32 ? 40U : 72U), "fm_threaded_comment_t ABI layout changed");
-static_assert(sizeof(fm_person_t) == 4U * sizeof(void*), "fm_person_t ABI layout changed");
-static_assert(sizeof(fm_threaded_comment_patch_t) == (kWasm32 ? 20U : 32U),
+static_assert(sizeof(fm_threaded_comment_t) == (kWasm32 ? 44U : 80U), "fm_threaded_comment_t ABI layout changed");
+static_assert(sizeof(fm_person_t) == (kWasm32 ? 20U : 40U), "fm_person_t ABI layout changed");
+static_assert(sizeof(fm_threaded_comment_patch_t) == (kWasm32 ? 24U : 40U),
               "fm_threaded_comment_patch_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
@@ -51,7 +51,7 @@ void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
 
 /// A patch that keeps everything; callers engage the fields they test.
 fm_threaded_comment_patch_t KeepAll() {
-  fm_threaded_comment_patch_t patch{};
+  fm_threaded_comment_patch_t patch = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
   patch.done = -1;
   return patch;
 }
@@ -79,7 +79,7 @@ std::vector<CommentCopy> ReadComments(const fm_workbook_t* wb) {
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_threaded_comment_count(wb, 0, &count), 0);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_threaded_comment_t c{};
+    fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
     EXPECT_EQ(fm_sheet_get_threaded_comment_at(wb, 0, i, &c), 0) << fm_get_last_error_message();
     CommentCopy copy;
     copy.id = Str(c.id);
@@ -104,23 +104,32 @@ std::vector<std::string> PersonNames(const fm_workbook_t* wb) {
   std::size_t count = 0;
   EXPECT_EQ(fm_workbook_get_person_count(wb, &count), 0);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_person_t p{};
+    fm_person_t p = FM_STRUCT_INIT(fm_person_t);
     EXPECT_EQ(fm_workbook_get_person_at(wb, i, &p), 0);
     names.push_back(Str(p.display_name));
   }
   return names;
 }
 
+fm_person_t MakePerson(const char* id, const char* display_name, const char* user_id, const char* provider_id) {
+  fm_person_t person = FM_STRUCT_INIT(fm_person_t);
+  person.id = id;
+  person.display_name = display_name;
+  person.user_id = user_id;
+  person.provider_id = provider_id;
+  return person;
+}
+
 void AddPeople(fm_workbook_t* wb) {
-  const fm_person_t alice{kAlice, "Alice", "alice@example.com", "None"};
-  const fm_person_t bob{kBob, "Bob", "bob@example.com", "None"};
+  const fm_person_t alice = MakePerson(kAlice, "Alice", "alice@example.com", "None");
+  const fm_person_t bob = MakePerson(kBob, "Bob", "bob@example.com", "None");
   ASSERT_EQ(fm_workbook_add_person(wb, &alice), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_add_person(wb, &bob), 0) << fm_get_last_error_message();
 }
 
 fm_threaded_comment_t Comment(const char* id, std::uint32_t row, std::uint32_t col, const char* person,
                               const char* text, const char* parent) {
-  fm_threaded_comment_t c{};
+  fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
   c.id = id;
   c.row = row;
   c.col = col;
@@ -148,16 +157,16 @@ TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   AddPeople(wb.handle);
   EXPECT_EQ(PersonNames(wb.handle), (std::vector<std::string>{"Alice", "Bob"}));
-  fm_person_t p{};
+  fm_person_t p = FM_STRUCT_INIT(fm_person_t);
   ASSERT_EQ(fm_workbook_get_person_at(wb.handle, 1, &p), 0);
   EXPECT_STREQ(p.id, kBob);
   EXPECT_STREQ(p.user_id, "bob@example.com");
   EXPECT_STREQ(p.provider_id, "None");
   EXPECT_EQ(fm_workbook_get_person_at(wb.handle, 2, &p), FM_STATUS_INDEX_OUT_OF_RANGE);
 
-  const fm_person_t duplicate{kAlice, "Again", nullptr, nullptr};
+  const fm_person_t duplicate = MakePerson(kAlice, "Again", nullptr, nullptr);
   EXPECT_EQ(fm_workbook_add_person(wb.handle, &duplicate), kThreadedCommentInvalid);
-  const fm_person_t lowercase{"{0a1b2c3d-0000-4000-8000-000000000009}", "Low", nullptr, nullptr};
+  const fm_person_t lowercase = MakePerson("{0a1b2c3d-0000-4000-8000-000000000009}", "Low", nullptr, nullptr);
   EXPECT_EQ(fm_workbook_add_person(wb.handle, &lowercase), kThreadedCommentInvalid);
   EXPECT_EQ(fm_workbook_add_person(wb.handle, nullptr), kBindingNullPointer);
 
@@ -292,7 +301,7 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
 
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_threaded_comment_count(wb.handle, 5, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  fm_threaded_comment_t out{};
+  fm_threaded_comment_t out = FM_STRUCT_INIT(fm_threaded_comment_t);
   EXPECT_EQ(fm_sheet_get_threaded_comment_at(wb.handle, 0, 1, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 

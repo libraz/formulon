@@ -7,11 +7,13 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "eval/function_registry.h"
 #include "utils/error.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_cell_coord;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::not_found;
@@ -39,6 +41,9 @@ extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
+  }
   const formulon::MergeRange ref{spec->rect.first_row, spec->rect.first_col, spec->rect.last_row, spec->rect.last_col};
   auto added = wb->workbook().add_data_table(sheet_index, ref,
                                              input_of(spec->has_row_input, spec->row_input_row, spec->row_input_col),
@@ -61,8 +66,13 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_data_table_t{};
+  out->struct_size = struct_size;
   const formulon::DataTable* table = wb->workbook().data_table_at(sheet_index, row, col);
   if (table == nullptr) {
     return 0;

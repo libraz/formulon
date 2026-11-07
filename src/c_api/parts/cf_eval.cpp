@@ -20,12 +20,14 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "cf/cf_evaluator.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "styles.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/resource_budget.h"
@@ -33,8 +35,11 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::color_spec_to_c;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
@@ -50,22 +55,23 @@ struct fm_cf_results {
 
 namespace {
 
-// Translates an engine-side `cf::Color` into the C ABI's RGBA POD.
-fm_cf_color_t to_c_color(formulon::cf::Color c) {
-  fm_cf_color_t out{};
-  out.r = c.r;
-  out.g = c.g;
-  out.b = c.b;
-  out.a = c.a;
-  return out;
+// A resolved engine-side `cf::Color` as an RGB colour spec.
+fm_color_spec_t to_c_color(formulon::cf::Color c) {
+  formulon::ColorSpec spec;
+  spec.kind = formulon::ColorSpec::Kind::kRgb;
+  spec.rgb = (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
+             (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
+  return color_spec_to_c(spec);
 }
 
 // Projects a single `cf::CFMatch` into the wire-format `fm_cf_match_t`.
-// The output is zero-initialised first so non-active fields are
-// deterministic (the public ABI promises default-zero for all
-// kind-irrelevant payload).
+// The output is zero-initialised first, keeping the caller's
+// `struct_size`, so non-active fields are deterministic (the public ABI
+// promises default-zero for all kind-irrelevant payload).
 void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
-  *out = fm_cf_match_t{};
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_cf_match_t);
+  out->struct_size = struct_size;
   out->priority = match.priority;
   switch (match.kind) {
     case formulon::cf::CFMatchKind::DifferentialFormat:
@@ -132,6 +138,9 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
     return invalid_argument("rect out of grid", "first=(" + std::to_string(first_row) + "," +
                                                     std::to_string(first_col) + ") last=(" + std::to_string(last_row) +
                                                     "," + std::to_string(last_col) + ")");
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
   }
   // Stack-allocated arena and eval context: the CF walker is purely
   // synchronous and the engine consumes both before returning. Binding
@@ -204,6 +213,9 @@ extern "C" fm_status_t fm_cf_results_get_match_at(const fm_cf_results_t* results
   }
   const auto& entry = results->matches[cell_index];
   if (auto rc = check_index(match_index, entry.matches.size(), "match_index"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
   fill_match(entry.matches[match_index], out);

@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "sheet.h"
 #include "threaded_comment.h"
 #include "utils/error.h"
@@ -18,6 +19,7 @@
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -85,6 +87,9 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
   if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
@@ -97,7 +102,9 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
     mentions.push_back(fm_mention_t{store_cstr(scratch->read_scratch, m.person_id),
                                     store_cstr(scratch->read_scratch, m.mention_id), m.start, m.length});
   }
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_threaded_comment_t{};
+  out->struct_size = struct_size;
   out->id = store_cstr(scratch->read_scratch, c.id);
   out->row = c.row;
   out->col = c.col;
@@ -123,8 +130,13 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, si
   if (auto rc = check_utf8({id}); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_threaded_comment_t{};
+  out->struct_size = struct_size;
   const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
   const std::size_t idx = formulon::find_threaded_comment(list, id);
   if (idx == list.size()) {
@@ -141,6 +153,9 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "comment is NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*comment); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({comment->id, comment->person_id, comment->created, comment->text, comment->parent_id});
@@ -172,6 +187,9 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "patch is NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({id, patch->text}); rc != 0) {
@@ -242,6 +260,9 @@ extern "C" fm_status_t fm_workbook_get_person_at(const fm_workbook_t* wb, size_t
   if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const auto& persons = wb->workbook().persons();
   if (auto rc = check_index(idx, persons.size(), "index"); rc != 0) {
     return rc;
@@ -264,8 +285,13 @@ extern "C" fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const cha
   if (auto rc = check_utf8({id}); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_person_t{};
+  out->struct_size = struct_size;
   const auto& persons = wb->workbook().persons();
   for (std::size_t i = 0; i < persons.size(); ++i) {
     if (persons[i].id == id) {
@@ -280,6 +306,9 @@ extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person
   clear_last_error();
   if (wb == nullptr || person == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*person); rc != 0) {
+    return rc;
   }
   if (auto rc = check_utf8({person->id, person->display_name, person->user_id, person->provider_id}); rc != 0) {
     return rc;

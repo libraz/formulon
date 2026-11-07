@@ -29,7 +29,7 @@ fm_status_t BuildFieldOrderPivot(fm_workbook_t* wb, std::size_t* out_pivot_index
     return status;
   }
   for (const char* name : kFieldNames) {
-    fm_pivot_field_spec_t spec{};
+    fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
     spec.source_name = name;
     spec.axis = FM_PIVOT_AXIS_VALUE;
     spec.subtotal_top = 1;
@@ -60,7 +60,7 @@ formulon::pivot::PivotTable& GetPivot(WorkbookGuard& wb, std::size_t pivot_index
 
 void ExpectAxes(const fm_workbook_t* wb, std::size_t pivot_index, const std::array<std::int32_t, kFieldCount>& axes) {
   for (std::size_t i = 0; i < axes.size(); ++i) {
-    fm_pivot_field_info_t field{};
+    fm_pivot_field_info_t field = FM_STRUCT_INIT(fm_pivot_field_info_t);
     ASSERT_EQ(fm_sheet_get_pivot_field(wb, 0U, pivot_index, i, &field), 0) << fm_get_last_error_message();
     EXPECT_EQ(field.axis, axes[i]) << "field=" << i;
   }

@@ -15,6 +15,7 @@
 #include "c_api/parts/chart_patch_reader.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "chart/chart_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -25,6 +26,7 @@ using formulon::c_api::parts::chart_blanks_as_from_c;
 using formulon::c_api::parts::chart_legend_position_from_c;
 using formulon::c_api::parts::chart_title_kind_from_c;
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -50,14 +52,14 @@ formulon::ChartTitle title_of(const fm_chart_title_t& t) {
 
 formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch_t& p) {
   formulon::ChartFillPatch out;
-  r.field(p.color_op, p.color, out.color, "fill.color_op");
+  r.rgb_field(p.color_op, p.color, out.color, "fill.color_op");
   r.field(p.transparency_op, p.transparency_pct, out.transparency_pct, "fill.transparency_op");
   return out;
 }
 
 formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch_t& p) {
   formulon::ChartLinePatch out;
-  r.field(p.color_op, p.color, out.color, "line.color_op");
+  r.rgb_field(p.color_op, p.color, out.color, "line.color_op");
   r.field(p.transparency_op, p.transparency_pct, out.transparency_pct, "line.transparency_op");
   r.field(p.width_op, p.width_pt, out.width_pt, "line.width_op");
   r.enum_field(p.dash_op, p.dash, formulon::ChartLineDash::kOther, out.dash, "line.dash");
@@ -84,7 +86,7 @@ formulon::ChartLabelsPatch read_labels(PatchReader& r, const fm_chart_labels_pat
   r.text_field(p.separator_op, p.separator, out.separator, "labels.separator_op");
   r.enum_field(p.position_op, p.position, formulon::ChartLabelPosition::kRight, out.position, "labels.position");
   r.text_field(p.number_format_op, p.number_format, out.number_format, "labels.number_format_op");
-  r.field(p.font_color_op, p.font_color, out.font_color, "labels.font_color_op");
+  r.rgb_field(p.font_color_op, p.font_color, out.font_color, "labels.font_color_op");
   r.field(p.font_size_op, p.font_size_pt, out.font_size_pt, "labels.font_size_op");
   return out;
 }
@@ -149,6 +151,9 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
     return null_argument();
   }
   if (auto rc = edit_entry(wb, sheet_index, opts); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*opts); rc != 0) {
     return rc;
   }
   if (opts->source == nullptr) {
@@ -236,6 +241,9 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
   if (auto rc = edit_entry(wb, sheet_index, legend); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*legend); rc != 0) {
+    return rc;
+  }
   if (legend->hidden_series == nullptr && legend->hidden_series_count != 0) {
     return null_argument();
   }
@@ -258,6 +266,9 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                uint32_t axis_id, const fm_chart_axis_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   PatchReader r;
@@ -294,6 +305,9 @@ extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t shee
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
   PatchReader r;
   formulon::ChartDisplayPatch model;
   if (patch->blanks_as_op == FM_CHART_PATCH_SET && patch->blanks_as == FM_CHART_BLANKS_ABSENT) {
@@ -314,6 +328,9 @@ extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
   PatchReader r;
   formulon::ChartSeriesPatch model = read_series(r, *patch);
   if (r.status() != 0) {
@@ -328,6 +345,9 @@ extern "C" fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_
                                                 size_t series_index, size_t point_index,
                                                 const fm_chart_point_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   PatchReader r;
@@ -347,6 +367,9 @@ extern "C" fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_sheet_set_chart_plot(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                const fm_chart_plot_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   PatchReader r;
@@ -389,6 +412,9 @@ extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet
     return null_argument();
   }
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   PatchReader r;

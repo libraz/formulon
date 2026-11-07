@@ -20,6 +20,7 @@
 #include "c_api/parts/chart_patch_reader.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "chart/chart_edit.h"
 #include "chart/chart_model.h"
 #include "drawing/drawing_xml.h"
@@ -29,9 +30,12 @@
 using formulon::c_api::parts::chart_blanks_as_from_c;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::color_spec_to_c;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
@@ -70,6 +74,28 @@ std::int32_t tri(formulon::Tri t) {
   return static_cast<std::int32_t>(t);
 }
 
+// Rgb colour of a chart fill, line or label; None when absent.
+fm_color_spec_t rgb_to_c(const std::optional<std::uint32_t>& rgb) {
+  formulon::ColorSpec spec;
+  if (rgb) {
+    spec.kind = formulon::ColorSpec::Kind::kRgb;
+    spec.rgb = *rgb;
+  }
+  return color_spec_to_c(spec);
+}
+
+// Validates the caller's `struct_size`, then zeroes `*out` keeping it.
+template <typename T>
+fm_status_t begin_record(T* out) {
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = T{};
+  out->struct_size = struct_size;
+  return 0;
+}
+
 double transparency_of(const std::optional<std::uint32_t>& alpha) {
   return alpha ? 100.0 - static_cast<double>(*alpha) / 1000.0 : kNaN;
 }
@@ -83,13 +109,12 @@ fm_chart_title_t to_fm(const formulon::ChartTitle& t) {
 }
 
 fm_chart_fill_t to_fm(const formulon::ChartFill& f) {
-  return fm_chart_fill_t{f.color ? 1 : 0, f.color.value_or(0U), transparency_of(f.alpha)};
+  return fm_chart_fill_t{rgb_to_c(f.color), transparency_of(f.alpha)};
 }
 
 fm_chart_line_t to_fm(const formulon::ChartLine& l) {
   fm_chart_line_t out{};
-  out.has_color = l.color ? 1 : 0;
-  out.color = l.color.value_or(0U);
+  out.color = rgb_to_c(l.color);
   out.transparency_pct = transparency_of(l.alpha);
   out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / 12700.0 : kNaN;
   out.has_dash = l.dash ? 1 : 0;
@@ -120,8 +145,7 @@ fm_chart_labels_t to_fm(const formulon::ChartLabels& l) {
   out.position = l.position ? static_cast<std::int32_t>(*l.position) : 0;
   out.number_format = l.num_fmt ? l.num_fmt->code.c_str() : nullptr;
   out.source_linked = l.num_fmt && l.num_fmt->source_linked ? 1 : 0;
-  out.has_font_color = l.font_color ? 1 : 0;
-  out.font_color = l.font_color.value_or(0U);
+  out.font_color = rgb_to_c(l.font_color);
   out.font_size_pt = l.font_size_hundredths_pt ? static_cast<double>(*l.font_size_hundredths_pt) / 100.0 : kNaN;
   out.deleted = l.deleted ? 1 : 0;
   return out;
@@ -272,7 +296,9 @@ extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_
     return null_argument();
   }
   const formulon::ChartModel& m = chart->model;
-  *out = fm_chart_info_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->object_id = m.object_id;
   out->name = m.name.c_str();
   out->description = m.descr.c_str();
@@ -342,7 +368,9 @@ extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot
     return rc;
   }
   const formulon::ChartPlot& p = chart->model.plots[plot];
-  *out = fm_chart_plot_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->type = static_cast<std::int32_t>(p.type);
   out->chartex_layout = p.chartex_layout.c_str();
   out->bar_dir = to_c(p.bar_dir);
@@ -388,7 +416,9 @@ extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t pl
   if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
     return rc;
   }
-  *out = fm_chart_series_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->idx = s->idx;
   out->order = s->order;
   out->filtered = s->filtered ? 1 : 0;
@@ -419,6 +449,9 @@ extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, s
   if (chart == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const formulon::ChartSeries* s = nullptr;
   if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
     return rc;
@@ -432,7 +465,10 @@ extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, s
   }
   const formulon::ChartValue& v = points[idx];
   const bool text = v.kind == formulon::ChartValue::Kind::kText;
-  *out = fm_chart_literal_t{v.idx, text ? 1 : 0, text ? 0.0 : v.number, v.text.c_str()};
+  out->idx = v.idx;
+  out->is_text = text ? 1 : 0;
+  out->number = text ? 0.0 : v.number;
+  out->text = v.text.c_str();
   return 0;
 }
 
@@ -450,7 +486,9 @@ extern "C" fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, siz
     return rc;
   }
   const formulon::ChartPoint& p = s->points[idx];
-  *out = fm_chart_point_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->idx = p.idx;
   out->fill = to_fm(p.fill);
   out->line = to_fm(p.line);
@@ -470,7 +508,9 @@ extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx,
     return rc;
   }
   const formulon::ChartAxis& a = chart->model.axes[idx];
-  *out = fm_chart_axis_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->id = a.id;
   out->kind = static_cast<std::int32_t>(a.kind);
   out->position = to_c(a.position);
@@ -529,6 +569,9 @@ extern "C" fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t s
   if (auto rc = check_chart_present(wb, sheet_index, object_id); rc != 0) {
     return rc;
   }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
   auto data = formulon::get_chart_data(wb->workbook(), sheet_index, object_id);
   if (!data) {
     return set_last_error(data.error());
@@ -546,6 +589,9 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
   }
   if (out == nullptr || overrides == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*overrides); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -572,6 +618,9 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
   if (r.status() != 0) {
     return r.status();
   }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
   auto data = formulon::preview_chart_data(wb->workbook(), sheet_index, object_id, model);
   if (!data) {
     return set_last_error(data.error());
@@ -590,7 +639,9 @@ extern "C" fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_ch
     return null_argument();
   }
   const formulon::ChartData& d = data->data;
-  *out = fm_chart_data_info_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->is_xy = d.domain == formulon::ChartData::Domain::kXY ? 1 : 0;
   out->point_count = static_cast<std::uint32_t>(d.point_count);
   out->series_count = static_cast<std::uint32_t>(d.series.size());
@@ -661,7 +712,9 @@ extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, 
     return rc;
   }
   const formulon::ChartDataSeries& s = data->data.series[series];
-  *out = fm_chart_data_series_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->plot_index = static_cast<std::uint32_t>(s.plot_index);
   out->idx = s.idx;
   out->name = opt_cstr(s.name);
@@ -687,7 +740,9 @@ extern "C" fm_status_t fm_chart_data_get_series_points(const fm_chart_data_t* da
   }
   const fm_chart_data::Points& p = data->points[series];
   const std::vector<double>& sizes = data->data.series[series].sizes;
-  *out = fm_chart_data_points_t{};
+  if (auto rc = begin_record(out); rc != 0) {
+    return rc;
+  }
   out->count = static_cast<std::uint32_t>(p.values.size());
   out->values = p.values.data();
   out->states = p.states.data();
@@ -723,11 +778,15 @@ extern "C" fm_status_t fm_chart_data_get_axis_title_at(const fm_chart_data_t* da
   if (data == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const std::vector<formulon::ChartAxisTitleText>& list = data->data.axis_title_texts;
   if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
   }
-  *out = fm_chart_axis_title_text_t{list[idx].axis_id, list[idx].text.c_str()};
+  out->axis_id = list[idx].axis_id;
+  out->text = list[idx].text.c_str();
   return 0;
 }
 
@@ -737,10 +796,15 @@ extern "C" fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* da
   if (data == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const std::vector<formulon::ChartUnresolved>& list = data->data.unresolved;
   if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
   }
-  *out = fm_chart_unresolved_t{list[idx].series_idx, list[idx].source.c_str(), list[idx].axis_id};
+  out->series_index = list[idx].series_idx;
+  out->source = list[idx].source.c_str();
+  out->axis_id = list[idx].axis_id;
   return 0;
 }

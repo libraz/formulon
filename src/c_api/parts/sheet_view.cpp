@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "io/sqref_text.h"
 #include "sheet.h"
 #include "utils/a1_ref.h"
@@ -20,6 +21,7 @@ using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_limit;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
@@ -124,6 +126,9 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   if (out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -170,6 +175,11 @@ extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t shee
     return rc;
   }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
+  // A pane-less view has one scrolled region, so its default origin is accepted.
+  if (!view.divides_rows() && !view.divides_cols() && row == view.freeze_rows && col == view.freeze_cols) {
+    view.pane_top_left_cell.clear();
+    return 0;
+  }
   if ((!view.divides_rows() && !view.divides_cols()) || row < view.freeze_rows || col < view.freeze_cols ||
       !formulon::Sheet::coord_in_grid(row, col)) {
     return invalid_argument("cell is not in the unfrozen area");

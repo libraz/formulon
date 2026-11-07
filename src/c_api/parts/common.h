@@ -31,6 +31,12 @@
 #include "workbook.h"
 
 namespace formulon {
+class Arena;
+namespace parser {
+class AstNode;
+struct ParseFailure;
+}  // namespace parser
+
 namespace c_api {
 namespace parts {
 
@@ -49,9 +55,9 @@ const char* store_cstr(TextStore& store, std::string_view text);
 // release the returned pointer exactly like a non-empty buffer.
 void copy_owned_bytes(const std::vector<std::uint8_t>& bytes, std::uint8_t** out_bytes, std::size_t* out_len);
 
-// Resets the thread-local diagnostics. Called at the start of every
-// fallible entry point so a successful return surfaces an empty error
-// message rather than the previous call's residue.
+// Resets the thread-local diagnostics, the parse-error record included.
+// Called at the start of every fallible entry point so a successful return
+// surfaces an empty error message rather than the previous call's residue.
 void clear_last_error();
 
 // Captures `err` into the thread-local buffers and returns its numeric
@@ -128,12 +134,17 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula);
 // fails that, or that `eval::needs_r1c1_entry` sends to R1C1, is taken as
 // `eval::translate_r1c1_entry` at the cell when that passes the same checks.
 // Typed `_xlpm.` before a cell-shaped name is refused everywhere. Returns 0,
-// or sets `kParserUnexpectedToken` ("formula does not parse") with
-// `context`. `*bound` receives the bound (or translated) text with one
+// or fails through `formula_parse_failed` with `context`. `*bound` receives the bound (or translated) text with one
 // leading '=', the spelling the readers store, not yet normalized, for
 // `Workbook::set_cell_formula`.
 fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col,
                                        std::string_view formula, std::string_view context, std::string* bound);
+
+// AST of ad-hoc `formula`, bound to `bound`, owned by `arena`; nullptr with
+// `*rc` set by `formula_parse_failed` (position in `formula`) when it does
+// not parse.
+const formulon::parser::AstNode* parse_evaluated_formula(std::string_view formula, std::string_view bound,
+                                                         formulon::Arena& arena, fm_status_t* rc);
 
 // Display name of the table whose range holds (`sheet`, `row`, `col`), or ""
 // outside every table.
@@ -178,6 +189,37 @@ const char* last_error_message();
 // Returns the thread-local diagnostic context buffer (always non-null).
 const char* last_error_context();
 
+// Position of a formula syntax failure as `fm_get_last_parse_error` reports
+// it: an `fm_parse_error_code_t` and a UTF-16 range into the caller's text.
+struct ParseErrorRecord {
+  std::int32_t code = 0;
+  std::uint32_t start = 0;
+  std::uint32_t end = 0;
+  std::uint32_t line = 1;
+  std::uint32_t column = 1;
+};
+
+// The thread-local parse-error record of the current call, or NULL when it
+// recorded none.
+const ParseErrorRecord* last_parse_error();
+
+// Fails a formula entry point on `failure`: records its code and range as the
+// parse-error record and sets the status `parser/parse_status.h` maps the code
+// to, with `failure.message` and `context` (`field=<name>` for a record field).
+fm_status_t formula_parse_failed(const formulon::parser::ParseFailure& failure, std::string context);
+
+// Rejects a record whose caller-set `struct_size` is below `v1_size`, the
+// layout this field set first shipped with, as kInvalidArgument with context
+// `struct_size=<got> type=<type_name>`. A larger size is accepted; the
+// library reads and writes only the fields it knows.
+fm_status_t check_struct_size(std::uint32_t got, std::size_t v1_size, const char* type_name);
+
+// Brings the workbook's values up to date before a value read
+// (`Workbook::ensure_calculated` with the default registry). The handle stays
+// logically const: only cached results change. Returns the recalc's status on
+// failure.
+fm_status_t ensure_calculated(const fm_workbook_t* wb);
+
 // Hard cap on the number of cell ranges any single C-API call may carry.
 // Validation lists and conditional-format sqrefs are unbounded on the
 // wire (`size_t`), so a hostile caller can pass `SIZE_MAX` and force
@@ -186,6 +228,16 @@ const char* last_error_context();
 // handful of CF sqrefs) but high enough that no legitimate caller will
 // trip the cap.
 constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
+
+// Projects an engine colour onto the C spec. A `kNone` colour with a
+// nonzero `fallback_argb` (a style record's legacy ARGB field) reads as
+// `kFmColorRgb` carrying that value.
+fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb = 0U);
+
+// Inverse of `color_spec_to_c`. When `out_argb` is non-NULL it receives the
+// legacy ARGB field the record keeps beside the spec: `rgb` for
+// `kFmColorRgb`, otherwise 0. The kind is not range-checked here.
+formulon::ColorSpec color_spec_from_c(const fm_color_spec_t& src, std::uint32_t* out_argb = nullptr);
 
 // Validates a required `const fm_cell_rect_t* ranges, size_t range_count`
 // list: at least one entry (`kInvalidArgument`), `ranges` non-NULL
@@ -494,7 +546,7 @@ struct fm_workbook {
   formulon::c_api::BorrowedStringArena cf_text_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cell_rect_t> cf_range_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cfvo_t> cfvo_scratch;
-  formulon::c_api::BorrowedArrayArena<fm_cf_color_t> cf_color_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_color_spec_t> cf_color_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cf_icon_t> cf_icon_scratch;
 
   // Arrays behind the borrowed `const T*` fields of the typed AutoFilter,

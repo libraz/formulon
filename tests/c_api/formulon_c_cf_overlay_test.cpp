@@ -131,13 +131,13 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   rule.data_bar_axis_position_engaged = 1;
   rule.data_bar_axis_position = 1;  // middle
   rule.data_bar_negative_fill_engaged = 1;
-  rule.data_bar_negative_fill = fm_cf_color_t{255, 0, 0, 255};
+  rule.data_bar_negative_fill = CfRgb(255, 0, 0, 255);
   rule.data_bar_border_engaged = 1;
-  rule.data_bar_border = fm_cf_color_t{1, 2, 3, 255};
+  rule.data_bar_border = CfRgb(1, 2, 3, 255);
   rule.data_bar_negative_border_engaged = 1;
-  rule.data_bar_negative_border = fm_cf_color_t{4, 5, 6, 255};
+  rule.data_bar_negative_border = CfRgb(4, 5, 6, 255);
   rule.data_bar_axis_color_engaged = 1;
-  rule.data_bar_axis_color = fm_cf_color_t{7, 8, 9, 255};
+  rule.data_bar_axis_color = CfRgb(7, 8, 9, 255);
   rule.data_bar_direction = 2;  // right to left
   std::size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
@@ -147,18 +147,18 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
 
-  fm_cf_rule_t back{};
+  fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
   EXPECT_EQ(back.data_bar_gradient, 0);
   EXPECT_EQ(back.data_bar_axis_position, 1U);
-  EXPECT_EQ(back.data_bar_negative_fill.r, 255U);
-  EXPECT_EQ(back.data_bar_negative_fill.g, 0U);
+  EXPECT_EQ(CfR(back.data_bar_negative_fill), 255U);
+  EXPECT_EQ(CfG(back.data_bar_negative_fill), 0U);
   EXPECT_EQ(back.data_bar_border_engaged, 1);
-  EXPECT_EQ(back.data_bar_border.b, 3U);
+  EXPECT_EQ(CfB(back.data_bar_border), 3U);
   EXPECT_EQ(back.data_bar_negative_border_engaged, 1);
-  EXPECT_EQ(back.data_bar_negative_border.b, 6U);
-  EXPECT_EQ(back.data_bar_axis_color.r, 7U);
-  EXPECT_EQ(back.data_bar_axis_color.b, 9U);
+  EXPECT_EQ(CfB(back.data_bar_negative_border), 6U);
+  EXPECT_EQ(CfR(back.data_bar_axis_color), 7U);
+  EXPECT_EQ(CfB(back.data_bar_axis_color), 9U);
   EXPECT_EQ(back.data_bar_direction, 2U);
 }
 
@@ -166,7 +166,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 4;  // IconSet
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -194,7 +194,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
-  fm_cf_rule_t back{};
+  fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
   EXPECT_EQ(back.icon_set_floor_engaged, 1);
   EXPECT_EQ(back.icon_set_floor.type, 0U);
@@ -206,7 +206,7 @@ TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 4;  // IconSet
   rule.ranges = &sqref;
   rule.range_count = 1;

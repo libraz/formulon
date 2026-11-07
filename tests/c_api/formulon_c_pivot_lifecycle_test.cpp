@@ -139,7 +139,7 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
   EXPECT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, 0, nullptr, &pivot_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
-  fm_pivot_filter_spec_t bad_filter{};
+  fm_pivot_filter_spec_t bad_filter = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   bad_filter.field_name = nullptr;
   bad_filter.type = FM_PIVOT_FILTER_LABEL_CONTAINS;
   bad_filter.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
@@ -317,7 +317,7 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0, pivot_index, &data_field_count), 0);
   EXPECT_EQ(data_field_count, 0U);
 
-  fm_pivot_filter_spec_t filter{};
+  fm_pivot_filter_spec_t filter = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   filter.axis = FM_PIVOT_AXIS_ROW;
   filter.field_name = "Region";
   filter.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
@@ -341,20 +341,20 @@ constexpr fm_status_t kNotFound = FM_STATUS_NOT_FOUND;
 constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 
 std::string FieldNumberFormat(const fm_workbook_t* wb, std::size_t pivot_index, std::size_t field_index) {
-  fm_pivot_field_info_t info{};
+  fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
   EXPECT_EQ(fm_sheet_get_pivot_field(wb, 0, pivot_index, field_index, &info), 0) << fm_get_last_error_message();
   return info.number_format != nullptr ? info.number_format : "<null>";
 }
 
 std::string DataFieldNumberFormat(const fm_workbook_t* wb, std::size_t pivot_index, std::size_t data_field_index) {
-  fm_pivot_data_field_spec_t spec{};
+  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   EXPECT_EQ(fm_sheet_get_pivot_data_field(wb, 0, pivot_index, data_field_index, &spec), 0)
       << fm_get_last_error_message();
   return spec.number_format != nullptr ? spec.number_format : "<null>";
 }
 
 fm_pivot_data_field_spec_t SumOfAmount(const char* number_format) {
-  fm_pivot_data_field_spec_t spec{};
+  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   spec.name = "Sum of Amount";
   spec.field_index = 1U;
   spec.aggregation = FM_PIVOT_AGG_SUM;
@@ -394,7 +394,7 @@ TEST(FormulonCApiPivot, NumberFormatCodeRoundTripsThroughEveryInput) {
   EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, 1), "0.0%");
 
   // fm_sheet_add_pivot_field, configuring a cache field in place.
-  fm_pivot_field_spec_t field_spec{};
+  fm_pivot_field_spec_t field_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   field_spec.source_name = "Region";
   field_spec.custom_name = "";
   field_spec.axis = FM_PIVOT_AXIS_ROW;
@@ -447,7 +447,7 @@ TEST(FormulonCApiPivot, NumberFormatRejectsMalformedUtf8OnEveryInput) {
 
   EXPECT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_index, 1, bad),
             FM_STATUS_BINDING_UTF8ENCODING_ERROR);
-  fm_pivot_field_spec_t field_spec{};
+  fm_pivot_field_spec_t field_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   field_spec.source_name = "Amount";
   field_spec.axis = FM_PIVOT_AXIS_VALUE;
   field_spec.number_format = bad;
@@ -469,7 +469,7 @@ TEST(FormulonCApiPivot, NumberFormatRejectsMalformedUtf8OnEveryInput) {
 TEST(FormulonCApiPivot, ProfileRenderedBuiltinCodeKeepsItsId) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
@@ -489,7 +489,7 @@ TEST(FormulonCApiPivot, ProfileRenderedBuiltinCodeKeepsItsId) {
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(reloaded.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(reloaded.handle, "mac-365-ja_JP"), 0);
   const std::string read_back = FieldNumberFormat(reloaded.handle, 0, 1);
   EXPECT_EQ(read_back, code);
   ASSERT_EQ(fm_sheet_set_pivot_field_number_format(reloaded.handle, 0, 0, 1, read_back.c_str()), 0)

@@ -19,6 +19,7 @@ using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::value_from_fm;
@@ -51,6 +52,9 @@ extern "C" fm_status_t fm_sheet_get_display_text(const fm_workbook_t* wb, size_t
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
   const formulon::Workbook& workbook = wb->workbook();

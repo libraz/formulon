@@ -123,9 +123,6 @@ export const StatusCode: Readonly<{
   BindingUtf8EncodingError: 7002;
   BindingCallbackException: 7003;
   BindingWasmInitFailed: 7004;
-  CliInvalidArgs: 7005;
-  CliFileNotFound: 7006;
-  CliOutputFailed: 7007;
   PivotSourceInvalid: 8000;
   PivotFieldNotFound: 8001;
   PivotAggregationFailed: 8002;
@@ -241,9 +238,6 @@ export type StatusCode =
   | 7002
   | 7003
   | 7004
-  | 7005
-  | 7006
-  | 7007
   | 8000
   | 8001
   | 8002

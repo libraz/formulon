@@ -33,7 +33,7 @@ TEST(FormulonCApiPivot, MutateExistingPivotFilter) {
   }
 
   // Add a label filter that only retains "North".
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
@@ -79,7 +79,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t int_filter{};
+  fm_pivot_filter_spec_t int_filter = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   int_filter.axis = FM_PIVOT_AXIS_VALUE;
   int_filter.field_name = "Amount";
   int_filter.type = FM_PIVOT_FILTER_VALUE_TOP_10;
@@ -90,7 +90,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &int_filter, ignored_index()), 0)
       << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t double_filter{};
+  fm_pivot_filter_spec_t double_filter = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   double_filter.axis = FM_PIVOT_AXIS_VALUE;
   double_filter.field_name = "Amount";
   double_filter.type = FM_PIVOT_FILTER_VALUE_GREATER_THAN;
@@ -101,7 +101,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &double_filter, ignored_index()), 0)
       << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t text_filter{};
+  fm_pivot_filter_spec_t text_filter = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   text_filter.axis = FM_PIVOT_AXIS_ROW;
   text_filter.field_name = "Region";
   text_filter.type = FM_PIVOT_FILTER_LABEL_CONTAINS;
@@ -111,7 +111,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &text_filter, ignored_index()), 0)
       << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t range_int_double{};
+  fm_pivot_filter_spec_t range_int_double = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   range_int_double.axis = FM_PIVOT_AXIS_VALUE;
   range_int_double.field_name = "Amount";
   range_int_double.type = FM_PIVOT_FILTER_VALUE_BETWEEN;
@@ -123,7 +123,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &range_int_double, ignored_index()), 0)
       << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t range_double_int{};
+  fm_pivot_filter_spec_t range_double_int = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   range_double_int.axis = FM_PIVOT_AXIS_VALUE;
   range_double_int.field_name = "Amount";
   range_double_int.type = FM_PIVOT_FILTER_VALUE_BETWEEN;
@@ -146,7 +146,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
       << fm_get_last_error_message();
   const std::vector<fm_pivot_cell_t> before_cells = CollectCells(before_projection.handle);
 
-  fm_pivot_filter_spec_t got{};
+  fm_pivot_filter_spec_t got = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index, 0, &got), 0);
   EXPECT_EQ(got.axis, FM_PIVOT_AXIS_VALUE);
   ASSERT_NE(got.field_name, nullptr);
@@ -161,7 +161,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   EXPECT_DOUBLE_EQ(got.value_high_double, 0.0);
   EXPECT_EQ(got.data_field_index, 0U);
 
-  got = {};
+  got = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index, 1, &got), 0);
   EXPECT_EQ(got.axis, FM_PIVOT_AXIS_VALUE);
   ASSERT_NE(got.field_name, nullptr);
@@ -176,7 +176,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   EXPECT_DOUBLE_EQ(got.value_high_double, 0.0);
   EXPECT_EQ(got.data_field_index, 0U);
 
-  got = {};
+  got = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index, 2, &got), 0);
   EXPECT_EQ(got.axis, FM_PIVOT_AXIS_ROW);
   ASSERT_NE(got.field_name, nullptr);
@@ -192,7 +192,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   EXPECT_DOUBLE_EQ(got.value_high_double, 0.0);
   EXPECT_EQ(got.data_field_index, 0U);
 
-  got = {};
+  got = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index, 3, &got), 0);
   EXPECT_EQ(got.axis, FM_PIVOT_AXIS_VALUE);
   ASSERT_NE(got.field_name, nullptr);
@@ -207,7 +207,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   EXPECT_DOUBLE_EQ(got.value_high_double, 500.25);
   EXPECT_EQ(got.data_field_index, 0U);
 
-  got = {};
+  got = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index, 4, &got), 0);
   EXPECT_EQ(got.axis, FM_PIVOT_AXIS_VALUE);
   ASSERT_NE(got.field_name, nullptr);
@@ -246,7 +246,7 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
 
   // Adding a filter invalidates the old model-backed views. Do not inspect
   // those pointers after the mutation; reacquire the entry instead.
-  fm_pivot_filter_spec_t mutation{};
+  fm_pivot_filter_spec_t mutation = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   mutation.axis = FM_PIVOT_AXIS_ROW;
   mutation.field_name = "Region";
   mutation.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
@@ -255,14 +255,14 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   mutation.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &mutation, ignored_index()), 0)
       << fm_get_last_error_message();
-  fm_pivot_filter_spec_t reacquired{};
+  fm_pivot_filter_spec_t reacquired = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index, 2, &reacquired), 0);
   EXPECT_EQ(reacquired.value_kind, FM_PIVOT_FILTER_VALUE_TEXT);
   ASSERT_NE(reacquired.value_text, nullptr);
   EXPECT_STREQ(reacquired.value_text, "o");
 
   const auto make_sentinel = [] {
-    fm_pivot_filter_spec_t sentinel{};
+    fm_pivot_filter_spec_t sentinel = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
     sentinel.axis = FM_PIVOT_AXIS_PAGE;
     sentinel.field_name = "sentinel-field";
     sentinel.type = FM_PIVOT_FILTER_LABEL_DATE;
@@ -324,7 +324,7 @@ TEST(FormulonCApiPivot, GetterRejectsUnrepresentableModelEnumsWithoutMutation) {
   ASSERT_NE(table, nullptr);
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   const auto make_sentinel = [] {
-    fm_pivot_filter_spec_t sentinel{};
+    fm_pivot_filter_spec_t sentinel = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
     sentinel.axis = FM_PIVOT_AXIS_PAGE;
     sentinel.field_name = "sentinel-field";
     sentinel.type = FM_PIVOT_FILTER_LABEL_DATE;
@@ -364,7 +364,7 @@ TEST(FormulonCApiPivot, PivotFilterAddRejectsRawAxisAndTypeWithoutMutation) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = RawEnumValue<fm_pivot_axis_t>(99);
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
@@ -392,7 +392,7 @@ TEST(FormulonCApiPivot, PivotFilterRejectsInvalidDataFieldWithoutMutation) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_VALUE_TOP_10;
@@ -415,7 +415,7 @@ TEST(FormulonCApiPivot, PivotFilterRejectsSelectorWhenNoDataFields) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_clear_pivot_data_fields(wb.handle, 0, pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_VALUE_TOP_10;
@@ -439,7 +439,7 @@ TEST(FormulonCApiPivot, PivotFilterRejectsUnknownFieldNameWithoutMutation) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "NoSuchField";
   spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
@@ -471,7 +471,7 @@ TEST(FormulonCApiPivot, ValueFilterRejectsUnknownFieldNameWithoutMutation) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "NoSuchField";
   spec.type = FM_PIVOT_FILTER_VALUE_TOP_10;
@@ -500,7 +500,7 @@ TEST(FormulonCApiPivot, FilterRejectsAmbiguousFieldNameWithoutMutation) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_field_spec_t dup_spec{};
+  fm_pivot_field_spec_t dup_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   dup_spec.source_name = "Amount";
   dup_spec.custom_name = "Region";
   dup_spec.axis = FM_PIVOT_AXIS_VALUE;
@@ -509,7 +509,7 @@ TEST(FormulonCApiPivot, FilterRejectsAmbiguousFieldNameWithoutMutation) {
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &dup_spec, &dup_field), 0)
       << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
@@ -531,7 +531,7 @@ TEST(FormulonCApiPivot, FilterErrorUsesApiName) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
@@ -546,7 +546,7 @@ TEST(FormulonCApiPivot, FilterErrorUsesApiName) {
 // field: text for a label type, a number for a value or date type, nothing
 // for a relative period or calendar position.
 fm_pivot_filter_spec_t FilterSpecFor(int type) {
-  fm_pivot_filter_spec_t spec{};
+  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = static_cast<fm_pivot_filter_type_t>(type);
@@ -604,7 +604,7 @@ TEST(FormulonCApiPivot, EveryFilterTypeRoundTripsThroughSaveAndLoad) {
   for (int type = 0; type <= FM_PIVOT_FILTER_DATE_M12; ++type) {
     SCOPED_TRACE(type);
     const fm_pivot_filter_spec_t want = FilterSpecFor(type);
-    fm_pivot_filter_spec_t got{};
+    fm_pivot_filter_spec_t got = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
     ASSERT_EQ(fm_sheet_get_pivot_filter(back.handle, 0, 0, static_cast<std::size_t>(type), &got), 0)
         << fm_get_last_error_message();
     EXPECT_EQ(got.type, want.type);
@@ -768,7 +768,7 @@ TEST(FormulonCApiPivot, RemovingADataFieldRepointsOrDropsEveryValueFilterType) {
     fm_pivot_axis_t axis;
   } fields[] = {{"Region", FM_PIVOT_AXIS_ROW}, {"Sales", FM_PIVOT_AXIS_VALUE}, {"Qty", FM_PIVOT_AXIS_VALUE}};
   for (const auto& field : fields) {
-    fm_pivot_field_spec_t spec{};
+    fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
     spec.source_name = field.name;
     spec.axis = field.axis;
     spec.subtotal_top = 1;
@@ -776,7 +776,7 @@ TEST(FormulonCApiPivot, RemovingADataFieldRepointsOrDropsEveryValueFilterType) {
     ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &spec, &idx), 0) << fm_get_last_error_message();
   }
   for (const std::uint32_t field : {1U, 2U}) {
-    fm_pivot_data_field_spec_t df{};
+    fm_pivot_data_field_spec_t df = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
     df.field_index = field;
     df.aggregation = FM_PIVOT_AGG_SUM;
     df.show_as_base_field = -1;
@@ -797,7 +797,7 @@ TEST(FormulonCApiPivot, RemovingADataFieldRepointsOrDropsEveryValueFilterType) {
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(wb.handle, 0, pivot, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_pivot_filter_spec_t kept{};
+  fm_pivot_filter_spec_t kept = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot, 0, &kept), 0);
   EXPECT_EQ(kept.type, FM_PIVOT_FILTER_VALUE_NOT_BETWEEN);
   EXPECT_EQ(kept.data_field_index, 0U);
@@ -815,7 +815,7 @@ TEST(FormulonCApiPivot, MutateShowValuesAs) {
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0, pivot_index, &df_count), 0);
   ASSERT_EQ(df_count, 1U);
 
-  fm_pivot_data_field_spec_t df_spec{};
+  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = 1U;  // Amount is the second pivot field.
   df_spec.aggregation = FM_PIVOT_AGG_SUM;

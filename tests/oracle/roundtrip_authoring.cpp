@@ -271,7 +271,7 @@ const char* optional_text(const JsonValue* block, const char* field) {
 /// same order as tools/oracle/print_roundtrip.py.
 Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t sheet, const JsonValue& rt) {
   if (const JsonValue* block = rt.find("page_setup"); block != nullptr && block->is_object()) {
-    fm_page_setup_t setup{};
+    fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
     patch_orientation(block, &setup.orientation_engaged, &setup.orientation);
     patch_u32(block, "paper_size", &setup.paper_size_engaged, &setup.paper_size);
     patch_u32(block, "scale", &setup.scale_engaged, &setup.scale);
@@ -282,7 +282,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
   }
 
   if (const JsonValue* block = rt.find("page_margins"); block != nullptr && block->is_object()) {
-    fm_page_margins_t margins{};
+    fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
     patch_double(block, "left", &margins.left_engaged, &margins.left);
     patch_double(block, "right", &margins.right_engaged, &margins.right);
     patch_double(block, "top", &margins.top_engaged, &margins.top);
@@ -293,7 +293,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
   }
 
   if (const JsonValue* block = rt.find("print_options"); block != nullptr && block->is_object()) {
-    fm_print_options_t options{};
+    fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
     patch_bool(block, "grid_lines", &options.grid_lines_engaged, &options.grid_lines);
     patch_bool(block, "headings", &options.headings_engaged, &options.headings);
     patch_bool(block, "horizontal_centered", &options.horizontal_centered_engaged, &options.horizontal_centered);
@@ -302,7 +302,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
   }
 
   if (const JsonValue* block = rt.find("header_footer"); block != nullptr && block->is_object()) {
-    fm_header_footer_t hf{};
+    fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
     hf.odd_header = optional_text(block, "odd_header");
     hf.odd_footer = optional_text(block, "odd_footer");
     hf.even_header = optional_text(block, "even_header");
@@ -324,7 +324,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
     while (!text.empty()) {
       const std::size_t comma = std::min(text.find(','), text.size());
       const std::string token(text.substr(0, comma));
-      fm_parsed_reference_t ref{};
+      fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
       RETURN_IF_ERROR(
           checked(fm_workbook_parse_reference(wb, token.c_str(), 0, 0, 0U, 0U, &ref), "fm_workbook_parse_reference"));
       if (ref.valid == 0) {
@@ -338,9 +338,9 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
 
   if (const JsonValue* titles = rt.find("print_titles"); titles != nullptr && titles->is_object()) {
     // The case spells each span in A1 (`1:2`, `A:A`).
-    fm_print_titles_t spans{};
-    fm_parsed_reference_t rows{};
-    fm_parsed_reference_t cols{};
+    fm_print_titles_t spans = FM_STRUCT_INIT(fm_print_titles_t);
+    fm_parsed_reference_t rows = FM_STRUCT_INIT(fm_parsed_reference_t);
+    fm_parsed_reference_t cols = FM_STRUCT_INIT(fm_parsed_reference_t);
     for (fm_parsed_reference_t* ref : {&rows, &cols}) {
       const JsonValue* v = titles->find(ref == &rows ? "repeat_rows" : "repeat_cols");
       if (v == nullptr || !v->is_string() || v->as_string().empty()) {

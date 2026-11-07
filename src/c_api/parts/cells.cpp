@@ -16,6 +16,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/cell_range.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "cell.h"
 #include "eval/lambda_format.h"
 #include "eval/lambda_value.h"
@@ -40,12 +41,14 @@ using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::display_formula_text;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
@@ -425,6 +428,9 @@ extern "C" fm_status_t fm_sheet_get_value(const fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
   // `resolve_cell_value` is the spill-aware accessor: phantoms of a
   // dynamic-array spill surface their array cell rather than the raw
   // (blank) cached value.
@@ -624,6 +630,10 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  // Spill phantoms are known only once the sheet is calculated.
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   // The sorted address vector is cached on the handle until the Sheet's
   // enumeration revision changes. A `cell_count` / `cell_at(0..N)` pass
@@ -680,7 +690,15 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::siz
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
-  *out = fm_spill_info_t{};
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_spill_info_t);
+  out->struct_size = struct_size;
   const auto& s = wb->workbook().sheet(sheet_index);
   // Try anchor lookup first; fall back to phantom-coverage map.
   const formulon::SpillRegion* region = s.spill_region_at_anchor(row, col);
@@ -719,7 +737,12 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
-  *out = fm_array_formula_t{};
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_array_formula_t);
+  out->struct_size = struct_size;
   const std::optional<formulon::Workbook::ArrayFormulaInfo> info =
       wb->workbook().array_formula_at(sheet_index, row, col);
   if (!info.has_value()) {
@@ -850,6 +873,9 @@ extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size
     return rc;
   }
   if (auto rc = check_cell_cursor(cursor); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
   auto handle = std::unique_ptr<fm_cell_range_t>(new fm_cell_range_t{});

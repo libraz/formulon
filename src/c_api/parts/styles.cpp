@@ -189,14 +189,6 @@ extern "C" fm_status_t fm_workbook_get_cell_xf(const fm_workbook_t* wb, size_t x
 
 namespace {
 
-void color_to_c(const formulon::ColorSpec& src, fm_color_spec_t* out) noexcept {
-  out->tint = src.tint;
-  out->rgb = src.rgb;
-  out->theme = src.theme;
-  out->indexed = src.indexed;
-  out->kind = static_cast<uint8_t>(src.kind);
-}
-
 /// Projects a model font onto the public record. Every field the styles
 /// writer can observe is carried, including the presence flags and the
 /// round-trip colour specification, so `fm_workbook_add_font(out)` names the
@@ -204,7 +196,6 @@ void color_to_c(const formulon::ColorSpec& src, fm_color_spec_t* out) noexcept {
 void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
   out->name = f.name.c_str();
   out->size = f.size;
-  out->color_argb = f.color_argb;
   out->bold = f.bold ? 1 : 0;
   out->italic = f.italic ? 1 : 0;
   out->strike = f.strike ? 1 : 0;
@@ -227,16 +218,14 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
   out->family = f.family;
   out->charset = f.charset;
   out->scheme = f.scheme;
-  color_to_c(f.color, &out->color);
+  out->color = formulon::c_api::parts::color_spec_to_c(f.color, f.color_argb);
 }
 
 void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out,
                formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t>& stop_arena) {
   out->pattern = f.pattern;
-  out->fg_argb = f.fg_argb;
-  out->bg_argb = f.bg_argb;
-  color_to_c(f.fg, &out->fg);
-  color_to_c(f.bg, &out->bg);
+  out->fg = formulon::c_api::parts::color_spec_to_c(f.fg, f.fg_argb);
+  out->bg = formulon::c_api::parts::color_spec_to_c(f.bg, f.bg_argb);
   out->has_gradient = f.has_gradient ? 1 : 0;
   out->gradient_type = f.gradient.path ? FM_GRADIENT_PATH : FM_GRADIENT_LINEAR;
   out->gradient_degree = f.gradient.degree;
@@ -254,8 +243,7 @@ void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out,
   for (const formulon::GradientStop& stop : f.gradient.stops) {
     fm_gradient_stop_t c{};
     c.position = stop.position;
-    c.color_argb = stop.argb;
-    color_to_c(stop.color, &c.color);
+    c.color = formulon::c_api::parts::color_spec_to_c(stop.color, stop.argb);
     stops.push_back(c);
   }
   out->gradient_stop_count = static_cast<std::uint32_t>(stops.size());
@@ -264,8 +252,7 @@ void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out,
 
 void border_side_to_c(const formulon::BorderSide& src, fm_border_side_t* out) noexcept {
   out->style = src.style;
-  out->color_argb = src.color_argb;
-  color_to_c(src.color, &out->color);
+  out->color = formulon::c_api::parts::color_spec_to_c(src.color, src.color_argb);
 }
 
 void border_to_c(const formulon::BorderRecord& b, fm_border_record_t* out) noexcept {

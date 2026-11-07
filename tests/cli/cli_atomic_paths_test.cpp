@@ -306,7 +306,7 @@ TEST(FormulonCli, RecalcAcceptsDoubleDashAsOutputPathValue) {
   std::remove(output.c_str());
   ASSERT_TRUE(write_fixture_workbook(input));
 
-  const CliRun result = run_cli({"recalc", input, "-o", output});
+  const CliRun result = run_cli({"recalc", input, "-o", output, "--format", "xlsx"});
   ASSERT_EQ(result.exit_code, 0) << result.stderr_text;
 
   std::ifstream saved(output, std::ios::binary);

@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/shape_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -18,9 +19,12 @@
 using formulon::c_api::parts::anchor_kind_from_c;
 using formulon::c_api::parts::check_anchor_enums;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::color_spec_from_c;
+using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
@@ -35,6 +39,22 @@ using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::to_c;
 
 namespace {
+
+// The colour of a shape paint: Rgb for a solid paint, None otherwise.
+fm_color_spec_t paint_color_to_c(formulon::ShapePaint paint, std::uint32_t rgb) {
+  formulon::ColorSpec spec;
+  if (paint == formulon::ShapePaint::kSolid) {
+    spec.kind = formulon::ColorSpec::Kind::kRgb;
+    spec.rgb = rgb;
+  }
+  return color_spec_to_c(spec);
+}
+
+std::uint32_t paint_rgb_from_c(const fm_color_spec_t& color) {
+  std::uint32_t rgb = 0U;
+  color_spec_from_c(color, &rgb);
+  return rgb;
+}
 
 // Converts `shape` to the model spec; a non-zero return is the status to report.
 fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
@@ -68,9 +88,9 @@ fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
   spec.cx = shape.width_emu;
   spec.cy = shape.height_emu;
   spec.fill = shape_paint_from_c(shape.fill_kind);
-  spec.fill_rgb = shape.fill_rgb;
+  spec.fill_rgb = paint_rgb_from_c(shape.fill_color);
   spec.line = shape_paint_from_c(shape.line_kind);
-  spec.line_rgb = shape.line_rgb;
+  spec.line_rgb = paint_rgb_from_c(shape.line_color);
   spec.line_width_emu = shape.line_width_emu;
   spec.rotation = shape.rotation;
   spec.hidden = shape.hidden != 0;
@@ -100,6 +120,9 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -114,7 +137,9 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
   const formulon::ShapeInfo& info = list[idx];
   const formulon::DrawingObject& obj = info.object;
   TextStore& store = fresh_read_scratch(wb);
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_shape_t{};
+  out->struct_size = struct_size;
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
   out->edit_as = to_c(obj.edit_as);
@@ -122,9 +147,9 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
   out->width_emu = obj.cx;
   out->height_emu = obj.cy;
   out->fill_kind = to_c(info.fill);
-  out->fill_rgb = info.fill_rgb;
+  out->fill_color = paint_color_to_c(info.fill, info.fill_rgb);
   out->line_kind = to_c(info.line);
-  out->line_rgb = info.line_rgb;
+  out->line_color = paint_color_to_c(info.line, info.line_rgb);
   out->line_width_emu = info.line_width_emu;
   out->rotation = info.rotation;
   out->hidden = info.hidden ? 1 : 0;
@@ -141,11 +166,16 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
   if (out_present == nullptr || out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_shape_t{};
+  out->struct_size = struct_size;
   auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
   if (!shapes) {
     return set_last_error(shapes.error());
@@ -165,6 +195,9 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
   clear_last_error();
   if (spec == nullptr || out_object_id == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -186,6 +219,9 @@ extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   if (spec == nullptr) {
     return null_argument("spec");
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

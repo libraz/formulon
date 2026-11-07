@@ -26,7 +26,7 @@ constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_date_group_item_t) == 8U, "fm_date_group_item_t ABI layout changed");
 static_assert(sizeof(fm_filter_column_t) == (kWasm32 ? 152U : 192U), "fm_filter_column_t ABI layout changed");
 static_assert(sizeof(fm_sort_condition_t) == (kWasm32 ? 48U : 56U), "fm_sort_condition_t ABI layout changed");
-static_assert(sizeof(fm_auto_filter_t) == (kWasm32 ? 64U : 80U), "fm_auto_filter_t ABI layout changed");
+static_assert(sizeof(fm_auto_filter_t) == (kWasm32 ? 68U : 88U), "fm_auto_filter_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kNotFound = static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound);
@@ -56,7 +56,7 @@ std::set<std::uint32_t> HiddenRows(const fm_workbook_t* wb) {
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_row_override_count(wb, 0, &count), 0);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_row_layout_t layout{};
+    fm_row_layout_t layout = FM_STRUCT_INIT(fm_row_layout_t);
     EXPECT_EQ(fm_sheet_get_row_override_at(wb, 0, i, &layout), 0);
     if (layout.hidden != 0) {
       rows.insert(layout.row);
@@ -68,7 +68,7 @@ std::set<std::uint32_t> HiddenRows(const fm_workbook_t* wb) {
 bool HasDefinedName(const fm_workbook_t* wb, const std::string& wanted) {
   const std::size_t count = count_of(fm_workbook_get_defined_name_count, wb);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_defined_name_t entry{};
+    fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
     EXPECT_EQ(fm_workbook_get_defined_name_at(wb, i, &entry), 0);
     if (wanted == entry.name) {
       return true;
@@ -104,7 +104,7 @@ struct ColumnCopy {
 };
 
 struct FilterCopy {
-  fm_auto_filter_t record{};
+  fm_auto_filter_t record = FM_STRUCT_INIT(fm_auto_filter_t);
   std::vector<ColumnCopy> columns;
   std::vector<fm_sort_condition_t> conditions;
   std::vector<std::string> custom_lists;
@@ -139,7 +139,7 @@ FilterCopy Copy(const fm_auto_filter_t& in) {
 }
 
 FilterCopy GetSheetFilter(const fm_workbook_t* wb) {
-  fm_auto_filter_t out{};
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
   EXPECT_EQ(fm_sheet_get_auto_filter(wb, 0, &out, &present), 0) << fm_get_last_error_message();
   EXPECT_EQ(present, 1);
@@ -222,7 +222,7 @@ class EveryKind {
   fm_date_group_item_t groups_[1]{};
   fm_filter_column_t columns_[6]{};
   fm_sort_condition_t conditions_[2]{};
-  fm_auto_filter_t filter_{};
+  fm_auto_filter_t filter_ = FM_STRUCT_INIT(fm_auto_filter_t);
 };
 
 void ExpectEveryKind(const FilterCopy& got) {
@@ -292,7 +292,7 @@ void ExpectEveryKind(const FilterCopy& got) {
 TEST(FormulonCApiAutoFilter, AbsentFilterReadsAsNotPresent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_auto_filter_t out{};
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   out.column_count = 7U;
   int32_t present = 1;
   ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &out, &present), 0);
@@ -323,7 +323,7 @@ TEST(FormulonCApiAutoFilter, EveryCriterionKindRoundTrips) {
   ExpectEveryKind(GetSheetFilter(reloaded.handle));
 
   ASSERT_EQ(fm_sheet_remove_auto_filter(reloaded.handle, 0), 0);
-  fm_auto_filter_t out{};
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 1;
   ASSERT_EQ(fm_sheet_get_auto_filter(reloaded.handle, 0, &out, &present), 0);
   EXPECT_EQ(present, 0);
@@ -336,7 +336,7 @@ TEST(FormulonCApiAutoFilter, ApplyHidesRowsAndClearShowsThem) {
   FillNumbers(wb.handle);
   const char* values[] = {"2", "4"};
   const fm_filter_column_t column = ValuesColumn(0, values, 2);
-  fm_auto_filter_t filter{};
+  fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = &column;
   filter.column_count = 1;
@@ -377,7 +377,7 @@ TEST(FormulonCApiAutoFilter, ClearKeepsColumnsThatHideTheirButton) {
   const char* values[] = {"3"};
   fm_filter_column_t column = ValuesColumn(0, values, 1);
   column.hidden_button = 1;
-  fm_auto_filter_t filter{};
+  fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = &column;
   filter.column_count = 1;
@@ -397,7 +397,7 @@ TEST(FormulonCApiAutoFilter, RejectsMalformedRecords) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* values[] = {"1"};
   fm_filter_column_t column = ValuesColumn(3, values, 1);
-  fm_auto_filter_t filter{};
+  fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 1};
   filter.columns = &column;
   filter.column_count = 1;
@@ -424,7 +424,7 @@ TEST(FormulonCApiAutoFilter, RejectsMalformedRecords) {
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
 
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, nullptr), kBindingNullPointer);
-  fm_auto_filter_t out{};
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 1;
   ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &out, &present), 0);
   EXPECT_EQ(present, 0);
@@ -437,7 +437,7 @@ TEST(FormulonCApiAutoFilter, OpaqueFilterStaysOnTheXmlView) {
       "<autoFilter ref=\"A1:B5\"><filterColumn colId=\"0\"><customFilters>"
       "<customFilter operator=\"bogus\" val=\"1\"/></customFilters></filterColumn></autoFilter>";
   ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, xml), 0) << fm_get_last_error_message();
-  fm_auto_filter_t out{};
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
   EXPECT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &out, &present), kAutoFilterInvalid);
   EXPECT_EQ(fm_sheet_apply_auto_filter(wb.handle, 0), kAutoFilterInvalid);
@@ -457,7 +457,7 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
             0)
       << fm_get_last_error_message();
 
-  fm_auto_filter_t out{};
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
   ASSERT_EQ(fm_workbook_get_table_auto_filter(wb.handle, table, &out, &present), 0);
   EXPECT_EQ(present, 1);
@@ -470,7 +470,7 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   column.custom_count = 1;
   column.op1 = 5;
   column.val1 = "3";
-  fm_auto_filter_t filter{};
+  fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = &column;
   filter.column_count = 1;
@@ -552,7 +552,7 @@ class OwnedRecord {
   std::vector<std::vector<const char*>> values_;
   std::vector<fm_filter_column_t> columns_;
   std::vector<fm_sort_condition_t> conditions_;
-  fm_auto_filter_t record_{};
+  fm_auto_filter_t record_ = FM_STRUCT_INIT(fm_auto_filter_t);
 };
 
 TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
@@ -579,7 +579,7 @@ TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
   wb.handle->workbook().mutable_tables()[table].auto_filter_xml.set(formulon::io::auto_filter_from_xml(table_xml));
   const std::string table_before =
       formulon::io::auto_filter_xml(wb.handle->workbook().tables()[table].auto_filter_xml.get());
-  fm_auto_filter_t out{};
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
   ASSERT_EQ(fm_workbook_get_table_auto_filter(wb.handle, table, &out, &present), 0) << fm_get_last_error_message();
   ASSERT_EQ(present, 1);

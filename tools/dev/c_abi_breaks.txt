@@ -175,7 +175,7 @@ removed fm_workbook_dependents :: renamed to fm_sheet_get_dependents
 removed fm_workbook_evaluate_cf_formula :: renamed to fm_sheet_evaluate_cf_formula
 removed fm_workbook_evaluate_formula :: renamed to fm_sheet_evaluate_formula
 removed fm_workbook_evaluate_formula_array :: renamed to fm_sheet_evaluate_formula_array
-removed fm_workbook_excel_profile_id :: renamed to fm_workbook_get_excel_profile_id
+removed fm_workbook_excel_profile_id :: renamed to fm_workbook_get_profile_id
 removed fm_workbook_external_link_at :: renamed to fm_workbook_get_external_link
 removed fm_workbook_external_link_count :: renamed to fm_workbook_get_external_link_count
 removed fm_workbook_get_cell_phonetic :: renamed to fm_sheet_get_cell_phonetic
@@ -271,6 +271,7 @@ removed fm_workbook_set_cell_phonetic_properties :: renamed to fm_sheet_set_cell
 removed fm_workbook_set_cell_phonetic_runs :: renamed to fm_sheet_set_cell_phonetic_runs
 signature fm_workbook_set_default_font :: parameter type renamed (fm_font_record -> fm_font_record_t); record passed as const pointer
 removed fm_workbook_set_error :: renamed to fm_sheet_set_error
+removed fm_workbook_set_excel_profile_id :: renamed to fm_workbook_set_profile_id
 removed fm_workbook_set_formula :: renamed to fm_sheet_set_formula
 removed fm_workbook_set_number :: renamed to fm_sheet_set_number
 removed fm_workbook_set_text :: renamed to fm_sheet_set_text

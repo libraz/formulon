@@ -670,6 +670,13 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest tools.dev.struct_init_rewrite_test
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The facade-table generator emits the ooxml namespace and record-range
+  # tables from the name ledger.
+  add_test(
+    NAME FacadeTablesAdoptionTests
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest tools.codegen.gen_facade_tables_adoption_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # The status-code tables generated from src/utils/error.h are current:
   # formulon_status.h, binding_status.h, the JS table and declarations, and
   # the Python StatusCode module.

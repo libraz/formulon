@@ -60,7 +60,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 0U);
   ASSERT_EQ(match_count, 1U);
-  fm_cf_match_t m{};
+  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.kind, FM_CF_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(m.priority, 1);
@@ -126,7 +126,7 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 0U);
   ASSERT_EQ(match_count, 1U);
-  fm_cf_match_t m{};
+  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.dxf_id_engaged, 1);
   EXPECT_EQ(m.dxf_id, 7U);
@@ -179,13 +179,13 @@ TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {
     std::size_t match_count = 0;
     ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, i, &row, &col, &match_count), 0);
     ASSERT_EQ(match_count, 1U) << "i=" << i;
-    fm_cf_match_t m{};
+    fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
     ASSERT_EQ(fm_cf_results_get_match_at(results.handle, i, 0, &m), 0) << "i=" << i;
     EXPECT_EQ(m.kind, FM_CF_COLOR_SCALE) << "i=" << i;
     const auto& [er, eg, eb] = expected[i];
-    EXPECT_NEAR(static_cast<int>(m.color.r), static_cast<int>(er), 1) << "i=" << i;
-    EXPECT_NEAR(static_cast<int>(m.color.g), static_cast<int>(eg), 1) << "i=" << i;
-    EXPECT_NEAR(static_cast<int>(m.color.b), static_cast<int>(eb), 1) << "i=" << i;
+    EXPECT_NEAR(static_cast<int>(CfR(m.color)), static_cast<int>(er), 1) << "i=" << i;
+    EXPECT_NEAR(static_cast<int>(CfG(m.color)), static_cast<int>(eg), 1) << "i=" << i;
+    EXPECT_NEAR(static_cast<int>(CfB(m.color)), static_cast<int>(eb), 1) << "i=" << i;
   }
 }
 
@@ -211,7 +211,7 @@ TEST(FormulonCApiCf, OutOfRangeIndicesReturnIndexOutOfRange) {
   fm_status_t rc = fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count);
   EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 
-  fm_cf_match_t m{};
+  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   rc = fm_cf_results_get_match_at(results.handle, 0, 0, &m);
   EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 }
@@ -261,7 +261,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 0, 0, 5.0), 0);   // Sheet2!A1
 
   fm_cell_rect_t sqref{0, 0, 0, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "AND(A1>10,Sheet2!A1=5)";
   rule.dxf_id_engaged = 1;
@@ -279,7 +279,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
       << fm_get_last_error_message();
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
 
-  fm_cf_match_t match{};
+  fm_cf_match_t match = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
   EXPECT_EQ(match.kind, FM_CF_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(match.dxf_id_engaged, 1);
@@ -295,7 +295,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SUM(Sheet2!A1,5)"), 0);  // Sheet1!A1
 
   fm_cell_rect_t sqref{0, 0, 0, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "A1>10";
   rule.dxf_id_engaged = 1;
@@ -315,7 +315,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
       << fm_get_last_error_message();
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
 
-  fm_cf_match_t match{};
+  fm_cf_match_t match = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
   EXPECT_EQ(match.kind, FM_CF_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(match.dxf_id_engaged, 1);
@@ -336,9 +336,8 @@ std::uint32_t ResolvedArgb(const formulon::Workbook& wb, const formulon::cf::Col
   return formulon::resolve_color(wb, c.spec, context).argb;
 }
 
-std::uint32_t PackArgb(const fm_cf_color_t& c) {
-  return (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
-         (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
+std::uint32_t PackArgb(const fm_color_spec_t& c) {
+  return c.rgb;
 }
 
 WorkbookGuard ThemeColorWorkbook() {
@@ -400,7 +399,7 @@ TEST(FormulonCApiCf, ThemeColorScalePayloadIsResolvedNotBlack) {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::size_t match_count = 0;
-  fm_cf_match_t m{};
+  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count), 0);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(PackArgb(m.color), low);
@@ -427,31 +426,33 @@ TEST(FormulonCApiCf, ThemeColorDataBarEvaluatedPayloadIsResolvedNotBlack) {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::size_t match_count = 0;
-  fm_cf_match_t m{};
+  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count), 0);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.kind, FM_CF_DATA_BAR);
   EXPECT_EQ(PackArgb(m.bar_fill), expected);
 }
 
-TEST(FormulonCApiCf, ThemeColorRuleReadbackReportsResolvedChannels) {
+TEST(FormulonCApiCf, ThemeColorRuleReadbackReportsTheThemeSelector) {
   WorkbookGuard wb = ThemeColorWorkbook();
   ASSERT_NE(wb.handle, nullptr);
   const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
-  const std::uint32_t scale_low = ResolvedArgb(wb.handle->workbook(), blocks[0].rules[0].color_scale->colors[0],
-                                               formulon::ColorContext::kFillForeground);
-  const std::uint32_t bar_fill =
-      ResolvedArgb(wb.handle->workbook(), blocks[1].rules[0].data_bar->fill, formulon::ColorContext::kFillForeground);
+  const formulon::ColorSpec& scale_low = blocks[0].rules[0].color_scale->colors[0].spec;
+  const formulon::ColorSpec& bar_fill = blocks[1].rules[0].data_bar->fill.spec;
+  ASSERT_EQ(scale_low.kind, formulon::ColorSpec::Kind::kTheme);
+  ASSERT_EQ(bar_fill.kind, formulon::ColorSpec::Kind::kTheme);
 
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &rule), 0) << fm_get_last_error_message();
   ASSERT_GE(rule.color_scale_count, 2U);
-  EXPECT_EQ(PackArgb(rule.color_scale_colors[0]), scale_low);
-  EXPECT_NE(PackArgb(rule.color_scale_colors[0]) & 0xFFFFFFU, 0U);
+  EXPECT_EQ(rule.color_scale_colors[0].kind, kFmColorTheme);
+  EXPECT_EQ(rule.color_scale_colors[0].theme, scale_low.theme);
+  EXPECT_DOUBLE_EQ(rule.color_scale_colors[0].tint, scale_low.tint);
 
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &rule), 0) << fm_get_last_error_message();
-  EXPECT_EQ(PackArgb(rule.data_bar_fill), bar_fill);
-  EXPECT_NE(PackArgb(rule.data_bar_fill) & 0xFFFFFFU, 0U);
+  EXPECT_EQ(rule.data_bar_fill.kind, kFmColorTheme);
+  EXPECT_EQ(rule.data_bar_fill.theme, bar_fill.theme);
+  EXPECT_DOUBLE_EQ(rule.data_bar_fill.tint, bar_fill.tint);
 }
 
 TEST(FormulonCApiCf, ThemeColorSurvivesXlsbSaveAndLoad) {

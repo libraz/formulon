@@ -10,12 +10,14 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "styles.h"
 #include "utils/error.h"
 #include "utils/strings.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_arena;
@@ -132,6 +134,9 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
   if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const auto& styles = wb->workbook().styles().table_styles.styles;
   if (auto rc = check_index(index, styles.size(), "index"); rc != 0) {
     return rc;
@@ -149,7 +154,9 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
   }
   fresh_read_scratch(wb);
   auto& element_arena = fresh_arena(wb, &fm_workbook_t::table_style_element_scratch);
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_table_style_t{};
+  out->struct_size = struct_size;
   out->name = style.name.c_str();
   out->pivot = style.pivot ? 1 : 0;
   out->table = style.table ? 1 : 0;
@@ -167,8 +174,13 @@ extern "C" fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, cons
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_table_style_t{};
+  out->struct_size = struct_size;
   const formulon::TableStylesSection& section = wb->workbook().styles().table_styles;
   const std::size_t index = find_style(section, name);
   if (index >= section.styles.size()) {
@@ -183,6 +195,9 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
   if (wb == nullptr || style == nullptr || style->name == nullptr ||
       (style->element_count != 0U && style->elements == nullptr)) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*style); rc != 0) {
+    return rc;
   }
   if (auto rc = check_utf8({style->name}); rc != 0) {
     return rc;

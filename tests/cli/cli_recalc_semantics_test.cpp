@@ -228,3 +228,41 @@ TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
   fm_workbook_destroy(wb);
 }
+
+TEST(FormulonCli, RecalcUnknownExtensionNeedsAnExplicitFormat) {
+  const std::string in = temp_path("format_rule_in.xlsx");
+  const std::string out_path = temp_path("format_rule_out.dat");
+  PathGuard g_in(in);
+  PathGuard g_out(out_path);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  std::remove(out_path.c_str());
+
+  const CliRun missing = run_cli({"recalc", "--quiet", in, "-o", out_path});
+  EXPECT_EQ(missing.exit_code, 64);
+  EXPECT_NE(missing.stderr_text.find("--format xlsx|xlsb"), std::string::npos) << missing.stderr_text;
+  EXPECT_FALSE(std::ifstream(out_path, std::ios::binary).good());
+
+  const CliRun xlsb = run_cli({"recalc", "--quiet", "--format", "xlsb", in, "-o", out_path});
+  ASSERT_EQ(xlsb.exit_code, 0) << xlsb.stderr_text;
+  std::ifstream f(out_path, std::ios::binary);
+  std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  formulon::io::ByteSpan span{bytes.data(), bytes.size()};
+  EXPECT_EQ(formulon::io::detect_workbook_format(span), formulon::WorkbookFormat::Xlsb);
+}
+
+TEST(FormulonCli, RecalcFormatMustAgreeWithAKnownExtension) {
+  const std::string in = temp_path("format_clash_in.xlsx");
+  const std::string out_path = temp_path("format_clash_out.xlsb");
+  PathGuard g_in(in);
+  PathGuard g_out(out_path);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  std::remove(out_path.c_str());
+
+  const CliRun clash = run_cli({"recalc", "--quiet", "--format", "xlsx", in, "-o", out_path});
+  EXPECT_EQ(clash.exit_code, 64);
+  EXPECT_NE(clash.stderr_text.find("contradicts the extension"), std::string::npos) << clash.stderr_text;
+  EXPECT_FALSE(std::ifstream(out_path, std::ios::binary).good());
+
+  EXPECT_EQ(run_cli({"recalc", "--quiet", "--format", "pdf", in, "-o", out_path}).exit_code, 64);
+  EXPECT_EQ(run_cli({"recalc", "--quiet", "--format", "xlsb", in, "-o", out_path}).exit_code, 0);
+}

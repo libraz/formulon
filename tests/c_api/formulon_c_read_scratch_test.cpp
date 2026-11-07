@@ -189,8 +189,10 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   thresholds[1].type = 1;  // Percent.
   thresholds[1].value = "50";
   thresholds[2].type = 4;  // Max.
-  fm_cf_color_t colors[3]{{255, 0, 0, 255}, {255, 255, 0, 255}, {0, 255, 0, 255}};
-  fm_cf_rule_t cf_input{};
+  fm_color_spec_t colors[3]{{0.0, 0xFFFF0000U, 0U, 0U, kFmColorRgb},
+                            {0.0, 0xFFFFFF00U, 0U, 0U, kFmColorRgb},
+                            {0.0, 0xFF00FF00U, 0U, 0U, kFmColorRgb}};
+  fm_cf_rule_t cf_input = FM_STRUCT_INIT(fm_cf_rule_t);
   cf_input.type = 2;  // ColorScale.
   cf_input.ranges = &cf_range;
   cf_input.range_count = 1;
@@ -227,7 +229,7 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
     const char* auto_filter = nullptr;
     ASSERT_EQ(fm_sheet_get_auto_filter_xml(wb.handle, 0, &auto_filter), 0);
 
-    fm_cf_rule_t cf_value{};
+    fm_cf_rule_t cf_value = FM_STRUCT_INIT(fm_cf_rule_t);
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &cf_value), 0);
 
     EXPECT_LE(wb.handle->read_scratch.size(), 3U);

@@ -92,10 +92,33 @@ template <typename MutateFn>
   return {{r1, c1}, {r2, c2}};
 }
 
+// Rgb colour spec from 8-bit channels.
+[[maybe_unused]] inline fm_color_spec_t CfRgb(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255U) {
+  fm_color_spec_t spec{};
+  spec.kind = kFmColorRgb;
+  spec.rgb = (static_cast<std::uint32_t>(a) << 24U) | (static_cast<std::uint32_t>(r) << 16U) |
+             (static_cast<std::uint32_t>(g) << 8U) | static_cast<std::uint32_t>(b);
+  return spec;
+}
+
+// Channel accessors for an Rgb colour spec.
+[[maybe_unused]] inline std::uint32_t CfA(const fm_color_spec_t& c) {
+  return (c.rgb >> 24U) & 0xFFU;
+}
+[[maybe_unused]] inline std::uint32_t CfR(const fm_color_spec_t& c) {
+  return (c.rgb >> 16U) & 0xFFU;
+}
+[[maybe_unused]] inline std::uint32_t CfG(const fm_color_spec_t& c) {
+  return (c.rgb >> 8U) & 0xFFU;
+}
+[[maybe_unused]] inline std::uint32_t CfB(const fm_color_spec_t& c) {
+  return c.rgb & 0xFFU;
+}
+
 // Minimal valid DataBar rule. Extension fields stay zero-initialized so
 // each test below engages only what it is about to assert.
 [[maybe_unused]] inline fm_cf_rule_t MakeDataBarRule(const fm_cell_rect_t* sqref) {
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 3;  // DataBar
   rule.ranges = sqref;
   rule.range_count = 1;
@@ -104,7 +127,7 @@ template <typename MutateFn>
   rule.data_bar_min.gte = 1;
   rule.data_bar_max.type = 4;  // Max
   rule.data_bar_max.gte = 1;
-  rule.data_bar_fill = fm_cf_color_t{99, 142, 198, 255};
+  rule.data_bar_fill = CfRgb(99, 142, 198, 255);
   rule.data_bar_show_value = 1;
   rule.data_bar_min_length_pct = 10;
   rule.data_bar_max_length_pct = 90;

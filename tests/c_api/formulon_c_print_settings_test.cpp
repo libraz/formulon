@@ -30,13 +30,13 @@ namespace {
 // and the bindings marshal them field by field from a hand-written layout
 // table. Pin the layout so a field insertion breaks the build here rather
 // than silently mis-decoding in the Python ctypes projection.
-static_assert(sizeof(fm_page_break_t) == 16U, "fm_page_break_t ABI layout changed");
-static_assert(offsetof(fm_page_break_t, manual) == 12U, "fm_page_break_t.manual offset changed");
-static_assert(sizeof(fm_page_setup_t) == 48U, "fm_page_setup_t ABI layout changed");
-static_assert(offsetof(fm_page_setup_t, fit_to_page) == 44U, "fm_page_setup_t.fit_to_page offset changed");
+static_assert(sizeof(fm_page_break_t) == 20U, "fm_page_break_t ABI layout changed");
+static_assert(offsetof(fm_page_break_t, manual) == 16U, "fm_page_break_t.manual offset changed");
+static_assert(sizeof(fm_page_setup_t) == 52U, "fm_page_setup_t ABI layout changed");
+static_assert(offsetof(fm_page_setup_t, fit_to_page) == 48U, "fm_page_setup_t.fit_to_page offset changed");
 static_assert(sizeof(fm_page_margins_t) == 96U, "fm_page_margins_t ABI layout changed");
 static_assert(offsetof(fm_page_margins_t, left) == 8U, "fm_page_margins_t.left offset changed");
-static_assert(sizeof(fm_print_options_t) == 32U, "fm_print_options_t ABI layout changed");
+static_assert(sizeof(fm_print_options_t) == 36U, "fm_print_options_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
@@ -72,7 +72,7 @@ std::string GetSheetPrXml(fm_workbook_t* wb) {
 
 // `fitToPage` alone, through the page-setup patch.
 fm_status_t SetFitToPage(fm_workbook_t* wb, std::size_t sheet_index, int32_t enabled) {
-  fm_page_setup_t patch{};
+  fm_page_setup_t patch = FM_STRUCT_INIT(fm_page_setup_t);
   patch.fit_to_page_engaged = 1;
   patch.fit_to_page = enabled;
   return fm_sheet_set_page_setup(wb, sheet_index, &patch);
@@ -110,14 +110,14 @@ TEST(FormulonCApiPrintSettings, EmptyStringRemovesElementAndResetsStructuredView
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, "<pageSetup orientation=\"landscape\" scale=\"50\"/>"), 0);
-  fm_page_setup_t before{};
+  fm_page_setup_t before = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &before), 0);
   ASSERT_EQ(before.orientation, FM_PAGE_ORIENTATION_LANDSCAPE);
   ASSERT_EQ(before.scale, 50U);
 
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, ""), 0);
   EXPECT_EQ(GetPageSetupXml(wb.handle), "");
-  fm_page_setup_t after{};
+  fm_page_setup_t after = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &after), 0);
   EXPECT_EQ(after.orientation, FM_PAGE_ORIENTATION_PORTRAIT);
   EXPECT_EQ(after.scale, 100U);
@@ -202,7 +202,7 @@ TEST(FormulonCApiPrintSettings, FitToPagePreservesOtherSheetPrContent) {
   EXPECT_NE(xml.find("<tabColor rgb=\"FFFF0000\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("fitToPage=\"true\""), std::string::npos) << xml;
 
-  fm_page_setup_t setup{};
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
   EXPECT_EQ(setup.fit_to_page, 1);
   EXPECT_EQ(setup.fit_to_page_engaged, 1);
@@ -220,7 +220,7 @@ TEST(FormulonCApiPrintSettings, ClearingFitToPageKeepsTheElements) {
   EXPECT_EQ(xml.find("fitToPage"), std::string::npos) << xml;
   EXPECT_NE(xml.find("autoPageBreaks=\"0\""), std::string::npos) << xml;
 
-  fm_page_setup_t setup{};
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
   EXPECT_EQ(setup.fit_to_page, 0);
   EXPECT_EQ(setup.fit_to_page_engaged, 0);
@@ -352,7 +352,7 @@ TEST(FormulonCApiPrintSettings, GetPrintAreaSurfacesAMalformedDefinedName) {
 TEST(FormulonCApiPrintSettings, PrintTitlesRoundTripRowsBeforeColumns) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   titles.has_rows = 1;
   titles.first_row = 0;
   titles.last_row = 1;
@@ -362,7 +362,7 @@ TEST(FormulonCApiPrintSettings, PrintTitlesRoundTripRowsBeforeColumns) {
   ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$1:$2,Sheet1!$A:$A");
 
-  fm_print_titles_t read{};
+  fm_print_titles_t read = FM_STRUCT_INIT(fm_print_titles_t);
   ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.has_rows, 1);
   EXPECT_EQ(read.first_row, 0U);
@@ -375,7 +375,7 @@ TEST(FormulonCApiPrintSettings, PrintTitlesRoundTripRowsBeforeColumns) {
 TEST(FormulonCApiPrintSettings, PrintTitlesAcceptOneAxisAndClearOnNull) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_print_titles_t titles{};
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   titles.has_rows = 1;
   // The span of an axis whose flag is zero is ignored.
   titles.first_col = 7;
@@ -383,7 +383,7 @@ TEST(FormulonCApiPrintSettings, PrintTitlesAcceptOneAxisAndClearOnNull) {
   ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$1:$1");
 
-  fm_print_titles_t read{};
+  fm_print_titles_t read = FM_STRUCT_INIT(fm_print_titles_t);
   ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.has_rows, 1);
   EXPECT_EQ(read.first_row, 0U);
@@ -400,7 +400,7 @@ TEST(FormulonCApiPrintSettings, PrintTitlesAcceptOneAxisAndClearOnNull) {
 
   // Both flags zero clears as NULL does.
   ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
-  const fm_print_titles_t none{};
+  const fm_print_titles_t none = FM_STRUCT_INIT(fm_print_titles_t);
   ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &none), 0);
   EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
 }
@@ -408,16 +408,16 @@ TEST(FormulonCApiPrintSettings, PrintTitlesAcceptOneAxisAndClearOnNull) {
 TEST(FormulonCApiPrintSettings, PrintTitlesRejectInvertedOrOutOfGridSpans) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_print_titles_t inverted{};
+  fm_print_titles_t inverted = FM_STRUCT_INIT(fm_print_titles_t);
   inverted.has_rows = 1;
   inverted.first_row = 2;
   inverted.last_row = 1;
   EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &inverted), kInvalidArgument);
-  fm_print_titles_t past_rows{};
+  fm_print_titles_t past_rows = FM_STRUCT_INIT(fm_print_titles_t);
   past_rows.has_rows = 1;
   past_rows.last_row = 1048576U;
   EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &past_rows), kInvalidArgument);
-  fm_print_titles_t past_cols{};
+  fm_print_titles_t past_cols = FM_STRUCT_INIT(fm_print_titles_t);
   past_cols.has_cols = 1;
   past_cols.last_col = 16384U;
   EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &past_cols), kInvalidArgument);
@@ -430,7 +430,7 @@ TEST(FormulonCApiPrintSettings, PageSetupRejectsOrientationOutsideTheEnum) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const std::string before = GetPageSetupXml(wb.handle);
-  fm_page_setup_t setup{};
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   setup.orientation_engaged = 1;
   for (const int32_t bad : {-1, 2}) {
     setup.orientation = bad;
@@ -451,7 +451,7 @@ TEST(FormulonCApiPrintSettings, BreaksUpsertStaySortedAndReplaceInPlace) {
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 25, 0), 0);
   ASSERT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 3U);
 
-  fm_page_break_t brk{};
+  fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.id, 10U);
   EXPECT_EQ(brk.min, 0U);
@@ -494,7 +494,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreaksAreNormalisedBeforeTheAbiObservesThe
 
   // The duplicate is gone and what remains is strictly increasing.
   ASSERT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 3U);
-  fm_page_break_t brk{};
+  fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
   std::uint32_t previous = 0;
   for (std::size_t i = 0; i < 3U; ++i) {
     ASSERT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, i, &brk), 0);
@@ -538,7 +538,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreakCountStaysWithinTheAuthoringCap) {
 
   // An index already present is an in-place replacement, so it is
   // accepted at the cap; a new one is what the cap refuses.
-  fm_page_break_t brk{};
+  fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 0, brk.id, 0), 0);
   EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U, 1), kPreconditionFailed);
@@ -580,7 +580,7 @@ TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus)
   EXPECT_STREQ(fm_get_last_error_message(), "");
 
   // The indexed reader rejects the same sheet outright.
-  fm_page_break_t brk{};
+  fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
   EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, sheet_count, 0, &brk), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_column_break_at(wb.handle, sheet_count, 0, &brk), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
@@ -589,7 +589,7 @@ TEST(FormulonCApiPrintSettings, ColumnBreaksSpanEveryRow) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_add_column_break(wb.handle, 0, 5, 1), 0);
-  fm_page_break_t brk{};
+  fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
   ASSERT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.id, 5U);
   EXPECT_EQ(brk.max, 1048575U);
@@ -646,7 +646,7 @@ TEST(FormulonCApiPrintSettings, BreaksRejectOutOfGridAndOverflow) {
 TEST(FormulonCApiPrintSettings, BreakAtRejectsOutOfRangeIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_page_break_t brk{};
+  fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
   EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &brk), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
@@ -663,7 +663,7 @@ TEST(FormulonCApiPrintSettings, PageSetupPatchPreservesUnmodelledAttributes) {
           wb.handle, 0, "<pageSetup paperSize=\"9\" orientation=\"portrait\" horizontalDpi=\"600\" copies=\"3\"/>"),
       0);
 
-  fm_page_setup_t patch{};
+  fm_page_setup_t patch = FM_STRUCT_INIT(fm_page_setup_t);
   patch.orientation_engaged = 1;
   patch.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &patch), 0);
@@ -680,7 +680,7 @@ TEST(FormulonCApiPrintSettings, PageSetupPatchPreservesUnmodelledAttributes) {
 TEST(FormulonCApiPrintSettings, PageSetupPatchRejectsScaleOutsideExcelsRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_page_setup_t patch{};
+  fm_page_setup_t patch = FM_STRUCT_INIT(fm_page_setup_t);
   patch.scale_engaged = 1;
   patch.scale = 9;
   // A mis-stated print scale lands on paper, so it is rejected rather than
@@ -697,7 +697,7 @@ TEST(FormulonCApiPrintSettings, PageSetupPatchRejectsScaleOutsideExcelsRange) {
 TEST(FormulonCApiPrintSettings, PageSetupPatchRoutesFitToPageToSheetPr) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_page_setup_t patch{};
+  fm_page_setup_t patch = FM_STRUCT_INIT(fm_page_setup_t);
   patch.fit_to_page_engaged = 1;
   patch.fit_to_page = 1;
   patch.fit_to_width_engaged = 1;
@@ -717,14 +717,14 @@ TEST(FormulonCApiPrintSettings, PageSetupPatchRoutesFitToPageToSheetPr) {
 TEST(FormulonCApiPrintSettings, PageMarginsPatchTouchesOnlyEngagedFields) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_page_margins_t patch{};
+  fm_page_margins_t patch = FM_STRUCT_INIT(fm_page_margins_t);
   patch.left_engaged = 1;
   patch.left = 0.25;
   patch.top_engaged = 1;
   patch.top = 1.5;
   ASSERT_EQ(fm_sheet_set_page_margins(wb.handle, 0, &patch), 0);
 
-  fm_page_margins_t read{};
+  fm_page_margins_t read = FM_STRUCT_INIT(fm_page_margins_t);
   ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, 0, &read), 0);
   EXPECT_DOUBLE_EQ(read.left, 0.25);
   EXPECT_DOUBLE_EQ(read.top, 1.5);
@@ -740,7 +740,7 @@ TEST(FormulonCApiPrintSettings, PageMarginsPatchTouchesOnlyEngagedFields) {
 TEST(FormulonCApiPrintSettings, PageMarginsPatchRejectsNonFiniteAndNegative) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_page_margins_t patch{};
+  fm_page_margins_t patch = FM_STRUCT_INIT(fm_page_margins_t);
   patch.bottom_engaged = 1;
   patch.bottom = -1.0;
   // The paginator subtracts margins from the paper; a negative one
@@ -753,7 +753,7 @@ TEST(FormulonCApiPrintSettings, PageMarginsPatchRejectsNonFiniteAndNegative) {
 TEST(FormulonCApiPrintSettings, PrintOptionsAndHeaderFooterPatch) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_print_options_t options{};
+  fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
   options.grid_lines_engaged = 1;
   options.grid_lines = 1;
   options.horizontal_centered_engaged = 1;
@@ -763,7 +763,7 @@ TEST(FormulonCApiPrintSettings, PrintOptionsAndHeaderFooterPatch) {
   ASSERT_EQ(fm_sheet_get_print_options_xml(wb.handle, 0, &options_xml), 0);
   EXPECT_STREQ(options_xml, "<printOptions gridLines=\"true\" horizontalCentered=\"true\"/>");
 
-  fm_header_footer_t hf{};
+  fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
   hf.odd_header = "&C\xE5\xB8\xB3\xE7\xA5\xA8";  // "&C帳票"
   hf.odd_footer = "&R&P / &N";
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &hf), 0);
@@ -781,10 +781,10 @@ TEST(FormulonCApiPrintSettings, HeaderFooterSectionsLandInSchemaOrder) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // Written last-to-first on purpose: ECMA-376 fixes the child order, and
   // appending in call order would put `<oddHeader>` after `<firstFooter>`.
-  fm_header_footer_t late{};
+  fm_header_footer_t late = FM_STRUCT_INIT(fm_header_footer_t);
   late.first_footer = "F";
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &late), 0);
-  fm_header_footer_t early{};
+  fm_header_footer_t early = FM_STRUCT_INIT(fm_header_footer_t);
   early.odd_header = "H";
   early.even_footer = "E";
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &early), 0);
@@ -799,12 +799,12 @@ TEST(FormulonCApiPrintSettings, HeaderFooterSectionsLandInSchemaOrder) {
 TEST(FormulonCApiPrintSettings, HeaderFooterNullLeavesSectionAndEmptyClearsIt) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_header_footer_t first{};
+  fm_header_footer_t first = FM_STRUCT_INIT(fm_header_footer_t);
   first.odd_header = "Keep";
   first.odd_footer = "Drop";
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &first), 0);
 
-  fm_header_footer_t second{};
+  fm_header_footer_t second = FM_STRUCT_INIT(fm_header_footer_t);
   second.odd_header = nullptr;  // untouched
   second.odd_footer = "";       // cleared
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &second), 0);
@@ -819,7 +819,7 @@ TEST(FormulonCApiPrintSettings, ClearingFitToPageThroughPageSetupDropsTheStatedA
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(SetFitToPage(wb.handle, 0, 1), 0);
   ASSERT_EQ(SetFitToPage(wb.handle, 0, 0), 0);
-  fm_page_setup_t setup{};
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
   EXPECT_EQ(setup.fit_to_page, 0);
   EXPECT_EQ(setup.fit_to_page_engaged, 0);
@@ -829,7 +829,7 @@ TEST(FormulonCApiPrintSettings, ClearingFitToPageThroughPageSetupDropsTheStatedA
 TEST(FormulonCApiPrintSettings, PrintOptionsGetterReportsStatedAndAbsentAttributes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_print_options_t fresh{};
+  fm_print_options_t fresh = FM_STRUCT_INIT(fm_print_options_t);
   fresh.grid_lines = 7;
   ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &fresh), 0);
   EXPECT_EQ(fresh.grid_lines, 0);
@@ -838,14 +838,14 @@ TEST(FormulonCApiPrintSettings, PrintOptionsGetterReportsStatedAndAbsentAttribut
   EXPECT_EQ(fresh.horizontal_centered_engaged, 0);
   EXPECT_EQ(fresh.vertical_centered_engaged, 0);
 
-  fm_print_options_t patch{};
+  fm_print_options_t patch = FM_STRUCT_INIT(fm_print_options_t);
   patch.grid_lines_engaged = 1;
   patch.grid_lines = 1;
   patch.headings_engaged = 1;
   patch.headings = 0;
   ASSERT_EQ(fm_sheet_set_print_options(wb.handle, 0, &patch), 0);
 
-  fm_print_options_t read{};
+  fm_print_options_t read = FM_STRUCT_INIT(fm_print_options_t);
   ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.grid_lines, 1);
   EXPECT_EQ(read.grid_lines_engaged, 1);
@@ -866,7 +866,7 @@ TEST(FormulonCApiPrintSettings, PrintOptionsGetterReportsStatedAndAbsentAttribut
 TEST(FormulonCApiPrintSettings, HeaderFooterGetterReadsDecodedSectionsAndNullForAbsentOnes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_header_footer_t fresh{};
+  fm_header_footer_t fresh = FM_STRUCT_INIT(fm_header_footer_t);
   ASSERT_EQ(fm_sheet_get_header_footer(wb.handle, 0, &fresh), 0);
   EXPECT_EQ(fresh.odd_header, nullptr);
   EXPECT_EQ(fresh.first_footer, nullptr);
@@ -878,7 +878,7 @@ TEST(FormulonCApiPrintSettings, HeaderFooterGetterReadsDecodedSectionsAndNullFor
   EXPECT_EQ(fresh.align_with_margins, 1);
   EXPECT_EQ(fresh.align_with_margins_engaged, 0);
 
-  fm_header_footer_t patch{};
+  fm_header_footer_t patch = FM_STRUCT_INIT(fm_header_footer_t);
   patch.odd_header = "&C\xE5\xB8\xB3\xE7\xA5\xA8";  // "&C帳票"
   patch.even_footer = "&R&P / &N";
   patch.different_odd_even_engaged = 1;
@@ -887,7 +887,7 @@ TEST(FormulonCApiPrintSettings, HeaderFooterGetterReadsDecodedSectionsAndNullFor
   patch.scale_with_doc = 0;
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &patch), 0);
 
-  fm_header_footer_t read{};
+  fm_header_footer_t read = FM_STRUCT_INIT(fm_header_footer_t);
   ASSERT_EQ(fm_sheet_get_header_footer(wb.handle, 0, &read), 0);
   ASSERT_NE(read.odd_header, nullptr);
   // The text comes back decoded, in the form the setter takes.
@@ -936,13 +936,13 @@ TEST(FormulonCApiPrintSettings, OrientationChangeIsVisibleToPaginateImmediately)
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
 
-  fm_page_setup_t portrait{};
+  fm_page_setup_t portrait = FM_STRUCT_INIT(fm_page_setup_t);
   portrait.orientation_engaged = 1;
   portrait.orientation = FM_PAGE_ORIENTATION_PORTRAIT;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &portrait), 0);
   const std::uint32_t portrait_pages = PageCount(wb.handle);
 
-  fm_page_setup_t landscape{};
+  fm_page_setup_t landscape = FM_STRUCT_INIT(fm_page_setup_t);
   landscape.orientation_engaged = 1;
   landscape.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &landscape), 0);
@@ -1015,9 +1015,9 @@ TEST(FormulonCApiPrintSettings, OutOfRangeSheetIndexIsRejectedEverywhere) {
   EXPECT_EQ(fm_sheet_get_page_setup_xml(wb.handle, 9, &xml), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 9, "<pageSetup/>"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(SetFitToPage(wb.handle, 9, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  fm_print_options_t options{};
+  fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
   EXPECT_EQ(fm_sheet_get_print_options(wb.handle, 9, &options), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  fm_header_footer_t hf{};
+  fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
   EXPECT_EQ(fm_sheet_get_header_footer(wb.handle, 9, &hf), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   const fm_cell_rect_t area{0, 0, 1, 1};
   EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 9, &area, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

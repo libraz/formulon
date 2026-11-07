@@ -5,7 +5,7 @@
 // `recalc_cmd.cpp`, `dump_cmd.cpp`); this file just routes `argv[1]`
 // to the right handler and translates the returned status into a process
 // exit code, shared by every subcommand: 0 success, 1 engine failure,
-// 64 usage, 66 input missing or unreadable, 73 output cannot be created,
+// 64 usage, 65 malformed formula, 66 input missing or unreadable, 73 output cannot be created,
 // 74 I/O error mid-stream. `--opt=value` is split into `--opt value` here,
 // once, before dispatch. SIGPIPE is ignored so a closed stdout surfaces as
 // exit 74 instead of killing the process.
@@ -27,25 +27,27 @@ void print_top_usage(std::ostream& out) {
   out << "Usage: formulon <command> [options]\n"
       << "\n"
       << "Commands:\n"
-      << "  eval <formula>          Evaluate a single formula on a fresh empty workbook.\n"
-      << "  recalc [--iterative] [--threads N] [--quiet] <in> -o <out>\n"
+      << "  eval <formula | ->      Evaluate a single formula on a fresh empty workbook,\n"
+      << "                          or at A1 of a sheet of --in <file>.\n"
+      << "  recalc [--iterative] [--threads N] [--quiet] [--format xlsx|xlsb] <in> -o <out>\n"
       << "                          Load, recalc, and write a workbook ('-o -' writes to stdout).\n"
-      << "  dump [--formulas|--values|--sheets|--metadata] <in>\n"
+      << "  dump [--formulas|--values|--sheets|--metadata] [--sheet S] [--range A1:B2] <in>\n"
       << "                          Print a diff-friendly snapshot of a workbook.\n"
       << "                          --values recalculates first; the others do not.\n"
       << "  paginate [--sheet N] <in>\n"
       << "                          Resolve print area (A1 ranges), page breaks, and page count.\n"
       << "  profiles [--json]       List the supported Excel profile ids, one per line.\n"
       << "\n"
-      << "<in> and <out> are xlsx or xlsb files. eval accepts --json and --repeat N;\n"
+      << "<in> and <out> are xlsx or xlsb files. eval accepts --json, --local, --repeat N, --in and --sheet;\n"
       << "dump, paginate and profiles accept --json (output starts with {\"format\":1,...});\n"
-      << "recalc accepts -o/--output, --iterative, --threads N and --quiet; every\n"
+      << "recalc accepts -o/--output, --format, --iterative, --threads N and --quiet; every\n"
       << "subcommand accepts -- to end options. Options take their value as\n"
       << "'--opt value' or '--opt=value'.\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n"
       << "\n"
       << "Standard streams:\n"
       << "  An input of '-' reads the whole workbook from stdin (refused on a terminal).\n"
+      << "  eval - reads the formula from stdin (refused on a terminal).\n"
       << "  recalc -o - writes the .xlsx workbook to stdout (refused on a terminal).\n"
       << "  Use './-' for a file named '-'.\n"
       << "\n"
@@ -53,6 +55,7 @@ void print_top_usage(std::ostream& out) {
       << "  0   success (an Excel error value such as #DIV/0! is still a result)\n"
       << "  1   engine failure, including an empty or corrupt input workbook\n"
       << "  64  usage error\n"
+      << "  65  malformed input: eval was given a formula that does not parse\n"
       << "  66  input file missing, unreadable or a directory\n"
       << "  73  output file cannot be created\n"
       << "  74  I/O error while reading or writing, including a closed stdout\n"

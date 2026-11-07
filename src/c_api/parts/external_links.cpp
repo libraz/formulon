@@ -6,11 +6,13 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "styles.h"
 #include "utils/error.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 
@@ -28,6 +30,9 @@ extern "C" fm_status_t fm_workbook_get_external_link(const fm_workbook_t* wb, si
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
   }
   const auto& links = wb->workbook().external_links();
   if (auto rc = check_index(index, links.size(), "index"); rc != 0) {

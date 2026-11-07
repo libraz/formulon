@@ -24,7 +24,7 @@ TEST(FormulonCApiStyles, LocaleOnlyBuiltinNumFmtFollowsProfile) {
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 31, &present, &s), 0);
   EXPECT_STREQ(s, "m/d/yy");
 
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 31, &present, &s), 0);
   EXPECT_STREQ(s, "yyyy\"年\"m\"月\"d\"日\"");
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &present, &s), 0);
@@ -33,11 +33,11 @@ TEST(FormulonCApiStyles, LocaleOnlyBuiltinNumFmtFollowsProfile) {
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &present, &s), 0);
   EXPECT_STREQ(s, "mm-dd-yy");
 
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-zh_CN"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-zh_CN"), 0);
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &present, &s), 0);
   EXPECT_STREQ(s, "yyyy\"年\"m\"月\"");
 
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-th_TH"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-th_TH"), 0);
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 59, &present, &s), 0);
   EXPECT_STREQ(s, "t0");
 }
@@ -93,7 +93,7 @@ TEST(FormulonCApiStyles, AddBatchNumFmtUsesEffectiveBuiltinMapping) {
 
   const char* const codes[] = {"General", "yyyy", "mm-dd-yy", "mm-dd-yy"};
   uint16_t ids[] = {0xFFFFU, 0xFFFFU, 0xFFFFU, 0xFFFFU};
-  fm_styles_batch_t batch{};
+  fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
   batch.num_fmt_codes = codes;
   batch.num_fmt_count = 4U;
   batch.num_fmt_ids = ids;
@@ -289,8 +289,10 @@ TEST(FormulonCApiStyles, AddBatchNumFmtExhaustionIsTransactional) {
   const std::string before_xml = formulon::io::write_styles(styles);
   const char* codes[] = {"first", "second"};
   uint16_t ids[] = {0xAAAAU, 0xBBBBU};
-  const fm_styles_batch_t batch{nullptr, 0U,      nullptr, nullptr, 0U,    nullptr, nullptr, 0U,
-                                nullptr, nullptr, 0U,      nullptr, codes, 2U,      ids};
+  fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+  batch.num_fmt_codes = codes;
+  batch.num_fmt_count = 2U;
+  batch.num_fmt_ids = ids;
   EXPECT_EQ(fm_workbook_add_batch(wb.handle, &batch),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed));
   EXPECT_EQ(ids[0], 0xAAAAU);

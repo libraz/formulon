@@ -118,7 +118,7 @@ TEST(FormulonCli, ExitCodeOutputDirectoryTargetIs73) {
   ASSERT_EQ(::mkdir(dir.c_str(), 0700), 0);
   DirGuard dir_guard(dir);
 
-  const CliRun r = run_cli({"recalc", "--quiet", in, "-o", dir});
+  const CliRun r = run_cli({"recalc", "--quiet", "--format", "xlsx", in, "-o", dir});
   EXPECT_EQ(r.exit_code, 73);
 }
 

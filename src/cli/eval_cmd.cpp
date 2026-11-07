@@ -1,33 +1,36 @@
 //
 // `formulon eval <formula>` — evaluate a single formula on a fresh,
-// empty workbook and print the result.
+// empty workbook (or at A1 of a sheet of `--in FILE`) and print the result.
 //
-// The handler creates an empty workbook, adds a single sheet, and evaluates
-// the formula through the C ABI's side-effect-free array surface. Cell-level
-// errors (`#NAME?`, `#DIV/0!`, …) are *not*
+// The handler evaluates the formula through the C ABI's side-effect-free
+// array surface. Cell-level errors (`#NAME?`, `#DIV/0!`, …) are *not*
 // process-level failures: the cell value just happens to be an
-// `FM_VAL_ERROR`, and we print its display name. That includes malformed
-// syntax, which the evaluator resolves to `#NAME?`: gating it here would
-// make the CLI answer differently from every other binding over the same
-// C ABI. Only structural failures (NULL handle, save/load) bubble out.
+// `FM_VAL_ERROR`, and we print its display name. A formula that does not
+// parse is a failure of the input: exit 65 with the position on stderr and
+// nothing on stdout.
 //
 // `--repeat N` re-evaluates the same formula `N` times through the ad-hoc
 // evaluator. Timing is reported on stderr without changing the stdout payload.
 
+#include <cerrno>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "cli/c_api_raii.h"
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
+#include "cli/file_io.h"
 #include "cli/render.h"
+#include "cli/workbook_load.h"
 
 namespace formulon {
 namespace cli {
@@ -35,13 +38,20 @@ namespace cli {
 namespace {
 
 void print_eval_usage(std::ostream& out) {
-  out << "Usage: formulon eval [--json] [--repeat N] [--] <formula>\n"
+  out << "Usage: formulon eval [--json] [--local] [--repeat N] [--in <file | -> [--sheet <name | index>]] [--] "
+         "<formula | ->\n"
       << "\n"
-      << "Evaluate <formula> on a fresh empty workbook and print the result.\n"
+      << "Evaluate <formula> on a fresh empty workbook and print the result. A formula of '-'\n"
+      << "is read from stdin (refused on a terminal).\n"
       << "Cell-level Excel errors (#NAME?, #DIV/0!, ...) print to stdout and\n"
       << "do NOT cause a non-zero exit code; only structural failures do.\n"
-      << "Malformed input is not an error: a formula that does not parse evaluates to #NAME?.\n"
+      << "A formula that does not parse exits 65 and prints 'formulon: eval: <message> at <line>:<column>'\n"
+      << "on stderr.\n"
       << "  --json       print {\"format\":1,\"rows\":[[{\"kind\":...,\"value\":...},...],...]}\n"
+      << "  --local      the formula is spelled in the --profile locale (separators, function names)\n"
+      << "  --in <file>  evaluate at A1 of a sheet of this xlsx or xlsb workbook ('-' reads it from stdin);\n"
+      << "               the workbook is not saved\n"
+      << "  --sheet <s>  with --in: the sheet name or 0-based index (default: the first sheet)\n"
       << "  --repeat N   evaluate N times and report the elapsed time on stderr\n"
       << "  --           end options; the next token is the formula\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
@@ -110,10 +120,44 @@ int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostr
   return 0;
 }
 
+// Reports a failed evaluation. A formula syntax error is exit 65 with its
+// position; anything else is the engine's message and the generic failure.
+int report_eval_failure(std::ostream& err) {
+  fm_parse_error_t position = FM_STRUCT_INIT(fm_parse_error_t);
+  if (fm_get_last_parse_error(&position) == 0) {
+    err << "formulon: eval: " << fm_get_last_error_message() << " at " << position.line << ':' << position.column
+        << '\n';
+    return kExitDataErr;
+  }
+  emit_last_error(err, "eval");
+  return kExitFailure;
+}
+
+// Reads the formula from stdin, without its trailing line break.
+int read_formula_from_stdin(std::string* formula, std::ostream& err) {
+  std::vector<std::uint8_t> bytes;
+  if (auto rc = read_stdin(bytes); rc != 0) {
+    if (rc == kExitUsage) {
+      err << "formulon: eval: stdin is a terminal; pipe a formula into '-' or pass it as an argument\n";
+    } else {
+      err << "formulon: eval: cannot read stdin: " << std::strerror(errno) << '\n';
+    }
+    return rc;
+  }
+  formula->assign(bytes.begin(), bytes.end());
+  while (!formula->empty() && (formula->back() == '\n' || formula->back() == '\r')) {
+    formula->pop_back();
+  }
+  return 0;
+}
+
 }  // namespace
 
 int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   bool want_json = false;
+  bool local = false;
+  std::optional<std::string> workbook_path;
+  std::optional<std::string> sheet_spec;
   // Engaged only when `--repeat` was actually given. The iteration count
   // and the decision to report timing are the same fact, so they live in
   // one value; holding the count in a plain `long` invites keying the
@@ -139,6 +183,19 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       want_json = true;
       continue;
     }
+    if (!options_ended && a == "--local") {
+      local = true;
+      continue;
+    }
+    if (!options_ended && (a == "--in" || a == "--sheet")) {
+      if (i + 1 >= args.size()) {
+        err << "formulon: eval: " << a << " requires a value\n";
+        return kExitUsage;
+      }
+      (a == "--in" ? workbook_path : sheet_spec).emplace(args[i + 1]);
+      ++i;
+      continue;
+    }
     if (!options_ended && a == "--repeat") {
       // `--repeat N` consumes one extra argument. `parse_repeat`
       // increments the index it receives once so it points at the next
@@ -157,7 +214,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       i = value_index - 1;
       continue;
     }
-    if (!accept_positional(a, options_ended, formula_seen, "eval", "formula", err)) {
+    if (!accept_positional(a, options_ended, formula_seen, "eval", "formula", err, /*allow_dash=*/true)) {
       return kExitUsage;
     }
     formula = a;
@@ -168,23 +225,65 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     return missing_positional("eval", "formula", print_eval_usage, err);
   }
 
+  if (sheet_spec.has_value() && !workbook_path.has_value()) {
+    err << "formulon: eval: --sheet requires --in\n";
+    return kExitUsage;
+  }
+  std::string formula_str(formula);
+  if (formula == kStdioPath) {
+    if (workbook_path == kStdioPath) {
+      err << "formulon: eval: the formula and --in cannot both read stdin\n";
+      return kExitUsage;
+    }
+    if (auto rc = read_formula_from_stdin(&formula_str, err); rc != 0) {
+      return rc;
+    }
+  }
+
   WorkbookGuard wb;
-  if (auto rc = fm_workbook_create_empty(&wb.handle); rc != 0) {
-    emit_last_error(err, "eval");
-    return kExitFailure;
-  }
-  if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
-    emit_last_error(err, "eval");
-    return kExitFailure;
-  }
   std::size_t sheet_index = 0;
-  if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1", &sheet_index); rc != 0) {
-    emit_last_error(err, "eval");
-    return kExitFailure;
+  if (workbook_path.has_value()) {
+    if (auto rc = load_workbook_file(*workbook_path, shared, wb, err, "eval"); rc != 0) {
+      return rc;
+    }
+    if (auto rc = fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_AUTO); rc != 0) {
+      emit_last_error(err, "eval");
+      return kExitFailure;
+    }
+    if (sheet_spec.has_value()) {
+      if (auto rc = resolve_sheet(wb.handle, *sheet_spec, &sheet_index, err, "eval"); rc != 0) {
+        return rc;
+      }
+    }
+  } else {
+    if (auto rc = fm_workbook_create_empty(&wb.handle); rc != 0) {
+      emit_last_error(err, "eval");
+      return kExitFailure;
+    }
+    if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
+      emit_last_error(err, "eval");
+      return kExitFailure;
+    }
+    if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1", &sheet_index); rc != 0) {
+      emit_last_error(err, "eval");
+      return kExitFailure;
+    }
+  }
+  if (local) {
+    const char* profile_id = nullptr;
+    const char* canonical = nullptr;
+    if (auto rc = fm_workbook_get_profile_id(wb.handle, &profile_id); rc != 0) {
+      emit_last_error(err, "eval");
+      return kExitFailure;
+    }
+    if (auto rc = fm_canonicalize_formula(formula_str.c_str(), profile_id, &canonical); rc != 0) {
+      emit_last_error(err, "eval");
+      return kExitFailure;
+    }
+    formula_str = canonical;
   }
   // Evaluate ad hoc at A1. This keeps evaluation side-effect free: `=A1+1`
   // sees the empty cell instead of creating a circular A1 formula.
-  std::string formula_str(formula);
 
   // `--repeat N` invokes the complete ad-hoc evaluator for every pass;
   // without the flag the formula is still evaluated exactly once.
@@ -197,8 +296,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     result.handle = nullptr;
     if (auto rc = fm_sheet_evaluate_formula_array(wb.handle, sheet_index, 0, 0, formula_str.c_str(), &result.handle);
         rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
+      return report_eval_failure(err);
     }
   }
   const auto elapsed = Clock::now() - t0;

@@ -21,11 +21,21 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   sees them; ``PATCH_KEYS`` (``{method: [position, [key, ...]]}``) of the
   ``patch: true`` ops and ``PATCH_NESTED_KEYS`` (``{method: {path: [key,
   ...]}}``) of the ``patch_nested`` ones: the keys of the patch type and of
-  the getter's record in src/wasm/formulon.d.ts.
+  the getter's record in src/wasm/formulon.d.ts. Once an op carries
+  ``namespace: ooxml``, ``OOXML_WORKBOOK_METHODS`` and ``OOXML_SHEET_METHODS``
+  list the names published under ``.ooxml``, which leave the two class lists.
 * ``packages/python/formulon/sheet.py``: the ``Workbook`` / ``Sheet`` tables but
   ``REF_ARGS`` and the patch tables in its ``# <facade-tables>`` region, with
   the Python names. ``--check`` skips the file while it has no region or an
   empty one; ``--write`` fills an empty one.
+* ``RECORD_RANGE_FIELDS`` (``{Record: {field: type}}``) in the
+  ``<record-range-fields>`` region of ``common.mjs`` and of
+  ``packages/python/formulon/_inputs.py``: the fields of the input records in
+  src/wasm/formulon.d.ts typed ``CellRect``, ``SheetRect`` or ``CellAddress``
+  (``[]`` for an array), or typed by another input record that has such a
+  field, less the ledger's ``a1_exempt`` fields. Python keys and nested record
+  names are the ledger's Python names, fields snake_case. Both files follow the
+  ``sheet.py`` rule for an absent or empty region.
 * ``packages/python/formulon/_handle_tables.py``: the same tables for the handle
   classes, the whole file generated.
 * ``src/node_addon/generated/facade_scope.inc``: ``kSheetMethods``, the sorted
@@ -58,16 +68,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import facade_scope  # noqa: E402
 
+from tools.dev.binding_drift.api_conventions_arguments import _js_fields  # noqa: E402
+from tools.dev.binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
+from tools.dev.binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
+
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
 PYTHON_SHEET = REPO_ROOT / "packages/python/formulon/sheet.py"
 PYTHON_HANDLE_TABLES = REPO_ROOT / "packages/python/formulon/_handle_tables.py"
 NODE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 ADDRESS_ARGS_JSON = REPO_ROOT / "tools/api/address_args.json"
+PYTHON_INPUTS = REPO_ROOT / "packages/python/formulon/_inputs.py"
+WASM_DTS = REPO_ROOT / "src/wasm/formulon.d.ts"
 
-_REGION = {
-    "js": re.compile(r"(// <facade-tables>[^\n]*\n)(.*?)(// </facade-tables>)", re.S),
-    "py": re.compile(r"(# <facade-tables>[^\n]*\n)(.*?)(# </facade-tables>)", re.S),
-}
+
+def _region_re(comment: str, tag: str) -> "re.Pattern[str]":
+    return re.compile(rf"({comment} <{tag}>[^\n]*\n)(.*?)({comment} </{tag}>)", re.S)
+
+
+_REGION = {"js": _region_re("//", "facade-tables"), "py": _region_re("#", "facade-tables")}
+_RANGE_REGION = {"js": _region_re("//", "record-range-fields"), "py": _region_re("#", "record-range-fields")}
+OOXML_NAMESPACE = "ooxml"
+# The d.ts types a record field holds an address in; the facade also takes an A1 string for each.
+RANGE_TYPES = ("CellRect", "SheetRect", "CellAddress")
+INPUT_ROLES = frozenset({"input", "patch", "both"})
 _INDENT = "  "
 _FACADE_CLASSES = ("Workbook.", "Sheet.")
 ONLY_TARGETS = ("node-scope",)
@@ -77,13 +100,27 @@ class GenError(ValueError):
     """An output file does not have the expected shape."""
 
 
-def _tables(language: str) -> Tuple[Dict[str, List[str]], Dict[str, Tuple[str, str]]]:
-    ledger = facade_scope.load()
-    names = {
-        "WORKBOOK_METHODS": facade_scope.methods(ledger, "workbook", language),
-        "SHEET_METHODS": facade_scope.methods(ledger, "sheet", language),
-        "SHEET_STRUCTURE_OPS": facade_scope.structure_ops(ledger, language),
-    }
+def ooxml_methods(ledger: facade_scope.Ledger, scope: str, language: str) -> List[str]:
+    """Sorted public names of the `scope` ops and lists the ledger publishes under `.ooxml`."""
+    out = set()
+    for entry in ledger.entries.values():
+        if isinstance(entry, dict) and entry.get("namespace") == OOXML_NAMESPACE and entry.get("scope") == scope:
+            name = facade_scope.public_name(entry, language)
+            if name is not None:
+                out.add(name)
+    return sorted(out)
+
+
+def _tables(
+    language: str, ledger: Optional[facade_scope.Ledger] = None
+) -> Tuple[Dict[str, List[str]], Dict[str, Tuple[str, str]]]:
+    ledger = ledger or facade_scope.load()
+    names = {}
+    for table, scope in (("WORKBOOK_METHODS", "workbook"), ("SHEET_METHODS", "sheet")):
+        ooxml = ooxml_methods(ledger, scope, language)
+        names[table] = [n for n in facade_scope.methods(ledger, scope, language) if n not in ooxml]
+        names[f"OOXML_{table}"] = ooxml
+    names["SHEET_STRUCTURE_OPS"] = facade_scope.structure_ops(ledger, language)
     families = facade_scope.list_families(ledger, language)
     names["HANDWRITTEN"] = facade_scope.handwritten(ledger, language)
     return names, families
@@ -256,11 +293,18 @@ def _list_families(language: str, families: Dict[str, Tuple[str, str]]) -> str:
     return _py_dict("LIST_FAMILIES", body)
 
 
-def js_region() -> str:
-    ledger = facade_scope.load()
-    names, families = _tables("js")
+def _has_ooxml(names: Dict[str, List[str]]) -> bool:
+    return bool(names["OOXML_WORKBOOK_METHODS"] or names["OOXML_SHEET_METHODS"])
+
+
+def js_region(ledger: Optional[facade_scope.Ledger] = None) -> str:
+    ledger = ledger or facade_scope.load()
+    names, families = _tables("js", ledger)
     out = [_js_list("WORKBOOK_METHODS", names["WORKBOOK_METHODS"])]
     out.append(_js_list("SHEET_METHODS", names["SHEET_METHODS"]))
+    if _has_ooxml(names):
+        out.append(_js_list("OOXML_WORKBOOK_METHODS", names["OOXML_WORKBOOK_METHODS"]))
+        out.append(_js_list("OOXML_SHEET_METHODS", names["OOXML_SHEET_METHODS"]))
     out.append(_js_list("SHEET_STRUCTURE_OPS", names["SHEET_STRUCTURE_OPS"]))
     out.append(_list_families("js", families))
     out.append(_js_list("HANDWRITTEN", names["HANDWRITTEN"]))
@@ -276,12 +320,15 @@ def _py_tuple(name: str, values: Sequence[str]) -> str:
     return f"{name} = (\n{body})\n"
 
 
-def py_region() -> str:
+def py_region(ledger: Optional[facade_scope.Ledger] = None) -> str:
     """The `Workbook` / `Sheet` tables of sheet.py's region."""
-    ledger = facade_scope.load()
-    names, families = _tables("py")
+    ledger = ledger or facade_scope.load()
+    names, families = _tables("py", ledger)
     out = [_py_tuple("WORKBOOK_METHODS", names["WORKBOOK_METHODS"])]
     out.append(_py_tuple("SHEET_METHODS", names["SHEET_METHODS"]))
+    if _has_ooxml(names):
+        out.append(_py_tuple("OOXML_WORKBOOK_METHODS", names["OOXML_WORKBOOK_METHODS"]))
+        out.append(_py_tuple("OOXML_SHEET_METHODS", names["OOXML_SHEET_METHODS"]))
     out.append(_py_tuple("SHEET_STRUCTURE_OPS", names["SHEET_STRUCTURE_OPS"]))
     out.append(_list_families("py", _select(families, True)))
     out.append(_py_tuple("HANDWRITTEN", names["HANDWRITTEN"]))
@@ -335,16 +382,135 @@ def node_scope_inc() -> str:
     return "".join(out)
 
 
-def _splice(text: str, language: str, region: str, path: Path) -> str:
-    match = _REGION[language].search(text)
+_ARRAY_RE = re.compile(r"(?:readonly\s+)?(?:\((.*)\)|([A-Za-z_$][\w$]*))\[\]|ReadonlyArray<(.*)>", re.S)
+
+
+def _range_type(text: str, known: Sequence[str]) -> Optional[str]:
+    """`T` or `T[]` when the field type `text` holds one `T` of `known` or an array of them, `string` and absent
+    alternatives aside; None otherwise. An array that also takes one `T` stays `T[]`."""
+    bases = set()
+    array = False
+    for alt in _strip_null(text, True):
+        match = _ARRAY_RE.fullmatch(alt.strip())
+        if match:
+            inner = [a for a in _strip_null(next(g for g in match.groups() if g), True) if a != "string"]
+            if len(inner) != 1:
+                return None
+            bases.add(inner[0].strip())
+            array = True
+        elif alt != "string":
+            bases.add(alt.strip())
+    if len(bases) != 1:
+        return None
+    base = bases.pop()
+    return (base + "[]" if array else base) if base in known else None
+
+
+def _snake(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def record_range_fields(
+    ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
+) -> Dict[str, Dict[str, str]]:
+    """`{InputRecord: {field: type}}` of the d.ts input records, JS names, records sorted, fields in order.
+
+    A field whose type is another input record counts once that record has an address field of its own.
+    """
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    exempt: Dict[str, set] = {}
+    for entry in ledger.entries.values():
+        if not isinstance(entry, dict) or not isinstance(entry.get("js"), str):
+            continue
+        if entry.get("kind") == "record" and entry.get("role") in INPUT_ROLES or "a1_exempt" in entry:
+            exempt[entry["js"]] = set((entry.get("a1_exempt") or {}).get("fields") or [])
+    fields = {name: _js_fields(surface.decls, surface.raw, name) or {} for name in exempt}
+    out: Dict[str, Dict[str, str]] = {}
+    while True:
+        known = (*RANGE_TYPES, *out)
+        found = {}
+        for name, members in fields.items():
+            row = {
+                field: kind
+                for field, ftype in members.items()
+                if field not in exempt[name] and (kind := _range_type(ftype, known)) is not None
+            }
+            if row:
+                found[name] = row
+        if found == out:
+            return dict(sorted(out.items()))
+        out = found
+
+
+def _py_record_names(ledger: facade_scope.Ledger) -> Dict[str, str]:
+    return {
+        e["js"]: e["py"]
+        for e in ledger.entries.values()
+        if isinstance(e, dict) and isinstance(e.get("js"), str) and isinstance(e.get("py"), str)
+    }
+
+
+def range_fields_region(language: str, ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """`RECORD_RANGE_FIELDS` of `language`; Python drops a record or a nested record the package does not name."""
+    ledger = ledger or facade_scope.load()
+    table = record_range_fields(ledger, dts)
+    if language == "js":
+        body = "".join(_js_field_row(_INDENT, name, row) for name, row in table.items())
+        return _js_frozen("RECORD_RANGE_FIELDS", body)
+    py_names = _py_record_names(ledger)
+    rows = []
+    for name, row in table.items():
+        if name not in py_names:
+            continue
+        cells = []
+        for field, kind in row.items():
+            base, array = (kind[:-2], "[]") if kind.endswith("[]") else (kind, "")
+            target = base if base in RANGE_TYPES else py_names.get(base)
+            if target is not None:
+                cells.append(f'"{_snake(field)}": "{target}{array}"')
+        if cells:
+            rows.append(_py_mapping_row(py_names[name], cells))
+    return _py_dict("RECORD_RANGE_FIELDS", "".join(rows))
+
+
+def _js_field_row(indent: str, name: str, row: Dict[str, str]) -> str:
+    """`Name: { field: 'Type', ... },` at `indent`, one field per line once the inline form passes the width."""
+    pairs = [f"{_js_bare_key(f)}: '{t}'" for f, t in row.items()]
+    one_line = f"{indent}{_js_bare_key(name)}: {{ {', '.join(pairs)} }},"
+    if len(one_line) <= _LINE_WIDTH:
+        return one_line + "\n"
+    body = "".join(f"{indent}{_INDENT}{p},\n" for p in pairs)
+    return f"{indent}{_js_bare_key(name)}: {{\n{body}{indent}}},\n"
+
+
+def _py_mapping_row(name: str, cells: Sequence[str]) -> str:
+    """`"Name": {...},` as the formatter lays it out at its line width."""
+    one_line = f'    "{name}": {{{", ".join(cells)}}},'
+    if len(one_line) <= _LINE_WIDTH:
+        return one_line + "\n"
+    body = "".join(f"        {c},\n" for c in cells)
+    return f'    "{name}": {{\n{body}    }},\n'
+
+
+def _splice(text: str, pattern: "re.Pattern[str]", region: str, path: Path) -> str:
+    match = pattern.search(text)
     if match is None:
-        raise GenError(f"{path}: no facade-tables region")
+        raise GenError(f"{path}: no generated region")
     return text[: match.start(2)] + region + text[match.end(2) :]
 
 
-def _empty_region(text: Optional[str], language: str) -> bool:
-    match = _REGION[language].search(text or "")
+def _empty_region(text: Optional[str], pattern: "re.Pattern[str]") -> bool:
+    match = pattern.search(text or "")
     return match is not None and not match.group(2).strip()
+
+
+def _region_output(path: Path, pattern: "re.Pattern[str]", region) -> Tuple[Path, Optional[str]]:
+    """`(path, text)` with `region()` spliced in, text None while the file has no such region."""
+    text = path.read_text(encoding="utf-8") if path.is_file() else None
+    if text is None or pattern.search(text) is None:
+        return path, None
+    return path, _splice(text, pattern, region(), path)
 
 
 def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
@@ -353,16 +519,30 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
         return [(NODE_SCOPE_INC, node_scope_inc())]
     result: List[Tuple[Path, Optional[str]]] = []
     common = NPM_COMMON.read_text(encoding="utf-8")
-    result.append((NPM_COMMON, _splice(common, "js", js_region(), NPM_COMMON)))
-    sheet = PYTHON_SHEET.read_text(encoding="utf-8") if PYTHON_SHEET.is_file() else None
-    if sheet is not None and _REGION["py"].search(sheet):
-        result.append((PYTHON_SHEET, _splice(sheet, "py", py_region(), PYTHON_SHEET)))
-    else:
-        result.append((PYTHON_SHEET, None))
+    common = _splice(common, _REGION["js"], js_region(), NPM_COMMON)
+    if _RANGE_REGION["js"].search(common):
+        common = _splice(common, _RANGE_REGION["js"], range_fields_region("js"), NPM_COMMON)
+    result.append((NPM_COMMON, common))
+    result.append(_region_output(PYTHON_SHEET, _REGION["py"], py_region))
+    result.append(_region_output(PYTHON_INPUTS, _RANGE_REGION["py"], lambda: range_fields_region("py")))
     result.append((PYTHON_HANDLE_TABLES, py_handle_tables()))
     result.append((NODE_SCOPE_INC, node_scope_inc()))
     result.append((ADDRESS_ARGS_JSON, address_args_json()))
     return result
+
+
+# Outputs whose region `--check` skips while it is empty; `--write` fills it.
+_FILLABLE = {PYTHON_SHEET: (_REGION["py"],), PYTHON_INPUTS: (_RANGE_REGION["py"],), NPM_COMMON: (_RANGE_REGION["js"],)}
+
+
+def _skippable(path: Path, current: Optional[str], text: str) -> bool:
+    """`--check` passes an output whose only difference is a fillable region that is still empty."""
+    for pattern in _FILLABLE.get(path, ()):
+        if _empty_region(current, pattern):
+            match = pattern.search(text)
+            if match is not None and current == text[: match.start(2)] + text[match.end(2) :]:
+                return True
+    return False
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -381,13 +561,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for path, text in generated:
         rel = path.relative_to(REPO_ROOT)
         if text is None:
-            print(f"gen_facade_tables: skipped {rel} (no facade-tables region)", file=sys.stderr)
+            print(f"gen_facade_tables: skipped {rel} (no generated region)", file=sys.stderr)
             continue
         current = path.read_text(encoding="utf-8") if path.is_file() else None
         if current == text:
             continue
-        if args.check and path == PYTHON_SHEET and _empty_region(current, "py"):
-            print(f"gen_facade_tables: skipped {rel} (empty facade-tables region)", file=sys.stderr)
+        if args.check and _skippable(path, current, text):
+            print(f"gen_facade_tables: skipped {rel} (empty generated region)", file=sys.stderr)
             continue
         if args.check:
             stale.append(str(rel))

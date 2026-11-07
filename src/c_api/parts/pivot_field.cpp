@@ -16,6 +16,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "eval/collation.h"
 #include "pivot/field_grouping.h"
 #include "pivot/field_lookup.h"
@@ -29,6 +30,7 @@
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_limit;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -147,6 +149,9 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
   if (auto rc = validate(*spec); rc != 0) {
@@ -710,7 +715,11 @@ extern "C" fm_status_t fm_sheet_get_pivot_field(const fm_workbook_t* wb, std::si
   if (auto rc = lookup_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   fm_pivot_field_info_t result{};
+  result.struct_size = out->struct_size;
   result.source_name = field->source_name.c_str();
   result.custom_name = field->custom_name.c_str();
   const auto axis = pivot_axis_to_fm(field->axis);
@@ -778,8 +787,12 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_item(const fm_workbook_t* wb, st
   if (auto rc = check_index(item_index, field->items.size(), "item_index"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const formulon::pivot::PivotItem& item = field->items[item_index];
   fm_pivot_item_info_t result{};
+  result.struct_size = out->struct_size;
   result.name = item.name.c_str();
   result.cache_index = item.has_cache_index ? static_cast<std::int32_t>(item.cache_index) : -1;
   result.visible = item.visible ? 1 : 0;

@@ -29,13 +29,13 @@ TEST(FormulonCApiStyles, DifferentialFormatGetterExposesCfDxfTable) {
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, 0, &out), 0);
   EXPECT_EQ(out.font_engaged, 1);
   EXPECT_EQ(out.font.bold, 1);
-  EXPECT_EQ(out.font.color_argb, 0xFFFF0000U);
+  EXPECT_EQ(out.font.color.rgb, 0xFFFF0000U);
   EXPECT_EQ(out.fill_engaged, 1);
   EXPECT_EQ(out.fill.pattern, 1U);
-  EXPECT_EQ(out.fill.fg_argb, 0xFFFFFF00U);
+  EXPECT_EQ(out.fill.fg.rgb, 0xFFFFFF00U);
   EXPECT_EQ(out.border_engaged, 1);
   EXPECT_EQ(out.border.left.style, 1U);
-  EXPECT_EQ(out.border.left.color_argb, 0xFF000000U);
+  EXPECT_EQ(out.border.left.color.rgb, 0xFF000000U);
   EXPECT_EQ(out.num_fmt_engaged, 1);
   EXPECT_EQ(out.num_fmt_id, 164U);
   ASSERT_NE(out.num_fmt_code, nullptr);
@@ -53,10 +53,10 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
   dxf.font.name = "Arial";
   dxf.font.size = 12.0;
   dxf.font.bold = 1;
-  dxf.font.color_argb = 0xFFFF0000U;
+  dxf.font.color = RgbColor(0xFFFF0000U);
   dxf.fill_engaged = 1;
   dxf.fill.pattern = 1;
-  dxf.fill.fg_argb = 0xFFFFFF00U;
+  dxf.fill.fg = RgbColor(0xFFFFFF00U);
   dxf.num_fmt_engaged = 1;
   dxf.num_fmt_id = 164;
   dxf.num_fmt_code = "0.00";
@@ -76,10 +76,10 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
   EXPECT_EQ(out.font_engaged, 1);
   EXPECT_STREQ(out.font.name, "Arial");
   EXPECT_EQ(out.font.bold, 1);
-  EXPECT_EQ(out.font.color_argb, 0xFFFF0000U);
+  EXPECT_EQ(out.font.color.rgb, 0xFFFF0000U);
   EXPECT_EQ(out.fill_engaged, 1);
   EXPECT_EQ(out.fill.pattern, 1U);
-  EXPECT_EQ(out.fill.fg_argb, 0xFFFFFF00U);
+  EXPECT_EQ(out.fill.fg.rgb, 0xFFFFFF00U);
   EXPECT_EQ(out.num_fmt_engaged, 1);
   EXPECT_EQ(out.num_fmt_id, 164U);
   ASSERT_NE(out.num_fmt_code, nullptr);
@@ -94,7 +94,7 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   dxf.font_engaged = 1;
   dxf.font.name = "Calibri";
   dxf.font.size = 9.0;
-  dxf.font.color_argb = 0xFF112233U;
+  dxf.font.color = RgbColor(0xFF112233U);
   dxf.font.vert_align = 1;  // superscript
   std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
@@ -200,7 +200,7 @@ TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle
   leave_bold_alone.font_engaged = 1;
   leave_bold_alone.font.name = "";
   leave_bold_alone.font.size = 11.0;
-  leave_bold_alone.font.color_argb = 0xFF000000U;
+  leave_bold_alone.font.color = RgbColor(0xFF000000U);
   std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &leave_bold_alone, &index), 0);
   EXPECT_NE(index, 0U);
@@ -219,7 +219,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   dxf.font.size = 11.0;
   dxf.font.has_bold = 1;
   dxf.font.bold = 1;
-  dxf.font.color_argb = 0xFF000000U;
+  dxf.font.color = RgbColor(0xFF000000U);
   ASSERT_EQ(dxf.font.has_size, 0);
   std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
@@ -247,7 +247,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   fm_font_record_t cell{};
   cell.name = "Arial";
   cell.size = 14.0;
-  cell.color_argb = 0xFF000000U;
+  cell.color = RgbColor(0xFF000000U);
   std::size_t font_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &cell, &font_index), 0);
   fm_font_record_t font_out{};

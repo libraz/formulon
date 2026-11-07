@@ -25,7 +25,7 @@ TEST(FormulonCApiSpill, NotSpilledLiteralReturnsNotEngaged) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=42"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
-  fm_spill_info_t info{};
+  fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 0, 0, &info), 0);
   EXPECT_EQ(info.engaged, 0);
   EXPECT_EQ(info.rect.last_row, 0U);
@@ -36,12 +36,12 @@ TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
   // A1 = =SEQUENCE(2,3) spills 2 rows × 3 cols starting at A1.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,3)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   // Anchor lookup
-  fm_spill_info_t at_anchor{};
+  fm_spill_info_t at_anchor = FM_STRUCT_INIT(fm_spill_info_t);
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 0, 0, &at_anchor), 0);
   EXPECT_EQ(at_anchor.engaged, 1);
   EXPECT_EQ(at_anchor.rect.first_row, 0U);
@@ -50,7 +50,7 @@ TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
   EXPECT_EQ(at_anchor.rect.last_col - at_anchor.rect.first_col + 1U, 3U);
 
   // Phantom lookup (any cell within the region, e.g. B2 = row=1, col=1)
-  fm_spill_info_t at_phantom{};
+  fm_spill_info_t at_phantom = FM_STRUCT_INIT(fm_spill_info_t);
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 1, 1, &at_phantom), 0);
   EXPECT_EQ(at_phantom.engaged, 1);
   EXPECT_EQ(at_phantom.rect.first_row, 0U);
@@ -59,7 +59,7 @@ TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
   EXPECT_EQ(at_phantom.rect.last_col - at_phantom.rect.first_col + 1U, 3U);
 
   // Outside region (D1, beyond cols=3 from anchor col=0 → col=3 is just past)
-  fm_spill_info_t outside{};
+  fm_spill_info_t outside = FM_STRUCT_INIT(fm_spill_info_t);
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 0, 3, &outside), 0);
   EXPECT_EQ(outside.engaged, 0);
 }
@@ -67,11 +67,11 @@ TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
 TEST(FormulonCApiSpill, ExpandBlankPadSpillsZerosAndCountReadsTwelve) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=EXPAND({1,2;3,4},3,4,)"), 0);  // A1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
-  fm_spill_info_t info{};
+  fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 0, 0, &info), 0);
   ASSERT_EQ(info.engaged, 1);
   EXPECT_EQ(info.rect.last_row - info.rect.first_row + 1U, 3U);
@@ -101,7 +101,7 @@ TEST(FormulonCApiSpill, ExpandBlankPadSpillsZerosAndCountReadsTwelve) {
 TEST(FormulonCApiSpill, RawRangeSortSpillsBlankAsZeroAndCountReadsThree) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   // A1:A3 is {2, blank, 1}; the absent A2 is the interior raw-grid blank.
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=2"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, 0, "=1"), 0);
@@ -127,7 +127,7 @@ TEST(FormulonCApiSpill, CellEnumerationIncludesSpillPhantoms) {
   // formula text, and the cell count must bound the iterable index range.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 3, "=SEQUENCE(3,1)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
@@ -191,7 +191,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterMutation) {
 TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSpillMutation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
 
   // Warm the one-cell coordinate list before the spill exists.
@@ -376,13 +376,13 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesBothSlotsAfterSheetMove) 
 TEST(FormulonCApiSpill, OutOfRangeSheetReturnsSheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_spill_info_t info{};
+  fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
   fm_status_t rc = fm_sheet_get_spill_info(wb.handle, 99, 0, 0, &info);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST(FormulonCApiSpill, NullArgsReturnBindingNullPointer) {
-  fm_spill_info_t info{};
+  fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
   EXPECT_EQ(fm_sheet_get_spill_info(nullptr, 0, 0, 0, &info),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   WorkbookGuard wb;
@@ -394,7 +394,7 @@ TEST(FormulonCApiSpill, NullArgsReturnBindingNullPointer) {
 namespace {
 
 fm_spill_info_t SpillAt(fm_workbook_t* wb, uint32_t row, uint32_t col) {
-  fm_spill_info_t info{};
+  fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
   EXPECT_EQ(fm_sheet_get_spill_info(wb, 0, row, col, &info), 0);
   return info;
 }

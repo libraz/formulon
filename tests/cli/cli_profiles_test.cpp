@@ -69,9 +69,17 @@ TEST(FormulonCli, EvalEngineFailureExitsOneWithJson) {
   EXPECT_EQ(json.stdout_text, "");
 }
 
-TEST(FormulonCli, EvalHelpStatesThatUnparsableFormulasEvaluateToNameError) {
+TEST(FormulonCli, EvalHelpStatesThatUnparsableFormulasExit65) {
   const CliRun r = run_cli({"eval", "--help"});
   ASSERT_EQ(r.exit_code, 0);
-  EXPECT_NE(r.stdout_text.find("a formula that does not parse evaluates to #NAME?"), std::string::npos)
+  EXPECT_NE(r.stdout_text.find("exits 65"), std::string::npos) << r.stdout_text;
+  EXPECT_EQ(r.stdout_text.find("Malformed input is not an error"), std::string::npos) << r.stdout_text;
+}
+
+TEST(FormulonCli, ProfileHelpStatesThatFormulaTextStaysEnUsUnlessLocal) {
+  const CliRun r = run_cli({"eval", "--help"});
+  ASSERT_EQ(r.exit_code, 0);
+  EXPECT_NE(r.stdout_text.find("Excel profile for evaluation semantics; formula text stays en-US unless --local"),
+            std::string::npos)
       << r.stdout_text;
 }

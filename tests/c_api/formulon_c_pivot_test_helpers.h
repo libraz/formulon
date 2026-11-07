@@ -107,7 +107,7 @@ template <typename Enum>
 
 [[maybe_unused]] inline std::vector<fm_pivot_cell_t> CollectCells(fm_pivot_cells_t* handle) {
   const std::size_t n = count_of(fm_pivot_cells_get_cell_count, handle);
-  std::vector<fm_pivot_cell_t> out(n);
+  std::vector<fm_pivot_cell_t> out(n, FM_STRUCT_INIT(fm_pivot_cell_t));
   for (std::size_t i = 0; i < n; ++i) {
     EXPECT_EQ(fm_pivot_cells_get_cell_at(handle, i, &out[i]), 0);
   }
@@ -221,7 +221,7 @@ template <typename Enum>
     return st;
   }
   // Region (row) + items 0 and 1, plus the OOXML "default" subtotal item.
-  fm_pivot_field_spec_t region_spec{};
+  fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   region_spec.source_name = "Region";
   region_spec.custom_name = "";
   region_spec.axis = FM_PIVOT_AXIS_ROW;
@@ -241,7 +241,7 @@ template <typename Enum>
     return st;
   }
   // Amount (value-axis source field).
-  fm_pivot_field_spec_t amount_spec{};
+  fm_pivot_field_spec_t amount_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
@@ -259,7 +259,7 @@ template <typename Enum>
     return st;
   }
   // Data field: Sum of Amount.
-  fm_pivot_data_field_spec_t df_spec{};
+  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGG_SUM;

@@ -40,7 +40,7 @@ fm_status_t check_strength(std::int32_t strength, formulon::eval::CollationStren
 
 }  // namespace
 
-extern "C" fm_status_t fm_compare_text(const char* a, const char* b, const char* profile_id, int32_t strength,
+extern "C" fm_status_t fm_compare_text(const char* a, const char* b, int32_t strength, const char* profile_id,
                                        int32_t* out_order) {
   clear_last_error();
   if (a == nullptr || b == nullptr || profile_id == nullptr || out_order == nullptr) {
@@ -62,8 +62,9 @@ extern "C" fm_status_t fm_compare_text(const char* a, const char* b, const char*
   return 0;
 }
 
-extern "C" fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, const char* profile_id,
-                                                int32_t strength, uint32_t* out_class_ids, uint32_t* out_class_count) {
+extern "C" fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, int32_t strength,
+                                                const char* profile_id, uint32_t* out_class_ids,
+                                                uint32_t* out_class_count) {
   clear_last_error();
   if (profile_id == nullptr || out_class_count == nullptr ||
       (count > 0 && (values == nullptr || out_class_ids == nullptr))) {

@@ -20,6 +20,8 @@
 namespace {
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+constexpr fm_status_t kParserUnexpectedToken =
+    static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 constexpr fm_status_t kBindingUtf8EncodingError =
     static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingUtf8EncodingError);
@@ -49,7 +51,7 @@ struct SourceRow {
 constexpr SourceRow kRows[] = {{0, 0, 120, 4}, {0, 1, 90, 3}, {1, 0, 300, 5}, {1, 1, 50, 2}, {2, 0, 70, 6}};
 
 fm_pivot_data_field_spec_t DataSpec(std::size_t field, fm_pivot_aggregation_t aggregation) {
-  fm_pivot_data_field_spec_t spec{};
+  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   spec.name = nullptr;
   spec.field_index = static_cast<std::uint32_t>(field);
   spec.aggregation = aggregation;
@@ -61,7 +63,7 @@ fm_pivot_data_field_spec_t DataSpec(std::size_t field, fm_pivot_aggregation_t ag
 }
 
 void AddField(fm_workbook_t* wb, const char* name, fm_pivot_axis_t axis) {
-  fm_pivot_field_spec_t spec{};
+  fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   spec.source_name = name;
   spec.custom_name = "";
   spec.axis = axis;
@@ -76,7 +78,7 @@ void AddField(fm_workbook_t* wb, const char* name, fm_pivot_axis_t axis) {
 // alone. The pivot sits at A3, as in the Excel files.
 void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_cols = false) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb.handle, cache, 1, "A1:D6", "Sheet1", nullptr), 0);
@@ -143,7 +145,7 @@ void LoadFixture(const std::string& name, WorkbookGuard* out) {
   const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out->handle), 0) << fm_get_last_error_message();
   // The files were saved by a ja-JP Excel; the profile is not stored in them.
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(out->handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(out->handle, "win-365-ja_JP"), 0);
 }
 
 // One report cell, copied out of the layout handle.
@@ -280,7 +282,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldGridMatchesExcel) {
   const std::size_t data = AddDataField(wb.handle, price, FM_PIVOT_AGG_SUM);
   EXPECT_EQ(Pending(wb.handle), 0);
 
-  fm_pivot_data_field_spec_t read{};
+  fm_pivot_data_field_spec_t read = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0U, kPivot, data, &read), 0);
   EXPECT_EQ(std::string(read.name), SumOf("Price"));
 
@@ -321,7 +323,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldSavesExcelStrings) {
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(loaded.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   ExpectNumber(loaded.handle, kGrandTotal, SumOf("Price"), 31.5);
 }
 
@@ -347,7 +349,7 @@ TEST(FormulonCApiPivotCalc, DivisionByZeroShowsTheErrorCaption) {
     ExpectError(wb.handle, row, SumOf("Bad"), formulon::ErrorCode::Div0);
   }
 
-  fm_pivot_options_t options{};
+  fm_pivot_options_t options = FM_STRUCT_INIT(fm_pivot_options_t);
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, kPivot, &options), 0);
   options.show_error = 1;
   options.error_caption = "ERR";
@@ -393,7 +395,7 @@ TEST(FormulonCApiPivotCalc, DataFieldFunctionRenamesButKeepsTheSumBasedValues) {
   for (const auto& c : cases) {
     fm_pivot_data_field_spec_t spec = DataSpec(4U, c.aggregation);
     ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0U, kPivot, data, &spec), 0) << fm_get_last_error_message();
-    fm_pivot_data_field_spec_t read{};
+    fm_pivot_data_field_spec_t read = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
     ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0U, kPivot, data, &read), 0);
     EXPECT_STREQ(read.name, c.name);
     ExpectNumber(wb.handle, "North", c.name, 30.0);
@@ -475,7 +477,8 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldArgumentBoundaries) {
     EXPECT_EQ(add(name, "Qty"), kInvalidArgument) << name;
   }
   // Formulas that are not pivot formulas.
-  for (const char* formula : {"Amt+", "Nope*2", "A1*2", "SUM(A1:A3)", "Table1[Amt]", "[Book2]Sheet1!A1", "{1,2}",
+  EXPECT_EQ(add("P", "Amt+"), kParserUnexpectedToken);
+  for (const char* formula : {"Nope*2", "'Typo'*2", "A1*2", "SUM(A1:A3)", "Table1[Amt]", "[Book2]Sheet1!A1", "{1,2}",
                               "MAX(Amt)", "Region[North]"}) {
     EXPECT_EQ(add("P", formula), kInvalidArgument) << formula;
   }
@@ -530,7 +533,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemGridAndSavedStringsMatchExcel) {
   std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item_count(wb.handle, cache, &count), 0);
   EXPECT_EQ(count, 1U);
-  fm_pivot_calculated_item_t item{};
+  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 0U, &item), 0);
   EXPECT_EQ(item.field_index, kRegion);
   EXPECT_STREQ(item.name, "X");
@@ -557,7 +560,7 @@ TEST(FormulonCApiPivotCalc, ExcelSavedCalculatedItemLoadsWithTheSameGrid) {
   ExpectNumber(wb.handle, kGrandTotal, "Summe von Qty", 34.0);
   std::uint32_t cache = 0;
   ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0U, kPivot, &cache), 0);
-  fm_pivot_calculated_item_t item{};
+  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 0U, &item), 0);
   EXPECT_STREQ(item.name, "X");
   EXPECT_STREQ(item.formula, "=Region[North]+Region[South]");
@@ -655,7 +658,7 @@ TEST(FormulonCApiPivotCalc, LaterItemWinsAtAnIntersectionAndMoveSwapsIt) {
 
   // CI4c: PY first, RX last: RX's formula over the PY cells.
   ASSERT_EQ(fm_workbook_move_pivot_cache_calculated_item(wb.handle, cache, 1U, 0U), 0) << fm_get_last_error_message();
-  fm_pivot_calculated_item_t first{};
+  fm_pivot_calculated_item_t first = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 0U, &first), 0);
   EXPECT_STREQ(first.name, "PY");
   EXPECT_EQ(first.field_index, kProduct);
@@ -678,7 +681,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemFormulaAndRemoval) {
 
   ASSERT_EQ(fm_workbook_set_pivot_cache_calculated_item_formula(wb.handle, cache, 1U, "=X*3"), 0)
       << fm_get_last_error_message();
-  fm_pivot_calculated_item_t item{};
+  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 1U, &item), 0);
   // Stored as Excel stores it: a bare item name is qualified with its field.
   EXPECT_STREQ(item.formula, "=Region[X]*3");
@@ -759,15 +762,16 @@ TEST(FormulonCApiPivotCalc, CalculatedItemArgumentBoundaries) {
     EXPECT_EQ(add(name, "North"), kInvalidArgument) << name;
   }
   // Another field's items, a bare field name, cells and defined names.
-  for (const char* formula : {"Product[A]", "Amt", "A1", "North+", "Unknown"}) {
+  for (const char* formula : {"Product[A]", "Amt", "A1", "Unknown"}) {
     EXPECT_EQ(add("X", formula), kInvalidArgument) << formula;
   }
+  EXPECT_EQ(add("X", "North+"), kParserUnexpectedToken);
   EXPECT_EQ(add(Repeat("x", 256).c_str(), "North"), kInvalidArgument);
   EXPECT_EQ(add("X", ("North" + Repeat(" ", 8188)).c_str()), kInvalidArgument);
   EXPECT_EQ(add((Repeat(kEmoji, 127) + "a").c_str(), "North"), 0) << fm_get_last_error_message();
 
   // Index edges of the other entry points.
-  fm_pivot_calculated_item_t item{};
+  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
   for (const std::size_t index : {std::size_t{1}, std::size_t{0x80000000U}, static_cast<std::size_t>(0x100000000ULL)}) {
     EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, index, &item), FM_STATUS_INDEX_OUT_OF_RANGE)
         << index;

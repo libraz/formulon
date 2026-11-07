@@ -92,6 +92,11 @@ def _load_manifest(path: Path) -> Tuple[int, List[dict]]:
                 raise SystemExit(f"{path}: functions[{i}] missing required field `{field}`")
         if entry["body"] not in VALID_BODY_KINDS:
             raise SystemExit(f"{path}: functions[{i}].body={entry['body']!r} not in {sorted(VALID_BODY_KINDS)}")
+        reads_values = entry.get("reads_values", False)
+        if not isinstance(reads_values, bool):
+            raise SystemExit(f"{path}: functions[{i}].reads_values must be a boolean")
+        if reads_values and entry["body"] != "status_sizet_out_with_sheet":
+            raise SystemExit(f"{path}: functions[{i}].reads_values needs body status_sizet_out_with_sheet")
     return int(version), funcs
 
 
@@ -181,9 +186,13 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #         if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
 #           return rc;
 #         }
+#         [GATE]
 #         *out_count = ACCESSOR;
 #         return 0;
 #       }
+#
+# An entry with `reads_values: true` places at [GATE] the
+# `ensure_calculated(wb)` call that brings pending results up to date.
 
 
 _CAPI_BODY_STATUS_SIZE_OUT = """\
@@ -206,9 +215,15 @@ extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {{
     return rc;
   }}
-  *out_count = {accessor};
+{gate}  *out_count = {accessor};
   return 0;
 }}
+"""
+
+_CAPI_GATE = """\
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
 """
 
 _CAPI_BODY_TEMPLATES = {
@@ -243,6 +258,8 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
         out += "\n"
         out += "using formulon::c_api::parts::check_sheet_index;\n"
         out += "using formulon::c_api::parts::clear_last_error;\n"
+        if any(e.get("reads_values", False) for e in items):
+            out += "using formulon::c_api::parts::ensure_calculated;\n"
         out += "using formulon::c_api::parts::null_argument;\n"
         out += "\n"
         for e in sorted(items, key=lambda x: x["name"]):
@@ -254,7 +271,8 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
 
 def _emit_capi_entry(e: dict) -> str:
     tmpl = _select_body_template(e["body"], _CAPI_BODY_TEMPLATES)
-    return tmpl.format(name=e["name"], accessor=e["accessor"])
+    gate = _CAPI_GATE if e.get("reads_values", False) else ""
+    return tmpl.format(name=e["name"], accessor=e["accessor"], gate=gate)
 
 
 # ---------------------------------------------------------------------------

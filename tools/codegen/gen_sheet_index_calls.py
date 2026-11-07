@@ -99,7 +99,7 @@ class Poisoner:
         self.bodies[name] = []
         lines = []
         for field in record.fields:
-            if field.name in self.skipped.get(name, set()):
+            if field.name == "struct_size" or field.name in self.skipped.get(name, set()):
                 continue
             target = f"r.{field.name}"
             if field.ctype == "const char*":

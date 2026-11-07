@@ -43,16 +43,16 @@ static_assert(offsetof(fm_cell_xf_t, apply_number_format) == 88U, "fm_cell_xf_t.
 static_assert(offsetof(fm_cell_xf_t, quote_prefix) == 112U, "fm_cell_xf_t.quote_prefix offset changed");
 static_assert(offsetof(fm_cell_xf_t, has_protection) == 116U, "fm_cell_xf_t.has_protection offset changed");
 static_assert(offsetof(fm_cell_xf_t, hidden) == 124U, "fm_cell_xf_t.hidden offset changed");
-static_assert(sizeof(fm_dxf_record_t) == (sizeof(void*) == 4U ? 456U : 472U), "fm_dxf_record_t ABI layout changed");
-static_assert(offsetof(fm_dxf_record_t, num_fmt_code) == (sizeof(void*) == 4U ? 440U : 448U),
+static_assert(sizeof(fm_dxf_record_t) == (sizeof(void*) == 4U ? 448U : 464U), "fm_dxf_record_t ABI layout changed");
+static_assert(offsetof(fm_dxf_record_t, num_fmt_code) == (sizeof(void*) == 4U ? 432U : 440U),
               "fm_dxf_record_t.num_fmt_code offset changed");
-static_assert(offsetof(fm_dxf_record_t, alignment_xml) == (sizeof(void*) == 4U ? 444U : 456U),
+static_assert(offsetof(fm_dxf_record_t, alignment_xml) == (sizeof(void*) == 4U ? 436U : 448U),
               "fm_dxf_record_t.alignment_xml offset changed");
-static_assert(offsetof(fm_dxf_record_t, protection_xml) == (sizeof(void*) == 4U ? 448U : 464U),
+static_assert(offsetof(fm_dxf_record_t, protection_xml) == (sizeof(void*) == 4U ? 440U : 456U),
               "fm_dxf_record_t.protection_xml offset changed");
 static_assert(sizeof(fm_font_record_t) == 120U, "fm_font_record_t ABI layout changed");
-static_assert(sizeof(fm_fill_record_t) == (sizeof(void*) == 4U ? 120U : 128U), "fm_fill_record_t ABI layout changed");
-static_assert(sizeof(fm_gradient_stop_t) == 40U, "fm_gradient_stop_t ABI layout changed");
+static_assert(sizeof(fm_fill_record_t) == (sizeof(void*) == 4U ? 112U : 120U), "fm_fill_record_t ABI layout changed");
+static_assert(sizeof(fm_gradient_stop_t) == 32U, "fm_gradient_stop_t ABI layout changed");
 
 // `fm_styles_batch_t` is fifteen pointer-width slots: five (array, count,
 // out-indices) triples whose `size_t` counts are the same width as a pointer on
@@ -61,38 +61,47 @@ static_assert(sizeof(fm_gradient_stop_t) == 40U, "fm_gradient_stop_t ABI layout 
 // the other side of the boundary and every offset is pinned here instead. A
 // reorder within the struct moves no total size, which is exactly why the
 // per-member offsets and not just `sizeof` are recorded.
-static_assert(sizeof(fm_styles_batch_t) == 15U * sizeof(void*), "fm_styles_batch_t ABI layout changed");
+static_assert(sizeof(fm_styles_batch_t) == 16U * sizeof(void*), "fm_styles_batch_t ABI layout changed");
 static_assert(alignof(fm_styles_batch_t) == alignof(void*), "fm_styles_batch_t ABI alignment changed");
-static_assert(offsetof(fm_styles_batch_t, fonts) == 0U * sizeof(void*), "fm_styles_batch_t.fonts offset changed");
-static_assert(offsetof(fm_styles_batch_t, font_count) == 1U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, fonts) == 1U * sizeof(void*), "fm_styles_batch_t.fonts offset changed");
+static_assert(offsetof(fm_styles_batch_t, font_count) == 2U * sizeof(void*),
               "fm_styles_batch_t.font_count offset changed");
-static_assert(offsetof(fm_styles_batch_t, font_indices) == 2U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, font_indices) == 3U * sizeof(void*),
               "fm_styles_batch_t.font_indices offset changed");
-static_assert(offsetof(fm_styles_batch_t, fills) == 3U * sizeof(void*), "fm_styles_batch_t.fills offset changed");
-static_assert(offsetof(fm_styles_batch_t, fill_count) == 4U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, fills) == 4U * sizeof(void*), "fm_styles_batch_t.fills offset changed");
+static_assert(offsetof(fm_styles_batch_t, fill_count) == 5U * sizeof(void*),
               "fm_styles_batch_t.fill_count offset changed");
-static_assert(offsetof(fm_styles_batch_t, fill_indices) == 5U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, fill_indices) == 6U * sizeof(void*),
               "fm_styles_batch_t.fill_indices offset changed");
-static_assert(offsetof(fm_styles_batch_t, borders) == 6U * sizeof(void*), "fm_styles_batch_t.borders offset changed");
-static_assert(offsetof(fm_styles_batch_t, border_count) == 7U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, borders) == 7U * sizeof(void*), "fm_styles_batch_t.borders offset changed");
+static_assert(offsetof(fm_styles_batch_t, border_count) == 8U * sizeof(void*),
               "fm_styles_batch_t.border_count offset changed");
-static_assert(offsetof(fm_styles_batch_t, border_indices) == 8U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, border_indices) == 9U * sizeof(void*),
               "fm_styles_batch_t.border_indices offset changed");
-static_assert(offsetof(fm_styles_batch_t, cell_xfs) == 9U * sizeof(void*), "fm_styles_batch_t.cell_xfs offset changed");
-static_assert(offsetof(fm_styles_batch_t, cell_xf_count) == 10U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, cell_xfs) == 10U * sizeof(void*),
+              "fm_styles_batch_t.cell_xfs offset changed");
+static_assert(offsetof(fm_styles_batch_t, cell_xf_count) == 11U * sizeof(void*),
               "fm_styles_batch_t.cell_xf_count offset changed");
-static_assert(offsetof(fm_styles_batch_t, cell_xf_indices) == 11U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, cell_xf_indices) == 12U * sizeof(void*),
               "fm_styles_batch_t.cell_xf_indices offset changed");
-static_assert(offsetof(fm_styles_batch_t, num_fmt_codes) == 12U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, num_fmt_codes) == 13U * sizeof(void*),
               "fm_styles_batch_t.num_fmt_codes offset changed");
-static_assert(offsetof(fm_styles_batch_t, num_fmt_count) == 13U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, num_fmt_count) == 14U * sizeof(void*),
               "fm_styles_batch_t.num_fmt_count offset changed");
-static_assert(offsetof(fm_styles_batch_t, num_fmt_ids) == 14U * sizeof(void*),
+static_assert(offsetof(fm_styles_batch_t, num_fmt_ids) == 15U * sizeof(void*),
               "fm_styles_batch_t.num_fmt_ids offset changed");
 // The slots are pointer-width because `size_t` is, on every target this ABI
 // ships to. Pinned separately so a target where that stops holding fails here
 // rather than silently re-laying the struct out.
 static_assert(sizeof(size_t) == sizeof(void*), "fm_styles_batch_t assumes size_t is pointer-width");
+
+// A literal-RGB colour spec (`kind == kFmColorRgb`).
+[[maybe_unused]] inline fm_color_spec_t RgbColor(uint32_t argb) {
+  fm_color_spec_t spec{};
+  spec.kind = static_cast<uint8_t>(kFmColorRgb);
+  spec.rgb = argb;
+  return spec;
+}
 
 struct WorkbookGuard {
   fm_workbook_t* handle = nullptr;
@@ -168,7 +177,7 @@ struct BufferGuard {
   fm_font_record_t r{};
   r.name = "Arial";
   r.size = 12.0;
-  r.color_argb = 0xFF112233U;
+  r.color = RgbColor(0xFF112233U);
   r.bold = 1;
   r.italic = 0;
   r.strike = 0;
@@ -179,20 +188,20 @@ struct BufferGuard {
 [[maybe_unused]] inline fm_fill_record_t MakeRedFill() {
   fm_fill_record_t r{};
   r.pattern = 1;  // solid
-  r.fg_argb = 0xFFFF0000U;
-  r.bg_argb = 0xFF000000U;
+  r.fg = RgbColor(0xFFFF0000U);
+  r.bg = RgbColor(0xFF000000U);
   return r;
 }
 
 [[maybe_unused]] inline fm_border_record_t MakeThinBoxBorder() {
   fm_border_record_t r{};
   r.left.style = 1;  // thin
-  r.left.color_argb = 0xFF000000U;
+  r.left.color = RgbColor(0xFF000000U);
   r.right = r.left;
   r.top = r.left;
   r.bottom = r.left;
   r.diagonal.style = 0;
-  r.diagonal.color_argb = 0;
+  r.diagonal.color = fm_color_spec_t{};
   r.diagonal_up = 0;
   r.diagonal_down = 0;
   return r;

@@ -73,8 +73,8 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedByReadOnlyEntryPoints) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   for (const char* bad : kMalformed) {
     std::int32_t order = 99;
-    EXPECT_EQ(fm_compare_text(bad, "a", "win-365-en_US", FM_COLLATION_COMPARE, &order), kUtf8Error);
-    EXPECT_EQ(fm_compare_text("a", bad, "win-365-en_US", FM_COLLATION_COMPARE, &order), kUtf8Error);
+    EXPECT_EQ(fm_compare_text(bad, "a", FM_COLLATION_COMPARE, "win-365-en_US", &order), kUtf8Error);
+    EXPECT_EQ(fm_compare_text("a", bad, FM_COLLATION_COMPARE, "win-365-en_US", &order), kUtf8Error);
     EXPECT_EQ(order, 99);
     fm_value_t value{};
     EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, (std::string("=LEN(\"") + bad + "\")").c_str(), &value),
@@ -97,7 +97,7 @@ TEST(FormulonCApiUtf8Input, WellFormedMultibyteTextPasses) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, (std::string("=\"") + kValidMultibyte + "\"").c_str()), 0)
       << fm_get_last_error_message();
   std::int32_t order = 99;
-  ASSERT_EQ(fm_compare_text(kValidMultibyte, kValidMultibyte, "win-365-en_US", FM_COLLATION_COMPARE, &order), 0)
+  ASSERT_EQ(fm_compare_text(kValidMultibyte, kValidMultibyte, FM_COLLATION_COMPARE, "win-365-en_US", &order), 0)
       << fm_get_last_error_message();
   EXPECT_EQ(order, 0);
 

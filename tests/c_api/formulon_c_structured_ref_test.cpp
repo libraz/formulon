@@ -118,7 +118,7 @@ std::string Stored(const WorkbookGuard& wb, std::size_t sheet, std::uint32_t row
 }
 
 std::string ColumnName(const WorkbookGuard& wb, std::size_t column) {
-  fm_table_column_info_t info{};
+  fm_table_column_info_t info = FM_STRUCT_INIT(fm_table_column_info_t);
   EXPECT_EQ(fm_workbook_get_table_column(wb.handle, 0, column, &info), 0);
   return info.name != nullptr ? info.name : "";
 }
@@ -139,7 +139,7 @@ std::string Rename(const WorkbookGuard& wb, std::size_t column, const char* name
 std::string DefinedName(const WorkbookGuard& wb, const std::string& wanted) {
   const std::size_t count = count_of(fm_workbook_get_defined_name_count, wb.handle);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_defined_name_t entry{};
+    fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
     EXPECT_EQ(fm_workbook_get_defined_name_at(wb.handle, i, &entry), 0);
     if (wanted == entry.name) {
       return entry.formula;
@@ -212,7 +212,7 @@ TEST(FormulonCApiStructuredRef, ArrayFormulaReadsAtItsAnchor) {
                 record_arg(fm_cell_rect_t{kOutsideRow, kOutsideCol, kOutsideRow + 1 - 1U, kOutsideCol + 1 - 1U}),
                 "=SUM(tblSales[Qty])"),
             0);
-  fm_array_formula_t info{};
+  fm_array_formula_t info = FM_STRUCT_INIT(fm_array_formula_t);
   ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, kInsideRow, kInsideCol, &info), 0);
   ASSERT_EQ(info.engaged, 1);
   EXPECT_STREQ(info.formula, "=SUM([Qty])");
@@ -231,7 +231,7 @@ TEST(FormulonCApiStructuredRef, TotalsRowShowsTheInsideForm) {
   // A custom formula entered in the display form binds at the totals cell.
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 3, "custom", nullptr, "=SUM([Price])*2"), 0)
       << fm_get_last_error_message();
-  fm_table_column_info_t column{};
+  fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_workbook_get_table_column(wb.handle, 0, 3, &column), 0);
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Price])*2");
   EXPECT_EQ(wb.handle->workbook().tables()[0].columns[3].totals_row_formula, "SUM(tblSales[Price])*2");

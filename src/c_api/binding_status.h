@@ -216,12 +216,6 @@ inline const char* status_name(std::int32_t status) {
       return "BINDING_CALLBACK_EXCEPTION";
     case FM_STATUS_BINDING_WASM_INIT_FAILED:
       return "BINDING_WASM_INIT_FAILED";
-    case FM_STATUS_CLI_INVALID_ARGS:
-      return "CLI_INVALID_ARGS";
-    case FM_STATUS_CLI_FILE_NOT_FOUND:
-      return "CLI_FILE_NOT_FOUND";
-    case FM_STATUS_CLI_OUTPUT_FAILED:
-      return "CLI_OUTPUT_FAILED";
     case FM_STATUS_PIVOT_SOURCE_INVALID:
       return "PIVOT_SOURCE_INVALID";
     case FM_STATUS_PIVOT_FIELD_NOT_FOUND:

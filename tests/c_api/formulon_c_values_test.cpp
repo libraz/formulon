@@ -122,7 +122,7 @@ TEST(FormulonCApi, ParallelRecalcMatchesSerialOnWideIndependentDag) {
   }
 
   ASSERT_EQ(fm_workbook_recalc(serial.handle), 0);
-  fm_parallel_recalc_stats_t stats{};
+  fm_parallel_recalc_stats_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
   ASSERT_EQ(fm_workbook_recalc_parallel(parallel.handle, 4U, &stats), 0);
   EXPECT_EQ(stats.cells_evaluated, kRows);
   EXPECT_GE(stats.sccs_processed, kRows);
@@ -147,7 +147,7 @@ TEST(FormulonCApi, ParallelRecalcCountOneStartsNoWorkers) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, 0U, 0U, 7.0), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0U, 0U, 1U, "=A1+1"), 0);
 
-  fm_parallel_recalc_stats_t stats{};
+  fm_parallel_recalc_stats_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
   ASSERT_EQ(fm_workbook_recalc_parallel(wb.handle, 1U, &stats), 0);
   EXPECT_EQ(stats.cells_evaluated, 1U);
   EXPECT_EQ(stats.worker_threads_started, 0U);
@@ -161,8 +161,8 @@ TEST(FormulonCApi, ParallelRecalcInvalidAndNullPathsResetStats) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  const fm_parallel_recalc_stats_t poison = {1U, 2U, 3U, 4U, 5U, 6U, 7U};
-  const fm_parallel_recalc_stats_t zero{};
+  const fm_parallel_recalc_stats_t poison = {sizeof(fm_parallel_recalc_stats_t), 1U, 2U, 3U, 4U, 5U, 6U, 7U};
+  const fm_parallel_recalc_stats_t zero = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
   fm_parallel_recalc_stats_t stats = poison;
   EXPECT_EQ(fm_workbook_recalc_parallel(wb.handle, 9U, &stats),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));

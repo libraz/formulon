@@ -17,6 +17,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "print/print_area.h"
@@ -26,6 +27,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_column_span;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
@@ -111,6 +113,11 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
 extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet_index,
                                                  const fm_print_titles_t* titles) {
   clear_last_error();
+  if (titles != nullptr) {
+    if (auto rc = check_record_size(*titles); rc != 0) {
+      return rc;
+    }
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -160,6 +167,9 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -167,7 +177,9 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
   if (!titles) {
     return set_last_error(titles.error());
   }
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_print_titles_t{};
+  out->struct_size = struct_size;
   if (titles.value().repeat_rows.has_value()) {
     out->has_rows = 1;
     out->first_row = titles.value().repeat_rows->first;

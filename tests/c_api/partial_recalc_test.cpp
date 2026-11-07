@@ -58,6 +58,8 @@ extern "C" int32_t record_user_data(uint32_t /*iteration*/, double /*max_residua
 TEST(FormulonCApiPartialRecalc, RecomputesOnlyClosure) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  // Auto mode computes pending cells on read; only Manual leaves C1 pending.
+  ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_MANUAL), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 5.0), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1+1"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, "=A1*3"), 0);
@@ -98,6 +100,7 @@ TEST(FormulonCApiPartialRecalc, SheetIndexPastTheLastSheetRejected) {
   // from a UI leaves stale values on screen with nothing to notice.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_MANUAL), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 5.0), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1+1"), 0);
 

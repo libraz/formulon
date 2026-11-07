@@ -1,8 +1,9 @@
 //
 // C ABI - ad-hoc, side-effect-free formula evaluation. Bridges the
-// engine-side `eval::evaluate_formula_text` / `eval::evaluate_cf_formula`
-// drivers into the stable C ABI. Every entry point observes the workbook
-// read-only (the `const fm_workbook_t*` is the purity contract). Scalar
+// engine-side `eval::evaluate_parsed_formula` / `eval::evaluate_parsed_cf_formula`
+// drivers into the stable C ABI. A formula that does not parse fails before
+// evaluation. Every entry point observes the workbook read-only apart from
+// bringing pending results up to date (`ensure_calculated`). Scalar
 // results borrow the handle's read scratch for text; an array result is an
 // owned `fm_value_array_t`.
 
@@ -28,8 +29,10 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::parse_evaluated_formula;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
@@ -86,6 +89,16 @@ fm_status_t arena_exhausted_error() {
   return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted");
 }
 
+// Status of a parse that yielded no AST: running out of arena is not the
+// syntax failure `parse_evaluated_formula` recorded for it.
+fm_status_t parse_failure_status(const formulon::Arena& arena, fm_status_t rc) {
+  if (!arena.exhausted()) {
+    return rc;
+  }
+  clear_last_error();
+  return arena_exhausted_error();
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
@@ -104,8 +117,16 @@ extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t
   // the read scratch below.
   formulon::Arena arena = make_eval_arena();
   const std::string text = bind_adhoc_formula(wb, sheet_index, row, col, formula);
-  const formulon::Value v = formulon::eval::evaluate_formula_text(
-      wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
+  fm_status_t rc = 0;
+  const formulon::parser::AstNode* root = parse_evaluated_formula(formula, text, arena, &rc);
+  if (root == nullptr) {
+    return parse_failure_status(arena, rc);
+  }
+  if (rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  const formulon::Value v = formulon::eval::evaluate_parsed_formula(
+      wb->workbook(), wb->workbook().sheet(sheet_index), row, col, *root, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
     return arena_exhausted_error();
   }
@@ -132,8 +153,16 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
   // into the returned handle below.
   formulon::Arena arena = make_eval_arena();
   const std::string text = bind_adhoc_formula(wb, sheet_index, row, col, formula);
-  const formulon::Value v = formulon::eval::evaluate_formula_text_array(
-      wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
+  fm_status_t rc = 0;
+  const formulon::parser::AstNode* root = parse_evaluated_formula(formula, text, arena, &rc);
+  if (root == nullptr) {
+    return parse_failure_status(arena, rc);
+  }
+  if (rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  const formulon::Value v = formulon::eval::evaluate_parsed_formula_array(
+      wb->workbook(), wb->workbook().sheet(sheet_index), row, col, *root, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
     return arena_exhausted_error();
   }
@@ -222,9 +251,17 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, siz
   }
   formulon::Arena arena = make_eval_arena();
   const std::string text = bind_adhoc_formula(wb, sheet_index, row, col, formula);
-  const bool fired =
-      formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col, anchor_row,
-                                          anchor_col, text, arena, formulon::eval::default_registry());
+  fm_status_t rc = 0;
+  const formulon::parser::AstNode* root = parse_evaluated_formula(formula, text, arena, &rc);
+  if (root == nullptr) {
+    return parse_failure_status(arena, rc);
+  }
+  if (rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  const bool fired = formulon::eval::evaluate_parsed_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row,
+                                                                col, anchor_row, anchor_col, *root, arena,
+                                                                formulon::eval::default_registry());
   if (arena.exhausted()) {
     return arena_exhausted_error();
   }

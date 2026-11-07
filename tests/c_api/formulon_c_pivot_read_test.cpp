@@ -151,7 +151,7 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb.handle), 0) << fm_get_last_error_message();
   ASSERT_NE(wb.handle, nullptr);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
 
   std::size_t count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_count(wb.handle, 0, &count), 0);
@@ -176,7 +176,7 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   std::vector<fm_pivot_cell_t> cells;
   const std::size_t cell_count = count_of(fm_pivot_cells_get_cell_count, projected.handle);
   ASSERT_GT(cell_count, 0U);
-  cells.resize(cell_count);
+  cells.resize(cell_count, FM_STRUCT_INIT(fm_pivot_cell_t));
   for (std::size_t i = 0; i < cell_count; ++i) {
     ASSERT_EQ(fm_pivot_cells_get_cell_at(projected.handle, i, &cells[i]), 0);
   }
@@ -224,7 +224,7 @@ TEST(FormulonCApiPivot, InvalidPivotArgsReturnErrors) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(cells, nullptr);
 
-  fm_pivot_cell_t cell{};
+  fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
   EXPECT_EQ(fm_pivot_cells_get_cell_at(nullptr, 0, &cell),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
@@ -238,7 +238,7 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   const std::vector<std::uint8_t> package = BuildPivotWorkbookBytes();
   ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
 
-  fm_pivot_field_spec_t region_spec{};
+  fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   region_spec.source_name = "Region";
   region_spec.custom_name = "";
   region_spec.axis = FM_PIVOT_AXIS_COL;
@@ -286,7 +286,7 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   EXPECT_EQ(grand_rows, 1);
   EXPECT_EQ(grand_cols, 1);
 
-  fm_pivot_field_info_t region{};
+  fm_pivot_field_info_t region = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 1, 0, 0, &region), 0) << fm_get_last_error_message();
   EXPECT_STREQ(region.source_name, "Region");
   EXPECT_STREQ(region.custom_name, "Region");
@@ -301,7 +301,7 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   EXPECT_EQ(region.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
   EXPECT_EQ(region.group_base_index, -1);
 
-  fm_pivot_field_info_t amount{};
+  fm_pivot_field_info_t amount = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 1, 0, 1, &amount), 0);
   EXPECT_EQ(amount.axis, FM_PIVOT_AXIS_VALUE);
   EXPECT_EQ(amount.cache_field_index, 1);
@@ -310,14 +310,14 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 1, 0, 0, &item_count), 0);
   ASSERT_GE(item_count, 2U);
   for (std::size_t i = 0; i < 2U; ++i) {
-    fm_pivot_item_info_t item{};
+    fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
     ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 1, 0, 0, i, &item), 0);
     EXPECT_EQ(item.cache_index, static_cast<std::int32_t>(i));
     EXPECT_EQ(item.visible, 1);
     EXPECT_STREQ(item.name, i == 0 ? "North" : "South");
   }
 
-  fm_pivot_data_field_spec_t data_field{};
+  fm_pivot_data_field_spec_t data_field = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 1, 0, 0, &data_field), 0);
   EXPECT_STREQ(data_field.name, "Sum of Amount");
   EXPECT_EQ(data_field.field_index, 1U);

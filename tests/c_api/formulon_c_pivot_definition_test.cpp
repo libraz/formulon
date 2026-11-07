@@ -13,7 +13,7 @@ std::string DerivedDataFieldName(const char* profile_id, fm_pivot_aggregation_t 
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   EXPECT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
-  fm_pivot_data_field_spec_t spec{};
+  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   spec.name = name;
   spec.field_index = 1;  // "Amount"
   spec.aggregation = aggregation;
@@ -21,7 +21,7 @@ std::string DerivedDataFieldName(const char* profile_id, fm_pivot_aggregation_t 
   spec.show_as_base_item = -1;
   std::size_t idx = 99;
   EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot_index, &spec, &idx), 0) << fm_get_last_error_message();
-  fm_pivot_data_field_spec_t read{};
+  fm_pivot_data_field_spec_t read = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   EXPECT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, idx, &read), 0) << fm_get_last_error_message();
   return read.name != nullptr ? read.name : "";
 }
@@ -59,7 +59,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_DAYS,
                                                 FM_PIVOT_CALENDAR_GREGORIAN, 7U, 45000.0, 45100.0),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  fm_pivot_field_info_t region{};
+  fm_pivot_field_info_t region = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &region), 0) << fm_get_last_error_message();
   EXPECT_STREQ(region.source_name, "Region");
   EXPECT_EQ(region.axis, FM_PIVOT_AXIS_ROW);
@@ -84,7 +84,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_index, 0, &item_count), 0);
   ASSERT_EQ(item_count, 2U);
   ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
-  fm_pivot_item_info_t item{};
+  fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 0, &item), 0);
   EXPECT_STREQ(item.name, "North");
   EXPECT_EQ(item.cache_index, 0);
@@ -100,7 +100,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(item.visible, 1);
 
   // Data field written with a base field / item.
-  fm_pivot_data_field_spec_t written{};
+  fm_pivot_data_field_spec_t written = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   written.name = "Share";
   written.field_index = 1;
   written.aggregation = FM_PIVOT_AGG_AVERAGE;
@@ -109,7 +109,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   written.show_as_base_field = 0;
   written.show_as_base_item = 1;
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &written), 0) << fm_get_last_error_message();
-  fm_pivot_data_field_spec_t data_field{};
+  fm_pivot_data_field_spec_t data_field = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 0, &data_field), 0);
   EXPECT_STREQ(data_field.name, "Share");
   EXPECT_EQ(data_field.field_index, 1U);
@@ -119,7 +119,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(data_field.show_as_base_item, 1);
 
   // Field orders follow the setters.
-  fm_pivot_field_spec_t extra{};
+  fm_pivot_field_spec_t extra = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   extra.source_name = "Amount";
   extra.axis = FM_PIVOT_AXIS_COL;
   extra.subtotal_top = 1;
@@ -138,14 +138,14 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(order[1], 0U);
   ASSERT_EQ(fm_sheet_get_pivot_column_field_order(wb.handle, 0, pivot_index, &order, &order_count), 0);
   EXPECT_EQ(order_count, 0U);
-  fm_pivot_field_info_t moved{};
+  fm_pivot_field_info_t moved = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, extra_index, &moved), 0);
   EXPECT_EQ(moved.axis, FM_PIVOT_AXIS_ROW);
 
   // A field left out of an axis order sits on no axis.
   const std::uint32_t only_extra[] = {static_cast<std::uint32_t>(extra_index)};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_index, only_extra, 1U), 0);
-  fm_pivot_field_info_t dropped{};
+  fm_pivot_field_info_t dropped = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &dropped), 0);
   EXPECT_EQ(dropped.axis, -1);
 }
@@ -175,17 +175,17 @@ TEST(FormulonCApiPivot, ReadBackSurvivesSaveAndReload) {
   EXPECT_EQ(grand_rows, 1);
   EXPECT_EQ(grand_cols, 0);
 
-  fm_pivot_field_info_t region{};
+  fm_pivot_field_info_t region = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(reloaded.handle, 0, 0, 0, &region), 0);
   EXPECT_STREQ(region.source_name, "Region");
   EXPECT_EQ(region.axis, FM_PIVOT_AXIS_ROW);
   EXPECT_EQ(region.cache_field_index, 0);
-  fm_pivot_item_info_t item{};
+  fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_item(reloaded.handle, 0, 0, 0, 1, &item), 0);
   EXPECT_EQ(item.cache_index, 1);
   EXPECT_EQ(item.visible, 0);
 
-  fm_pivot_data_field_spec_t data_field{};
+  fm_pivot_data_field_spec_t data_field = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_data_field(reloaded.handle, 0, 0, 0, &data_field), 0);
   EXPECT_STREQ(data_field.name, "Sum of Amount");
   EXPECT_EQ(data_field.aggregation, FM_PIVOT_AGG_SUM);
@@ -214,15 +214,15 @@ TEST(FormulonCApiPivot, ReadBackRejectsBadArguments) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(out_cache, 7U);
 
-  fm_pivot_field_info_t field{};
+  fm_pivot_field_info_t field = FM_STRUCT_INIT(fm_pivot_field_info_t);
   EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 99, &field),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  fm_pivot_item_info_t item{};
+  fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
   EXPECT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 99, &item),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
-  fm_pivot_data_field_spec_t data_field{};
+  fm_pivot_data_field_spec_t data_field = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   EXPECT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 99, &data_field),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   const std::uint32_t* order = nullptr;
@@ -251,7 +251,7 @@ TEST(FormulonCApiPivot, DerivedDataFieldNameUsesTheFieldDisplayNameAndSetPath) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   // A renamed source field is named by its caption.
-  fm_pivot_field_spec_t caption{};
+  fm_pivot_field_spec_t caption = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   caption.source_name = "Amount";
   caption.custom_name = "Sales";
   caption.axis = FM_PIVOT_AXIS_VALUE;
@@ -259,13 +259,13 @@ TEST(FormulonCApiPivot, DerivedDataFieldNameUsesTheFieldDisplayNameAndSetPath) {
   std::size_t caption_index = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &caption, &caption_index), 0);
 
-  fm_pivot_data_field_spec_t spec{};
+  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   spec.field_index = static_cast<std::uint32_t>(caption_index);
   spec.aggregation = FM_PIVOT_AGG_MAX;
   spec.show_as_base_field = -1;
   spec.show_as_base_item = -1;
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &spec), 0) << fm_get_last_error_message();
-  fm_pivot_data_field_spec_t read{};
+  fm_pivot_data_field_spec_t read = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 0, &read), 0);
   EXPECT_STREQ(read.name, "Max of Sales");
 
@@ -305,7 +305,7 @@ void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t
 }
 
 fm_pivot_field_spec_t FieldSpec(const char* name, fm_pivot_axis_t axis) {
-  fm_pivot_field_spec_t spec{};
+  fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   spec.source_name = name;
   spec.axis = axis;
   spec.subtotal_top = 1;
@@ -334,12 +334,12 @@ TEST(FormulonCApiPivot, FieldAddBindsToTheCacheColumnByName) {
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot, &count), 0);
   EXPECT_EQ(count, 4U);
 
-  fm_pivot_field_info_t product{};
+  fm_pivot_field_info_t product = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot, 1, &product), 0);
   EXPECT_STREQ(product.source_name, "Product");
   EXPECT_EQ(product.axis, -1);
 
-  fm_pivot_data_field_spec_t df{};
+  fm_pivot_data_field_spec_t df = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df.name = "Total";
   df.field_index = static_cast<std::uint32_t>(sales);
   df.aggregation = FM_PIVOT_AGG_SUM;
@@ -394,14 +394,14 @@ TEST(FormulonCApiPivot, FieldAxisNoneTakesTheFieldOffTheReport) {
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &sales, &idx), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &qty, &idx), 0);
   for (const std::uint32_t field : {2U, 3U}) {
-    fm_pivot_data_field_spec_t df{};
+    fm_pivot_data_field_spec_t df = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
     df.field_index = field;
     df.aggregation = FM_PIVOT_AGG_SUM;
     df.show_as_base_field = -1;
     df.show_as_base_item = -1;
     ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, &df, &idx), 0) << fm_get_last_error_message();
   }
-  fm_pivot_filter_spec_t filter{};
+  fm_pivot_filter_spec_t filter = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   filter.axis = FM_PIVOT_AXIS_VALUE;
   filter.field_name = "Qty";
   filter.type = FM_PIVOT_FILTER_VALUE_GREATER_THAN;
@@ -414,16 +414,16 @@ TEST(FormulonCApiPivot, FieldAxisNoneTakesTheFieldOffTheReport) {
 
   // Taking Sales off removes its data field; Qty's data field and filter move down one.
   ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, 2, -1), 0) << fm_get_last_error_message();
-  fm_pivot_field_info_t info{};
+  fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot, 2, &info), 0);
   EXPECT_EQ(info.axis, -1);
   std::size_t data_fields = 0;
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0, pivot, &data_fields), 0);
   ASSERT_EQ(data_fields, 1U);
-  fm_pivot_data_field_spec_t remaining{};
+  fm_pivot_data_field_spec_t remaining = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot, 0, &remaining), 0);
   EXPECT_EQ(remaining.field_index, 3U);
-  fm_pivot_filter_spec_t kept{};
+  fm_pivot_filter_spec_t kept = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, pivot, 0, &kept), 0);
   EXPECT_EQ(kept.data_field_index, 0U);
 
@@ -519,7 +519,7 @@ void LoadWithPivotTail(fm_workbook_t* wb, const std::string& tail, WorkbookGuard
 }
 
 fm_pivot_style_info_t ReadStyleInfo(const fm_workbook_t* wb) {
-  fm_pivot_style_info_t style{};
+  fm_pivot_style_info_t style = FM_STRUCT_INIT(fm_pivot_style_info_t);
   EXPECT_EQ(fm_sheet_get_pivot_style_info(wb, 0, 0, &style), 0) << fm_get_last_error_message();
   return style;
 }
@@ -597,7 +597,7 @@ TEST(FormulonCApiPivot, StyleInfoRejectsBadArguments) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  fm_pivot_style_info_t style{};
+  fm_pivot_style_info_t style = FM_STRUCT_INIT(fm_pivot_style_info_t);
   EXPECT_EQ(fm_sheet_get_pivot_style_info(nullptr, 0, pivot_index, &style),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_get_pivot_style_info(wb.handle, 0, pivot_index, nullptr),

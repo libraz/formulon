@@ -12,6 +12,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/cell_range.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "cf/validation_eval.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -21,8 +22,10 @@
 using formulon::c_api::parts::cell_range_page_size;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_cursor;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::value_from_fm;
@@ -55,8 +58,14 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   formulon::Value value = formulon::Value::blank();
   if (auto rc = value_from_fm(*proposed, &value); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
   const formulon::Workbook& book = wb->workbook();
@@ -64,7 +73,9 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
   if (!outcome) {
     return set_last_error(outcome.error());
   }
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_validation_outcome_t{};
+  out->struct_size = struct_size;
   out->has_rule = outcome.value().has_rule ? 1 : 0;
   out->valid = outcome.value().valid ? 1 : 0;
   out->rule_index = outcome.value().rule_index;
@@ -83,6 +94,9 @@ extern "C" fm_status_t fm_sheet_get_invalid_cells(const fm_workbook_t* wb, size_
     return rc;
   }
   if (auto rc = check_cell_cursor(cursor); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
   const formulon::Workbook& book = wb->workbook();

@@ -8,6 +8,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "column_width.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -16,6 +17,7 @@
 using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_row;
@@ -45,6 +47,9 @@ extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t
   if (range == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_geometry_args(wb, sheet_index, mode); rc != 0) {
     return rc;
   }
@@ -62,7 +67,9 @@ extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t
     width += formulon::column_chars_to_points(chars, model);
   }
   const double y = formulon::print::row_offset_pt(sheet, first_row);
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_rect_pt_t{};
+  out->struct_size = struct_size;
   out->x = formulon::print::column_offset_pt(sheet, first_col, model);
   out->y = y;
   out->width = width;
@@ -107,11 +114,16 @@ extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t 
   if (out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_geometry_args(wb, sheet_index, mode); rc != 0) {
     return rc;
   }
   const formulon::ColumnWidthModel model = width_model_for(wb, mode);
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_width_model_t{};
+  out->struct_size = struct_size;
   out->points_per_char = model.points_per_char;
   out->padding_pt = model.padding_pt;
   out->normal_font_size = model.normal_font_size;

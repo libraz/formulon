@@ -90,9 +90,10 @@ TEST(FormulonCli, StdinDashDotSlashNamesAFileCalledDash) {
   EXPECT_EQ(r.stdout_text, "Sheet1\n");
 }
 
-TEST(FormulonCli, StdinDashIsNotAFormula) {
+TEST(FormulonCli, StdinDashIsTheFormulaSoAnEmptyStdinIsMalformed) {
   const CliRun r = run_cli({"eval", "-"}, false, false, "/dev/null");
-  EXPECT_EQ(r.exit_code, 64);
+  EXPECT_EQ(r.exit_code, 65) << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "");
 }
 
 TEST(FormulonCli, StdoutDashWritesTheWorkbookToStdout) {
@@ -135,7 +136,7 @@ TEST(FormulonCli, StdoutDashDotSlashNamesAFileCalledDash) {
   PathGuard out_guard(name);
   std::remove(name.c_str());
 
-  const CliRun r = run_cli({"recalc", "--quiet", in, "-o", "./-"});
+  const CliRun r = run_cli({"recalc", "--quiet", "--format", "xlsx", in, "-o", "./-"});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text, "");
   EXPECT_TRUE(loads_as_workbook(slurp_file(name)));

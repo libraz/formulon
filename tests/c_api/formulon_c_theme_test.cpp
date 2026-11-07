@@ -18,16 +18,15 @@
 
 namespace {
 
-static_assert(sizeof(fm_theme_colors_t) == 48U, "fm_theme_colors_t ABI layout changed");
-static_assert(sizeof(fm_theme_fonts_t) == 4U * sizeof(void*), "fm_theme_fonts_t ABI layout changed");
-static_assert(offsetof(fm_effective_style_t, font_argb) == 20U, "fm_effective_style_t.font_argb offset changed");
-static_assert(offsetof(fm_effective_style_t, border_argb) == 44U, "fm_effective_style_t.border_argb offset changed");
-static_assert(offsetof(fm_effective_style_t, border_resolution) == 64U,
+static_assert(sizeof(fm_theme_colors_t) == 52U, "fm_theme_colors_t ABI layout changed");
+static_assert(sizeof(fm_theme_fonts_t) == 5U * sizeof(void*), "fm_theme_fonts_t ABI layout changed");
+static_assert(offsetof(fm_effective_style_t, font_argb) == 24U, "fm_effective_style_t.font_argb offset changed");
+static_assert(offsetof(fm_effective_style_t, border_argb) == 48U, "fm_effective_style_t.border_argb offset changed");
+static_assert(offsetof(fm_effective_style_t, border_resolution) == 68U,
               "fm_effective_style_t.border_resolution offset changed");
-static_assert(offsetof(fm_effective_style_t, hidden) == 88U, "fm_effective_style_t.hidden offset changed");
-static_assert(offsetof(fm_effective_style_t, num_fmt_code) == (sizeof(void*) == 4U ? 92U : 96U),
-              "fm_effective_style_t.num_fmt_code offset changed");
-static_assert(sizeof(fm_effective_style_t) == (sizeof(void*) == 4U ? 96U : 104U),
+static_assert(offsetof(fm_effective_style_t, hidden) == 92U, "fm_effective_style_t.hidden offset changed");
+static_assert(offsetof(fm_effective_style_t, num_fmt_code) == 96U, "fm_effective_style_t.num_fmt_code offset changed");
+static_assert(sizeof(fm_effective_style_t) == (sizeof(void*) == 4U ? 100U : 104U),
               "fm_effective_style_t ABI layout changed");
 
 using Bytes = std::vector<std::uint8_t>;
@@ -124,7 +123,7 @@ Resolved Resolve(fm_workbook_t* wb, fm_color_spec_t spec, int32_t context) {
 }
 
 fm_theme_colors_t ReadColors(fm_workbook_t* wb, int32_t* source) {
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   EXPECT_EQ(fm_workbook_get_theme_colors(wb, &colors, source), 0);
   return colors;
 }
@@ -140,7 +139,7 @@ TEST(FormulonCApiTheme, WorkbookWithoutThemePartReportsDefaultTheme) {
   for (std::size_t i = 0; i < 12U; ++i) {
     EXPECT_EQ(colors.argb[i], kDefaultScheme[i]) << i;
   }
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   ASSERT_EQ(fm_workbook_get_theme_fonts(wb.handle, &fonts), 0);
   EXPECT_STREQ(fonts.major_latin, "Aptos Display");
   EXPECT_STREQ(fonts.major_east_asian, kYuGothicLight);
@@ -151,7 +150,7 @@ TEST(FormulonCApiTheme, WorkbookWithoutThemePartReportsDefaultTheme) {
 TEST(FormulonCApiTheme, SetColorsOnWorkbookWithoutThemeSurvivesSaveReload) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   for (uint32_t i = 0; i < 12U; ++i) {
     colors.argb[i] = 0xFF101010U + i;
   }
@@ -165,7 +164,7 @@ TEST(FormulonCApiTheme, SetColorsOnWorkbookWithoutThemeSurvivesSaveReload) {
   EXPECT_EQ(live.argb[4], 0xFF123456U);
   EXPECT_EQ(live.argb[11], 0xFF10101BU);
   // The generated part carries the default fonts.
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   ASSERT_EQ(fm_workbook_get_theme_fonts(wb.handle, &fonts), 0);
   EXPECT_STREQ(fonts.minor_latin, "Aptos Narrow");
 
@@ -182,7 +181,7 @@ TEST(FormulonCApiTheme, SetColorsOnWorkbookWithoutThemeSurvivesSaveReload) {
 TEST(FormulonCApiTheme, SetFontsSurvivesSaveReload) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   fonts.major_latin = "Georgia";
   fonts.major_east_asian = "MS Mincho";
   fonts.minor_latin = "Arial";
@@ -191,7 +190,7 @@ TEST(FormulonCApiTheme, SetFontsSurvivesSaveReload) {
 
   WorkbookGuard loaded;
   Load(Save(wb.handle), &loaded);
-  fm_theme_fonts_t reread{};
+  fm_theme_fonts_t reread = FM_STRUCT_INIT(fm_theme_fonts_t);
   ASSERT_EQ(fm_workbook_get_theme_fonts(loaded.handle, &reread), 0);
   EXPECT_STREQ(reread.major_latin, "Georgia");
   EXPECT_STREQ(reread.major_east_asian, "MS Mincho");
@@ -207,7 +206,7 @@ TEST(FormulonCApiTheme, SetFontsSurvivesSaveReload) {
 TEST(FormulonCApiTheme, UnparseablePartIsReportedAndRefusesEdits) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   for (uint32_t i = 0; i < 12U; ++i) {
     colors.argb[i] = 0xFF202020U;
   }
@@ -222,7 +221,7 @@ TEST(FormulonCApiTheme, UnparseablePartIsReportedAndRefusesEdits) {
   EXPECT_EQ(source, kSourceUnparseable);
   EXPECT_EQ(reread.argb[4], kDefaultScheme[4]);
   EXPECT_EQ(fm_workbook_set_theme_colors(loaded.handle, &colors), kXmlParse);
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   fonts.major_latin = fonts.major_east_asian = fonts.minor_latin = fonts.minor_east_asian = "Arial";
   EXPECT_EQ(fm_workbook_set_theme_fonts(loaded.handle, &fonts), kXmlParse);
 
@@ -235,12 +234,12 @@ TEST(FormulonCApiTheme, UnparseablePartIsReportedAndRefusesEdits) {
 TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   for (uint32_t i = 0; i < 12U; ++i) {
     colors.argb[i] = 0xFF303030U + i;
   }
   ASSERT_EQ(fm_workbook_set_theme_colors(wb.handle, &colors), 0);
-  fm_theme_fonts_t fonts{};
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   fonts.major_latin = fonts.major_east_asian = fonts.minor_latin = fonts.minor_east_asian = "Arial";
   ASSERT_EQ(fm_workbook_set_theme_fonts(wb.handle, &fonts), 0);
   int32_t source = -1;
@@ -255,7 +254,7 @@ TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
   for (std::size_t i = 0; i < 12U; ++i) {
     EXPECT_EQ(reset.argb[i], kDefaultScheme[i]) << i;
   }
-  fm_theme_fonts_t reset_fonts{};
+  fm_theme_fonts_t reset_fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   ASSERT_EQ(fm_workbook_get_theme_fonts(wb.handle, &reset_fonts), 0);
   EXPECT_STREQ(reset_fonts.minor_latin, "Aptos Narrow");
 
@@ -286,7 +285,7 @@ TEST(FormulonCApiTheme, ResetOnWorkbookWithoutThemeSucceeds) {
 TEST(FormulonCApiTheme, ResetRemovesUnparseablePartAndRejectsNull) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   ASSERT_EQ(fm_workbook_set_theme_colors(wb.handle, &colors), 0);
   const Bytes broken =
       ReplaceEntries(Save(wb.handle), {{"xl/theme/theme1.xml", "<a:theme>not a colour scheme</a:theme>"}});
@@ -306,8 +305,8 @@ TEST(FormulonCApiTheme, ResetRemovesUnparseablePartAndRejectsNull) {
 TEST(FormulonCApiTheme, ThemeAccessorsRejectNullArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_theme_colors_t colors{};
-  fm_theme_fonts_t fonts{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
+  fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
   int32_t source = 0;
   EXPECT_EQ(fm_workbook_get_theme_colors(nullptr, &colors, &source), kNullPointer);
   EXPECT_EQ(fm_workbook_get_theme_colors(wb.handle, nullptr, &source), kNullPointer);
@@ -345,7 +344,7 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
   EXPECT_EQ(got.argb, 0xFF000000U);
   EXPECT_EQ(got.resolution, FM_COLOR_RESOLUTION_INDEX_OUT_OF_RANGE);
 
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   for (std::size_t i = 0; i < 12U; ++i) {
     colors.argb[i] = kDefaultScheme[i];
   }
@@ -434,7 +433,6 @@ PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   fill.pattern = 1;
   fill.fg.kind = kFmColorRgb;
   fill.fg.rgb = 0xFFFF0000U;
-  fill.fg_argb = 0xFFFF0000U;
   std::size_t fill_index = 0;
   EXPECT_EQ(fm_workbook_add_fill(wb, &fill, &fill_index), 0);
   fm_border_record_t border{};
@@ -483,7 +481,7 @@ Bytes PrecedencePackage(fm_workbook_t* wb, const PrecedenceXfs& xfs) {
 }
 
 fm_effective_style_t Effective(fm_workbook_t* wb, uint32_t row, uint32_t col) {
-  fm_effective_style_t style{};
+  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   EXPECT_EQ(fm_sheet_get_effective_style(wb, 0, row, col, &style), 0);
   return style;
 }
@@ -554,7 +552,7 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   EXPECT_STREQ(style.num_fmt_code, "m/d/yy");
 
   // Once the theme part exists the same font colour is exact.
-  fm_theme_colors_t colors{};
+  fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   for (std::size_t i = 0; i < 12U; ++i) {
     colors.argb[i] = kDefaultScheme[i];
   }
@@ -571,7 +569,7 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
 TEST(FormulonCApiEffectiveStyle, RejectsInvalidArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_effective_style_t style{};
+  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   EXPECT_EQ(fm_sheet_get_effective_style(nullptr, 0, 0, 0, &style), kNullPointer);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 9, 0, 0, &style), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

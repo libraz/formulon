@@ -50,7 +50,7 @@ void emit_ooxml_read_diagnostics(std::ostream& err, std::string_view subcommand,
 }  // namespace
 
 fm_status_t emit_read_diagnostics(const fm_workbook_t* wb, std::ostream& err, std::string_view subcommand) {
-  fm_read_diagnostics_t diagnostics{};
+  fm_read_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_read_diagnostics_t);
   if (auto rc = fm_workbook_get_diagnostics(wb, &diagnostics); rc != 0) {
     return rc;
   }

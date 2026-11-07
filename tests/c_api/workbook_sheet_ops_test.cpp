@@ -186,7 +186,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
   ASSERT_EQ(SetDefinedName(wb.handle, "MyName", "=42"), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
 
-  fm_defined_name_t dn{};
+  fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.name, "MyName");
   EXPECT_STREQ(dn.formula, "=42");
@@ -207,7 +207,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
   ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "=2", 1), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
 
-  fm_defined_name_t dn{};
+  fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
   dn.local_sheet_id = -99;
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.name, "Rate");
@@ -243,7 +243,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
 
   const char* expected[] = {"=Sheet1!$A$1", "=Sheet1!$B$2", "=Sheet1!$C$3"};
-  fm_defined_name_t dn{};
+  fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 3U);
   for (std::size_t i = 0; i < 3U; ++i) {
     ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, i, &dn), 0);
@@ -289,7 +289,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameRejectsEmptyFormulaAndKeepsTheName) {
   EXPECT_EQ(SetDefinedName(wb.handle, "Fresh", ""),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
-  fm_defined_name_t dn{};
+  fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.formula, "=1");
 }
@@ -299,9 +299,9 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameRejectsEmptyFormulaAndKeepsTheName) {
 TEST(WorkbookSheetOpsCApi, SetDefinedNameReplacesCommentAndHidden) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_defined_name_input_t full{"Rate", "=0.1", -1, "Tax rate", 1};
+  const fm_defined_name_input_t full{sizeof(fm_defined_name_input_t), "Rate", "=0.1", -1, "Tax rate", 1};
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &full), 0);
-  fm_defined_name_t dn{};
+  fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.comment, "Tax rate");
   EXPECT_EQ(dn.hidden, 1);

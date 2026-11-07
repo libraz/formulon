@@ -13,18 +13,23 @@
 #include "auto_filter.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/slicer_edit.h"
+#include "eval/text_format/display_text.h"
 #include "io/auto_filter_xml.h"
 #include "io/xml_escape.h"
+#include "new_workbook_defaults.h"
 #include "parser/structured_ref_payload.h"
 #include "table.h"
 #include "utils/error.h"
 #include "utils/formula_text.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
@@ -35,7 +40,6 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_cell_rect;
@@ -245,6 +249,62 @@ std::string table_auto_filter_xml(std::string_view raw_xml, std::string_view ref
   return out;
 }
 
+/// Column names of a new table over `rect`. Without `column_names` each name is
+/// its header cell's displayed text, and a blank header (every column of a
+/// table without a header row) takes the first free `<column word>N`. With
+/// them, a non-blank header cell must already read as its column's name.
+/// `*blank` marks the header cells the names are to be written into.
+fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet_index, const fm_cell_rect_t& rect,
+                               bool header_row, const char* const* column_names, std::size_t column_count,
+                               std::vector<std::string>* names, std::vector<bool>* blank) {
+  const std::size_t width = static_cast<std::size_t>(rect.last_col - rect.first_col) + 1U;
+  if (column_names != nullptr) {
+    names->reserve(column_count);
+    for (std::size_t i = 0; i < column_count; ++i) {
+      names->push_back(text_or_empty(column_names[i]));
+    }
+  } else {
+    names->assign(width, std::string());
+  }
+  blank->assign(names->size(), false);
+  if (header_row) {
+    const formulon::Sheet& sheet = book.sheet(sheet_index);
+    for (std::size_t i = 0; i < names->size() && i < width; ++i) {
+      std::string header = formulon::text_format::format_cell_for_display(
+                               book, sheet, rect.first_row, rect.first_col + static_cast<std::uint32_t>(i))
+                               .text;
+      if (header.empty()) {
+        (*blank)[i] = true;
+      } else if (column_names == nullptr) {
+        (*names)[i] = std::move(header);
+      } else if ((*names)[i] != header) {
+        return invalid_argument("column name does not match its header cell",
+                                "column=" + std::to_string(i) + " name=" + (*names)[i] + " header=" + header);
+      }
+    }
+  }
+  if (column_names == nullptr) {
+    const std::string word = formulon::new_workbook_defaults(book.excel_profile().locale).column_word;
+    const auto taken = [names](const std::string& candidate) {
+      return std::any_of(names->begin(), names->end(), [&candidate](const std::string& existing) {
+        return formulon::strings::case_insensitive_eq(existing, candidate);
+      });
+    };
+    std::size_t suffix = 1;
+    for (std::string& column : *names) {
+      if (!column.empty()) {
+        continue;
+      }
+      std::string candidate;
+      do {
+        candidate = word + std::to_string(suffix++);
+      } while (taken(candidate));
+      column = std::move(candidate);
+    }
+  }
+  return 0;
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx, const char** out_name,
@@ -310,8 +370,7 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
                                              const char* style_name, int32_t header_row, int32_t totals_row,
                                              size_t* out_index) {
   clear_last_error();
-  if (wb == nullptr || rect == nullptr || name == nullptr || display_name == nullptr || column_names == nullptr ||
-      out_index == nullptr) {
+  if (wb == nullptr || rect == nullptr || name == nullptr || display_name == nullptr || out_index == nullptr) {
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
@@ -324,7 +383,7 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc = check_utf8({name, display_name, style_name}); rc != 0) {
     return rc;
   }
-  for (size_t i = 0; i < column_count; ++i) {
+  for (size_t i = 0; column_names != nullptr && i < column_count; ++i) {
     if (column_names[i] == nullptr) {
       continue;
     }
@@ -333,6 +392,13 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
     }
   }
   formulon::Workbook& book = wb->workbook();
+  std::vector<std::string> names;
+  std::vector<bool> blank_headers;
+  if (auto rc = table_column_names(book, sheet_index, *rect, header_row != 0, column_names, column_count, &names,
+                                   &blank_headers);
+      rc != 0) {
+    return rc;
+  }
   formulon::TableMetadata table;
   table.sheet_index = sheet_index;
   table.name = name;
@@ -340,18 +406,26 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
   table.ref = ref;
   table.header_row = header_row != 0;
   table.totals_row = totals_row != 0;
-  table.columns.reserve(column_count);
-  for (size_t i = 0; i < column_count; ++i) {
+  table.columns.reserve(names.size());
+  for (const std::string& column_name : names) {
     formulon::TableColumn column;
-    if (column_names[i] != nullptr) {
-      column.name = column_names[i];
-    }
+    column.name = column_name;
     table.columns.push_back(std::move(column));
   }
   table.style_info = default_style_info(text_or_empty(style_name));
   auto added = book.add_table(std::move(table));
   if (!added) {
     return formulon::c_api::parts::set_last_error(added.error());
+  }
+  for (std::size_t i = 0; i < blank_headers.size(); ++i) {
+    if (!blank_headers[i]) {
+      continue;
+    }
+    if (auto rc = finish_status(book.set_cell_text(sheet_index, rect->first_row,
+                                                   rect->first_col + static_cast<std::uint32_t>(i), names[i]));
+        rc != 0) {
+      return rc;
+    }
   }
   *out_index = added.value();
   return 0;
@@ -471,13 +545,18 @@ extern "C" fm_status_t fm_workbook_get_table_info(const fm_workbook_t* wb, size_
   if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const auto& tables = wb->workbook().tables();
   if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::TableMetadata& table = tables[index];
   const formulon::TableStyleInfo& style = table.style_info;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_table_info_t{};
+  out->struct_size = struct_size;
   out->style_name = style.name.c_str();
   out->style_present = style.present ? 1 : 0;
   out->show_first_column = style.present && style.show_first_column ? 1 : 0;
@@ -495,6 +574,9 @@ extern "C" fm_status_t fm_workbook_get_table_column(const fm_workbook_t* wb, siz
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
   }
   const auto& tables = wb->workbook().tables();
   if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
@@ -615,15 +697,10 @@ extern "C" fm_status_t fm_workbook_set_table_column_totals(fm_workbook_t* wb, si
     if (!rect) {
       return invalid_argument("table ref is not a range", "ref=" + tables[index].ref);
     }
-    // The stored text drops one '=', so a second one would not survive.
-    if (formula[0] == '=' && formula[1] == '=') {
-      return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken, "formula does not parse",
-                               "column=" + std::to_string(column));
-    }
     std::string bound;
     if (auto rc = check_entered_cell_formula(wb, tables[index].sheet_index, rect->last_row,
                                              rect->first_col + static_cast<std::uint32_t>(column), formula,
-                                             "column=" + std::to_string(column), &bound);
+                                             "field=formula", &bound);
         rc != 0) {
       return rc;
     }

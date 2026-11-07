@@ -10,14 +10,18 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "io/sparkline_groups.h"
 #include "utils/error.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::color_spec_from_c;
+using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
@@ -31,37 +35,17 @@ namespace {
 
 namespace io = formulon::io;
 
-fm_color_spec_t color_to_c(const formulon::ColorSpec& src) {
-  fm_color_spec_t out{};
-  out.tint = src.tint;
-  out.rgb = src.rgb;
-  out.theme = src.theme;
-  out.indexed = src.indexed;
-  out.kind = static_cast<uint8_t>(src.kind);
-  return out;
-}
-
-formulon::ColorSpec color_from_c(const fm_color_spec_t& src) {
-  formulon::ColorSpec out;
-  out.kind = static_cast<formulon::ColorSpec::Kind>(src.kind);
-  out.rgb = src.rgb;
-  out.theme = src.theme;
-  out.tint = src.tint;
-  out.indexed = src.indexed;
-  return out;
-}
-
 io::SparklineGroup group_from_c(const fm_sparkline_group_t& g) {
   io::SparklineGroup out;
   out.type = static_cast<io::SparklineType>(g.type);
-  out.color_series = color_from_c(g.color_series);
-  out.color_negative = color_from_c(g.color_negative);
-  out.color_axis = color_from_c(g.color_axis);
-  out.color_markers = color_from_c(g.color_markers);
-  out.color_first = color_from_c(g.color_first);
-  out.color_last = color_from_c(g.color_last);
-  out.color_high = color_from_c(g.color_high);
-  out.color_low = color_from_c(g.color_low);
+  out.color_series = color_spec_from_c(g.color_series);
+  out.color_negative = color_spec_from_c(g.color_negative);
+  out.color_axis = color_spec_from_c(g.color_axis);
+  out.color_markers = color_spec_from_c(g.color_markers);
+  out.color_first = color_spec_from_c(g.color_first);
+  out.color_last = color_spec_from_c(g.color_last);
+  out.color_high = color_spec_from_c(g.color_high);
+  out.color_low = color_spec_from_c(g.color_low);
   out.markers = g.markers != 0;
   out.high = g.high != 0;
   out.low = g.low != 0;
@@ -157,6 +141,9 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -167,15 +154,17 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   }
   const io::SparklineGroup& g = groups[idx];
   TextStore& store = fresh_read_scratch(wb);
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_sparkline_group_t{};
-  out->color_series = color_to_c(g.color_series);
-  out->color_negative = color_to_c(g.color_negative);
-  out->color_axis = color_to_c(g.color_axis);
-  out->color_markers = color_to_c(g.color_markers);
-  out->color_first = color_to_c(g.color_first);
-  out->color_last = color_to_c(g.color_last);
-  out->color_high = color_to_c(g.color_high);
-  out->color_low = color_to_c(g.color_low);
+  out->struct_size = struct_size;
+  out->color_series = color_spec_to_c(g.color_series);
+  out->color_negative = color_spec_to_c(g.color_negative);
+  out->color_axis = color_spec_to_c(g.color_axis);
+  out->color_markers = color_spec_to_c(g.color_markers);
+  out->color_first = color_spec_to_c(g.color_first);
+  out->color_last = color_spec_to_c(g.color_last);
+  out->color_high = color_spec_to_c(g.color_high);
+  out->color_low = color_spec_to_c(g.color_low);
   out->manual_min = g.manual_min;
   out->manual_max = g.manual_max;
   out->line_weight = g.line_weight;
@@ -230,6 +219,9 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
   if (group == nullptr || items == nullptr || out_index == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*group); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -256,6 +248,9 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
   clear_last_error();
   if (group == nullptr) {
     return null_argument("group");
+  }
+  if (auto rc = check_record_size(*group); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

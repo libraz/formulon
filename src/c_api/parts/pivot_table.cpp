@@ -17,6 +17,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "pivot/calculated.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
@@ -29,6 +30,7 @@
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
@@ -524,6 +526,9 @@ fm_status_t prepare_data_field(fm_workbook_t* wb, std::size_t sheet_index, std::
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(spec); rc != 0) {
+    return rc;
+  }
   if (auto rc = validate(spec); rc != 0) {
     return rc;
   }
@@ -715,7 +720,11 @@ extern "C" fm_status_t fm_sheet_get_pivot_style_info(const fm_workbook_t* wb, st
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   fm_pivot_style_info_t result{};
+  result.struct_size = out->struct_size;
   result.name = "";
   if (const auto& info = table->style_info(); info.has_value()) {
     result.name = info->name.c_str();
@@ -741,8 +750,12 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field(const fm_workbook_t* wb, st
   if (auto rc = check_index(data_field_index, table->data_fields().size(), "data_field_index"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const formulon::pivot::PivotDataField& df = table->data_fields()[data_field_index];
   fm_pivot_data_field_spec_t result{};
+  result.struct_size = out->struct_size;
   result.name = df.name.c_str();
   result.field_index = df.field_index;
   result.aggregation = static_cast<fm_pivot_aggregation_t>(df.aggregation);
@@ -803,8 +816,12 @@ extern "C" fm_status_t fm_sheet_get_pivot_options(const fm_workbook_t* wb, std::
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
   fm_pivot_options_t result{};
+  result.struct_size = out->struct_size;
   result.show_error = table->show_error() ? 1 : 0;
   result.error_caption = option_text(store, table->error_caption());
   result.show_missing = table->show_missing() ? 1 : 0;
@@ -842,6 +859,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*options); rc != 0) {
     return rc;
   }
   const fm_pivot_options_t& o = *options;

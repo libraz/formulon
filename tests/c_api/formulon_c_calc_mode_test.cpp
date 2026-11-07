@@ -141,15 +141,15 @@ TEST(FormulonCApiCalcMode, ExcelProfileIdDefaultsToWinEnAndRoundTrips) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   const char* profile = nullptr;
-  ASSERT_EQ(fm_workbook_get_excel_profile_id(wb.handle, &profile), 0);
+  ASSERT_EQ(fm_workbook_get_profile_id(wb.handle, &profile), 0);
   ASSERT_STREQ(profile, "win-365-en_US");
 
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
-  ASSERT_EQ(fm_workbook_get_excel_profile_id(wb.handle, &profile), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_get_profile_id(wb.handle, &profile), 0);
   EXPECT_STREQ(profile, "mac-365-ja_JP");
 
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
-  ASSERT_EQ(fm_workbook_get_excel_profile_id(wb.handle, &profile), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_get_profile_id(wb.handle, &profile), 0);
   EXPECT_STREQ(profile, "win-365-ja_JP");
 }
 
@@ -160,7 +160,7 @@ TEST(FormulonCApiCalcMode, ExcelProfileSwitchDirtiesProfileSensitiveFormulas) {
   // survives the switch unrecomputed.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=CODE(\"\xe9\xab\x99\")"), 0);  // U+9AD9
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
@@ -169,7 +169,7 @@ TEST(FormulonCApiCalcMode, ExcelProfileSwitchDirtiesProfileSensitiveFormulas) {
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
   ASSERT_DOUBLE_EQ(v.u.number, 38526.0);
 
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
@@ -180,13 +180,13 @@ TEST(FormulonCApiCalcMode, UnknownExcelProfileIdRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_status_t rc = fm_workbook_set_excel_profile_id(wb.handle, "linux-365-ja_JP");
+  fm_status_t rc = fm_workbook_set_profile_id(wb.handle, "linux-365-ja_JP");
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  rc = fm_workbook_set_excel_profile_id(wb.handle, "mac-365-pt_PT");
+  rc = fm_workbook_set_profile_id(wb.handle, "mac-365-pt_PT");
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   const char* profile = nullptr;
-  ASSERT_EQ(fm_workbook_get_excel_profile_id(wb.handle, &profile), 0);
+  ASSERT_EQ(fm_workbook_get_profile_id(wb.handle, &profile), 0);
   EXPECT_STREQ(profile, "win-365-en_US");
 }
 
@@ -204,13 +204,13 @@ TEST(FormulonCApiCalcMode, NullArgsReturnBindingNullPointer) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
   const char* profile = nullptr;
-  EXPECT_EQ(fm_workbook_get_excel_profile_id(nullptr, &profile),
+  EXPECT_EQ(fm_workbook_get_profile_id(nullptr, &profile),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_get_excel_profile_id(wb.handle, nullptr),
+  EXPECT_EQ(fm_workbook_get_profile_id(wb.handle, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_set_excel_profile_id(nullptr, "mac-365-ja_JP"),
+  EXPECT_EQ(fm_workbook_set_profile_id(nullptr, "mac-365-ja_JP"),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_set_excel_profile_id(wb.handle, nullptr),
+  EXPECT_EQ(fm_workbook_set_profile_id(wb.handle, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 

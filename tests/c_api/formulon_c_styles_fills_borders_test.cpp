@@ -47,8 +47,7 @@ TEST(FormulonCApiStyles, AddFillAndBorderDistinguishColourSpecifications) {
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, 1U, &themed_fill), 0);
   ASSERT_EQ(themed_fill.fg.kind, static_cast<uint8_t>(kFmColorTheme));
   fm_fill_record_t literal_fill = themed_fill;
-  literal_fill.fg = fm_color_spec_t{};
-  literal_fill.fg_argb = themed_fill.fg_argb;
+  literal_fill.fg = RgbColor(0xFF112233U);
   std::size_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &literal_fill, &fill_index), 0);
   EXPECT_NE(fill_index, 1U);
@@ -57,7 +56,7 @@ TEST(FormulonCApiStyles, AddFillAndBorderDistinguishColourSpecifications) {
   ASSERT_EQ(fm_workbook_get_border(wb.handle, 1U, &themed_border), 0);
   ASSERT_EQ(themed_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
   fm_border_record_t literal_border = themed_border;
-  literal_border.left.color = fm_color_spec_t{};
+  literal_border.left.color = RgbColor(0xFF112233U);
   std::size_t border_index = 0;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &literal_border, &border_index), 0);
   EXPECT_NE(border_index, 1U);
@@ -82,7 +81,6 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   automatic.kind = static_cast<uint8_t>(kFmColorAuto);
 
   fm_font_record_t font = MakeArial();
-  font.color_argb = 0x01020304U;  // compatibility fallback, not a render result
   font.color = theme;
   std::size_t font_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), 0);
@@ -91,14 +89,11 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   EXPECT_EQ(got_font.color.kind, static_cast<uint8_t>(kFmColorTheme));
   EXPECT_EQ(got_font.color.theme, 3U);
   EXPECT_DOUBLE_EQ(got_font.color.tint, 0.5);
-  EXPECT_EQ(got_font.color_argb, 0x01020304U);
   std::size_t font_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &got_font, &font_again), 0);
   EXPECT_EQ(font_again, font_index);
 
   fm_fill_record_t fill = MakeRedFill();
-  fill.fg_argb = 0x05060708U;
-  fill.bg_argb = 0x090A0B0CU;
   fill.fg = indexed;
   fill.bg = automatic;
   std::size_t fill_index = 0xFFFFFFFFU;
@@ -188,7 +183,7 @@ TEST(FormulonCApiStyles, AddFillDistinctReturnsNewIndex) {
   std::size_t b = 0;
   fm_fill_record_t red = MakeRedFill();
   fm_fill_record_t blue = MakeRedFill();
-  blue.fg_argb = 0xFF0000FFU;
+  blue.fg = RgbColor(0xFF0000FFU);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &red, &a), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &blue, &b), 0);
   EXPECT_NE(a, b);
@@ -211,7 +206,7 @@ TEST(FormulonCApiStyles, AddFillGrowsTable) {
   fm_fill_record_t out{};
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.pattern, 1U);
-  EXPECT_EQ(out.fg_argb, 0xFFFF0000U);
+  EXPECT_EQ(out.fg.rgb, 0xFFFF0000U);
 }
 
 TEST(FormulonCApiStyles, AddBorderDedupReturnsExistingIndex) {

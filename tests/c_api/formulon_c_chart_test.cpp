@@ -28,40 +28,40 @@ using Bytes = std::vector<std::uint8_t>;
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_chart_title_t) == (kWasm32 ? 12U : 24U), "fm_chart_title_t ABI layout changed");
-static_assert(sizeof(fm_chart_fill_t) == 16U, "fm_chart_fill_t ABI layout changed");
-static_assert(sizeof(fm_chart_line_t) == 40U, "fm_chart_line_t ABI layout changed");
-static_assert(sizeof(fm_chart_marker_t) == 72U, "fm_chart_marker_t ABI layout changed");
-static_assert(sizeof(fm_chart_labels_t) == (kWasm32 ? 64U : 80U), "fm_chart_labels_t ABI layout changed");
-static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 176U : 208U), "fm_chart_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_plot_t) == (kWasm32 ? 64U : 72U), "fm_chart_plot_t ABI layout changed");
+static_assert(sizeof(fm_chart_fill_t) == 32U, "fm_chart_fill_t ABI layout changed");
+static_assert(sizeof(fm_chart_line_t) == 56U, "fm_chart_line_t ABI layout changed");
+static_assert(sizeof(fm_chart_marker_t) == 104U, "fm_chart_marker_t ABI layout changed");
+static_assert(sizeof(fm_chart_labels_t) == (kWasm32 ? 80U : 96U), "fm_chart_labels_t ABI layout changed");
+static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 184U : 208U), "fm_chart_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_plot_t) == (kWasm32 ? 68U : 72U), "fm_chart_plot_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_source_t) == (kWasm32 ? 12U : 24U), "fm_chart_data_source_t ABI layout changed");
-static_assert(sizeof(fm_chart_series_t) == (kWasm32 ? 304U : 392U), "fm_chart_series_t ABI layout changed");
-static_assert(sizeof(fm_chart_literal_t) == 24U, "fm_chart_literal_t ABI layout changed");
-static_assert(sizeof(fm_chart_point_t) == 144U, "fm_chart_point_t ABI layout changed");
-static_assert(sizeof(fm_chart_axis_t) == (kWasm32 ? 112U : 136U), "fm_chart_axis_t ABI layout changed");
-static_assert(sizeof(fm_chart_preview_overrides_t) == (kWasm32 ? 52U : 56U),
+static_assert(sizeof(fm_chart_series_t) == (kWasm32 ? 384U : 472U), "fm_chart_series_t ABI layout changed");
+static_assert(sizeof(fm_chart_literal_t) == 32U, "fm_chart_literal_t ABI layout changed");
+static_assert(sizeof(fm_chart_point_t) == 208U, "fm_chart_point_t ABI layout changed");
+static_assert(sizeof(fm_chart_axis_t) == (kWasm32 ? 120U : 144U), "fm_chart_axis_t ABI layout changed");
+static_assert(sizeof(fm_chart_preview_overrides_t) == (kWasm32 ? 56U : 64U),
               "fm_chart_preview_overrides_t ABI layout changed");
-static_assert(sizeof(fm_chart_data_info_t) == (kWasm32 ? 44U : 56U), "fm_chart_data_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 56U : 72U), "fm_chart_data_series_t ABI layout changed");
-static_assert(offsetof(fm_chart_data_series_t, x_format_code) == (kWasm32 ? 52U : 64U),
+static_assert(sizeof(fm_chart_data_info_t) == (kWasm32 ? 48U : 64U), "fm_chart_data_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 60U : 80U), "fm_chart_data_series_t ABI layout changed");
+static_assert(offsetof(fm_chart_data_series_t, x_format_code) == (kWasm32 ? 56U : 72U),
               "fm_chart_data_series_t x_format_code offset changed");
-static_assert(sizeof(fm_chart_data_points_t) == (kWasm32 ? 20U : 40U), "fm_chart_data_points_t ABI layout changed");
+static_assert(sizeof(fm_chart_data_points_t) == (kWasm32 ? 24U : 40U), "fm_chart_data_points_t ABI layout changed");
 static_assert(sizeof(fm_sheet_rect_t) == 20U, "fm_sheet_rect_t ABI layout changed");
-static_assert(sizeof(fm_chart_axis_title_text_t) == (kWasm32 ? 8U : 16U),
+static_assert(sizeof(fm_chart_axis_title_text_t) == (kWasm32 ? 12U : 16U),
               "fm_chart_axis_title_text_t ABI layout changed");
-static_assert(sizeof(fm_chart_unresolved_t) == (kWasm32 ? 12U : 24U), "fm_chart_unresolved_t ABI layout changed");
-static_assert(sizeof(fm_chart_insert_t) == (kWasm32 ? 88U : 112U), "fm_chart_insert_t ABI layout changed");
-static_assert(sizeof(fm_chart_fill_patch_t) == 24U, "fm_chart_fill_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_line_patch_t) == 56U, "fm_chart_line_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_marker_patch_t) == 104U, "fm_chart_marker_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_labels_patch_t) == (kWasm32 ? 88U : 104U), "fm_chart_labels_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_series_patch_t) == (kWasm32 ? 320U : 360U), "fm_chart_series_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_point_patch_t) == 192U, "fm_chart_point_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_plot_patch_t) == 40U, "fm_chart_plot_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_unresolved_t) == (kWasm32 ? 16U : 24U), "fm_chart_unresolved_t ABI layout changed");
+static_assert(sizeof(fm_chart_insert_t) == (kWasm32 ? 96U : 120U), "fm_chart_insert_t ABI layout changed");
+static_assert(sizeof(fm_chart_fill_patch_t) == 48U, "fm_chart_fill_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_line_patch_t) == 80U, "fm_chart_line_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_marker_patch_t) == 152U, "fm_chart_marker_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_labels_patch_t) == (kWasm32 ? 112U : 128U), "fm_chart_labels_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_series_patch_t) == (kWasm32 ? 448U : 488U), "fm_chart_series_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_point_patch_t) == 296U, "fm_chart_point_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_plot_patch_t) == 44U, "fm_chart_plot_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_patch_t) == (kWasm32 ? 136U : 168U), "fm_chart_axis_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_legend_patch_t) == (kWasm32 ? 20U : 32U), "fm_chart_legend_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_display_patch_t) == 24U, "fm_chart_display_patch_t ABI layout changed");
-static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 172U : 204U), "fm_chart_info_t na_as_blank offset");
+static_assert(sizeof(fm_chart_legend_patch_t) == (kWasm32 ? 24U : 32U), "fm_chart_legend_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_display_patch_t) == 28U, "fm_chart_display_patch_t ABI layout changed");
+static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 180U : 204U), "fm_chart_info_t na_as_blank offset");
 
 constexpr fm_status_t Code(formulon::FormulonErrorCode c) {
   return static_cast<fm_status_t>(c);
@@ -101,7 +101,7 @@ void FillGrid(fm_workbook_t* wb) {
 }
 
 fm_chart_insert_t Options(int32_t kind, const char* source) {
-  fm_chart_insert_t o{};
+  fm_chart_insert_t o = FM_STRUCT_INIT(fm_chart_insert_t);
   o.kind = kind;
   o.source = source;
   o.legend = FM_CHART_LEGEND_RIGHT;
@@ -119,13 +119,13 @@ std::uint32_t Insert(fm_workbook_t* wb, int32_t kind, const char* source = "Shee
 }
 
 fm_chart_info_t Info(const ChartGuard& chart) {
-  fm_chart_info_t info{};
+  fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
   EXPECT_EQ(fm_chart_get_info(chart.handle, &info), 0);
   return info;
 }
 
 fm_chart_series_t Series(const ChartGuard& chart, size_t plot, size_t series) {
-  fm_chart_series_t s{};
+  fm_chart_series_t s = FM_STRUCT_INIT(fm_chart_series_t);
   EXPECT_EQ(fm_chart_get_series_at(chart.handle, plot, series, &s), 0) << fm_get_last_error_message();
   return s;
 }
@@ -134,7 +134,7 @@ fm_chart_series_t Series(const ChartGuard& chart, size_t plot, size_t series) {
 uint32_t AxisId(const ChartGuard& chart, int32_t kind) {
   const fm_chart_info_t info = Info(chart);
   for (size_t i = 0; i < info.axis_count; ++i) {
-    fm_chart_axis_t a{};
+    fm_chart_axis_t a = FM_STRUCT_INIT(fm_chart_axis_t);
     EXPECT_EQ(fm_chart_get_axis_at(chart.handle, i, &a), 0);
     if (a.kind == kind) {
       return a.id;
@@ -147,7 +147,7 @@ uint32_t AxisId(const ChartGuard& chart, int32_t kind) {
 fm_chart_axis_t Axis(const ChartGuard& chart, uint32_t id) {
   const fm_chart_info_t info = Info(chart);
   for (size_t i = 0; i < info.axis_count; ++i) {
-    fm_chart_axis_t a{};
+    fm_chart_axis_t a = FM_STRUCT_INIT(fm_chart_axis_t);
     EXPECT_EQ(fm_chart_get_axis_at(chart.handle, i, &a), 0);
     if (a.id == id) {
       return a;
@@ -172,7 +172,7 @@ void OpenData(fm_workbook_t* wb, uint32_t id, DataGuard* out) {
 }
 
 std::vector<double> Values(const DataGuard& data, size_t series) {
-  fm_chart_data_points_t p{};
+  fm_chart_data_points_t p = FM_STRUCT_INIT(fm_chart_data_points_t);
   EXPECT_EQ(fm_chart_data_get_series_points(data.handle, series, &p), 0);
   return std::vector<double>(p.values, p.values + p.count);
 }
@@ -261,7 +261,7 @@ TEST(FormulonCApiChart, AbsentElementsReadAsMinusOne) {
   ChartGuard chart;
   Open(wb.handle, id, &chart);
   EXPECT_EQ(Info(chart).legend_position, -1);
-  fm_chart_plot_t plot{};
+  fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   EXPECT_EQ(plot.type, FM_CHART_PLOT_LINE);
   EXPECT_EQ(plot.bar_dir, -1);
@@ -276,7 +276,7 @@ TEST(FormulonCApiChart, InsertAndReadThroughAccessors) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 0, &obj), 0);
   EXPECT_EQ(obj.kind, FM_DRAWING_OBJECT_CHART);
   EXPECT_EQ(obj.object_id, id);
@@ -301,7 +301,7 @@ TEST(FormulonCApiChart, InsertAndReadThroughAccessors) {
   EXPECT_EQ(info.source_header_row, 1);
   EXPECT_EQ(info.source_header_column, 1);
 
-  fm_chart_plot_t plot{};
+  fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   EXPECT_EQ(plot.type, FM_CHART_PLOT_BAR);
   EXPECT_EQ(plot.bar_dir, FM_CHART_BAR_DIR_COL);
@@ -348,7 +348,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
 
   DataGuard data;
   OpenData(wb.handle, id, &data);
-  fm_chart_data_info_t info{};
+  fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
   ASSERT_EQ(fm_chart_data_get_info(data.handle, &info), 0);
   EXPECT_EQ(info.is_xy, 0);
   EXPECT_EQ(info.point_count, 4U);
@@ -366,7 +366,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_TRUE(std::isnan(value));
   EXPECT_EQ(fm_chart_data_get_category_at(data.handle, 4, &label, &value), FM_STATUS_INDEX_OUT_OF_RANGE);
 
-  fm_chart_data_series_t s{};
+  fm_chart_data_series_t s = FM_STRUCT_INIT(fm_chart_data_series_t);
   ASSERT_EQ(fm_chart_data_get_series_at(data.handle, 0, &s), 0);
   EXPECT_EQ(s.plot_index, 0U);
   EXPECT_EQ(s.idx, 0U);
@@ -379,7 +379,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_VALUES], 1U);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_X], 0U);
 
-  fm_chart_data_points_t points{};
+  fm_chart_data_points_t points = FM_STRUCT_INIT(fm_chart_data_points_t);
   ASSERT_EQ(fm_chart_data_get_series_points(data.handle, 0, &points), 0);
   ASSERT_EQ(points.count, 4U);
   EXPECT_EQ(points.x, nullptr);
@@ -401,13 +401,13 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 3, FM_CHART_ROLE_VALUES, 0, &r), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   // A reference to an empty sheet range, then a value change, reach the next open.
-  fm_chart_series_patch_t patch{};
+  fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.values = "Sheet1!$H$2:$H$5";
   ASSERT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 2, &patch), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 42.0), 0);
   OpenData(wb.handle, id, &data);
   EXPECT_EQ(Values(data, 0)[0], 42.0);
-  fm_chart_data_points_t gaps{};
+  fm_chart_data_points_t gaps = FM_STRUCT_INIT(fm_chart_data_points_t);
   ASSERT_EQ(fm_chart_data_get_series_points(data.handle, 2, &gaps), 0);
   ASSERT_EQ(gaps.count, 4U);
   EXPECT_NE(gaps.states[0], FM_CHART_POINT_VALUE);
@@ -417,7 +417,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   ASSERT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, &title), 0) << fm_get_last_error_message();
   ChartGuard chart;
   Open(wb.handle, id, &chart);
-  fm_chart_axis_patch_t axis{};
+  fm_chart_axis_patch_t axis = FM_STRUCT_INIT(fm_chart_axis_patch_t);
   axis.title_op = FM_CHART_PATCH_SET;
   axis.title = fm_chart_title_t{FM_CHART_TITLE_TEXT, "Amount", nullptr};
   const uint32_t val_id = AxisId(chart, FM_CHART_AXIS_VALUE);
@@ -427,12 +427,12 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   ASSERT_NE(info.title_text, nullptr);
   EXPECT_STREQ(info.title_text, "S1");
   ASSERT_EQ(info.axis_title_count, 1U);
-  fm_chart_axis_title_text_t at{};
+  fm_chart_axis_title_text_t at = FM_STRUCT_INIT(fm_chart_axis_title_text_t);
   ASSERT_EQ(fm_chart_data_get_axis_title_at(data.handle, 0, &at), 0);
   EXPECT_EQ(at.axis_id, val_id);
   EXPECT_STREQ(at.text, "Amount");
   EXPECT_EQ(fm_chart_data_get_axis_title_at(data.handle, 1, &at), FM_STATUS_INDEX_OUT_OF_RANGE);
-  fm_chart_unresolved_t un{};
+  fm_chart_unresolved_t un = FM_STRUCT_INIT(fm_chart_unresolved_t);
   EXPECT_EQ(fm_chart_data_get_unresolved_at(data.handle, 0, &un), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
@@ -448,14 +448,14 @@ TEST(FormulonCApiChart, ScatterDataCarriesX) {
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_SCATTER, "Sheet1!$F$1:$G$5");
   DataGuard data;
   OpenData(wb.handle, id, &data);
-  fm_chart_data_info_t info{};
+  fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
   ASSERT_EQ(fm_chart_data_get_info(data.handle, &info), 0);
   EXPECT_EQ(info.is_xy, 1);
   ASSERT_EQ(info.series_count, 1U);
-  fm_chart_data_points_t p{};
+  fm_chart_data_points_t p = FM_STRUCT_INIT(fm_chart_data_points_t);
   ASSERT_EQ(fm_chart_data_get_series_points(data.handle, 0, &p), 0);
   ASSERT_EQ(p.count, 4U);
-  fm_chart_data_series_t ds{};
+  fm_chart_data_series_t ds = FM_STRUCT_INIT(fm_chart_data_series_t);
   ASSERT_EQ(fm_chart_data_get_series_at(data.handle, 0, &ds), 0);
   EXPECT_STREQ(ds.x_format_code, "0.00");
   EXPECT_STREQ(ds.format_code, "General");
@@ -465,7 +465,7 @@ TEST(FormulonCApiChart, ScatterDataCarriesX) {
 
   ChartGuard chart;
   Open(wb.handle, id, &chart);
-  fm_chart_plot_t plot{};
+  fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   EXPECT_EQ(plot.type, FM_CHART_PLOT_SCATTER);
   const fm_chart_series_t s = Series(chart, 0, 0);
@@ -480,7 +480,7 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_COLUMN);
   ChartGuard chart;
 
-  fm_chart_plot_patch_t plot{};
+  fm_chart_plot_patch_t plot = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   plot.gap_width_op = FM_CHART_PATCH_SET;
   plot.gap_width = 50;
   plot.overlap_op = FM_CHART_PATCH_SET;
@@ -489,7 +489,7 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   plot.vary_colors = 1;
   ASSERT_EQ(fm_sheet_set_chart_plot(wb.handle, 0, id, 0, &plot), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
-  fm_chart_plot_t p{};
+  fm_chart_plot_t p = FM_STRUCT_INIT(fm_chart_plot_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &p), 0);
   EXPECT_EQ(p.has_gap_width, 1);
   EXPECT_EQ(p.gap_width, 50U);
@@ -497,12 +497,12 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   EXPECT_EQ(p.overlap, -10);
   EXPECT_EQ(p.vary_colors, FM_CHART_TRI_TRUE);
   // A plot field cannot be cleared, and an unknown op is rejected.
-  fm_chart_plot_patch_t bad{};
+  fm_chart_plot_patch_t bad = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   bad.gap_width_op = FM_CHART_PATCH_CLEAR;
   EXPECT_EQ(fm_sheet_set_chart_plot(wb.handle, 0, id, 0, &bad), kInvalidArgument);
   bad.gap_width_op = 3;
   EXPECT_EQ(fm_sheet_set_chart_plot(wb.handle, 0, id, 0, &bad), kInvalidArgument);
-  bad = fm_chart_plot_patch_t{};
+  bad = fm_chart_plot_patch_t FM_STRUCT_INIT(fm_chart_plot_patch_t);
   bad.hole_size_op = FM_CHART_PATCH_SET;
   bad.hole_size = 50;
   EXPECT_EQ(fm_sheet_set_chart_plot(wb.handle, 0, id, 0, &bad), kInvalidArgument);  // not a doughnut
@@ -526,7 +526,8 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   EXPECT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, nullptr), kBindingNullPointer);
 
   const uint32_t hidden[] = {1U};
-  fm_chart_legend_patch_t legend{FM_CHART_LEGEND_BOTTOM, 1, FM_CHART_PATCH_SET, hidden, 1};
+  fm_chart_legend_patch_t legend{
+      sizeof(fm_chart_legend_patch_t), FM_CHART_LEGEND_BOTTOM, 1, FM_CHART_PATCH_SET, hidden, 1};
   ASSERT_EQ(fm_sheet_set_chart_legend(wb.handle, 0, id, &legend), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
   fm_chart_info_t info = Info(chart);
@@ -537,25 +538,33 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   ASSERT_EQ(fm_chart_get_legend_hidden_at(chart.handle, 0, &entry), 0);
   EXPECT_EQ(entry, 1U);
   EXPECT_EQ(fm_chart_get_legend_hidden_at(chart.handle, 1, &entry), FM_STATUS_INDEX_OUT_OF_RANGE);
-  legend = fm_chart_legend_patch_t{FM_CHART_LEGEND_NONE, 0, FM_CHART_PATCH_KEEP, nullptr, 0};
+  legend = fm_chart_legend_patch_t{
+      sizeof(fm_chart_legend_patch_t), FM_CHART_LEGEND_NONE, 0, FM_CHART_PATCH_KEEP, nullptr, 0};
   ASSERT_EQ(fm_sheet_set_chart_legend(wb.handle, 0, id, &legend), 0);
   Open(wb.handle, id, &chart);
   EXPECT_EQ(Info(chart).legend_position, FM_CHART_LEGEND_NONE);
   legend.hidden_series_count = 2;
   EXPECT_EQ(fm_sheet_set_chart_legend(wb.handle, 0, id, &legend), kBindingNullPointer);
-  legend = fm_chart_legend_patch_t{6, 0, FM_CHART_PATCH_KEEP, nullptr, 0};
+  legend = fm_chart_legend_patch_t{sizeof(fm_chart_legend_patch_t), 6, 0, FM_CHART_PATCH_KEEP, nullptr, 0};
   EXPECT_EQ(fm_sheet_set_chart_legend(wb.handle, 0, id, &legend), kInvalidArgument);
 
-  fm_chart_display_patch_t display{
-      FM_CHART_PATCH_SET, FM_CHART_BLANKS_ZERO, FM_CHART_PATCH_SET, 0, FM_CHART_PATCH_KEEP, 0};
+  fm_chart_display_patch_t display{sizeof(fm_chart_display_patch_t),
+                                   FM_CHART_PATCH_SET,
+                                   FM_CHART_BLANKS_ZERO,
+                                   FM_CHART_PATCH_SET,
+                                   0,
+                                   FM_CHART_PATCH_KEEP,
+                                   0};
   ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &display), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
   info = Info(chart);
   EXPECT_EQ(info.blanks_as, FM_CHART_BLANKS_ZERO);
   EXPECT_EQ(info.plot_vis_only, FM_CHART_TRI_FALSE);
-  display = fm_chart_display_patch_t{FM_CHART_PATCH_SET, 4, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0};
+  display = fm_chart_display_patch_t{
+      sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_SET, 4, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0};
   EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &display), kInvalidArgument);
-  display = fm_chart_display_patch_t{FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 3, FM_CHART_PATCH_KEEP, 0};
+  display = fm_chart_display_patch_t{
+      sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 3, FM_CHART_PATCH_KEEP, 0};
   EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &display), kInvalidArgument);
 
   ASSERT_EQ(fm_sheet_set_chart_type(wb.handle, 0, id, 0, FM_CHART_INSERT_LINE, FM_CHART_GROUPING_STANDARD), 0)
@@ -580,7 +589,7 @@ TEST(FormulonCApiChart, AxisEdits) {
   const uint32_t val_id = AxisId(chart, FM_CHART_AXIS_VALUE);
   const uint32_t cat_id = AxisId(chart, FM_CHART_AXIS_CATEGORY);
 
-  fm_chart_axis_patch_t patch{};
+  fm_chart_axis_patch_t patch = FM_STRUCT_INIT(fm_chart_axis_patch_t);
   patch.min_op = FM_CHART_PATCH_SET;
   patch.min = 0.0;
   patch.max_op = FM_CHART_PATCH_SET;
@@ -616,7 +625,7 @@ TEST(FormulonCApiChart, AxisEdits) {
   ASSERT_NE(a.tick_label_pos, nullptr);
   EXPECT_STREQ(a.tick_label_pos, "low");
 
-  patch = fm_chart_axis_patch_t{};
+  patch = fm_chart_axis_patch_t FM_STRUCT_INIT(fm_chart_axis_patch_t);
   patch.max_op = FM_CHART_PATCH_CLEAR;
   patch.log_base_op = FM_CHART_PATCH_CLEAR;
   patch.title_op = FM_CHART_PATCH_CLEAR;
@@ -631,7 +640,7 @@ TEST(FormulonCApiChart, AxisEdits) {
   EXPECT_EQ(a.deleted, 1);
 
   // The axis title takes the chart title kinds; AUTO leaves the text to the viewer.
-  patch = fm_chart_axis_patch_t{};
+  patch = fm_chart_axis_patch_t FM_STRUCT_INIT(fm_chart_axis_patch_t);
   patch.title_op = FM_CHART_PATCH_SET;
   patch.title = fm_chart_title_t{FM_CHART_TITLE_AUTO, nullptr, nullptr};
   ASSERT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), 0) << fm_get_last_error_message();
@@ -641,7 +650,7 @@ TEST(FormulonCApiChart, AxisEdits) {
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
 
   // The crossing point is written on the cross axis.
-  patch = fm_chart_axis_patch_t{};
+  patch = fm_chart_axis_patch_t FM_STRUCT_INIT(fm_chart_axis_patch_t);
   patch.crosses_op = FM_CHART_PATCH_SET;
   patch.crosses = FM_CHART_CROSSES_AT;
   patch.crosses_at = 3.0;
@@ -652,10 +661,10 @@ TEST(FormulonCApiChart, AxisEdits) {
   EXPECT_TRUE((crossing.crosses == FM_CHART_CROSSES_AT && crossing.crosses_at == 3.0) ||
               (crossed.crosses == FM_CHART_CROSSES_AT && crossed.crosses_at == 3.0));
 
-  patch = fm_chart_axis_patch_t{};
+  patch = fm_chart_axis_patch_t FM_STRUCT_INIT(fm_chart_axis_patch_t);
   patch.visible_op = FM_CHART_PATCH_CLEAR;
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
-  patch = fm_chart_axis_patch_t{};
+  patch = fm_chart_axis_patch_t FM_STRUCT_INIT(fm_chart_axis_patch_t);
   patch.crosses_op = FM_CHART_PATCH_SET;
   patch.crosses = FM_CHART_CROSSES_AT + 1;
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
@@ -664,7 +673,7 @@ TEST(FormulonCApiChart, AxisEdits) {
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
   patch.crosses = FM_CHART_CROSSES_ABSENT;
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), 0) << fm_get_last_error_message();
-  const fm_chart_axis_patch_t keep{};
+  const fm_chart_axis_patch_t keep = FM_STRUCT_INIT(fm_chart_axis_patch_t);
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, 999, &keep), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, nullptr), kBindingNullPointer);
 }
@@ -676,9 +685,10 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_LINE);
   ChartGuard chart;
 
-  fm_chart_series_patch_t patch{};
+  fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.line.color_op = FM_CHART_PATCH_SET;
-  patch.line.color = 0xFFFF0000U;
+  patch.line.color.kind = kFmColorRgb;
+  patch.line.color.rgb = 0xFFFF0000U;
   patch.line.transparency_op = FM_CHART_PATCH_SET;
   patch.line.transparency_pct = 25.0;
   patch.line.width_op = FM_CHART_PATCH_SET;
@@ -691,7 +701,8 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   patch.marker.size_op = FM_CHART_PATCH_SET;
   patch.marker.size = 7.0;
   patch.marker.fill.color_op = FM_CHART_PATCH_SET;
-  patch.marker.fill.color = 0xFF00FF00U;
+  patch.marker.fill.color.kind = kFmColorRgb;
+  patch.marker.fill.color.rgb = 0xFF00FF00U;
   patch.smooth_op = FM_CHART_PATCH_SET;
   patch.smooth = 1;
   patch.labels_op = FM_CHART_PATCH_SET;
@@ -702,14 +713,15 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   patch.labels.font_size_op = FM_CHART_PATCH_SET;
   patch.labels.font_size_pt = 9.0;
   patch.labels.font_color_op = FM_CHART_PATCH_SET;
-  patch.labels.font_color = 0xFF0000FFU;
+  patch.labels.font_color.kind = kFmColorRgb;
+  patch.labels.font_color.rgb = 0xFF0000FFU;
   patch.labels.separator_op = FM_CHART_PATCH_SET;
   patch.labels.separator = "; ";
   ASSERT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
   fm_chart_series_t s = Series(chart, 0, 0);
-  EXPECT_EQ(s.line.has_color, 1);
-  EXPECT_EQ(s.line.color, 0xFFFF0000U);
+  EXPECT_EQ(s.line.color.kind, kFmColorRgb);
+  EXPECT_EQ(s.line.color.rgb, 0xFFFF0000U);
   EXPECT_DOUBLE_EQ(s.line.transparency_pct, 25.0);
   EXPECT_DOUBLE_EQ(s.line.width_pt, 2.0);
   EXPECT_EQ(s.line.has_dash, 1);
@@ -718,11 +730,12 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_EQ(s.marker.symbol, FM_CHART_MARKER_CIRCLE);
   EXPECT_EQ(s.marker.has_size, 1);
   EXPECT_EQ(s.marker.size, 7U);
-  EXPECT_EQ(s.marker.fill.color, 0xFF00FF00U);
+  EXPECT_EQ(s.marker.fill.color.kind, kFmColorRgb);
+  EXPECT_EQ(s.marker.fill.color.rgb, 0xFF00FF00U);
   EXPECT_EQ(s.smooth, FM_CHART_TRI_TRUE);
 
   // A picture marker is read-only: it needs a blip a patch cannot carry.
-  fm_chart_series_patch_t picture{};
+  fm_chart_series_patch_t picture = FM_STRUCT_INIT(fm_chart_series_patch_t);
   picture.marker_op = FM_CHART_PATCH_SET;
   picture.marker.symbol_op = FM_CHART_PATCH_SET;
   picture.marker.symbol = FM_CHART_MARKER_PICTURE;
@@ -733,12 +746,12 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   ASSERT_NE(s.labels.number_format, nullptr);
   EXPECT_STREQ(s.labels.number_format, "0");
   EXPECT_DOUBLE_EQ(s.labels.font_size_pt, 9.0);
-  EXPECT_EQ(s.labels.has_font_color, 1);
-  EXPECT_EQ(s.labels.font_color, 0xFF0000FFU);
+  EXPECT_EQ(s.labels.font_color.kind, kFmColorRgb);
+  EXPECT_EQ(s.labels.font_color.rgb, 0xFF0000FFU);
   ASSERT_NE(s.labels.separator, nullptr);
   EXPECT_STREQ(s.labels.separator, "; ");
 
-  patch = fm_chart_series_patch_t{};
+  patch = fm_chart_series_patch_t FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.marker_op = FM_CHART_PATCH_CLEAR;
   patch.labels_op = FM_CHART_PATCH_CLEAR;
   patch.line.width_op = FM_CHART_PATCH_CLEAR;
@@ -751,15 +764,15 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_TRUE(std::isnan(s.line.width_pt));
   EXPECT_EQ(s.name.kind, FM_CHART_SOURCE_NONE);
 
-  patch = fm_chart_series_patch_t{};
+  patch = fm_chart_series_patch_t FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.values = "";
   EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &patch), kInvalidArgument);
   patch.values = "Nope!$B$2:$B$5";
   EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &patch), kInvalidReference);
-  patch = fm_chart_series_patch_t{};
+  patch = fm_chart_series_patch_t FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.smooth_op = FM_CHART_PATCH_CLEAR;
   EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &patch), kInvalidArgument);
-  patch = fm_chart_series_patch_t{};
+  patch = fm_chart_series_patch_t FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.marker_op = FM_CHART_PATCH_SET;
   patch.marker.symbol_op = FM_CHART_PATCH_SET;
   patch.marker.symbol = FM_CHART_MARKER_PICTURE + 1;
@@ -770,9 +783,10 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 9, &patch), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, nullptr), kBindingNullPointer);
 
-  fm_chart_point_patch_t point{};
+  fm_chart_point_patch_t point = FM_STRUCT_INIT(fm_chart_point_patch_t);
   point.line.color_op = FM_CHART_PATCH_SET;
-  point.line.color = 0xFF123456U;
+  point.line.color.kind = kFmColorRgb;
+  point.line.color.rgb = 0xFF123456U;
   point.marker_op = FM_CHART_PATCH_SET;
   point.marker.symbol_op = FM_CHART_PATCH_SET;
   point.marker.symbol = FM_CHART_MARKER_TRIANGLE;
@@ -780,14 +794,15 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   Open(wb.handle, id, &chart);
   s = Series(chart, 0, 1);
   ASSERT_EQ(s.point_count, 1U);
-  fm_chart_point_t pt{};
+  fm_chart_point_t pt = FM_STRUCT_INIT(fm_chart_point_t);
   ASSERT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 0, &pt), 0);
   EXPECT_EQ(pt.idx, 2U);
-  EXPECT_EQ(pt.line.color, 0xFF123456U);
+  EXPECT_EQ(pt.line.color.kind, kFmColorRgb);
+  EXPECT_EQ(pt.line.color.rgb, 0xFF123456U);
   ASSERT_EQ(pt.has_marker, 1);
   EXPECT_EQ(pt.marker.symbol, FM_CHART_MARKER_TRIANGLE);
   EXPECT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 1, &pt), FM_STATUS_INDEX_OUT_OF_RANGE);
-  const fm_chart_point_patch_t empty{};
+  const fm_chart_point_patch_t empty = FM_STRUCT_INIT(fm_chart_point_patch_t);
   ASSERT_EQ(fm_sheet_set_chart_point(wb.handle, 0, id, 0, 1, 2, &empty), 0);
   Open(wb.handle, id, &chart);
   EXPECT_EQ(Series(chart, 0, 1).point_count, 0U);
@@ -804,7 +819,7 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_EQ(cat, 2U);
   EXPECT_EQ(fm_chart_get_hidden_category_at(chart.handle, 2, &cat), FM_STATUS_INDEX_OUT_OF_RANGE);
   bool filtered = false;
-  fm_chart_plot_t plot{};
+  fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   for (size_t i = 0; i < plot.series_count; ++i) {
     const fm_chart_series_t each = Series(chart, 0, i);
@@ -816,7 +831,7 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_EQ(Info(chart).hidden_category_count, 0U);
   EXPECT_EQ(fm_sheet_set_chart_filter(wb.handle, 0, id, nullptr, 1, nullptr, 0), kBindingNullPointer);
 
-  patch = fm_chart_series_patch_t{};
+  patch = fm_chart_series_patch_t FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.name = "Sheet1!$D$1";
   patch.categories = "Sheet1!$A$2:$A$5";
   patch.values = "Sheet1!$D$2:$D$5";
@@ -859,15 +874,15 @@ TEST(FormulonCApiChart, PreviewLeavesWorkbookUnchanged) {
   FillGrid(wb.handle);
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_COLUMN);
 
-  fm_chart_preview_overrides_t o{};
+  fm_chart_preview_overrides_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   o.source = "Sheet1!$A$1:$B$5";
   DataGuard preview;
   ASSERT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, id, &o, &preview.handle), 0) << fm_get_last_error_message();
-  fm_chart_data_info_t info{};
+  fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
   ASSERT_EQ(fm_chart_data_get_info(preview.handle, &info), 0);
   EXPECT_EQ(info.series_count, 1U);
 
-  o = fm_chart_preview_overrides_t{};
+  o = fm_chart_preview_overrides_t FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   o.direction_op = FM_CHART_PATCH_SET;
   o.direction = FM_CHART_DIRECTION_ROWS;
   DataGuard rows;
@@ -887,7 +902,7 @@ TEST(FormulonCApiChart, PreviewLeavesWorkbookUnchanged) {
   }
 
   DataGuard current;
-  o = fm_chart_preview_overrides_t{};
+  o = fm_chart_preview_overrides_t FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   o.source = "Sheet1!$A$1:$B$5";
   ASSERT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, id, &o, &current.handle), 0);
   DataGuard after;
@@ -895,12 +910,12 @@ TEST(FormulonCApiChart, PreviewLeavesWorkbookUnchanged) {
   ASSERT_EQ(fm_chart_data_get_info(after.handle, &info), 0);
   EXPECT_EQ(info.series_count, 4U);
 
-  o = fm_chart_preview_overrides_t{};
+  o = fm_chart_preview_overrides_t FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   o.blanks_as_op = FM_CHART_PATCH_CLEAR;
   fm_chart_data_t* raw = reinterpret_cast<fm_chart_data_t*>(&o);  // reset to NULL on failure
   EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, id, &o, &raw), kInvalidArgument);
   EXPECT_EQ(raw, nullptr);
-  o = fm_chart_preview_overrides_t{};
+  o = fm_chart_preview_overrides_t FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   o.source = "Nope!$A$1:$B$5";
   EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, id, &o, &raw), kInvalidReference);
   EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, id, nullptr, &raw), kBindingNullPointer);
@@ -912,13 +927,13 @@ TEST(FormulonCApiChart, DoughnutHoleSize) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_DOUGHNUT, "Sheet1!$A$1:$B$5");
-  fm_chart_plot_patch_t patch{};
+  fm_chart_plot_patch_t patch = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   patch.hole_size_op = FM_CHART_PATCH_SET;
   patch.hole_size = 60;
   ASSERT_EQ(fm_sheet_set_chart_plot(wb.handle, 0, id, 0, &patch), 0) << fm_get_last_error_message();
   ChartGuard chart;
   Open(wb.handle, id, &chart);
-  fm_chart_plot_t plot{};
+  fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   EXPECT_EQ(plot.type, FM_CHART_PLOT_DOUGHNUT);
   EXPECT_EQ(plot.has_hole_size, 1);
@@ -1014,32 +1029,32 @@ TEST(FormulonCApiChart, OpenAndAccessorsRejectBadArguments) {
 
   ChartGuard guard;
   Open(wb.handle, id, &guard);
-  fm_chart_info_t info{};
+  fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
   EXPECT_EQ(fm_chart_get_info(nullptr, &info), kBindingNullPointer);
   EXPECT_EQ(fm_chart_get_info(guard.handle, nullptr), kBindingNullPointer);
-  fm_chart_plot_t plot{};
+  fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
   EXPECT_EQ(fm_chart_get_plot_at(guard.handle, 1, &plot), FM_STATUS_INDEX_OUT_OF_RANGE);
   uint32_t u = 0;
   EXPECT_EQ(fm_chart_get_plot_axis_id_at(guard.handle, 0, 2, &u), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_get_plot_axis_id_at(guard.handle, 1, 0, &u), FM_STATUS_INDEX_OUT_OF_RANGE);
-  fm_chart_series_t s{};
+  fm_chart_series_t s = FM_STRUCT_INIT(fm_chart_series_t);
   EXPECT_EQ(fm_chart_get_series_at(guard.handle, 0, 3, &s), FM_STATUS_INDEX_OUT_OF_RANGE);
-  fm_chart_literal_t lit{};
+  fm_chart_literal_t lit = FM_STRUCT_INIT(fm_chart_literal_t);
   EXPECT_EQ(fm_chart_get_series_literal_at(guard.handle, 0, 0, FM_CHART_ROLE_VALUES, 0, &lit),
             FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_get_series_literal_at(guard.handle, 0, 0, 6, 0, &lit), kInvalidArgument);
   EXPECT_EQ(fm_chart_get_series_literal_at(guard.handle, 0, 0, -1, 0, &lit), kInvalidArgument);
-  fm_chart_point_t pt{};
+  fm_chart_point_t pt = FM_STRUCT_INIT(fm_chart_point_t);
   EXPECT_EQ(fm_chart_get_series_point_at(guard.handle, 0, 0, 0, &pt), FM_STATUS_INDEX_OUT_OF_RANGE);
-  fm_chart_axis_t axis{};
+  fm_chart_axis_t axis = FM_STRUCT_INIT(fm_chart_axis_t);
   EXPECT_EQ(fm_chart_get_axis_at(guard.handle, 2, &axis), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_get_axis_at(guard.handle, 0, nullptr), kBindingNullPointer);
 
   DataGuard dg;
   OpenData(wb.handle, id, &dg);
-  fm_chart_data_series_t ds{};
+  fm_chart_data_series_t ds = FM_STRUCT_INIT(fm_chart_data_series_t);
   EXPECT_EQ(fm_chart_data_get_series_at(dg.handle, 3, &ds), FM_STATUS_INDEX_OUT_OF_RANGE);
-  fm_chart_data_points_t pts{};
+  fm_chart_data_points_t pts = FM_STRUCT_INIT(fm_chart_data_points_t);
   EXPECT_EQ(fm_chart_data_get_series_points(dg.handle, 3, &pts), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_data_get_series_points(nullptr, 0, &pts), kBindingNullPointer);
   size_t n = 0;
@@ -1102,16 +1117,21 @@ TEST(FormulonCApiChart, ChartexAndPivotChartsRefuseEdits) {
   ChartGuard chart;
   Open(cx.handle, c.id, &chart, c.sheet);
   EXPECT_EQ(Info(chart).is_chartex, 1);
-  fm_chart_plot_t plot{};
+  fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   EXPECT_EQ(plot.type, FM_CHART_PLOT_CHARTEX);
   EXPECT_STRNE(plot.chartex_layout, "");
   const fm_chart_title_t title{FM_CHART_TITLE_TEXT, "T", nullptr};
   EXPECT_EQ(fm_sheet_set_chart_title(cx.handle, c.sheet, c.id, &title), kUnsupportedKind);
-  const fm_chart_display_patch_t display{
-      FM_CHART_PATCH_SET, FM_CHART_BLANKS_GAP, FM_CHART_PATCH_SET, 1, FM_CHART_PATCH_KEEP, 0};
+  const fm_chart_display_patch_t display{sizeof(fm_chart_display_patch_t),
+                                         FM_CHART_PATCH_SET,
+                                         FM_CHART_BLANKS_GAP,
+                                         FM_CHART_PATCH_SET,
+                                         1,
+                                         FM_CHART_PATCH_KEEP,
+                                         0};
   EXPECT_EQ(fm_sheet_set_chart_display(cx.handle, c.sheet, c.id, &display), kUnsupportedKind);
-  fm_chart_preview_overrides_t o{};
+  fm_chart_preview_overrides_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   fm_chart_data_t* preview = nullptr;
   EXPECT_EQ(fm_sheet_get_chart_preview(cx.handle, c.sheet, c.id, &o, &preview), kUnsupportedKind);
   DataGuard data;
@@ -1124,7 +1144,7 @@ TEST(FormulonCApiChart, ChartexAndPivotChartsRefuseEdits) {
   const Located p = pv_charts[0];
   Open(pv.handle, p.id, &chart, p.sheet);
   EXPECT_EQ(Info(chart).is_pivot_chart, 1);
-  fm_chart_series_patch_t rename{};
+  fm_chart_series_patch_t rename = FM_STRUCT_INIT(fm_chart_series_patch_t);
   rename.name = "Sheet1!$A$1";
   EXPECT_EQ(fm_sheet_set_chart_series(pv.handle, p.sheet, p.id, 0, 0, &rename), kUnsupportedKind);
   std::size_t added = 0;
@@ -1147,7 +1167,7 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
     Open(lit.handle, c.id, &chart, c.sheet);
     const fm_chart_info_t info = Info(chart);
     for (size_t p = 0; p < info.plot_count; ++p) {
-      fm_chart_plot_t plot{};
+      fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
       ASSERT_EQ(fm_chart_get_plot_at(chart.handle, p, &plot), 0);
       for (size_t i = 0; i < plot.series_count; ++i) {
         const fm_chart_series_t s = Series(chart, p, i);
@@ -1159,12 +1179,12 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
           }
           ASSERT_GT(src.literal_count, 0U);
           for (size_t k = 0; k < src.literal_count; ++k) {
-            fm_chart_literal_t l{};
+            fm_chart_literal_t l = FM_STRUCT_INIT(fm_chart_literal_t);
             ASSERT_EQ(fm_chart_get_series_literal_at(chart.handle, p, i, role, k, &l), 0);
             ASSERT_NE(l.text, nullptr);
             ++literals;
           }
-          fm_chart_literal_t l{};
+          fm_chart_literal_t l = FM_STRUCT_INIT(fm_chart_literal_t);
           EXPECT_EQ(fm_chart_get_series_literal_at(chart.handle, p, i, role, src.literal_count, &l),
                     FM_STATUS_INDEX_OUT_OF_RANGE);
         }
@@ -1179,7 +1199,7 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
   for (const Located& c : AllCharts(multi.handle)) {
     DataGuard data;
     ASSERT_EQ(fm_sheet_get_chart_data(multi.handle, c.sheet, c.id, &data.handle), 0) << fm_get_last_error_message();
-    fm_chart_data_info_t info{};
+    fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
     ASSERT_EQ(fm_chart_data_get_info(data.handle, &info), 0);
     for (size_t level = 0; level < info.category_level_count; ++level) {
       size_t n = 0;
@@ -1199,7 +1219,8 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
 
 /// A display patch touching only `c16r3:dispNaAsBlank`.
 fm_chart_display_patch_t NaPatch(int32_t op, int32_t value) {
-  return fm_chart_display_patch_t{FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, op, value};
+  return fm_chart_display_patch_t{
+      sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, op, value};
 }
 
 int32_t NaAsBlank(fm_workbook_t* wb, uint32_t id, size_t sheet = 0) {
@@ -1276,7 +1297,7 @@ TEST(FormulonCApiChart, NaAsBlankPatchSetClearAndKeep) {
   EXPECT_EQ(NaAsBlank(wb.handle, id), FM_CHART_TRI_TRUE);
 
   // A zeroed patch changes nothing.
-  patch = fm_chart_display_patch_t{};
+  patch = fm_chart_display_patch_t FM_STRUCT_INIT(fm_chart_display_patch_t);
   ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &patch), 0) << fm_get_last_error_message();
   ChartGuard chart;
   Open(wb.handle, id, &chart);
@@ -1286,7 +1307,8 @@ TEST(FormulonCApiChart, NaAsBlankPatchSetClearAndKeep) {
   EXPECT_EQ(info.plot_vis_only, FM_CHART_TRI_TRUE);
 
   // Each field moves on its own.
-  patch = fm_chart_display_patch_t{FM_CHART_PATCH_CLEAR, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0};
+  patch = fm_chart_display_patch_t{
+      sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_CLEAR, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0};
   ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &patch), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
   info = Info(chart);
@@ -1308,17 +1330,18 @@ TEST(FormulonCApiChart, DisplayPatchRejectsBadFields) {
   EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, nullptr), kBindingNullPointer);
   const fm_chart_display_patch_t bad[] = {
       // An op outside KEEP / CLEAR / SET.
-      {3, FM_CHART_BLANKS_GAP, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
-      {FM_CHART_PATCH_KEEP, 0, -1, 0, FM_CHART_PATCH_KEEP, 0},
-      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, 3, 1},
+      {sizeof(fm_chart_display_patch_t), 3, FM_CHART_BLANKS_GAP, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_KEEP, 0, -1, 0, FM_CHART_PATCH_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, 3, 1},
       // ABSENT is not a value; CLEAR removes the element.
-      {FM_CHART_PATCH_SET, FM_CHART_BLANKS_ABSENT, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
-      {FM_CHART_PATCH_SET, 4, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
-      {FM_CHART_PATCH_SET, -1, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_SET, FM_CHART_BLANKS_ABSENT, FM_CHART_PATCH_KEEP, 0,
+       FM_CHART_PATCH_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_SET, 4, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_SET, -1, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
       // Flags are 0/1.
-      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 2, FM_CHART_PATCH_KEEP, 0},
-      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 2},
-      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, -1},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 2, FM_CHART_PATCH_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 2},
+      {sizeof(fm_chart_display_patch_t), FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, -1},
   };
   for (const fm_chart_display_patch_t& p : bad) {
     EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &p), kInvalidArgument)
@@ -1344,14 +1367,14 @@ TEST(FormulonCApiChart, PreviewNaAsBlankOverrideTurnsNaIntoBlank) {
   const fm_chart_display_patch_t off = NaPatch(FM_CHART_PATCH_CLEAR, 0);
   ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &off), 0) << fm_get_last_error_message();
 
-  fm_chart_preview_overrides_t o{};
+  fm_chart_preview_overrides_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   o.blanks_as_op = FM_CHART_PATCH_SET;
   o.blanks_as = FM_CHART_BLANKS_ZERO;
   o.na_as_blank_op = FM_CHART_PATCH_SET;
   o.na_as_blank = 1;
   DataGuard blank;
   ASSERT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, id, &o, &blank.handle), 0) << fm_get_last_error_message();
-  fm_chart_data_points_t p{};
+  fm_chart_data_points_t p = FM_STRUCT_INIT(fm_chart_data_points_t);
   ASSERT_EQ(fm_chart_data_get_series_points(blank.handle, 0, &p), 0);
   ASSERT_GT(p.count, 1U);
   EXPECT_EQ(p.states[1], FM_CHART_POINT_VALUE);

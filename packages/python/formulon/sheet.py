@@ -5267,13 +5267,12 @@ class Sheet:
 
     # -- Conditional formatting --------------------------------------------
     @staticmethod
-    def _decode_cf_color(d: Dict[str, int], prefix: str) -> Tuple[int, int, int, int]:
-        return (
-            d[prefix + "r"],
-            d[prefix + "g"],
-            d[prefix + "b"],
-            d[prefix + "a"],
-        )
+    def _decode_cf_color(d: Dict[str, Any], key: str) -> Tuple[int, int, int, int]:
+        spec = d[key]
+        if spec["kind"] != ColorKind.RGB:
+            return (0, 0, 0, 0)
+        argb = spec["rgb"]
+        return ((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, argb >> 24)
 
     def evaluate_cf_range(
         self,
@@ -5341,13 +5340,13 @@ class Sheet:
                                 priority=d["priority"],
                                 dxf_id_engaged=bool(d["dxf_id_engaged"]),
                                 dxf_id=d["dxf_id"],
-                                color=self._decode_cf_color(d, "color_"),
+                                color=self._decode_cf_color(d, "color"),
                                 bar_length_pct=d["bar_length_pct"],
                                 bar_axis_position_pct=d["bar_axis_position_pct"],
                                 bar_is_negative=bool(d["bar_is_negative"]),
-                                bar_fill=self._decode_cf_color(d, "bar_fill_"),
+                                bar_fill=self._decode_cf_color(d, "bar_fill"),
                                 bar_border_engaged=bool(d["bar_border_engaged"]),
-                                bar_border=self._decode_cf_color(d, "bar_border_"),
+                                bar_border=self._decode_cf_color(d, "bar_border"),
                                 bar_gradient=bool(d["bar_gradient"]),
                                 icon_set_name=d["icon_set_name"],
                                 icon_index=d["icon_index"],
@@ -5381,8 +5380,11 @@ class Sheet:
 
     @staticmethod
     def _decode_cf_color_at(ptr: int) -> CfColor:
-        d = S.CF_COLOR.unpack(LIB, ptr)
-        return CfColor(d["r"], d["g"], d["b"], d["a"])
+        d = S.COLOR_SPEC.unpack(LIB, ptr)
+        if d["kind"] != ColorKind.RGB:
+            return CfColor(0, 0, 0, 0)
+        argb = d["rgb"]
+        return CfColor((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, argb >> 24)
 
     @staticmethod
     def _write_cfvo(ptr: int, value: Cfvo, scope: _ArgScope) -> None:
@@ -5392,16 +5394,11 @@ class Sheet:
 
     @staticmethod
     def _write_cf_color(ptr: int, color: CfColor) -> None:
-        S.CF_COLOR.pack(
-            LIB,
-            ptr,
-            {
-                "r": _uint(color.r, "r", 8),
-                "g": _uint(color.g, "g", 8),
-                "b": _uint(color.b, "b", 8),
-                "a": _uint(color.a, "a", 8),
-            },
-        )
+        r, g, b, a = (_uint(color.r, "r", 8), _uint(color.g, "g", 8), _uint(color.b, "b", 8), _uint(color.a, "a", 8))
+        if (r, g, b, a) == (0, 0, 0, 0):
+            S.COLOR_SPEC.pack(LIB, ptr, {})
+        else:
+            S.COLOR_SPEC.pack(LIB, ptr, {"kind": ColorKind.RGB, "rgb": (a << 24) | (r << 16) | (g << 8) | b})
 
     def _cf_rule_at(self, cf_rule_index: int) -> ConditionalFormat:
         """Read the ``cf_rule_index``-th CF rule on the sheet (flattened order)."""
@@ -5419,7 +5416,7 @@ class Sheet:
                     for i in range(d["color_scale_count"])
                 ]
                 colors = [
-                    self._decode_cf_color_at(d["color_scale_colors"] + i * S.CF_COLOR.size)
+                    self._decode_cf_color_at(d["color_scale_colors"] + i * S.COLOR_SPEC.size)
                     for i in range(d["color_scale_count"])
                 ]
                 color_scale = ColorScale(thresholds, colors)
@@ -5545,11 +5542,11 @@ class Sheet:
                 if count != len(rule.color_scale.colors):
                     raise ValueError("color_scale thresholds and colors must have equal length")
                 thresholds = scope.alloc(count * S.CFVO.size)
-                colors = scope.alloc(count * S.CF_COLOR.size)
+                colors = scope.alloc(count * S.COLOR_SPEC.size)
                 for i, value in enumerate(rule.color_scale.thresholds):
                     self._write_cfvo(thresholds + i * S.CFVO.size, value, scope)
                 for i, color in enumerate(rule.color_scale.colors):
-                    self._write_cf_color(colors + i * S.CF_COLOR.size, color)
+                    self._write_cf_color(colors + i * S.COLOR_SPEC.size, color)
                 LIB.write_bytes(ptr + ro["color_scale_thresholds"][1], struct.pack("<I", thresholds))
                 LIB.write_bytes(ptr + ro["color_scale_colors"][1], struct.pack("<I", colors))
                 LIB.write_bytes(ptr + ro["color_scale_count"][1], struct.pack("<I", count))

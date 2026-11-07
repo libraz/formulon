@@ -88,7 +88,7 @@ void CreateSalesTable(WorkbookGuard& wb, const char* style = "TableStyleMedium2"
 }
 
 fm_table_info_t Info(fm_workbook_t* wb, std::size_t index = 0U) {
-  fm_table_info_t info{};
+  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
   EXPECT_EQ(fm_workbook_get_table_info(wb, index, &info), 0);
   return info;
 }
@@ -97,6 +97,17 @@ std::string Formula(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
   const char* text = nullptr;
   EXPECT_EQ(fm_sheet_get_formula(wb, 0, row, col, &text), 0);
   return text != nullptr ? text : "";
+}
+
+fm_table_style_t MakeTableStyle(const char* name, int32_t pivot, int32_t table,
+                                const fm_table_style_element_t* elements, std::uint32_t element_count) {
+  fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
+  style.name = name;
+  style.pivot = pivot;
+  style.table = table;
+  style.elements = elements;
+  style.element_count = element_count;
+  return style;
 }
 
 fm_value_t Value(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
@@ -119,7 +130,7 @@ TEST(FormulonCApiTable, CreateDefaultsAndReadBack) {
   EXPECT_EQ(info.totals_row_count, 0U);
   EXPECT_EQ(info.column_count, 2U);
 
-  fm_table_column_info_t column{};
+  fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_workbook_get_table_column(wb.handle, 0, 1, &column), 0);
   EXPECT_STREQ(column.name, "Amount");
   EXPECT_STREQ(column.totals_row_function, "none");
@@ -127,7 +138,7 @@ TEST(FormulonCApiTable, CreateDefaultsAndReadBack) {
   EXPECT_STREQ(column.totals_row_formula, "");
   EXPECT_EQ(fm_workbook_get_table_column(wb.handle, 0, 2, &column), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_get_table_info(wb.handle, 1, nullptr), kBindingNullPointer);
-  fm_table_info_t ignored{};
+  fm_table_info_t ignored = FM_STRUCT_INIT(fm_table_info_t);
   EXPECT_EQ(fm_workbook_get_table_info(wb.handle, 1, &ignored), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   WorkbookGuard plain;
@@ -233,7 +244,7 @@ TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
 
   WorkbookGuard reloaded;
   Load(saved, reloaded);
-  fm_table_column_info_t column{};
+  fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_workbook_get_table_column(reloaded.handle, 0, 0, &column), 0);
   EXPECT_STREQ(column.totals_row_label, "Total");
   EXPECT_STREQ(column.totals_row_function, "none");
@@ -266,7 +277,7 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   EXPECT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "median", nullptr, nullptr), kInvalidArgument);
   EXPECT_NE(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "custom", nullptr, "=SUM(("), 0);
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "custom", nullptr, "=SUM(Sales[Amount])*2"), 0);
-  fm_table_column_info_t column{};
+  fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_workbook_get_table_column(wb.handle, 0, 1, &column), 0);
   EXPECT_STREQ(column.totals_row_function, "custom");
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Amount])*2");
@@ -381,7 +392,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   EXPECT_STREQ(display, "Revenue");
   EXPECT_EQ(Formula(wb.handle, 0, 3), "=SUM(Revenue[Amount])+COUNTA(Revenue[Product])");
   EXPECT_EQ(Formula(wb.handle, 1, 3), "=Revenue") << "an entered bare table name binds to the whole table";
-  fm_defined_name_t dn{};
+  fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.formula, "=SUM(Revenue[Amount])*2");
 
@@ -411,7 +422,8 @@ fm_dxf_record_t FillDxf() {
   fm_dxf_record_t dxf{};
   dxf.fill_engaged = 1;
   dxf.fill.pattern = 1;
-  dxf.fill.fg_argb = 0xFFDDEBF7U;
+  dxf.fill.fg.kind = kFmColorRgb;
+  dxf.fill.fg.rgb = 0xFFDDEBF7U;
   return dxf;
 }
 
@@ -427,7 +439,7 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
       {"firstRowStripe", 2U, 1, static_cast<uint32_t>(dxf)},
       {"totalRow", 1U, 0, 0U},
   };
-  fm_table_style_t style{"Corporate", 0, 1, elements, 4U};
+  fm_table_style_t style = MakeTableStyle("Corporate", 0, 1, elements, 4U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
@@ -465,7 +477,7 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   EXPECT_STREQ(Info(reloaded.handle).style_name, "Corporate");
   ASSERT_EQ(fm_workbook_get_table_style_count(reloaded.handle, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_table_style_t got{};
+  fm_table_style_t got = FM_STRUCT_INIT(fm_table_style_t);
   ASSERT_EQ(fm_workbook_get_table_style_at(reloaded.handle, 0, &got), 0);
   EXPECT_STREQ(got.name, "Corporate");
   EXPECT_EQ(got.pivot, 0);
@@ -493,16 +505,16 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   std::size_t dxf = 0;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
   const fm_table_style_element_t one[] = {{"wholeTable", 1U, 1, static_cast<uint32_t>(dxf)}};
-  fm_table_style_t style{"Mine", 1, 1, one, 1U};
+  fm_table_style_t style = MakeTableStyle("Mine", 1, 1, one, 1U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
   const fm_table_style_element_t two[] = {{"pageFieldLabels", 1U, 0, 0U},
                                           {"blankRow", 1U, 1, static_cast<uint32_t>(dxf)}};
-  fm_table_style_t replaced{"MINE", 1, 0, two, 2U};
+  fm_table_style_t replaced = MakeTableStyle("MINE", 1, 0, two, 2U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &replaced), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 1U);
-  fm_table_style_t got{};
+  fm_table_style_t got = FM_STRUCT_INIT(fm_table_style_t);
   ASSERT_EQ(fm_workbook_get_table_style_at(wb.handle, 0, &got), 0);
   EXPECT_STREQ(got.name, "MINE");
   EXPECT_EQ(got.table, 0);
@@ -510,27 +522,27 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   EXPECT_STREQ(got.elements[0].type, "pageFieldLabels");
 
   const fm_table_style_element_t unknown[] = {{"bodyRow", 1U, 0, 0U}};
-  fm_table_style_t bad{"Other", 1, 1, unknown, 1U};
+  fm_table_style_t bad = MakeTableStyle("Other", 1, 1, unknown, 1U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
   const fm_table_style_element_t repeated[] = {{"wholeTable", 1U, 0, 0U}, {"wholeTable", 1U, 0, 0U}};
-  bad = fm_table_style_t{"Other", 1, 1, repeated, 2U};
+  bad = MakeTableStyle("Other", 1, 1, repeated, 2U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
   const fm_table_style_element_t zero_size[] = {{"firstRowStripe", 0U, 0, 0U}};
-  bad = fm_table_style_t{"Other", 1, 1, zero_size, 1U};
+  bad = MakeTableStyle("Other", 1, 1, zero_size, 1U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
   const fm_table_style_element_t dangling[] = {{"wholeTable", 1U, 1, static_cast<uint32_t>(dxf + 1U)}};
-  bad = fm_table_style_t{"Other", 1, 1, dangling, 1U};
+  bad = MakeTableStyle("Other", 1, 1, dangling, 1U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  bad = fm_table_style_t{"TableStyleMedium2", 1, 1, nullptr, 0U};
+  bad = MakeTableStyle("TableStyleMedium2", 1, 1, nullptr, 0U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  bad = fm_table_style_t{"pivotstylelight16", 1, 1, nullptr, 0U};
+  bad = MakeTableStyle("pivotstylelight16", 1, 1, nullptr, 0U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  bad = fm_table_style_t{"", 1, 1, nullptr, 0U};
+  bad = MakeTableStyle("", 1, 1, nullptr, 0U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  bad = fm_table_style_t{"Other", 1, 1, nullptr, 1U};
+  bad = MakeTableStyle("Other", 1, 1, nullptr, 1U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kBindingNullPointer);
   // `TableStyleMedium29` is past the built-in range, so it is a legal name.
-  bad = fm_table_style_t{"TableStyleMedium29", 1, 1, nullptr, 0U};
+  bad = MakeTableStyle("TableStyleMedium29", 1, 1, nullptr, 0U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), 0);
   ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 2U);
@@ -539,7 +551,7 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
 TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_table_style_t style{"Mine", 1, 1, nullptr, 0U};
+  fm_table_style_t style = MakeTableStyle("Mine", 1, 1, nullptr, 0U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
   ASSERT_EQ(fm_workbook_set_table_style_defaults(wb.handle, "Mine", nullptr), 0);
   const char* table = nullptr;

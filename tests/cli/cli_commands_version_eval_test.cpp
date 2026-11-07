@@ -1,13 +1,15 @@
 // `formulon_cli` end-to-end tests grouped by command surface.
 #include "cli/cli.h"
 #include "cli_test_support.h"
+#include "support/json_cases.h"
 
 using namespace formulon::cli_test;
+using formulon::test_support::Json;
 
 TEST(FormulonCli, VersionPrintsNonEmpty) {
   CliRun r = run_cli({"--version"});
   EXPECT_EQ(r.exit_code, 0);
-  EXPECT_GT(r.stdout_text.size(), 0U);
+  EXPECT_EQ(r.stdout_text, std::string("formulon ") + fm_get_version() + "\n");
 }
 
 TEST(FormulonCli, HelpExitsZero) {
@@ -75,6 +77,7 @@ TEST(FormulonCli, UnknownCommandExits64) {
 TEST(FormulonCli, ExitCodesNeverEncodeLargeInternalStatusValues) {
   EXPECT_EQ(formulon::cli::exit_code_for_status(0), 0);
   EXPECT_EQ(formulon::cli::exit_code_for_status(formulon::cli::kExitUsage), 64);
+  EXPECT_EQ(formulon::cli::exit_code_for_status(formulon::cli::kExitDataErr), 65);
   EXPECT_EQ(formulon::cli::exit_code_for_status(128), 1);
   EXPECT_EQ(formulon::cli::exit_code_for_status(7000), 1);
   EXPECT_EQ(formulon::cli::exit_code_for_status(8000), 1);
@@ -106,42 +109,130 @@ TEST(FormulonCli, EvalCellLevelErrorIsStillExitZero) {
   EXPECT_EQ(r.stdout_text, "1\n");
 }
 
-TEST(FormulonCli, EvalMalformedSyntaxYieldsTheSameNameErrorEveryBindingReturns) {
-  // The ad-hoc evaluator resolves a parser recovery placeholder to a
-  // cell-level `#NAME?`. That is what the WASM, Node and Python bindings
-  // return over the same C ABI entry point, so the CLI returns it too:
-  // a formula prototyped here has to behave identically when it is moved
-  // into a script driving one of the other surfaces.
+TEST(FormulonCli, EvalMalformedSyntaxExits65WithThePosition) {
   for (const char* formula : {"=1+", "=1+*2"}) {
     CliRun r = run_cli({"eval", formula});
-    EXPECT_EQ(r.exit_code, 0) << formula << " stderr=" << r.stderr_text;
-    EXPECT_EQ(r.stdout_text, "#NAME?\n") << formula;
+    EXPECT_EQ(r.exit_code, 65) << formula << " stderr=" << r.stderr_text;
+    EXPECT_EQ(r.stdout_text, "") << formula;
+    EXPECT_EQ(r.stderr_text.rfind("formulon: eval: ", 0), 0U) << r.stderr_text;
+    EXPECT_NE(r.stderr_text.find(" at 1:"), std::string::npos) << r.stderr_text;
   }
 }
 
 TEST(FormulonCli, EvalMalformedSyntaxMatchesTheAdHocCApiEntryPoint) {
-  // Same formula, same C ABI call the CLI makes, in-process: a future
-  // pre-parse gate on either side would break this comparison.
+  // The CLI reports what the C ABI records for the same call.
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_create_empty(&wb), 0);
   std::size_t sheet = 0;
   ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1", &sheet), 0);
   fm_value_array_t* result = nullptr;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb, sheet, 0, 0, "=1+", &result), 0);
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  ASSERT_EQ(fm_value_array_get_dimensions(result, &rows, &cols), 0);
-  EXPECT_EQ(rows, 1U);
-  EXPECT_EQ(cols, 1U);
-  fm_value_t value{};
-  ASSERT_EQ(fm_value_array_get_value_at(result, 0, &value), 0);
-  EXPECT_EQ(value.kind, FM_VAL_ERROR);
+  EXPECT_NE(fm_sheet_evaluate_formula_array(wb, sheet, 0, 0, "=1+", &result), 0);
+  fm_parse_error_t position = FM_STRUCT_INIT(fm_parse_error_t);
+  ASSERT_EQ(fm_get_last_parse_error(&position), 0);
+  const std::string expected = std::string("formulon: eval: ") + fm_get_last_error_message() + " at " +
+                               std::to_string(position.line) + ":" + std::to_string(position.column) + "\n";
   fm_value_array_destroy(result);
   fm_workbook_destroy(wb);
 
   CliRun r = run_cli({"eval", "=1+"});
+  EXPECT_EQ(r.exit_code, 65) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stderr_text, expected);
+}
+
+TEST(FormulonCli, EvalMalformedSyntaxMatchesTheSharedCaseTable) {
+  Json cases;
+  ASSERT_TRUE(formulon::test_support::LoadRepoJson(__FILE__, "tests/cli/", "tools/api/parse_error_cases.json", &cases));
+  const Json& rows = cases.At("cases");
+  std::size_t checked = 0;
+  for (const Json& row : rows.items) {
+    if (row.At("entry").text != "cli_eval") {
+      continue;
+    }
+    std::string formula = row.At("formula").text;
+    CliRun r = run_cli({"eval", "--", formula});
+    EXPECT_EQ(r.exit_code, static_cast<int>(row.At("exit").number)) << row.At("id").text << " stderr=" << r.stderr_text;
+    EXPECT_EQ(r.stdout_text, "") << row.At("id").text;
+    EXPECT_EQ(r.stderr_text.rfind("formulon: eval: ", 0), 0U) << row.At("id").text << " stderr=" << r.stderr_text;
+    const Json& suffix = row.At("stderr_suffix");
+    if (suffix.kind == Json::Kind::kString) {
+      const std::string line = r.stderr_text.substr(0, r.stderr_text.size() - (r.stderr_text.empty() ? 0 : 1));
+      ASSERT_GE(line.size(), suffix.text.size()) << row.At("id").text;
+      EXPECT_EQ(line.substr(line.size() - suffix.text.size()), suffix.text) << row.At("id").text;
+    }
+    ++checked;
+  }
+  EXPECT_GT(checked, 0U);
+}
+
+TEST(FormulonCli, EvalReadsTheFormulaFromStdinWithoutItsTrailingNewline) {
+  const std::string path = temp_path("eval_stdin_formula.txt");
+  PathGuard guard(path);
+  ASSERT_TRUE(write_bytes(path, "=SUM(1,2,3)\n"));
+  const CliRun r = run_cli({"eval", "-"}, false, false, path);
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
-  EXPECT_EQ(r.stdout_text, "#NAME?\n");
+  EXPECT_EQ(r.stdout_text, "6\n");
+}
+
+TEST(FormulonCli, EvalStdinSyntaxErrorExits65) {
+  const std::string path = temp_path("eval_stdin_bad_formula.txt");
+  PathGuard guard(path);
+  ASSERT_TRUE(write_bytes(path, "=1+\n"));
+  const CliRun r = run_cli({"eval", "-"}, false, false, path);
+  EXPECT_EQ(r.exit_code, 65) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "");
+}
+
+TEST(FormulonCli, EvalStdinIsRefusedOnATerminal) {
+  SpawnOptions options;
+  options.stdin_tty = true;
+  const CliRun r = run_cli_spawn({"eval", "-"}, options);
+  EXPECT_EQ(r.exit_code, 64) << "stderr=" << r.stderr_text;
+}
+
+TEST(FormulonCli, EvalFormulaAndWorkbookCannotBothReadStdin) {
+  EXPECT_EQ(run_cli({"eval", "--in", "-", "-"}).exit_code, 64);
+}
+
+TEST(FormulonCli, EvalInEvaluatesAtA1OfTheFirstSheet) {
+  const std::string in = temp_path("eval_in_workbook.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));  // A1 = 7, B1 = =A1+1
+  const CliRun r = run_cli({"eval", "--in", in, "=A1*2"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "14\n");
+}
+
+TEST(FormulonCli, EvalInSelectsTheSheetByNameOrIndex) {
+  const std::string in = temp_path("eval_in_sheets.xlsx");
+  PathGuard guard(in);
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_default(&wb), 0);
+  std::size_t second = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "Second", &second), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, second, 0, 0, 5.0), 0);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb, &bytes, &len), 0);
+  ASSERT_TRUE(write_bytes(in, std::string_view(reinterpret_cast<const char*>(bytes), len)));
+  fm_buffer_destroy(bytes);
+  fm_workbook_destroy(wb);
+
+  EXPECT_EQ(run_cli({"eval", "--in", in, "--sheet", "Second", "=A1"}).stdout_text, "5\n");
+  EXPECT_EQ(run_cli({"eval", "--in", in, "--sheet", "1", "=A1"}).stdout_text, "5\n");
+  EXPECT_EQ(run_cli({"eval", "--in", in, "--sheet", "0", "=A1"}).stdout_text, "1\n");
+  EXPECT_EQ(run_cli({"eval", "--in", in, "--sheet", "Nope", "=A1"}).exit_code, 64);
+  EXPECT_EQ(run_cli({"eval", "--sheet", "0", "=A1"}).exit_code, 64);
+}
+
+TEST(FormulonCli, EvalLocalCanonicalizesTheFormulaBeforeEvaluating) {
+  // de-DE spells the argument separator `;`.
+  const CliRun local = run_cli({"eval", "--profile", "win-365-de_DE", "--local", "=SUMME(1;2;3)"});
+  EXPECT_EQ(local.exit_code, 0) << "stderr=" << local.stderr_text;
+  EXPECT_EQ(local.stdout_text, "6\n");
+  const CliRun invariant = run_cli({"eval", "--profile", "win-365-de_DE", "=SUM(1,2,3)"});
+  EXPECT_EQ(invariant.exit_code, 0) << "stderr=" << invariant.stderr_text;
+  EXPECT_EQ(invariant.stdout_text, "6\n");
 }
 
 TEST(FormulonCli, EvalUnknownFunctionRemainsCellLevelNameError) {

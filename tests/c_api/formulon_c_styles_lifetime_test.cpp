@@ -33,7 +33,7 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
 
   fm_fill_record_t fill{};
   fill.pattern = 1U; /* solid */
-  fill.fg_argb = 0xFFFF0000U;
+  fill.fg = RgbColor(0xFFFF0000U);
   std::size_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   EXPECT_GT(fill_index, 1U);
@@ -92,7 +92,7 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
   declared.family = 2;
   declared.has_charset = 1;
   declared.charset = 128;
-  declared.color_argb = 0xFF000000U;
+  declared.color = RgbColor(0xFF000000U);
   ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &declared), 0);
 
   fm_font_record_t read_back{};
@@ -201,7 +201,7 @@ TEST(FormulonCApiStyles, CreateForProfileSeedsTheLocaleDefaults) {
   EXPECT_EQ(phonetic.size, 6.0);
 
   const char* profile = nullptr;
-  ASSERT_EQ(fm_workbook_get_excel_profile_id(wb.handle, &profile), 0);
+  ASSERT_EQ(fm_workbook_get_profile_id(wb.handle, &profile), 0);
   EXPECT_STREQ(profile, "mac-365-ja_JP");
 }
 

@@ -57,7 +57,7 @@ TEST_F(FormulonCApiRemoveMissingKey, ChartReadersOfAnAbsentId) {
   fm_chart_data_t* data = nullptr;
   ExpectNotFound(fm_sheet_get_chart_data(wb(), 0, 42U, &data), "chart data");
   EXPECT_EQ(data, nullptr);
-  const fm_chart_preview_overrides_t overrides{};
+  const fm_chart_preview_overrides_t overrides = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
   ExpectNotFound(fm_sheet_get_chart_preview(wb(), 0, 42U, &overrides, &data), "chart preview");
   EXPECT_EQ(data, nullptr);
 }

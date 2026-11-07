@@ -135,7 +135,7 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetMovesTabSelectionAndSurvivesXlsb) {
   ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
   ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_get_last_error_message();
   for (std::size_t i = 0; i < 3; ++i) {
-    fm_sheet_view_t view{};
+    fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
     ASSERT_EQ(fm_sheet_get_view(wb.handle, i, &view), 0);
     EXPECT_EQ(view.tab_selected != 0, i == 2U) << "sheet " << i;
   }
@@ -167,7 +167,7 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
     }
   };
   const auto tab_selected = [](const WorkbookGuard& wb, std::size_t sheet) {
-    fm_sheet_view_t view{};
+    fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
     EXPECT_EQ(fm_sheet_get_view(wb.handle, sheet, &view), 0);
     return view.tab_selected != 0;
   };
@@ -375,7 +375,7 @@ TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage)
   WorkbookGuard wb;
   Load(BuildPackage("", sheet), wb);
 
-  fm_sheet_view_t view{};
+  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.top_left_row, 3U);
   EXPECT_EQ(view.top_left_col, 2U);
@@ -457,7 +457,7 @@ TEST(FormulonCApiWorkbookView, UnfrozenSplitViewSavesEveryPaneSelectionTheExcelW
   ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 0, &total), 0);
   EXPECT_EQ(row, 11U);
   EXPECT_EQ(col, 4U);
-  fm_sheet_view_t view{};
+  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 9U);
   EXPECT_EQ(view.pane_top_left_col, 3U);
@@ -555,7 +555,7 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
   // Without a stored pane origin the first unfrozen cell is reported and written.
-  fm_sheet_view_t view{};
+  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 2U);
   EXPECT_EQ(view.pane_top_left_col, 1U);
@@ -614,14 +614,16 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   EXPECT_EQ(row, 41U);
   EXPECT_EQ(count, 2U);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 0, 0), 0);
-  EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 0, 0), kInvalidArgument);
+  // Without a pane only the default origin is accepted, so a read view writes back unchanged.
+  EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 0, 0), 0);
+  EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 1, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_view_t view{};
+  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 0.0);
   EXPECT_EQ(view.split_y, 0.0);
@@ -642,7 +644,7 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
     }
     WorkbookGuard reloaded;
     Load(bytes, reloaded);
-    fm_sheet_view_t got{};
+    fm_sheet_view_t got = FM_STRUCT_INIT(fm_sheet_view_t);
     ASSERT_EQ(fm_sheet_get_view(reloaded.handle, 0, &got), 0);
     EXPECT_EQ(got.split_x, 2000.0) << "format " << format;
     EXPECT_EQ(got.split_y, 1500.0) << "format " << format;
@@ -680,7 +682,7 @@ TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewO
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 1), 0);
 
   ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 1800.0, 1200.0), 0);
-  fm_sheet_view_t view{};
+  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 0U);  // origin re-derived
   EXPECT_EQ(view.pane_top_left_col, 0U);

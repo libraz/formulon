@@ -61,7 +61,7 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   ASSERT_EQ(fm_workbook_get_font(wb.handle, idx, &out), 0);
   EXPECT_STREQ(out.name, "Arial");
   EXPECT_DOUBLE_EQ(out.size, 12.0);
-  EXPECT_EQ(out.color_argb, 0xFF112233U);
+  EXPECT_EQ(out.color.rgb, 0xFF112233U);
   EXPECT_EQ(out.bold, 1);
 }
 
@@ -104,14 +104,14 @@ TEST(FormulonCApiStyles, GetEditAddFontPreservesTheUneditedFields) {
 
   fm_font_record_t edited{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, idx, &edited), 0);
-  edited.color_argb = 0xFF00FF00U;
+  edited.color = RgbColor(0xFF00FF00U);
   std::size_t recolored = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &edited, &recolored), 0);
   EXPECT_NE(recolored, idx);
 
   fm_font_record_t reread{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, recolored, &reread), 0);
-  EXPECT_EQ(reread.color_argb, 0xFF00FF00U);
+  EXPECT_EQ(reread.color.rgb, 0xFF00FF00U);
   EXPECT_EQ(reread.vert_align, 1U);
   EXPECT_EQ(reread.has_family, 1);
   EXPECT_EQ(reread.family, 2U);
@@ -144,15 +144,15 @@ TEST(FormulonCApiStyles, AddFontDoesNotAliasAThemeColourOntoLiteralRgb) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadExcelAuthoredStyles(wb.handle));
 
-  // Font 0 is `<color theme="1"/>`. Its sibling ARGB is only a compatibility
-  // fallback, so folding it together with a caller's literal RGB record
-  // would lose the selector and change the template's body text semantics.
+  // Font 0 is `<color theme="1"/>`; folding it together with a caller's
+  // literal RGB record would lose the selector and change the template's
+  // body text semantics.
   fm_font_record_t themed{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, 0U, &themed), 0);
   ASSERT_EQ(themed.color.kind, static_cast<uint8_t>(kFmColorTheme));
 
   fm_font_record_t literal_rgb = themed;
-  literal_rgb.color = fm_color_spec_t{};
+  literal_rgb.color = RgbColor(0xFF112233U);
   std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &literal_rgb, &index), 0);
   EXPECT_NE(index, 0U);
@@ -251,8 +251,10 @@ TEST(FormulonCApiStyles, AddBatchRejectsInvalidFontsTransactionally) {
     fonts[1].size = size;
     fonts[1].has_size = 0;
     uint32_t font_indices[] = {0xA1A2A3A4U, 0xB1B2B3B4U};
-    const fm_styles_batch_t batch{fonts,   2U,      font_indices, nullptr, 0U,      nullptr, nullptr, 0U,
-                                  nullptr, nullptr, 0U,           nullptr, nullptr, 0U,      nullptr};
+    fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+    batch.fonts = fonts;
+    batch.font_count = 2U;
+    batch.font_indices = font_indices;
 
     EXPECT_EQ(fm_workbook_add_batch(wb.handle, &batch), kInvalidArgument);
     EXPECT_EQ(font_indices[0], 0xA1A2A3A4U);
@@ -319,8 +321,10 @@ TEST(FormulonCApiStyles, CellAndDifferentialFontsAcceptPositiveAndNegativeZeroSi
 
     const uint32_t batch_sentinel = 0xB1B2B3B4U;
     uint32_t batch_index = batch_sentinel;
-    const fm_styles_batch_t batch{&font,   1U,      &batch_index, nullptr, 0U,      nullptr, nullptr, 0U,
-                                  nullptr, nullptr, 0U,           nullptr, nullptr, 0U,      nullptr};
+    fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+    batch.fonts = &font;
+    batch.font_count = 1U;
+    batch.font_indices = &batch_index;
     EXPECT_EQ(fm_workbook_add_batch(wb.handle, &batch), 0) << fm_get_last_error_message();
     EXPECT_NE(batch_index, batch_sentinel);
 

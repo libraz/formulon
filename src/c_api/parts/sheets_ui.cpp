@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "sheet.h"
 #include "threaded_comment.h"
 #include "utils/error.h"
@@ -17,6 +18,7 @@
 
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_stored_formula;
@@ -84,6 +86,9 @@ extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t she
   if (hl == nullptr) {
     return null_argument("hl");
   }
+  if (auto rc = check_record_size(*hl); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -147,6 +152,9 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, std::s
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -169,6 +177,9 @@ extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size
   if (out_present == nullptr || out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -176,7 +187,11 @@ extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size
     return rc;
   }
   *out_present = 0;
-  *out = fm_hyperlink_t{};
+  {
+    const std::uint32_t struct_size = out->struct_size;
+    *out = fm_hyperlink_t{};
+    out->struct_size = struct_size;
+  }
   const auto& hls = wb->workbook().sheet(sheet_index).hyperlinks();
   for (std::size_t i = 0; i < hls.size(); ++i) {
     if (hls[i].row == row && hls[i].col == col) {
@@ -319,8 +334,13 @@ extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_comment_t{};
+  out->struct_size = struct_size;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -348,6 +368,9 @@ extern "C" fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, std::siz
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -508,6 +531,9 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -551,6 +577,9 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
   clear_last_error();
   if (v == nullptr || out_index == nullptr) {
     return null_argument(v == nullptr ? "v" : "out_index");
+  }
+  if (auto rc = check_record_size(*v); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -621,6 +650,9 @@ extern "C" fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, st
   if (out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -655,6 +687,9 @@ extern "C" fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, std::siz
   clear_last_error();
   if (in == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*in); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

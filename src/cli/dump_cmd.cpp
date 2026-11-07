@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <ostream>
 #include <sstream>
 #include <string>
@@ -37,18 +38,33 @@ namespace {
 
 enum class DumpMode { kFormulas, kValues, kSheets, kMetadata };
 
+/// Which cells the `--formulas` / `--values` views list.
+struct DumpScope {
+  std::optional<std::size_t> sheet;
+  std::optional<fm_cell_rect_t> range;
+
+  bool covers_sheet(std::size_t s) const { return !sheet.has_value() || *sheet == s; }
+  bool covers_cell(std::uint32_t row, std::uint32_t col) const {
+    return !range.has_value() ||
+           (row >= range->first_row && row <= range->last_row && col >= range->first_col && col <= range->last_col);
+  }
+};
+
 std::string escape_c_string(const char* text) {
   return escape_single_line(view_or_empty(text));
 }
 
 void print_dump_usage(std::ostream& out) {
-  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--json] [--] <in | ->\n"
+  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--sheet <name | index>] [--range A1:B2]\n"
+      << "                     [--json] [--] <in | ->\n"
       << "\n"
       << "Print a diff-friendly snapshot of <in>, an xlsx or xlsb file ('-' reads stdin):\n"
       << "  --formulas  list every formula cell (default)\n"
       << "  --values    recalculate, then list every non-blank cell with its rendered value\n"
       << "  --sheets    list sheet names in document order\n"
       << "  --metadata  list defined names, tables and passthrough parts\n"
+      << "  --sheet S   with --formulas or --values: only the sheet named S (or the 0-based index S)\n"
+      << "  --range R   with --formulas or --values: only the cells in the A1 range R (with --sheet, on that sheet)\n"
       << "  --json      print the selected view as one JSON object: {\"format\":1,...}\n"
       << "  --           end options; the next token is the input path\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
@@ -75,10 +91,10 @@ fm_status_t for_each_sheet(const fm_workbook_t* wb, SheetVisitor&& visit) {
   return 0;
 }
 
-// Calls `visit(row, col, formula, value)` for every cell of sheet `s` in the
-// order `fm_sheet_get_cell_at` enumerates them.
+// Calls `visit(row, col, formula, value)` for every cell of sheet `s` inside
+// `scope`, in the order `fm_sheet_get_cell_at` enumerates them.
 template <typename CellVisitor>
-fm_status_t for_each_cell(const fm_workbook_t* wb, std::size_t s, CellVisitor&& visit) {
+fm_status_t for_each_cell(const fm_workbook_t* wb, std::size_t s, const DumpScope& scope, CellVisitor&& visit) {
   std::size_t cell_count = 0;
   if (auto rc = fm_sheet_get_cell_count(wb, s, &cell_count); rc != 0) {
     return rc;
@@ -91,24 +107,30 @@ fm_status_t for_each_cell(const fm_workbook_t* wb, std::size_t s, CellVisitor&& 
     if (auto rc = fm_sheet_get_cell_at(wb, s, i, &row, &col, &formula, &v); rc != 0) {
       return rc;
     }
-    visit(row, col, formula, v);
+    if (scope.covers_cell(row, col)) {
+      visit(row, col, formula, v);
+    }
   }
   return 0;
 }
 
 // Emits every formula cell (`Sheet!A1 =formula`) or, for `kValues`, every
 // non-blank cell (`Sheet!A1 <rendered>`) on every sheet.
-fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out) {
+fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, const DumpScope& scope, std::ostream& out) {
   const bool formulas = mode == DumpMode::kFormulas;
   return for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
+    if (!scope.covers_sheet(s)) {
+      return 0;
+    }
     const std::string escaped_sheet_name = escape_c_string(sheet_name);
-    return for_each_cell(wb, s, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
-      if (formulas ? formula == nullptr : v.kind == FM_VAL_BLANK) {
-        return;
-      }
-      out << escaped_sheet_name << '!' << format_a1(row, col) << ' '
-          << (formulas ? escape_single_line(formula) : escape_single_line(render_value(v))) << '\n';
-    });
+    return for_each_cell(
+        wb, s, scope, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
+          if (formulas ? formula == nullptr : v.kind == FM_VAL_BLANK) {
+            return;
+          }
+          out << escaped_sheet_name << '!' << format_a1(row, col) << ' '
+              << (formulas ? escape_single_line(formula) : escape_single_line(render_value(v))) << '\n';
+        });
   });
 }
 
@@ -117,16 +139,21 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
 // `value` are the `eval --json` rendering, and `formula` appears on formula
 // cells only. The document is assembled before anything is written so a
 // failure leaves `out` untouched.
-fm_status_t dump_cells_json(const fm_workbook_t* wb, std::ostream& out) {
+fm_status_t dump_cells_json(const fm_workbook_t* wb, const DumpScope& scope, std::ostream& out) {
   std::string doc = "{\"format\":1,\"sheets\":[";
+  bool first_sheet = true;
   const fm_status_t rc = for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
-    if (s != 0) {
+    if (!scope.covers_sheet(s)) {
+      return 0;
+    }
+    if (!first_sheet) {
       doc.push_back(',');
     }
+    first_sheet = false;
     doc += "{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"cells\":[";
     bool first_cell = true;
-    const fm_status_t cells_rc =
-        for_each_cell(wb, s, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
+    const fm_status_t cells_rc = for_each_cell(
+        wb, s, scope, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
           if (formula == nullptr && v.kind == FM_VAL_BLANK) {
             return;
           }
@@ -192,7 +219,7 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
     return rc;
   }
   for (std::size_t i = 0; i < n_names; ++i) {
-    fm_defined_name_t entry{};
+    fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
     if (auto rc = fm_workbook_get_defined_name_at(wb, i, &entry); rc != 0) {
       return rc;
     }
@@ -289,6 +316,8 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   DumpMode mode = DumpMode::kFormulas;
   bool mode_set = false;
   bool want_json = false;
+  std::optional<std::string> sheet_spec;
+  std::optional<std::string> range_spec;
   std::string input_path;
   bool input_seen = false;
   bool options_ended = false;
@@ -319,6 +348,15 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       want_json = true;
       continue;
     }
+    if (!options_ended && (a == "--sheet" || a == "--range")) {
+      if (i + 1 >= args.size()) {
+        err << "formulon: dump: " << a << " requires a value\n";
+        return kExitUsage;
+      }
+      (a == "--sheet" ? sheet_spec : range_spec).emplace(args[i + 1]);
+      ++i;
+      continue;
+    }
     const DumpModeFlag* mode_flag = nullptr;
     for (const DumpModeFlag& candidate : kDumpModeFlags) {
       if (!options_ended && a == candidate.flag) {
@@ -342,9 +380,35 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     return missing_positional("dump", "input path", print_dump_usage, err);
   }
 
+  if ((sheet_spec.has_value() || range_spec.has_value()) && mode != DumpMode::kFormulas && mode != DumpMode::kValues) {
+    err << "formulon: dump: --sheet and --range apply to --formulas and --values only\n";
+    return kExitUsage;
+  }
+
   WorkbookGuard wb;
   if (auto rc = load_workbook_file(input_path, shared, wb, err, "dump"); rc != 0) {
     return rc;
+  }
+  if (auto rc = use_manual_calculation(wb.handle, err, "dump"); rc != 0) {
+    return rc;
+  }
+
+  DumpScope scope;
+  if (sheet_spec.has_value()) {
+    std::size_t sheet = 0;
+    if (auto rc = resolve_sheet(wb.handle, *sheet_spec, &sheet, err, "dump"); rc != 0) {
+      return rc;
+    }
+    scope.sheet = sheet;
+  }
+  if (range_spec.has_value()) {
+    fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
+    const fm_status_t parsed = fm_workbook_parse_reference(wb.handle, range_spec->c_str(), 0, 0, 0, 0, &ref);
+    if (parsed != 0 || ref.valid == 0 || ref.has_sheet != 0) {
+      err << "formulon: dump: --range requires an A1 range without a sheet name, such as A1:B2\n";
+      return kExitUsage;
+    }
+    scope.range = ref.rect;
   }
 
   // `--values` mode runs a recalc so cached values reflect the
@@ -361,7 +425,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   switch (mode) {
     case DumpMode::kFormulas:
     case DumpMode::kValues:
-      rc = want_json ? dump_cells_json(wb.handle, out) : dump_cells(wb.handle, mode, out);
+      rc = want_json ? dump_cells_json(wb.handle, scope, out) : dump_cells(wb.handle, mode, scope, out);
       break;
     case DumpMode::kSheets:
       rc = dump_sheets(wb.handle, want_json, out);

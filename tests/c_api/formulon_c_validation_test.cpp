@@ -15,7 +15,7 @@
 
 namespace {
 
-static_assert(sizeof(fm_validation_outcome_t) == 16U, "fm_validation_outcome_t ABI layout changed");
+static_assert(sizeof(fm_validation_outcome_t) == 20U, "fm_validation_outcome_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
@@ -64,7 +64,7 @@ fm_value_t Text(const char* text) {
 /// Adds a whole-number rule over `range` (between `low` and `high`).
 void AddWholeBetween(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, const char* high,
                      std::uint8_t error_style) {
-  fm_data_validation_t v{};
+  fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
   v.ranges = &range;
   v.range_count = 1;
   v.type = 1;
@@ -77,7 +77,7 @@ void AddWholeBetween(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, c
 }
 
 fm_validation_outcome_t Validate(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, fm_value_t value) {
-  fm_validation_outcome_t out{};
+  fm_validation_outcome_t out = FM_STRUCT_INIT(fm_validation_outcome_t);
   EXPECT_EQ(fm_sheet_validate_value(wb, 0, row, col, &value, &out), 0) << fm_get_last_error_message();
   return out;
 }
@@ -218,7 +218,7 @@ TEST(FormulonCApiValidation, NoRulesListsNothing) {
 TEST(FormulonCApiValidation, RejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_validation_outcome_t out{};
+  fm_validation_outcome_t out = FM_STRUCT_INIT(fm_validation_outcome_t);
   fm_value_t value = Number(1);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 3, 0, 0, &value, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, nullptr, &out), kBindingNullPointer);

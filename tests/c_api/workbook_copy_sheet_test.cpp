@@ -179,7 +179,7 @@ TEST(CApiCopySheet, SlicerSourceRefusedWithoutChange) {
   ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", "Sales", columns, 2,
                                   "TableStyleMedium2", 1, 0, &table),
             0);
-  fm_slicer_t spec{};
+  fm_slicer_t spec = FM_STRUCT_INIT(fm_slicer_t);
   spec.fields = FM_SLICER_FIELD_ANCHOR;
   spec.from_row = 4;
   spec.from_col = 3;

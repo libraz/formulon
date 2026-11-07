@@ -9,7 +9,7 @@
 //   2. Calls `fm_workbook_load`, then the serial `fm_workbook_recalc` or
 //      opt-in `fm_workbook_recalc_parallel`, then
 //      `fm_workbook_save_with_diagnostics` with a format derived from
-//      `-o`'s extension (`.xlsb` -> MS-XLSB, anything else -> `.xlsx`).
+//      `-o`'s extension (`.xlsx`, `.xlsb`) or `--format`.
 //   3. Writes the saved buffer back out to `out`.
 //
 // `--iterative` enables iterative-calc while preserving any iteration cap
@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -44,13 +45,15 @@ namespace {
 constexpr std::uint32_t kMaxRecalcThreads = 8U;
 
 void print_recalc_usage(std::ostream& out) {
-  out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] <in.xlsx-or-xlsb | -> -o <out.xlsx-or-xlsb | "
-         "->\n"
-      << "       formulon recalc [--iterative] [--threads N] [--quiet] -o <out.xlsx-or-xlsb> -- <in.xlsx-or-xlsb>\n"
+  out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] [--format xlsx|xlsb] <in.xlsx-or-xlsb | -> -o "
+         "<out | ->\n"
+      << "       formulon recalc [--iterative] [--threads N] [--quiet] [--format xlsx|xlsb] -o <out> -- "
+         "<in.xlsx-or-xlsb>\n"
       << "\n"
       << "Load <in.xlsx-or-xlsb>, drive a full recalc, and write the result to <out.xlsx-or-xlsb>.\n"
-      << "The output format is chosen from -o's extension: '.xlsb' writes MS-XLSB,\n"
-      << "any other extension (or none) writes OOXML .xlsx.\n"
+      << "The output format is chosen from -o's extension: '.xlsx' writes OOXML, '.xlsb' writes MS-XLSB.\n"
+      << "Any other extension needs --format xlsx|xlsb (exit 64 without it); --format must agree with\n"
+      << "a .xlsx or .xlsb extension. '-o -' writes .xlsx unless --format says otherwise.\n"
       << "--threads N opts into parallel recalc: 0 selects automatic detection (capped at " << kMaxRecalcThreads
       << "),\n"
       << "1 stays on the caller thread, and 2.." << kMaxRecalcThreads << " select the worker cap. Without --threads,\n"
@@ -72,18 +75,21 @@ bool parse_thread_count(std::string_view text, std::uint32_t* out) {
   return true;
 }
 
-// Derives the `fm_workbook_save_with_diagnostics` container format from `path`'s
-// extension: `.xlsb` (case-insensitive) selects MS-XLSB; every other
-// extension (including none) selects `.xlsx` so existing callers that
-// never named `.xlsb` keep writing OOXML, matching `fm_workbook_save`'s
-// prior behaviour.
-fm_workbook_format_t format_from_extension(const std::string& path) {
+// Returns the container `path`'s extension names (`.xlsx` or `.xlsb`,
+// case-insensitive), or nothing for any other extension.
+std::optional<fm_workbook_format_t> format_from_extension(const std::string& path) {
   const std::size_t dot = path.find_last_of('.');
   if (dot == std::string::npos) {
+    return std::nullopt;
+  }
+  const std::string_view extension = std::string_view(path).substr(dot + 1);
+  if (strings::case_insensitive_eq(extension, "xlsx")) {
     return FM_WORKBOOK_FORMAT_XLSX;
   }
-  return strings::case_insensitive_eq(std::string_view(path).substr(dot + 1), "xlsb") ? FM_WORKBOOK_FORMAT_XLSB
-                                                                                      : FM_WORKBOOK_FORMAT_XLSX;
+  if (strings::case_insensitive_eq(extension, "xlsb")) {
+    return FM_WORKBOOK_FORMAT_XLSB;
+  }
+  return std::nullopt;
 }
 
 }  // namespace
@@ -95,6 +101,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   bool quiet = false;
   bool parallel = false;
   std::uint32_t thread_count = 0U;
+  std::optional<fm_workbook_format_t> format_option;
   bool input_seen = false;
   bool output_seen = false;
   bool options_ended = false;
@@ -129,6 +136,22 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
         return kExitUsage;
       }
       parallel = true;
+      ++i;
+      continue;
+    }
+    if (!options_ended && a == "--format") {
+      if (i + 1 >= args.size()) {
+        err << "formulon: recalc: --format requires xlsx or xlsb\n";
+        return kExitUsage;
+      }
+      if (args[i + 1] == "xlsx") {
+        format_option = FM_WORKBOOK_FORMAT_XLSX;
+      } else if (args[i + 1] == "xlsb") {
+        format_option = FM_WORKBOOK_FORMAT_XLSB;
+      } else {
+        err << "formulon: recalc: --format must be xlsx or xlsb, not '" << args[i + 1] << "'\n";
+        return kExitUsage;
+      }
       ++i;
       continue;
     }
@@ -171,20 +194,37 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return kExitUsage;
   }
 
+  // `-o -` has no extension and defaults to .xlsx, as a stream does elsewhere.
+  const std::optional<fm_workbook_format_t> implied = to_stdout ? std::nullopt : format_from_extension(output_path);
+  if (format_option.has_value() && implied.has_value() && *format_option != *implied) {
+    err << "formulon: recalc: format " << (*format_option == FM_WORKBOOK_FORMAT_XLSB ? "XLSB" : "XLSX")
+        << " contradicts the extension of '" << output_path << "'\n";
+    return kExitUsage;
+  }
+  if (!to_stdout && !format_option.has_value() && !implied.has_value()) {
+    err << "formulon: recalc: cannot infer the workbook format from '" << output_path
+        << "'; use a .xlsx or .xlsb extension or pass --format xlsx|xlsb\n";
+    return kExitUsage;
+  }
+  const fm_workbook_format_t format = format_option.value_or(implied.value_or(FM_WORKBOOK_FORMAT_XLSX));
+
   WorkbookGuard wb;
   if (auto rc = load_workbook_file(input_path, shared, wb, err, "recalc"); rc != 0) {
     return rc;
   }
 
   if (iterative) {
-    const fm_iterative_settings_patch_t enable{1, -1, -1.0};
+    fm_iterative_settings_patch_t enable = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+    enable.enabled = 1;
+    enable.max_iterations = -1;
+    enable.max_change = -1.0;
     if (auto rc = fm_workbook_set_iterative(wb.handle, &enable); rc != 0) {
       emit_last_error(err, "recalc");
       return rc;
     }
   }
 
-  fm_parallel_recalc_stats_t parallel_stats{};
+  fm_parallel_recalc_stats_t parallel_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
   if (parallel) {
     if (auto rc = fm_workbook_recalc_parallel(wb.handle, thread_count, &parallel_stats); rc != 0) {
       emit_last_error(err, "recalc");
@@ -198,8 +238,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   SaveBuffer buf;
-  const fm_workbook_format_t format = format_from_extension(output_path);
-  fm_save_diagnostics_t save_diagnostics{};
+  fm_save_diagnostics_t save_diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
   if (auto rc = fm_workbook_save_with_diagnostics(wb.handle, format, &buf.data, &buf.len, &save_diagnostics); rc != 0) {
     emit_last_error(err, "recalc");
     return rc;

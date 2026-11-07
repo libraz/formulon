@@ -29,12 +29,14 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/xml_fragment.h"
 #include "io/ooxml/print_settings_parse.h"
 #include "io/xml_utils.h"
@@ -48,6 +50,7 @@
 using formulon::c_api::parts::check_column_index;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
@@ -287,6 +290,41 @@ void set_fit_to_page(SheetPrintSettings& print, bool enabled) {
   print.page_setup.fit_to_page = enabled;
 }
 
+/// Sets or removes `<sheetPr><tabColor>`, leaving the other `<sheetPr>`
+/// content alone. `<tabColor>` leads `<sheetPr>`'s content model.
+void set_tab_color(SheetPrintSettings& print, const formulon::ColorSpec& color) {
+  pugi::xml_document doc;
+  pugi::xml_node root = load_or_create_root(doc, print.sheet_pr_xml, "sheetPr");
+  root.remove_child("tabColor");
+  if (color.kind != formulon::ColorSpec::Kind::kNone) {
+    pugi::xml_node node = root.prepend_child("tabColor");
+    switch (color.kind) {
+      case formulon::ColorSpec::Kind::kRgb: {
+        // snprintf is unavailable to engine code on WASM.
+        std::string hex(8U, '0');
+        for (std::size_t i = 0; i < 8U; ++i) {
+          hex[7U - i] = "0123456789ABCDEF"[(color.rgb >> (4U * i)) & 0xFU];
+        }
+        set_attr(node, "rgb", hex);
+        break;
+      }
+      case formulon::ColorSpec::Kind::kTheme:
+        set_attr_u32(node, "theme", color.theme);
+        if (color.tint != 0.0) {
+          set_attr_double(node, "tint", color.tint);
+        }
+        break;
+      case formulon::ColorSpec::Kind::kIndexed:
+        set_attr_u32(node, "indexed", color.indexed);
+        break;
+      default:
+        set_attr(node, "auto", "1");
+        break;
+    }
+  }
+  print.sheet_pr_xml = (root.first_child() || root.first_attribute()) ? raw_xml(root) : std::string();
+}
+
 /// Loads a stored print fragment for a getter; false when it is absent.
 bool load_fragment(pugi::xml_document& doc, const std::string& fragment) {
   return !fragment.empty() &&
@@ -366,6 +404,9 @@ fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -525,6 +566,9 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
   if (setup == nullptr) {
     return null_argument("setup");
   }
+  if (auto rc = check_record_size(*setup); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -571,6 +615,9 @@ extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet
   clear_last_error();
   if (margins == nullptr) {
     return null_argument("margins");
+  }
+  if (auto rc = check_record_size(*margins); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -620,6 +667,9 @@ extern "C" fm_status_t fm_sheet_set_print_options(fm_workbook_t* wb, size_t shee
   if (options == nullptr) {
     return null_argument("options");
   }
+  if (auto rc = check_record_size(*options); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -641,6 +691,9 @@ extern "C" fm_status_t fm_sheet_set_header_footer(fm_workbook_t* wb, size_t shee
   clear_last_error();
   if (hf == nullptr) {
     return null_argument("hf");
+  }
+  if (auto rc = check_record_size(*hf); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -677,12 +730,17 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
   const PageSetup& view = print.page_setup;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_page_setup_t{};
+  out->struct_size = struct_size;
   // `default` and an absent attribute both print portrait.
   out->orientation =
       view.orientation == Orientation::kLandscape ? FM_PAGE_ORIENTATION_LANDSCAPE : FM_PAGE_ORIENTATION_PORTRAIT;
@@ -720,12 +778,17 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
   const PageMargins& view = print.page_margins;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_page_margins_t{};
+  out->struct_size = struct_size;
   out->left = view.left;
   out->right = view.right;
   out->top = view.top;
@@ -751,10 +814,15 @@ extern "C" fm_status_t fm_sheet_get_print_options(const fm_workbook_t* wb, size_
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_print_options_t{};
+  out->struct_size = struct_size;
   pugi::xml_document doc;
   if (!load_fragment(doc, wb->workbook().sheet(sheet_index).print_settings().print_options_xml)) {
     return 0;
@@ -780,10 +848,15 @@ extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_header_footer_t{};
+  out->struct_size = struct_size;
   // CT_HeaderFooter defaults: scaleWithDoc and alignWithMargins are true.
   out->scale_with_doc = 1;
   out->align_with_margins = 1;
@@ -812,5 +885,62 @@ extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_
       *sections[i] = store_cstr(store, node.text().get());
     }
   }
+  return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sheet tab colour                                                           */
+/* -------------------------------------------------------------------------- */
+
+extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sheet_index, fm_color_spec_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  formulon::ColorSpec color;
+  pugi::xml_document doc;
+  if (load_fragment(doc, wb->workbook().sheet(sheet_index).print_settings().sheet_pr_xml)) {
+    const pugi::xml_node node = doc.first_child().child("tabColor");
+    if (const pugi::xml_attribute rgb = node.attribute("rgb")) {
+      color.kind = formulon::ColorSpec::Kind::kRgb;
+      color.rgb = static_cast<std::uint32_t>(std::strtoul(rgb.value(), nullptr, 16));
+      // A 6-digit value is RRGGBB with full alpha.
+      if (std::string_view(rgb.value()).size() <= 6U) {
+        color.rgb |= 0xFF000000U;
+      }
+    } else if (node.attribute("theme")) {
+      color.kind = formulon::ColorSpec::Kind::kTheme;
+      color.theme = node.attribute("theme").as_uint();
+      color.tint = node.attribute("tint").as_double(0.0);
+    } else if (node.attribute("indexed")) {
+      color.kind = formulon::ColorSpec::Kind::kIndexed;
+      color.indexed = node.attribute("indexed").as_uint();
+    } else if (node.attribute("auto").as_bool(false)) {
+      color.kind = formulon::ColorSpec::Kind::kAuto;
+    }
+  }
+  *out = formulon::c_api::parts::color_spec_to_c(color);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_index, const fm_color_spec_t* color) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  formulon::ColorSpec spec;
+  if (color != nullptr) {
+    if (auto rc = check_enum_domain(color->kind, kFmColorNone, kFmColorAuto, "kind"); rc != 0) {
+      return rc;
+    }
+    if (color->kind == kFmColorTheme && !std::isfinite(color->tint)) {
+      return invalid_argument("theme tint must be finite", "field=tint");
+    }
+    spec = formulon::c_api::parts::color_spec_from_c(*color);
+  }
+  set_tab_color(wb->workbook().sheet(sheet_index).mutable_print_settings(), spec);
   return 0;
 }

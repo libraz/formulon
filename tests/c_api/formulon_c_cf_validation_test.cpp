@@ -9,7 +9,7 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   // model leaves the save path with a reference it cannot write.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "TRUE";
   rule.range_count = 1;
@@ -58,7 +58,7 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
 TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;
   rule.ranges = nullptr;
   rule.range_count = 0;
@@ -79,7 +79,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &before), 0);
 
   fm_cell_rect_t sqref{0, 0, 0, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   std::string f = "TRUE";
   rule.formula1 = f.c_str();
@@ -104,7 +104,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   SeedDxfs(wb.handle, 2);
 
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
@@ -120,7 +120,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   // and worksheet part disagree arrives.
   wb.handle->workbook().mutable_styles().dxfs.resize(1);
 
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out.dxf_id_engaged, 0);
 
@@ -146,7 +146,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "TRUE";
   rule.ranges = &sqref;
@@ -168,7 +168,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
   // A GUID-shaped id is accepted and comes back verbatim.
   rule.id = "{3B4F1C22-0000-4000-8000-0123456789AB}";
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.id, "{3B4F1C22-0000-4000-8000-0123456789AB}");
 
@@ -193,7 +193,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t base{};
+  fm_cf_rule_t base = FM_STRUCT_INIT(fm_cf_rule_t);
   base.formula1 = "TRUE";
   base.ranges = &sqref;
   base.range_count = 1;
@@ -240,7 +240,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   expect_rejected(unknown_icon_set, "icon_set_name");
 
   fm_cfvo_t color_thresholds[2]{};
-  fm_cf_color_t colors[2]{};
+  fm_color_spec_t colors[2]{};
   color_thresholds[0].type = static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax) + 1U;
   fm_cf_rule_t unknown_color_cfvo = base;
   unknown_color_cfvo.type = 2;  // ColorScale
@@ -277,7 +277,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
 TEST(FormulonCApiCfMutate, OutOfRangeIndexReturnsIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   fm_status_t rc = fm_sheet_get_cf_rule(wb.handle, 0, 99, &out);
   EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
   rc = fm_sheet_remove_cf_rule(wb.handle, 0, 99);
@@ -301,7 +301,7 @@ TEST(FormulonCApiCfMutate, PreLoadedRulesEnumerableViaFlatIndex) {
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
-  fm_cf_rule_t out{};
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.type, 1U);
   ASSERT_NE(out.formula1, nullptr);
@@ -319,7 +319,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   SeedDxfs(wb.handle, 1);
 
   fm_cell_rect_t sqref{0, 0, 9, 0};
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
@@ -335,7 +335,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   // Re-populate the rule: `fm_sheet_add_cf_rule` deep-copies string /
   // range payloads, but reuse a fresh `fm_cf_rule_t` to avoid relying on
   // stale scratch state from the first call.
-  fm_cf_rule_t rule2{};
+  fm_cf_rule_t rule2 = FM_STRUCT_INIT(fm_cf_rule_t);
   rule2.type = 1;  // CellIs
   rule2.op_engaged = 1;
   rule2.op = 5;  // GreaterThan
@@ -358,11 +358,11 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
 
   // The indices returned by add_rule must match what a subsequent
   // flattened readback reports for rule order/position.
-  fm_cf_rule_t readback_first{};
+  fm_cf_rule_t readback_first = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, first_index, &readback_first), 0);
   EXPECT_EQ(readback_first.priority, 1);  // auto-assigned to the first rule added
 
-  fm_cf_rule_t readback_second{};
+  fm_cf_rule_t readback_second = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, second_index, &readback_second), 0);
   EXPECT_EQ(readback_second.priority, 2);  // auto-assigned one past the first
 }

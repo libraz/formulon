@@ -18,7 +18,7 @@
 namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_slicer_t) == (kWasm32 ? 104U : 128U), "fm_slicer_t ABI layout changed");
+static_assert(sizeof(fm_slicer_t) == (kWasm32 ? 112U : 136U), "fm_slicer_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
@@ -62,7 +62,7 @@ void CreateSalesTable(WorkbookGuard& wb) {
 }
 
 fm_slicer_t Anchored(std::uint32_t fields) {
-  fm_slicer_t s{};
+  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
   s.fields = fields | FM_SLICER_FIELD_ANCHOR;
   s.from_row = 4;
   s.from_col = 3;
@@ -103,7 +103,7 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   Load(Save(wb.handle), again);
   ASSERT_EQ(fm_sheet_get_slicer_count(again.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_slicer_t out{};
+  fm_slicer_t out = FM_STRUCT_INIT(fm_slicer_t);
   ASSERT_EQ(fm_sheet_get_slicer_at(again.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.fields, 0U);
   EXPECT_EQ(out.object_id, 2U);
@@ -230,7 +230,7 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   fm_slicer_t spec = Anchored(0);
   uint32_t id = 0;
   size_t count = 0;
-  fm_slicer_t out{};
+  fm_slicer_t out = FM_STRUCT_INIT(fm_slicer_t);
   EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 7, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -240,7 +240,7 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 7, 0, 0, &spec, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 1, 0, &spec, &id), kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 2, &spec, &id), kInvalidArgument);
-  fm_slicer_t no_anchor{};
+  fm_slicer_t no_anchor = FM_STRUCT_INIT(fm_slicer_t);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &no_anchor, &id), kInvalidArgument);
   fm_slicer_t bad_bit = Anchored(0x4000u);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &bad_bit, &id), kInvalidArgument);

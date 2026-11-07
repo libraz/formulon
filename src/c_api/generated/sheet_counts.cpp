@@ -19,6 +19,7 @@
 
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 
 extern "C" fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
@@ -27,6 +28,9 @@ extern "C" fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t s
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).cell_count();

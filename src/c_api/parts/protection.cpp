@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "io/protection_xml.h"
 #include "io/sqref_text.h"
 #include "sheet.h"
@@ -18,6 +19,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_rect_list;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
@@ -77,6 +79,9 @@ extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* 
   if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const formulon::WorkbookProtection p =
       formulon::io::parse_workbook_protection(wb->workbook().workbook_protection_xml());
   TextStore& store = fresh_read_scratch(wb);
@@ -101,6 +106,9 @@ extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
   clear_last_error();
   if (wb == nullptr || protection == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*protection); rc != 0) {
+    return rc;
   }
   if (auto rc = check_utf8({protection->workbook_password, protection->workbook_algorithm_name,
                             protection->workbook_hash_value, protection->workbook_salt_value,
@@ -150,6 +158,9 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const auto ranges = formulon::io::read_protected_ranges(wb->workbook().sheet(sheet_index).raw_extensions());
   if (auto rc = check_index(index, ranges.size(), "index"); rc != 0) {
     return rc;
@@ -179,6 +190,9 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*range); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_rect_list(range->ranges, range->range_count); rc != 0) {
     return rc;
   }
@@ -201,6 +215,9 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
     return null_argument("range");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*range); rc != 0) {
     return rc;
   }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();

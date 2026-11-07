@@ -338,7 +338,7 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
 
   // Engage two of the six. ECMA-376 makes all six required, so the other
   // four have to be filled from the schema defaults rather than omitted.
-  fm_page_margins_t margins{};
+  fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
   margins.left_engaged = 1;
   margins.left = 1.25;
   margins.footer_engaged = 1;
@@ -368,7 +368,7 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
   // Completing the element is a write-time step. Storing the defaults in
   // the model instead would report every margin as engaged here, and the
   // caller could no longer tell a stated margin from a defaulted one.
-  fm_page_margins_t read{};
+  fm_page_margins_t read = FM_STRUCT_INIT(fm_page_margins_t);
   ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.left_engaged, 1);
   EXPECT_EQ(read.footer_engaged, 1);

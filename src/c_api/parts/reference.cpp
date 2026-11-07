@@ -13,8 +13,11 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "eval/a1_parse.h"
 #include "eval/eval_profile_scope.h"
+#include "parser/parse_error.h"
+#include "parser/parse_status.h"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "utils/error.h"
@@ -23,9 +26,11 @@
 
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::format_rect_a1;
+using formulon::c_api::parts::formula_parse_failed;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
@@ -38,6 +43,9 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   clear_last_error();
   if (wb == nullptr || text == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
   }
   if (auto rc = check_utf8({text}); rc != 0) {
     return rc;
@@ -53,7 +61,9 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
       return rc;
     }
   }
-  *out = fm_parsed_reference_t{};
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  out->struct_size = struct_size;
   namespace refs = formulon::eval::refs_internal;
   refs::A1Parse parsed;
   {
@@ -69,7 +79,12 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
     }
   }
   if (!parsed.valid || formulon::utf16_units_in(parsed.sheet) > formulon::sheet_names::kMaxNameUnits) {
-    return 0;
+    // The grammar reports no position, so the failure covers the whole text.
+    formulon::parser::ParseFailure failure;
+    failure.code = formulon::parser::ParseErrorCode::InvalidReference;
+    failure.range.end = formulon::utf16_units_in(text);
+    failure.message = formulon::parser::default_message(failure.code);
+    return formula_parse_failed(failure, std::string());
   }
   const std::uint32_t row2 = parsed.is_range ? parsed.row2 : parsed.row;
   const std::uint32_t col2 = parsed.is_range ? parsed.col2 : parsed.col;

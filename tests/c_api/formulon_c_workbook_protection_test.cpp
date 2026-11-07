@@ -48,7 +48,7 @@ void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out) {
 }
 
 fm_protected_range_t Range(const char* name, const fm_cell_rect_t* ranges, size_t range_count) {
-  fm_protected_range_t r{};
+  fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
   r.name = name;
   r.ranges = ranges;
   r.range_count = static_cast<uint32_t>(range_count);
@@ -83,7 +83,7 @@ uint32_t RangeCount(const WorkbookGuard& wb) {
 TEST(FormulonCApiWorkbookProtection, AbsentByDefault) {
   WorkbookGuard wb;
   Create(&wb);
-  fm_workbook_protection_t p{};
+  fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
   p.lock_structure = 7;
   ASSERT_EQ(fm_workbook_get_workbook_protection(wb.handle, &p), 0);
   EXPECT_EQ(p.lock_structure, 0);
@@ -94,7 +94,7 @@ TEST(FormulonCApiWorkbookProtection, AbsentByDefault) {
 TEST(FormulonCApiWorkbookProtection, EveryFieldRoundTripsThroughSaveAndLoad) {
   WorkbookGuard wb;
   Create(&wb);
-  fm_workbook_protection_t in{};
+  fm_workbook_protection_t in = FM_STRUCT_INIT(fm_workbook_protection_t);
   in.lock_structure = 1;
   in.lock_windows = 1;
   in.lock_revision = 1;
@@ -112,7 +112,7 @@ TEST(FormulonCApiWorkbookProtection, EveryFieldRoundTripsThroughSaveAndLoad) {
 
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
-  fm_workbook_protection_t out{};
+  fm_workbook_protection_t out = FM_STRUCT_INIT(fm_workbook_protection_t);
   ASSERT_EQ(fm_workbook_get_workbook_protection(loaded.handle, &out), 0);
   EXPECT_EQ(out.lock_structure, 1);
   EXPECT_EQ(out.lock_windows, 1);
@@ -132,14 +132,14 @@ TEST(FormulonCApiWorkbookProtection, EveryFieldRoundTripsThroughSaveAndLoad) {
 TEST(FormulonCApiWorkbookProtection, AnAllEmptyRecordRemovesTheElement) {
   WorkbookGuard wb;
   Create(&wb);
-  fm_workbook_protection_t in{};
+  fm_workbook_protection_t in = FM_STRUCT_INIT(fm_workbook_protection_t);
   in.lock_structure = 1;
   ASSERT_EQ(fm_workbook_set_workbook_protection(wb.handle, &in), 0);
-  fm_workbook_protection_t cleared{};
+  fm_workbook_protection_t cleared = FM_STRUCT_INIT(fm_workbook_protection_t);
   ASSERT_EQ(fm_workbook_set_workbook_protection(wb.handle, &cleared), 0);
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
-  fm_workbook_protection_t out{};
+  fm_workbook_protection_t out = FM_STRUCT_INIT(fm_workbook_protection_t);
   ASSERT_EQ(fm_workbook_get_workbook_protection(loaded.handle, &out), 0);
   EXPECT_EQ(out.lock_structure, 0);
 }
@@ -147,7 +147,7 @@ TEST(FormulonCApiWorkbookProtection, AnAllEmptyRecordRemovesTheElement) {
 TEST(FormulonCApiWorkbookProtection, NullArgumentsAreRejected) {
   WorkbookGuard wb;
   Create(&wb);
-  fm_workbook_protection_t p{};
+  fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
   EXPECT_NE(fm_workbook_get_workbook_protection(nullptr, &p), 0);
   EXPECT_NE(fm_workbook_get_workbook_protection(wb.handle, nullptr), 0);
   EXPECT_NE(fm_workbook_set_workbook_protection(nullptr, &p), 0);
@@ -173,7 +173,7 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
   ASSERT_EQ(RangeCount(loaded), 2U);
-  fm_protected_range_t out{};
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Inputs");
   EXPECT_EQ(RangesText(loaded, out), "B2:C3 E5");
@@ -208,7 +208,7 @@ TEST(FormulonCApiProtectedRanges, SqrefFollowsRowAndColumnEdits) {
   ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 2), 0);
   ASSERT_EQ(fm_sheet_insert_columns(wb.handle, 0, 0, 1), 0);
-  fm_protected_range_t out{};
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(RangesText(wb, out), "C4:D5 F7");
   // Deleting every row the range covers removes it.
@@ -225,7 +225,7 @@ TEST(FormulonCApiProtectedRanges, AnUnparsedTokenIsKeptForSave) {
   stored.name = "Odd";
   stored.sqref = "B2 bogus";
   formulon::io::write_protected_ranges(wb.handle->workbook().sheet(0).mutable_raw_extensions(), {stored});
-  fm_protected_range_t out{};
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(RangesText(wb, out), "B2");
 
@@ -294,7 +294,7 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &good), 0);
   EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 5, &good), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, 5), FM_STATUS_INDEX_OUT_OF_RANGE);
-  fm_protected_range_t out{};
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 5, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 9, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

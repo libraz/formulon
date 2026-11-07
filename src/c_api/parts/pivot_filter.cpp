@@ -14,12 +14,14 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
@@ -78,6 +80,9 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
   if (spec->field_name == nullptr) {
@@ -208,6 +213,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
   if (auto rc = check_index(filter_index, filters.size(), "filter_index"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
 
   const auto& filter = filters[filter_index];
   const auto axis = pivot_axis_to_fm(filter.axis);
@@ -219,6 +227,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
   }
 
   fm_pivot_filter_spec_t result{};
+  result.struct_size = out->struct_size;
   result.axis = *axis;
   result.field_name = filter.field_name.c_str();
   result.type = static_cast<fm_pivot_filter_type_t>(filter.type);

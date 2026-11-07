@@ -36,7 +36,7 @@ struct BufferGuard {
 TEST(FormulonCApiProtection, FreshSheetReportsDisabled) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_protection_t p{};
+  fm_sheet_protection_t p = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb.handle, 0, &p), 0);
   EXPECT_EQ(p.enabled, 0);
   EXPECT_EQ(p.sheet, 0);
@@ -50,7 +50,7 @@ TEST(FormulonCApiProtection, SetThenGetReturnsAllFields) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_sheet_protection_t in{};
+  fm_sheet_protection_t in = FM_STRUCT_INIT(fm_sheet_protection_t);
   in.enabled = 1;
   in.algorithm_name = "SHA-512";
   in.hash_value = "deadbeef==";
@@ -66,7 +66,7 @@ TEST(FormulonCApiProtection, SetThenGetReturnsAllFields) {
   in.auto_filter = 1;
   ASSERT_EQ(fm_sheet_set_sheet_protection(wb.handle, 0, &in), 0);
 
-  fm_sheet_protection_t out{};
+  fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb.handle, 0, &out), 0);
   EXPECT_EQ(out.enabled, 1);
   EXPECT_STREQ(out.algorithm_name, "SHA-512");
@@ -90,13 +90,13 @@ TEST(FormulonCApiProtection, NullStringsTreatedAsEmpty) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_sheet_protection_t in{};
+  fm_sheet_protection_t in = FM_STRUCT_INIT(fm_sheet_protection_t);
   in.enabled = 1;
   in.sheet = 1;
   // All string pointers left as NULL.
   ASSERT_EQ(fm_sheet_set_sheet_protection(wb.handle, 0, &in), 0);
 
-  fm_sheet_protection_t out{};
+  fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb.handle, 0, &out), 0);
   EXPECT_EQ(out.enabled, 1);
   ASSERT_NE(out.algorithm_name, nullptr);
@@ -108,7 +108,7 @@ TEST(FormulonCApiProtection, NullStringsTreatedAsEmpty) {
 TEST(FormulonCApiProtection, OutOfRangeSheetReturnsSheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_protection_t p{};
+  fm_sheet_protection_t p = FM_STRUCT_INIT(fm_sheet_protection_t);
   EXPECT_EQ(fm_sheet_get_sheet_protection(wb.handle, 99, &p),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(fm_sheet_set_sheet_protection(wb.handle, 99, &p),
@@ -116,7 +116,7 @@ TEST(FormulonCApiProtection, OutOfRangeSheetReturnsSheetIndexOutOfRange) {
 }
 
 TEST(FormulonCApiProtection, NullArgsReturnBindingNullPointer) {
-  fm_sheet_protection_t p{};
+  fm_sheet_protection_t p = FM_STRUCT_INIT(fm_sheet_protection_t);
   EXPECT_EQ(fm_sheet_get_sheet_protection(nullptr, 0, &p),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_set_sheet_protection(nullptr, 0, &p),
@@ -133,7 +133,7 @@ TEST(FormulonCApiProtection, ProtectedSheetRoundTripsThroughOoxml) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_sheet_protection_t in{};
+  fm_sheet_protection_t in = FM_STRUCT_INIT(fm_sheet_protection_t);
   in.enabled = 1;
   in.algorithm_name = "SHA-512";
   in.hash_value = "AAAA==";
@@ -154,7 +154,7 @@ TEST(FormulonCApiProtection, ProtectedSheetRoundTripsThroughOoxml) {
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
 
-  fm_sheet_protection_t out{};
+  fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb2.handle, 0, &out), 0);
   EXPECT_EQ(out.enabled, 1);
   EXPECT_STREQ(out.algorithm_name, "SHA-512");
@@ -179,7 +179,7 @@ TEST(FormulonCApiProtection, DisabledProtectionOmitsXmlElement) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // Stamp a non-default field value but leave `enabled = 0` to confirm
   // the writer respects the gate.
-  fm_sheet_protection_t in{};
+  fm_sheet_protection_t in = FM_STRUCT_INIT(fm_sheet_protection_t);
   in.enabled = 0;
   in.sheet = 1;
   in.objects = 1;
@@ -190,7 +190,7 @@ TEST(FormulonCApiProtection, DisabledProtectionOmitsXmlElement) {
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
-  fm_sheet_protection_t out{};
+  fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb2.handle, 0, &out), 0);
   EXPECT_EQ(out.enabled, 0);
   // Fields not persisted because the element was skipped.
@@ -202,7 +202,7 @@ TEST(FormulonCApiProtection, LegacyPasswordRoundTrips) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_sheet_protection_t in{};
+  fm_sheet_protection_t in = FM_STRUCT_INIT(fm_sheet_protection_t);
   in.enabled = 1;
   in.legacy_password = "CC53";
   in.sheet = 1;
@@ -213,7 +213,7 @@ TEST(FormulonCApiProtection, LegacyPasswordRoundTrips) {
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
-  fm_sheet_protection_t out{};
+  fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb2.handle, 0, &out), 0);
   EXPECT_EQ(out.enabled, 1);
   EXPECT_STREQ(out.legacy_password, "CC53");

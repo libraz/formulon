@@ -6,6 +6,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -17,6 +18,7 @@
 
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_profile_id;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
@@ -81,7 +83,12 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
                                                    fm_parallel_recalc_stats_t* out_stats) {
   clear_last_error();
   if (out_stats != nullptr) {
-    *out_stats = fm_parallel_recalc_stats_t{};
+    if (auto rc = check_record_size(*out_stats); rc != 0) {
+      return rc;
+    }
+    const std::uint32_t struct_size = out_stats->struct_size;
+    *out_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
+    out_stats->struct_size = struct_size;
   }
   if (wb == nullptr) {
     return null_argument("wb");
@@ -120,6 +127,9 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, const fm_ite
   }
   if (patch == nullptr) {
     return null_argument("patch");
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
   }
   if (const fm_status_t st = check_finite(patch->max_change, "max_change")) {
     return st;
@@ -325,7 +335,7 @@ extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id) {
+extern "C" fm_status_t fm_workbook_get_profile_id(const fm_workbook_t* wb, const char** out_profile_id) {
   clear_last_error();
   if (wb == nullptr || out_profile_id == nullptr) {
     return null_argument();
@@ -334,7 +344,7 @@ extern "C" fm_status_t fm_workbook_get_excel_profile_id(const fm_workbook_t* wb,
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id) {
+extern "C" fm_status_t fm_workbook_set_profile_id(fm_workbook_t* wb, const char* profile_id) {
   clear_last_error();
   if (wb == nullptr || profile_id == nullptr) {
     return null_argument();

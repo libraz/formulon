@@ -24,8 +24,8 @@ namespace {
 using Bytes = std::vector<std::uint8_t>;
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_image_info_t) == 12U, "fm_image_info_t ABI layout changed");
-static_assert(sizeof(fm_drawing_object_t) == (kWasm32 ? 96U : 112U), "fm_drawing_object_t ABI layout changed");
+static_assert(sizeof(fm_image_info_t) == 16U, "fm_image_info_t ABI layout changed");
+static_assert(sizeof(fm_drawing_object_t) == (kWasm32 ? 104U : 120U), "fm_drawing_object_t ABI layout changed");
 static_assert(sizeof(fm_image_insert_t) == (kWasm32 ? 56U : 64U), "fm_image_insert_t ABI layout changed");
 static_assert(sizeof(fm_drawing_anchor_t) == 48U, "fm_drawing_anchor_t ABI layout changed");
 
@@ -177,7 +177,7 @@ TEST(FormulonCApiDrawing, ProbeEachFormat) {
                         {Gif(5, 7), FM_IMAGE_FORMAT_GIF, 5, 7},
                         {Bmp(9, 4), FM_IMAGE_FORMAT_BMP, 9, 4}};
   for (const Case& c : cases) {
-    fm_image_info_t info{};
+    fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
     ASSERT_EQ(fm_get_image_info(c.bytes.data(), c.bytes.size(), &info), 0) << fm_get_last_error_message();
     EXPECT_EQ(info.format, c.format);
     EXPECT_EQ(info.px_width, c.w);
@@ -187,7 +187,7 @@ TEST(FormulonCApiDrawing, ProbeEachFormat) {
 
 TEST(FormulonCApiDrawing, ProbeRejectsUnknownBytesAndNulls) {
   const Bytes junk = {'n', 'o', 't', ' ', 'a', 'n', ' ', 'i', 'm', 'a', 'g', 'e'};
-  fm_image_info_t info{};
+  fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   EXPECT_EQ(fm_get_image_info(junk.data(), junk.size(), &info), kIoImageUnsupported);
   EXPECT_EQ(fm_get_image_info(junk.data(), 0, &info), kIoImageUnsupported);
   EXPECT_EQ(fm_get_image_info(nullptr, 0, &info), kBindingNullPointer);
@@ -213,7 +213,7 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 2U);
-  fm_drawing_object_t chart{};
+  fm_drawing_object_t chart = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 0, &chart), 0);
   EXPECT_EQ(chart.kind, FM_DRAWING_OBJECT_CHART);
   EXPECT_EQ(chart.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
@@ -221,7 +221,7 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   EXPECT_EQ(chart.to_row, 14U);
   EXPECT_EQ(chart.image_format, FM_IMAGE_FORMAT_UNKNOWN);
   EXPECT_STREQ(chart.name, "Chart 1");
-  fm_drawing_object_t pic{};
+  fm_drawing_object_t pic = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 1, &pic), 0);
   EXPECT_EQ(pic.object_id, id);
   EXPECT_EQ(pic.kind, FM_DRAWING_OBJECT_PICTURE);
@@ -237,13 +237,13 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   EXPECT_STREQ(pic.description, "alt");
   EXPECT_NE(std::string(pic.media_path).find("xl/media/image"), std::string::npos);
   // The previous record's strings live until the next successful read.
-  fm_drawing_object_t again{};
+  fm_drawing_object_t again = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 1, &again), 0);
   EXPECT_STREQ(again.name, "Logo");
 
   const uint8_t* got = nullptr;
   size_t got_len = 0;
-  fm_image_info_t info{};
+  fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, id, &present, &got, &got_len, &info), 0) << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), png);
@@ -299,7 +299,7 @@ TEST(FormulonCApiDrawing, InsertSaveReloadKeepsBytes) {
   ASSERT_EQ(count, 2U);
   const uint8_t* got = nullptr;
   size_t got_len = 0;
-  fm_image_info_t info{};
+  fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_image(reloaded.handle, 0, first, &present, &got, &got_len, &info), 0)
       << fm_get_last_error_message();
@@ -309,7 +309,7 @@ TEST(FormulonCApiDrawing, InsertSaveReloadKeepsBytes) {
       << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), jpeg);
   EXPECT_EQ(info.format, FM_IMAGE_FORMAT_JPEG);
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(reloaded.handle, 0, 1, &obj), 0);
   EXPECT_EQ(obj.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
   EXPECT_EQ(obj.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
@@ -384,7 +384,7 @@ std::vector<std::uint32_t> ObjectIds(const fm_workbook_t* wb) {
   EXPECT_EQ(fm_sheet_get_drawing_object_count(wb, 0, &count), 0);
   std::vector<std::uint32_t> ids;
   for (size_t i = 0; i < count; ++i) {
-    fm_drawing_object_t obj{};
+    fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
     EXPECT_EQ(fm_sheet_get_drawing_object_at(wb, 0, i, &obj), 0);
     ids.push_back(obj.object_id);
   }
@@ -425,7 +425,7 @@ TEST(FormulonCApiDrawing, SetImageAnchorMovesAndResizesKeepingId) {
   anchor.height_emu = 0;  // keeps the current height
   ASSERT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, id, &anchor), 0) << fm_get_last_error_message();
 
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 0, &obj), 0);
   EXPECT_EQ(obj.object_id, id);
   EXPECT_EQ(obj.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
@@ -440,7 +440,7 @@ TEST(FormulonCApiDrawing, SetImageAnchorMovesAndResizesKeepingId) {
 
   WorkbookGuard reloaded;
   SaveAndReload(wb.handle, &reloaded);
-  fm_drawing_object_t again{};
+  fm_drawing_object_t again = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(reloaded.handle, 0, 0, &again), 0);
   EXPECT_EQ(again.from_row, 5U);
   EXPECT_EQ(again.width_emu, 200000);
@@ -452,7 +452,7 @@ TEST(FormulonCApiDrawing, SetImageAnchorWithListedValuesWritesNothing) {
   const std::uint32_t id = InsertAt(wb.handle, 2, "Logo");
   const Bytes before = DrawingBytes(wb.handle);
   ASSERT_FALSE(before.empty());
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 0, &obj), 0);
   const fm_drawing_anchor_t same = AnchorOf(obj);
   ASSERT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, id, &same), 0) << fm_get_last_error_message();
@@ -479,7 +479,7 @@ TEST(FormulonCApiDrawing, SetImageAnchorRejectsBadArguments) {
   anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
   anchor.width_emu = -1;
   EXPECT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, id, &anchor), kInvalidArgument);
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 0, &obj), 0);
   EXPECT_EQ(obj.from_row, 0U);
 }
@@ -525,7 +525,7 @@ TEST(FormulonCApiDrawing, SetNameRenamesPictureAndChartAndSurvivesReload) {
 
   WorkbookGuard reloaded;
   SaveAndReload(wb.handle, &reloaded);
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(reloaded.handle, 0, 0, &obj), 0);
   EXPECT_STREQ(obj.name, "Sales chart");
   ASSERT_EQ(fm_sheet_get_drawing_object_at(reloaded.handle, 0, 1, &obj), 0);
@@ -573,11 +573,11 @@ TEST(FormulonCApiDrawing, SnapshotRestoreReturnsDeletedPictureToItsPlace) {
   EXPECT_EQ(ObjectIds(wb.handle), (std::vector<std::uint32_t>{2U, first, second}));
   const uint8_t* got = nullptr;
   size_t got_len = 0;
-  fm_image_info_t info{};
+  fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, first, &present, &got, &got_len, &info), 0) << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), Png(16, 8));
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 1, &obj), 0);
   EXPECT_EQ(obj.from_row, 1U);
   EXPECT_STREQ(obj.name, "A");
@@ -603,7 +603,7 @@ TEST(FormulonCApiDrawing, SnapshotRestoreUndoesMoveAndReorder) {
       << fm_get_last_error_message();
   EXPECT_EQ(restored, first);
   EXPECT_EQ(ObjectIds(wb.handle), (std::vector<std::uint32_t>{first, second}));
-  fm_drawing_object_t obj{};
+  fm_drawing_object_t obj = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 0, &obj), 0);
   EXPECT_EQ(obj.from_row, 1U);
 }
@@ -623,7 +623,7 @@ TEST(FormulonCApiDrawing, RestoreWithNewIdAddsACopyOnTop) {
   EXPECT_EQ(ObjectIds(wb.handle), (std::vector<std::uint32_t>{first, second, copy}));
   const uint8_t* got = nullptr;
   size_t got_len = 0;
-  fm_image_info_t info{};
+  fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, copy, &present, &got, &got_len, &info), 0) << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), Png(16, 8));

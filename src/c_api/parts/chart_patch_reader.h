@@ -63,6 +63,15 @@ class PatchReader {
     field(op, value == 1, out, name);
   }
 
+  // A colour patch: a `SET` value must be kind Rgb.
+  void rgb_field(std::int32_t op, const fm_color_spec_t& value, ChartPatchField<std::uint32_t>& out, const char* name) {
+    if (op == FM_CHART_PATCH_SET && value.kind != kFmColorRgb) {
+      fail(name, "must be an Rgb colour");
+      return;
+    }
+    field(op, value.rgb, out, name);
+  }
+
   void text_field(std::int32_t op, const char* value, ChartPatchField<std::string>& out, const char* name) {
     if (text_ok(value, name)) {
       field(op, std::string(value != nullptr ? value : ""), out, name);

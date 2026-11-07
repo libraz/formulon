@@ -15,6 +15,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/xml_fragment.h"
 #include "cf/auto_filter_eval.h"
 #include "io/auto_filter_xml.h"
@@ -24,9 +25,11 @@
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::fresh_arena;
@@ -177,7 +180,9 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
     columns.push_back(c);
   }
 
-  *out = fm_auto_filter_t{};
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_auto_filter_t);
+  out->struct_size = struct_size;
   out->range = to_cell_rect(filter.range);
   out->column_count = static_cast<uint32_t>(columns.size());
   out->columns = scratch->filter_column_scratch.adopt(std::move(columns));
@@ -444,8 +449,13 @@ void drop_criteria(formulon::AutoFilter& filter) {
 // --- shared bodies ----------------------------------------------------------
 
 fm_status_t get_body(const fm_workbook_t* wb, const Target& target, fm_auto_filter_t* out, int32_t* out_present) {
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (target.filter == nullptr) {
-    *out = fm_auto_filter_t{};
+    const std::uint32_t struct_size = out->struct_size;
+    *out = FM_STRUCT_INIT(fm_auto_filter_t);
+    out->struct_size = struct_size;
     *out_present = 0;
     return 0;
   }
@@ -469,6 +479,9 @@ fm_status_t null_filter() {
 }
 
 fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filter_t* filter) {
+  if (auto rc = check_record_size(*filter); rc != 0) {
+    return rc;
+  }
   formulon::AutoFilter model;
   if (auto rc = filter_from_fm(*filter, &model); rc != 0) {
     return rc;
@@ -599,6 +612,9 @@ extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, si
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
   return evaluate_body(wb, target, buf, cap, out_len, out_first_row);
 }
 
@@ -665,6 +681,9 @@ extern "C" fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_
   }
   Target target;
   if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
   return evaluate_body(wb, target, buf, cap, out_len, out_first_row);

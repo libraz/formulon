@@ -20,6 +20,7 @@
 //     in the C API, so the CLI surfaces the diagnostic by reading
 //     `fm_get_last_error_message()` and prefixing with the subcommand name.
 //   * `64` on a usage error (mirrors sysexits(3) `EX_USAGE`).
+//   * `65` when the input text is malformed: a formula that does not parse.
 //   * `66` when an input file is missing, unreadable or a directory.
 //   * `73` when an output file cannot be created.
 //   * `74` on an I/O error while reading or writing a stream, including a
@@ -70,8 +71,8 @@ inline void print_profile_ids(std::ostream& out) {
 
 /// Writes the help lines of the value-taking shared options.
 inline void print_shared_options(std::ostream& out) {
-  out << "  --profile <id>        Select the Excel formula profile (default: "
-      << excel_profile_id(default_excel_profile()) << ").\n"
+  out << "  --profile <id>        Excel profile for evaluation semantics; formula text stays en-US unless --local\n"
+      << "                        (default: " << excel_profile_id(default_excel_profile()) << ").\n"
       << "                        Profiles: see 'formulon profiles'\n"
       << "  --now <date[Thh:mm:ss]>\n"
       << "                        Pin the clock NOW, TODAY and relative date filters\n"
@@ -139,7 +140,7 @@ bool parse_unsigned(std::string_view text, T* out) {
 inline fm_status_t apply_shared_options(fm_workbook_t* workbook, const SharedOptions& options) {
   if (options.profile_id.has_value()) {
     const std::string id(*options.profile_id);
-    if (const fm_status_t rc = fm_workbook_set_excel_profile_id(workbook, id.c_str()); rc != 0) {
+    if (const fm_status_t rc = fm_workbook_set_profile_id(workbook, id.c_str()); rc != 0) {
       return rc;
     }
   }
@@ -171,7 +172,7 @@ inline int flush_output(std::ostream& out, std::ostream& err, std::string_view s
 /// must not receive an empty string together with a success status.
 inline int print_version(std::ostream& out, std::ostream& err) {
   const char* version = fm_get_version();
-  out << (version != nullptr ? version : "") << '\n';
+  out << "formulon " << (version != nullptr ? version : "") << '\n';
   return flush_output(out, err, "version");
 }
 
@@ -183,9 +184,10 @@ inline int print_version(std::ostream& out, std::ostream& err) {
 /// diagnostic when the invocation is a usage error.
 inline bool split_option_values(const ArgList& raw, std::string_view subcommand, std::vector<std::string>& storage,
                                 ArgList& expanded, std::ostream& err) {
-  constexpr std::string_view kValueOptions[] = {"--profile", "--now", "--repeat", "--threads", "--output", "--sheet"};
+  constexpr std::string_view kValueOptions[] = {"--profile", "--now", "--repeat", "--threads", "--output",
+                                                "--sheet",   "--in",  "--range",  "--format"};
   constexpr std::string_view kFlagOptions[] = {"--json",   "--iterative", "--quiet", "--formulas", "--values",
-                                               "--sheets", "--metadata",  "--help",  "--version"};
+                                               "--sheets", "--metadata",  "--local", "--help",     "--version"};
   const auto contains = [](const auto& names, std::string_view name) {
     for (const std::string_view candidate : names) {
       if (candidate == name) {
@@ -328,16 +330,19 @@ inline int missing_positional(std::string_view subcommand, std::string_view noun
 /// `eval` handler: evaluate a single formula on a fresh empty workbook.
 ///
 /// `args` carries the post-`eval` arguments. The first non-flag argument
-/// is the formula text (with or without a leading `=`).
+/// is the formula text (with or without a leading `=`); a lone `-` reads it
+/// from stdin.
 ///
 /// Supported flags: the common options above, `--json`, `--repeat N` (re-evaluate `N` times and
 /// report timing on stderr for every `N` the flag accepts, including 1),
-/// `-h | --help`, and `--` to end option parsing before a formula
-/// beginning with `-`.
+/// `--local` (the formula is spelled in the profile's locale), `--in FILE`
+/// (evaluate at A1 of a sheet of that workbook, `-` for stdin) with `--sheet
+/// NAME|INDEX`, `-h | --help`, and `--` to end option parsing before a
+/// formula beginning with `-`.
 ///
-/// Malformed syntax is not a handler failure: the evaluator turns parser
-/// recovery placeholders into a cell-level `#NAME?`, and `eval` prints
-/// that value and exits `0` like every other binding over the same C ABI.
+/// A formula that does not parse exits `65` with `formulon: eval: <message>
+/// at <line>:<column>` on stderr and nothing on stdout. A cell-level Excel
+/// error such as `#DIV/0!` is a result and exits `0`.
 ///
 /// Plain output is a TAB-separated grid of exactly `rows` lines with
 /// `cols` fields each, so cell payloads are escaped the way `dump`
@@ -353,7 +358,8 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err);
 /// `args` carries the post-`recalc` arguments. The first non-flag
 /// argument is the input path.
 ///
-/// Supported flags: the common options above, `-o | --output PATH` (required; `-` writes to stdout), `--iterative`
+/// Supported flags: the common options above, `-o | --output PATH` (required; `-` writes to stdout),
+/// `--format xlsx|xlsb` (required unless the extension is `.xlsx` or `.xlsb`), `--iterative`
 /// (enable iterative calc), `--threads N` (opt in to parallel recalc with
 /// an inclusive 0..8 worker setting), `--quiet`, `-h | --help`, and `--` to
 /// end option parsing before the input path. All options, including `-o`,
@@ -368,7 +374,9 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 ///
 /// Supported flags: the common options above and (mutually exclusive): `--formulas` (default),
 /// `--values`, `--sheets`, `--metadata`, `-h | --help`, and `--` to end
-/// option parsing before an input path. `--json` prints the selected view as
+/// option parsing before an input path. `--sheet NAME|INDEX` and `--range
+/// A1:B2` narrow `--formulas` and `--values`. The workbook opens with manual
+/// calculation, so only `--values` recalculates. `--json` prints the selected view as
 /// one JSON object with a top-level `"format":1`.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 

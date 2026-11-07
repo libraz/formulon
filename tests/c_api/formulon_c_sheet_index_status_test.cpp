@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <type_traits>
 #include <vector>
 
 #include "formulon_c_record_arg.h"
@@ -18,8 +19,14 @@
 
 namespace {
 
+template <typename T, typename = void>
+struct HasStructSize : std::false_type {};
+template <typename T>
+struct HasStructSize<T, std::void_t<decltype(T::struct_size)>> : std::true_type {};
+
 // Zeroed storage for every pointer argument of one call. `arg` hands out slot
-// `I` as a `T*`, or NULL when the test has masked that slot.
+// `I` as a `T*`, or NULL when the test has masked that slot. A record slot
+// carries its `struct_size`.
 struct ZeroSlots {
   static constexpr std::size_t kCount = 8;
   static constexpr std::size_t kBytes = 4096;
@@ -31,7 +38,11 @@ struct ZeroSlots {
   T* at() {
     static_assert(I < kCount, "a sheet-scoped function takes more pointers than ZeroSlots holds");
     static_assert(sizeof(T) <= kBytes, "a pointee does not fit one slot");
-    return reinterpret_cast<T*>(storage[I]);
+    T* slot = reinterpret_cast<T*>(storage[I]);
+    if constexpr (HasStructSize<T>::value) {
+      const_cast<std::remove_const_t<T>*>(slot)->struct_size = static_cast<std::uint32_t>(sizeof(T));
+    }
+    return slot;
   }
 
   template <typename T, std::size_t I>

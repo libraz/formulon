@@ -17,30 +17,31 @@
 #include "sheet.h"
 #include "workbook.h"
 
-static_assert(offsetof(fm_parallel_recalc_stats_t, cells_evaluated) == 0U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, sccs_processed) == 8U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, parallel_steps) == 16U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, serial_fallback_steps) == 24U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, cycle_recoveries) == 32U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, worker_threads_started) == 40U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, worker_threads_used) == 44U);
+static_assert(offsetof(fm_parallel_recalc_stats_t, cells_evaluated) == 8U);
+static_assert(offsetof(fm_parallel_recalc_stats_t, sccs_processed) == 16U);
+static_assert(offsetof(fm_parallel_recalc_stats_t, parallel_steps) == 24U);
+static_assert(offsetof(fm_parallel_recalc_stats_t, serial_fallback_steps) == 32U);
+static_assert(offsetof(fm_parallel_recalc_stats_t, cycle_recoveries) == 40U);
+static_assert(offsetof(fm_parallel_recalc_stats_t, worker_threads_started) == 48U);
+static_assert(offsetof(fm_parallel_recalc_stats_t, worker_threads_used) == 52U);
 
 // The two counter structs must have the same layout on native and wasm32,
 // which is the whole reason they use `uint32_t` rather than `size_t`. A
 // binding's hand-written offsets are only safe while this holds.
-static_assert(sizeof(fm_read_diagnostics_t) == 20U);
-static_assert(offsetof(fm_read_diagnostics_t, undecoded_formula_count) == 0U);
-static_assert(offsetof(fm_read_diagnostics_t, undecoded_defined_name_count) == 4U);
-static_assert(offsetof(fm_read_diagnostics_t, undecoded_part_count) == 8U);
-static_assert(offsetof(fm_read_diagnostics_t, skipped_feature_count) == 12U);
-static_assert(offsetof(fm_read_diagnostics_t, unknown_content_type_count) == 16U);
-static_assert(sizeof(fm_save_diagnostics_t) == 20U);
-static_assert(offsetof(fm_save_diagnostics_t, downgraded_formula_count) == 0U);
-static_assert(offsetof(fm_save_diagnostics_t, deferred_feature_count) == 4U);
-static_assert(offsetof(fm_save_diagnostics_t, dropped_part_count) == 8U);
-static_assert(offsetof(fm_save_diagnostics_t, dropped_relationship_count) == 12U);
-static_assert(offsetof(fm_save_diagnostics_t, renumbered_part_count) == 16U);
-static_assert(sizeof(fm_parallel_recalc_stats_t) == 48U);
+static_assert(sizeof(fm_read_diagnostics_t) == 24U);
+static_assert(offsetof(fm_read_diagnostics_t, struct_size) == 0U);
+static_assert(offsetof(fm_read_diagnostics_t, undecoded_formula_count) == 4U);
+static_assert(offsetof(fm_read_diagnostics_t, undecoded_defined_name_count) == 8U);
+static_assert(offsetof(fm_read_diagnostics_t, undecoded_part_count) == 12U);
+static_assert(offsetof(fm_read_diagnostics_t, skipped_feature_count) == 16U);
+static_assert(offsetof(fm_read_diagnostics_t, unknown_content_type_count) == 20U);
+static_assert(sizeof(fm_save_diagnostics_t) == 24U);
+static_assert(offsetof(fm_save_diagnostics_t, downgraded_formula_count) == 4U);
+static_assert(offsetof(fm_save_diagnostics_t, deferred_feature_count) == 8U);
+static_assert(offsetof(fm_save_diagnostics_t, dropped_part_count) == 12U);
+static_assert(offsetof(fm_save_diagnostics_t, dropped_relationship_count) == 16U);
+static_assert(offsetof(fm_save_diagnostics_t, renumbered_part_count) == 20U);
+static_assert(sizeof(fm_parallel_recalc_stats_t) == 56U);
 
 // `fm_value_t` is the most widely passed record on the boundary: every cell
 // read, every ad-hoc evaluation and every pivot cell writes one through a
@@ -461,7 +462,7 @@ TEST(FormulonCApi, CellPhoneticSettersDirtyPhoneticFormulaDependents) {
   // alone is dirty-only and cannot discover the change on its own.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);              // A1
   ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);   // A1 reading
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=PHONETIC(A1)"), 0);  // B1

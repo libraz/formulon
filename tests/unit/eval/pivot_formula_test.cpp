@@ -232,7 +232,7 @@ TEST_F(PivotFormula, RejectsReferencesNamesAndArrays) {
   EXPECT_EQ(compile_error("'No Such Field'+1", field_scope()), kInvalid);
   EXPECT_EQ(compile_error("_fmpv0+Amt", field_scope()), kInvalid);
   EXPECT_EQ(compile_error("LET(x,Amt,x*2)", field_scope()), kInvalid);
-  EXPECT_EQ(compile_error("Amt+", field_scope()), kInvalid);
+  EXPECT_EQ(compile_error("Amt+", field_scope()), FormulonErrorCode::kParserUnexpectedToken);
   EXPECT_EQ(compile_error("'Amt", field_scope()), kInvalid);
 }
 

@@ -15,6 +15,7 @@
 #include "formulon_c_record_arg.h"
 #include "formulon_c_setters.h"
 #include "gtest/gtest.h"
+#include "parser/parse_status.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -37,6 +38,23 @@ void MakeWorkbook(WorkbookGuard* wb) {
   for (const char* name : {"Data", "S2"}) {
     ASSERT_EQ(fm_workbook_add_sheet(wb->handle, name, ignored_index()), 0) << fm_get_last_error_message();
   }
+}
+
+// Checks the last failure is a formula syntax refusal: `rc` is the parser
+// status of the recorded code and the recorded range lies inside `formula`.
+// Call it right after the failing call.
+void ExpectParseRefusal(fm_status_t rc, const std::string& formula) {
+  EXPECT_STRNE(fm_get_last_error_message(), "");
+  fm_parse_error_t err = FM_STRUCT_INIT(fm_parse_error_t);
+  ASSERT_EQ(fm_get_last_parse_error(&err), 0);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(
+                    formulon::parser::parse_error_status(static_cast<formulon::parser::ParseErrorCode>(err.code))));
+  EXPECT_GE(rc, 1000);
+  EXPECT_LE(rc, 1014);
+  EXPECT_LE(err.start, err.end);
+  EXPECT_LE(err.end, formula.size());
+  EXPECT_GE(err.line, 1U);
+  EXPECT_GE(err.column, 1U);
 }
 
 const std::vector<std::string>& RejectedFormulas() {
@@ -109,12 +127,11 @@ TEST(FormulonCApiFormulaEntry, SetFormulaRejectsUnparseableTextAndKeepsState) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=1+2"), 0);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
-    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, formula.c_str()), kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
+    ExpectParseRefusal(fm_sheet_set_formula(wb.handle, 0, 0, 1, formula.c_str()), formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("row=0 col=1"), std::string::npos);
     EXPECT_EQ(GetFormula(wb.handle, 0, 1), "=1+2");
 
-    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 5, 5, formula.c_str()), kParserUnexpectedToken);
+    ExpectParseRefusal(fm_sheet_set_formula(wb.handle, 0, 5, 5, formula.c_str()), formula);
     EXPECT_EQ(GetFormula(wb.handle, 5, 5), "");
   }
 }
@@ -169,15 +186,13 @@ TEST(FormulonCApiFormulaEntry, DefinedNameRejectsUnparseableTextAndKeepsState) {
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
-    EXPECT_EQ(SetDefinedName(wb.handle, "Rate", formula.c_str()), kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
-    EXPECT_EQ(SetDefinedName(wb.handle, "Fresh", formula.c_str()), kParserUnexpectedToken);
-    EXPECT_EQ(SetDefinedName(wb.handle, "Local", formula.c_str(), 0), kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
-    EXPECT_EQ(SetDefinedName(wb.handle, "Fresh", formula.c_str(), -1), kParserUnexpectedToken);
+    ExpectParseRefusal(SetDefinedName(wb.handle, "Rate", formula.c_str()), formula);
+    ExpectParseRefusal(SetDefinedName(wb.handle, "Fresh", formula.c_str()), formula);
+    ExpectParseRefusal(SetDefinedName(wb.handle, "Local", formula.c_str(), 0), formula);
+    ExpectParseRefusal(SetDefinedName(wb.handle, "Fresh", formula.c_str(), -1), formula);
   }
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
-  fm_defined_name_t entry{};
+  fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
   EXPECT_STREQ(entry.formula, "=Sheet1!$A$1");
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &entry), 0);
@@ -195,7 +210,7 @@ TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableText) {
 }
 
 fm_cf_rule_t MakeCfRule(const fm_cell_rect_t* sqref, const char* formula1, const char* formula2) {
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = formula1;
   rule.formula2 = formula2;
@@ -212,12 +227,11 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleRejectsUnparseableFormulasAndKeepsState)
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", nullptr)), &index), 0);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
-    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, formula.c_str(), nullptr)), &index),
-              kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
+    ExpectParseRefusal(
+        fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, formula.c_str(), nullptr)), &index), formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula1"), std::string::npos);
-    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", formula.c_str())), &index),
-              kParserUnexpectedToken);
+    ExpectParseRefusal(
+        fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", formula.c_str())), &index), formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula2"), std::string::npos);
   }
   std::size_t count = 0;
@@ -240,7 +254,7 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleAcceptsParseableAndEmptyFormulas) {
 
 fm_data_validation_t MakeValidation(const fm_cell_rect_t* range, std::uint8_t type, const char* formula1,
                                     const char* formula2) {
-  fm_data_validation_t v{};
+  fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
   v.ranges = range;
   v.range_count = 1;
   v.type = type;
@@ -257,14 +271,13 @@ TEST(FormulonCApiFormulaEntry, AddValidationRejectsUnparseableFormulasAndKeepsSt
             0);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
-    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, formula.c_str(), "10")),
-                                      ignored_index()),
-              kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
+    ExpectParseRefusal(fm_sheet_add_validation(
+                           wb.handle, 0, record_arg(MakeValidation(&range, 1, formula.c_str(), "10")), ignored_index()),
+                       formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula1"), std::string::npos);
-    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", formula.c_str())),
-                                      ignored_index()),
-              kParserUnexpectedToken);
+    ExpectParseRefusal(fm_sheet_add_validation(
+                           wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", formula.c_str())), ignored_index()),
+                       formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula2"), std::string::npos);
   }
   std::size_t count = 0;
@@ -312,7 +325,7 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
 
   ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "=Sheet1!$A$1+-0 "), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "Local", " 1+ +5", 0), 0);
-  fm_defined_name_t entry{};
+  fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
   EXPECT_STREQ(entry.formula, "=Sheet1!$A$1+0");
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &entry), 0);
@@ -321,7 +334,7 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   const fm_cell_rect_t sqref{0, 0, 9, 0};
   std::size_t index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "=$A$1>+1.50", "{1, 2}")), &index), 0);
-  fm_cf_rule_t rule{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, index, &rule), 0);
   EXPECT_STREQ(rule.formula1, "=$A$1>1.5");
   EXPECT_STREQ(rule.formula2, "={1,2}");
@@ -346,7 +359,7 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   const char* const expected[] = {"=\"1.50,1E3,+5\"", "=+$A$1:$A$3", "=OFFSET($A$1,0,0,1000/1000+2,1)",
                                   "=SUM(A1:A2)>0"};
   for (std::uint32_t i = 0; i < 4U; ++i) {
-    fm_data_validation_t v{};
+    fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
     ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, i, &v), 0);
     EXPECT_STREQ(v.formula1, expected[i]);
   }

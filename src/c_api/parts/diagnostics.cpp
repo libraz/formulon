@@ -14,6 +14,7 @@
 #include "c_api/binding_status.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "utils/error.h"
 #include "utils/structured_log.h"
 #include "value.h"
@@ -24,6 +25,27 @@ extern "C" const char* fm_get_last_error_message(void) {
 
 extern "C" const char* fm_get_last_error_context(void) {
   return formulon::c_api::parts::last_error_context();
+}
+
+extern "C" fm_status_t fm_get_last_parse_error(fm_parse_error_t* out) {
+  // Reads error state, so it reports its own failures by status alone and
+  // leaves the message, context and parse record untouched.
+  if (out == nullptr) {
+    return FM_STATUS_BINDING_NULL_POINTER;
+  }
+  if (out->struct_size < formulon::c_api::parts::StructV1<fm_parse_error_t>::kSize) {
+    return FM_STATUS_INVALID_ARGUMENT;
+  }
+  const formulon::c_api::parts::ParseErrorRecord* record = formulon::c_api::parts::last_parse_error();
+  if (record == nullptr) {
+    return FM_STATUS_NOT_FOUND;
+  }
+  out->code = record->code;
+  out->start = record->start;
+  out->end = record->end;
+  out->line = record->line;
+  out->column = record->column;
+  return 0;
 }
 
 extern "C" const char* fm_get_status_name(fm_status_t status) {

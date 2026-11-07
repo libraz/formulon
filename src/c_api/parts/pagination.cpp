@@ -13,11 +13,14 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "utils/error.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
 
@@ -32,6 +35,9 @@ extern "C" fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t s
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
   auto paginated = formulon::print::paginate(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
@@ -81,6 +87,18 @@ extern "C" fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pa
 }
 
 namespace {
+
+// Checks record `*out`'s `struct_size` and zeroes the rest of it.
+template <typename T>
+fm_status_t reset_record(T* out) {
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = T{};
+  out->struct_size = struct_size;
+  return 0;
+}
 
 // Shared body of the break getters. `manual` reads the manual-flag list
 // instead of the position list; the value is returned through `value`.
@@ -146,8 +164,10 @@ extern "C" fm_status_t fm_pagination_get_paper(const fm_pagination_t* pagination
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = reset_record(out); rc != 0) {
+    return rc;
+  }
   const formulon::print::PaperInfo& paper = pagination->result.paper;
-  *out = fm_paper_info_t{};
   out->width_pt = paper.width_pt;
   out->height_pt = paper.height_pt;
   out->landscape = paper.landscape ? 1 : 0;
@@ -160,8 +180,16 @@ extern "C" fm_status_t fm_pagination_get_margins(const fm_pagination_t* paginati
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = reset_record(out); rc != 0) {
+    return rc;
+  }
   const formulon::print::MarginsPt& margins = pagination->result.margins;
-  *out = fm_margins_pt_t{margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer};
+  out->left = margins.left;
+  out->right = margins.right;
+  out->top = margins.top;
+  out->bottom = margins.bottom;
+  out->header = margins.header;
+  out->footer = margins.footer;
   return 0;
 }
 
@@ -170,8 +198,14 @@ extern "C" fm_status_t fm_pagination_get_printable(const fm_pagination_t* pagina
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = reset_record(out); rc != 0) {
+    return rc;
+  }
   const formulon::print::RectPt& rect = pagination->result.printable;
-  *out = fm_rect_pt_t{rect.x, rect.y, rect.width, rect.height};
+  out->x = rect.x;
+  out->y = rect.y;
+  out->width = rect.width;
+  out->height = rect.height;
   return 0;
 }
 
@@ -198,8 +232,10 @@ extern "C" fm_status_t fm_pagination_get_print_titles(const fm_pagination_t* pag
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = reset_record(out); rc != 0) {
+    return rc;
+  }
   const formulon::print::PrintTitleSpan& titles = pagination->result.print_titles;
-  *out = fm_print_titles_t{};
   out->has_rows = titles.has_rows ? 1 : 0;
   out->first_row = titles.first_row;
   out->last_row = titles.last_row;
@@ -218,8 +254,10 @@ extern "C" fm_status_t fm_pagination_get_page_at(const fm_pagination_t* paginati
   if (auto rc = check_index(index, pagination->result.pages.size(), "index"); rc != 0) {
     return rc;
   }
+  if (auto rc = reset_record(out); rc != 0) {
+    return rc;
+  }
   const formulon::print::PageLayout& page = pagination->result.pages[index];
-  *out = fm_page_layout_t{};
   out->area_index = page.area_index;
   out->rect = fm_cell_rect_t{page.first_row, page.first_col, page.last_row, page.last_col};
   out->origin_x_pt = page.origin_x_pt;

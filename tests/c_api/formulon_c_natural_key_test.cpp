@@ -29,7 +29,7 @@ void CreateDefault(WorkbookGuard& wb) {
 TEST(FormulonCApiNaturalKey, DefinedNameByNameAndScope) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  const fm_defined_name_input_t rate{"Rate", "Sheet1!$A$1", -1, "the rate", 1};
+  const fm_defined_name_input_t rate{sizeof(fm_defined_name_input_t), "Rate", "Sheet1!$A$1", -1, "the rate", 1};
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &rate), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "Sheet1!$B$1", 0), 0);
 
@@ -83,11 +83,11 @@ TEST(FormulonCApiNaturalKey, TableAndCellStyleByName) {
   WorkbookGuard wb;
   CreateDefault(wb);
   const fm_table_style_element_t element{"wholeTable", 1U, 0, 0U};
-  const fm_table_style_t style{"Corporate", 0, 1, &element, 1U};
+  const fm_table_style_t style{sizeof(fm_table_style_t), "Corporate", 0, 1, &element, 1U};
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
 
   int32_t present = 0;
-  fm_table_style_t table_style{};
+  fm_table_style_t table_style = FM_STRUCT_INIT(fm_table_style_t);
   ASSERT_EQ(fm_workbook_get_table_style(wb.handle, "corporate", &present, &table_style), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(table_style.name, "Corporate");
@@ -109,13 +109,13 @@ TEST(FormulonCApiNaturalKey, TableAndCellStyleByName) {
 TEST(FormulonCApiNaturalKey, HyperlinkByAnchorCell) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  fm_hyperlink_t link{};
+  fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
   link.rect = fm_cell_rect_t{1U, 1U, 2U, 3U};
   link.target = "https://example.com/";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb.handle, 0, &link), 0);
 
   int32_t present = 0;
-  fm_hyperlink_t out{};
+  fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, 1U, 1U, &present, &out), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(out.target, "https://example.com/");
@@ -128,9 +128,9 @@ TEST(FormulonCApiNaturalKey, HyperlinkByAnchorCell) {
 TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  const fm_person_t alice{kAlice, "Alice", "alice@example.com", "None"};
+  const fm_person_t alice{sizeof(fm_person_t), kAlice, "Alice", "alice@example.com", "None"};
   ASSERT_EQ(fm_workbook_add_person(wb.handle, &alice), 0) << fm_get_last_error_message();
-  fm_threaded_comment_t comment{};
+  fm_threaded_comment_t comment = FM_STRUCT_INIT(fm_threaded_comment_t);
   comment.id = kThread;
   comment.row = 4U;
   comment.col = 2U;
@@ -140,14 +140,14 @@ TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
   ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &comment), 0) << fm_get_last_error_message();
 
   int32_t present = 0;
-  fm_person_t person{};
+  fm_person_t person = FM_STRUCT_INIT(fm_person_t);
   ASSERT_EQ(fm_workbook_get_person(wb.handle, kAlice, &present, &person), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(person.display_name, "Alice");
   ASSERT_EQ(fm_workbook_get_person(wb.handle, "{0A1B2C3D-0000-4000-8000-000000000009}", &present, &person), 0);
   EXPECT_EQ(present, 0);
 
-  fm_threaded_comment_t thread{};
+  fm_threaded_comment_t thread = FM_STRUCT_INIT(fm_threaded_comment_t);
   ASSERT_EQ(fm_sheet_get_threaded_comment(wb.handle, 0, kThread, &present, &thread), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(thread.text, "Check this");
@@ -160,7 +160,7 @@ TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
 TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  fm_shape_t spec{};
+  fm_shape_t spec = FM_STRUCT_INIT(fm_shape_t);
   spec.fields = FM_SHAPE_FIELD_PRESET_GEOMETRY | FM_SHAPE_FIELD_ANCHOR;
   spec.preset_geometry = "rect";
   spec.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
@@ -171,7 +171,7 @@ TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
   int32_t present = 0;
-  fm_shape_t shape{};
+  fm_shape_t shape = FM_STRUCT_INIT(fm_shape_t);
   ASSERT_EQ(fm_sheet_get_shape(wb.handle, 0, id, &present, &shape), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(shape.object_id, id);
@@ -179,7 +179,7 @@ TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   ASSERT_EQ(fm_sheet_get_shape(wb.handle, 0, id + 1U, &present, &shape), 0);
   EXPECT_EQ(present, 0);
 
-  fm_drawing_object_t object{};
+  fm_drawing_object_t object = FM_STRUCT_INIT(fm_drawing_object_t);
   ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &present, &object), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(object.object_id, id);
@@ -232,7 +232,7 @@ TEST(FormulonCApiNaturalKey, IndexKeyedAddsReturnTheirIndex) {
   EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Third", nullptr), kBindingNullPointer);
 
   fm_cell_rect_t range{0U, 0U, 3U, 0U};
-  fm_data_validation_t validation{};
+  fm_data_validation_t validation = FM_STRUCT_INIT(fm_data_validation_t);
   validation.ranges = &range;
   validation.range_count = 1;
   validation.type = 1;
@@ -246,7 +246,7 @@ TEST(FormulonCApiNaturalKey, IndexKeyedAddsReturnTheirIndex) {
   EXPECT_EQ(first, 0U);
   EXPECT_EQ(second, 1U);
 
-  fm_protected_range_t protected_range{};
+  fm_protected_range_t protected_range = FM_STRUCT_INIT(fm_protected_range_t);
   protected_range.name = "Inputs";
   protected_range.ranges = &range;
   protected_range.range_count = 1;
@@ -267,7 +267,7 @@ TEST(FormulonCApiNaturalKey, ARejectedAddLeavesItsOutIndexUntouched) {
   EXPECT_EQ(out, 99U);
   EXPECT_NE(fm_workbook_add_sheet(wb.handle, "Sheet1", &out), 0);
   EXPECT_EQ(out, 99U);
-  fm_data_validation_t validation{};
+  fm_data_validation_t validation = FM_STRUCT_INIT(fm_data_validation_t);
   EXPECT_NE(fm_sheet_add_validation(wb.handle, 0, &validation, &out), 0);
   EXPECT_EQ(out, 99U);
 }

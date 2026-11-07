@@ -35,9 +35,21 @@ struct Parsed {
   uint32_t col1 = 0;
 };
 
+// Text that is not a reference fails with the whole text as the parse-error range.
+void ExpectNotReference(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0) {
+  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  EXPECT_EQ(fm_workbook_parse_reference(wb, text, r1c1, 0, 0, 0, &out), FM_STATUS_PARSER_INVALID_REFERENCE) << text;
+  EXPECT_EQ(out.valid, 0) << text;
+  fm_parse_error_t error = FM_STRUCT_INIT(fm_parse_error_t);
+  ASSERT_EQ(fm_get_last_parse_error(&error), 0) << text;
+  EXPECT_EQ(error.code, FM_PARSE_ERROR_INVALID_REFERENCE) << text;
+  EXPECT_EQ(error.start, 0U) << text;
+  EXPECT_EQ(error.end, static_cast<uint32_t>(std::string(text).size())) << text;
+}
+
 Parsed Parse(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0, int32_t has_base = 0, uint32_t base_row = 0,
              uint32_t base_col = 0) {
-  fm_parsed_reference_t out{};
+  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
   EXPECT_EQ(fm_workbook_parse_reference(wb, text, r1c1, has_base, base_row, base_col, &out), 0)
       << text << ": " << fm_get_last_error_message();
   Parsed p;
@@ -123,7 +135,7 @@ TEST(FormulonCApiReference, ParsesSheetQualifiers) {
   ExpectRange(Parse(wb.handle, "'My Sheet'!A1:B2"), 0, 0, 1, 1);
 }
 
-TEST(FormulonCApiReference, NonReferencesReadInvalid) {
+TEST(FormulonCApiReference, NonReferencesFailAsInvalidReference) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* rows[] = {
@@ -143,7 +155,7 @@ TEST(FormulonCApiReference, NonReferencesReadInvalid) {
       "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'!A1",
   };
   for (const char* text : rows) {
-    EXPECT_FALSE(Parse(wb.handle, text).valid) << text;
+    ExpectNotReference(wb.handle, text);
   }
 }
 
@@ -155,18 +167,18 @@ TEST(FormulonCApiReference, ParsesR1C1UnderTheWorkbookProfile) {
   ExpectRange(Parse(wb.handle, "R[-1]C", 1, 1, 5, 5), 4, 5, 4, 5);
   // A relative axis wraps at the grid edge, as Excel's does.
   ExpectRange(Parse(wb.handle, "R[-1]C", 1, 1, 0, 0), kLastRow, 0, kLastRow, 0);
-  EXPECT_FALSE(Parse(wb.handle, "R[-1]C", 1).valid);
+  ExpectNotReference(wb.handle, "R[-1]C", 1);
 
   WorkbookGuard de;
   ASSERT_EQ(fm_workbook_create_default(&de.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(de.handle, "mac-365-de_DE"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(de.handle, "mac-365-de_DE"), 0);
   ExpectRange(Parse(de.handle, "Z2S3", 1), 1, 2, 1, 2);
 }
 
 TEST(FormulonCApiReference, SheetNameOutlivesTheNextParserCall) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_parsed_reference_t out{};
+  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
   ASSERT_EQ(fm_workbook_parse_reference(wb.handle, "'My Sheet'!A1", 0, 0, 0, 0, &out), 0);
   ASSERT_EQ(out.has_sheet, 1);
   // The parser's own sheet view lives in thread-local scratch the next parse reuses.
@@ -178,7 +190,7 @@ TEST(FormulonCApiReference, SheetNameOutlivesTheNextParserCall) {
 TEST(FormulonCApiReference, ParseRejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_parsed_reference_t out{};
+  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
   EXPECT_EQ(fm_workbook_parse_reference(nullptr, "A1", 0, 0, 0, 0, &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_parse_reference(wb.handle, nullptr, 0, 0, 0, 0, &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_parse_reference(wb.handle, "A1", 0, 0, 0, 0, nullptr), kBindingNullPointer);

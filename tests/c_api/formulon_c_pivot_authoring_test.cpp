@@ -92,7 +92,7 @@ TEST(FormulonCApiPivot, SaveRejectsAPivotCacheWithNoWorksheetSource) {
 TEST(FormulonCApiPivot, SavedScratchPivotEmitsLocationRequiredDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
@@ -119,7 +119,7 @@ TEST(FormulonCApiPivot, SavedPivotLocationRefCoversTheProjectedGrid) {
   // to be pinned on the emitted bytes.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
@@ -217,7 +217,7 @@ TEST(FormulonCApiPivot, PivotMutationsInvalidateGetPivotDataFormula) {
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 1400.0);
 
-  fm_pivot_data_field_spec_t average_spec{};
+  fm_pivot_data_field_spec_t average_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   average_spec.name = "Sum of Amount";
   average_spec.field_index = 1U;
   average_spec.aggregation = FM_PIVOT_AGG_AVERAGE;
@@ -244,7 +244,7 @@ TEST(FormulonCApiPivot, PivotMutationsInvalidateGetPivotDataFormula) {
 TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
   WorkbookGuard original;
   ASSERT_EQ(fm_workbook_create_default(&original.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(original.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(original.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(original.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
@@ -254,7 +254,7 @@ TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(loaded.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   EXPECT_NE(SavedPivotXml(loaded.handle).find("<location ref=\"D1:E4\""), std::string::npos);
 
   // The loaded location is marked authored. Add a new shared item and record
@@ -516,7 +516,7 @@ std::vector<std::string> RowLabels(fm_workbook_t* wb, std::size_t pivot_index) {
 TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
@@ -540,7 +540,7 @@ TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(loaded.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   EXPECT_EQ(RowLabels(loaded.handle, 0), (std::vector<std::string>{"South", "North"}));
 
   // Leaving manual order returns to label order and spells it out.
@@ -609,7 +609,7 @@ void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_i
   }
 
   ASSERT_EQ(fm_sheet_add_pivot(wb, 0, "PT", cache_id, 0U, 3U, &pivot_index), 0) << fm_get_last_error_message();
-  fm_pivot_field_spec_t date_spec{};
+  fm_pivot_field_spec_t date_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   date_spec.source_name = "Date";
   date_spec.custom_name = "";
   date_spec.axis = FM_PIVOT_AXIS_ROW;
@@ -619,7 +619,7 @@ void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_i
   ASSERT_EQ(fm_sheet_add_pivot_field(wb, 0, pivot_index, &date_spec, &date_field), 0) << fm_get_last_error_message();
   const std::uint32_t row_order[] = {static_cast<std::uint32_t>(date_field)};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb, 0, pivot_index, row_order, 1U), 0) << fm_get_last_error_message();
-  fm_pivot_field_spec_t amount_spec{};
+  fm_pivot_field_spec_t amount_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
@@ -628,7 +628,7 @@ void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_i
   std::size_t amount_field = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field), 0)
       << fm_get_last_error_message();
-  fm_pivot_data_field_spec_t data_spec{};
+  fm_pivot_data_field_spec_t data_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   data_spec.name = "Sum of Amount";
   data_spec.field_index = static_cast<std::uint32_t>(amount_field);
   data_spec.aggregation = FM_PIVOT_AGG_SUM;
@@ -795,13 +795,13 @@ TEST(FormulonCApiPivot, StructEnumMutatorsRejectRawValuesWithoutMutation) {
   const std::vector<std::uint8_t> snapshot(before.data, before.data + before.len);
   const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 
-  fm_pivot_field_spec_t field_spec{};
+  fm_pivot_field_spec_t field_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   field_spec.source_name = "Region";
   field_spec.axis = RawEnumValue<fm_pivot_axis_t>(99);
   std::size_t field_index = 99U;
   EXPECT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &field_spec, &field_index), expected);
 
-  fm_pivot_data_field_spec_t df_spec{};
+  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Total";
   df_spec.field_index = 1;
   df_spec.aggregation = RawEnumValue<fm_pivot_aggregation_t>(99);
@@ -822,7 +822,7 @@ TEST(FormulonCApiPivot, StructEnumMutatorsRejectRawValuesWithoutMutation) {
 TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
@@ -841,7 +841,7 @@ TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
   bool saw_japanese_total = false;
   const std::size_t cell_count = count_of(fm_pivot_cells_get_cell_count, projected.handle);
   for (std::size_t i = 0; i < cell_count; ++i) {
-    fm_pivot_cell_t cell{};
+    fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
     ASSERT_EQ(fm_pivot_cells_get_cell_at(projected.handle, i, &cell), 0);
     if (cell.value.kind == FM_VAL_TEXT && cell.value.u.text != nullptr &&
         std::string_view(cell.value.u.text) == "総計") {
@@ -899,7 +899,7 @@ TEST(FormulonCApiPivot, PivotCacheRecordSettersRejectOutOfRangeFieldIndex) {
 TEST(FormulonCApiPivot, FieldAxisKeepsRowAndColumnOrdersInStep) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
@@ -911,14 +911,14 @@ TEST(FormulonCApiPivot, FieldAxisKeepsRowAndColumnOrdersInStep) {
 
   // A field added on the row axis is placed without an explicit order.
   ASSERT_EQ(fm_sheet_clear_pivot_fields(wb.handle, 0, pivot_index), 0);
-  fm_pivot_field_spec_t region_spec{};
+  fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   region_spec.source_name = "Region";
   region_spec.axis = FM_PIVOT_AXIS_ROW;
   region_spec.subtotal_top = 1;
   std::size_t region = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &region_spec, &region), 0)
       << fm_get_last_error_message();
-  fm_pivot_field_spec_t amount_spec{};
+  fm_pivot_field_spec_t amount_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   amount_spec.source_name = "Amount";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
   amount_spec.subtotal_top = 1;
@@ -981,7 +981,7 @@ void BuildDatePivot(fm_workbook_t* wb, std::uint32_t* out_cache_id) {
   const char* const names[] = {"When", "Amt"};
   const fm_pivot_axis_t axes[] = {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_VALUE};
   for (std::size_t i = 0; i < 2; ++i) {
-    fm_pivot_field_spec_t spec{};
+    fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
     spec.source_name = names[i];
     spec.custom_name = "";
     spec.axis = axes[i];
@@ -991,7 +991,7 @@ void BuildDatePivot(fm_workbook_t* wb, std::uint32_t* out_cache_id) {
   }
   const std::uint32_t rows[] = {0U};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb, 0, pivot, rows, 1U), 0);
-  fm_pivot_data_field_spec_t df{};
+  fm_pivot_data_field_spec_t df = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df.name = "Sum of Amt";
   df.field_index = 1U;
   df.aggregation = FM_PIVOT_AGG_SUM;

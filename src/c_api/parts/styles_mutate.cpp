@@ -17,6 +17,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "io/styles_writer.h"
 #include "styles.h"
 #include "utils/error.h"
@@ -26,6 +27,7 @@ using formulon::effective_num_fmt;
 using formulon::c_api::parts::add_num_fmt_code;
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
@@ -221,19 +223,13 @@ formulon::CellXf cell_xf_from_c(const fm_cell_xf_t& record, std::uint32_t xf_id)
 }
 
 /// Accepts a colour specification from the caller. An out-of-range `kind`
-/// degrades to `kNone`, which makes the writer emit the sibling `*_argb` as
-/// `rgb` rather than emitting an unknown attribute. Non-`kNone` selectors
-/// remain authoritative; no theme or indexed colour is resolved here.
-formulon::ColorSpec color_from_c(const fm_color_spec_t& src) noexcept {
-  formulon::ColorSpec out;
-  out.kind = (src.kind <= static_cast<uint8_t>(formulon::ColorSpec::Kind::kAuto))
-                 ? static_cast<formulon::ColorSpec::Kind>(src.kind)
-                 : formulon::ColorSpec::Kind::kNone;
-  out.rgb = src.rgb;
-  out.theme = src.theme;
-  out.tint = src.tint;
-  out.indexed = src.indexed;
-  return out;
+/// degrades to `kNone` rather than reaching the writer as an unknown
+/// attribute; `out_argb` receives the record's legacy ARGB field.
+formulon::ColorSpec color_from_c(fm_color_spec_t src, std::uint32_t* out_argb) {
+  if (src.kind > static_cast<uint8_t>(formulon::ColorSpec::Kind::kAuto)) {
+    src.kind = kFmColorNone;
+  }
+  return formulon::c_api::parts::color_spec_from_c(src, out_argb);
 }
 
 formulon::FontRecord font_from_c(const fm_font_record_t& record) {
@@ -262,8 +258,7 @@ formulon::FontRecord font_from_c(const fm_font_record_t& record) {
   out.family = record.family;
   out.charset = record.charset;
   out.scheme = record.scheme;
-  out.color_argb = record.color_argb;
-  out.color = color_from_c(record.color);
+  out.color = color_from_c(record.color, &out.color_argb);
   return out;
 }
 
@@ -284,10 +279,8 @@ constexpr std::size_t kMaxGradientStops = 1024;
 formulon::FillRecord fill_from_c(const fm_fill_record_t& record) {
   formulon::FillRecord out;
   out.pattern = record.pattern;
-  out.fg_argb = record.fg_argb;
-  out.bg_argb = record.bg_argb;
-  out.fg = color_from_c(record.fg);
-  out.bg = color_from_c(record.bg);
+  out.fg = color_from_c(record.fg, &out.fg_argb);
+  out.bg = color_from_c(record.bg, &out.bg_argb);
   if (record.has_gradient != 0) {
     out.has_gradient = true;
     // The pattern fields do not exist on a gradient fill; clearing them keeps
@@ -311,8 +304,7 @@ formulon::FillRecord fill_from_c(const fm_fill_record_t& record) {
       const fm_gradient_stop_t& in = record.gradient_stops[i];
       formulon::GradientStop stop;
       stop.position = finite_or_zero(in.position);
-      stop.argb = in.color_argb;
-      stop.color = color_from_c(in.color);
+      stop.color = color_from_c(in.color, &stop.argb);
       gradient.stops.push_back(stop);
     }
   }
@@ -322,8 +314,7 @@ formulon::FillRecord fill_from_c(const fm_fill_record_t& record) {
 formulon::BorderSide border_side_from_c(const fm_border_side_t& src) noexcept {
   formulon::BorderSide dst;
   dst.style = src.style;
-  dst.color_argb = src.color_argb;
-  dst.color = color_from_c(src.color);
+  dst.color = color_from_c(src.color, &dst.color_argb);
   return dst;
 }
 
@@ -559,6 +550,9 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   clear_last_error();
   if (wb == nullptr || batch == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*batch); rc != 0) {
+    return rc;
   }
   if ((batch->font_count != 0U && (batch->fonts == nullptr || batch->font_indices == nullptr)) ||
       (batch->fill_count != 0U && (batch->fills == nullptr || batch->fill_indices == nullptr)) ||

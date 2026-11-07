@@ -14,7 +14,7 @@
 
 TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
   int32_t present = 0;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("SUM", &present, &md), 0);
   EXPECT_EQ(present, 1);
   ASSERT_NE(md.canonical_name, nullptr);
@@ -30,7 +30,7 @@ TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
 
 TEST(FormulonCApiFunctionMetadata, LookupIsCaseInsensitive) {
   int32_t present = 0;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("sum", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "SUM");
   ASSERT_EQ(fm_get_function_metadata("SuM", &present, &md), 0);
@@ -39,7 +39,7 @@ TEST(FormulonCApiFunctionMetadata, LookupIsCaseInsensitive) {
 
 TEST(FormulonCApiFunctionMetadata, UnknownFunctionIsAbsent) {
   int32_t present = 1;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("NOT_A_FUNCTION", &present, &md), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(md.canonical_name, nullptr);
@@ -47,7 +47,7 @@ TEST(FormulonCApiFunctionMetadata, UnknownFunctionIsAbsent) {
 
 TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesUnavailableStubs) {
   int32_t present = 0;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("WEBSERVICE", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "WEBSERVICE");
   EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
@@ -58,7 +58,7 @@ TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesUnavailableStubs) {
 
 TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesNonStubSpecialCases) {
   int32_t present = 0;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("FILTERXML", &present, &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
 
@@ -71,7 +71,7 @@ TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesNonStubSpecialCases)
 
 TEST(FormulonCApiFunctionMetadata, NullArgsReturnBindingNullPointer) {
   int32_t present = 0;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   EXPECT_EQ(fm_get_function_metadata(nullptr, &present, &md),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_get_function_metadata("SUM", &present, nullptr),
@@ -205,7 +205,7 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
         Expected{"INDEX", 2U, 4U}, Expected{"OFFSET", 3U, 5U}, Expected{"INDIRECT", 1U, 2U}, Expected{"SORT", 1U, 4U},
         Expected{"UNIQUE", 1U, 3U}, Expected{"FILTER", 2U, 3U}, Expected{"IF", 2U, 3U}, Expected{"LET", 3U, 253U},
         Expected{"LAMBDA", 1U, 254U}, Expected{"VLOOKUP", 3U, 4U}}) {
-    fm_function_metadata_t md{};
+    fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
     ASSERT_EQ(fm_get_function_metadata(fn.name, &present, &md), 0) << fn.name;
     ASSERT_EQ(present, 1) << fn.name << " did not resolve";
     ASSERT_NE(md.canonical_name, nullptr);
@@ -218,7 +218,7 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
 
 TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
   int32_t present = 0;
-  fm_function_metadata_t md{};
+  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("xlookup", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "XLOOKUP");
 }
@@ -242,7 +242,7 @@ TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalog
       ASSERT_NE(name, nullptr);
 
       // metadata
-      fm_function_metadata_t md{};
+      fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
       EXPECT_EQ(fm_get_function_metadata(name, &present, &md), 0) << name;
       EXPECT_EQ(present, 1) << name << " has no metadata";
       // Display text is host-supplied, never engine-owned. Asserted for

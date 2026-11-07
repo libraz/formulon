@@ -1,29 +1,3 @@
-c	record.border_side	color_argb	fm_border_side_t: `color_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
-c	record.cf_color	-	`fm_cf_color_t` is retired; use `fm_color_spec_t`
-c	record.cf_match	bar_border	fm_cf_match_t: `bar_border` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_match	bar_fill	fm_cf_match_t: `bar_fill` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_match	color	fm_cf_match_t: `color` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_rule	color_scale_colors	fm_cf_rule_t: `color_scale_colors` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_rule	data_bar_axis_color	fm_cf_rule_t: `data_bar_axis_color` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_rule	data_bar_border	fm_cf_rule_t: `data_bar_border` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_rule	data_bar_fill	fm_cf_rule_t: `data_bar_fill` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_rule	data_bar_negative_border	fm_cf_rule_t: `data_bar_negative_border` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.cf_rule	data_bar_negative_fill	fm_cf_rule_t: `data_bar_negative_fill` is a `fm_cf_color_t`; use `fm_color_spec_t`
-c	record.chart_fill	color	fm_chart_fill_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
-c	record.chart_fill	has_color	fm_chart_fill_t: `has_color` flags a colour's presence; an absent `fm_color_spec_t` is kind None
-c	record.chart_fill_patch	color	fm_chart_fill_patch_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
-c	record.chart_labels	font_color	fm_chart_labels_t: `font_color` holds a colour as a number; make it a `fm_color_spec_t`
-c	record.chart_labels	has_font_color	fm_chart_labels_t: `has_font_color` flags a colour's presence; an absent `fm_color_spec_t` is kind None
-c	record.chart_labels_patch	font_color	fm_chart_labels_patch_t: `font_color` holds a colour as a number; make it a `fm_color_spec_t`
-c	record.chart_line	color	fm_chart_line_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
-c	record.chart_line	has_color	fm_chart_line_t: `has_color` flags a colour's presence; an absent `fm_color_spec_t` is kind None
-c	record.chart_line_patch	color	fm_chart_line_patch_t: `color` holds a colour as a number; make it a `fm_color_spec_t`
-c	record.fill_record	bg_argb	fm_fill_record_t: `bg_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
-c	record.fill_record	fg_argb	fm_fill_record_t: `fg_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
-c	record.font_record	color_argb	fm_font_record_t: `color_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
-c	record.gradient_stop	color_argb	fm_gradient_stop_t: `color_argb` holds a colour as a number; carry one `fm_color_spec_t` instead
-c	record.shape	fill_rgb	fm_shape_t: `fill_rgb` holds a colour as a number; carry one `fm_color_spec_t` instead
-c	record.shape	line_rgb	fm_shape_t: `line_rgb` holds a colour as a number; carry one `fm_color_spec_t` instead
 native	record.border_side	BorderSide.colorArgb	BorderSide: `colorArgb` holds a colour as a number; carry one `Color` instead
 native	record.cf_color	-	`CfColor` is retired; use `Color`
 native	record.cf_match	CfMatch.barBorder	CfMatch: `barBorder` is a `CfColor`; use `Color`

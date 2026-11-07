@@ -76,8 +76,10 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     record.horizontal_align = 8;
     record.has_horizontal_align = 1;
     uint32_t indices[] = {0xAABBCCDDU};
-    const fm_styles_batch_t batch{nullptr, 0U,      nullptr, nullptr, 0U,      nullptr, nullptr, 0U,
-                                  nullptr, &record, 1U,      indices, nullptr, 0U,      nullptr};
+    fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+    batch.cell_xfs = &record;
+    batch.cell_xf_count = 1U;
+    batch.cell_xf_indices = indices;
     const std::size_t before = wb.handle->workbook().styles().cell_xfs.size();
     expect_rejected(fm_workbook_add_batch(wb.handle, &batch), kInvalid, "horizontal_align");
     EXPECT_EQ(indices[0], 0xAABBCCDDU);
@@ -91,8 +93,10 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     fm_cell_xf_t record{};
     record.xf_id = 3U;
     uint32_t indices[] = {0xAABBCCDDU};
-    const fm_styles_batch_t batch{nullptr, 0U,      nullptr, nullptr, 0U,      nullptr, nullptr, 0U,
-                                  nullptr, &record, 1U,      indices, nullptr, 0U,      nullptr};
+    fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+    batch.cell_xfs = &record;
+    batch.cell_xf_count = 1U;
+    batch.cell_xf_indices = indices;
     expect_rejected(fm_workbook_add_batch(wb.handle, &batch), FM_STATUS_INDEX_OUT_OF_RANGE, "xf_id");
     EXPECT_EQ(indices[0], 0xAABBCCDDU);
   }
@@ -103,8 +107,10 @@ TEST(FormulonCApiStyles, AddBatchEmitsAlignmentOnlyForFlaggedAttributes) {
     WorkbookGuard wb;
     EXPECT_EQ(fm_workbook_create_default(&wb.handle), 0);
     uint32_t xf_indices[] = {0xDEADBEEFU};
-    const fm_styles_batch_t batch{nullptr, 0U,      nullptr, nullptr,    0U,      nullptr, nullptr, 0U,
-                                  nullptr, &record, 1U,      xf_indices, nullptr, 0U,      nullptr};
+    fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+    batch.cell_xfs = &record;
+    batch.cell_xf_count = 1U;
+    batch.cell_xf_indices = xf_indices;
     EXPECT_EQ(fm_workbook_add_batch(wb.handle, &batch), 0) << fm_get_last_error_message();
     fm_cell_xf_t got{};
     EXPECT_EQ(fm_workbook_get_cell_xf(wb.handle, xf_indices[0], &got), 0);

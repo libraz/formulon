@@ -170,8 +170,14 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_create_default(&wb), 0);
   ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 0, 1.0), 0);
-  const fm_defined_name_input_t workbook_const{"WorkbookConst", "=1", -1, nullptr, 0};
-  const fm_defined_name_input_t sheet_local{"SheetLocal", "=Sheet1!$A$1", 0, nullptr, 0};
+  fm_defined_name_input_t workbook_const = FM_STRUCT_INIT(fm_defined_name_input_t);
+  workbook_const.name = "WorkbookConst";
+  workbook_const.formula = "=1";
+  workbook_const.local_sheet_id = -1;
+  fm_defined_name_input_t sheet_local = FM_STRUCT_INIT(fm_defined_name_input_t);
+  sheet_local.name = "SheetLocal";
+  sheet_local.formula = "=Sheet1!$A$1";
+  sheet_local.local_sheet_id = 0;
   ASSERT_EQ(fm_workbook_set_defined_name(wb, &workbook_const), 0);
   ASSERT_EQ(fm_workbook_set_defined_name(wb, &sheet_local), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
@@ -243,4 +249,43 @@ TEST(FormulonCli, PaginateConsumesTerminatorAsSheetValue) {
   const CliRun result = run_cli({"paginate", "--sheet", "--", input});
   EXPECT_EQ(result.exit_code, 64);
   EXPECT_TRUE(result.stdout_text.empty());
+}
+
+TEST(FormulonCli, DumpRangeNarrowsTheCellViews) {
+  const std::string in = temp_path("dump_range.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in, "text"));  // A1 = 7, B1 = =A1+1, A2 = text
+  const CliRun values = run_cli({"dump", "--values", "--range", "B1:B1", in});
+  EXPECT_EQ(values.exit_code, 0) << values.stderr_text;
+  EXPECT_EQ(values.stdout_text, "Sheet1!B1 8\n");
+  const CliRun column = run_cli({"dump", "--values", "--range=A1:A2", in});
+  EXPECT_EQ(column.stdout_text, "Sheet1!A1 7\nSheet1!A2 text\n");
+  const CliRun formulas = run_cli({"dump", "--range", "A1:B2", in});
+  EXPECT_EQ(formulas.stdout_text, "Sheet1!B1 =A1+1\n");
+  const CliRun json = run_cli({"dump", "--json", "--sheet", "0", "--range", "A2:A2", in});
+  EXPECT_EQ(json.exit_code, 0) << json.stderr_text;
+  EXPECT_NE(json.stdout_text.find("\"ref\":\"A2\""), std::string::npos) << json.stdout_text;
+  EXPECT_EQ(json.stdout_text.find("\"ref\":\"A1\""), std::string::npos) << json.stdout_text;
+}
+
+TEST(FormulonCli, DumpSheetSelectsOneSheetByNameOrIndex) {
+  const std::string in = temp_path("dump_sheet.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  EXPECT_EQ(run_cli({"dump", "--sheet", "Sheet1", in}).stdout_text, "Sheet1!B1 =A1+1\n");
+  EXPECT_EQ(run_cli({"dump", "--sheet", "0", in}).stdout_text, "Sheet1!B1 =A1+1\n");
+  const CliRun missing = run_cli({"dump", "--sheet", "Nope", in});
+  EXPECT_EQ(missing.exit_code, 64);
+  EXPECT_EQ(missing.stdout_text, "");
+}
+
+TEST(FormulonCli, DumpRangeAndSheetRejectBadUseAsUsageErrors) {
+  const std::string in = temp_path("dump_range_bad.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  EXPECT_EQ(run_cli({"dump", "--range", "not a range", in}).exit_code, 64);
+  EXPECT_EQ(run_cli({"dump", "--range", "Sheet1!A1:B2", in}).exit_code, 64);
+  EXPECT_EQ(run_cli({"dump", "--sheets", "--range", "A1:B2", in}).exit_code, 64);
+  EXPECT_EQ(run_cli({"dump", "--metadata", "--sheet", "0", in}).exit_code, 64);
+  EXPECT_EQ(run_cli({"dump", "--range"}).exit_code, 64);
 }

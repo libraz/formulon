@@ -20,6 +20,14 @@ against `interface <handle.class>`. `patch: true` names its getter's record in
 `patch_record`, never `none`. A public name is unique per scope (or handle
 class), a raw name per scope.
 
+`reads_values: true` marks a C-backed op that computes pending cells before it
+reads; `resolved: true` a read whose XF-family indices are resolved output;
+`color: resolved` a record, field or op whose colours are rendered results;
+`namespace: ooxml` a `Workbook` / `Sheet` op published under `.ooxml`;
+`a1_exempt` the `*Row` / `*Col` fields of an input record that stay numeric. A
+`params` slot is a type, or `{type, default}` for a trailing argument the
+binding may omit; a default given there names a parameter of the C signature.
+
 `--ledger-only` runs the schema, chain, index and rule checks without reading
 src/wasm/formulon.d.ts or the C header.
 
@@ -67,7 +75,8 @@ FIELDS = frozenset(
         "kind", "scope", "noun", "qualifies", "record", "role", "from", "c", "js", "py", "enum", "returns",
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
         "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "patch", "patch_record",
-        "patch_reason", "patch_nested", "span_args", "internal", "handle",
+        "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved", "color",
+        "namespace", "a1_exempt",
     }
 )  # fmt: skip
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
@@ -89,6 +98,11 @@ FUNCTION_KINDS = frozenset({"op", "factory"})
 TYPE_KINDS = frozenset({"record", "enum", "typedef"})
 _RULE_ID_RE = re.compile(r"R\d+(\.[a-z0-9_]+)*")
 _SLOT_RE = re.compile(r"bool|string|number|int|double|enum:[a-z0-9_]+|union:[A-Za-z0-9_]+")
+NAMESPACES = frozenset({"ooxml"})
+COLOR_MODES = frozenset({"resolved"})
+# Defaults the binding computes rather than spells: `today` is the pinned clock, else the current date.
+DYNAMIC_DEFAULTS = frozenset({"today"})
+A1_EXEMPT_ROLES = frozenset({"input", "patch", "both"})
 WASM_DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
 PATCH_RECORD_NONE = "none"
 _JS_CELL_PAIR_RE = re.compile(r"(\w*?)(?:row|Row)")
@@ -172,7 +186,13 @@ def check_schema(data) -> List[str]:
             problems.append(f"{where}: review is `true` or absent")
         if "note" in entry and (not isinstance(entry["note"], str) or not entry["note"].strip()):
             problems.append(f"{where}: note must be a non-empty string")
-        slots = dict(entry.get("params") or {})
+        slots = {}
+        for param, spec in (entry.get("params") or {}).items():
+            if isinstance(spec, dict):
+                problems += _param_default_schema(f"{where}: param {param}", spec)
+                if "type" not in spec:
+                    continue
+            slots[param] = slot_type(spec)
         if "returns" in entry:
             slots["<return>"] = entry["returns"]
         for slot, value in slots.items():
@@ -189,6 +209,7 @@ def check_schema(data) -> List[str]:
             problems.append(f"{where}: `sheet_arg` excuses a sheet index on a workbook-scope entry only")
         problems += _address_and_patch_schema(where, entry)
         problems += _handle_schema(where, entry, data)
+        problems += _adoption_schema(where, entry)
         if not any(f in entry for f in (*NAME_FIELDS, "was", "replaced_by", "handle")):
             problems.append(f"{where}: names nothing")
     for name, collection in collections.items():
@@ -295,6 +316,56 @@ def _address_and_patch_schema(where: str, entry: dict) -> List[str]:
             )
         ):
             problems.append(f"{where}: span_args lists `[position, row|col, span|start_count]` triples")
+    return problems
+
+
+def slot_type(spec) -> Optional[str]:
+    """The type of a `params` slot: the slot itself, or the `type` of a `{type, default}` mapping."""
+    return spec.get("type") if isinstance(spec, dict) else spec
+
+
+def _param_default_schema(where: str, spec: dict) -> List[str]:
+    """A mapping slot is `{type?, default}`; the default is a literal or one of `DYNAMIC_DEFAULTS`."""
+    problems: List[str] = []
+    if not set(spec) <= {"type", "default"} or "default" not in spec:
+        problems.append(f"{where}: a mapping slot is `{{type, default}}` with `default` given")
+    default = spec.get("default")
+    if isinstance(default, str) and default not in DYNAMIC_DEFAULTS:
+        problems.append(f"{where}: default {default!r} is a literal or one of {sorted(DYNAMIC_DEFAULTS)}")
+    elif default is not None and not isinstance(default, (bool, int, float, str)):
+        problems.append(f"{where}: default must be a scalar")
+    return problems
+
+
+def _adoption_schema(where: str, entry: dict) -> List[str]:
+    """`reads_values`, `resolved`, `color`, `namespace` and `a1_exempt` sit on the kinds they describe."""
+    problems: List[str] = []
+    kind = entry.get("kind")
+    if "reads_values" in entry and (entry["reads_values"] is not True or kind != "op" or "c" not in entry):
+        problems.append(f"{where}: reads_values is `true` on an op with a C name")
+    if "resolved" in entry and (entry["resolved"] is not True or kind != "op"):
+        problems.append(f"{where}: resolved is `true` on an op")
+    if "color" in entry and (entry["color"] not in COLOR_MODES or kind not in ("record", "field", "op")):
+        problems.append(f"{where}: color is one of {sorted(COLOR_MODES)} on a record, field or op")
+    if "namespace" in entry:
+        if entry["namespace"] not in NAMESPACES:
+            problems.append(f"{where}: namespace is one of {sorted(NAMESPACES)}")
+        if kind not in ("op", "list") or entry.get("scope") not in SCOPES or "handle" in entry:
+            problems.append(f"{where}: a namespace holds `Workbook` / `Sheet` ops and lists, not handle methods")
+    if "a1_exempt" in entry:
+        exempt = entry["a1_exempt"]
+        if kind not in ("record", "typedef") or (kind == "record" and entry.get("role") not in A1_EXEMPT_ROLES):
+            problems.append(f"{where}: a1_exempt belongs to an input record or an options type")
+        if (
+            not isinstance(exempt, dict)
+            or set(exempt) != {"fields", "reason"}
+            or not isinstance(exempt["fields"], list)
+            or not exempt["fields"]
+            or not all(isinstance(f, str) and f for f in exempt["fields"])
+            or not isinstance(exempt["reason"], str)
+            or not exempt["reason"].strip()
+        ):
+            problems.append(f"{where}: a1_exempt is `{{fields: [name, ...], reason}}`")
     return problems
 
 
@@ -551,8 +622,12 @@ def check_typed_slots(entries: Dict[str, dict], surfaces: Optional[extract_names
             if p.name.startswith("out") and p.pointer_depth == 1:
                 if not str(entry.get("returns", "")).startswith("enum:"):
                     problems.append(f"{key}: returns enum {p.base_type} but carries no `returns: enum:<key>`")
-            elif p.pointer_depth == 0 and not str(params.get(p.name, "")).startswith("enum:"):
+            elif p.pointer_depth == 0 and not str(slot_type(params.get(p.name)) or "").startswith("enum:"):
                 problems.append(f"{key}: parameter {p.name} is enum {p.base_type} but `params` omits it")
+        names = {p.name for p in fn.params}
+        for param, spec in params.items():
+            if isinstance(spec, dict) and param not in names:
+                problems.append(f"{key}: params gives {param} a default, but {fn.name} has no such parameter")
         _, words = split_c_name(entry.get("c", ""))
         if words[:1] in (["is"], ["has"]) and entry.get("returns") != "bool":
             problems.append(f"{key}: predicate {entry.get('c')} needs `returns: bool`")

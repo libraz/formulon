@@ -37,7 +37,7 @@ void BuildSquares(WorkbookGuard& wb) {
 }
 
 fm_data_table_t SquaresSpec() {
-  fm_data_table_t spec{};
+  fm_data_table_t spec = FM_STRUCT_INIT(fm_data_table_t);
   spec.rect.first_row = 2;
   spec.rect.first_col = 1;
   spec.rect.last_row = 4;
@@ -61,7 +61,7 @@ TEST(FormulonCApiDataTable, AddComputesReadsAndRefusesWrites) {
   EXPECT_DOUBLE_EQ(Number(wb.handle, 1, 1), 9.0);
 
   int32_t present = 0;
-  fm_data_table_t info{};
+  fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 3, 1, &present, &info), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(info.rect.first_row, 2U);
@@ -101,7 +101,7 @@ TEST(FormulonCApiDataTable, TwoVariableTableReadsBothInputs) {
     ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 2, 3 + j, static_cast<double>(j + 1)), 0);
     ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 3 + j, 2, static_cast<double>(10 * (j + 1))), 0);
   }
-  fm_data_table_t spec{};
+  fm_data_table_t spec = FM_STRUCT_INIT(fm_data_table_t);
   spec.rect.first_row = 3;
   spec.rect.first_col = 3;
   spec.rect.last_row = 5;
@@ -119,7 +119,7 @@ TEST(FormulonCApiDataTable, TwoVariableTableReadsBothInputs) {
   EXPECT_DOUBLE_EQ(Number(wb.handle, 5, 5), 90.0);
 
   int32_t present = 0;
-  fm_data_table_t info{};
+  fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 5, 5, &present, &info), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(info.two_dimensional, 1);
@@ -153,7 +153,7 @@ TEST(FormulonCApiDataTable, RemoveBlanksTheResultCells) {
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 3, 1, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_BLANK);
   int32_t present = 1;
-  fm_data_table_t info{};
+  fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 3, 1, &present, &info), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, 4, 1), FM_STATUS_NOT_FOUND);
@@ -186,7 +186,7 @@ TEST(FormulonCApiDataTable, SurvivesSaveAndLoad) {
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   int32_t present = 0;
-  fm_data_table_t info{};
+  fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
   ASSERT_EQ(fm_sheet_get_data_table(loaded.handle, 0, 3, 1, &present, &info), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(info.has_col_input, 1);
@@ -247,7 +247,7 @@ TEST(FormulonCApiDataTable, StructuralEditsMoveOrRemoveTheTableWhole) {
   EXPECT_EQ(fm_sheet_delete_columns(wb.handle, 0, 0, 1), kPreconditionFailed);
   EXPECT_EQ(fm_sheet_insert_columns(wb.handle, 0, 1, 1), kPreconditionFailed);
   int32_t present = 0;
-  fm_data_table_t info{};
+  fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 2, 1, &present, &info), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(info.rect.last_row, 4U);
@@ -266,7 +266,7 @@ TEST(FormulonCApiDataTable, RejectsBadArguments) {
   BuildSquares(wb);
   fm_data_table_t spec = SquaresSpec();
   int32_t present = 0;
-  fm_data_table_t info{};
+  fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 9, &spec), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, 0, 0, nullptr, &info), kBindingNullPointer);

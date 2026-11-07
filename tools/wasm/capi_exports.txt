@@ -133,8 +133,8 @@ fm_workbook_set_pinned_now
 fm_workbook_clear_pinned_now
 fm_convert_civil_to_serial
 fm_convert_serial_to_civil
-fm_workbook_get_excel_profile_id
-fm_workbook_set_excel_profile_id
+fm_workbook_get_profile_id
+fm_workbook_set_profile_id
 fm_workbook_get_file_name
 fm_workbook_set_file_name
 
@@ -213,6 +213,8 @@ fm_sheet_get_view
 fm_sheet_set_zoom
 fm_sheet_set_freeze
 fm_sheet_set_visibility
+fm_sheet_get_tab_color
+fm_sheet_set_tab_color
 fm_sheet_set_show_grid_lines
 fm_sheet_set_show_row_col_headers
 fm_sheet_set_show_zeros
@@ -471,6 +473,7 @@ fm_workbook_get_external_link
 fm_workbook_get_diagnostics
 fm_get_last_error_message
 fm_get_last_error_context
+fm_get_last_parse_error
 fm_get_status_name
 fm_get_error_display_name
 

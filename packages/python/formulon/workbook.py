@@ -3583,7 +3583,15 @@ def _decode_color(ptr: int) -> Color:
     return Color(kind=_enum(ColorKind, d["kind"]), rgb=d["rgb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"])
 
 
-def _pack_color(ptr: int, spec: Color) -> None:
+def _argb_of(color: Color) -> int:
+    """The literal ``0xAARRGGBB`` a facade ``*_argb`` field reports for ``color``."""
+    return color.rgb if color.kind == ColorKind.RGB else 0
+
+
+def _pack_color(ptr: int, spec: Color, argb: int = 0) -> None:
+    """Write ``spec``; with no selector, a non-zero ``argb`` is written as a literal RGB."""
+    if spec.kind == ColorKind.NONE and argb:
+        spec = Color(kind=ColorKind.RGB, rgb=_uint(argb, "argb"))
     S.COLOR_SPEC.pack(
         LIB,
         ptr,
@@ -3603,17 +3611,18 @@ _FONT_TOGGLES = ("bold", "italic", "strike", "outline", "shadow", "condense", "e
 
 def _decode_font(ptr: int) -> Font:
     d = S.FONT_RECORD.unpack(LIB, ptr)
+    color = _decode_color(ptr + S.FONT_RECORD.offsets["color"][1])
     return Font(
         name=LIB.read_cstr(d["name"]),
         size=d["size"] if d["has_size"] else None,
-        color_argb=d["color_argb"],
+        color_argb=_argb_of(color),
         **{name: bool(d[name]) if d[f"has_{name}"] else None for name in _FONT_TOGGLES},
         underline=_enum(UnderlineStyle, d["underline"]),
         vert_align=_enum(FontVerticalAlign, d["vert_align"]),
         family=_enum(FontFamily, d["family"]) if d["has_family"] else None,
         charset=d["charset"] if d["has_charset"] else None,
         scheme=_enum(FontScheme, d["scheme"]),
-        color=_decode_color(ptr + S.FONT_RECORD.offsets["color"][1]),
+        color=color,
     )
 
 
@@ -3621,7 +3630,6 @@ def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
     fields: Dict[str, object] = {
         "size": 0.0 if record.size is None else float(record.size),
         "has_size": 0 if record.size is None else 1,
-        "color_argb": _uint(record.color_argb, "color_argb"),
         "underline": _uint(record.underline, "underline", 8),
         "vert_align": _uint(record.vert_align, "vert_align", 8),
         "has_family": 0 if record.family is None else 1,
@@ -3635,7 +3643,7 @@ def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
         fields[name] = 1 if value else 0
         fields[f"has_{name}"] = 0 if value is None else 1
     S.FONT_RECORD.pack(LIB, ptr, fields)
-    _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color)
+    _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color, record.color_argb)
     S.write_str_field(LIB, ptr, S.FONT_RECORD, "name", record.name, scope)
 
 
@@ -3648,13 +3656,8 @@ def _decode_fill(ptr: int) -> Fill:
         for i in range(d["gradient_stop_count"]):
             stop_ptr = d["gradient_stops"] + i * stop_size
             stop = S.GRADIENT_STOP.unpack(LIB, stop_ptr)
-            stops.append(
-                GradientStop(
-                    position=stop["position"],
-                    color_argb=stop["color_argb"],
-                    color=_decode_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1]),
-                )
-            )
+            stop_color = _decode_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1])
+            stops.append(GradientStop(position=stop["position"], color_argb=_argb_of(stop_color), color=stop_color))
         gradient = GradientFill(
             type=_enum(GradientType, d["gradient_type"]),
             degree=d["gradient_degree"],
@@ -3664,12 +3667,14 @@ def _decode_fill(ptr: int) -> Fill:
             bottom=d["gradient_bottom"],
             stops=stops,
         )
+    fg = _decode_color(ptr + S.FILL_RECORD.offsets["fg"][1])
+    bg = _decode_color(ptr + S.FILL_RECORD.offsets["bg"][1])
     return Fill(
         pattern=_enum(FillPattern, d["pattern"]),
-        fg_argb=d["fg_argb"],
-        bg_argb=d["bg_argb"],
-        fg=_decode_color(ptr + S.FILL_RECORD.offsets["fg"][1]),
-        bg=_decode_color(ptr + S.FILL_RECORD.offsets["bg"][1]),
+        fg_argb=_argb_of(fg),
+        bg_argb=_argb_of(bg),
+        fg=fg,
+        bg=bg,
         gradient=gradient,
     )
 
@@ -3679,8 +3684,6 @@ def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
     stops are allocated through ``scope``."""
     values: Dict[str, object] = {
         "pattern": _uint(record.pattern, "pattern", 8),
-        "fg_argb": _uint(record.fg_argb, "fg_argb"),
-        "bg_argb": _uint(record.bg_argb, "bg_argb"),
     }
     gradient = record.gradient
     stops_ptr = 0
@@ -3691,12 +3694,8 @@ def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
             LIB.write_bytes(stops_ptr, b"\x00" * (stop_size * len(gradient.stops)))
             for i, stop in enumerate(gradient.stops):
                 stop_ptr = stops_ptr + i * stop_size
-                S.GRADIENT_STOP.pack(
-                    LIB,
-                    stop_ptr,
-                    {"position": float(stop.position), "color_argb": _uint(stop.color_argb, "color_argb")},
-                )
-                _pack_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1], stop.color)
+                S.GRADIENT_STOP.pack(LIB, stop_ptr, {"position": float(stop.position)})
+                _pack_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1], stop.color, stop.color_argb)
         values.update(
             has_gradient=1,
             gradient_type=_sint(gradient.type, "gradient.type"),
@@ -3709,8 +3708,8 @@ def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
             gradient_stop_count=len(gradient.stops),
         )
     S.FILL_RECORD.pack(LIB, ptr, values)
-    _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg)
-    _pack_color(ptr + S.FILL_RECORD.offsets["bg"][1], record.bg)
+    _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg, record.fg_argb)
+    _pack_color(ptr + S.FILL_RECORD.offsets["bg"][1], record.bg, record.bg_argb)
 
 
 def _decode_border_record(ptr: int) -> Border:
@@ -3718,10 +3717,9 @@ def _decode_border_record(ptr: int) -> Border:
     for side in _BORDER_SIDES:
         side_ptr = ptr + S.BORDER_RECORD.offsets[side][1]
         d = S.BORDER_SIDE.unpack(LIB, side_ptr)
+        side_color = _decode_color(side_ptr + S.BORDER_SIDE.offsets["color"][1])
         sides[side] = BorderSide(
-            style=_enum(BorderStyle, d["style"]),
-            color_argb=d["color_argb"],
-            color=_decode_color(side_ptr + S.BORDER_SIDE.offsets["color"][1]),
+            style=_enum(BorderStyle, d["style"]), color_argb=_argb_of(side_color), color=side_color
         )
     outer = S.BORDER_RECORD.unpack(LIB, ptr)
     return Border(**sides, diagonal_up=bool(outer["diagonal_up"]), diagonal_down=bool(outer["diagonal_down"]))
@@ -3738,12 +3736,8 @@ def _pack_border_record(ptr: int, border: Border) -> None:
     for side in _BORDER_SIDES:
         spec: BorderSide = getattr(border, side)
         side_ptr = ptr + S.BORDER_RECORD.offsets[side][1]
-        S.BORDER_SIDE.pack(
-            LIB,
-            side_ptr,
-            {"style": _uint(spec.style, "style", 8), "color_argb": _uint(spec.color_argb, "color_argb")},
-        )
-        _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.color)
+        S.BORDER_SIDE.pack(LIB, side_ptr, {"style": _uint(spec.style, "style", 8)})
+        _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.color, spec.color_argb)
 
 
 @dataclass(frozen=True)
@@ -4267,12 +4261,18 @@ class _ArgScope:
         return self.alloc(8)
 
     def struct(self, layout: S.Struct) -> int:
-        """Allocate one zeroed ``layout`` struct."""
-        return self.alloc(layout.size)
+        """Allocate one zeroed ``layout`` struct; a record carries its ``struct_size``."""
+        ptr = self.alloc(layout.size)
+        if layout.is_record:
+            LIB.write_bytes(ptr, layout.blank())
+        return ptr
 
     def struct_array(self, layout: S.Struct, count: int) -> int:
         """Allocate a zeroed contiguous array of ``count`` ``layout`` structs."""
-        return self.alloc(layout.size * count)
+        ptr = self.alloc(layout.size * count)
+        if ptr and layout.is_record:
+            LIB.write_bytes(ptr, bytes(layout.blank()) * count)
+        return ptr
 
     def value_array(self, count: int) -> int:
         """Allocate a zeroed contiguous array of ``count`` value-struct slots."""
@@ -4383,7 +4383,7 @@ def _pack_shape(
     """Build a shape input struct; a ``None`` argument is a field left out of the mask."""
     ptr = scope.struct_array(S.SHAPE, 1)
     mask = 0
-    values: Dict[str, int] = {}
+    values: Dict[str, Any] = {}
     if text_box is not None:
         mask |= _SHAPE_FIELDS["text_box"]
         values["text_box"] = 1 if text_box else 0
@@ -4405,10 +4405,12 @@ def _pack_shape(
         )
     if fill_kind is not None:
         mask |= _SHAPE_FIELDS["fill"]
-        values.update(fill_kind=_sint(fill_kind, "fill_kind"), fill_rgb=_uint(fill_rgb, "fill_rgb"))
+        values.update(fill_kind=_sint(fill_kind, "fill_kind"))
+        values["fill_color"] = {"kind": ColorKind.RGB, "rgb": _uint(fill_rgb, "fill_rgb")}
     if line_kind is not None:
         mask |= _SHAPE_FIELDS["line"]
-        values.update(line_kind=_sint(line_kind, "line_kind"), line_rgb=_uint(line_rgb, "line_rgb"))
+        values.update(line_kind=_sint(line_kind, "line_kind"))
+        values["line_color"] = {"kind": ColorKind.RGB, "rgb": _uint(line_rgb, "line_rgb")}
     if line_width_emu is not None:
         mask |= _SHAPE_FIELDS["line_width"]
         values["line_width_emu"] = _sint(line_width_emu, "line_width_emu", 64)
@@ -4593,9 +4595,9 @@ _CHART_LEGEND_NONE = -1
 _CHART_ROLES = ("name", "categories", "values", "x", "y", "size")
 
 # (patch key, C field, scalar kind) per patch struct.
-_FILL_PATCH_SPEC = (("color", "color", "u32"), ("transparency", "transparency_pct", "f64"))
+_FILL_PATCH_SPEC = (("color", "color", "rgb"), ("transparency", "transparency_pct", "f64"))
 _LINE_PATCH_SPEC = (
-    ("color", "color", "u32"),
+    ("color", "color", "rgb"),
     ("transparency", "transparency_pct", "f64"),
     ("width_pt", "width_pt", "f64"),
     ("dash", "dash", "i32"),
@@ -4611,7 +4613,7 @@ _LABELS_PATCH_SPEC = (
     ("separator", "separator", "str"),
     ("position", "position", "i32"),
     ("number_format", "number_format", "str"),
-    ("font_color", "font_color", "u32"),
+    ("font_color", "font_color", "rgb"),
     ("font_size_pt", "font_size_pt", "f64"),
 )
 _PLOT_PATCH_SPEC = (
@@ -4694,13 +4696,18 @@ def _read_chart_title(d: Dict[str, object]) -> Optional[ChartTitle]:
     )
 
 
+def _chart_rgb(spec: Dict[str, Any]) -> Optional[int]:
+    """The literal RGB of a chart colour spec, ``None`` when it is not one."""
+    return spec["rgb"] if spec["kind"] == ColorKind.RGB else None
+
+
 def _read_chart_fill(d: Dict[str, object]) -> ChartFill:
-    return ChartFill(color=d["color"] if d["has_color"] else None, transparency=_nan_none(d["transparency_pct"]))
+    return ChartFill(color=_chart_rgb(d["color"]), transparency=_nan_none(d["transparency_pct"]))
 
 
 def _read_chart_line(d: Dict[str, object]) -> ChartLine:
     return ChartLine(
-        color=d["color"] if d["has_color"] else None,
+        color=_chart_rgb(d["color"]),
         transparency=_nan_none(d["transparency_pct"]),
         width_pt=_nan_none(d["width_pt"]),
         dash=_enum(ChartLineDash, d["dash"]) if d["has_dash"] else None,
@@ -4728,7 +4735,7 @@ def _read_chart_labels(d: Dict[str, object]) -> ChartLabels:
         position=_enum(ChartLabelPosition, d["position"]) if d["has_position"] else None,
         number_format=_opt_cstr(d["number_format"]),
         source_linked=bool(d["source_linked"]),
-        font_color=d["font_color"] if d["has_font_color"] else None,
+        font_color=_chart_rgb(d["font_color"]),
         font_size_pt=_nan_none(d["font_size_pt"]),
         deleted=bool(d["deleted"]),
     )
@@ -4960,6 +4967,8 @@ def _title_fields(title: Union[str, ChartTitle], scope: _ArgScope) -> Dict[str, 
 def _patch_scalar(kind: str, value, key: str, scope: _ArgScope):
     if kind == "u32":
         return _uint(value, key)
+    if kind == "rgb":
+        return {"kind": ColorKind.RGB, "rgb": _uint(value, key)}
     if kind == "i32":
         return _sint(value, key)
     if kind == "bool":
@@ -5265,9 +5274,9 @@ def _shape_from(d: Dict[str, Any]) -> ShapeProperties:
         text=LIB.read_cstr(d["text"]),
         text_box=bool(d["text_box"]),
         fill_kind=_enum_or_none(ShapePaint, d["fill_kind"]),
-        fill_rgb=d["fill_rgb"],
+        fill_rgb=d["fill_color"]["rgb"] if d["fill_color"]["kind"] == ColorKind.RGB else 0,
         line_kind=_enum_or_none(ShapePaint, d["line_kind"]),
-        line_rgb=d["line_rgb"],
+        line_rgb=d["line_color"]["rgb"] if d["line_color"]["kind"] == ColorKind.RGB else 0,
         line_width_emu=d["line_width_emu"],
         rotation=d["rotation"],
         hidden=bool(d["hidden"]),
@@ -6739,7 +6748,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_get_excel_profile_id(h, out))
+            _check(LIB.fm_workbook_get_profile_id(h, out))
             return cast(
                 ExcelProfileId,
                 LIB.read_cstr(LIB.read_u32(out)),
@@ -6757,7 +6766,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             pid_ptr = scope.cstr(profile_id)
-            _check(LIB.fm_workbook_set_excel_profile_id(h, pid_ptr))
+            _check(LIB.fm_workbook_set_profile_id(h, pid_ptr))
 
     def get_file_name(self) -> Optional[str]:
         """Return the file name the workbook is shown under, or ``None`` when unset.
@@ -7380,7 +7389,7 @@ class Workbook:
             _check(LIB.fm_workbook_get_theme_colors(h, colors_ptr, source_ptr))
             return ThemeColors(
                 source=ThemeSource(LIB.read_i32(source_ptr)),
-                colors=list(struct.unpack("<12I", LIB.read_bytes(colors_ptr, S.THEME_COLORS.size))),
+                colors=list(struct.unpack("<12I", LIB.read_bytes(colors_ptr + S.THEME_COLORS.offsets["argb"][1], 48))),
             )
 
     def set_theme_colors(self, *, colors: Sequence[int]) -> None:
@@ -7391,7 +7400,7 @@ class Workbook:
             raise ValueError(f"formulon: colors must hold 12 entries, got {len(values)}")
         with _ArgScope() as scope:
             ptr = scope.struct(S.THEME_COLORS)
-            LIB.write_bytes(ptr, struct.pack("<12I", *values))
+            LIB.write_bytes(ptr + S.THEME_COLORS.offsets["argb"][1], struct.pack("<12I", *values))
             _check(LIB.fm_workbook_set_theme_colors(h, ptr))
 
     def set_theme_fonts(self, fonts: ThemeFonts) -> None:
@@ -7905,7 +7914,7 @@ def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ExcelP
         b_ptr = scope.cstr(b)
         pid_ptr = scope.cstr(profile_id)
         out = scope.out_ptr()
-        _check(LIB.fm_compare_text(a_ptr, b_ptr, pid_ptr, _sint(strength, "strength"), out))
+        _check(LIB.fm_compare_text(a_ptr, b_ptr, _sint(strength, "strength"), pid_ptr, out))
         return struct.unpack("<i", LIB.read_bytes(out, 4))[0]
 
 
@@ -7945,7 +7954,7 @@ def get_collation_classes(
         if n:
             ids = scope.alloc(4 * n)
         _check(
-            LIB.fm_get_collation_classes(base, _uint(n, "count"), pid_ptr, _sint(strength, "strength"), ids, count_out)
+            LIB.fm_get_collation_classes(base, _uint(n, "count"), _sint(strength, "strength"), pid_ptr, ids, count_out)
         )
         class_ids = list(struct.unpack(f"<{n}I", LIB.read_bytes(ids, 4 * n))) if n else []
         return CollationClasses(class_ids=class_ids, class_count=LIB.read_u32(count_out))

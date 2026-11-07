@@ -10,12 +10,14 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/slicer_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -118,6 +120,9 @@ extern "C" fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sh
   if (out == nullptr) {
     return null_argument("out");
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -132,7 +137,9 @@ extern "C" fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sh
   const formulon::SlicerInfo& info = list[idx];
   const formulon::DrawingObject& obj = info.object;
   TextStore& store = fresh_read_scratch(wb);
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_slicer_t{};
+  out->struct_size = struct_size;
   out->object_id = obj.object_id;
   out->column_count = info.column_count;
   out->sort_order = to_c(info.sort_order);
@@ -154,11 +161,16 @@ extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet
   if (out_present == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
   *out = fm_slicer_t{};
+  out->struct_size = struct_size;
   size_t index = 0;
   bool found = false;
   if (auto rc = find_slicer(wb, sheet_index, object_id, &index, &found); rc != 0 || !found) {
@@ -173,6 +185,9 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
   clear_last_error();
   if (spec == nullptr || out_object_id == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -194,6 +209,9 @@ extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_in
   clear_last_error();
   if (spec == nullptr) {
     return null_argument("spec");
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

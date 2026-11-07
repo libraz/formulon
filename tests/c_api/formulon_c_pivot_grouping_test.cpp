@@ -48,7 +48,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   if (st != 0) {
     return st;
   }
-  fm_pivot_field_spec_t date_spec{};
+  fm_pivot_field_spec_t date_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   date_spec.source_name = "Date";
   date_spec.custom_name = "";
   date_spec.axis = FM_PIVOT_AXIS_ROW;
@@ -59,7 +59,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   if (st != 0) {
     return st;
   }
-  fm_pivot_field_spec_t amount_spec{};
+  fm_pivot_field_spec_t amount_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
@@ -75,7 +75,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   if (st != 0) {
     return st;
   }
-  fm_pivot_data_field_spec_t df_spec{};
+  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGG_SUM;
@@ -171,7 +171,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   if (fm_status_t st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, 0U, 0U, &pivot_index); st != 0) {
     return st;
   }
-  fm_pivot_field_spec_t region_spec{};
+  fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   region_spec.source_name = "Region";
   region_spec.custom_name = "";
   region_spec.axis = FM_PIVOT_AXIS_ROW;
@@ -181,7 +181,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   if (fm_status_t st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &region_spec, &region_field); st != 0) {
     return st;
   }
-  fm_pivot_field_spec_t amount_spec{};
+  fm_pivot_field_spec_t amount_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
@@ -195,7 +195,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   if (fm_status_t st = fm_sheet_set_pivot_row_field_order(wb, 0, pivot_index, row_order, 1U); st != 0) {
     return st;
   }
-  fm_pivot_data_field_spec_t df_spec{};
+  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGG_SUM;
@@ -221,7 +221,7 @@ double SumDataCells(fm_pivot_cells_t* handle) {
   double total = 0.0;
   const std::size_t n = count_of(fm_pivot_cells_get_cell_count, handle);
   for (std::size_t i = 0; i < n; ++i) {
-    fm_pivot_cell_t cell{};
+    fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
     EXPECT_EQ(fm_pivot_cells_get_cell_at(handle, i, &cell), 0);
     if (cell.kind == FM_PIVOT_CELL_DATA && cell.value.kind == FM_VAL_NUMBER) {
       total += cell.value.u.number;
@@ -279,7 +279,7 @@ TEST(FormulonCApiPivot, DaysGroupMatchesPivotWeek1900FixtureThroughTheAbi) {
   for (const auto& variant : variants) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0) << variant.name;
-    ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+    ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
     std::size_t pivot_index = 0;
     ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, variant.start_serial, &pivot_index), 0)
         << variant.name << ": " << fm_get_last_error_message();
@@ -300,7 +300,7 @@ TEST(FormulonCApiPivot, DaysGroupMatchesPivotWeek1900FixtureThroughTheAbi) {
 TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, std::numeric_limits<double>::quiet_NaN(), &pivot_index), 0)
       << fm_get_last_error_message();
@@ -315,13 +315,13 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   std::size_t field_count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_index, &field_count), 0);
   EXPECT_EQ(field_count, 4U);
-  fm_pivot_field_info_t date{};
+  fm_pivot_field_info_t date = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &date), 0);
   EXPECT_EQ(date.date_periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
   EXPECT_EQ(date.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
   EXPECT_EQ(date.group_base_index, -1);
   EXPECT_EQ(date.axis, -1);
-  fm_pivot_field_info_t months{};
+  fm_pivot_field_info_t months = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 2, &months), 0);
   EXPECT_STREQ(months.source_name, "\xE6\x9C\x88 (Date)");  // 月 (Date)
   EXPECT_EQ(months.group_base_index, 0);

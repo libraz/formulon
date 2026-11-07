@@ -9,6 +9,13 @@
 # `TableRef` / `PivotRef` / `CfRuleRef` / `ProtectedRangeRef` argument. `patch: true` marks a
 # partial update whose keys are fields of `patch_record`, or `patch_record: none` with a
 # `patch_reason` when no getter returns a record.
+# `reads_values: true` marks a C function that computes pending cells before it reads (Auto
+# calculation); `resolved: true` a read whose XF-family indices are resolved output, and
+# `color: resolved` a record, field or op whose colours are rendered results. `namespace: ooxml`
+# publishes a `Workbook` / `Sheet` op under `.ooxml` instead of on the class. A `params` slot may be
+# `{ type, default }`: the binding may omit that trailing argument (`today`: the pinned clock, else
+# the current date). `a1_exempt` lists the JS `*Row` / `*Col` fields of an input record that stay
+# numbers instead of taking an A1 address.
 schema: 1
 collections:
   sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }
@@ -91,6 +98,14 @@ enum_distinct:
   - { enums: [enum.border_style, enum.underline_style], reason: "share None / Double: border line style vs font underline; values follow the OOXML vocabulary order" }
   - { enums: [enum.pivot_filter_value_kind, enum.underline_style], reason: "share None / Double: filter operand kind vs font underline; values follow the OOXML vocabulary order" }
   - { enums: [enum.fill_pattern, enum.shape_paint], reason: "share None / Solid: cell fill pattern vs shape fill paint; values follow the OOXML vocabulary order" }
+  - { enums: [enum.cf_match_kind, enum.cf_rule_type], reason: "share ColorScale / DataBar / IconSet: kind of a matched rule's result vs kind of the rule" }
+  - { enums: [enum.cf_value_object_type, enum.chart_axis_crosses], reason: "share Min / Max: threshold kind vs axis crossing point" }
+  - { enums: [enum.cf_time_period, enum.dynamic_filter_type], reason: "share Today / Yesterday / week and month periods: conditional-format time period vs AutoFilter dynamic filter" }
+  - { enums: [enum.cf_operator, enum.filter_operator], reason: "share the comparison operators: conditional-format cell-is operator vs AutoFilter custom-filter operator" }
+  - { enums: [enum.cf_value_object_type, enum.pivot_aggregation], reason: "share Min / Max: threshold kind vs aggregation function" }
+  - { enums: [enum.cf_operator, enum.validation_operator], reason: "share the comparison operators: conditional-format cell-is operator vs data-validation operator" }
+  - { enums: [enum.filter_operator, enum.validation_operator], reason: "share the comparison operators: AutoFilter custom-filter operator vs data-validation operator" }
+  - { enums: [enum.filter_kind, enum.validation_type], reason: "share None / Custom: AutoFilter column kind vs data-validation type" }
 entries:
   type.status:
     kind: typedef
@@ -250,6 +265,18 @@ entries:
     py: ValidationErrorStyle
     surfaces: [c, wasm, native, py]
     was: { c: fm_validation_error_style_t, js: ValidationErrorStyle, py: ValidationErrorStyle }
+  enum.validation_type:
+    kind: enum
+    c: fm_validation_type_t
+    js: ValidationType
+    py: ValidationType
+    surfaces: [c, wasm, native, py]
+  enum.validation_operator:
+    kind: enum
+    c: fm_validation_operator_t
+    js: ValidationOperator
+    py: ValidationOperator
+    surfaces: [c, wasm, native, py]
   record.data_validation:
     kind: record
     role: result
@@ -354,13 +381,43 @@ entries:
     py: CfMatchKind
     surfaces: [c, wasm, native, py]
     was: { c: fm_cf_match_kind_t, js: CfMatchKind }
+  enum.cf_rule_type:
+    kind: enum
+    c: fm_cf_rule_type_t
+    js: CfRuleType
+    py: CfRuleType
+    surfaces: [c, wasm, native, py]
+  enum.cf_operator:
+    kind: enum
+    c: fm_cf_operator_t
+    js: CfOperator
+    py: CfOperator
+    surfaces: [c, wasm, native, py]
+  enum.cf_time_period:
+    kind: enum
+    c: fm_cf_time_period_t
+    js: CfTimePeriod
+    py: CfTimePeriod
+    surfaces: [c, wasm, native, py]
+  enum.cf_value_object_type:
+    kind: enum
+    c: fm_cf_value_object_type_t
+    js: CfValueObjectType
+    py: CfValueObjectType
+    surfaces: [c, wasm, native, py]
+  enum.icon_set:
+    kind: enum
+    c: fm_icon_set_t
+    js: IconSetName
+    py: IconSetName
+    surfaces: [c, wasm, native, py]
+    exception: "IconSet names the conditional-format icon-set payload in Python; the enum takes the engine's IconSetName on both bindings"
   record.cf_color:
     kind: record
     role: result
-    c: fm_cf_color_t
-    js: CfColor
-    py: CfColor
     surfaces: [c, wasm, native, py]
+    replaced_by: record.color_spec
+    closes: R31.color
     was: { c: fm_cf_color_t, js: CfColor, py: CfColor }
   record.cf_icon:
     kind: record
@@ -1000,6 +1057,7 @@ entries:
     c: fm_theme_colors_t
     js: ThemeColors
     py: ThemeColors
+    color: resolved
     surfaces: [c, wasm, native, py]
     was: { c: fm_theme_colors }
   record.theme_colors_input:
@@ -1034,6 +1092,7 @@ entries:
     role: result
     c: fm_effective_style_t
     py: EffectiveStyle
+    color: resolved
     surfaces: [c, py]
     was: { c: fm_effective_style, py: EffectiveStyle }
   record.external_link_record:
@@ -2571,6 +2630,7 @@ entries:
   type.parse_reference_options:
     kind: typedef
     js: ParseReferenceOptions
+    a1_exempt: { fields: [baseRow, baseCol], reason: "the base cell of the A1 parser itself, which resolves relative references" }
     surfaces: [wasm, native]
     was: { js: ParseReferenceOptions }
   record.partial_recalc_result:
@@ -2739,6 +2799,15 @@ entries:
     js: RangeCell
     surfaces: [wasm, native]
     was: { js: RangeCell }
+  type.native_value:
+    kind: typedef
+    js: NativeValue
+    surfaces: [wasm, native]
+  record.cell_address:
+    kind: record
+    role: both
+    js: CellAddress
+    surfaces: [wasm, native]
   record.range_style_bases_result:
     kind: record
     role: result
@@ -2770,6 +2839,7 @@ entries:
     role: result
     js: ResolvedColor
     py: ResolvedColor
+    color: resolved
     surfaces: [wasm, native, py]
     was: { js: ResolvedColor, py: ResolvedColor }
   record.resolved_color_result:
@@ -2808,6 +2878,7 @@ entries:
     kind: record
     role: input
     js: ShapeInput
+    a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
     surfaces: [wasm, native]
     was: { js: ShapeInput }
   record.sheet_auto_filter_xml_result:
@@ -2909,6 +2980,7 @@ entries:
     kind: record
     role: input
     js: SlicerInput
+    a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
     surfaces: [wasm, native]
     was: { js: SlicerInput }
   record.sparkline_group_input:
@@ -3027,6 +3099,7 @@ entries:
     kind: record
     role: patch
     js: SlicerPatch
+    a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
     surfaces: [wasm, native]
   record.theme_result:
     kind: record
@@ -3064,6 +3137,8 @@ entries:
     kind: typedef
     js: Validation
     surfaces: [wasm, native]
+    replaced_by: record.data_validation
+    closes: R0.coverage
     was: { js: ValidationEntry }
   record.validation_outcome_result:
     kind: record
@@ -3095,6 +3170,8 @@ entries:
     js: Cell
     py: Cell
     surfaces: [wasm, native, py]
+    replaced_by: record.range_cell
+    closes: R0.coverage
     was: { js: CellEntry, py: Cell }
   record.chart_categories:
     kind: record
@@ -3187,6 +3264,14 @@ entries:
     py: InvalidArgumentError
     surfaces: [py]
     was: { py: InvalidArgumentError }
+  type.formula_syntax_error:
+    kind: typedef
+    py: FormulaSyntaxError
+    surfaces: [py]
+  type.invalid_file_error:
+    kind: typedef
+    py: InvalidFileError
+    surfaces: [py]
   record.iterative_settings:
     kind: record
     role: result
@@ -3324,6 +3409,7 @@ entries:
     c: fm_workbook_save
     js: save
     py: save
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_save, js: save, py: save }
   as.save:
@@ -3334,6 +3420,7 @@ entries:
     js: saveAs
     py: save_as
     params: { format: "enum:workbook_format", fmt: "enum:workbook_format" }
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_save_as, js: saveAs, py: save_as }
     drop: { js: saveAs, py: save_as, closes: R5.derive }
@@ -3347,6 +3434,7 @@ entries:
     js: saveWithDiagnostics
     py: save_with_diagnostics
     params: { format: "enum:workbook_format", fmt: "enum:workbook_format" }
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_save_with_diagnostics, js: saveWithDiagnostics, py: save_with_diagnostics }
   buffer.destroy:
@@ -3418,6 +3506,7 @@ entries:
     js: copySheet
     py: copy_sheet
     returns: "union:Sheet"
+    params: { insert_before: { default: null } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_copy_sheet, js: copySheet, py: copy_sheet }
     facade: handwritten
@@ -3653,6 +3742,7 @@ entries:
     js: getValue
     py: get_value
     cell_args: [[0, 1]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_value, js: getValue, py: get_value }
   cell_phonetic.get:
@@ -3735,6 +3825,7 @@ entries:
     js: evaluateFormula
     py: evaluate_formula
     cell_args: [[0, 1]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_formula, js: evaluateFormulaText }
   cf_formula.evaluate:
@@ -3745,6 +3836,7 @@ entries:
     js: evaluateCfFormula
     py: evaluate_cf_formula
     cell_args: [[0, 1], [2, 3]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_cf_formula, js: evaluateConditionalFormula, py: evaluate_cf_formula }
   formula_array.evaluate:
@@ -3755,6 +3847,7 @@ entries:
     js: evaluateFormulaArray
     py: evaluate_formula_array
     cell_args: [[0, 1]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_formula_array, js: evaluateFormulaArray, py: evaluate_formula_array }
   type.value_array:
@@ -3813,6 +3906,7 @@ entries:
     c: fm_sheet_get_cell_count
     js: getCellCount
     py: get_cell_count
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_cell_count, js: cellCount }
     drop: { js: getCellCount, py: get_cell_count, closes: R25.count }
@@ -3823,6 +3917,7 @@ entries:
     c: fm_sheet_get_cell_at
     js: getCellAt
     py: get_cell_at
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_cell_at, js: cellAt }
     drop: { js: getCellAt, py: get_cell_at, closes: R25.count }
@@ -3855,6 +3950,7 @@ entries:
     js: getCellsInRange
     py: get_cells_in_range
     rect_args: [0]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cells_in_range, js: getCellsInRange, py: get_cells_in_range }
   cell_range.get_cell_count:
@@ -3894,6 +3990,7 @@ entries:
     js: getDisplayText
     py: get_display_text
     cell_args: [[0, 1]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_display_text, js: getDisplayText, py: get_display_text }
   value.format:
@@ -4402,6 +4499,7 @@ entries:
     js: validateValue
     py: validate_value
     cell_args: [[0, 1]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_validate_value, js: validateValue, py: validate_value }
   invalid_cells.get:
@@ -4411,6 +4509,7 @@ entries:
     c: fm_sheet_get_invalid_cells
     js: getInvalidCells
     py: get_invalid_cells
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_list_invalid_cells, js: listInvalidCells, py: list_invalid_cells }
   threaded_comment.get_count:
@@ -4516,6 +4615,7 @@ entries:
     noun: parallel
     c: fm_workbook_recalc_parallel
     js: recalcParallel
+    params: { thread_count: { default: 0 } }
     surfaces: [c, wasm, native]
     was: { c: fm_workbook_recalc_parallel, js: recalcParallel }
   iterative.set:
@@ -4680,20 +4780,22 @@ entries:
   excel_profile_id.get:
     kind: op
     scope: workbook
-    noun: excel_profile_id
-    c: fm_workbook_get_excel_profile_id
+    noun: profile_id
+    c: fm_workbook_get_profile_id
     js: getExcelProfileId
     py: get_excel_profile_id
     surfaces: [c, wasm, native, py]
+    exception: "the binding names keep the Excel-profile wording until the declarations take getProfileId / get_profile_id"
     was: { c: fm_workbook_excel_profile_id, js: excelProfileId, py: excel_profile_id }
   excel_profile_id.set:
     kind: op
     scope: workbook
-    noun: excel_profile_id
-    c: fm_workbook_set_excel_profile_id
+    noun: profile_id
+    c: fm_workbook_set_profile_id
     js: setExcelProfileId
     py: set_excel_profile_id
     surfaces: [c, wasm, native, py]
+    exception: "the binding names keep the Excel-profile wording until the declarations take setProfileId / set_profile_id"
     was: { c: fm_workbook_set_excel_profile_id, js: setExcelProfileId, py: set_excel_profile_id }
   file_name.get:
     kind: op
@@ -4757,6 +4859,7 @@ entries:
     c: fm_sheet_get_pagination
     js: getPagination
     py: get_pagination
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_paginate, js: paginate, py: paginate }
   pagination.destroy:
@@ -4975,6 +5078,18 @@ entries:
     py: set_sheet_pr_xml
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_sheet_pr_xml, js: setSheetSheetPrXml, py: set_sheet_pr_xml }
+  tab_color.get:
+    kind: op
+    scope: sheet
+    noun: tab_color
+    c: fm_sheet_get_tab_color
+    surfaces: [c]
+  tab_color.set:
+    kind: op
+    scope: sheet
+    noun: tab_color
+    c: fm_sheet_set_tab_color
+    surfaces: [c]
   fit_to_page.set:
     kind: op
     scope: sheet
@@ -5188,6 +5303,8 @@ entries:
     js: evaluateCfRange
     py: evaluate_cf_range
     rect_args: [0]
+    reads_values: true
+    params: { today_serial: { default: today } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_cf_evaluate_range, js: evaluateCfRange, py: evaluate_cf_range }
   cf_results.destroy:
@@ -5274,6 +5391,8 @@ entries:
     js: getPrecedents
     py: get_precedents
     cell_args: [[0, 1]]
+    reads_values: true
+    params: { depth: { default: 1 } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_precedents, js: precedents, py: precedents }
   dependents.get:
@@ -5284,6 +5403,8 @@ entries:
     js: getDependents
     py: get_dependents
     cell_args: [[0, 1]]
+    reads_values: true
+    params: { depth: { default: 1 } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_dependents, js: dependents, py: dependents }
   cell_nodes.destroy:
@@ -5324,6 +5445,7 @@ entries:
     c: fm_sheet_get_pivot_layout
     js: getPivotLayout
     py: get_pivot_layout
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_layout, js: pivotLayout, py: pivot_layout }
     handle: { class: Pivot, supplies: [sheet, pivot] }
@@ -6405,6 +6527,7 @@ entries:
     js: getSpillInfo
     py: get_spill_info
     cell_args: [[0, 1]]
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_spill_info, js: spillInfo, py: spill_info }
   array_formula.get:
@@ -6694,6 +6817,7 @@ entries:
     c: fm_sheet_evaluate_auto_filter
     js: evaluateAutoFilter
     py: evaluate_auto_filter
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_evaluate_auto_filter, js: evaluateAutoFilter, py: evaluate_auto_filter }
   table_auto_filter.get:
@@ -6754,6 +6878,7 @@ entries:
     c: fm_workbook_evaluate_table_auto_filter
     js: evaluateTableAutoFilter
     py: evaluate_table_auto_filter
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_evaluate_auto_filter, js: evaluateTableAutoFilter, py: evaluate_table_auto_filter }
     handle: { class: Table, supplies: [table] }
@@ -7187,6 +7312,208 @@ entries:
     surfaces: [c, wasm, native]
     was: { c: fm_last_error_context, js: lastErrorContext }
     drop: { js: getLastErrorContext, closes: R8.js }
+  last_parse_error.get:
+    kind: op
+    scope: process
+    noun: last_parse_error
+    c: fm_get_last_parse_error
+    surfaces: [c]
+  record.parse_error:
+    kind: record
+    role: result
+    c: fm_parse_error_t
+    surfaces: [c]
+  enum.parse_error_code:
+    kind: enum
+    c: fm_parse_error_code_t
+    js: ParseErrorCode
+    py: ParseErrorCode
+    surfaces: [c, wasm, native, py]
+  constant.fm_parse_error_lexer_invalid_character:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_INVALID_CHARACTER
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lexer_unterminated_string:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_UNTERMINATED_STRING
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lexer_unterminated_sheet_quote:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_UNTERMINATED_SHEET_QUOTE
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lexer_invalid_number_literal:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_INVALID_NUMBER_LITERAL
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lexer_invalid_error_literal:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_INVALID_ERROR_LITERAL
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lexer_invalid_escape:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_INVALID_ESCAPE
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lexer_invalid_reference:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_INVALID_REFERENCE
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lexer_excessive_length:
+    kind: constant
+    c: FM_PARSE_ERROR_LEXER_EXCESSIVE_LENGTH
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_unexpected_token:
+    kind: constant
+    c: FM_PARSE_ERROR_UNEXPECTED_TOKEN
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_unexpected_eof:
+    kind: constant
+    c: FM_PARSE_ERROR_UNEXPECTED_EOF
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_expected_expression:
+    kind: constant
+    c: FM_PARSE_ERROR_EXPECTED_EXPRESSION
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_expected_close_paren:
+    kind: constant
+    c: FM_PARSE_ERROR_EXPECTED_CLOSE_PAREN
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_unbalanced_braces:
+    kind: constant
+    c: FM_PARSE_ERROR_UNBALANCED_BRACES
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_array_row_mismatch:
+    kind: constant
+    c: FM_PARSE_ERROR_ARRAY_ROW_MISMATCH
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_expected_rparen_or_comma:
+    kind: constant
+    c: FM_PARSE_ERROR_EXPECTED_RPAREN_OR_COMMA
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_expected_comma_or_semi_in_array:
+    kind: constant
+    c: FM_PARSE_ERROR_EXPECTED_COMMA_OR_SEMI_IN_ARRAY
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_invalid_reference:
+    kind: constant
+    c: FM_PARSE_ERROR_INVALID_REFERENCE
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_unsupported_construct:
+    kind: constant
+    c: FM_PARSE_ERROR_UNSUPPORTED_CONSTRUCT
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_expected_open_paren:
+    kind: constant
+    c: FM_PARSE_ERROR_EXPECTED_OPEN_PAREN
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_expected_comma:
+    kind: constant
+    c: FM_PARSE_ERROR_EXPECTED_COMMA
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_unbalanced_brackets:
+    kind: constant
+    c: FM_PARSE_ERROR_UNBALANCED_BRACKETS
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_invalid_range:
+    kind: constant
+    c: FM_PARSE_ERROR_INVALID_RANGE
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_nested_formula_too_deep:
+    kind: constant
+    c: FM_PARSE_ERROR_NESTED_FORMULA_TOO_DEEP
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_too_many_errors:
+    kind: constant
+    c: FM_PARSE_ERROR_TOO_MANY_ERRORS
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_let_invalid_name:
+    kind: constant
+    c: FM_PARSE_ERROR_LET_INVALID_NAME
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_let_wrong_arity:
+    kind: constant
+    c: FM_PARSE_ERROR_LET_WRONG_ARITY
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lambda_invalid_param:
+    kind: constant
+    c: FM_PARSE_ERROR_LAMBDA_INVALID_PARAM
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lambda_empty:
+    kind: constant
+    c: FM_PARSE_ERROR_LAMBDA_EMPTY
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_lambda_duplicate_param:
+    kind: constant
+    c: FM_PARSE_ERROR_LAMBDA_DUPLICATE_PARAM
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_entry_wrong_arity:
+    kind: constant
+    c: FM_PARSE_ERROR_ENTRY_WRONG_ARITY
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_entry_reference_required:
+    kind: constant
+    c: FM_PARSE_ERROR_ENTRY_REFERENCE_REQUIRED
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_entry_qualified_builtin:
+    kind: constant
+    c: FM_PARSE_ERROR_ENTRY_QUALIFIED_BUILTIN
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_entry_refused_whitespace:
+    kind: constant
+    c: FM_PARSE_ERROR_ENTRY_REFUSED_WHITESPACE
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_entry_param_shaped_name:
+    kind: constant
+    c: FM_PARSE_ERROR_ENTRY_PARAM_SHAPED_NAME
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_entry_double_equals:
+    kind: constant
+    c: FM_PARSE_ERROR_ENTRY_DOUBLE_EQUALS
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_entry_bom_not_supported:
+    kind: constant
+    c: FM_PARSE_ERROR_ENTRY_BOM_NOT_SUPPORTED
+    enum: enum.parse_error_code
+    surfaces: [c]
+  constant.fm_parse_error_structured_ref_invalid:
+    kind: constant
+    c: FM_PARSE_ERROR_STRUCTURED_REF_INVALID
+    enum: enum.parse_error_code
+    surfaces: [c]
   status_name.get:
     kind: op
     scope: process
@@ -7659,6 +7986,7 @@ entries:
     js: resolveColor
     py: resolve_color
     params: { context: "enum:color_context" }
+    color: resolved
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_resolve_color, js: resolveColor, py: resolve_color }
   effective_style.get:
@@ -7669,6 +7997,7 @@ entries:
     js: getEffectiveStyle
     py: get_effective_style
     cell_args: [[0, 1]]
+    resolved: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_effective_style, js: getEffectiveStyle, py: get_effective_style }
   external_link.get_count:
@@ -8063,6 +8392,7 @@ entries:
     c: fm_sheet_get_chart_data
     js: getChartData
     py: get_chart_data
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_chart_data_open, js: getChartData, py: get_chart_data }
     total: "returns the chart's data handle; a missing chart throws"
@@ -8075,6 +8405,7 @@ entries:
     c: fm_sheet_get_chart_preview
     js: getChartPreview
     py: get_chart_preview
+    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_chart_preview_open, js: previewChartData, py: preview_chart_data }
     total: "returns the preview handle; a missing chart throws"
@@ -11801,22 +12132,22 @@ entries:
     was: { c: FM_STATUS_BINDING_WASM_INIT_FAILED }
   constant.fm_status_cli_invalid_args:
     kind: constant
-    c: FM_STATUS_CLI_INVALID_ARGS
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CLI_INVALID_ARGS }
+    drop: { c: FM_STATUS_CLI_INVALID_ARGS, closes: R0.coverage }
   constant.fm_status_cli_file_not_found:
     kind: constant
-    c: FM_STATUS_CLI_FILE_NOT_FOUND
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CLI_FILE_NOT_FOUND }
+    drop: { c: FM_STATUS_CLI_FILE_NOT_FOUND, closes: R0.coverage }
   constant.fm_status_cli_output_failed:
     kind: constant
-    c: FM_STATUS_CLI_OUTPUT_FAILED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CLI_OUTPUT_FAILED }
+    drop: { c: FM_STATUS_CLI_OUTPUT_FAILED, closes: R0.coverage }
   constant.fm_status_pivot_source_invalid:
     kind: constant
     c: FM_STATUS_PIVOT_SOURCE_INVALID
@@ -12397,8 +12728,9 @@ entries:
   record.excel_error:
     kind: record
     role: both
+    js: ExcelError
     py: ExcelError
-    surfaces: [py]
+    surfaces: [wasm, native, py]
   type.index_out_of_range_error:
     kind: typedef
     py: IndexOutOfRangeError
@@ -12892,3 +13224,465 @@ entries:
     enum: enum.cf_data_bar_axis_position
     surfaces: [c]
     was: { c: FM_CF_DATA_BAR_AXIS_NONE }
+  constant.fm_validation_type_none:
+    kind: constant
+    c: FM_VALIDATION_TYPE_NONE
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_NONE }
+  constant.fm_validation_type_whole:
+    kind: constant
+    c: FM_VALIDATION_TYPE_WHOLE
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_WHOLE }
+  constant.fm_validation_type_decimal:
+    kind: constant
+    c: FM_VALIDATION_TYPE_DECIMAL
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_DECIMAL }
+  constant.fm_validation_type_list:
+    kind: constant
+    c: FM_VALIDATION_TYPE_LIST
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_LIST }
+  constant.fm_validation_type_date:
+    kind: constant
+    c: FM_VALIDATION_TYPE_DATE
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_DATE }
+  constant.fm_validation_type_time:
+    kind: constant
+    c: FM_VALIDATION_TYPE_TIME
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_TIME }
+  constant.fm_validation_type_text_length:
+    kind: constant
+    c: FM_VALIDATION_TYPE_TEXT_LENGTH
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_TEXT_LENGTH }
+  constant.fm_validation_type_custom:
+    kind: constant
+    c: FM_VALIDATION_TYPE_CUSTOM
+    enum: enum.validation_type
+    surfaces: [c]
+    was: { c: FM_VALIDATION_TYPE_CUSTOM }
+  constant.fm_validation_operator_between:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_BETWEEN
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_BETWEEN }
+  constant.fm_validation_operator_not_between:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_NOT_BETWEEN
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_NOT_BETWEEN }
+  constant.fm_validation_operator_equal:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_EQUAL
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_EQUAL }
+  constant.fm_validation_operator_not_equal:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_NOT_EQUAL
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_NOT_EQUAL }
+  constant.fm_validation_operator_greater_than:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_GREATER_THAN
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_GREATER_THAN }
+  constant.fm_validation_operator_less_than:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_LESS_THAN
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_LESS_THAN }
+  constant.fm_validation_operator_greater_than_or_equal:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_GREATER_THAN_OR_EQUAL
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_GREATER_THAN_OR_EQUAL }
+  constant.fm_validation_operator_less_than_or_equal:
+    kind: constant
+    c: FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL
+    enum: enum.validation_operator
+    surfaces: [c]
+    was: { c: FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL }
+  constant.fm_icon_set_3_arrows:
+    kind: constant
+    c: FM_ICON_SET_3_ARROWS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_ARROWS }
+  constant.fm_icon_set_3_arrows_gray:
+    kind: constant
+    c: FM_ICON_SET_3_ARROWS_GRAY
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_ARROWS_GRAY }
+  constant.fm_icon_set_3_flags:
+    kind: constant
+    c: FM_ICON_SET_3_FLAGS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_FLAGS }
+  constant.fm_icon_set_3_traffic_lights_1:
+    kind: constant
+    c: FM_ICON_SET_3_TRAFFIC_LIGHTS_1
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_TRAFFIC_LIGHTS_1 }
+  constant.fm_icon_set_3_traffic_lights_2:
+    kind: constant
+    c: FM_ICON_SET_3_TRAFFIC_LIGHTS_2
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_TRAFFIC_LIGHTS_2 }
+  constant.fm_icon_set_3_signs:
+    kind: constant
+    c: FM_ICON_SET_3_SIGNS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_SIGNS }
+  constant.fm_icon_set_3_symbols:
+    kind: constant
+    c: FM_ICON_SET_3_SYMBOLS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_SYMBOLS }
+  constant.fm_icon_set_3_symbols_2:
+    kind: constant
+    c: FM_ICON_SET_3_SYMBOLS_2
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_3_SYMBOLS_2 }
+  constant.fm_icon_set_4_arrows:
+    kind: constant
+    c: FM_ICON_SET_4_ARROWS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_4_ARROWS }
+  constant.fm_icon_set_4_arrows_gray:
+    kind: constant
+    c: FM_ICON_SET_4_ARROWS_GRAY
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_4_ARROWS_GRAY }
+  constant.fm_icon_set_4_red_to_black:
+    kind: constant
+    c: FM_ICON_SET_4_RED_TO_BLACK
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_4_RED_TO_BLACK }
+  constant.fm_icon_set_4_rating:
+    kind: constant
+    c: FM_ICON_SET_4_RATING
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_4_RATING }
+  constant.fm_icon_set_4_traffic_lights:
+    kind: constant
+    c: FM_ICON_SET_4_TRAFFIC_LIGHTS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_4_TRAFFIC_LIGHTS }
+  constant.fm_icon_set_5_arrows:
+    kind: constant
+    c: FM_ICON_SET_5_ARROWS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_5_ARROWS }
+  constant.fm_icon_set_5_arrows_gray:
+    kind: constant
+    c: FM_ICON_SET_5_ARROWS_GRAY
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_5_ARROWS_GRAY }
+  constant.fm_icon_set_5_rating:
+    kind: constant
+    c: FM_ICON_SET_5_RATING
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_5_RATING }
+  constant.fm_icon_set_5_quarters:
+    kind: constant
+    c: FM_ICON_SET_5_QUARTERS
+    enum: enum.icon_set
+    surfaces: [c]
+    was: { c: FM_ICON_SET_5_QUARTERS }
+  constant.fm_cf_rule_type_expression:
+    kind: constant
+    c: FM_CF_RULE_TYPE_EXPRESSION
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_EXPRESSION }
+  constant.fm_cf_rule_type_cell_is:
+    kind: constant
+    c: FM_CF_RULE_TYPE_CELL_IS
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_CELL_IS }
+  constant.fm_cf_rule_type_color_scale:
+    kind: constant
+    c: FM_CF_RULE_TYPE_COLOR_SCALE
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_COLOR_SCALE }
+  constant.fm_cf_rule_type_data_bar:
+    kind: constant
+    c: FM_CF_RULE_TYPE_DATA_BAR
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_DATA_BAR }
+  constant.fm_cf_rule_type_icon_set:
+    kind: constant
+    c: FM_CF_RULE_TYPE_ICON_SET
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_ICON_SET }
+  constant.fm_cf_rule_type_top10:
+    kind: constant
+    c: FM_CF_RULE_TYPE_TOP10
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_TOP10 }
+  constant.fm_cf_rule_type_above_average:
+    kind: constant
+    c: FM_CF_RULE_TYPE_ABOVE_AVERAGE
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_ABOVE_AVERAGE }
+  constant.fm_cf_rule_type_contains_text:
+    kind: constant
+    c: FM_CF_RULE_TYPE_CONTAINS_TEXT
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_CONTAINS_TEXT }
+  constant.fm_cf_rule_type_not_contains_text:
+    kind: constant
+    c: FM_CF_RULE_TYPE_NOT_CONTAINS_TEXT
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_NOT_CONTAINS_TEXT }
+  constant.fm_cf_rule_type_begins_with:
+    kind: constant
+    c: FM_CF_RULE_TYPE_BEGINS_WITH
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_BEGINS_WITH }
+  constant.fm_cf_rule_type_ends_with:
+    kind: constant
+    c: FM_CF_RULE_TYPE_ENDS_WITH
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_ENDS_WITH }
+  constant.fm_cf_rule_type_contains_blanks:
+    kind: constant
+    c: FM_CF_RULE_TYPE_CONTAINS_BLANKS
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_CONTAINS_BLANKS }
+  constant.fm_cf_rule_type_not_contains_blanks:
+    kind: constant
+    c: FM_CF_RULE_TYPE_NOT_CONTAINS_BLANKS
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_NOT_CONTAINS_BLANKS }
+  constant.fm_cf_rule_type_contains_errors:
+    kind: constant
+    c: FM_CF_RULE_TYPE_CONTAINS_ERRORS
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_CONTAINS_ERRORS }
+  constant.fm_cf_rule_type_not_contains_errors:
+    kind: constant
+    c: FM_CF_RULE_TYPE_NOT_CONTAINS_ERRORS
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_NOT_CONTAINS_ERRORS }
+  constant.fm_cf_rule_type_time_period:
+    kind: constant
+    c: FM_CF_RULE_TYPE_TIME_PERIOD
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_TIME_PERIOD }
+  constant.fm_cf_rule_type_duplicate_values:
+    kind: constant
+    c: FM_CF_RULE_TYPE_DUPLICATE_VALUES
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_DUPLICATE_VALUES }
+  constant.fm_cf_rule_type_unique_values:
+    kind: constant
+    c: FM_CF_RULE_TYPE_UNIQUE_VALUES
+    enum: enum.cf_rule_type
+    surfaces: [c]
+    was: { c: FM_CF_RULE_TYPE_UNIQUE_VALUES }
+  constant.fm_cf_operator_less_than:
+    kind: constant
+    c: FM_CF_OPERATOR_LESS_THAN
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_LESS_THAN }
+  constant.fm_cf_operator_less_than_or_equal:
+    kind: constant
+    c: FM_CF_OPERATOR_LESS_THAN_OR_EQUAL
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_LESS_THAN_OR_EQUAL }
+  constant.fm_cf_operator_equal:
+    kind: constant
+    c: FM_CF_OPERATOR_EQUAL
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_EQUAL }
+  constant.fm_cf_operator_not_equal:
+    kind: constant
+    c: FM_CF_OPERATOR_NOT_EQUAL
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_NOT_EQUAL }
+  constant.fm_cf_operator_greater_than_or_equal:
+    kind: constant
+    c: FM_CF_OPERATOR_GREATER_THAN_OR_EQUAL
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_GREATER_THAN_OR_EQUAL }
+  constant.fm_cf_operator_greater_than:
+    kind: constant
+    c: FM_CF_OPERATOR_GREATER_THAN
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_GREATER_THAN }
+  constant.fm_cf_operator_between:
+    kind: constant
+    c: FM_CF_OPERATOR_BETWEEN
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_BETWEEN }
+  constant.fm_cf_operator_not_between:
+    kind: constant
+    c: FM_CF_OPERATOR_NOT_BETWEEN
+    enum: enum.cf_operator
+    surfaces: [c]
+    was: { c: FM_CF_OPERATOR_NOT_BETWEEN }
+  constant.fm_cf_time_period_today:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_TODAY
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_TODAY }
+  constant.fm_cf_time_period_yesterday:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_YESTERDAY
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_YESTERDAY }
+  constant.fm_cf_time_period_tomorrow:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_TOMORROW
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_TOMORROW }
+  constant.fm_cf_time_period_last_7_days:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_LAST_7_DAYS
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_LAST_7_DAYS }
+  constant.fm_cf_time_period_this_week:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_THIS_WEEK
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_THIS_WEEK }
+  constant.fm_cf_time_period_last_week:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_LAST_WEEK
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_LAST_WEEK }
+  constant.fm_cf_time_period_next_week:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_NEXT_WEEK
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_NEXT_WEEK }
+  constant.fm_cf_time_period_this_month:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_THIS_MONTH
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_THIS_MONTH }
+  constant.fm_cf_time_period_last_month:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_LAST_MONTH
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_LAST_MONTH }
+  constant.fm_cf_time_period_next_month:
+    kind: constant
+    c: FM_CF_TIME_PERIOD_NEXT_MONTH
+    enum: enum.cf_time_period
+    surfaces: [c]
+    was: { c: FM_CF_TIME_PERIOD_NEXT_MONTH }
+  constant.fm_cf_value_object_type_number:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_NUMBER
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_NUMBER }
+  constant.fm_cf_value_object_type_percent:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_PERCENT
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_PERCENT }
+  constant.fm_cf_value_object_type_percentile:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_PERCENTILE
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_PERCENTILE }
+  constant.fm_cf_value_object_type_min:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_MIN
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_MIN }
+  constant.fm_cf_value_object_type_max:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_MAX
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_MAX }
+  constant.fm_cf_value_object_type_formula:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_FORMULA
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_FORMULA }
+  constant.fm_cf_value_object_type_auto_min:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_AUTO_MIN
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_AUTO_MIN }
+  constant.fm_cf_value_object_type_auto_max:
+    kind: constant
+    c: FM_CF_VALUE_OBJECT_TYPE_AUTO_MAX
+    enum: enum.cf_value_object_type
+    surfaces: [c]
+    was: { c: FM_CF_VALUE_OBJECT_TYPE_AUTO_MAX }

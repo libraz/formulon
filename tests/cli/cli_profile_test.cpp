@@ -51,6 +51,11 @@ std::string first_cell_text(const std::string& path) {
   if (fm_workbook_load(bytes.data(), bytes.size(), &workbook) != 0) {
     return {};
   }
+  // Stored values only: an automatic read would recalculate under the default profile and clock.
+  if (fm_workbook_set_calc_mode(workbook, FM_CALC_MODE_MANUAL) != 0) {
+    fm_workbook_destroy(workbook);
+    return {};
+  }
   std::size_t cell_count = 0;
   std::uint32_t row = 0;
   std::uint32_t col = 0;

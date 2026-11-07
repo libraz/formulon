@@ -46,9 +46,6 @@ CFVO_BLOB = ("blob_cfvo", 12, 4)
 # Opaque 16-byte, 4-aligned blob: an inline ``fm_cell_rect_t``. Pack and
 # unpack it with :data:`CELL_RECT` against ``ptr + offset``.
 CELL_RECT_BLOB = ("blob_cell_rect", 16, 4)
-# Opaque 4-byte, 1-aligned blob: an inline ``fm_cf_color_t`` (four
-# ``uint8_t`` channels). Not decoded by :meth:`Struct.unpack`.
-CF_COLOR_BLOB = ("blob_cf_color", 4, 1)
 
 _FMT = {
     "ptr": "<I",
@@ -59,6 +56,102 @@ _FMT = {
     "u8": "<B",
     "f64": "<d",
 }
+
+
+# Records: structs passed by pointer whose first member is ``uint32_t
+# struct_size``. :class:`Struct` prepends the field and every packer and
+# zeroing helper fills it with the layout's wasm32 size, so a caller never
+# sets it. The set matches ``src/c_api/parts/struct_v1_sizes.h``; value types
+# (array elements, colour, style and chart parts) are not in it.
+RECORD_NAMES = frozenset(
+    (
+        "fm_array_formula_t",
+        "fm_auto_filter_t",
+        "fm_cell_node_t",
+        "fm_cf_match_t",
+        "fm_cf_rule_t",
+        "fm_chart_axis_patch_t",
+        "fm_chart_axis_t",
+        "fm_chart_axis_title_text_t",
+        "fm_chart_data_info_t",
+        "fm_chart_data_points_t",
+        "fm_chart_data_series_t",
+        "fm_chart_display_patch_t",
+        "fm_chart_info_t",
+        "fm_chart_insert_t",
+        "fm_chart_legend_patch_t",
+        "fm_chart_literal_t",
+        "fm_chart_plot_patch_t",
+        "fm_chart_plot_t",
+        "fm_chart_point_patch_t",
+        "fm_chart_point_t",
+        "fm_chart_preview_overrides_t",
+        "fm_chart_series_patch_t",
+        "fm_chart_series_t",
+        "fm_chart_unresolved_t",
+        "fm_column_layout_t",
+        "fm_comment_t",
+        "fm_data_table_t",
+        "fm_data_validation_t",
+        "fm_defined_name_input_t",
+        "fm_defined_name_t",
+        "fm_drawing_object_t",
+        "fm_effective_style_t",
+        "fm_external_link_record_t",
+        "fm_function_metadata_t",
+        "fm_header_footer_t",
+        "fm_hyperlink_t",
+        "fm_image_info_t",
+        "fm_iterative_settings_patch_t",
+        "fm_locale_facts_t",
+        "fm_margins_pt_t",
+        "fm_page_break_t",
+        "fm_page_layout_t",
+        "fm_page_margins_t",
+        "fm_page_setup_t",
+        "fm_paper_info_t",
+        "fm_parallel_recalc_stats_t",
+        "fm_parse_error_t",
+        "fm_parsed_reference_t",
+        "fm_person_t",
+        "fm_pivot_cache_options_t",
+        "fm_pivot_calculated_item_t",
+        "fm_pivot_cell_t",
+        "fm_pivot_data_field_spec_t",
+        "fm_pivot_field_info_t",
+        "fm_pivot_field_spec_t",
+        "fm_pivot_filter_spec_t",
+        "fm_pivot_item_info_t",
+        "fm_pivot_options_t",
+        "fm_pivot_style_info_t",
+        "fm_print_options_t",
+        "fm_print_titles_t",
+        "fm_protected_range_t",
+        "fm_read_diagnostics_t",
+        "fm_rect_pt_t",
+        "fm_row_layout_t",
+        "fm_save_diagnostics_t",
+        "fm_shape_t",
+        "fm_sheet_format_defaults_t",
+        "fm_sheet_protection_t",
+        "fm_sheet_view_t",
+        "fm_slicer_t",
+        "fm_sparkline_group_t",
+        "fm_spill_info_t",
+        "fm_styles_batch_t",
+        "fm_table_column_info_t",
+        "fm_table_info_t",
+        "fm_table_style_t",
+        "fm_theme_colors_t",
+        "fm_theme_fonts_t",
+        "fm_threaded_comment_patch_t",
+        "fm_threaded_comment_t",
+        "fm_validation_outcome_t",
+        "fm_width_model_t",
+        "fm_workbook_protection_t",
+    )
+)
+STRUCT_SIZE_FIELD = "struct_size"
 
 
 def nested(layout: "Struct") -> Tuple:
@@ -74,10 +167,13 @@ def array(elem: Tuple, count: int) -> Tuple:
 class Struct:
     """A wasm32 POD layout: ordered (name, ctype) fields with offsets."""
 
-    __slots__ = ("name", "fields", "offsets", "size", "align", "_extra")
+    __slots__ = ("name", "fields", "offsets", "size", "align", "is_record", "_extra")
 
     def __init__(self, name: str, fields: List[Tuple[str, Tuple]]) -> None:
         self.name = name
+        self.is_record = name in RECORD_NAMES
+        if self.is_record:
+            fields = [(STRUCT_SIZE_FIELD, U32)] + list(fields)
         self.fields = fields
         self.offsets: Dict[str, Tuple[str, int]] = {}
         self._extra: Dict[str, object] = {}
@@ -95,7 +191,13 @@ class Struct:
         self.size = (off + max_align - 1) // max_align * max_align
 
     def pack_into(self, raw: bytearray, base: int, values: Dict[str, object]) -> None:
-        """Write ``values`` into ``raw`` at ``base``; a nested struct takes a dict."""
+        """Write ``values`` into ``raw`` at ``base``; a nested struct takes a dict.
+
+        A record's ``struct_size`` is filled first, so ``values`` need not carry
+        it (a test may pass one to build a deliberately wrong size).
+        """
+        if self.is_record:
+            struct.pack_into("<I", raw, base, self.size)
         for fname, value in values.items():
             kind, off = self.offsets[fname]
             if kind == "nested":
@@ -103,9 +205,16 @@ class Struct:
             else:
                 struct.pack_into(_FMT[kind], raw, base + off, value)
 
+    def blank(self) -> bytearray:
+        """A zeroed block of ``size`` bytes with a record's ``struct_size`` set."""
+        raw = bytearray(self.size)
+        if self.is_record:
+            struct.pack_into("<I", raw, 0, self.size)
+        return raw
+
     def pack(self, lib, ptr: int, values: Dict[str, object]) -> None:
         """Pack supplied fields into a zeroed block and write it once."""
-        raw = bytearray(self.size)
+        raw = self.blank()
         self.pack_into(raw, 0, values)
         lib.write_bytes(ptr, raw)
 
@@ -113,6 +222,8 @@ class Struct:
         """Decode every scalar, nested-struct and array field of ``raw`` at ``base``."""
         out: Dict[str, object] = {}
         for fname, (kind, off) in self.offsets.items():
+            if self.is_record and fname == STRUCT_SIZE_FIELD:
+                continue
             if kind == "nested":
                 out[fname] = self._extra[fname].unpack_from(raw, base + off)
             elif kind == "array":
@@ -138,9 +249,9 @@ def zero_struct(lib, layout: Struct, ptr: int) -> None:
 
     Lets a collection reader hoist one scratch block out of its loop and
     still hand each ABI call a cleared block, without paying a WASM
-    ``malloc``/``free`` pair per item.
+    ``malloc``/``free`` pair per item. A record keeps its ``struct_size``.
     """
-    lib.write_bytes(ptr, b"\x00" * layout.size)
+    lib.write_bytes(ptr, layout.blank())
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +267,15 @@ SHEET_RECT = Struct(
     "fm_sheet_rect_t",
     [("sheet_index", U32), ("rect", nested(CELL_RECT))],
 )
+
+COLOR_SPEC = Struct(
+    "fm_color_spec_t",
+    [("tint", F64), ("rgb", U32), ("theme", U32), ("indexed", U32), ("kind", U8)],
+)
+# Inline ``fm_color_spec_t``, packed and decoded as a nested dict. Nested
+# rather than flattened into its owner: it is 8-aligned, so its trailing
+# padding is part of the C layout.
+COLOR_SPEC_BLOB = nested(COLOR_SPEC)
 
 HYPERLINK = Struct(
     "fm_hyperlink_t",
@@ -256,11 +376,6 @@ SHEET_PROTECTION = Struct(
     ],
 )
 
-CF_COLOR = Struct(
-    "fm_cf_color_t",
-    [("r", U8), ("g", U8), ("b", U8), ("a", U8)],
-)
-
 CFVO = Struct(
     "fm_cfvo_t",
     [("type", U8), ("_pad", ("blob_pad3", 3, 1)), ("gte", I32), ("value", PTR)],
@@ -273,22 +388,13 @@ CF_MATCH = Struct(
         ("priority", I32),
         ("dxf_id_engaged", I32),
         ("dxf_id", U32),
-        ("color_r", U8),
-        ("color_g", U8),
-        ("color_b", U8),
-        ("color_a", U8),
+        ("color", COLOR_SPEC_BLOB),
         ("bar_length_pct", F64),
         ("bar_axis_position_pct", F64),
         ("bar_is_negative", I32),
-        ("bar_fill_r", U8),
-        ("bar_fill_g", U8),
-        ("bar_fill_b", U8),
-        ("bar_fill_a", U8),
+        ("bar_fill", COLOR_SPEC_BLOB),
         ("bar_border_engaged", I32),
-        ("bar_border_r", U8),
-        ("bar_border_g", U8),
-        ("bar_border_b", U8),
-        ("bar_border_a", U8),
+        ("bar_border", COLOR_SPEC_BLOB),
         ("bar_gradient", I32),
         ("icon_set_name", I32),
         ("icon_index", U8),
@@ -329,7 +435,7 @@ CF_RULE = Struct(
         ("data_bar_engaged", I32),
         ("data_bar_min", CFVO_BLOB),
         ("data_bar_max", CFVO_BLOB),
-        ("data_bar_fill", CF_COLOR_BLOB),
+        ("data_bar_fill", COLOR_SPEC_BLOB),
         ("data_bar_show_value", I32),
         ("data_bar_min_length_pct", U8),
         ("data_bar_max_length_pct", U8),
@@ -347,13 +453,13 @@ CF_RULE = Struct(
         ("data_bar_axis_position_engaged", I32),
         ("data_bar_axis_position", U8),
         ("data_bar_negative_fill_engaged", I32),
-        ("data_bar_negative_fill", CF_COLOR_BLOB),
+        ("data_bar_negative_fill", COLOR_SPEC_BLOB),
         ("data_bar_border_engaged", I32),
-        ("data_bar_border", CF_COLOR_BLOB),
+        ("data_bar_border", COLOR_SPEC_BLOB),
         ("data_bar_negative_border_engaged", I32),
-        ("data_bar_negative_border", CF_COLOR_BLOB),
+        ("data_bar_negative_border", COLOR_SPEC_BLOB),
         ("data_bar_axis_color_engaged", I32),
-        ("data_bar_axis_color", CF_COLOR_BLOB),
+        ("data_bar_axis_color", COLOR_SPEC_BLOB),
         ("icon_set_floor_engaged", I32),
         ("icon_set_floor", CFVO_BLOB),
         ("data_bar_direction", U8),
@@ -367,6 +473,11 @@ CF_ICON = Struct("fm_cf_icon_t", [("icon_set", PTR), ("icon_id", I32)])
 CELL_NODE = Struct(
     "fm_cell_node_t",
     [("sheet", U32), ("row", U32), ("col", U32)],
+)
+
+PARSE_ERROR = Struct(
+    "fm_parse_error_t",
+    [("code", I32), ("start", U32), ("end", U32), ("line", U32), ("column", U32)],
 )
 
 # One ``<rPh>`` block. Passed both ways: as an element of the array
@@ -848,21 +959,11 @@ CELL_XF = Struct(
     ],
 )
 
-COLOR_SPEC = Struct(
-    "fm_color_spec_t",
-    [("tint", F64), ("rgb", U32), ("theme", U32), ("indexed", U32), ("kind", U8)],
-)
-# Inline ``fm_color_spec_t``. Nested rather than flattened into its owner: it
-# is 8-aligned, so its trailing padding is part of the C layout and a flat
-# field list would place the following member too early.
-COLOR_SPEC_BLOB = ("blob_color_spec", COLOR_SPEC.size, 8)
-
 FONT_RECORD = Struct(
     "fm_font_record_t",
     [
         ("name", PTR),
         ("size", F64),
-        ("color_argb", U32),
         ("bold", I32),
         ("italic", I32),
         ("strike", I32),
@@ -891,15 +992,13 @@ FONT_RECORD = Struct(
 
 GRADIENT_STOP = Struct(
     "fm_gradient_stop_t",
-    [("position", F64), ("color_argb", U32), ("color", COLOR_SPEC_BLOB)],
+    [("position", F64), ("color", COLOR_SPEC_BLOB)],
 )
 
 FILL_RECORD = Struct(
     "fm_fill_record_t",
     [
         ("pattern", U8),
-        ("fg_argb", U32),
-        ("bg_argb", U32),
         ("fg", COLOR_SPEC_BLOB),
         ("bg", COLOR_SPEC_BLOB),
         ("has_gradient", I32),
@@ -917,7 +1016,7 @@ FILL_RECORD = Struct(
 
 BORDER_SIDE = Struct(
     "fm_border_side_t",
-    [("style", U8), ("color_argb", U32), ("color", COLOR_SPEC_BLOB)],
+    [("style", U8), ("color", COLOR_SPEC_BLOB)],
 )
 BORDER_SIDE_BLOB = ("blob_border_side", BORDER_SIDE.size, 8)
 
@@ -1344,9 +1443,9 @@ SHAPE = Struct(
         ("to_row", U32),
         ("to_col", U32),
         ("fill_kind", I32),
-        ("fill_rgb", U32),
+        ("fill_color", COLOR_SPEC_BLOB),
         ("line_kind", I32),
-        ("line_rgb", U32),
+        ("line_color", COLOR_SPEC_BLOB),
         ("rotation", I32),
         ("hidden", I32),
         ("text_box", I32),
@@ -1452,14 +1551,13 @@ CHART_TITLE = Struct("fm_chart_title_t", [("kind", I32), ("text", PTR), ("formul
 
 CHART_FILL = Struct(
     "fm_chart_fill_t",
-    [("has_color", I32), ("color", U32), ("transparency_pct", F64)],
+    [("color", COLOR_SPEC_BLOB), ("transparency_pct", F64)],
 )
 
 CHART_LINE = Struct(
     "fm_chart_line_t",
     [
-        ("has_color", I32),
-        ("color", U32),
+        ("color", COLOR_SPEC_BLOB),
         ("transparency_pct", F64),
         ("width_pt", F64),
         ("has_dash", I32),
@@ -1492,8 +1590,7 @@ CHART_LABELS = Struct(
         ("position", I32),
         ("number_format", PTR),
         ("source_linked", I32),
-        ("has_font_color", I32),
-        ("font_color", U32),
+        ("font_color", COLOR_SPEC_BLOB),
         ("font_size_pt", F64),
         ("deleted", I32),
     ],
@@ -1717,7 +1814,7 @@ CHART_FILL_PATCH = Struct(
     "fm_chart_fill_patch_t",
     [
         ("color_op", I32),
-        ("color", U32),
+        ("color", COLOR_SPEC_BLOB),
         ("transparency_op", I32),
         ("transparency_pct", F64),
     ],
@@ -1727,7 +1824,7 @@ CHART_LINE_PATCH = Struct(
     "fm_chart_line_patch_t",
     [
         ("color_op", I32),
-        ("color", U32),
+        ("color", COLOR_SPEC_BLOB),
         ("transparency_op", I32),
         ("transparency_pct", F64),
         ("width_op", I32),
@@ -1771,7 +1868,7 @@ CHART_LABELS_PATCH = Struct(
         ("number_format_op", I32),
         ("number_format", PTR),
         ("font_color_op", I32),
-        ("font_color", U32),
+        ("font_color", COLOR_SPEC_BLOB),
         ("font_size_op", I32),
         ("font_size_pt", F64),
     ],

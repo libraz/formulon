@@ -15,6 +15,10 @@ inline constexpr int kExitFailure = 1;
 /// Usage error. Mirrors sysexits(3) `EX_USAGE`.
 inline constexpr int kExitUsage = 64;
 
+/// The input text is malformed, such as a formula that does not parse. Mirrors
+/// `EX_DATAERR`.
+inline constexpr int kExitDataErr = 65;
+
 /// An input file is missing, unreadable or a directory. Mirrors `EX_NOINPUT`.
 inline constexpr int kExitNoInput = 66;
 
@@ -33,6 +37,7 @@ constexpr int exit_code_for_status(int status) {
   switch (status) {
     case 0:
     case kExitUsage:
+    case kExitDataErr:
     case kExitNoInput:
     case kExitCantCreate:
     case kExitIoError:
