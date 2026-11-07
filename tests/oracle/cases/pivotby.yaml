@@ -344,3 +344,251 @@ cases:
   - id: pivotby_two_param_lambda_rows
     setup: { A2: "a", A3: "a", A4: "b", A5: "b", A6: "c", A7: "c", B2: "p", B3: "q", B4: "p", B5: "q", B6: "p", B7: "q", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6 }
     formula: '=PIVOTBY(A2:A7,B2:B7,C2:C7,LAMBDA(x,y,ROWS(x)&"/"&ROWS(y)))'
+
+  - id: relative_to_000
+    description: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,1,2,1,,,0)'
+    formula: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,1,2,1,,,0)'
+
+  - id: relative_to_001
+    description: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,2,,1,,,0)'
+    formula: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,2,,1,,,0)'
+
+  - id: relative_to_002
+    description: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,-2,,1,,,0)'
+    formula: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,-2,,1,,,0)'
+
+  - id: relative_to_003
+    description: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,2,,,0)'
+    formula: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,2,,,0)'
+
+  - id: relative_to_004
+    description: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,1,2,,0)'
+    formula: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,1,2,,0)'
+
+  - id: relative_to_005
+    description: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,1,2,1,,,1)'
+    formula: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,1,2,1,,,1)'
+
+  - id: relative_to_006
+    description: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,2,,1,,,1)'
+    formula: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,2,,1,,,1)'
+
+  - id: relative_to_007
+    description: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,-2,,1,,,1)'
+    formula: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,-2,,1,,,1)'
+
+  - id: relative_to_008
+    description: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,2,,,1)'
+    formula: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,2,,,1)'
+
+  - id: relative_to_009
+    description: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,1,2,,1)'
+    formula: '=PIVOTBY({"c";"d";"c";"d";"c"},{"b","p";"a","q";"b","a";"a","z";"b","q"},{5;2;3;4;1},SUM,0,1,,1,2,,1)'
+
+  - id: relative_to_010
+    description: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,1,,1,,,2)'
+    formula: '=PIVOTBY({"b","p";"a","q";"b","a";"a","z";"b","q"},{"c";"d";"c";"d";"c"},{5;2;3;4;1},SUM,0,1,,1,,,2)'
+
+  - id: relative_to_011
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,)'
+
+  - id: relative_to_012
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,0)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,0)'
+
+  - id: relative_to_013
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,1)'
+
+  - id: relative_to_014
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,2)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,2)'
+
+  - id: relative_to_015
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,3)'
+
+  - id: relative_to_016
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,4)'
+
+  - id: relative_to_017
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,5)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,5)'
+
+  - id: relative_to_018
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,-1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,-1)'
+
+  - id: relative_to_019
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,"x")'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,"x")'
+
+  - id: relative_to_020
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,TRUE)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},PERCENTOF,0,2,,1,,,TRUE)'
+
+  - id: relative_to_021
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,0)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,0)'
+
+  - id: relative_to_022
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,0)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,0)'
+
+  - id: relative_to_023
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,0)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,0)'
+
+  - id: relative_to_024
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,0)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,0)'
+
+  - id: relative_to_025
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,1)'
+
+  - id: relative_to_026
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,1)'
+
+  - id: relative_to_027
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,1)'
+
+  - id: relative_to_028
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,1)'
+
+  - id: relative_to_029
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,2)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,2)'
+
+  - id: relative_to_030
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,2)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,2)'
+
+  - id: relative_to_031
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,2)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,2)'
+
+  - id: relative_to_032
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,2)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,2)'
+
+  - id: relative_to_033
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,3)'
+
+  - id: relative_to_034
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,3)'
+
+  - id: relative_to_035
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,3)'
+
+  - id: relative_to_036
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,3)'
+
+  - id: relative_to_037
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,,1,,,4)'
+
+  - id: relative_to_038
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},PERCENTOF,0,2,,2,,,4)'
+
+  - id: relative_to_039
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,SUM(a)/SUM(b)),0,2,,1,,,4)'
+
+  - id: relative_to_040
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,4)'
+
+  - id: relative_to_041
+    description: '=PIVOTBY({"A";"B";"A"},{"x";"x";"y"},{1;2;3},SUM,0,0,,0,,,0)'
+    formula: '=PIVOTBY({"A";"B";"A"},{"x";"x";"y"},{1;2;3},SUM,0,0,,0,,,0)'
+
+  - id: relative_to_042
+    description: '=PIVOTBY({"A";"B";"A"},{"x";"x";"y"},{1;2;3},SUM,0,0,,0,,,1)'
+    formula: '=PIVOTBY({"A";"B";"A"},{"x";"x";"y"},{1;2;3},SUM,0,0,,0,,,1)'
+
+  - id: relative_to_043
+    description: '=PIVOTBY({"x","p";"y","q";"x","q"},{"c";"c";"d"},{1;2;3},SUM,0,2,,0,,,1)'
+    formula: '=PIVOTBY({"x","p";"y","q";"x","q"},{"c";"c";"d"},{1;2;3},SUM,0,2,,0,,,1)'
+
+  - id: relative_to_044
+    description: '=PIVOTBY({"x","p";"y","q";"x","q"},{"c";"c";"d"},{1;2;3},SUM,0,2,,0,,,0)'
+    formula: '=PIVOTBY({"x","p";"y","q";"x","q"},{"c";"c";"d"},{1;2;3},SUM,0,2,,0,,,0)'
+
+  - id: relative_to_045
+    description: '=PIVOTBY({"A";"B";"A"},{"x";"x";"y"},{1;2;3},SUM,0,0,,0,,)'
+    formula: '=PIVOTBY({"A";"B";"A"},{"x";"x";"y"},{1;2;3},SUM,0,0,,0,,)'
+
+  - id: relative_to_extra_000
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,1,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,1,,1,,,3)'
+
+  - id: relative_to_extra_001
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,3)'
+
+  - id: relative_to_extra_002
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,0,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,0,,1,,,3)'
+
+  - id: relative_to_extra_003
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,0,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,0,,,3)'
+
+  - id: relative_to_extra_004
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,-1,,1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,-1,,1,,,3)'
+
+  - id: relative_to_extra_005
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,-1,,,3)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,-1,,,3)'
+
+  - id: relative_to_extra_006
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,1,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,1,,1,,,4)'
+
+  - id: relative_to_extra_007
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,1,,,4)'
+
+  - id: relative_to_extra_008
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,0,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,0,,1,,,4)'
+
+  - id: relative_to_extra_009
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,0,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,0,,,4)'
+
+  - id: relative_to_extra_010
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,-1,,1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,-1,,1,,,4)'
+
+  - id: relative_to_extra_011
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,-1,,,4)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c","m";"d","m";"c","n";"c","n";"d","m"},{1;2;3;4;5},LAMBDA(a,b,ROWS(b)),0,2,,-1,,,4)'
+
+  - id: relative_to_extra_012
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,0,3,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,0,3,1)'
+
+  - id: relative_to_extra_013
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,0,-3,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,0,-3,1)'
+
+  - id: relative_to_extra_014
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,3,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,2,3,1)'
+
+  - id: relative_to_extra_015
+    description: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,0,2,1)'
+    formula: '=PIVOTBY({"x","p";"x","q";"y","p";"y","q";"x","p"},{"c";"d";"c";"c";"d"},{1;2;3;4;5},SUM,0,0,2,1)'
