@@ -3730,6 +3730,8 @@ function makeFacade(Raw, registry, runtime) {
   let rawOf;
   let liveRaw;
   let isDisposed;
+  // Facade calls in flight per workbook; `dispose()` refuses while one runs.
+  const activeCalls = new WeakMap();
   let sheetIndex;
   let sheetState;
   let insertSheet;
@@ -5054,6 +5056,13 @@ function makeFacade(Raw, registry, runtime) {
     // With a registry (the WASM entries), the raw object is deleted here as a collection would delete it.
     dispose() {
       if (this.#disposed) return;
+      if (activeCalls.get(this) > 0) {
+        throw new FormulonError(
+          StatusCode.GraphRecalcReentrant,
+          'cannot dispose Workbook during an active method call (kGraphRecalcReentrant, 4005)',
+          '',
+        );
+      }
       this.#handle.dispose();
       this.#disposed = true;
       if (registry !== undefined) {
@@ -5481,6 +5490,24 @@ function makeFacade(Raw, registry, runtime) {
   for (const [owner, cls, rawFor, sheetFor] of argumentForms) {
     installArgumentForms(cls.prototype, owner, rawFor, sheetFor, handleIndex);
   }
+  // Under the arity guard: the handle is checked before a call reads or validates its input, and the workbook
+  // cannot be disposed from inside the call.
+  const workbookOfSheet = (sheet) => sheet.workbook;
+  const guardedClasses = [
+    [Workbook, (self) => self],
+    [Sheet, workbookOfSheet],
+    [Table, workbookOfSheet],
+    [PivotCache, workbookOfSheet],
+    [Pivot, (self) => self.sheet.workbook],
+    [Drawing, (self) => self.sheet.workbook],
+    [Picture, (self) => self.sheet.workbook],
+    [Chart, (self) => self.sheet.workbook],
+    [Shape, (self) => self.sheet.workbook],
+    [Slicer, (self) => self.sheet.workbook],
+    [WorkbookOoxml, (self) => ooxmlState.workbookOf(self)],
+    [SheetOoxml, (self) => ooxmlState.sheetOf(self).workbook],
+  ];
+  for (const [cls, workbookOf] of guardedClasses) installCallGuards(cls.prototype, workbookOf, liveRaw, activeCalls);
   const guarded = [['Workbook', Workbook], ['Workbook', WorkbookOoxml], ['Sheet', SheetOoxml], ...handleClasses];
   for (const [owner, cls] of guarded) installArityGuards(cls.prototype, owner);
   // `using` calls the same function as `dispose()`.
@@ -5563,6 +5590,33 @@ function installArityGuards(proto, owner) {
           throw new TypeError(`${where} takes at most ${limit} argument${limit === 1 ? '' : 's'}`);
         }
         return inner.apply(this, args);
+      }),
+    );
+  }
+}
+
+/**
+ * Wraps every method `proto` defines itself (not `dispose`) so that the workbook's handle is checked before the
+ * call reads or validates its arguments, and so that the workbook counts the call as active until it returns.
+ */
+function installCallGuards(proto, workbookOf, liveRaw, activeCalls) {
+  for (const name of Object.getOwnPropertyNames(proto)) {
+    if (name === 'constructor' || name === 'dispose') continue;
+    const desc = Object.getOwnPropertyDescriptor(proto, name);
+    if (typeof desc.value !== 'function') continue;
+    const inner = desc.value;
+    defineMethod(
+      proto,
+      name,
+      namedFunction(name, function (args) {
+        const workbook = workbookOf(this);
+        liveRaw(workbook);
+        activeCalls.set(workbook, (activeCalls.get(workbook) ?? 0) + 1);
+        try {
+          return inner.apply(this, args);
+        } finally {
+          activeCalls.set(workbook, activeCalls.get(workbook) - 1);
+        }
       }),
     );
   }
