@@ -7774,7 +7774,10 @@ class WorkbookOoxml:
             )
 
     def get_num_fmt_string(self, num_fmt_id: int) -> Optional[str]:
-        """Return the effective format code for ``num_fmt_id``; ``None`` when no format maps to it."""
+        """Return the effective format code for ``num_fmt_id`` in the workbook profile's vocabulary.
+
+        Built-in id 14 is ``m/d/yy`` under en-US and ``yyyy/m/d`` under ja-JP. ``None`` when no format maps to it.
+        """
         h = self._workbook._require()
         return _read_optional_cstr_out(
             LIB.fm_workbook_get_num_fmt_string,
@@ -7864,7 +7867,11 @@ class WorkbookOoxml:
             return LIB.read_u32(out)
 
     def add_num_fmt(self, format_code: str) -> int:
-        """Add (dedup) a number-format code; return its resolved id."""
+        """Add (dedup) a number-format code in the workbook profile's vocabulary; return its resolved id.
+
+        A built-in id whose profile code equals ``format_code`` wins (``m/d/yy`` is 14 under en-US); the ECMA-376
+        spelling ``mm-dd-yy`` becomes a custom format.
+        """
         h = self._workbook._require()
         with _ArgScope() as scope:
             code_ptr = scope.cstr(format_code)

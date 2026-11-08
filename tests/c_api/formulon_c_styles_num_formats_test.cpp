@@ -12,7 +12,31 @@ TEST(FormulonCApiStyles, BuiltinNumFmtResolves) {
   EXPECT_STREQ(s, "General");
   EXPECT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &present, &s), 0);
   ASSERT_NE(s, nullptr);
+  EXPECT_STREQ(s, "m/d/yy");
+}
+
+TEST(FormulonCApiStyles, AddNumFmtUsesProfileVocabulary) {
+  int32_t present = 0;
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  uint32_t id = 0xFFFFU;
+  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "m/d/yy", &id), 0);
+  EXPECT_EQ(id, 14U);
+  const char* s = nullptr;
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, id, &present, &s), 0);
+  EXPECT_STREQ(s, "m/d/yy");
+
+  // The ECMA-376 spelling is not the profile's code, so it is a custom format.
+  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &id), 0);
+  EXPECT_GE(id, 164U);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, id, &present, &s), 0);
   EXPECT_STREQ(s, "mm-dd-yy");
+
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "yyyy/m/d", &id), 0);
+  EXPECT_EQ(id, 14U);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &s), 0);
+  EXPECT_STREQ(s, "yyyy/m/d");
 }
 
 TEST(FormulonCApiStyles, LocaleOnlyBuiltinNumFmtFollowsProfile) {
@@ -29,9 +53,8 @@ TEST(FormulonCApiStyles, LocaleOnlyBuiltinNumFmtFollowsProfile) {
   EXPECT_STREQ(s, "yyyy\"年\"m\"月\"d\"日\"");
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &present, &s), 0);
   EXPECT_STREQ(s, "[$-411]ge\\.m\\.d");
-  // Ids with an ECMA-376 code keep it whatever the profile.
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &present, &s), 0);
-  EXPECT_STREQ(s, "mm-dd-yy");
+  EXPECT_STREQ(s, "yyyy/m/d");
 
   ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-zh_CN"), 0);
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &present, &s), 0);
@@ -124,10 +147,10 @@ TEST(FormulonCApiStyles, InvalidCustomNumFmtStringIndexDoesNotShadowBuiltin) {
   const char* resolved = nullptr;
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
-  EXPECT_STREQ(resolved, "mm-dd-yy");
+  EXPECT_STREQ(resolved, "m/d/yy");
 
   uint32_t id = 0xFFFFU;
-  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &id), 0);
+  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "m/d/yy", &id), 0);
   EXPECT_EQ(id, 14U);
 }
 
@@ -197,10 +220,10 @@ TEST(FormulonCApiStyles, DuplicateNumFmtAllInvalidRecordsFallBackToBuiltin) {
   const char* resolved = nullptr;
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
-  EXPECT_STREQ(resolved, "mm-dd-yy");
+  EXPECT_STREQ(resolved, "m/d/yy");
 
   uint32_t builtin_id = 0xFFFFU;
-  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_id), 0);
+  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "m/d/yy", &builtin_id), 0);
   EXPECT_EQ(builtin_id, 14U);
 }
 

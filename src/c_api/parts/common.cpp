@@ -598,17 +598,23 @@ bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
   return false;
 }
 
-fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, std::uint32_t* out_id) {
-  const formulon::StylesTable& existing_styles = wb.styles();
-
-  // Step 1: return a built-in slot only when that slot's effective mapping
-  // matches the requested code. A custom record may override the built-in.
+std::optional<std::uint16_t> builtin_num_fmt_id_for_code(const formulon::StylesTable& styles,
+                                                         formulon::ExcelProfile profile, std::string_view code) {
   for (std::uint16_t id = 0; id < kBuiltinNumFmtIdLimit; ++id) {
-    const std::optional<std::string_view> resolved = effective_num_fmt(existing_styles, id);
-    if (resolved.has_value() && code == *resolved) {
-      *out_id = id;
-      return 0;
+    const std::optional<std::string_view> rendered = effective_num_fmt(styles, id, profile);
+    if (rendered.has_value() && *rendered == code) {
+      return id;
     }
+  }
+  return std::nullopt;
+}
+
+fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, std::uint32_t* out_id) {
+  // Step 1: a built-in slot whose profile-rendered code is `code`. A custom
+  // record may override the built-in.
+  if (const std::optional<std::uint16_t> builtin = builtin_num_fmt_id_for_code(wb.styles(), wb.excel_profile(), code)) {
+    *out_id = *builtin;
+    return 0;
   }
 
   formulon::StylesTable& styles = wb.mutable_styles();
@@ -656,13 +662,6 @@ fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std:
     return rc;
   }
   const std::string_view text(code);
-  for (std::uint16_t id = 0; id < kBuiltinNumFmtIdLimit; ++id) {
-    const std::optional<std::string_view> rendered = effective_num_fmt(wb.styles(), id, wb.excel_profile());
-    if (rendered.has_value() && *rendered == text) {
-      *out = std::to_string(id);
-      return 0;
-    }
-  }
   std::uint32_t id = 0;
   if (auto rc = add_num_fmt_code(wb, std::string(text), &id); rc != 0) {
     return rc;
@@ -672,11 +671,7 @@ fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std:
 }
 
 std::optional<std::string_view> resolve_num_fmt_code(const formulon::Workbook& wb, std::uint16_t id) {
-  std::optional<std::string_view> resolved = effective_num_fmt(wb.styles(), id);
-  if (!resolved.has_value()) {
-    resolved = effective_num_fmt(wb.styles(), id, wb.excel_profile());
-  }
-  return resolved;
+  return effective_num_fmt(wb.styles(), id, wb.excel_profile());
 }
 
 const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text) {

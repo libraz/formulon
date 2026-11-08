@@ -637,18 +637,9 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   }
   for (size_t i = 0; i < batch->num_fmt_count; ++i) {
     const std::string code = text_or_empty(batch->num_fmt_codes[i]);
-    uint16_t builtin_id = 0U;
-    bool is_builtin = false;
-    for (uint16_t id = 0U; id < formulon::c_api::parts::kBuiltinNumFmtIdLimit; ++id) {
-      const std::optional<std::string_view> resolved = effective_num_fmt(staged, id);
-      if (resolved.has_value() && code == *resolved) {
-        builtin_id = id;
-        is_builtin = true;
-        break;
-      }
-    }
-    if (is_builtin) {
-      staged_num_fmt_ids[i] = builtin_id;
+    if (const std::optional<std::uint16_t> builtin =
+            formulon::c_api::parts::builtin_num_fmt_id_for_code(staged, wb->workbook().excel_profile(), code)) {
+      staged_num_fmt_ids[i] = *builtin;
       continue;
     }
     const auto existing = num_fmts.find(code);

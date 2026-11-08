@@ -365,14 +365,18 @@ constexpr std::uint16_t kBuiltinNumFmtIdLimit = kLastBuiltinNumFmtId + 1U;
 // registered in `styles.num_fmts`.
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id);
 
-// The `fm_workbook_add_num_fmt` lookup: a built-in id whose ECMA-376 code is
-// `code`, then a registered custom id, else a newly appended custom id.
+// First built-in id (ascending) whose code as `profile` renders it is `code`.
+std::optional<std::uint16_t> builtin_num_fmt_id_for_code(const formulon::StylesTable& styles,
+                                                         formulon::ExcelProfile profile, std::string_view code);
+
+// The `fm_workbook_add_num_fmt` lookup: a built-in id whose code in the
+// workbook's profile is `code`, then a registered custom id, else a newly
+// appended custom id.
 fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, std::uint32_t* out_id);
 
 // Converts a pivot `number_format` format code into the numFmtId text the
-// pivot model stores. NULL and `""` mean "no number format" and yield `""`.
-// A built-in id whose profile-rendered code is `code` wins, so a code read
-// back from a built-in id maps to that id; otherwise `add_num_fmt_code`.
+// pivot model stores. NULL and `""` mean "no number format" and yield `""`;
+// anything else resolves as `add_num_fmt_code` does.
 fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std::string* out);
 
 // Format code of a pivot model numFmtId text, resolved as
@@ -380,9 +384,9 @@ fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std:
 // The view is static or styles-owned, valid until the next mutation.
 const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text);
 
-// Code of number-format id `id`: the ECMA-376 / stored code, else the code
-// the workbook's profile renders for ids with none (East Asian dates, Thai
-// digits, currency). Empty optional when the id names no format.
+// Code of number-format id `id` in the workbook's profile vocabulary: a valid
+// custom record, else the code the profile renders for the built-in id. Empty
+// optional when the id names no format.
 std::optional<std::string_view> resolve_num_fmt_code(const formulon::Workbook& wb, std::uint16_t id);
 
 // Validates a conditional-formatting rule record: sqref shape and every

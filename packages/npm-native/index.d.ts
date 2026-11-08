@@ -5902,7 +5902,8 @@ export interface WorkbookOoxml {
   getFill(fillIndex: number): Fill;
   /** Returns the border record at `borderIndex`, including its Color selectors. */
   getBorder(borderIndex: number): Border;
-  /** Returns the effective format string for `numFmtId`; `null` when no format maps to it. */
+  /** Returns the effective format string for `numFmtId` in the workbook profile's vocabulary (id 14 is
+   *  `m/d/yy` under en-US, `yyyy/m/d` under ja-JP); `null` when no format maps to it. */
   getNumFmtString(numFmtId: number): string | null;
   /** Returns the differential-format record referenced by CF `dxfId`. */
   getDxf(dxfIndex: number): Dxf;
@@ -5919,13 +5920,10 @@ export interface WorkbookOoxml {
   addFill(record: Fill): number;
   /** Adds a border (deduplicating against existing entries). */
   addBorder(record: Border): number;
-  /** Adds a number-format code. An existing effective mapping is reused,
-   *  including an existing custom record; a built-in id is reused without
-   *  modifying the table only when its current effective mapping matches the
-   *  code. Otherwise custom codes are appended at
-   *  `max(existing_custom_id, 163) + 1`. Effective mappings use the first
-   *  valid custom record for an id in document order, then a non-empty
-   *  built-in code. */
+  /** Adds a number-format code in the workbook profile's vocabulary and returns its id. A built-in id
+   *  whose profile code equals `formatCode` (lowest id first) wins, then an existing custom record,
+   *  else a custom code is appended at `max(existing_custom_id, 163) + 1`. Under en-US `m/d/yy` is id 14;
+   *  the ECMA-376 spelling `mm-dd-yy` is a custom format. `getNumFmtString(addNumFmt(x))` returns `x`. */
   addNumFmt(formatCode: string): number;
   /** Adds an `<xf>` record (deduplicating against existing entries).
    *  Out-of-range font/fill/border indices or unregistered `numFmtId`

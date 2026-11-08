@@ -5355,11 +5355,10 @@ typedef enum {
  *                       zero-initialised spec asks for subtotals at the
  *                       bottom, so set it explicitly.
  *   * `number_format` — nullable; the field's number-format code, e.g.
- *                       `"0.0%"`. `NULL` or `""` means none. A code the
- *                       workbook profile renders for a built-in id selects
- *                       that id; any other code is registered as
- *                       `fm_workbook_add_num_fmt` does. A string of digits is
- *                       a format code, not an id.
+ *                       `"0.0%"`. `NULL` or `""` means none. The code is in
+ *                       the workbook profile's vocabulary and is registered
+ *                       as `fm_workbook_add_num_fmt` does. A string of
+ *                       digits is a format code, not an id.
  */
 typedef struct {
   uint32_t struct_size;
@@ -5413,8 +5412,8 @@ typedef struct {
  * except that `axis` is `-1` for a field that sits on no axis. Strings are
  * model-backed views, never `NULL`, valid until the next mutation.
  * `number_format` is the format code the field's numFmtId resolves to (as
- * `fm_workbook_get_num_fmt_string` resolves it), `""` for none or an
- * unregistered id; writing it back selects the same id.
+ * `fm_workbook_get_num_fmt_string` resolves it, in the profile's vocabulary),
+ * `""` for none or an unregistered id; writing it back selects the same id.
  *
  *   * `cache_field_index` — index of the bound pivot-cache field, `-1` when
  *                           the cache does not cover this field. Pivot field
@@ -9224,13 +9223,13 @@ FM_API fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font_ind
 /**
  * @brief Looks up the effective format string for `num_fmt_id`.
  *
- * Resolution searches valid custom `<numFmt>` records in document order;
- * this includes a custom record below 164 that overrides a built-in slot.
- * When no valid custom record matches, a non-empty built-in code in the
- * `0..163` range is used as the fallback. A built-in id with no ECMA-376 code
- * (the East Asian date ids, the Thai-digit ids, the currency ids 5-8)
- * resolves to the code the workbook's Excel profile renders it with, so the
- * result for those ids follows `fm_workbook_set_profile_id`. When present, `*out` is either a
+ * Codes use the vocabulary of the workbook's Excel profile
+ * (`fm_workbook_set_profile_id`), as Excel stores them: built-in id 14 is
+ * `m/d/yy` under en-US and `yyyy/m/d` under ja-JP. Resolution searches valid
+ * custom `<numFmt>` records in document order; this includes a custom record
+ * below 164 that overrides a built-in slot. When no valid custom record
+ * matches, the code the profile renders for a built-in id in the `0..163`
+ * range is used. When present, `*out` is either a
  * model-backed view into the custom record's format string (valid until the
  * next mutation of the numFmt list, `fm_workbook_add_num_fmt`, or until
  * handle destruction), or a static built-in view with program lifetime.
@@ -9646,14 +9645,15 @@ FM_API fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border_rec
  *        deduplicating against existing entries. Returns the resolved
  *        OOXML `numFmtId`.
  *
- * Resolution proceeds in three steps. An id's effective mapping is the
- *      first valid custom `<numFmt>` record for that id in document order,
- *      falling back to a non-empty built-in code when no custom record
- *      resolves it.
- *   1. If `format_code` matches an id in the built-in range (`0..163`) after
- *      that effective-resolution step, the id is returned and nothing is
- *      appended to the table. A built-in id is therefore returned only when
- *      its current effective mapping matches `format_code`.
+ * `format_code` is in the vocabulary of the workbook's Excel profile, so
+ * `fm_workbook_get_num_fmt_string(add(x))` returns `x`. An id's effective
+ * mapping is the first valid custom `<numFmt>` record for that id in document
+ * order, falling back to the code the profile renders for the built-in id.
+ * The steps are:
+ *   1. If `format_code` matches an id in the built-in range (`0..163`) under
+ *      that mapping (lowest id first), the id is returned and nothing is
+ *      appended to the table. `m/d/yy` is id 14 under en-US; the ECMA-376
+ *      spelling `mm-dd-yy` is not, and becomes a custom format.
  *   2. Otherwise existing custom entries whose ids effectively resolve to
  *      their code are searched; the first match returns its registered id.
  *   3. Otherwise a new custom entry is appended with id

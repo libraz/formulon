@@ -2216,6 +2216,12 @@ order.
 
 ### Changed
 
+- Number-format codes (`fm_workbook_add_num_fmt`, `fm_workbook_get_num_fmt_string`
+  and their JavaScript and Python forms) use the vocabulary of the workbook's
+  Excel profile, as the pivot `number_format` field does. Built-in id 14 is
+  `m/d/yy` under en-US and `yyyy/m/d` under ja-JP, so adding that code
+  returns 14, and the ECMA-376 spelling `mm-dd-yy` is stored as a custom
+  format. `get(add(code))` returns `code`.
 - `evaluate_cf_range` with `today_serial` omitted evaluates time-period rules
   against today instead of disabling them, and the JavaScript
   `evaluateCfRange` no longer requires `todaySerial`. Passing `NaN` still
