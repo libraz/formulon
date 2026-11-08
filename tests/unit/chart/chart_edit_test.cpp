@@ -1208,6 +1208,113 @@ TEST(ChartEdit, TypeChangeCarriesSeriesFillBetweenBarAndAreaOnly) {
   EXPECT_EQ(PartText(lw, line.path).find("FF0000"), std::string::npos);
 }
 
+// A chart without style parts keeps its own series formatting through a type change, as Excel does: a line plot
+// drops hidden lines, a scatter plot hides every line and keeps only shown markers.
+TEST(ChartEdit, TypeChangeKeepsFormattingInAChartWithoutStyleParts) {
+  const std::string fill_red = "<a:solidFill><a:srgbClr val=\"FF0000\"/></a:solidFill>";
+  const std::string fill_cyan = "<a:solidFill><a:srgbClr val=\"00FFFF\"/></a:solidFill>";
+  const std::string fill_accent = "<a:solidFill><a:schemeClr val=\"accent3\"/></a:solidFill>";
+  const std::string blue_ln = "<a:ln w=\"3175\"><a:solidFill><a:srgbClr val=\"0000FF\"/></a:solidFill></a:ln>";
+  const std::string point_green = "<c:spPr><a:solidFill><a:srgbClr val=\"00FF00\"/></a:solidFill></c:spPr></c:dPt>";
+  const auto hidden = [](const char* w) { return std::string("<a:ln w=\"") + w + "\"><a:noFill/></a:ln>"; };
+  // Series `n` of `xml` without its references and extensions.
+  const auto ser = [](const std::string& xml, int n) {
+    std::string out = Between(xml, "<c:ser>", "</c:ser>", n);
+    out = std::regex_replace(out, std::regex("<c:(tx|cat|val|xVal|yVal|extLst)>.*?</c:\\1>"), "");
+    return out;
+  };
+  // Rewrites the series of an inserted chart with the given shape properties, markers and points.
+  const auto restyle = [](Workbook& wb, const Located& c, const std::vector<std::string>& sp,
+                          const std::vector<std::string>& marker, const std::vector<std::string>& points) {
+    std::string xml = PartText(wb, c.path);
+    std::size_t at = 0;
+    for (std::size_t i = 0; i < sp.size(); ++i) {
+      at = xml.find("<c:ser>", at + 1);
+      const std::size_t end = xml.find("</c:ser>", at);
+      std::string s = xml.substr(at, end - at);
+      s = std::regex_replace(s, std::regex("<c:spPr>.*?</c:spPr>"), "", std::regex_constants::format_first_only);
+      s = std::regex_replace(s, std::regex("<c:marker>.*?</c:marker>"), "");
+      s = std::regex_replace(s, std::regex("<c:invertIfNegative val=\"0\"/>"), "");
+      const bool bar = xml.find("<c:barChart>") != std::string::npos;
+      const std::size_t tx = s.find("</c:tx>") + 7;
+      s.insert(tx, sp[i] + (i < marker.size() ? marker[i] : "") + (bar ? "<c:invertIfNegative val=\"0\"/>" : "") +
+                       (i < points.size() ? points[i] : ""));
+      xml.replace(at, end - at, s);
+    }
+    MustOk(wb.replace_passthrough_part(c.path, std::vector<std::uint8_t>(xml.begin(), xml.end())));
+  };
+  const std::vector<std::string> bar_sp = {
+      "<c:spPr>" + fill_red + blue_ln + "</c:spPr>", "<c:spPr>" + fill_cyan + hidden("50800") + "</c:spPr>",
+      "<c:spPr>" + fill_accent + "<a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr>"};
+  const std::vector<std::string> bar_points = {
+      "<c:dPt><c:idx val=\"1\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" + point_green};
+  const auto idx = [](int i) {
+    return "<c:idx val=\"" + std::to_string(i) + "\"/><c:order val=\"" + std::to_string(i) + "\"/>";
+  };
+  const std::string none = "<c:marker><c:symbol val=\"none\"/></c:marker>";
+  const std::string green_point = "<c:dPt><c:idx val=\"1\"/><c:bubble3D val=\"0\"/>";
+
+  struct Case {
+    K kind;
+    std::vector<std::string> want;
+  };
+  const std::vector<Case> from_bar = {
+      {K::kLine,
+       {idx(0) + bar_sp[0] + none + green_point + point_green + "<c:smooth val=\"0\"/>",
+        idx(1) + none + "<c:smooth val=\"0\"/>",
+        idx(2) + "<c:spPr>" + fill_accent + "<a:effectLst/></c:spPr>" + none + "<c:smooth val=\"0\"/>"}},
+      {K::kScatter,
+       {idx(0) + "<c:spPr>" + fill_red + hidden("25400") + "</c:spPr>" + green_point + "<c:spPr>" +
+            "<a:solidFill><a:srgbClr val=\"00FF00\"/></a:solidFill>" + hidden("38100") + "</c:spPr></c:dPt>" +
+            "<c:smooth val=\"0\"/>",
+        idx(1) + "<c:spPr>" + fill_cyan + hidden("38100") + "</c:spPr><c:smooth val=\"0\"/>",
+        idx(2) + "<c:spPr>" + fill_accent + hidden("38100") + "<a:effectLst/></c:spPr><c:smooth val=\"0\"/>"}},
+      {K::kArea, {idx(0) + bar_sp[0] + green_point + point_green, idx(1) + bar_sp[1], idx(2) + bar_sp[2]}},
+  };
+  for (const Case& t : from_bar) {
+    Workbook wb = GridBook();
+    Insert(wb, K::kColumn);
+    const Located c = Find(wb);
+    restyle(wb, c, bar_sp, {}, bar_points);
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, t.kind, ChartGrouping::kStandard));
+    const std::string xml = PartText(wb, c.path);
+    for (int i = 0; i < 3; ++i) {
+      EXPECT_EQ(ser(xml, i), "<c:ser>" + t.want[static_cast<std::size_t>(i)] + "</c:ser>")
+          << static_cast<int>(t.kind) << " series " << i;
+    }
+  }
+
+  const std::string green_ln = "<a:ln w=\"50800\"><a:solidFill><a:srgbClr val=\"00AA00\"/></a:solidFill></a:ln>";
+  const std::string purple_ln = "<a:ln w=\"28575\"><a:solidFill><a:srgbClr val=\"AA00AA\"/></a:solidFill></a:ln>";
+  const std::vector<std::string> line_sp = {"<c:spPr>" + green_ln + "</c:spPr>",
+                                            "<c:spPr>" + hidden("6350") + "</c:spPr>",
+                                            "<c:spPr>" + purple_ln + "</c:spPr>"};
+  const std::vector<std::string> line_markers = {none, "", "<c:marker><c:symbol val=\"diamond\"/></c:marker>"};
+  const std::vector<Case> from_line = {
+      {K::kScatter,
+       {idx(0) + "<c:spPr>" + hidden("25400") + "</c:spPr><c:smooth val=\"0\"/>",
+        idx(1) + "<c:spPr>" + hidden("38100") + "</c:spPr><c:smooth val=\"0\"/>",
+        idx(2) + "<c:spPr>" + hidden("25400") +
+            "</c:spPr><c:marker><c:symbol val=\"diamond\"/><c:size val=\"5\"/></c:marker><c:smooth val=\"0\"/>"}},
+      {K::kColumn,
+       {idx(0) + line_sp[0] + "<c:invertIfNegative val=\"0\"/>",
+        idx(1) + line_sp[1] + "<c:invertIfNegative val=\"0\"/>",
+        idx(2) + line_sp[2] + "<c:invertIfNegative val=\"0\"/>"}},
+  };
+  for (const Case& t : from_line) {
+    Workbook wb = GridBook();
+    Insert(wb, K::kLine);
+    const Located c = Find(wb);
+    restyle(wb, c, line_sp, line_markers, {});
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, t.kind, ChartGrouping::kClustered));
+    const std::string xml = PartText(wb, c.path);
+    for (int i = 0; i < 3; ++i) {
+      EXPECT_EQ(ser(xml, i), "<c:ser>" + t.want[static_cast<std::size_t>(i)] + "</c:ser>")
+          << static_cast<int>(t.kind) << " series " << i;
+    }
+  }
+}
+
 // A chart's automatic colours, re-derived by a type change, come from its own colour style.
 TEST(ChartEdit, TypeChangeColoursFromTheChartsColourStyle) {
   Workbook wb = LoadFixture("chart_column.xlsx");

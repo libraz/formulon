@@ -156,11 +156,8 @@ void line_from_outline(xml_node ln, const xml_node& src) {
 
 /// Sets `to`'s series line as Excel changes type. Between line and bar / area types an explicit line becomes the
 /// outline and a visible outline the line; otherwise a bar or area series keeps the width of a hidden source line
-/// and has none, a line series from a scatter plot takes 1.5 pt, and one from an area plot is smoothed.
+/// and has none, and a line series from a scatter plot takes 1.5 pt.
 void carry_series_line(const xml_node& from, xml_node to, int old_kind, int new_kind) {
-  if (new_kind == static_cast<int>(ChartInsertKind::kLine) && old_kind == static_cast<int>(ChartInsertKind::kArea)) {
-    put_val(to, "c:smooth", kSerOrder, "1");
-  }
   xml_node ln = child_local(child_local(to, "spPr"), "ln");
   if (!ln) {
     return;
@@ -223,6 +220,76 @@ void convert_points(const xml_node& from, xml_node to, Family old_family, Family
         sp.append_copy(ln);
       }
       sp.append_child("a:effectLst");
+    }
+    if (const xml_node ext = child_local(d, "extLst")) {
+      copy_at(p, ext, kPointOrder);
+    }
+    insert_point(to, p, idx);
+  }
+}
+
+/// Hides the line of scatter shape properties `sp` as Excel does in a chart without style parts: 2 pt wide when it
+/// was a visible line with a width, 3 pt otherwise.
+void hide_scatter_line(xml_node sp) {
+  const xml_node old = child_local(sp, "ln");
+  const bool sized = old && !child_local(old, "noFill") && old.attribute("w");
+  drop(sp, "ln");
+  xml_node ln = ensure(sp, "a:ln", kShapeOrder);
+  ln.append_attribute("w").set_value(sized ? "25400" : "38100");
+  ln.append_child("a:noFill");
+}
+
+/// Carries `from`'s formatting to `to` as Excel changes type in a chart without style parts: the shape properties
+/// of the series and its points stay as they are, except that a line series loses a hidden line (and shape
+/// properties left with neither a line nor effects) and takes no markers, and a scatter series hides its lines
+/// and keeps only a shown marker.
+void carry_unstyled(const xml_node& from, xml_node to, Family after, bool bar) {
+  drop(to, "spPr");
+  drop(to, "dPt");
+  if (after != Family::kLine) {
+    drop(to, "marker");
+  }
+  if (const xml_node sp = child_local(from, "spPr")) {
+    copy_at(to, sp, kSerOrder);
+  }
+  if (after == Family::kLine) {
+    if (xml_node sp = child_local(to, "spPr")) {
+      const xml_node ln = child_local(sp, "ln");
+      if (ln && child_local(ln, "noFill")) {
+        sp.remove_child(ln);
+      }
+      if (!child_local(sp, "ln") && !child_local(sp, "effectLst")) {
+        to.remove_child(sp);
+      }
+    }
+  } else if (after == Family::kMarker) {
+    hide_scatter_line(ensure(to, "c:spPr", kSerOrder));
+    const xml_node m = child_local(from, "marker");
+    if (m && std::string_view(child_local(m, "symbol").attribute("val").value()) != "none") {
+      xml_node out = copy_at(to, m, kSerOrder);
+      if (!child_local(out, "size")) {
+        put_val(out, "c:size", kMarkerOrder, "5");
+      }
+    }
+  }
+  for (const xml_node& d : children_local(from, "dPt")) {
+    const std::uint32_t idx = val_u(d, "idx");
+    const xml_node invert = child_local(d, "invertIfNegative");
+    const std::string invert_val = invert ? invert.attribute("val").value() : "0";
+    pugi::xml_document frag;
+    xml_node p = fragment(frag, data_point_open(idx) +
+                                    (bar ? "<c:invertIfNegative val=\"" + invert_val + "\"/>" : std::string()) +
+                                    "<c:bubble3D val=\"0\"/></c:dPt>");
+    if (after != Family::kFill) {
+      if (const xml_node marker = child_local(d, "marker")) {
+        copy_at(p, marker, kPointOrder);
+      }
+    }
+    if (const xml_node sp = child_local(d, "spPr")) {
+      xml_node out = copy_at(p, sp, kPointOrder);
+      if (after == Family::kMarker) {
+        hide_scatter_line(out);
+      }
     }
     if (const xml_node ext = child_local(d, "extLst")) {
       copy_at(p, ext, kPointOrder);
@@ -317,6 +384,9 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   pugi::xml_document t;
   RETURN_IF_ERROR(template_doc(wb, c, kind, grouping, std::nullopt, ChartLegendPosition::kRight, split, t));
   xml_node tplot = template_plot(t);
+  // A chart without style parts keeps its own formatting through a type change, as Excel does.
+  Palette palette;
+  load_palette(wb, c.path, palette);
   const std::vector<xml_node> fresh = children_local(tplot, "ser");
   for (std::size_t i = 0; i < sers.size() && i < fresh.size(); ++i) {
     xml_node to = fresh[i];
@@ -338,6 +408,13 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     copy_at(to, val, kSerOrder, scatter ? "c:yVal" : "c:val");
     if (const xml_node ext = child_local(from, "extLst")) {
       copy_at(to, ext, kSerOrder);
+    }
+    if (k == static_cast<int>(ChartInsertKind::kLine) && old == static_cast<int>(ChartInsertKind::kArea)) {
+      put_val(to, "c:smooth", kSerOrder, "1");
+    }
+    if (!palette.styled && !old_ring && !new_ring) {
+      carry_unstyled(from, to, family_of(k), is_bar(tplot));
+      continue;
     }
     // As Excel changes type: the series fill carries only between bar and area types; every other change
     // re-derives the series colour.

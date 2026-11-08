@@ -2228,6 +2228,12 @@ order.
   included, instead of only an RGB colour. A change to or from a line or
   scatter type re-derives the series colour, an RGB one included, as Excel
   does; previously an RGB colour was carried to the scatter markers.
+- A chart without chart style parts, as `addChart` creates and as many
+  non-Excel writers save, keeps its series and point formatting through a
+  type change, as Excel does for such a chart: a line plot drops hidden lines
+  and shows no markers, and a scatter plot hides every line (2 pt wide when a
+  visible line had a width, 3 pt otherwise) and keeps only shown markers.
+  Previously such a chart was restyled as a chart with style parts is.
 - A shape fill or outline colour is no longer dropped silently: given without
   its kind it fails with a `TypeError` in JavaScript and Python, and given with
   a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.

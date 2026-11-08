@@ -100,8 +100,8 @@ struct Chart {
   }
 };
 
-/// A chart's style parts as marker settling needs them: Excel completes marker outlines only in a chart with
-/// a chart style part, in the colours of its colour style.
+/// A chart's style parts as edits need them: Excel completes marker outlines and re-derives series formatting on
+/// a type change only in a chart with a chart style part, in the colours of its colour style.
 struct Palette {
   bool styled = false;
   pugi::xml_document colors;
