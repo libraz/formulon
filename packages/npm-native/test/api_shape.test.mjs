@@ -687,7 +687,7 @@ test('H9: showPivotDetails returns the new sheet and the existing handles follow
     const cell = ws
       .pivot(pivot)
       .getLayout()
-      .cells.find((c) => c.kind === formulon.PivotCellKind.GrandTotal && c.value.kind === formulon.ValueKind.Number);
+      .cells.find((c) => c.kind === formulon.PivotCellKind.GrandTotal && typeof c.value === 'number');
     assert.ok(cell, 'the pivot has a grand total value cell');
     const details = ws.pivot(pivot).showDetails(cell.row, cell.col);
     assert.equal(details.index, 0);
@@ -822,9 +822,9 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => wb.activeSheet(),
       (v) => wb.setActiveSheet(v),
     );
-    wb.setThemeScriptFont({ major: true, script: 'Zzzz', typeface: 'Face' });
+    wb.setThemeScriptFont({ scheme: formulon.FontScheme.Major, script: 'Zzzz', typeface: 'Face' });
     same(
-      () => wb.getThemeScriptFont({ major: true, script: 'Zzzz' }),
+      () => wb.getThemeScriptFont({ scheme: formulon.FontScheme.Major, script: 'Zzzz' }),
       (v) => wb.setThemeScriptFont(v),
     );
     const colors = wb.getThemeColors();
@@ -1150,22 +1150,19 @@ test('L1 / L2: an empty collection lists as [], and each call returns a fresh ar
 
 test('N1: enums of one family share their values', async () => {
   const formulon = await getFormulon();
-  assert.equal(formulon.SlicerSortOrder.Descending, formulon.PivotSortOrder.Descending);
-  assert.equal(formulon.SlicerSortOrder.Ascending, formulon.PivotSortOrder.Ascending);
+  assert.equal(formulon.SlicerSortOrder.Ascending, 0);
+  assert.equal(formulon.PivotSortOrder.Manual, 0);
+  assert.notEqual(formulon.SlicerSortOrder.Descending, formulon.PivotSortOrder.Descending);
   assert.equal(formulon.AnchorEditAs.OneCell, formulon.AnchorKind.OneCell);
   assert.equal(formulon.AnchorEditAs.TwoCell, formulon.AnchorKind.TwoCell);
   assert.equal(formulon.AnchorEditAs.Absolute, formulon.AnchorKind.Absolute);
-  for (const member of ['Gap', 'Zero', 'Span']) {
-    assert.equal(formulon.ChartBlanksAs[member], formulon.SparklineEmptyCells[member], member);
-  }
-  for (const member of ['Bottom', 'Top', 'Left', 'Right']) {
-    assert.equal(formulon.ChartAxisPosition[member], formulon.ChartLegendPosition[member], member);
-  }
+  assert.deepEqual({ ...formulon.BlanksAs }, { Zero: 0, Gap: 1, Span: 2 });
+  assert.equal(formulon.ChartAxisPosition.Bottom, 0);
+  assert.notEqual(formulon.ChartAxisPosition.Top, formulon.ChartLegendPosition.Top);
   for (const [table, member] of [
-    ['ChartBlanksAs', 'Absent'],
+    ['BlanksAs', 'Absent'],
     ['ChartAxisCrosses', 'Absent'],
     ['ShapePaint', 'Unset'],
-    ['PivotFilterOperandKind', 'None'],
     ['ChartTitleKind', 'None'],
     ['ChartLegendPosition', 'None'],
   ]) {
@@ -1192,7 +1189,7 @@ test('N3: the old ordinal of a removed member reads with its new meaning', async
     for (let r = 0; r < 4; r += 1) ws.setNumber(r, 1, r + 1);
     const id = ws.addChart({ kind: formulon.ChartInsertKind.Line, source: 'Sheet1!$B$1:$B$4' });
     ws.chart(id).updateDisplay({ blanksAs: 0 });
-    assert.equal(ws.chart(id).getProperties().blanksAs, formulon.ChartBlanksAs.Gap);
+    assert.equal(ws.chart(id).getProperties().blanksAs, formulon.BlanksAs.Zero);
   });
 });
 

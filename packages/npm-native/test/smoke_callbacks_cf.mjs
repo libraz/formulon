@@ -58,18 +58,18 @@ test('evaluateCfRange returns an empty list for a CF-less workbook', async () =>
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // The default workbook has no CF rules, so the call should succeed
-  // and return an empty cell list. NaN disables `TimePeriod` rules.
-  const r = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 }, Number.NaN);
+  // and return an empty cell list.
+  const r = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 });
   assert.ok(Array.isArray(r));
   assert.equal(r.length, 0);
 });
 
-test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', async () => {
+test('evaluateCfRange dates timePeriod rules by today, an omitted today is the host date, an Invalid Date is a RangeError', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // timePeriod rule (type 15) for "today" (period 0) over A1. The cell
-  // holds the serial for 1899-12-30, which a 0.0 basis would match.
-  wb.sheet(0).setNumber(0, 0, 0);
+  // holds the serial for 1900-01-01.
+  wb.sheet(0).setNumber(0, 0, 1);
   const dxf = wb.ooxml.addDxf({ font: { bold: true } });
   wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
@@ -79,15 +79,19 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
   });
   wb.recalc();
 
-  // An omitted todaySerial is today, not 0 (the valid serial for 1899-12-30
-  // that would make the rule match). NaN is the documented disabling value.
+  // An omitted today is the host's date, not the date the cell holds (1900-01-01, which would make the rule match).
   const omitted = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 });
   assert.equal(omitted.filter((c) => c.matches).length, 0);
-  const explicitNaN = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
-  assert.equal(explicitNaN.length, 0);
+  const invalid = { today: new Date(Number.NaN) };
+  assert.throws(
+    () => wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, invalid),
+    RangeError,
+  );
 
-  // A concrete basis of 0 does engage the rule, proving the default is
+  // A concrete basis of 1900-01-01 does engage the rule, proving the default is
   // not merely a no-op for this workbook.
-  const zeroBasis = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0);
+  const zeroBasis = wb
+    .sheet(0)
+    .evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, { today: new Date(1900, 0, 1) });
   assert.equal(zeroBasis.length, 1);
 });

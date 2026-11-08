@@ -320,7 +320,7 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
   } else {
     emit_u32(p, 0U);
   }
-  constexpr std::array<std::uint16_t, 3> kEmpty = {1U, 0U, 2U};  // gap, zero, span
+  constexpr std::array<std::uint16_t, 3> kEmpty = {0U, 1U, 2U};  // zero, gap, span
   std::uint16_t bits = static_cast<std::uint16_t>(kEmpty[static_cast<std::size_t>(g.empty_cells_as)] << 1U);
   const struct {
     bool on;

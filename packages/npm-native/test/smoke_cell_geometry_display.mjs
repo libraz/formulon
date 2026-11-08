@@ -135,7 +135,7 @@ test('geometry accessors agree with each other', async () => {
   assert.equal(typeof model.pointsPerChar, 'number');
   assert.equal(typeof model.calibrated, 'boolean');
   assert.equal(typeof model.normalFontName, 'string');
-  assert.equal(model.platform, 'win');
+  assert.equal(model.platform, mod.WidthPlatform.Win);
 
   const c0 = wb.sheet(0).getColumnWidthPt(0, 0);
   const c1 = wb.sheet(0).getColumnWidthPt(1, 0);

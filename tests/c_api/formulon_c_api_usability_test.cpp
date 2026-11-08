@@ -377,7 +377,7 @@ TEST(FormulonCApiUsability, CfFormulasCarryTheEqualsWhicheverWayTheyWereEntered)
   fm_cf_rule_t bare = FM_STRUCT_INIT(fm_cf_rule_t);
   bare.type = 1;  // CellIs
   bare.op_engaged = 1;
-  bare.op = 0;  // Between
+  bare.op = FM_COMPARISON_OPERATOR_BETWEEN;
   bare.formula1 = "1";
   bare.formula2 = "=10";
   bare.ranges = &sqref;
@@ -439,11 +439,15 @@ TEST(FormulonCApiUsability, TableTotalsFormulaCarriesTheEqualsWhicheverWayItWasE
   ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "");
 
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, "custom", nullptr, "SUM(Sales[Amount])*2"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
+                                             "SUM(Sales[Amount])*2"),
+            0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "=SUM([Amount])*2");
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, "custom", nullptr, "=SUM(Sales[Amount])*3"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
+                                             "=SUM(Sales[Amount])*3"),
+            0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "=SUM([Amount])*3");

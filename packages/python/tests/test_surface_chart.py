@@ -11,13 +11,14 @@ from formulon import (
     UNCHANGED,
     AnchorEditAs,
     AnchorKind,
+    BlanksAs,
     CellRect,
     Chart,
     ChartAxisCrosses,
     ChartAxisKind,
     ChartAxisPosition,
     ChartBarDirection,
-    ChartBlanksAs,
+    ChartDomain,
     ChartFill,
     ChartGrouping,
     ChartInsertKind,
@@ -33,6 +34,7 @@ from formulon import (
     ChartSeriesDirection,
     ChartSeriesInput,
     ChartSourceKind,
+    ChartTickLabelPosition,
     ChartTitle,
     ChartTitleKind,
     Color,
@@ -86,17 +88,19 @@ class ChartEnumTests(unittest.TestCase):
         self.assertEqual((ChartPlotType.BAR, ChartPlotType.OF_PIE, ChartPlotType.EXTENDED), (0, 9, 16))
         self.assertEqual((ChartInsertKind.COLUMN, ChartInsertKind.SCATTER, ChartInsertKind.DOUGHNUT), (0, 5, 6))
         self.assertEqual((ChartGrouping.CLUSTERED, ChartGrouping.STANDARD), (0, 3))
-        self.assertEqual((ChartBlanksAs.GAP, ChartBlanksAs.SPAN), (0, 2))
+        self.assertEqual((BlanksAs.ZERO, BlanksAs.GAP, BlanksAs.SPAN), (0, 1, 2))
         self.assertEqual((ChartPointState.VALUE, ChartPointState.GAP, ChartPointState.CONNECT), (0, 1, 2))
         self.assertEqual((ChartAxisKind.CATEGORY, ChartAxisKind.SERIES), (0, 3))
         self.assertEqual((ChartAxisCrosses.AUTO_ZERO, ChartAxisCrosses.AT), (0, 3))
         self.assertEqual((ChartTitleKind.TEXT, ChartTitleKind.AUTO), (1, 3))
         self.assertEqual((ChartSeriesDirection.AUTO, ChartSeriesDirection.ROWS), (0, 2))
-        self.assertEqual((ChartLegendPosition.BOTTOM, ChartLegendPosition.TOP_RIGHT), (0, 4))
+        self.assertEqual(
+            (ChartLegendPosition.RIGHT, ChartLegendPosition.BOTTOM, ChartLegendPosition.TOP_RIGHT), (0, 1, 2)
+        )
         self.assertEqual((ChartAxisPosition.BOTTOM, ChartAxisPosition.RIGHT), (0, 3))
         self.assertEqual((ChartBarDirection.COLUMN, ChartBarDirection.BAR), (0, 1))
         for absent in ("ABSENT", "NONE"):
-            self.assertFalse(hasattr(ChartBlanksAs, absent))
+            self.assertFalse(hasattr(BlanksAs, absent))
             self.assertFalse(hasattr(ChartLegendPosition, absent))
             self.assertFalse(hasattr(ChartTitleKind, absent))
         self.assertEqual((ChartLineDash.SOLID, ChartLineDash.OTHER), (0, 4))
@@ -162,7 +166,7 @@ class ChartReadTests(unittest.TestCase):
         wb, oid = _chart()
         with wb:
             data = wb.sheet(0).chart(oid).get_data()
-            self.assertEqual((data.domain, data.point_count, len(data.series)), ("category", 4, 3))
+            self.assertEqual((data.domain, data.point_count, len(data.series)), (ChartDomain.CATEGORY, 4, 3))
             self.assertEqual(data.categories.labels, ["a", "b", "c", "d"])
             self.assertIsNone(data.categories.values)
             self.assertEqual(data.categories.levels, [])
@@ -201,7 +205,7 @@ class ChartReadTests(unittest.TestCase):
             info = wb.sheet(0).chart(oid).get_properties()
             self.assertEqual(info.plots[0].type, ChartPlotType.SCATTER)
             data = wb.sheet(0).chart(oid).get_data()
-            self.assertEqual(data.domain, "xy")
+            self.assertEqual(data.domain, ChartDomain.XY)
             self.assertEqual(len(data.series), 1)
             self.assertEqual(data.series[0].x, [0.0, 3.0, 6.0, 9.0])
             self.assertEqual(data.series[0].values, [0.0, 1.0, 4.0, 9.0])
@@ -271,9 +275,9 @@ class ChartEditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 wb.sheet(0).chart(oid).update_legend(position=ChartLegendPosition.TOP, hidden_series=[-1])
 
-            wb.sheet(0).chart(oid).update_display(blanks_as=ChartBlanksAs.SPAN, plot_visible_only=False)
+            wb.sheet(0).chart(oid).update_display(blanks_as=BlanksAs.SPAN, plot_visible_only=False)
             info = wb.sheet(0).chart(oid).get_properties()
-            self.assertEqual((info.blanks_as, info.plot_visible_only), (ChartBlanksAs.SPAN, False))
+            self.assertEqual((info.blanks_as, info.plot_visible_only), (BlanksAs.SPAN, False))
             wb.sheet(0).chart(oid).update_display(blanks_as=None, plot_visible_only=None)
             info = wb.sheet(0).chart(oid).get_properties()
             self.assertEqual((info.blanks_as, info.plot_visible_only), (None, None))
@@ -281,13 +285,13 @@ class ChartEditTests(unittest.TestCase):
     def test_display_patch_keeps_omitted_keys(self) -> None:
         wb, oid = _chart()
         with wb:
-            wb.sheet(0).chart(oid).update_display(blanks_as=ChartBlanksAs.ZERO, plot_visible_only=True)
+            wb.sheet(0).chart(oid).update_display(blanks_as=BlanksAs.ZERO, plot_visible_only=True)
             wb.sheet(0).chart(oid).update_display(plot_visible_only=False)
             info = wb.sheet(0).chart(oid).get_properties()
-            self.assertEqual((info.blanks_as, info.plot_visible_only), (ChartBlanksAs.ZERO, False))
+            self.assertEqual((info.blanks_as, info.plot_visible_only), (BlanksAs.ZERO, False))
             wb.sheet(0).chart(oid).update_display()
             info = wb.sheet(0).chart(oid).get_properties()
-            self.assertEqual((info.blanks_as, info.plot_visible_only), (ChartBlanksAs.ZERO, False))
+            self.assertEqual((info.blanks_as, info.plot_visible_only), (BlanksAs.ZERO, False))
             with self.assertRaises(TypeError):
                 wb.sheet(0).chart(oid).update_display(nope=1)  # type: ignore[call-arg]
             with self.assertRaises(FormulonError):
@@ -301,7 +305,7 @@ class ChartEditTests(unittest.TestCase):
             self.assertIsNone(wb.sheet(0).chart(oid).get_properties().na_as_blank)
             wb.sheet(0).chart(oid).update_display(na_as_blank=True)
             self.assertIs(wb.sheet(0).chart(oid).get_properties().na_as_blank, True)
-            wb.sheet(0).chart(oid).update_display(blanks_as=ChartBlanksAs.GAP)
+            wb.sheet(0).chart(oid).update_display(blanks_as=BlanksAs.GAP)
             self.assertIs(wb.sheet(0).chart(oid).get_properties().na_as_blank, True)
             wb.sheet(0).chart(oid).update_display(na_as_blank=None)
             self.assertIsNone(wb.sheet(0).chart(oid).get_properties().na_as_blank)
@@ -313,7 +317,7 @@ class ChartEditTests(unittest.TestCase):
             wb.sheet(0).set_blank(2, 1)
             wb.recalc()
             # Blanks plot as zero, so a #N/A shown as blank differs from one left as a gap.
-            wb.sheet(0).chart(oid).update_display(blanks_as=ChartBlanksAs.ZERO, na_as_blank=False)
+            wb.sheet(0).chart(oid).update_display(blanks_as=BlanksAs.ZERO, na_as_blank=False)
             today = wb.sheet(0).chart(oid).get_data().series[0].states
             on = wb.sheet(0).chart(oid).get_preview(na_as_blank=True).series[0].states
             off = wb.sheet(0).chart(oid).get_preview(na_as_blank=False).series[0].states
@@ -335,13 +339,20 @@ class ChartEditTests(unittest.TestCase):
             self.assertEqual((axis.number_format, axis.major_gridlines), ("0.0", False))
 
             wb.sheet(0).chart(oid).update_axis(
-                val_id, min=None, title=None, reversed=True, log_base=10.0, tick_label_position="low"
+                val_id,
+                min=None,
+                title=None,
+                reversed=True,
+                log_base=10.0,
+                tick_label_position=ChartTickLabelPosition.LOW,
             )
             axis = next(a for a in wb.sheet(0).chart(oid).get_properties().axes if a.id == val_id)
             self.assertIsNone(axis.min)
             self.assertEqual(axis.max, 50.0)
             self.assertIsNone(axis.title)
-            self.assertEqual((axis.reversed, axis.log_base, axis.tick_label_position), (True, 10.0, "low"))
+            self.assertEqual(
+                (axis.reversed, axis.log_base, axis.tick_label_position), (True, 10.0, ChartTickLabelPosition.LOW)
+            )
 
             wb.sheet(0).chart(oid).update_axis(val_id, title=ChartTitle(ChartTitleKind.AUTO, "", ""))
             axis = next(a for a in wb.sheet(0).chart(oid).get_properties().axes if a.id == val_id)

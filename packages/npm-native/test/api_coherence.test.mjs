@@ -119,7 +119,7 @@ function sparklineGroup(f) {
     manualMin: -1.5,
     manualMax: 8.5,
     lineWeight: 1.25,
-    emptyCellsAs: f.SparklineEmptyCells.Zero,
+    emptyCellsAs: f.BlanksAs.Zero,
     sparklines: [
       { formula: 'Sheet1!A1:D1', location: 'F1' },
       { formula: 'Sheet1!A2:D2', location: 'F2' },
@@ -452,12 +452,12 @@ test('patch: updateSparklineGroup is read-modify-write and every omitted field s
       { high: true, low: true },
       { manualMin: null },
       { manualMax: 9 },
-      { dateAxis: true, dateAxisRef: 'Sheet1!A1:D1' },
+      { dateAxis: true, dateAxisRef: '=Sheet1!A1:D1' },
       { dateAxisRef: null },
       { colorSeries: colorGreen },
       { lineWeight: 2.25 },
-      { emptyCellsAs: f.SparklineEmptyCells.Gap },
-      { sparklines: [{ formula: 'Sheet1!B1:B5', location: 'H1' }] },
+      { emptyCellsAs: f.BlanksAs.Gap },
+      { sparklines: [{ formula: '=Sheet1!B1:B5', location: 'H1' }] },
     ];
     for (const patch of patches) {
       ws.updateSparklineGroup(0, patch);

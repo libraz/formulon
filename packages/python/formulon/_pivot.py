@@ -7,6 +7,7 @@ see :class:`Pivot`.
 
 from __future__ import annotations
 
+import datetime
 import inspect
 import struct
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union, overload
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Un
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
 from ._handle_tables import CELL_ARGS
+from ._inputs import civil_datetime, date_serial
 from ._status import StatusCode
 from ._workbook import (
     _PIVOT_NO_DATA_FIELD,
@@ -35,7 +37,6 @@ from ._workbook import (
     PivotFilter,
     PivotFilterInput,
     PivotFilterKind,
-    PivotFilterOperandKind,
     PivotGrandTotals,
     PivotItem,
     PivotLayout,
@@ -49,12 +50,14 @@ from ._workbook import (
     _ArgScope,
     _check,
     _decode_cell_rect_at,
-    _enum_or_none,
+    _decode_pivot_filter_operand,
+    _encode_pivot_filter_operands,
     _install_workbook_locks,
     _nullable_enum,
     _read_count,
     _read_cstr_out,
     _tristate_default,
+    to_native,
 )
 
 if TYPE_CHECKING:
@@ -222,7 +225,7 @@ class Pivot:
                         PivotCell(
                             row=d["row"],
                             col=d["col"],
-                            value=value,
+                            value=to_native(value),
                             kind=PivotCellKind(d["kind"]),
                             depth=d["depth"],
                             field_name=LIB.read_cstr(d["field_name"]),
@@ -779,8 +782,8 @@ class Pivot:
         periods: PivotDatePeriod,
         calendar: PivotCalendar = PivotCalendar.GREGORIAN,
         interval_days: int = 1,
-        start: float = float("nan"),
-        end: float = float("nan"),
+        start: Optional[Union[datetime.datetime, datetime.date]] = None,
+        end: Optional[Union[datetime.datetime, datetime.date]] = None,
     ) -> None:
         """Group the date field ``field_index`` by the periods of ``periods``.
 
@@ -791,13 +794,19 @@ class Pivot:
         another pivot showing the field shows them before it.
         ``PivotCalendar.JAPANESE`` groups the years by era year.
         ``interval_days`` above 1 groups by runs of days and needs ``periods``
-        to be ``PivotDatePeriod.DAYS`` alone. ``start`` / ``end`` are date
-        serials; NaN takes the field's first value and its last (the midnight
-        after it for a date without a time). An empty or unknown mask, a zero
+        to be ``PivotDatePeriod.DAYS`` alone. ``start`` / ``end`` are a
+        ``date`` or ``datetime`` (a naive local wall clock; an aware one
+        is a ValueError); ``None`` takes the field's first value and its last
+        (the midnight after it for a date without a time). An empty or unknown mask, a zero
         interval, an invalid bound, a start after the end, or a field holding
         anything but dates raises ``FormulonError``.
         """
         h, sheet, pivot_index = self._locate()
+        date1904 = self._sheet._workbook.get_date1904()
+        bounds = [
+            float("nan") if bound is None else date_serial(civil_datetime(bound, label), date1904=date1904)[0]
+            for bound, label in ((start, "start"), (end, "end"))
+        ]
         _check(
             LIB.fm_sheet_set_pivot_field_date_group(
                 h,
@@ -807,8 +816,8 @@ class Pivot:
                 _uint(periods, "periods_mask"),
                 _sint(calendar, "calendar"),
                 _uint(interval_days, "interval_days"),
-                float(start),
-                float(end),
+                bounds[0],
+                bounds[1],
             )
         )
 
@@ -1221,20 +1230,15 @@ class Pivot:
                 axis=PivotAxis(d["axis"]),
                 field_name=LIB.read_cstr(d["field_name"]),
                 type=PivotFilterKind(d["type"]),
-                value_kind=_enum_or_none(PivotFilterOperandKind, d["value_kind"]),
-                value_int=d["value_int"],
-                value_double=d["value_double"],
-                value_text=LIB.read_cstr(d["value_text"]),
-                value_high_kind=_enum_or_none(PivotFilterOperandKind, d["value_high_kind"]),
-                value_high_int=d["value_high_int"],
-                value_high_double=d["value_high_double"],
+                value=_decode_pivot_filter_operand(d, "value"),
+                value_high=_decode_pivot_filter_operand(d, "value_high"),
                 data_field_index=d["data_field_index"],
-                value_high_text=LIB.read_cstr(d["value_high_text"]),
             )
 
     def add_filter(self, spec: PivotFilterInput) -> int:
         """Append a filter to the pivot and return its index; it is saved with it. See :meth:`list_filters`."""
         h, sheet, pivot_index = self._locate()
+        operands = _encode_pivot_filter_operands(spec)
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_FILTER_SPEC)
             S.PIVOT_FILTER_SPEC.pack(
@@ -1244,19 +1248,17 @@ class Pivot:
                     "axis": _sint(spec.axis, "axis"),
                     "type": _sint(spec.type, "type"),
                     "data_field_index": _uint(spec.data_field_index, "data_field_index"),
-                    "value_kind": _sint(_nullable_enum(spec.value_kind, "value_kind"), "value_kind"),
-                    "value_int": _sint(spec.value_int, "value_int"),
-                    "value_double": float(spec.value_double),
-                    "value_high_kind": _sint(
-                        _nullable_enum(spec.value_high_kind, "value_high_kind"), "value_high_kind"
-                    ),
-                    "value_high_int": _sint(spec.value_high_int, "value_high_int"),
-                    "value_high_double": float(spec.value_high_double),
+                    "value_kind": _sint(operands["value_kind"], "value_kind"),
+                    "value_int": _sint(operands.get("value_int", 0), "value_int"),
+                    "value_double": float(operands.get("value_double", 0.0)),
+                    "value_high_kind": _sint(operands["value_high_kind"], "value_high_kind"),
+                    "value_high_int": _sint(operands.get("value_high_int", 0), "value_high_int"),
+                    "value_high_double": float(operands.get("value_high_double", 0.0)),
                 },
             )
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "field_name", spec.field_name, scope)
-            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, scope)
-            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_high_text", spec.value_high_text, scope)
+            for name in ("value_text", "value_high_text"):
+                S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, name, operands.get(name), scope, allow_empty=True)
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_add_pivot_filter(

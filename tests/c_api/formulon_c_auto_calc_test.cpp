@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_evaluate_top_left.h"
 #include "gtest/gtest.h"
 
 namespace {
@@ -71,7 +72,7 @@ std::vector<Reader> Readers() {
       {"evaluate_formula",
        [](fm_workbook_t* wb) {
          fm_value_t v{};
-         return fm_sheet_evaluate_formula(wb, 0, 5, 5, "=A2", &v);
+         return evaluate_top_left(wb, 0, 5, 5, "=A2", &v);
        }},
       {"evaluate_formula_array",
        [](fm_workbook_t* wb) {
@@ -182,7 +183,7 @@ TEST(FormulonCApiAutoCalc, ReadAfterWriteSeesTheNewValue) {
 
   fm_value_t evaluated{};
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 4.0), 0);
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 5, 5, "=A2+1", &evaluated), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 5, 5, "=A2+1", &evaluated), 0);
   ASSERT_EQ(evaluated.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(evaluated.u.number, 41.0);
 }
@@ -311,7 +312,7 @@ TEST(FormulonCApiAutoCalc, ReadFromAProgressCallbackIsReentrant) {
                     p.called = true;
                     fm_value_t v{};
                     p.value_status = fm_sheet_get_value(p.wb, 0, 0, 0, &v);
-                    p.evaluate_status = fm_sheet_evaluate_formula(p.wb, 0, 3, 3, "=A1", &v);
+                    p.evaluate_status = evaluate_top_left(p.wb, 0, 3, 3, "=A1", &v);
                   }
                   return 1;
                 },

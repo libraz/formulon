@@ -149,15 +149,9 @@ class JsWorkbook {
   bool getCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const;
 
-  /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
-  /// single scalar result without mutating the workbook. Array results are
-  /// reduced to their top-left element. See `fm_sheet_evaluate_formula`.
-  emscripten::val evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) const;
-
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns the
-  /// whole multi-cell result without mutating the workbook. Unlike
-  /// `evaluateFormulaText` (which reduces an array to its top-left element),
-  /// this yields the full grid as a JS object
+  /// whole multi-cell result without mutating the workbook. It yields the
+  /// full grid as a JS object
   /// `{ rows, cols, cells }`, where `cells` is a `rows` x `cols`
   /// nested array of Value objects (row-major, `cells[r][c]`); a scalar
   /// result is reported as a 1x1 array. See
@@ -166,7 +160,7 @@ class JsWorkbook {
 
   /// Evaluates `formula` as a conditional-formatting predicate anchored at
   /// `(sheet, row, col)`, with relative refs written relative to
-  /// `(anchorRow, anchorCol)`; returns a coerced boolean result. See
+  /// `(anchorRow, anchorCol)`; returns the coerced result as a JS boolean. See
   /// `fm_sheet_evaluate_cf_formula`.
   emscripten::val evaluateConditionalFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t anchorRow,
                                              uint32_t anchorCol, const std::string& formula) const;
@@ -456,10 +450,10 @@ class JsWorkbook {
   emscripten::val getThemeColors() const;
   /// The four theme typefaces `{ majorLatin, majorEastAsian, minorLatin, minorEastAsian }`.
   emscripten::val getThemeFonts() const;
-  emscripten::val getThemeScriptFont(bool major, const std::string& script) const;
+  emscripten::val getThemeScriptFont(int32_t scheme, const std::string& script) const;
   void setThemeColors(emscripten::val colors);
   void setThemeFonts(emscripten::val fonts);
-  void setThemeScriptFont(bool major, const std::string& script, const std::string& typeface);
+  void setThemeScriptFont(int32_t scheme, const std::string& script, const std::string& typeface);
   void resetTheme();
   /// `{ argb, resolution }` for a `ColorSpec` used in `context` (`ColorContext.*`).
   emscripten::val resolveColor(emscripten::val spec, int32_t context) const;

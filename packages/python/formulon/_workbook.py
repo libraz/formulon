@@ -95,9 +95,7 @@ __all__ = [
     "CfIcon",
     "CfMatch",
     "CfMatchKind",
-    "CfOperator",
     "CfRuleType",
-    "CfTimePeriod",
     "CfValueObjectType",
     "Cfvo",
     "ChartAxis",
@@ -107,12 +105,13 @@ __all__ = [
     "ChartAxisPosition",
     "ChartAxisTitleText",
     "ChartBarDirection",
-    "ChartBlanksAs",
+    "BlanksAs",
     "ChartCategories",
     "ChartData",
     "ChartDataSeries",
     "ChartDataSource",
     "ChartDisplayPatch",
+    "ChartDomain",
     "ChartExtendedLayout",
     "ChartFill",
     "ChartFillPatch",
@@ -143,6 +142,7 @@ __all__ = [
     "ChartSeriesRanges",
     "ChartSource",
     "ChartSourceKind",
+    "ChartTickLabelPosition",
     "ChartTitle",
     "ChartTitleKind",
     "ChartUnresolved",
@@ -166,6 +166,7 @@ __all__ = [
     "DataTableInputCell",
     "DataValidation",
     "DataValidationInput",
+    "DatePeriod",
     "DateTimeGrouping",
     "DefinedName",
     "DefinedNameInput",
@@ -189,7 +190,7 @@ __all__ = [
     "FillPatch",
     "FillPattern",
     "FilterKind",
-    "FilterOperator",
+    "ComparisonOperator",
     "Font",
     "FontFamily",
     "FontPatch",
@@ -225,6 +226,10 @@ __all__ = [
     "MarginsPt",
     "Mention",
     "NativeValue",
+    "PageOrder",
+    "PaperSize",
+    "PhoneticAlignment",
+    "PhoneticType",
     "PictureInput",
     "PivotStyleOptions",
     "RowBreak",
@@ -260,7 +265,6 @@ __all__ = [
     "PivotFilter",
     "PivotFilterInput",
     "PivotFilterKind",
-    "PivotFilterOperandKind",
     "PivotGrandTotals",
     "PivotInput",
     "PivotItem",
@@ -305,7 +309,6 @@ __all__ = [
     "Span",
     "Sparkline",
     "SparklineAxisType",
-    "SparklineEmptyCells",
     "SparklineGroup",
     "SparklineType",
     "Spill",
@@ -315,23 +318,26 @@ __all__ = [
     "TableStyle",
     "TableStyleDefaults",
     "TableStyleElement",
+    "TableStyleElementType",
     "TableStyleOptions",
+    "TableTotalsRowFunction",
     "ThemeColors",
     "ThemeFonts",
     "ThemeScriptFont",
     "ThemeSource",
     "ThreadedComment",
     "ThreadedCommentInput",
+    "to_native",
     "UNCHANGED",
     "Unchanged",
     "UnderlineStyle",
     "ValidationErrorStyle",
-    "ValidationOperator",
     "ValidationOutcome",
     "ValidationType",
     "Value",
     "VerticalAlign",
     "WidthModel",
+    "WidthPlatform",
     "Workbook",
     "WorkbookFormat",
     "WorkbookProtection",
@@ -597,29 +603,31 @@ class Value:
         # BLANK / REF / LAMBDA: no payload. A value slot never holds an array.
         return cls(kind=kind)
 
-    def to_python(self) -> NativeValue:
-        """Convert to a native Python value (:data:`NativeValue`).
 
-        - ``BLANK`` -> ``None``
-        - ``NUMBER`` -> ``float``
-        - ``BOOL`` -> ``bool``
-        - ``TEXT`` -> ``str``
-        - ``ERROR`` -> :class:`ExcelError` (Excel cell errors are values,
-          not Python exceptions)
-        - ``ARRAY`` -> a list of rows, each a list of the cells' native values
-        """
-        if self.kind is ValueKind.BLANK:
-            return None
-        if self.kind is ValueKind.NUMBER:
-            return self.number
-        if self.kind is ValueKind.BOOL:
-            return self.boolean
-        if self.kind is ValueKind.TEXT:
-            return self.text
-        if self.kind is ValueKind.ERROR:
-            return ExcelError(cast(ErrorCode, self.error_code))
-        assert self.kind is ValueKind.ARRAY, f"a {self.kind.name} value never reaches a public read"
-        return [[cell.to_python() for cell in row] for row in cast(Tuple[Tuple[Value, ...], ...], self.array)]
+def to_native(value: Value) -> NativeValue:
+    """Convert a tagged :class:`Value` to plain Python data (:data:`NativeValue`).
+
+    - ``BLANK`` -> ``None``
+    - ``NUMBER`` -> ``float``
+    - ``BOOL`` -> ``bool``
+    - ``TEXT`` -> ``str``
+    - ``ERROR`` -> :class:`ExcelError` (Excel cell errors are values,
+      not Python exceptions)
+    - ``ARRAY`` -> a list of rows, each a list of the cells' native values
+    """
+    kind = value.kind
+    if kind is ValueKind.BLANK:
+        return None
+    if kind is ValueKind.NUMBER:
+        return value.number
+    if kind is ValueKind.BOOL:
+        return value.boolean
+    if kind is ValueKind.TEXT:
+        return value.text
+    if kind is ValueKind.ERROR:
+        return ExcelError(cast(ErrorCode, value.error_code))
+    assert kind is ValueKind.ARRAY, f"a {kind.name} value never reaches a public read"
+    return [[to_native(cell) for cell in row] for row in cast(Tuple[Tuple[Value, ...], ...], value.array)]
 
 
 def _array_payload(rows: object) -> Tuple[Tuple[Value, ...], ...]:
@@ -695,18 +703,37 @@ class DefinedNameInput:
     hidden: bool = False
 
 
+class TableTotalsRowFunction(IntEnum):
+    """The totals-row function of a table column, in ``ST_TotalsRowFunction`` order."""
+
+    NONE = 0
+    SUM = 1
+    MIN = 2
+    MAX = 3
+    AVERAGE = 4
+    COUNT = 5
+    COUNT_NUMBERS = 6
+    STD_DEV = 7
+    VAR = 8
+    CUSTOM = 9
+
+
 @dataclass(frozen=True)
 class TableColumn:
     """One column of :attr:`TableProperties.columns`.
 
-    ``totals_row_function`` is the ``ST_TotalsRowFunction`` token (``"none"``
-    when absent); ``totals_row_formula`` is the ``custom`` function's formula.
+    ``totals_row_function`` is the column's :class:`TableTotalsRowFunction`
+    (``NONE`` when absent); ``totals_row_formula`` is the ``custom``
+    function's formula.
     """
 
     name: str
-    totals_row_function: str = "none"
+    totals_row_function: TableTotalsRowFunction = TableTotalsRowFunction.NONE
     totals_row_label: str = ""
     totals_row_formula: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "totals_row_function", _enum(TableTotalsRowFunction, self.totals_row_function))
 
 
 @dataclass(frozen=True)
@@ -774,15 +801,17 @@ class TableInput:
 class TableStyleElement:
     """One region of a custom table style.
 
-    ``type`` is the ``ST_TableStyleType`` token (``"wholeTable"``,
-    ``"firstRowStripe"``, ``"pageFieldLabels"``, ...); ``size`` is the stripe
-    band size; ``dxf_index`` indexes the differential formats, ``None`` for a
-    region listed without formatting.
+    ``type`` is the :class:`TableStyleElementType` region; ``size`` is the
+    stripe band size; ``dxf_index`` indexes the differential formats,
+    ``None`` for a region listed without formatting.
     """
 
-    type: str
+    type: TableStyleElementType
     size: int = 1
     dxf_index: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "type", _enum(TableStyleElementType, self.type))
 
 
 @dataclass(frozen=True)
@@ -805,6 +834,113 @@ class PassthroughPart:
 # ---------------------------------------------------------------------------
 # Enumerations (mirror the C ABI ordinals)
 # ---------------------------------------------------------------------------
+
+
+class TableStyleElementType(IntEnum):
+    """The region a :class:`TableStyleElement` formats, in ``ST_TableStyleType`` order."""
+
+    WHOLE_TABLE = 0
+    HEADER_ROW = 1
+    TOTAL_ROW = 2
+    FIRST_COLUMN = 3
+    LAST_COLUMN = 4
+    FIRST_ROW_STRIPE = 5
+    SECOND_ROW_STRIPE = 6
+    FIRST_COLUMN_STRIPE = 7
+    SECOND_COLUMN_STRIPE = 8
+    FIRST_HEADER_CELL = 9
+    LAST_HEADER_CELL = 10
+    FIRST_TOTAL_CELL = 11
+    LAST_TOTAL_CELL = 12
+    FIRST_SUBTOTAL_COLUMN = 13
+    SECOND_SUBTOTAL_COLUMN = 14
+    THIRD_SUBTOTAL_COLUMN = 15
+    FIRST_SUBTOTAL_ROW = 16
+    SECOND_SUBTOTAL_ROW = 17
+    THIRD_SUBTOTAL_ROW = 18
+    BLANK_ROW = 19
+    FIRST_COLUMN_SUBHEADING = 20
+    SECOND_COLUMN_SUBHEADING = 21
+    THIRD_COLUMN_SUBHEADING = 22
+    FIRST_ROW_SUBHEADING = 23
+    SECOND_ROW_SUBHEADING = 24
+    THIRD_ROW_SUBHEADING = 25
+    PAGE_FIELD_LABELS = 26
+    PAGE_FIELD_VALUES = 27
+
+
+class PhoneticType(IntEnum):
+    """Kana form a phonetic guide generates readings in (``<phoneticPr type>``).
+
+    Zero is the state of an absent ``<phoneticPr>``, not the schema default.
+    """
+
+    HALFWIDTH_KATAKANA = 0
+    FULLWIDTH_KATAKANA = 1
+    HIRAGANA = 2
+    NO_CONVERSION = 3
+
+
+class PhoneticAlignment(IntEnum):
+    """How a phonetic guide's kana is distributed over the characters it covers (``<phoneticPr alignment>``).
+
+    Zero is the state of an absent ``<phoneticPr>``, not the schema default.
+    """
+
+    NO_CONTROL = 0
+    LEFT = 1
+    CENTER = 2
+    DISTRIBUTED = 3
+
+
+class PageOrder(IntEnum):
+    """The order a worksheet's pages are numbered in (``ST_PageOrder``)."""
+
+    DOWN_THEN_OVER = 0
+    OVER_THEN_DOWN = 1
+
+
+class PaperSize:
+    """Named OOXML ``paperSize`` codes the engine knows.
+
+    Not an enum: the code set is open, so ``PageSetup.paper_size`` stays an
+    ``int`` and an unknown code reads back unchanged.
+    """
+
+    LETTER = 1
+    LEGAL = 5
+    A3 = 8
+    A4 = 9
+    A5 = 11
+    B4 = 12
+    B5 = 13
+    A6 = 70
+
+
+class ChartTickLabelPosition(IntEnum):
+    """Where an axis draws its tick labels (``ST_TickLblPos``); ``NONE`` draws no labels.
+
+    An axis without the element reads ``None``.
+    """
+
+    NEXT_TO = 0
+    HIGH = 1
+    LOW = 2
+    NONE = 3
+
+
+class ChartDomain(IntEnum):
+    """What a chart's category axis carries: category labels or X values."""
+
+    CATEGORY = 0
+    XY = 1
+
+
+class WidthPlatform(IntEnum):
+    """The platform whose metrics a :class:`WidthModel` uses."""
+
+    WIN = 0
+    MAC = 1
 
 
 class GeometryMode(IntEnum):
@@ -860,15 +996,21 @@ class FilterKind(IntEnum):
     ICON = 6
 
 
-class FilterOperator(IntEnum):
-    """Comparison operator of a custom AutoFilter condition."""
+class ComparisonOperator(IntEnum):
+    """Comparison of a ``CELL_IS`` conditional-format rule, a data-validation rule or an AutoFilter condition.
 
-    EQUAL = 0
-    LESS_THAN = 1
-    LESS_THAN_OR_EQUAL = 2
+    The order is that of the ``ST_DataValidationOperator`` schema type. An
+    AutoFilter condition takes only the six non-range members.
+    """
+
+    BETWEEN = 0
+    NOT_BETWEEN = 1
+    EQUAL = 2
     NOT_EQUAL = 3
-    GREATER_THAN_OR_EQUAL = 4
-    GREATER_THAN = 5
+    LESS_THAN = 4
+    LESS_THAN_OR_EQUAL = 5
+    GREATER_THAN = 6
+    GREATER_THAN_OR_EQUAL = 7
 
 
 class DynamicFilterType(IntEnum):
@@ -960,19 +1102,6 @@ class ValidationType(IntEnum):
     CUSTOM = 7
 
 
-class ValidationOperator(IntEnum):
-    """How a data-validation rule compares the value with its formulas."""
-
-    BETWEEN = 0
-    NOT_BETWEEN = 1
-    EQUAL = 2
-    NOT_EQUAL = 3
-    GREATER_THAN = 4
-    LESS_THAN = 5
-    GREATER_THAN_OR_EQUAL = 6
-    LESS_THAN_OR_EQUAL = 7
-
-
 class CfRuleType(IntEnum):
     """The kind of a conditional-format rule."""
 
@@ -996,32 +1125,19 @@ class CfRuleType(IntEnum):
     UNIQUE_VALUES = 17
 
 
-class CfOperator(IntEnum):
-    """The comparison of a ``CELL_IS`` conditional-format rule."""
-
-    LESS_THAN = 0
-    LESS_THAN_OR_EQUAL = 1
-    EQUAL = 2
-    NOT_EQUAL = 3
-    GREATER_THAN_OR_EQUAL = 4
-    GREATER_THAN = 5
-    BETWEEN = 6
-    NOT_BETWEEN = 7
-
-
-class CfTimePeriod(IntEnum):
-    """The period of a ``TIME_PERIOD`` conditional-format rule."""
+class DatePeriod(IntEnum):
+    """The period of a ``TIME_PERIOD`` conditional-format rule, in ``ST_TimePeriod`` schema order."""
 
     TODAY = 0
     YESTERDAY = 1
     TOMORROW = 2
     LAST_7_DAYS = 3
-    THIS_WEEK = 4
-    LAST_WEEK = 5
-    NEXT_WEEK = 6
-    THIS_MONTH = 7
-    LAST_MONTH = 8
-    NEXT_MONTH = 9
+    THIS_MONTH = 4
+    LAST_MONTH = 5
+    NEXT_MONTH = 6
+    THIS_WEEK = 7
+    LAST_WEEK = 8
+    NEXT_WEEK = 9
 
 
 class CfValueObjectType(IntEnum):
@@ -1038,7 +1154,7 @@ class CfValueObjectType(IntEnum):
 
 
 class IconSetName(IntEnum):
-    """A built-in icon set; the digit is the level count."""
+    """An icon set; the digit is the level count."""
 
     THREE_ARROWS = 0
     THREE_ARROWS_GRAY = 1
@@ -1057,6 +1173,11 @@ class IconSetName(IntEnum):
     FIVE_ARROWS_GRAY = 14
     FIVE_RATING = 15
     FIVE_QUARTERS = 16
+    #: The sets below exist only as levels of a custom icon set (:class:`CfIcon`).
+    THREE_STARS = 17
+    THREE_TRIANGLES = 18
+    FIVE_BOXES = 19
+    NO_ICONS = 20
 
 
 def enum_name(enum_type: "type[enum.Enum]", value: int) -> Optional[str]:
@@ -1153,8 +1274,8 @@ class ShapePaint(IntEnum):
 class SlicerSortOrder(IntEnum):
     """Item sort order of a table slicer."""
 
-    DESCENDING = 0
-    ASCENDING = 1
+    ASCENDING = 0
+    DESCENDING = 1
 
 
 class SlicerCrossFilter(IntEnum):
@@ -1179,14 +1300,6 @@ class SparklineAxisType(IntEnum):
     INDIVIDUAL = 0
     GROUP = 1
     CUSTOM = 2
-
-
-class SparklineEmptyCells(IntEnum):
-    """How a sparkline plots empty cells."""
-
-    GAP = 0
-    ZERO = 1
-    SPAN = 2
 
 
 class ColorResolution(IntEnum):
@@ -1618,46 +1731,38 @@ class PivotFilterKind(IntEnum):
     DATE_NEWER_THAN = 33
     DATE_NEWER_THAN_OR_EQUAL = 34
     DATE_NOT_BETWEEN = 35
-    DATE_TOMORROW = 36
-    DATE_TODAY = 37
-    DATE_YESTERDAY = 38
-    DATE_NEXT_WEEK = 39
-    DATE_THIS_WEEK = 40
-    DATE_LAST_WEEK = 41
-    DATE_NEXT_MONTH = 42
-    DATE_THIS_MONTH = 43
-    DATE_LAST_MONTH = 44
-    DATE_NEXT_QUARTER = 45
-    DATE_THIS_QUARTER = 46
-    DATE_LAST_QUARTER = 47
-    DATE_NEXT_YEAR = 48
-    DATE_THIS_YEAR = 49
-    DATE_LAST_YEAR = 50
-    DATE_YEAR_TO_DATE = 51
-    DATE_Q1 = 52
-    DATE_Q2 = 53
-    DATE_Q3 = 54
-    DATE_Q4 = 55
-    DATE_M1 = 56
-    DATE_M2 = 57
-    DATE_M3 = 58
-    DATE_M4 = 59
-    DATE_M5 = 60
-    DATE_M6 = 61
-    DATE_M7 = 62
-    DATE_M8 = 63
-    DATE_M9 = 64
-    DATE_M10 = 65
-    DATE_M11 = 66
-    DATE_M12 = 67
-
-
-class PivotFilterOperandKind(IntEnum):
-    """Discriminator for a pivot filter spec's variant payload; an absent operand is ``None``."""
-
-    INT = 0
-    DOUBLE = 1
-    TEXT = 2
+    TOMORROW = 36
+    TODAY = 37
+    YESTERDAY = 38
+    NEXT_WEEK = 39
+    THIS_WEEK = 40
+    LAST_WEEK = 41
+    NEXT_MONTH = 42
+    THIS_MONTH = 43
+    LAST_MONTH = 44
+    NEXT_QUARTER = 45
+    THIS_QUARTER = 46
+    LAST_QUARTER = 47
+    NEXT_YEAR = 48
+    THIS_YEAR = 49
+    LAST_YEAR = 50
+    YEAR_TO_DATE = 51
+    Q1 = 52
+    Q2 = 53
+    Q3 = 54
+    Q4 = 55
+    M1 = 56
+    M2 = 57
+    M3 = 58
+    M4 = 59
+    M5 = 60
+    M6 = 61
+    M7 = 62
+    M8 = 63
+    M9 = 64
+    M10 = 65
+    M11 = 66
+    M12 = 67
 
 
 class PivotDatePeriod(IntFlag):
@@ -1708,9 +1813,9 @@ class PivotSortOrder(IntEnum):
     :meth:`Pivot.add_field_item` and takes no ``by_field`` key.
     """
 
-    DESCENDING = 0
+    MANUAL = 0
     ASCENDING = 1
-    MANUAL = 2
+    DESCENDING = 2
 
 
 # Sentinel value for ``PivotDataFieldInput.show_as_base_item`` meaning
@@ -1810,7 +1915,7 @@ class DataValidation:
 
     ranges: List[CellRect]
     type: ValidationType
-    operator: ValidationOperator
+    operator: ComparisonOperator
     error_style: ValidationErrorStyle
     allow_blank: bool
     show_input_message: bool
@@ -1825,7 +1930,7 @@ class DataValidation:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", _enum(ValidationType, self.type))
-        object.__setattr__(self, "operator", _enum(ValidationOperator, self.operator))
+        object.__setattr__(self, "operator", _enum(ComparisonOperator, self.operator))
 
 
 @dataclass
@@ -1841,7 +1946,7 @@ class DataValidationInput:
     type: ValidationType
     #: Rectangles, unqualified A1 ranges, or one A1 string.
     ranges: Union[List[Union[CellRect, str]], str]
-    operator: ValidationOperator = ValidationOperator.BETWEEN
+    operator: ComparisonOperator = ComparisonOperator.BETWEEN
     error_style: ValidationErrorStyle = ValidationErrorStyle.STOP
     allow_blank: bool = True
     show_input_message: bool = True
@@ -1886,9 +1991,11 @@ class AutoFilterColumn:
     date_groups: List[AutoFilterDateGroup] = field(default_factory=list)
     custom_and: bool = False
     custom_count: int = 0
-    operator1: FilterOperator = FilterOperator.EQUAL
+    #: A used condition states its operator; ``None`` (the default) in a used slot is rejected on write,
+    #: and an unused slot reads as ``None``.
+    operator1: Optional[ComparisonOperator] = None
     value1: str = ""
-    operator2: FilterOperator = FilterOperator.EQUAL
+    operator2: Optional[ComparisonOperator] = None
     value2: str = ""
     top: bool = True
     percent: bool = False
@@ -1907,6 +2014,11 @@ class AutoFilterColumn:
     icon_set: int = 0
     #: ``None`` when the icon filter names no icon.
     icon_index: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        for name in ("operator1", "operator2"):
+            value = getattr(self, name)
+            object.__setattr__(self, name, None if value is None else _enum(ComparisonOperator, value))
 
 
 @dataclass
@@ -2000,7 +2112,8 @@ class ThreadedComment:
     row: int
     col: int
     person_id: str
-    created: str
+    #: The local wall-clock time it was created; whole seconds. ``None`` when the comment states none.
+    created: Optional[datetime.datetime]
     text: str
     parent_id: Optional[str]
     done: bool
@@ -2013,7 +2126,9 @@ class ThreadedCommentInput:
 
     ``parent_id`` ``None`` opens a new thread at ``(row, col)``; otherwise
     the comment replies to that thread, taking its anchor and ignoring
-    ``row``, ``col`` and ``done``.
+    ``row``, ``col`` and ``done``. ``created`` is a ``datetime`` (a naive
+    local wall clock; an aware one is a ValueError) or a ``date`` (midnight);
+    fractions of a second are dropped, and ``None`` states no time.
     """
 
     id: str
@@ -2021,7 +2136,7 @@ class ThreadedCommentInput:
     text: str
     row: int = 0
     col: int = 0
-    created: str = ""
+    created: Optional[Union[datetime.datetime, datetime.date]] = None
     parent_id: Optional[str] = None
     done: bool = False
     mentions: Sequence[Mention] = ()
@@ -2275,10 +2390,21 @@ class DataTableInput:
 
 @dataclass(frozen=True)
 class Sparkline:
-    """One sparkline: the data ``formula`` (a sheet-qualified range without ``=``) and its single A1 ``location``."""
+    """One sparkline: the data ``formula`` and its single A1 ``location``.
+
+    ``formula`` is a sheet-qualified range, with a leading ``=`` on read and optional on input.
+    """
 
     formula: str
     location: str
+
+
+class BlanksAs(IntEnum):
+    """How blank cells plot (a chart or a sparkline group); a chart without the element reads ``None``."""
+
+    ZERO = 0
+    GAP = 1
+    SPAN = 2
 
 
 @dataclass(frozen=True)
@@ -2287,7 +2413,7 @@ class SparklineGroup:
 
     A colour with ``kind=0`` is absent; ``manual_min`` / ``manual_max`` are
     ``None`` when the axis bound is not set. ``date_axis_ref`` is the group's
-    date range, ``None`` when absent.
+    date range (leading ``=`` on read, optional on input), ``None`` when absent.
     """
 
     type: SparklineType = SparklineType.LINE
@@ -2314,8 +2440,11 @@ class SparklineGroup:
     date_axis: bool = False
     date_axis_ref: Optional[str] = None
     line_weight: float = 0.75
-    empty_cells_as: SparklineEmptyCells = SparklineEmptyCells.GAP
+    empty_cells_as: BlanksAs = BlanksAs.GAP
     sparklines: List[Sparkline] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "empty_cells_as", _enum(BlanksAs, self.empty_cells_as))
 
 
 class ChartPlotType(IntEnum):
@@ -2375,14 +2504,6 @@ class ChartGrouping(IntEnum):
     STANDARD = 3
 
 
-class ChartBlanksAs(IntEnum):
-    """How blank cells plot; a chart without the element reads ``None``."""
-
-    GAP = 0
-    ZERO = 1
-    SPAN = 2
-
-
 class ChartPointState(IntEnum):
     """State of a resolved data point."""
 
@@ -2428,11 +2549,11 @@ class ChartSeriesDirection(IntEnum):
 class ChartLegendPosition(IntEnum):
     """Legend placement; a chart without a legend reads ``None``."""
 
-    BOTTOM = 0
-    TOP = 1
-    LEFT = 2
-    RIGHT = 3
-    TOP_RIGHT = 4
+    RIGHT = 0
+    BOTTOM = 1
+    TOP_RIGHT = 2
+    LEFT = 3
+    TOP = 4
 
 
 class ChartAxisPosition(IntEnum):
@@ -2655,7 +2776,7 @@ class ChartAxis:
     title: Optional[ChartTitle]
     major_gridlines: bool
     minor_gridlines: bool
-    tick_label_position: Optional[Literal["nextTo", "low", "high", "none"]]
+    tick_label_position: Optional[ChartTickLabelPosition]
 
 
 @dataclass(frozen=True)
@@ -2694,7 +2815,7 @@ class ChartProperties:
     title: Optional[ChartTitle]
     auto_title_deleted: Optional[bool]
     legend: Optional[ChartLegend]
-    blanks_as: Optional[ChartBlanksAs]
+    blanks_as: Optional[BlanksAs]
     plot_visible_only: Optional[bool]
     date1904: bool
     style: Optional[int]
@@ -2735,7 +2856,7 @@ class ChartDataSeries:
     x_format_code: str
     filtered: bool
     values: List[float]
-    states: List[int]
+    states: List[ChartPointState]
     x: Optional[List[float]]
     sizes: Optional[List[float]]
     ranges: ChartSeriesRanges
@@ -2776,7 +2897,7 @@ class ChartUnresolved:
 class ChartData:
     """A chart's series resolved against the current cell values (:meth:`Chart.get_data`)."""
 
-    domain: Literal["category", "xy"]
+    domain: ChartDomain
     point_count: int
     categories: ChartCategories
     series: List[ChartDataSeries]
@@ -2893,7 +3014,7 @@ class ChartAxisPatch(TypedDict, total=False):
     :class:`ChartTitle` (``AUTO`` leaves the text to the viewer).
     ``None`` on ``title`` removes the axis title, on
     ``log_base`` makes the axis linear and on ``tick_label_position``
-    (``nextTo``, ``low``, ``high``, ``none``) restores the default.
+    (a :class:`ChartTickLabelPosition`) restores the default.
     ``crosses_at`` is read when ``crosses`` is ``AT``.
     """
 
@@ -2908,13 +3029,13 @@ class ChartAxisPatch(TypedDict, total=False):
     log_base: Optional[float]
     crosses: Optional[ChartAxisCrosses]
     crosses_at: Optional[float]
-    tick_label_position: Optional[Literal["nextTo", "low", "high", "none"]]
+    tick_label_position: Optional[ChartTickLabelPosition]
 
 
 class ChartDisplayPatch(TypedDict, total=False):
     """Display patch for :meth:`Chart.update_display`; an omitted key is kept, ``None`` removes the element."""
 
-    blanks_as: Optional[ChartBlanksAs]
+    blanks_as: Optional[BlanksAs]
     plot_visible_only: Optional[bool]
     na_as_blank: Optional[bool]
 
@@ -3134,10 +3255,12 @@ class Pagination:
     printable: "RectPt"
     #: Effective print scale as a percentage (100 is 100%).
     scale_pct: float
-    #: 0 down-then-over, 1 over-then-down.
-    page_order: int
+    page_order: PageOrder
     print_titles: "PrintTitles"
     pages: List["PageLayout"]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "page_order", _enum(PageOrder, self.page_order))
 
 
 @dataclass(frozen=True)
@@ -3247,7 +3370,10 @@ class WidthModel:
     #: False when the Normal font is not a measured calibration point.
     calibrated: bool
     normal_font_name: str
-    platform: str
+    platform: WidthPlatform
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "platform", _enum(WidthPlatform, self.platform))
 
 
 @dataclass(frozen=True)
@@ -3485,13 +3611,16 @@ class IconSet:
 class CfIcon:
     """One level of a custom icon set.
 
-    ``icon_set`` is the ``ST_IconSetType`` spelling of the set the icon comes
-    from (``"3Arrows"``, ``"3Triangles"``, ``"5Boxes"``, ``"NoIcons"`` for a
-    level that draws nothing, ...); ``icon_index`` is the zero-based icon within it.
+    ``icon_set`` is the :class:`IconSetName` the icon comes from
+    (``NO_ICONS`` for a level that draws nothing); ``icon_index`` is the
+    zero-based icon within it.
     """
 
-    icon_set: str
+    icon_set: IconSetName
     icon_index: int = 0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "icon_set", _enum(IconSetName, self.icon_set))
 
 
 @dataclass(frozen=True)
@@ -3506,7 +3635,7 @@ class ConditionalFormat:
     dxf_index: Optional[int]
     formula1: str
     formula2: str
-    operator: Optional[CfOperator]
+    operator: Optional[ComparisonOperator]
     rank: Optional[int]
     percent: bool
     bottom: bool
@@ -3514,7 +3643,7 @@ class ConditionalFormat:
     equal_average: bool
     std_dev: Optional[float]
     text: str
-    time_period: Optional[CfTimePeriod]
+    time_period: Optional[DatePeriod]
     color_scale: Optional[ColorScale]
     data_bar: Optional[DataBar]
     icon_set: Optional[IconSet]
@@ -3522,9 +3651,9 @@ class ConditionalFormat:
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", _enum(CfRuleType, self.type))
         if self.operator is not None:
-            object.__setattr__(self, "operator", _enum(CfOperator, self.operator))
+            object.__setattr__(self, "operator", _enum(ComparisonOperator, self.operator))
         if self.time_period is not None:
-            object.__setattr__(self, "time_period", _enum(CfTimePeriod, self.time_period))
+            object.__setattr__(self, "time_period", _enum(DatePeriod, self.time_period))
 
 
 @dataclass
@@ -3544,7 +3673,7 @@ class ConditionalFormatInput:
     dxf_index: Optional[int] = None
     formula1: str = ""
     formula2: str = ""
-    operator: Optional[CfOperator] = None
+    operator: Optional[ComparisonOperator] = None
     rank: Optional[int] = None
     percent: bool = False
     bottom: bool = False
@@ -3552,7 +3681,7 @@ class ConditionalFormatInput:
     equal_average: bool = False
     std_dev: Optional[float] = None
     text: str = ""
-    time_period: Optional[CfTimePeriod] = None
+    time_period: Optional[DatePeriod] = None
     color_scale: Optional[ColorScale] = None
     data_bar: Optional[DataBar] = None
     icon_set: Optional[IconSet] = None
@@ -3783,9 +3912,13 @@ class PhoneticProperties:
     """
 
     font_index: int = 0
-    type: int = 0
-    alignment: int = 0
+    type: PhoneticType = PhoneticType.HALFWIDTH_KATAKANA
+    alignment: PhoneticAlignment = PhoneticAlignment.NO_CONTROL
     present: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "type", _enum(PhoneticType, self.type))
+        object.__setattr__(self, "alignment", _enum(PhoneticAlignment, self.alignment))
 
 
 @dataclass(frozen=True)
@@ -4321,12 +4454,12 @@ class ThemeFonts:
 
 @dataclass(frozen=True)
 class ThemeScriptFont:
-    """One ``a:font`` entry of the major (``major`` true, heading) or minor (body) theme font set.
+    """One ``a:font`` entry of the major (``FontScheme.MAJOR``, heading) or minor (``FontScheme.MINOR``, body) theme font set.
 
     ``script`` is an ISO 15924 code (``Jpan``) and ``typeface`` its font.
     """
 
-    major: bool
+    scheme: FontScheme
     script: str
     typeface: str
 
@@ -4392,7 +4525,8 @@ class PivotCell:
 
     row: int
     col: int
-    value: Value
+    #: A date item label reads as its serial number; ``number_format`` tells it is a date.
+    value: NativeValue
     kind: PivotCellKind
     depth: int
     field_name: str
@@ -4445,9 +4579,9 @@ class PivotCacheField:
 
 @dataclass(frozen=True)
 class PivotCacheSharedItem:
-    """One shared item of a pivot-cache field; a date item holds its serial number and has ``is_date`` set."""
+    """One shared item of a pivot-cache field; a date item reads as its serial number and has ``is_date`` set."""
 
-    value: Value
+    value: NativeValue
     is_date: bool
 
 
@@ -4620,20 +4754,21 @@ class PivotDataFieldInput:
 
 @dataclass
 class PivotFilterInput:
-    """Argument shape for :meth:`Pivot.add_filter`; an operand whose kind is ``None`` is absent."""
+    """Argument shape for :meth:`Pivot.add_filter`.
+
+    ``value`` is the operand: a number for a value filter (an integer count
+    for the top / bottom count types) or a date filter, a ``str`` for a label
+    filter, ``None`` for a relative-period type. ``value_high`` is the upper
+    bound of a range type (a ``str`` for ``LABEL_BETWEEN`` / ``LABEL_NOT_BETWEEN``),
+    ``None`` otherwise. A ``bool`` is rejected.
+    """
 
     axis: PivotAxis
     field_name: str
     type: PivotFilterKind
-    value_kind: Optional[PivotFilterOperandKind] = None
-    value_int: int = 0
-    value_double: float = 0.0
-    value_text: str = ""
-    value_high_kind: Optional[PivotFilterOperandKind] = None
-    value_high_int: int = 0
-    value_high_double: float = 0.0
+    value: Union[int, float, str, None] = None
+    value_high: Union[int, float, str, None] = None
     data_field_index: int = 0
-    value_high_text: str = ""
 
 
 def _nullable_enum(value: Optional[int], name: str) -> int:
@@ -4691,22 +4826,62 @@ class PivotDataField:
 class PivotFilter:
     """One stored filter of a pivot, as :meth:`Pivot.list_filters` reads it.
 
-    The fields read as in :class:`PivotFilterInput`; an operand whose kind is
-    ``None`` is absent.
+    The fields read as in :class:`PivotFilterInput`; ``value`` and
+    ``value_high`` are ``None`` when the filter has no such operand.
     """
 
     axis: PivotAxis
     field_name: str
     type: PivotFilterKind
-    value_kind: Optional[PivotFilterOperandKind]
-    value_int: int
-    value_double: float
-    value_text: str
-    value_high_kind: Optional[PivotFilterOperandKind]
-    value_high_int: int
-    value_high_double: float
+    value: Optional[Union[float, str]]
+    value_high: Optional[Union[float, str]]
     data_field_index: int
-    value_high_text: str
+
+
+# The C operand-kind discriminator of a pivot filter operand.
+_OPERAND_NONE = -1
+_OPERAND_INT = 0
+_OPERAND_DOUBLE = 1
+_OPERAND_TEXT = 2
+_COUNT_FILTER_KINDS = (PivotFilterKind.VALUE_TOP_COUNT, PivotFilterKind.VALUE_BOTTOM_COUNT)
+
+
+def _operand_fields(value: object, name: str, *, count_filter: bool) -> Dict[str, object]:
+    """The ``<name>_kind`` / ``_int`` / ``_double`` / text slots one filter operand fills."""
+    if value is None:
+        return {name + "_kind": _OPERAND_NONE}
+    if isinstance(value, str):
+        return {name + "_kind": _OPERAND_TEXT, name + "_text": value}
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise TypeError(f"formulon: {name} must be a number, a str or None, got {type(value).__name__}")
+    if count_filter and math.isfinite(value) and value == int(value) and abs(value) < (1 << 31):
+        return {name + "_kind": _OPERAND_INT, name + "_int": int(value)}
+    return {name + "_kind": _OPERAND_DOUBLE, name + "_double": float(value)}
+
+
+def _encode_pivot_filter_operands(spec: PivotFilterInput) -> Dict[str, object]:
+    """The operand slots of the C filter spec for ``spec.value`` / ``spec.value_high``.
+
+    A text operand lands in ``value_text`` / ``value_high_text``; those two keys are
+    returned only when used, so the caller writes each as a string field or leaves it ``NULL``.
+    """
+    count_filter = spec.type in _COUNT_FILTER_KINDS
+    return {
+        **_operand_fields(spec.value, "value", count_filter=count_filter),
+        **_operand_fields(spec.value_high, "value_high", count_filter=False),
+    }
+
+
+def _decode_pivot_filter_operand(d: Dict[str, object], name: str) -> Optional[Union[float, str]]:
+    """One filter operand of a decoded C filter spec; ``None`` when the slot is unset."""
+    kind = d[name + "_kind"]
+    if kind == _OPERAND_INT:
+        return float(d[name + "_int"])
+    if kind == _OPERAND_DOUBLE:
+        return d[name + "_double"]
+    if kind == _OPERAND_TEXT:
+        return LIB.read_cstr(d[name + "_text"])
+    return None
 
 
 def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
@@ -5225,7 +5400,7 @@ _AXIS_PATCH_SPEC = (
     ("reversed", "reversed", "bool"),
     ("log_base", "log_base", "f64"),
     ("crosses", "crosses", "i32"),
-    ("tick_label_position", "tick_label_position", "str"),
+    ("tick_label_position", "tick_label_position", "i32"),
 )
 # Patch fields whose `_op` companion drops the unit suffix of the value field.
 _PATCH_OP_PREFIX = {"font_size_pt": "font_size"}
@@ -5406,7 +5581,7 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxis:
         title=_read_chart_title(d["title"]),
         major_gridlines=bool(d["major_gridlines"]),
         minor_gridlines=bool(d["minor_gridlines"]),
-        tick_label_position=_opt_cstr(d["tick_label_position"]),
+        tick_label_position=_enum_or_none(ChartTickLabelPosition, d["tick_label_position"]),
     )
 
 
@@ -5440,7 +5615,7 @@ def _read_chart(chart: int) -> ChartProperties:
                 for i in range(d["legend_hidden_count"])
             ],
         ),
-        blanks_as=_enum_or_none(ChartBlanksAs, d["blanks_as"]),
+        blanks_as=_enum_or_none(BlanksAs, d["blanks_as"]),
         plot_visible_only=_tri(d["plot_visible_only"]),
         na_as_blank=_tri(d["na_as_blank"]),
         date1904=bool(d["date1904"]),
@@ -5504,14 +5679,14 @@ def _read_chart_data(data: int) -> ChartData:
                 x_format_code=LIB.read_cstr(s["x_format_code"]),
                 filtered=bool(s["filtered"]),
                 values=_read_chart_data_array(points["values"], n, "d", 8) or [],
-                states=_read_chart_data_array(points["states"], n, "B", 1) or [],
+                states=[_enum(ChartPointState, st) for st in _read_chart_data_array(points["states"], n, "B", 1) or []],
                 x=_read_chart_data_array(points["x"], n, "d", 8),
                 sizes=_read_chart_data_array(points["sizes"], n, "d", 8) if s["has_sizes"] else None,
                 ranges=ranges,
             )
         )
     return ChartData(
-        domain="xy" if info["is_xy"] else "category",
+        domain=ChartDomain.XY if info["is_xy"] else ChartDomain.CATEGORY,
         point_count=info["point_count"],
         categories=ChartCategories(
             labels=labels,
@@ -5813,13 +5988,30 @@ def _hyperlink_from(d: Dict[str, Any]) -> Hyperlink:
     )
 
 
+def _parse_created(text: str) -> Optional[datetime.datetime]:
+    """The ``datetime`` a threaded comment's ``YYYY-MM-DDTHH:MM:SS[.ss]`` stamp names, hundredths dropped."""
+    if not text:
+        return None
+    try:
+        return datetime.datetime.strptime(text[:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return None
+
+
+def _format_created(value: Optional[Union[datetime.datetime, datetime.date]]) -> str:
+    """The C stamp of a threaded comment's ``created`` input; ``""`` for ``None``."""
+    if value is None:
+        return ""
+    return civil_datetime(value, "created").strftime("%Y-%m-%dT%H:%M:%S") + ".00"
+
+
 def _threaded_comment_from(d: Dict[str, Any]) -> ThreadedComment:
     return ThreadedComment(
         id=LIB.read_cstr(d["id"]),
         row=d["row"],
         col=d["col"],
         person_id=LIB.read_cstr(d["person_id"]),
-        created=LIB.read_cstr(d["created"]),
+        created=_parse_created(LIB.read_cstr(d["created"])),
         text=LIB.read_cstr(d["text"]),
         parent_id=LIB.read_cstr(d["parent_id"]) or None,
         done=bool(d["done"]),
@@ -5930,7 +6122,7 @@ def _table_style_from(d: Dict[str, Any]) -> TableStyle:
         e = S.TABLE_STYLE_ELEMENT.unpack(LIB, d["elements"] + i * S.TABLE_STYLE_ELEMENT.size)
         elements.append(
             TableStyleElement(
-                type=LIB.read_cstr(e["type"]),
+                type=e["type"],
                 size=e["size"],
                 dxf_index=e["dxf_index"] if e["has_dxf_index"] else None,
             )
@@ -6003,7 +6195,9 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
     for name in _FILTER_COLUMN_BOOLS:
         fields[name] = 1 if getattr(col, name) else 0
     for name, c_name in _FILTER_COLUMN_INTS:
-        fields[c_name] = _sint(getattr(col, name), name)
+        value = getattr(col, name)
+        # An omitted operator packs as BETWEEN, which C rejects in a used condition slot.
+        fields[c_name] = _sint(0 if value is None else value, name)
     for name, c_name in _FILTER_COLUMN_DOUBLES:
         fields[c_name] = float(getattr(col, name))
     for name, c_name, flag in _FILTER_COLUMN_OPTIONAL:
@@ -6111,6 +6305,10 @@ def _decode_filter_column(ptr: int) -> AutoFilterColumn:
         groups.append(AutoFilterDateGroup(**g))
     kwargs: Dict[str, object] = {name: bool(d[name]) for name in _FILTER_COLUMN_BOOLS}
     kwargs.update({name: d[c_name] for name, c_name in _FILTER_COLUMN_INTS + _FILTER_COLUMN_DOUBLES})
+    used = d["custom_count"] if d["kind"] == FilterKind.CUSTOM else 0
+    for slot, name in enumerate(("operator1", "operator2"), start=1):
+        if slot > used:
+            kwargs[name] = None
     kwargs.update({name: d[c_name] if d[flag] else None for name, c_name, flag in _FILTER_COLUMN_OPTIONAL})
     kwargs.update({name: LIB.read_cstr(d[c_name]) for name, c_name in _FILTER_COLUMN_STRINGS})
     return AutoFilterColumn(
@@ -6213,31 +6411,30 @@ def _write_dest(dest: object, data: bytes) -> None:
 
 
 #: A pivot-cache value: a number, text, a boolean, a blank (``None``) or an Excel error.
-_PivotCacheValue = Union[None, float, str, bool, ExcelError]
+_PivotCacheValue = Union[None, float, str, bool, ExcelError, datetime.date]
 
 
-def _pivot_cache_value_kind(value: object, date: object) -> str:
-    """Which typed C writer stores ``value``: ``number``, ``date``, ``text``, ``bool``, ``blank`` or ``error``."""
-    if not isinstance(date, bool):
-        raise TypeError(f"formulon: date must be a bool, got {type(date).__name__}")
+def _pivot_cache_value_kind(value: object) -> str:
+    """Which typed C writer stores ``value``: ``number``, ``date``, ``text``, ``bool``, ``blank`` or ``error``.
+
+    A ``date`` or ``datetime`` is a date; a number is a number.
+    """
     if value is None:
-        kind = "blank"
-    elif isinstance(value, bool):
-        kind = "bool"
-    elif isinstance(value, numbers.Real):
-        kind = "date" if date else "number"
-    elif isinstance(value, str):
-        kind = "text"
-    elif isinstance(value, ExcelError):
-        kind = "error"
-    else:
-        raise TypeError(
-            f"formulon: a pivot cache value must be a number, a str, a bool, None or an ExcelError, "
-            f"got {type(value).__name__}"
-        )
-    if date and kind != "date":
-        raise TypeError(f"formulon: date=True needs a number, got {type(value).__name__}")
-    return kind
+        return "blank"
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, datetime.date):
+        return "date"
+    if isinstance(value, numbers.Real):
+        return "number"
+    if isinstance(value, str):
+        return "text"
+    if isinstance(value, ExcelError):
+        return "error"
+    raise TypeError(
+        "formulon: a pivot cache value must be a number, a str, a bool, None, an ExcelError, "
+        f"a date or a datetime, got {type(value).__name__}"
+    )
 
 
 class Workbook:
@@ -7282,8 +7479,11 @@ class Workbook:
             d = S.CIVIL_TIME.unpack(LIB, ptr)
             return datetime.datetime(d["year"], d["month"], d["day"], d["hour"], d["minute"], d["second"])
 
-    def set_pinned_now(self, t: Optional[datetime.datetime]) -> None:
-        """Pin every clock-dependent result to the naive local time ``t``; ``None`` releases the pin.
+    def set_pinned_now(self, t: Optional[Union[datetime.datetime, datetime.date]]) -> None:
+        """Pin every clock-dependent result to the local time ``t``; ``None`` releases the pin.
+
+        A ``date`` pins midnight and a naive ``datetime`` is read as the local
+        wall clock; an aware ``datetime`` is a ``ValueError``.
 
         ``NOW()``, ``TODAY()`` and the pivot relative-period filters ("this
         month", "year to date", ...) otherwise each read the clock
@@ -7298,19 +7498,14 @@ class Workbook:
         ``CalcMode.MANUAL`` :meth:`recalc` does.
 
         Raises:
-          TypeError: when ``t`` is not a ``datetime.datetime`` (a bare
-            ``datetime.date`` included).
-          ValueError: when ``t`` carries a time zone.
+          TypeError: when ``t`` is not a ``datetime.date`` or ``datetime.datetime``.
           InvalidArgumentError: unless the year is in ``[1900, 9999]``.
         """
         h = self._require()
         if t is None:
             _check(LIB.fm_workbook_set_pinned_now(h, 0))
             return
-        if not isinstance(t, datetime.datetime):
-            raise TypeError(f"formulon: the pinned time must be a datetime.datetime, got {type(t).__name__}")
-        if t.tzinfo is not None:
-            raise ValueError("formulon: the pinned time must be naive; it is a wall-clock reading")
+        t = civil_datetime(t, "the pinned time")
         with _ArgScope() as scope:
             ptr = scope.struct(S.CIVIL_TIME)
             S.CIVIL_TIME.pack(
@@ -7715,12 +7910,11 @@ class Workbook:
             if style.elements:
                 elements_ptr = scope.struct_array(S.TABLE_STYLE_ELEMENT, len(style.elements))
                 for i, element in enumerate(style.elements):
-                    type_ptr = scope.cstr(element.type)
                     S.TABLE_STYLE_ELEMENT.pack(
                         LIB,
                         elements_ptr + i * S.TABLE_STYLE_ELEMENT.size,
                         {
-                            "type": type_ptr,
+                            "type": _sint(element.type, "type"),
                             "size": _uint(element.size, "size"),
                             "has_dxf_index": 0 if element.dxf_index is None else 1,
                             "dxf_index": _uint(0 if element.dxf_index is None else element.dxf_index, "dxf_index"),
@@ -7830,22 +8024,30 @@ class Workbook:
                 S.write_str_field(LIB, ptr, S.THEME_FONTS, fname, getattr(fonts, fname), scope, allow_empty=True)
             _check(LIB.fm_workbook_set_theme_fonts(h, ptr))
 
-    def get_theme_script_font(self, *, major: bool, script: str) -> Optional[ThemeScriptFont]:
-        """Return the entry for ``script`` in the major (heading) or minor (body) font set, or ``None``."""
+    def get_theme_script_font(self, *, scheme: FontScheme, script: str) -> Optional[ThemeScriptFont]:
+        """Return the entry for ``script`` in the major (``FontScheme.MAJOR``, heading) or minor (``FontScheme.MINOR``,
+        body) font set, or ``None``.
+
+        Raises:
+          FormulonError: ``StatusCode.INVALID_ARGUMENT`` for ``FontScheme.NONE`` or any other value.
+        """
         h = self._require()
         with _ArgScope() as scope:
             script_ptr = scope.cstr(script)
             present = scope.out_ptr()
             face_ptr = scope.out_ptr()
-            _check(LIB.fm_workbook_get_theme_script_font(h, 1 if major else 0, script_ptr, present, face_ptr))
+            _check(LIB.fm_workbook_get_theme_script_font(h, _sint(scheme, "scheme"), script_ptr, present, face_ptr))
             if not LIB.read_u32(present):
                 return None
-            return ThemeScriptFont(major=major, script=script, typeface=LIB.read_cstr(LIB.read_u32(face_ptr)))
+            return ThemeScriptFont(
+                scheme=_enum(FontScheme, scheme), script=script, typeface=LIB.read_cstr(LIB.read_u32(face_ptr))
+            )
 
-    def set_theme_script_font(self, *, major: bool, script: str, typeface: str) -> None:
+    def set_theme_script_font(self, *, scheme: FontScheme, script: str, typeface: str) -> None:
         """Set the typeface of one script in the major (heading) or minor (body) font set.
 
-        ``major`` picks the heading set, else the body set. ``script`` is an ISO 15924 code
+        ``scheme`` picks the heading set (``FontScheme.MAJOR``) or the body set
+        (``FontScheme.MINOR``); ``FontScheme.NONE`` raises. ``script`` is an ISO 15924 code
         of exactly four ASCII letters (``Jpan``, ``Hang``); ``typeface`` must be non-empty. Other
         scripts are unchanged and an unlisted script is appended. Setting
         ``Jpan`` also changes ``ThemeFonts.*_east_asian``. A workbook without a
@@ -7856,7 +8058,7 @@ class Workbook:
         with _ArgScope() as scope:
             script_ptr = scope.cstr(script)
             face_ptr = scope.cstr(typeface)
-            _check(LIB.fm_workbook_set_theme_script_font(h, 1 if major else 0, script_ptr, face_ptr))
+            _check(LIB.fm_workbook_set_theme_script_font(h, _sint(scheme, "scheme"), script_ptr, face_ptr))
 
     def reset_theme(self) -> None:
         """Restore the default Office theme by removing the theme part.
@@ -8632,7 +8834,7 @@ def get_collation_classes(
 
 # Imported last: these modules import this one, and the annotations above name their classes, which
 # `typing.get_type_hints` resolves from this module's globals.
-from ._inputs import cell_rect, color_input, optional_color_input  # noqa: E402
+from ._inputs import cell_rect, civil_datetime, color_input, optional_color_input  # noqa: E402
 from ._pivot_cache import PivotCache  # noqa: E402
 from ._sheet import Sheet  # noqa: E402
 from ._table import Table  # noqa: E402

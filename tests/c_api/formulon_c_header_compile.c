@@ -71,7 +71,7 @@ int main(void) {
   // through caller pointers. All but the width model are target-independent.
   _Static_assert(sizeof(fm_sheet_format_defaults_t) == 64, "fm_sheet_format_defaults_t ABI layout changed");
   _Static_assert(sizeof(fm_rect_pt_t) == 40, "fm_rect_pt_t ABI layout changed");
-  _Static_assert(sizeof(fm_width_model_t) == (sizeof(void*) == 4 ? 48 : 56), "fm_width_model_t ABI layout changed");
+  _Static_assert(sizeof(fm_width_model_t) == 48, "fm_width_model_t ABI layout changed");
   _Static_assert(sizeof(fm_paper_info_t) == 32, "fm_paper_info_t ABI layout changed");
   _Static_assert(sizeof(fm_margins_pt_t) == 56, "fm_margins_pt_t ABI layout changed");
   _Static_assert(sizeof(fm_print_titles_t) == 28, "fm_print_titles_t ABI layout changed");
@@ -109,8 +109,7 @@ int main(void) {
   // Table and custom table-style records, pinned per target.
   _Static_assert(sizeof(fm_table_info_t) == (sizeof(void*) == 4 ? 40 : 48), "fm_table_info_t ABI layout changed");
   _Static_assert(sizeof(fm_table_column_info_t) == 5 * sizeof(void*), "fm_table_column_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_table_style_element_t) == (sizeof(void*) == 4 ? 16 : 24),
-                 "fm_table_style_element_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_style_element_t) == 16, "fm_table_style_element_t ABI layout changed");
   _Static_assert(sizeof(fm_table_style_t) == (sizeof(void*) == 4 ? 24 : 40), "fm_table_style_t ABI layout changed");
   // Protection records, pinned per target.
   _Static_assert(sizeof(fm_workbook_protection_t) == (sizeof(void*) == 4 ? 56 : 88),
@@ -144,7 +143,7 @@ int main(void) {
       fm_sheet_restore_drawing;
   fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_reset_theme;
   fm_status_t (*set_table_style)(fm_workbook_t*, const fm_table_style_t*) = fm_workbook_set_table_style;
-  fm_status_t (*set_column_totals)(fm_workbook_t*, size_t, size_t, size_t, const char*, const char*, const char*) =
+  fm_status_t (*set_column_totals)(fm_workbook_t*, size_t, size_t, size_t, int32_t, const char*, const char*) =
       fm_sheet_set_table_column_totals;
   (void)cells_in_range;
   (void)set_table_style;

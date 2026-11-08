@@ -35,6 +35,7 @@ from formulon import (
     Color,
     ColorKind,
     Comment,
+    ComparisonOperator,
     ConditionalFormatInput,
     DataBar,
     DefinedNameInput,
@@ -55,7 +56,6 @@ from formulon import (
     PivotFieldInput,
     PivotFilterInput,
     PivotFilterKind,
-    PivotFilterOperandKind,
     PivotGrandTotals,
     PivotInput,
     ShapeInput,
@@ -66,6 +66,8 @@ from formulon import (
     TableStyle,
     TableStyleDefaults,
     TableStyleElement,
+    TableStyleElementType,
+    TableTotalsRowFunction,
     Value,
     ValueKind,
     Workbook,
@@ -664,16 +666,18 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 )
             )
             table.set_column_totals(0, label="Total")
-            table.set_column_totals(1, function="sum")
+            table.set_column_totals(1, function=TableTotalsRowFunction.SUM)
             self.assertEqual(wb.sheet(0).get_formula(3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
             self.assertEqual(wb.sheet(0).get_value(3, 1), 30.0)
             with self.assertRaises(FormulonError):
-                table.set_column_totals(1, function="median")
+                table.set_column_totals(1, function=99)  # type: ignore[arg-type]
+            with self.assertRaises(TypeError):
+                table.set_column_totals(1, function="sum")  # type: ignore[arg-type]
             with Workbook.load(wb.save()) as reloaded:
                 columns = reloaded.sheet(0).list_tables()[0].get_properties().columns
                 self.assertEqual(columns[0].totals_row_label, "Total")
-                self.assertEqual(columns[1].totals_row_function, "sum")
+                self.assertEqual(columns[1].totals_row_function, TableTotalsRowFunction.SUM)
 
     def test_table_rename_rewrites_structured_references(self) -> None:
         with Workbook.create_default() as wb:
@@ -695,9 +699,9 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 name="Corporate",
                 pivot=False,
                 elements=[
-                    TableStyleElement("wholeTable", dxf_index=dxf),
-                    TableStyleElement("firstRowStripe", size=2, dxf_index=dxf),
-                    TableStyleElement("totalRow"),
+                    TableStyleElement(TableStyleElementType.WHOLE_TABLE, dxf_index=dxf),
+                    TableStyleElement(TableStyleElementType.FIRST_ROW_STRIPE, size=2, dxf_index=dxf),
+                    TableStyleElement(TableStyleElementType.TOTAL_ROW),
                 ],
             )
             wb.set_table_style(style)
@@ -804,7 +808,7 @@ class OneShotEvaluationTests(unittest.TestCase):
                 self.assertEqual(formulon.evaluate_formula(formula), payload)
                 value = formulon.evaluate_typed_formula(formula)
                 self.assertEqual(value.kind, kind)
-                self.assertEqual(value.to_python(), payload)
+                self.assertEqual(formulon.to_native(value), payload)
                 # Writing into the anchor and recalcing would make the
                 # anchor-referencing cases #REF!.
                 self.assertIsNone(value.error_code)
@@ -859,8 +863,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             axis=PivotAxis.ROW,
             field_name="Region",
             type=PivotFilterKind.VALUE_GREATER_THAN,
-            value_kind=PivotFilterOperandKind.DOUBLE,
-            value_double=15.0,
+            value=15.0,
         )
 
     def test_added_filter_reads_back_field_for_field(self) -> None:
@@ -874,8 +877,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
         self.assertEqual(got.axis, PivotAxis.ROW)
         self.assertEqual(got.field_name, "Region")
         self.assertEqual(got.type, PivotFilterKind.VALUE_GREATER_THAN)
-        self.assertEqual(got.value_kind, PivotFilterOperandKind.DOUBLE)
-        self.assertEqual(got.value_double, 15.0)
+        self.assertEqual(got.value, 15.0)
 
     def test_count_reports_the_filters_on_the_pivot(self) -> None:
         wb, pivot = self._workbook_with_pivot()
@@ -900,7 +902,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             self.assertEqual(len(reloaded.sheet(0).pivot(0).list_filters()), 1)
             got = reloaded.sheet(0).pivot(0).list_filters()[0]
             self.assertEqual((got.field_name, got.type), ("Region", PivotFilterKind.VALUE_GREATER_THAN))
-            self.assertEqual((got.value_kind, got.value_double), (PivotFilterOperandKind.DOUBLE, 15.0))
+            self.assertEqual(got.value, 15.0)
 
     def test_out_of_range_index_is_rejected(self) -> None:
         wb, pivot = self._workbook_with_pivot()
@@ -1153,7 +1155,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, n - 1, 0)],
                     type=1,
-                    operator=4,
+                    operator=ComparisonOperator.GREATER_THAN_OR_EQUAL,
                     formula1="10",
                     dxf_index=dxf_index,
                 ),
@@ -1265,8 +1267,8 @@ class CellMutatorDocstringTests(unittest.TestCase):
 
 
 class EvaluateCfRangeDefaultTests(unittest.TestCase):
-    def test_default_today_serial_disables_time_period_rules(self) -> None:
-        """Omitting ``today_serial`` must not pin the basis to 1899-12-30."""
+    def test_default_today_is_the_host_date_for_time_period_rules(self) -> None:
+        """Omitting ``today`` must not pin the basis to 1899-12-30."""
         with Workbook.create_default() as wb:
             dxf_index = wb.ooxml.add_dxf(DxfInput())
             wb.sheet(0).set_number(0, 0, 0.0)
@@ -1280,14 +1282,13 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
             )
             wb.recalc()
             omitted = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0))
-            explicit_nan = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), float("nan"))
-            zero_basis = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), 0.0)
+            explicit = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), today=datetime.date(2024, 3, 15))
         self.assertEqual([c for c in omitted if c.matches], [])
-        self.assertEqual(len(omitted), len(explicit_nan))
-        self.assertEqual(len([c for c in zero_basis if c.matches]), 1)
+        self.assertEqual(len(omitted), len(explicit))
+        self.assertEqual([c for c in explicit if c.matches], [])
 
-    def test_omitted_today_serial_reads_the_pinned_date(self) -> None:
-        """Omitting ``today_serial`` evaluates ``timePeriod`` rules against the pinned date."""
+    def test_omitted_today_reads_the_pinned_date(self) -> None:
+        """Omitting ``today`` evaluates ``timePeriod`` rules against the pinned date."""
         with Workbook.create_default() as wb:
             wb.set_pinned_now(datetime.datetime(2024, 3, 15, 9, 30))
             dxf_index = wb.ooxml.add_dxf(DxfInput())
@@ -1302,9 +1303,11 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
             )
             wb.recalc()
             omitted = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0))
-            explicit_nan = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), float("nan"))
+            elsewhere = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), today=datetime.datetime(2024, 3, 16))
+            same_day = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), today=datetime.date(2024, 3, 15))
         self.assertEqual(len([c for c in omitted if c.matches]), 1)
-        self.assertEqual([c for c in explicit_nan if c.matches], [])
+        self.assertEqual([c for c in elsewhere if c.matches], [])
+        self.assertEqual(len([c for c in same_day if c.matches]), 1)
 
 
 class ArgumentScopeTests(unittest.TestCase):

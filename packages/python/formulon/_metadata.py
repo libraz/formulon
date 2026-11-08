@@ -30,7 +30,7 @@ from . import _structs as S
 from ._c import LIB, _sint
 from ._c import decode_cstr as _decode_cstr
 from ._status import StatusCode
-from ._workbook import FunctionMetadata, LogLevel, _ArgScope, _check
+from ._workbook import FunctionAvailability, FunctionMetadata, LogLevel, _ArgScope, _check
 
 __all__ = [
     "FunctionMetadataEntry",
@@ -236,7 +236,7 @@ class MergedFunctionMetadata:
     name: str
     min_arity: int
     max_arity: Optional[int]
-    availability: int
+    availability: FunctionAvailability
     signature: Optional[str]
     description: Optional[str]
     #: ``entry.aliases[locale]`` when present, else the canonical ``name``.

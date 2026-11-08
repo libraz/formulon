@@ -1,10 +1,24 @@
 // Compile-time checks of the public declarations. Never executed: `make npm-typecheck` runs tsc over it
 // against the staged d.ts. A line marked `@ts-expect-error` must fail to compile; it is the rejected form.
 import createFormulon, {
-  CfOperator,
+  BlanksAs,
   CfRuleType,
+  ChartDomain,
   ChartExtendedLayout,
   ChartLegendPosition,
+  ChartTickLabelPosition,
+  ComparisonOperator,
+  DatePeriod,
+  FontScheme,
+  PageOrder,
+  PaperSize,
+  PhoneticAlignment,
+  PhoneticType,
+  PivotSortOrder,
+  SlicerSortOrder,
+  TableStyleElementType,
+  TableTotalsRowFunction,
+  WidthPlatform,
   ChartPlotType,
   ChartRole,
   ChartSourceKind,
@@ -26,6 +40,9 @@ import createFormulon, {
   type ConditionalFormat,
   type ConditionalFormatInput,
   type DataValidation,
+  type DateInput,
+  type CellValueInput,
+  type PivotDatePeriodMask,
   type Dxf,
   type DxfInput,
   type EffectiveStyle,
@@ -470,10 +487,10 @@ export function colors(): void {
 }
 
 export function conditionalFormats(): void {
-  sheet.addCfRule({ type: CfRuleType.CellIs, ranges: 'A1:A9', operator: CfOperator.GreaterThan, formula1: '10', dxfIndex: 0 });
+  sheet.addCfRule({ type: CfRuleType.CellIs, ranges: 'A1:A9', operator: ComparisonOperator.GreaterThan, formula1: '10', dxfIndex: 0 });
   sheet.addCfRule({ type: CfRuleType.Expression, ranges: 'A1:A9', formula1: '=A1>0', format: { font: { bold: true } } });
   // @ts-expect-error the operator is `operator`
-  sheet.addCfRule({ type: CfRuleType.CellIs, ranges: 'A1:A9', op: CfOperator.GreaterThan, formula1: '10' });
+  sheet.addCfRule({ type: CfRuleType.CellIs, ranges: 'A1:A9', op: ComparisonOperator.GreaterThan, formula1: '10' });
   // @ts-expect-error the format index is `dxfIndex`
   sheet.addCfRule({ type: CfRuleType.Expression, ranges: 'A1:A9', formula1: '=A1>0', dxfId: 0 });
   sheet.addCfRule({ type: CfRuleType.Expression, ranges: ['A1:A9', rect], formula1: '=A1>0' });
@@ -771,7 +788,7 @@ export function styleRecords(dxf: Dxf): void {
   const xfIndex: number = sheet.ooxml.getCellXfIndex('A1');
   const run = sheet.getCellPhoneticRuns('A1')[0];
   const span: number = run.end - run.start;
-  sheet.setCellPhoneticProperties('A1', { fontIndex: 0, type: 1, alignment: 1 });
+  sheet.setCellPhoneticProperties('A1', { fontIndex: 0, type: PhoneticType.Hiragana, alignment: PhoneticAlignment.Left });
   // @ts-expect-error the font is `fontIndex`
   sheet.setCellPhoneticProperties('A1', { fontId: 0, type: 1, alignment: 1 });
   const xfBase = {
@@ -836,4 +853,187 @@ export function columnSpellings(): void {
   sheet.addDataTable({ rect: 'B2:D6', colInput: 'A1' });
   // @ts-expect-error spelled `columnInput`
   void sheet.getDataTable('B2')?.colInput;
+}
+
+export function sharedOrdinalTables(): void {
+  sheet.addCfRule({ type: CfRuleType.CellIs, ranges: 'A1:A9', operator: ComparisonOperator.Between, formula1: '1', formula2: '9' });
+  sheet.addValidation({ ranges: 'B1:B9', type: 1, operator: ComparisonOperator.NotBetween, formula1: '1', formula2: '9' });
+  sheet.setAutoFilter({ range: rect, columns: [{ columnOffset: 0, operator1: ComparisonOperator.GreaterThanOrEqual, value1: '5' }] });
+  sheet.addCfRule({ type: CfRuleType.TimePeriod, ranges: 'A1:A9', timePeriod: DatePeriod.ThisMonth });
+  // @ts-expect-error the retired validation operator table is gone
+  void formulon.ValidationOperator;
+  // @ts-expect-error the retired CF operator table is gone
+  void formulon.CfOperator;
+  // @ts-expect-error the retired sparkline table is gone
+  void formulon.SparklineEmptyCells;
+  // @ts-expect-error renamed to DatePeriod
+  void formulon.CfTimePeriod;
+  // @ts-expect-error the pivot operand discriminator is gone
+  void formulon.PivotFilterOperandKind;
+  // @ts-expect-error 8 is past the last operator
+  const operator: ComparisonOperator = 8;
+  void operator;
+  assertType<Equal<(typeof ComparisonOperator)['GreaterThanOrEqual'], 7>>();
+  assertType<Equal<(typeof DatePeriod)['ThisMonth'], 4>>();
+  assertType<Equal<(typeof BlanksAs)['Zero'], 0>>();
+  assertType<Equal<(typeof PivotSortOrder)['Manual'], 0>>();
+  assertType<Equal<(typeof SlicerSortOrder)['Ascending'], 0>>();
+  assertType<Equal<(typeof ChartLegendPosition)['Right'], 0>>();
+  sheet.addSparklineGroup({ emptyCellsAs: BlanksAs.Span });
+  // @ts-expect-error a sparkline blank mode is a BlanksAs ordinal
+  sheet.addSparklineGroup({ emptyCellsAs: 'gap' });
+  chart.updateDisplay({ blanksAs: BlanksAs.Gap });
+  // @ts-expect-error 3 is not a BlanksAs
+  chart.updateDisplay({ blanksAs: 3 });
+}
+
+declare const chart: Chart;
+
+export function stringUnionsBecameTables(): void {
+  table.setColumnTotals(0, { function: TableTotalsRowFunction.CountNumbers, label: 'n' });
+  // @ts-expect-error the totals function is an ordinal, not its token
+  table.setColumnTotals(0, { function: 'sum' });
+  const fn: TableTotalsRowFunction = tableProps.columns[0].totalsRowFunction;
+  // @ts-expect-error the totals function reads back as an ordinal
+  const token: string = tableProps.columns[0].totalsRowFunction;
+  void [fn, token];
+  wb.setTableStyle({ name: 'S', elements: [{ type: TableStyleElementType.HeaderRow, dxfIndex: 0 }] });
+  // @ts-expect-error the element type is an ordinal, not its token
+  wb.setTableStyle({ name: 'S', elements: [{ type: 'headerRow' }] });
+  chart.updateAxis(1, { tickLabelPosition: ChartTickLabelPosition.Low });
+  // @ts-expect-error the tick label position is an ordinal, not its token
+  chart.updateAxis(1, { tickLabelPosition: 'low' });
+  const position: ChartTickLabelPosition | null = chart.getProperties().axes[0].tickLabelPosition;
+  void position;
+  const domain: ChartDomain = chart.getData().domain;
+  const isXy: boolean = domain === ChartDomain.Xy;
+  // @ts-expect-error the domain is an ordinal, not its token
+  const named: 'xy' | 'category' = chart.getData().domain;
+  void [isXy, named];
+  const platform: WidthPlatform = sheet.getWidthModel().platform;
+  const isMac: boolean = platform === WidthPlatform.Mac;
+  // @ts-expect-error the platform is an ordinal, not its token
+  const platformName: 'win' | 'mac' = sheet.getWidthModel().platform;
+  void [isMac, platformName];
+  sheet.addCfRule({
+    type: CfRuleType.IconSet,
+    ranges: [rect],
+    iconSet: {
+      name: IconSetName.ThreeArrows,
+      thresholds: [{ type: 1, value: '33' }, { type: 1, value: '67' }],
+      icons: [{ iconSet: IconSetName.NoIcons, iconIndex: 0 }, { iconSet: IconSetName.ThreeStars, iconIndex: 2 }],
+    },
+  });
+  sheet.addCfRule({
+    type: CfRuleType.IconSet,
+    ranges: [rect],
+    iconSet: {
+      name: IconSetName.ThreeArrows,
+      thresholds: [{ type: 1, value: '33' }, { type: 1, value: '67' }],
+      // @ts-expect-error a custom icon level names its set by IconSetName, not by its token
+      icons: [{ iconSet: '3Arrows', iconIndex: 0 }],
+    },
+  });
+}
+
+export function bareNumbersBecameTables(): void {
+  sheet.setCellPhoneticProperties('A1', { fontIndex: 0, type: PhoneticType.NoConversion, alignment: PhoneticAlignment.Distributed });
+  // @ts-expect-error 4 is not a PhoneticType
+  sheet.setCellPhoneticProperties('A1', { fontIndex: 0, type: 4, alignment: 0 });
+  // @ts-expect-error a number outside the table is not a PhoneticAlignment
+  sheet.setCellPhoneticProperties('A1', { fontIndex: 0, type: 0, alignment: 4 });
+  const order: PageOrder = sheet.getPagination().pageOrder;
+  const overThen: boolean = order === PageOrder.OverThenDown;
+  void overThen;
+  // @ts-expect-error the page order is a PageOrder, not a bare boolean
+  const flag: boolean = sheet.getPagination().pageOrder;
+  void flag;
+  sheet.updatePageSetup({ paperSize: PaperSize.A4 });
+  sheet.updatePageSetup({ paperSize: 118 });
+  const code: number = sheet.getPageSetup().paperSize;
+  void code;
+  assertType<Equal<(typeof PaperSize)['A6'], 70>>();
+}
+
+export function themeScriptFonts(): void {
+  wb.setThemeScriptFont({ scheme: FontScheme.Major, script: 'Jpan', typeface: 'Yu Gothic' });
+  // @ts-expect-error the font set is `scheme`, not a `major` flag
+  wb.setThemeScriptFont({ major: true, script: 'Jpan', typeface: 'Yu Gothic' });
+  wb.getThemeScriptFont({ scheme: FontScheme.Minor, script: 'Jpan' });
+  const scheme: FontScheme | undefined = wb.getThemeScriptFont({ scheme: FontScheme.Minor, script: 'Jpan' })?.scheme;
+  void scheme;
+}
+
+export function nativeBooleansAndDates(): void {
+  const matches: boolean = sheet.evaluateCfFormula('A1', 'A1', 'A1>0');
+  // @ts-expect-error the predicate result is a boolean, not a Value
+  const tagged: Value = sheet.evaluateCfFormula('A1', 'A1', 'A1>0');
+  void [matches, tagged];
+  const match = sheet.evaluateCfRange('A1:A9')[0].matches[0];
+  const engaged: boolean = match.dxfIndexEngaged && match.barIsNegative && match.barBorderEngaged && match.barGradient;
+  // @ts-expect-error the flags are booleans
+  const asNumber: number = match.barGradient;
+  void [engaged, asNumber];
+  const pivotCell = pivot.getLayout().cells[0];
+  const cellValue: NativeValue = pivotCell.value;
+  // @ts-expect-error a pivot cell has no isDate; its numberFormat tells a date label
+  void pivotCell.isDate;
+  void cellValue;
+  const shared = cache.listFieldSharedItems(0)[0];
+  const sharedValue: NativeValue = shared.value;
+  void sharedValue;
+
+  const civil: DateInput = { year: 2024, month: 1, day: 31, hour: 0, minute: 0, second: 0 };
+  const date: DateInput = new Date(2024, 0, 31);
+  wb.setPinnedNow(date);
+  wb.setPinnedNow(civil);
+  wb.setPinnedNow(null);
+  // @ts-expect-error a serial number is not a DateInput
+  wb.setPinnedNow(45322);
+  sheet.evaluateCfRange('A1:A9', { today: new Date() });
+  // @ts-expect-error the date basis is `options.today`, not a serial
+  sheet.evaluateCfRange('A1:A9', 45322);
+  sheet.addThreadedComment({ id: '{A}', text: 't', personId: 'p', created: new Date() });
+  sheet.addThreadedComment({ id: '{A}', text: 't', personId: 'p', created: civil });
+  // @ts-expect-error `created` is a DateInput, not a timestamp string
+  sheet.addThreadedComment({ id: '{A}', text: 't', personId: 'p', created: '2024-01-31T00:00:00.00' });
+  const read: CivilTime | null = sheet.listThreadedComments()[0].created;
+  void read;
+  cache.setRecordValue(0, 0, new Date(2024, 0, 31));
+  cache.addFieldSharedItem(0, new Date(2024, 0, 31));
+  // @ts-expect-error a Date is a date; there is no flag
+  cache.setRecordValue(0, 0, 45322, { date: true });
+  pivot.setFieldDateGroup(0, { periods: 16 | 64, start: new Date(2024, 0, 1), end: civil });
+  const mask: PivotDatePeriodMask = pivot.listFields()[0].datePeriods;
+  void mask;
+  // @ts-expect-error a bound is a DateInput, not a serial
+  pivot.setFieldDateGroup(0, { periods: 16, start: 45292 });
+}
+
+export function writerUnions(): void {
+  const input: CellValueInput = new ExcelError(1);
+  sheet.validateValue('B1', 'Open');
+  sheet.validateValue(0, 1, 42);
+  sheet.validateValue('B1', input);
+  sheet.setError('A1', new ExcelError(2));
+  sheet.setError(0, 0, 2);
+  // @ts-expect-error a string is neither an ErrorCode nor an ExcelError
+  sheet.setError('A1', '#N/A');
+}
+
+export function pivotFilterOperands(): void {
+  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.ValueTopCount, value: 10 });
+  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.LabelContains, value: 'a' });
+  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.ValueBetween, value: 1, valueHigh: 9 });
+  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.LabelBetween, value: 'a', valueHigh: null });
+  // @ts-expect-error the operand discriminator and per-kind payload fields are gone
+  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.ValueTopCount, valueKind: 0, valueInt: 10 });
+  // @ts-expect-error the text payload is `value`
+  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.LabelContains, valueText: 'a' });
+  const filter = pivot.listFilters()[0];
+  const value: number | string | null = filter.value;
+  const high: number | string | null = filter.valueHigh;
+  void [value, high, PivotFilterKind.Today, PivotFilterKind.M12];
+  // @ts-expect-error the relative-period members dropped their Date prefix
+  void PivotFilterKind.DateToday;
 }

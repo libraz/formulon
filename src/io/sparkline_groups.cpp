@@ -20,7 +20,7 @@ constexpr std::size_t kMaxItems = 1U << 16;
 
 constexpr const char* kTypeNames[] = {"line", "column", "stacked"};
 constexpr const char* kAxisNames[] = {"individual", "group", "custom"};
-constexpr const char* kEmptyNames[] = {"gap", "zero", "span"};
+constexpr const char* kEmptyNames[] = {"zero", "gap", "span"};
 
 // Child order of `CT_SparklineGroup`; anything else sorts last.
 constexpr std::string_view kChildOrder[] = {"colorSeries", "colorNegative", "colorAxis", "colorMarkers",
@@ -224,7 +224,7 @@ void apply_group(pugi::xml_node node, const SparklineGroup& g) {
   }();
   set_text_attr(node, "type", kTypeNames[static_cast<int>(g.type)], g.type == SparklineType::kLine);
   set_text_attr(node, "displayEmptyCellsAs", kEmptyNames[static_cast<int>(g.empty_cells_as)],
-                g.empty_cells_as == SparklineEmptyCells::kGap);
+                g.empty_cells_as == SparklineEmptyCells::kZero);
   set_text_attr(node, "minAxisType", kAxisNames[static_cast<int>(g.min_axis_type)],
                 g.min_axis_type == SparklineAxisType::kIndividual);
   set_text_attr(node, "maxAxisType", kAxisNames[static_cast<int>(g.max_axis_type)],

@@ -2,7 +2,7 @@
   "fields": {
     "formula": "evaluated with evaluateFormula / evaluate_formula; the case reads its result",
     "cell": "instead of `formula`: read this cell of a new sheet with getValue / get_value",
-    "native": "what toNative (JS) and Value.to_python() (Python) return: a JSON scalar or null as is",
+    "native": "what toNative (JS) and to_native (Python) return: a JSON scalar or null as is",
     "error": "`native: { error: <ErrorCode member> }`: JS returns the ErrorValue with that errorCode, Python an ExcelError with ErrorCode.<UPPER>",
     "passthrough": "`native: { passthrough: true }`: the input value itself is returned (array, reference, lambda)",
     "facade_cases": "rows of the high-level read shapes (NativeValue), read by the facade drivers only: id; call (evaluate_formula | evaluate_formula_array | get_value | get_values); formula, or cell / range on a new sheet; native (the value the call returns). evaluate_formula folds a 1x1 result to a scalar and returns an array as a two-dimensional list; evaluate_formula_array always returns a two-dimensional list; an error is `{error: <ErrorCode member>}`, an empty cell null."

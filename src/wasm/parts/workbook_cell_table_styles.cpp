@@ -39,7 +39,7 @@ emscripten::val table_style_to_val(const fm_table_style_t& style) {
   for (uint32_t i = 0; i < style.element_count; ++i) {
     const fm_table_style_element_t& element = style.elements[i];
     emscripten::val e = emscripten::val::object();
-    js_set_cstr(e, "type", element.type);
+    e.set("type", element.type);
     e.set("size", element.size);
     if (element.has_dxf_index != 0) {
       e.set("dxfIndex", element.dxf_index);
@@ -145,7 +145,6 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
   const bool pivot = reader.boolean(style, "pivot", true, "style.pivot");
   const bool table = reader.boolean(style, "table", true, "style.table");
   const emscripten::val elements = reader.value(style, "elements", "style.elements");
-  std::vector<std::string> types;
   std::vector<fm_table_style_element_t> records;
   if (reader.ok() && js_value_present(elements)) {
     if (!reader.is_array(elements, "style.elements")) {
@@ -153,12 +152,11 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
       return;
     }
     const uint32_t count = reader.length(elements, "style.elements.length");
-    types.reserve(count);
     records.reserve(count);
     for (uint32_t i = 0; i < count && reader.ok(); ++i) {
       const emscripten::val element = reader.array_element(elements, i, "style.elements[]");
-      types.push_back(reader.string(element, "type", "style.elements[].type"));
       fm_table_style_element_t record{};
+      record.type = static_cast<int32_t>(reader.required_u32(element, "type", "style.elements[].type"));
       record.size = reader.u32(element, "size", 1U, "style.elements[].size");
       const emscripten::val dxf = reader.value(element, "dxfIndex", "style.elements[].dxfIndex");
       if (reader.ok() && js_value_present(dxf)) {
@@ -170,10 +168,6 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
   }
   if (!reader.ok()) {
     return;
-  }
-  // `types` has stopped growing, so its `c_str()` views stay put.
-  for (std::size_t i = 0; i < records.size(); ++i) {
-    records[i].type = types[i].c_str();
   }
   fm_table_style_t record = FM_STRUCT_INIT(fm_table_style_t);
   record.name = name.c_str();

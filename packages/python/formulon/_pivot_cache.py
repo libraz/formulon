@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint, fm_value_t_size
+from ._inputs import date_serial
 from ._status import StatusCode
 from ._workbook import (
     UNCHANGED,
@@ -26,6 +27,7 @@ from ._workbook import (
     _PivotCacheValue,
     _read_count,
     _read_cstr_out,
+    to_native,
 )
 
 if TYPE_CHECKING:
@@ -327,25 +329,29 @@ class PivotCache:
                 _check(LIB.fm_workbook_get_pivot_cache_field_shared_item_value(h, cache_id, field, item, value_ptr))
                 value = Value._from_wasm(value_ptr)
                 _check(LIB.fm_workbook_is_pivot_cache_field_shared_item_date(h, cache_id, field, item, date_ptr))
-                items.append(PivotCacheSharedItem(value=value, is_date=LIB.read_i32(date_ptr) != 0))
+                items.append(PivotCacheSharedItem(value=to_native(value), is_date=LIB.read_i32(date_ptr) != 0))
         return items
 
-    def add_field_shared_item(self, field_index: int, value: _PivotCacheValue, *, date: bool = False) -> None:
+    def _date_serial(self, value: object) -> float:
+        """The serial of a ``date`` or ``datetime`` cache value in the workbook's date system."""
+        return date_serial(value, date1904=self._workbook.get_date1904())[0]
+
+    def add_field_shared_item(self, field_index: int, value: _PivotCacheValue) -> None:
         """Append a shared item to cache field ``field_index``.
 
         ``value`` is a number, a ``str``, a ``bool``, ``None`` (blank) or an
-        :class:`ExcelError`. ``date=True`` stores a number as a date serial in
-        the workbook's date system, saved to the second.
+        :class:`ExcelError`, or a ``date`` / ``datetime`` (a date item stored as
+        its serial in the workbook's date system, saved to the second); a number
+        is a number.
 
         Raises:
-          TypeError: when ``value`` is none of the above, or ``date`` is set
-            for a value that is not a number.
+          TypeError: when ``value`` is none of the above.
         """
-        kind = _pivot_cache_value_kind(value, date)
+        kind = _pivot_cache_value_kind(value)
         h, cache_id = self._call()
         field = _uint(field_index, "field_index")
         if kind == "date":
-            _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_date(h, cache_id, field, float(value)))
+            _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_date(h, cache_id, field, self._date_serial(value)))
         elif kind == "number":
             _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_number(h, cache_id, field, float(value)))
         elif kind == "bool":
@@ -385,21 +391,18 @@ class PivotCache:
         h, cache_id = self._call()
         _check(LIB.fm_workbook_clear_pivot_cache_records(h, cache_id))
 
-    def set_record_value(
-        self, record_index: int, field_index: int, value: _PivotCacheValue, *, date: bool = False
-    ) -> None:
-        """Set cache cell ``(record_index, field_index)``; ``value`` and ``date`` as in :meth:`add_field_shared_item`.
+    def set_record_value(self, record_index: int, field_index: int, value: _PivotCacheValue) -> None:
+        """Set cache cell ``(record_index, field_index)``; ``value`` as in :meth:`add_field_shared_item`.
 
         Raises:
-          TypeError: when ``value`` is not an accepted kind, or ``date`` is set
-            for a value that is not a number.
+          TypeError: when ``value`` is not an accepted kind.
         """
-        kind = _pivot_cache_value_kind(value, date)
+        kind = _pivot_cache_value_kind(value)
         h, cache_id = self._call()
         record = _uint(record_index, "record_index")
         field = _uint(field_index, "field_index")
         if kind == "date":
-            _check(LIB.fm_workbook_set_pivot_cache_record_date(h, cache_id, record, field, float(value)))
+            _check(LIB.fm_workbook_set_pivot_cache_record_date(h, cache_id, record, field, self._date_serial(value)))
         elif kind == "number":
             _check(LIB.fm_workbook_set_pivot_cache_record_number(h, cache_id, record, field, float(value)))
         elif kind == "bool":

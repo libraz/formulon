@@ -63,7 +63,7 @@ class MatrixEditTests(unittest.TestCase):
             wb.recalc()
             # A1 is now blank; the value moved to A2.
             self.assertEqual(wb.sheet(0).get_typed_value(0, 0).kind, ValueKind.BLANK)
-            self.assertEqual(wb.sheet(0).get_typed_value(1, 0).to_python(), 11.0)
+            self.assertEqual(formulon.to_native(wb.sheet(0).get_typed_value(1, 0)), 11.0)
 
     def test_delete_col_shifts_value_left(self) -> None:
         with Workbook.create_default() as wb:
@@ -72,7 +72,7 @@ class MatrixEditTests(unittest.TestCase):
             wb.sheet(0).delete_columns(0, 1)
             wb.recalc()
             # The old B1 collapses into A1.
-            self.assertEqual(wb.sheet(0).get_typed_value(0, 0).to_python(), 2.0)
+            self.assertEqual(formulon.to_native(wb.sheet(0).get_typed_value(0, 0)), 2.0)
 
 
 class MergeCommentHyperlinkTests(unittest.TestCase):

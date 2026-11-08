@@ -136,13 +136,7 @@ export function registerPivotRegressions(Module, test) {
   });
 
   test('pivot filters throw on invalid axis, value kind, and field index before mutation', () => {
-    const invalid = [
-      { axis: 2 ** 32 },
-      { valueKind: 1.5 },
-      { valueKind: Number.NaN },
-      { valueKind: Symbol('pivot filter') },
-      { dataFieldIndex: 2 ** 32 },
-    ];
+    const invalid = [{ axis: 2 ** 32 }, { value: Symbol('pivot filter') }, { dataFieldIndex: 2 ** 32 }];
     for (const override of invalid) {
       const { wb, pivot } = makeCheckedPivot(Module);
       try {
@@ -153,8 +147,7 @@ export function registerPivotRegressions(Module, test) {
               axis: 0,
               fieldName: 'Region',
               type: 1,
-              valueKind: 1,
-              valueDouble: 15,
+              value: 15,
               ...override,
             }),
           nestedErrorClass(Object.values(override)[0]),
@@ -165,6 +158,35 @@ export function registerPivotRegressions(Module, test) {
       } finally {
         wb.delete();
       }
+    }
+  });
+
+  test('pivot filter operands of the wrong type throw a TypeError before mutation', () => {
+    for (const override of [{ value: {} }, { value: true }, { valueHigh: [] }]) {
+      const { wb, pivot } = makeCheckedPivot(Module);
+      try {
+        const before = wb.getPivotFilterCount(0, pivot);
+        assert.throws(
+          () => wb.addPivotFilter(0, pivot, { axis: 0, fieldName: 'Region', type: 1, value: 15, ...override }),
+          TypeError,
+          `pivotFilterAdd ${JSON.stringify(override)} accepted`,
+        );
+        assert.equal(wb.getPivotFilterCount(0, pivot), before);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
+  test('a pivot filter reads back its operands as a number, a string or null', () => {
+    const { wb, pivot } = makeCheckedPivot(Module);
+    try {
+      const index = wb.addPivotFilter(0, pivot, { axis: 0, fieldName: 'Region', type: 1, value: 15.5 });
+      const stored = wb.getPivotFilter(0, pivot, index);
+      assert.equal(stored.value, 15.5);
+      assert.equal(stored.valueHigh, null);
+    } finally {
+      wb.delete();
     }
   });
 
@@ -202,8 +224,7 @@ export function registerPivotRegressions(Module, test) {
         axis: 0,
         fieldName: 'Region',
         type: 1,
-        valueKind: 1,
-        valueDouble: 15,
+        value: 15,
       });
       wb.setPivotRowFieldOrder(0, pivot, [0]);
     } finally {
@@ -326,7 +347,7 @@ export function registerPivotRegressions(Module, test) {
         const formula = `=${'SUM('.repeat(depth)}A1${')'.repeat(depth)}`;
         let out;
         try {
-          out = wb.evaluateFormula(0, 1, 0, formula);
+          out = wb.evaluateFormulaArray(0, 1, 0, formula).cells[0][0];
         } catch (e) {
           // A formula past the nesting cap is refused at entry with a parser status.
           if (e?.code === 1007) {

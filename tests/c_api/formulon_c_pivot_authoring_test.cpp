@@ -549,6 +549,25 @@ TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
   EXPECT_NE(SavedPivotXml(wb.handle).find("sortType=\"ascending\""), std::string::npos);
 }
 
+// Zero is the OOXML default `manual`; the rest follow `ST_FieldSortType`.
+TEST(FormulonCApiPivot, SortOrderOrdinalsStartAtTheSchemaDefault) {
+  EXPECT_EQ(FM_PIVOT_SORT_ORDER_MANUAL, 0);
+  EXPECT_EQ(FM_PIVOT_SORT_ORDER_ASCENDING, 1);
+  EXPECT_EQ(FM_PIVOT_SORT_ORDER_DESCENDING, 2);
+}
+
+TEST(FormulonCApiPivot, DescendingSortWritesItsSchemaToken) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_DESCENDING, nullptr), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(RowLabels(wb.handle, pivot_index), (std::vector<std::string>{"South", "North"}));
+  EXPECT_NE(SavedPivotXml(wb.handle).find("sortType=\"descending\""), std::string::npos);
+}
+
 TEST(FormulonCApiPivot, ManualSortRejectsAByFieldKeyWithoutMutation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

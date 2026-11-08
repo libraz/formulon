@@ -1,11 +1,10 @@
 //
 // C ABI - ad-hoc, side-effect-free formula evaluation. Bridges the
-// engine-side `eval::evaluate_parsed_formula` / `eval::evaluate_parsed_cf_formula`
+// engine-side `eval::evaluate_parsed_formula_array` / `eval::evaluate_parsed_cf_formula`
 // drivers into the stable C ABI. A formula that does not parse fails before
 // evaluation. Every entry point observes the workbook read-only apart from
-// bringing pending results up to date (`ensure_calculated`). Scalar
-// results borrow the handle's read scratch for text; an array result is an
-// owned `fm_value_array_t`.
+// bringing pending results up to date (`ensure_calculated`). A formula's
+// result is an owned `fm_value_array_t`; the CF predicate is a boolean.
 
 #include <cstddef>
 #include <cstdint>
@@ -30,7 +29,6 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
-using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::parse_evaluated_formula;
 using formulon::c_api::parts::set_binding_error;
@@ -100,42 +98,6 @@ fm_status_t parse_failure_status(const formulon::Arena& arena, fm_status_t rc) {
 }
 
 }  // namespace
-
-extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                 uint32_t col, const char* formula, fm_value_t* out) {
-  clear_last_error();
-  if (out == nullptr || formula == nullptr) {
-    return null_argument();
-  }
-  if (auto rc = check_adhoc_cell(wb, sheet_index, row, col); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8({formula}); rc != 0) {
-    return rc;
-  }
-  // The arena backs any text payload in the result until it is copied into
-  // the read scratch below.
-  formulon::Arena arena = make_eval_arena();
-  const std::string text = bind_adhoc_formula(wb, sheet_index, row, col, formula);
-  fm_status_t rc = 0;
-  const formulon::parser::AstNode* root = parse_evaluated_formula(formula, text, arena, &rc);
-  if (root == nullptr) {
-    return parse_failure_status(arena, rc);
-  }
-  if (rc = ensure_calculated(wb); rc != 0) {
-    return rc;
-  }
-  const formulon::Value v = formulon::eval::evaluate_parsed_formula(
-      wb->workbook(), wb->workbook().sheet(sheet_index), row, col, *root, arena, formulon::eval::default_registry());
-  if (arena.exhausted()) {
-    return arena_exhausted_error();
-  }
-  // Returned text pointers stay valid only until the next read (see
-  // `fm_sheet_get_value`).
-  TextStore& store = fresh_read_scratch(wb);
-  value_to_fm(v, store, out);
-  return 0;
-}
 
 extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                        uint32_t col, const char* formula, fm_value_array_t** out) {

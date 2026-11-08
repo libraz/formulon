@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "sheet.h"
 #include "threaded_comment.h"
@@ -36,6 +37,8 @@ using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::validate;
+using formulon::c_api::parts::validation_operator_from_c;
+using formulon::c_api::parts::validation_operator_to_c;
 using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
@@ -579,7 +582,7 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   out->ranges = v.ranges.empty() ? nullptr : reinterpret_cast<const fm_cell_rect_t*>(v.ranges.data());
   out->range_count = static_cast<std::uint32_t>(v.ranges.size());
   out->type = v.type;
-  out->op = v.op;
+  out->op = validation_operator_to_c(v.op);
   out->error_style = v.error_style;
   out->allow_blank = tristate_of(v.allow_blank);
   out->show_input_message = tristate_of(v.show_input_message);
@@ -633,7 +636,7 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
     out.ranges.push_back(to_merge_range(v->ranges[i]));
   }
   out.type = v->type;
-  out.op = v->op;
+  out.op = validation_operator_from_c(v->op);
   out.error_style = v->error_style;
   out.allow_blank = tristate_to_bool(v->allow_blank);
   out.show_input_message = tristate_to_bool(v->show_input_message);

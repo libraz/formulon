@@ -139,8 +139,8 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   const Napi::Object props = ArgObject(info, 3);
   CheckedSpecReader reader(env);
   const uint32_t font_id = reader.U32(props, "fontIndex", 0U);
-  const uint32_t type = reader.U32(props, "type", 0U);
-  const uint32_t alignment = reader.U32(props, "alignment", 0U);
+  const int32_t type = reader.I32(props, "type", 0);
+  const int32_t alignment = reader.I32(props, "alignment", 0);
   if (!reader.ok()) {
     // A malformed field left a pending JS exception: stop before the C ABI
     // call commits a default value for it.
@@ -220,8 +220,8 @@ Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   }
   const CellAddressArgs address = ReadCellAddress(info);
   size_t font_id = 0;
-  uint32_t type = 0;
-  uint32_t alignment = 0;
+  int32_t type = 0;
+  int32_t alignment = 0;
   int32_t present = 0;
   fm_status_t rc = fm_sheet_get_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, &font_id,
                                                          &type, &alignment);
@@ -257,18 +257,6 @@ Napi::Value Workbook::SetCellShowPhonetic(const Napi::CallbackInfo& info) {
   });
 }
 
-Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const CellAddressArgs address = ReadCellAddress(info);
-  const std::string formula = ArgString(info, 3);
-  fm_value_t v{};
-  fm_status_t rc = fm_sheet_evaluate_formula(handle_, address.sheet, address.row, address.col, formula.c_str(), &v);
-  return ValueOrThrow(env, rc, ValueToJs(env, v));
-}
-
 Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -301,7 +289,7 @@ Napi::Value Workbook::EvaluateConditionalFormula(const Napi::CallbackInfo& info)
   fm_value_t v{};
   fm_status_t rc = fm_sheet_evaluate_cf_formula(handle_, address.sheet, address.row, address.col, anchor_row,
                                                 anchor_col, formula.c_str(), &v);
-  return ValueOrThrow(env, rc, ValueToJs(env, v));
+  return ValueOrThrow(env, rc, Napi::Boolean::New(env, v.u.boolean != 0));
 }
 
 Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {

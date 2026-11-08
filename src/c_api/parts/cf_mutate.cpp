@@ -40,6 +40,7 @@
 
 using formulon::c_api::BorrowedArrayArena;
 using formulon::c_api::BorrowedStringArena;
+using formulon::c_api::parts::cf_operator_from_c;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
@@ -50,12 +51,16 @@ using formulon::c_api::parts::color_spec_from_c;
 using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::data_bar_axis_position_from_c;
 using formulon::c_api::parts::data_bar_direction_from_c;
+using formulon::c_api::parts::date_period_from_c;
 using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::kIconSetNameTokens;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_c;
+using formulon::c_api::parts::token_of;
 using formulon::c_api::parts::validate;
 using formulon::c_api::parts::with_formula_prefix;
 
@@ -122,10 +127,10 @@ fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObj
   out.type = static_cast<std::uint8_t>(src.type);
   out.gte = src.gte ? 1 : 0;
   if (!src.value.empty()) {
-    out.value =
-        text_arena.emplace(src.type == formulon::cf::CfvoType::Formula
-                               ? formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(src.value))
-                               : src.value);
+    out.value = text_arena.emplace(
+        src.type == formulon::cf::CfvoType::Formula
+            ? with_formula_prefix(formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(src.value)))
+            : src.value);
   }
   return out;
 }
@@ -169,7 +174,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
                       : nullptr;
   if (rule.op.has_value()) {
     out->op_engaged = 1;
-    out->op = static_cast<std::uint8_t>(*rule.op);
+    out->op = static_cast<std::uint8_t>(to_c(*rule.op));
   }
   if (rule.rank.has_value()) {
     out->rank_engaged = 1;
@@ -186,7 +191,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   out->text = rule.text.has_value() ? text_arena.emplace(*rule.text) : nullptr;
   if (rule.time_period.has_value()) {
     out->time_period_engaged = 1;
-    out->time_period = static_cast<std::uint8_t>(*rule.time_period);
+    out->time_period = static_cast<std::uint8_t>(to_c(*rule.time_period));
   }
   if (rule.color_scale.has_value()) {
     const auto& spec = *rule.color_scale;
@@ -253,7 +258,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     std::vector<fm_cf_icon_t> icons;
     icons.reserve(spec.custom_icons.size());
     for (const auto& icon : spec.custom_icons) {
-      icons.push_back(fm_cf_icon_t{text_arena.emplace(icon.icon_set), icon.icon_id});
+      icons.push_back(fm_cf_icon_t{ordinal_of(kIconSetNameTokens, icon.icon_set, -1), icon.icon_id});
     }
     out->icon_set_icon_count = static_cast<std::uint32_t>(icons.size());
     out->icon_set_icons = icon_arena.adopt(std::move(icons));
@@ -411,7 +416,8 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
     spec.custom_icons.reserve(rule.icon_set_icon_count);
     for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
       spec.custom_icons.push_back(
-          formulon::cf::CfIcon{rule.icon_set_icons[i].icon_set, rule.icon_set_icons[i].icon_index});
+          formulon::cf::CfIcon{std::string(token_of(kIconSetNameTokens, rule.icon_set_icons[i].icon_set)),
+                               rule.icon_set_icons[i].icon_index});
     }
   }
   out_rule->icon_set = std::move(spec);
@@ -636,7 +642,7 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     }
   }
   if (rule->op_engaged != 0) {
-    out_rule.op = static_cast<formulon::cf::CellIsOperator>(rule->op);
+    out_rule.op = cf_operator_from_c(rule->op);
   }
   if (rule->rank_engaged != 0) {
     out_rule.rank = rule->rank;
@@ -652,7 +658,7 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     out_rule.text = std::string(rule->text);
   }
   if (rule->time_period_engaged != 0) {
-    out_rule.time_period = static_cast<formulon::cf::TimePeriod>(rule->time_period);
+    out_rule.time_period = date_period_from_c(rule->time_period);
   }
   if (!out_rule.formula1.has_value() || out_rule.formula1->empty()) {
     // Excel stores a derived formula for these types and readers surface it.

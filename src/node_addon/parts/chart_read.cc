@@ -211,7 +211,7 @@ Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_t& a) {
   o.Set("title", TitleToJs(env, a.title));
   o.Set("majorGridlines", JsBool(env, a.major_gridlines));
   o.Set("minorGridlines", JsBool(env, a.minor_gridlines));
-  o.Set("tickLabelPosition", StringOrNull(env, a.tick_label_position));
+  o.Set("tickLabelPosition", JsIndexOrNull(env, a.tick_label_position));
   return o;
 }
 
@@ -345,7 +345,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   if (!Step(rc, fm_chart_data_get_info(data, &info))) {
     return o;
   }
-  o.Set("domain", JsString(env, info.is_xy != 0 ? "xy" : "category"));
+  o.Set("domain", JsNumber(env, info.is_xy != 0 ? 1 : 0));
   o.Set("pointCount", JsNumber(env, static_cast<double>(info.point_count)));
 
   Napi::Object categories = Napi::Object::New(env);

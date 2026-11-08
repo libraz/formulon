@@ -149,6 +149,53 @@ TEST(FormulonCApiValidation, ValidateValueUsesTheCoveringRule) {
   ExpectVerdicts(wb.handle);
 }
 
+// The shared table is in `ST_DataValidationOperator` order; zero is `between`.
+TEST(FormulonCApiValidation, ComparisonOperatorOrdinalsFollowTheSchemaOrder) {
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_BETWEEN, 0);
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_NOT_BETWEEN, 1);
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_EQUAL, 2);
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_NOT_EQUAL, 3);
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_LESS_THAN, 4);
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_LESS_THAN_OR_EQUAL, 5);
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_GREATER_THAN, 6);
+  EXPECT_EQ(FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, 7);
+}
+
+// Each member of the shared table compares as it is named.
+TEST(FormulonCApiValidation, EachComparisonOperatorComparesAsNamed) {
+  const struct {
+    int32_t op;
+    bool four;
+    bool five;
+    bool six;
+  } kCases[] = {
+      {FM_COMPARISON_OPERATOR_BETWEEN, false, true, true},
+      {FM_COMPARISON_OPERATOR_NOT_BETWEEN, true, false, false},
+      {FM_COMPARISON_OPERATOR_EQUAL, false, true, false},
+      {FM_COMPARISON_OPERATOR_NOT_EQUAL, true, false, true},
+      {FM_COMPARISON_OPERATOR_LESS_THAN, true, false, false},
+      {FM_COMPARISON_OPERATOR_LESS_THAN_OR_EQUAL, true, true, false},
+      {FM_COMPARISON_OPERATOR_GREATER_THAN, false, false, true},
+      {FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, false, true, true},
+  };
+  for (const auto& c : kCases) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    const fm_cell_rect_t range{0, 0, 0, 0};
+    fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
+    v.ranges = &range;
+    v.range_count = 1;
+    v.type = FM_VALIDATION_TYPE_WHOLE;
+    v.op = static_cast<std::uint8_t>(c.op);
+    v.formula1 = "5";
+    v.formula2 = "6";
+    ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+    EXPECT_EQ(Validate(wb.handle, 0, 0, Number(4)).valid, c.four ? 1 : 0) << c.op;
+    EXPECT_EQ(Validate(wb.handle, 0, 0, Number(5)).valid, c.five ? 1 : 0) << c.op;
+    EXPECT_EQ(Validate(wb.handle, 0, 0, Number(6)).valid, c.six ? 1 : 0) << c.op;
+  }
+}
+
 TEST(FormulonCApiValidation, OverlappingRulesApplyTheFirst) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

@@ -386,6 +386,9 @@ export class ExcelError {
   toString(): string;
 }
 
+/** What `setValue` stores: a native value, a `Date`, an {@link ExcelError} or a tagged {@link Value}. */
+export type CellValueInput = number | string | boolean | null | Date | ExcelError | Value;
+
 /** Per-call telemetry returned by `Workbook.recalcParallel`. The five
  * scheduler counters are 64-bit counters exposed as
  * JavaScript `number` values. They are exact through
@@ -543,18 +546,21 @@ export interface DefinedNameInput {
   hidden?: boolean;
 }
 
-/** A table column's totals-row function (`ST_TotalsRowFunction`). */
-export type TableTotalsRowFunction =
-  | 'none'
-  | 'sum'
-  | 'min'
-  | 'max'
-  | 'average'
-  | 'count'
-  | 'countNums'
-  | 'stdDev'
-  | 'var'
-  | 'custom';
+/** A table column's totals-row function, in `ST_TotalsRowFunction` order. */
+export const TableTotalsRowFunction: Readonly<{
+  None: 0;
+  Sum: 1;
+  Min: 2;
+  Max: 3;
+  Average: 4;
+  Count: 5;
+  CountNumbers: 6;
+  StdDev: 7;
+  Var: 8;
+  Custom: 9;
+}>;
+/** Union of the {@link TableTotalsRowFunction} ordinals. */
+export type TableTotalsRowFunction = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 /** One column of `TableProperties.columns`. `totalsRowFormula` is the `custom`
  *  function's formula (leading `=` included), empty otherwise. */
@@ -629,44 +635,75 @@ export interface TableStyleOptions {
 export type TableStyleOptionsPatch = Patch<TableStyleOptions>;
 
 /** Totals-row settings of one table column (`Table.setColumnTotals`).
- *  `function` defaults to `'none'`; `formula` is required for `'custom'`. */
+ *  `function` defaults to `TableTotalsRowFunction.None`; `formula` is required for `TableTotalsRowFunction.Custom`. */
 export interface TableColumnTotalsInput {
   function?: TableTotalsRowFunction;
   label?: string;
   formula?: string;
 }
 
-/** A region of a custom table style (`ST_TableStyleType`). The PivotTable
+/** A region of a custom table style, in `ST_TableStyleType` order. The PivotTable
  *  regions apply only to styles a PivotTable uses. */
+export const TableStyleElementType: Readonly<{
+  WholeTable: 0;
+  HeaderRow: 1;
+  TotalRow: 2;
+  FirstColumn: 3;
+  LastColumn: 4;
+  FirstRowStripe: 5;
+  SecondRowStripe: 6;
+  FirstColumnStripe: 7;
+  SecondColumnStripe: 8;
+  FirstHeaderCell: 9;
+  LastHeaderCell: 10;
+  FirstTotalCell: 11;
+  LastTotalCell: 12;
+  FirstSubtotalColumn: 13;
+  SecondSubtotalColumn: 14;
+  ThirdSubtotalColumn: 15;
+  FirstSubtotalRow: 16;
+  SecondSubtotalRow: 17;
+  ThirdSubtotalRow: 18;
+  BlankRow: 19;
+  FirstColumnSubheading: 20;
+  SecondColumnSubheading: 21;
+  ThirdColumnSubheading: 22;
+  FirstRowSubheading: 23;
+  SecondRowSubheading: 24;
+  ThirdRowSubheading: 25;
+  PageFieldLabels: 26;
+  PageFieldValues: 27;
+}>;
+/** Union of the {@link TableStyleElementType} ordinals. */
 export type TableStyleElementType =
-  | 'wholeTable'
-  | 'headerRow'
-  | 'totalRow'
-  | 'firstColumn'
-  | 'lastColumn'
-  | 'firstRowStripe'
-  | 'secondRowStripe'
-  | 'firstColumnStripe'
-  | 'secondColumnStripe'
-  | 'firstHeaderCell'
-  | 'lastHeaderCell'
-  | 'firstTotalCell'
-  | 'lastTotalCell'
-  | 'firstSubtotalColumn'
-  | 'secondSubtotalColumn'
-  | 'thirdSubtotalColumn'
-  | 'firstSubtotalRow'
-  | 'secondSubtotalRow'
-  | 'thirdSubtotalRow'
-  | 'blankRow'
-  | 'firstColumnSubheading'
-  | 'secondColumnSubheading'
-  | 'thirdColumnSubheading'
-  | 'firstRowSubheading'
-  | 'secondRowSubheading'
-  | 'thirdRowSubheading'
-  | 'pageFieldLabels'
-  | 'pageFieldValues';
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20
+  | 21
+  | 22
+  | 23
+  | 24
+  | 25
+  | 26
+  | 27;
 
 /** One element of a custom table style. `size` is the stripe band size
  *  (default 1); `dxfIndex` indexes the differential formats (`addDxf`) and is
@@ -717,7 +754,8 @@ export interface PivotCell {
   readonly row: number;
   /** Absolute 0-based sheet column. */
   readonly col: number;
-  readonly value: Value;
+  /** The cell's value; a date item label reads as its serial number, and `numberFormat` tells it is a date. */
+  readonly value: NativeValue;
   readonly kind: PivotCellKind;
   /** Header nesting depth; 0 for data cells. */
   readonly depth: number;
@@ -833,38 +871,38 @@ export const PivotFilterKind: Readonly<{
   DateNewerThan: 33;
   DateNewerThanOrEqual: 34;
   DateNotBetween: 35;
-  DateTomorrow: 36;
-  DateToday: 37;
-  DateYesterday: 38;
-  DateNextWeek: 39;
-  DateThisWeek: 40;
-  DateLastWeek: 41;
-  DateNextMonth: 42;
-  DateThisMonth: 43;
-  DateLastMonth: 44;
-  DateNextQuarter: 45;
-  DateThisQuarter: 46;
-  DateLastQuarter: 47;
-  DateNextYear: 48;
-  DateThisYear: 49;
-  DateLastYear: 50;
-  DateYearToDate: 51;
-  DateQ1: 52;
-  DateQ2: 53;
-  DateQ3: 54;
-  DateQ4: 55;
-  DateM1: 56;
-  DateM2: 57;
-  DateM3: 58;
-  DateM4: 59;
-  DateM5: 60;
-  DateM6: 61;
-  DateM7: 62;
-  DateM8: 63;
-  DateM9: 64;
-  DateM10: 65;
-  DateM11: 66;
-  DateM12: 67;
+  Tomorrow: 36;
+  Today: 37;
+  Yesterday: 38;
+  NextWeek: 39;
+  ThisWeek: 40;
+  LastWeek: 41;
+  NextMonth: 42;
+  ThisMonth: 43;
+  LastMonth: 44;
+  NextQuarter: 45;
+  ThisQuarter: 46;
+  LastQuarter: 47;
+  NextYear: 48;
+  ThisYear: 49;
+  LastYear: 50;
+  YearToDate: 51;
+  Q1: 52;
+  Q2: 53;
+  Q3: 54;
+  Q4: 55;
+  M1: 56;
+  M2: 57;
+  M3: 58;
+  M4: 59;
+  M5: 60;
+  M6: 61;
+  M7: 62;
+  M8: 63;
+  M9: 64;
+  M10: 65;
+  M11: 66;
+  M12: 67;
 }>;
 /** Union of the {@link PivotFilterKind} ordinals. */
 export type PivotFilterKind =
@@ -950,6 +988,8 @@ export const PivotDatePeriod: Readonly<{
 }>;
 /** Union of the {@link PivotDatePeriod} ordinals. */
 export type PivotDatePeriod = 1 | 2 | 4 | 8 | 16 | 32 | 64;
+/** A bitwise OR of {@link PivotDatePeriod} values. */
+export type PivotDatePeriodMask = number;
 
 /** Calendar a date group's years follow. */
 export const PivotCalendar: Readonly<{
@@ -961,9 +1001,9 @@ export type PivotCalendar = 0 | 1;
 
 /** Sibling item order of a pivot field. */
 export const PivotSortOrder: Readonly<{
-  Descending: 0;
+  Manual: 0;
   Ascending: 1;
-  Manual: 2;
+  Descending: 2;
 }>;
 /** Union of the {@link PivotSortOrder} ordinals. */
 export type PivotSortOrder = 0 | 1 | 2;
@@ -994,16 +1034,6 @@ export interface PivotWorksheetSource {
   readonly sheet: string | null;
   readonly name: string | null;
 }
-
-/** Discriminator for the variant payload carried by a pivot filter
- *  spec. A slot without a payload (the optional upper bound of a range filter) is `null`. */
-export const PivotFilterOperandKind: Readonly<{
-  Int: 0;
-  Double: 1;
-  Text: 2;
-}>;
-/** Union of the {@link PivotFilterOperandKind} ordinals. */
-export type PivotFilterOperandKind = 0 | 1 | 2;
 
 /** Plain-data spec for `Pivot.addField`. */
 export interface PivotFieldInput {
@@ -1147,7 +1177,7 @@ export interface PivotField {
   readonly sortByField: string;
   /** For a date-grouped field, the `PivotDatePeriod` bits of its group
    *  fields; `0` otherwise. */
-  readonly datePeriods: number;
+  readonly datePeriods: PivotDatePeriodMask;
   /** Calendar of that grouping; `Gregorian` when ungrouped. */
   readonly dateCalendar: PivotCalendar;
   /** For a group field, the index of the field it groups; `null` otherwise. */
@@ -1218,8 +1248,8 @@ export interface PivotCacheField {
 
 /** One element of `PivotCache.listFieldSharedItems(...)`; its position is the shared item's index. */
 export interface PivotCacheSharedItem {
-  /** The item's value; a date item reads as its serial number. */
-  readonly value: Value;
+  /** The item's value; a date item reads as its serial number, and `isDate` tells it apart. */
+  readonly value: NativeValue;
   readonly isDate: boolean;
 }
 
@@ -1237,38 +1267,32 @@ export interface PivotDataField {
 }
 
 /** Argument of `Pivot.setFieldDateGroup`: the `PivotDatePeriod` bits to group by, the calendar
- *  (`Gregorian` when omitted), the day interval (`1` when omitted) and the date-serial bounds (the field's
+ *  (`Gregorian` when omitted), the day interval (`1` when omitted) and the {@link DateInput} bounds (the field's
  *  first and last value when omitted). */
 export interface PivotDateGroupInput {
-  periods: number;
+  periods: PivotDatePeriodMask;
   calendar?: PivotCalendar;
   intervalDays?: number;
-  start?: number;
-  end?: number;
+  start?: DateInput;
+  end?: DateInput;
 }
 
-/** Plain-data spec for `Pivot.addFilter`. For non-range filters, `valueKind` must be
- *  one of `Int` / `Double` / `Text`; the high-bound payload is honoured
- *  only for range filter types (`ValueBetween`, `ValueNotBetween`,
- *  `DateBetween`, `DateNotBetween`); `LabelBetween` / `LabelNotBetween` take
- *  their upper bound in `valueHighText`, and no other type may set it. */
+/** Plain-data spec for `Pivot.addFilter`. `value` is a `number` for a value filter (a count, a percent, a sum or
+ *  a measure threshold) and a `string` for a label filter; a mismatch is `StatusCode.InvalidArgument`. The range filters (`ValueBetween`, `ValueNotBetween`, `LabelBetween`,
+ *  `LabelNotBetween`, `DateBetween`, `DateNotBetween`) take their upper bound in `valueHigh`, and no other type may
+ *  set it. Omitted `value` / `valueHigh` and `null` mean no operand. */
 export interface PivotFilterInput {
   readonly axis: PivotAxis;
   readonly fieldName: string;
   readonly type: PivotFilterKind;
   /** Data-field aggregate scored by value filters. Defaults to 0. */
   readonly dataFieldIndex?: number;
-  readonly valueKind?: PivotFilterOperandKind;
-  readonly valueInt?: number;
-  readonly valueDouble?: number;
-  readonly valueText?: string;
-  readonly valueHighKind?: PivotFilterOperandKind;
-  readonly valueHighInt?: number;
-  readonly valueHighDouble?: number;
-  readonly valueHighText?: string;
+  readonly value?: number | string;
+  readonly valueHigh?: number | string | null;
 }
 
 /** One element of `Pivot.listFilters()`: the stored filter. Field names and semantics match `PivotFilterInput`.
+ *  `value` and `valueHigh` are `null` when the filter has no operand / no high bound.
  *
  *  The filter list is saved as the definition's `<filters>` block. Every entry of a loaded block whose type
  *  the engine enumerates appears here, naming its field by source name, and `Pivot.clearFilters` /
@@ -1280,16 +1304,8 @@ export interface PivotFilter {
   readonly fieldName: string;
   readonly type: PivotFilterKind;
   readonly dataFieldIndex: number;
-  readonly valueKind: PivotFilterOperandKind | null;
-  readonly valueInt: number;
-  readonly valueDouble: number;
-  readonly valueText: string;
-  /** `null` when the filter has no high bound. */
-  readonly valueHighKind: PivotFilterOperandKind | null;
-  readonly valueHighInt: number;
-  readonly valueHighDouble: number;
-  /** `null` when the filter has no high bound. */
-  readonly valueHighText: string | null;
+  readonly value: number | string | null;
+  readonly valueHigh: number | string | null;
 }
 
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
@@ -1455,6 +1471,11 @@ export interface CivilTimeInput {
   readonly second?: number;
 }
 
+/** A date-time input: a {@link CivilTime} or a `Date`. A `Date` is read through its local getters
+ *  (year through seconds, milliseconds dropped), as Python reads a naive `datetime`; an Invalid Date
+ *  is a `RangeError`. */
+export type DateInput = CivilTime | Date;
+
 /** The kind of a conditional-format rule (`<cfRule type>`). */
 export const CfRuleType: Readonly<{
   Expression: 0;
@@ -1479,35 +1500,38 @@ export const CfRuleType: Readonly<{
 /** Union of the {@link CfRuleType} ordinals. */
 export type CfRuleType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
 
-/** The comparison of a `CellIs` conditional-format rule. */
-export const CfOperator: Readonly<{
-  LessThan: 0;
-  LessThanOrEqual: 1;
+/** Comparison operator shared by `CellIs` conditional-format rules, data validation and custom AutoFilter
+ *  conditions, in `ST_DataValidationOperator` order. A custom AutoFilter condition always states its operator and
+ *  accepts only the six non-range members: `Between` and `NotBetween` there are `StatusCode.InvalidArgument`. */
+export const ComparisonOperator: Readonly<{
+  Between: 0;
+  NotBetween: 1;
   Equal: 2;
   NotEqual: 3;
-  GreaterThanOrEqual: 4;
-  GreaterThan: 5;
-  Between: 6;
-  NotBetween: 7;
+  LessThan: 4;
+  LessThanOrEqual: 5;
+  GreaterThan: 6;
+  GreaterThanOrEqual: 7;
 }>;
-/** Union of the {@link CfOperator} ordinals. */
-export type CfOperator = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** Union of the {@link ComparisonOperator} ordinals. */
+export type ComparisonOperator = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-/** The period of a `TimePeriod` conditional-format rule. */
-export const CfTimePeriod: Readonly<{
+/** The period of a `TimePeriod` conditional-format rule, in `ST_TimePeriod` order. `DynamicFilterType` and
+ *  `PivotFilterKind` spell their shared periods the same way. */
+export const DatePeriod: Readonly<{
   Today: 0;
   Yesterday: 1;
   Tomorrow: 2;
   Last7Days: 3;
-  ThisWeek: 4;
-  LastWeek: 5;
-  NextWeek: 6;
-  ThisMonth: 7;
-  LastMonth: 8;
-  NextMonth: 9;
+  ThisMonth: 4;
+  LastMonth: 5;
+  NextMonth: 6;
+  ThisWeek: 7;
+  LastWeek: 8;
+  NextWeek: 9;
 }>;
-/** Union of the {@link CfTimePeriod} ordinals. */
-export type CfTimePeriod = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+/** Union of the {@link DatePeriod} ordinals. */
+export type DatePeriod = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 /** How a conditional-format threshold reads its value (`<cfvo type>`). */
 export const CfValueObjectType: Readonly<{
@@ -1523,7 +1547,8 @@ export const CfValueObjectType: Readonly<{
 /** Union of the {@link CfValueObjectType} ordinals. */
 export type CfValueObjectType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-/** A built-in icon set (`ST_IconSetType`); the leading word is the level count. */
+/** An icon set (`ST_IconSetType`); the leading word is the level count. The first 17 are the built-in sets a rule
+ *  draws; the last four are x14-only and only a custom icon level ({@link CfIconInput}) takes them. */
 export const IconSetName: Readonly<{
   ThreeArrows: 0;
   ThreeArrowsGray: 1;
@@ -1542,12 +1567,17 @@ export const IconSetName: Readonly<{
   FiveArrowsGray: 14;
   FiveRating: 15;
   FiveQuarters: 16;
+  ThreeStars: 17;
+  ThreeTriangles: 18;
+  FiveBoxes: 19;
+  NoIcons: 20;
 }>;
 /** Union of the {@link IconSetName} ordinals. */
-export type IconSetName = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+export type IconSetName = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
 
-/** A conditional-format threshold (`<cfvo>`). `value` is the number, percentage or formula the `type` reads;
- *  `gte` (default `true`) makes the threshold inclusive. */
+/** A conditional-format threshold (`<cfvo>`). `value` is the number, percentage or formula the `type` reads; a
+ *  formula carries its leading `=` on read and takes it with or without on input. `gte` (default `true`) makes the
+ *  threshold inclusive. */
 export interface CfValueObjectInput {
   type: CfValueObjectType;
   value?: string;
@@ -1578,19 +1608,22 @@ export type CfDataBarAxisPosition = 0 | 1 | 2;
 export interface CfMatch {
   readonly kind: CfMatchKind;
   readonly priority: number;
-  /** `1` when `dxfIndex` is meaningful; `0` otherwise. */
-  readonly dxfIndexEngaged: number;
+  /** `true` when `dxfIndex` is meaningful. */
+  readonly dxfIndexEngaged: boolean;
   readonly dxfIndex: number;
   /** Active when `kind === ColorScale`. */
   readonly color: Color;
   /** Active when `kind === DataBar`. */
   readonly barLengthPct: number;
   readonly barAxisPositionPct: number;
-  readonly barIsNegative: number;
+  /** `true` when the bar draws in the negative direction. */
+  readonly barIsNegative: boolean;
   readonly barFill: Color;
-  readonly barBorderEngaged: number;
+  /** `true` when `barBorder` is drawn. */
+  readonly barBorderEngaged: boolean;
   readonly barBorder: Color;
-  readonly barGradient: number;
+  /** `true` when the bar is filled with a gradient. */
+  readonly barGradient: boolean;
   /** The rule's direction; the bar geometry is stated from the left edge. */
   readonly barDirection: CfDataBarDirection;
   /** Active when `kind === IconSet`. */
@@ -1625,13 +1658,20 @@ export interface Pagination {
   readonly printable: RectPt;
   /** Effective print scale as a percentage (100 is 100%). */
   readonly scalePct: number;
-  /** 0 = down then over, 1 = over then down. */
-  readonly pageOrder: number;
+  readonly pageOrder: PageOrder;
   /** Repeat rows / columns in effect; `null` when neither axis repeats. */
   readonly printTitles: PrintTitles | null;
   /** Physical pages in print order. */
   readonly pages: readonly PaginationPage[];
 }
+
+/** Page order of a printed sheet, in `ST_PageOrder` order. */
+export const PageOrder: Readonly<{
+  DownThenOver: 0;
+  OverThenDown: 1;
+}>;
+/** Union of the {@link PageOrder} ordinals. */
+export type PageOrder = 0 | 1;
 
 /** `Pagination.paper`. `known` is false when the stored `paperSize` was
  *  unrecognised and A4 was substituted. */
@@ -1685,6 +1725,14 @@ export const GeometryMode: Readonly<{
 /** Union of the {@link GeometryMode} ordinals. */
 export type GeometryMode = 0 | 1;
 
+/** Windows or Mac column-width model. */
+export const WidthPlatform: Readonly<{
+  Win: 0;
+  Mac: 1;
+}>;
+/** Union of the {@link WidthPlatform} ordinals. */
+export type WidthPlatform = 0 | 1;
+
 /** Return type of `Sheet.getWidthModel(...)`. `pointsPerChar` and `paddingPt` are per displayed
  *  character: `chars * pointsPerChar + paddingPt`; stored widths go through `convertColumnCharsToPt`. */
 export interface WidthModel {
@@ -1695,7 +1743,7 @@ export interface WidthModel {
   /** False when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
   readonly calibrated: boolean;
   readonly normalFontName: string;
-  readonly platform: string;
+  readonly platform: WidthPlatform;
 }
 
 /** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColWidthChars` and `defaultRowHeightPt`
@@ -2072,25 +2120,11 @@ export const ValidationType: Readonly<{
 /** Union of the {@link ValidationType} ordinals. */
 export type ValidationType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-/** How a data-validation rule compares the value with its formulas (`ST_DataValidationOperator`). */
-export const ValidationOperator: Readonly<{
-  Between: 0;
-  NotBetween: 1;
-  Equal: 2;
-  NotEqual: 3;
-  GreaterThan: 4;
-  LessThan: 5;
-  GreaterThanOrEqual: 6;
-  LessThanOrEqual: 7;
-}>;
-/** Union of the {@link ValidationOperator} ordinals. */
-export type ValidationOperator = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
-
 /** One sheet `<dataValidation>` block as returned by `Sheet.listValidations()` (OOXML `dataValidations.xsd`). */
 export interface DataValidation {
   readonly ranges: readonly CellRect[];
   readonly type: ValidationType;
-  readonly operator: ValidationOperator;
+  readonly operator: ComparisonOperator;
   readonly errorStyle: ValidationErrorStyle;
   /** A blank cell passes the rule. */
   readonly allowBlank: boolean;
@@ -2116,7 +2150,7 @@ export interface DataValidation {
 export interface DataValidationInput {
   ranges: readonly (CellRect | string)[] | string;
   type: ValidationType;
-  operator?: ValidationOperator;
+  operator?: ComparisonOperator;
   errorStyle?: ValidationErrorStyle;
   /** A blank cell passes the rule; default `true`. */
   allowBlank?: boolean;
@@ -2283,7 +2317,8 @@ declare function mergeFunctionMetadata(
  *  rows. A `RefValue` or `LambdaValue`, which no read returns, and anything that is not a `Value` throw
  *  `TypeError`.
  *
- *  A pure host-side helper, reached as `Formulon.toNative` on both packages. */
+ *  A pure host-side helper, reached as `Formulon.toNative` on both packages; Python's counterpart is
+ *  `formulon.to_native`. */
 declare function toNative(value: BlankValue): null;
 declare function toNative(value: NumberValue): number;
 declare function toNative(value: BoolValue): boolean;
@@ -2369,7 +2404,7 @@ export interface ConditionalFormat {
   readonly formula1?: string;
   readonly formula2?: string;
   /** Engaged for `CellIs` rules. */
-  readonly operator?: CfOperator;
+  readonly operator?: ComparisonOperator;
   /** Engaged for `Top10` rules. */
   readonly rank?: number;
   readonly percent?: boolean;
@@ -2382,7 +2417,7 @@ export interface ConditionalFormat {
    *  `NotContainsText` rules. */
   readonly text?: string;
   /** Engaged for `TimePeriod` rules. */
-  readonly timePeriod?: CfTimePeriod;
+  readonly timePeriod?: DatePeriod;
   /** Engaged for `ColorScale` rules. */
   readonly colorScale?: {
     readonly thresholds: readonly CfValueObjectInput[];
@@ -2413,7 +2448,7 @@ export interface ConditionalFormat {
   /** Engaged for `IconSet` rules. */
   readonly iconSet?: {
     readonly name: IconSetName;
-    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries no leading `=`. */
+    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries its leading `=` on read. */
     readonly thresholds: readonly CfValueObjectInput[];
     readonly reverse: boolean;
     readonly showValue: boolean;
@@ -2430,12 +2465,10 @@ export interface ConditionalFormat {
   };
 }
 
-/** One level of a custom icon set. `iconSet` is the `ST_IconSetType` spelling
- *  of the set the icon comes from (`"3Arrows"`, `"3Triangles"`, `"5Boxes"`,
- *  `"NoIcons"` for a level that draws nothing, ...), which reaches past
- *  {@link IconSetName}; `iconIndex` is the zero-based icon within it. */
+/** One level of a custom icon set. `iconSet` is the set the icon comes from
+ *  (`IconSetName.NoIcons` for a level that draws nothing); `iconIndex` is the zero-based icon within it. */
 export interface CfIconInput {
-  iconSet: string;
+  iconSet: IconSetName;
   iconIndex: number;
 }
 
@@ -2466,7 +2499,7 @@ interface CfExpressionRuleInput extends CfFormatRuleInputBase {
 /** `CellIs`: compares the cell with `formula1`, and `formula2` for `Between` / `NotBetween`. */
 interface CfCellIsRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.CellIs;
-  operator: CfOperator;
+  operator: ComparisonOperator;
   formula1: string;
   formula2?: string;
 }
@@ -2511,7 +2544,7 @@ interface CfIconSetRuleInput extends CfRuleInputBase {
   type: typeof CfRuleType.IconSet;
   iconSet: {
     name: IconSetName;
-    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `StatusCode.InvalidArgument`. A formula-typed value is stored without its leading `=`. */
+    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `StatusCode.InvalidArgument`. A formula-typed value takes its leading `=` with or without. */
     thresholds: readonly CfValueObjectInput[];
     reverse?: boolean;
     showValue?: boolean;
@@ -2560,7 +2593,7 @@ interface CfTextRuleInput extends CfFormatRuleInputBase {
 /** `TimePeriod`: a date in `timePeriod` relative to today. */
 interface CfTimePeriodRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.TimePeriod;
-  timePeriod: CfTimePeriod;
+  timePeriod: DatePeriod;
   formula1?: string;
 }
 
@@ -3053,16 +3086,35 @@ export interface PhoneticRun {
   readonly text: string;
 }
 
+/** Kana form of a phonetic guide (`<phoneticPr type>`). */
+export const PhoneticType: Readonly<{
+  HalfwidthKatakana: 0;
+  FullwidthKatakana: 1;
+  Hiragana: 2;
+  NoConversion: 3;
+}>;
+/** Union of the {@link PhoneticType} ordinals. */
+export type PhoneticType = 0 | 1 | 2 | 3;
+
+/** Distribution of a phonetic guide over its base text (`<phoneticPr alignment>`). */
+export const PhoneticAlignment: Readonly<{
+  NoControl: 0;
+  Left: 1;
+  Center: 2;
+  Distributed: 3;
+}>;
+/** Union of the {@link PhoneticAlignment} ordinals. */
+export type PhoneticAlignment = 0 | 1 | 2 | 3;
+
 /** How a cell's phonetic guide renders (OOXML `<phoneticPr>`). `fontIndex`
  *  indexes the workbook's font table for the ruby text; `type` is the kana
- *  form (0 half-width katakana, 1 full-width katakana, 2 hiragana, 3 no
- *  conversion) and `alignment` how the kana is distributed (0 no control,
- *  1 left, 2 center, 3 distributed). The all-zero triple is what Excel
- *  infers for a guide written with no `<phoneticPr>` element. */
+ *  form and `alignment` how the kana is distributed. The all-zero triple
+ *  (`HalfwidthKatakana`, `NoControl`) is what Excel infers for a guide written
+ *  with no `<phoneticPr>` element. */
 export interface PhoneticPropertiesInput {
   fontIndex: number;
-  type: number;
-  alignment: number;
+  type: PhoneticType;
+  alignment: PhoneticAlignment;
 }
 
 /** Return type of `Sheet.getCellPhoneticProperties(row, col)`. */
@@ -3171,18 +3223,6 @@ export const FilterKind: Readonly<{
 }>;
 /** Union of the {@link FilterKind} ordinals. */
 export type FilterKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-/** Comparison operator of a custom AutoFilter condition. */
-export const FilterOperator: Readonly<{
-  Equal: 0;
-  LessThan: 1;
-  LessThanOrEqual: 2;
-  NotEqual: 3;
-  GreaterThanOrEqual: 4;
-  GreaterThan: 5;
-}>;
-/** Union of the {@link FilterOperator} ordinals. */
-export type FilterOperator = 0 | 1 | 2 | 3 | 4 | 5;
 
 /** Dynamic AutoFilter type, in `ST_DynamicFilterType` schema order. */
 export const DynamicFilterType: Readonly<{
@@ -3363,8 +3403,8 @@ export type ShapePaint = 0 | 1 | 2;
 
 /** Table slicer item order. */
 export const SlicerSortOrder: Readonly<{
-  Descending: 0;
-  Ascending: 1;
+  Ascending: 0;
+  Descending: 1;
 }>;
 /** Union of the {@link SlicerSortOrder} ordinals. */
 export type SlicerSortOrder = 0 | 1;
@@ -3395,15 +3435,6 @@ export const SparklineAxisType: Readonly<{
 }>;
 /** Union of the {@link SparklineAxisType} ordinals. */
 export type SparklineAxisType = 0 | 1 | 2;
-
-/** How a sparkline plots empty cells. */
-export const SparklineEmptyCells: Readonly<{
-  Gap: 0;
-  Zero: 1;
-  Span: 2;
-}>;
-/** Union of the {@link SparklineEmptyCells} ordinals. */
-export type SparklineEmptyCells = 0 | 1 | 2;
 
 /** Plot group type. */
 export const ChartPlotType: Readonly<{
@@ -3465,14 +3496,14 @@ export const ChartGrouping: Readonly<{
 /** Union of the {@link ChartGrouping} ordinals. */
 export type ChartGrouping = 0 | 1 | 2 | 3;
 
-/** How blank cells are plotted; a chart without the element reads `null`. */
-export const ChartBlanksAs: Readonly<{
-  Gap: 0;
-  Zero: 1;
+/** How blank cells are plotted, by charts and sparklines; a chart without the element reads `null`. */
+export const BlanksAs: Readonly<{
+  Zero: 0;
+  Gap: 1;
   Span: 2;
 }>;
-/** Union of the {@link ChartBlanksAs} ordinals. */
-export type ChartBlanksAs = 0 | 1 | 2;
+/** Union of the {@link BlanksAs} ordinals. */
+export type BlanksAs = 0 | 1 | 2;
 
 /** How a resolved point is drawn. */
 export const ChartPointState: Readonly<{
@@ -3540,13 +3571,14 @@ export const ChartSeriesDirection: Readonly<{
 /** Union of the {@link ChartSeriesDirection} ordinals. */
 export type ChartSeriesDirection = 0 | 1 | 2;
 
-/** Legend position. A chart without a legend reads `null` for the whole legend. */
+/** Legend position, in `ST_LegendPos` order with the OOXML default `Right` at zero. A chart without a legend
+ *  reads `null` for the whole legend. */
 export const ChartLegendPosition: Readonly<{
-  Bottom: 0;
-  Top: 1;
-  Left: 2;
-  Right: 3;
-  TopRight: 4;
+  Right: 0;
+  Bottom: 1;
+  TopRight: 2;
+  Left: 3;
+  Top: 4;
 }>;
 /** Union of the {@link ChartLegendPosition} ordinals. */
 export type ChartLegendPosition = 0 | 1 | 2 | 3 | 4;
@@ -3647,8 +3679,8 @@ export interface ThemeFonts {
  * entry). Use the same table when choosing by the script of the characters.
  */
 export interface ThemeScriptFont {
-  /** Whether the face belongs to the major font set rather than the minor one. */
-  readonly major: boolean;
+  /** The font set the face belongs to: `FontScheme.Major` or `FontScheme.Minor`. */
+  readonly scheme: FontScheme;
   readonly script: string;
   readonly typeface: string;
 }
@@ -3667,10 +3699,10 @@ export interface ThemeColorsInput {
   readonly colors: readonly ColorInput[];
 }
 
-/** Argument of `Workbook.setThemeScriptFont`: one script's typeface in the major (`major` true) or minor font
- *  set. */
+/** Argument of `Workbook.setThemeScriptFont`: one script's typeface in the major (`FontScheme.Major`) or minor
+ *  (`FontScheme.Minor`) font set; `FontScheme.None` is `StatusCode.InvalidArgument`. */
 export interface ThemeScriptFontInput {
-  major: boolean;
+  scheme: FontScheme;
   script: string;
   typeface: string;
 }
@@ -3733,7 +3765,8 @@ export interface AutoFilterDateGroup {
  *  of the AutoFilter range. `kind` selects the criterion and only that
  *  criterion's fields are read on input (a `FilterKind`); on output every other criterion's
  *  fields are zero. Custom operators `operator1` / `operator2` are
- *  `FilterOperator`s; `dynamicType` is a `DynamicFilterType`.
+ *  `ComparisonOperator`s (a custom condition always states its operator; `Between` and `NotBetween` are
+ *  `StatusCode.InvalidArgument`); `dynamicType` is a `DynamicFilterType`.
  *  `dxfIndex` of `4294967295` means absent. */
 export interface AutoFilterColumn {
   columnOffset: number;
@@ -3745,9 +3778,9 @@ export interface AutoFilterColumn {
   dateGroups: readonly AutoFilterDateGroup[];
   customAnd: boolean;
   customCount: number;
-  operator1: FilterOperator;
+  operator1: ComparisonOperator;
   value1: string;
-  operator2: FilterOperator;
+  operator2: ComparisonOperator;
   value2: string;
   top: boolean;
   percent: boolean;
@@ -3824,9 +3857,9 @@ export interface AutoFilterColumnInput {
   dateGroups?: readonly AutoFilterDateGroupInput[];
   customAnd?: boolean;
   customCount?: number;
-  operator1?: FilterOperator;
+  operator1?: ComparisonOperator;
   value1?: string;
-  operator2?: FilterOperator;
+  operator2?: ComparisonOperator;
   value2?: string;
   top?: boolean;
   percent?: boolean;
@@ -3901,14 +3934,14 @@ export interface Mention {
 
 /** One threaded comment: a thread's opening comment, or a reply when
  *  `parentId` is non-empty. Ids are brace-wrapped uppercase GUIDs and
- *  `created` is `YYYY-MM-DDTHH:MM:SS.ss`; the caller supplies both. `done`
+ *  `created` is a {@link CivilTime} (whole seconds), `null` when the stamp is absent; the caller supplies both. `done`
  *  is the thread's resolved state, meaningful on the opening comment only. */
 export interface ThreadedComment {
   readonly id: string;
   readonly row: number;
   readonly col: number;
   readonly personId: string;
-  readonly created: string;
+  readonly created: CivilTime | null;
   readonly text: string;
   readonly parentId: string;
   readonly done: boolean;
@@ -3923,7 +3956,7 @@ export interface ThreadedCommentInput {
   row?: number;
   col?: number;
   personId?: string;
-  created?: string;
+  created?: DateInput;
   parentId?: string;
   done?: boolean;
   mentions?: readonly Mention[];
@@ -4213,7 +4246,7 @@ export interface DataTableInput {
   columnInput?: DataTableInputCell | string | null;
 }
 
-/** One sparkline: the data `formula` (a sheet-qualified range without `=`) and the
+/** One sparkline: the data `formula` (a sheet-qualified range; leading `=` on read, optional on input) and the
  *  single A1 `location` cell that shows it. */
 export interface Sparkline {
   readonly formula: string;
@@ -4222,7 +4255,7 @@ export interface Sparkline {
 
 /** A sparkline group of the sheet's worksheet extension list. A colour with `kind` `ColorKind.None` is
  *  absent. `manualMin` / `manualMax` are `null` when the axis bound is not set.
- *  `dateAxisRef` is the group's date range, `null` when absent. */
+ *  `dateAxisRef` is the group's date range (leading `=` on read, optional on input), `null` when absent. */
 export interface SparklineGroup {
   readonly type: SparklineType;
   readonly colorSeries: Color;
@@ -4248,7 +4281,7 @@ export interface SparklineGroup {
   readonly dateAxis: boolean;
   readonly dateAxisRef: string | null;
   readonly lineWeight: number;
-  readonly emptyCellsAs: SparklineEmptyCells;
+  readonly emptyCellsAs: BlanksAs;
   readonly sparklines: readonly Sparkline[];
 }
 
@@ -4279,7 +4312,7 @@ export interface SparklineGroupInput {
   readonly dateAxis?: boolean;
   readonly dateAxisRef?: string | null;
   readonly lineWeight?: number;
-  readonly emptyCellsAs?: SparklineEmptyCells;
+  readonly emptyCellsAs?: BlanksAs;
   readonly sparklines?: readonly Sparkline[];
 }
 
@@ -4430,6 +4463,25 @@ export interface ChartLegend {
  *  `false`, `[]`) when the chart has no legend. No key has a cleared form; `hiddenSeries: []` shows every entry. */
 export type ChartLegendPatch = Patch<ChartLegend>;
 
+/** Where an axis draws its tick labels, in `ST_TickLblPos` order with the OOXML default `NextTo` at zero. `None`
+ *  is a value (no labels drawn), not absence. */
+export const ChartTickLabelPosition: Readonly<{
+  NextTo: 0;
+  High: 1;
+  Low: 2;
+  None: 3;
+}>;
+/** Union of the {@link ChartTickLabelPosition} ordinals. */
+export type ChartTickLabelPosition = 0 | 1 | 2 | 3;
+
+/** Coordinate system of a chart's data: categories on one axis, or x/y values on both. */
+export const ChartDomain: Readonly<{
+  Category: 0;
+  Xy: 1;
+}>;
+/** Union of the {@link ChartDomain} ordinals. */
+export type ChartDomain = 0 | 1;
+
 /** One chart axis. `visible` is `false` for a deleted axis (`c:delete`), the same key `ChartAxisPatch` takes. */
 export interface ChartAxis {
   readonly id: number;
@@ -4450,7 +4502,8 @@ export interface ChartAxis {
   readonly title: ChartTitle | null;
   readonly majorGridlines: boolean;
   readonly minorGridlines: boolean;
-  readonly tickLabelPosition: 'nextTo' | 'low' | 'high' | 'none' | null;
+  /** `null` when the axis element is absent. */
+  readonly tickLabelPosition: ChartTickLabelPosition | null;
 }
 
 /** Return type of `Chart.getProperties()`: the typed view of a chart. `source` is the rectangle every series was
@@ -4466,7 +4519,7 @@ export interface ChartProperties {
   readonly title: ChartTitle | null;
   readonly autoTitleDeleted: boolean | null;
   readonly legend: ChartLegend | null;
-  readonly blanksAs: ChartBlanksAs | null;
+  readonly blanksAs: BlanksAs | null;
   readonly plotVisibleOnly: boolean | null;
   /** Whether `#N/A` points draw as blank cells; `null` when the chart carries no setting. */
   readonly naAsBlank: boolean | null;
@@ -4506,7 +4559,7 @@ export interface ChartDataSeries {
  *  resolve: `source` is the input's {@link ChartRole}, `seriesIndex` the series' `c:idx` (0 for a title) and
  *  `axisId` the axis of a `ChartRole.AxisTitle` entry. */
 export interface ChartData {
-  domain: 'category' | 'xy';
+  domain: ChartDomain;
   pointCount: number;
   categories: {
     labels: string[];
@@ -4622,7 +4675,7 @@ export type ChartPlotPatch = Patch<{
 
 /** `crossesAt` is read when `crosses` is `At`. `title` takes the forms of `Chart.setTitle`, so
  *  a title of kind `ChartTitleKind.Auto` gives the axis Excel's automatic title; `null` removes it. `null` on `logBase` makes
- *  the axis linear and on `tickLabelPosition` (`nextTo`, `low`, `high`, `none`) restores the default. */
+ *  the axis linear and on `tickLabelPosition` restores the default. */
 export type ChartAxisPatch = Patch<{
   visible: boolean;
   title: ChartTitleInput;
@@ -4635,14 +4688,14 @@ export type ChartAxisPatch = Patch<{
   logBase: number;
   crosses: ChartAxisCrosses;
   crossesAt: number;
-  tickLabelPosition: 'nextTo' | 'low' | 'high' | 'none';
+  tickLabelPosition: ChartTickLabelPosition;
 }>;
 
 /** Patch for `Chart.updateDisplay`. An omitted key keeps the element, `null` removes it, a value sets it.
  *  `naAsBlank: true` writes `c16r3:dispNaAsBlank`; `false` and `null` both remove it, as Excel does, so a
- *  read-back is `null`. `blanksAs` takes `Gap`, `Zero` or `Span`; use `null` to remove it. */
+ *  read-back is `null`. `blanksAs` takes a {@link BlanksAs}; use `null` to remove it. */
 export type ChartDisplayPatch = Patch<{
-  blanksAs: ChartBlanksAs;
+  blanksAs: BlanksAs;
   plotVisibleOnly: boolean;
   naAsBlank: boolean;
 }>;
@@ -4653,7 +4706,7 @@ export interface ChartPreviewOverridesInput {
   direction?: ChartSeriesDirection;
   headerRow?: boolean;
   headerColumn?: boolean;
-  blanksAs?: ChartBlanksAs;
+  blanksAs?: BlanksAs;
   plotVisibleOnly?: boolean;
   naAsBlank?: boolean;
 }
@@ -4725,7 +4778,8 @@ export type PageOrientation = 0 | 1;
  * needs all three. */
 export interface PageSetupInput {
   readonly orientation: PageOrientation;
-  /** OOXML paperSize code; 9 = A4. */
+  /** OOXML paperSize code, a number so that unknown codes round-trip; the known ones are named in {@link PaperSize}
+   *  (`PaperSize.A4` is 9). */
   readonly paperSize: number;
   /** Print scale percentage. Outside `[10, 400]` is rejected, not clamped. */
   readonly scalePct: number;
@@ -4733,6 +4787,19 @@ export interface PageSetupInput {
   readonly fitToHeight: number;
   readonly fitToPage: boolean;
 }
+
+/** Named OOXML `paperSize` codes the engine knows. `PageSetup.paperSize` stays a `number`: the code set is open
+ *  and an unknown code round-trips. B4 and B5 are the JIS sizes. */
+export const PaperSize: Readonly<{
+  Letter: 1;
+  Legal: 5;
+  A3: 8;
+  A4: 9;
+  A5: 11;
+  B4: 12;
+  B5: 13;
+  A6: 70;
+}>;
 
 /** Argument of `Sheet.updatePageSetup`. */
 export type PageSetupPatch = Patch<PageSetupInput>;
@@ -5114,8 +5181,8 @@ export interface Workbook {
   getPinnedNow(): CivilTime | null;
   /** Pins the workbook clock to a local civil instant (see `getPinnedNow` for the accepted ranges), or with `null`
    *  releases the pin so the clock follows the host again; releasing an unpinned workbook does nothing. A `Date`
-   *  pins its UTC fields. */
-  setPinnedNow(time: CivilTime | Date | null): void;
+   *  pins its local wall clock (see {@link DateInput}). */
+  setPinnedNow(time: DateInput | null): void;
 
   /** The workbook's Excel profile id. Defaults to `win-365-en_US`.
    * Pick another locale or host with any {@link ProfileId}.
@@ -5233,15 +5300,15 @@ export interface Workbook {
   setThemeColors(colors: ThemeColorsInput): void;
   /** Rewrites the theme's major and minor typefaces. */
   setThemeFonts(fonts: ThemeFonts): void;
-  /** Sets one script's typeface in the major (`major` true) or minor font set;
+  /** Sets one script's typeface in the major (`FontScheme.Major`) or minor (`FontScheme.Minor`) font set;
    *  other scripts are unchanged and an unknown script is appended. `Jpan` also
    *  changes `ThemeFonts.*EastAsian`. A workbook without a theme part first gets
    *  one with the full default set. `script` must be four ASCII letters and
    *  `typeface` non-empty, else the call fails with `StatusCode.InvalidArgument`. */
   setThemeScriptFont(font: ThemeScriptFontInput): void;
-  /** Reads the typeface of `key.script` in the major (`key.major` true) or minor font set; `null` when the set
-   *  does not list the script. */
-  getThemeScriptFont(key: Pick<ThemeScriptFontInput, 'major' | 'script'>): ThemeScriptFont | null;
+  /** Reads the typeface of `key.script` in the major (`FontScheme.Major`) or minor (`FontScheme.Minor`) font set;
+   *  `null` when the set does not list the script. */
+  getThemeScriptFont(key: Pick<ThemeScriptFontInput, 'scheme' | 'script'>): ThemeScriptFont | null;
   /** Restores the default Office theme by removing the theme part, so the workbook reports the default theme
    *  (`source` is `Default`). Excel adds a theme part again when it saves the file. */
   resetTheme(): void;
@@ -5322,12 +5389,12 @@ export interface Sheet {
   setBool(row: number, col: number, value: boolean): void;
   /** `setBool` at the A1 address `a1`. */
   setBool(a1: string, value: boolean): void;
-  /** Stores a static Excel error literal. Unlike `setNumber`/`setBool`/`setText`, an omitted
-   *  `errorCode` has no sane zero-value default, so it is rejected
+  /** Stores a static Excel error literal, an {@link ErrorCode} or an {@link ExcelError}. Unlike
+   *  `setNumber`/`setBool`/`setText`, an omitted `error` has no sane zero-value default, so it is rejected
    *  rather than silently writing error code 0 (`#NULL!`). */
-  setError(row: number, col: number, errorCode: ErrorCode): void;
+  setError(row: number, col: number, error: ErrorCode | ExcelError): void;
   /** `setError` at the A1 address `a1`. */
-  setError(a1: string, errorCode: ErrorCode): void;
+  setError(a1: string, error: ErrorCode | ExcelError): void;
   /** Stores a text literal. */
   setText(row: number, col: number, text: string): void;
   /** `setText` at the A1 address `a1`. */
@@ -5370,7 +5437,7 @@ export interface Sheet {
    *  infinity fail with `StatusCode.InvalidArgument`), a `string` that starts with `=` through `setFormula`
    *  (`'='` alone is a syntax error; `+`, `-`, `@` and the full-width `＝` do not start a formula), any other
    *  `string` through `setText`, a `boolean` through `setBool`, `null` through `setBlank` and an
-   *  {@link ExcelError} through `setError`. A `Date` stores the serial of its UTC fields and, when the cell's
+   *  {@link ExcelError} through `setError`. A `Date` stores the serial of its local wall clock (see {@link DateInput}) and, when the cell's
    *  effective number format is General, gives it a date format (`m/d/yyyy`, or `m/d/yyyy h:mm` with a time
    *  of day). A {@link Value} is stored by its `kind`; a `TextValue` is always text. `undefined`, a `bigint`,
    *  a symbol, an array, any other object, and an `ArrayValue` / `RefValue` / `LambdaValue` throw
@@ -5383,9 +5450,9 @@ export interface Sheet {
    *  ws.setValue('A3', '=A1*2'); // a formula
    *  ws.setValue('A4', null); // blank
    *  ``` */
-  setValue(row: number, col: number, value: number | string | boolean | null | Date | ExcelError | Value): void;
+  setValue(row: number, col: number, value: CellValueInput): void;
   /** `setValue` at the A1 address `a1`. */
-  setValue(a1: string, value: number | string | boolean | null | Date | ExcelError | Value): void;
+  setValue(a1: string, value: CellValueInput): void;
 
   /** Writes `values` (rows of `setValue` values, row-major) into the block whose top-left cell is `(row, col)`.
    *  Every element's type, NaN / infinity, equal row lengths and the block's fit in the sheet are checked first,
@@ -5401,16 +5468,9 @@ export interface Sheet {
    *    ['Apple', 3],
    *  ]);
    *  ``` */
-  setValues(
-    row: number,
-    col: number,
-    values: readonly (readonly (number | string | boolean | null | Date | ExcelError | Value)[])[],
-  ): void;
+  setValues(row: number, col: number, values: readonly (readonly CellValueInput[])[]): void;
   /** `setValues` at the A1 address `a1`. */
-  setValues(
-    a1: string,
-    values: readonly (readonly (number | string | boolean | null | Date | ExcelError | Value)[])[],
-  ): void;
+  setValues(a1: string, values: readonly (readonly CellValueInput[])[]): void;
 
   /** Reads the cell's value as native data. Fails with `StatusCode.InvalidArgument` when `row` or `col` is out
    *  of range; a sheet-qualified address (`'Sheet1!A1'`) is refused in favour of `wb.sheet('Sheet1').getValue('A1')`.
@@ -5445,7 +5505,7 @@ export interface Sheet {
   /** `getValues` with each value tagged with its kind; `setValues` stores the grid back unchanged. */
   getTypedValues(range: CellRect | string): readonly (readonly Value[])[];
   /** Reads the cell as a date: the serial's calendar date under the workbook's date system, its fraction
-   *  rounded to the millisecond, as a `Date` whose UTC fields carry it. `null` for an empty cell; a cell that
+   *  rounded to the millisecond, as a `Date` whose local fields carry it (the wall clock a `Date` input means). `null` for an empty cell; a cell that
    *  holds no number fails with `StatusCode.InvalidArgument`. */
   getDate(row: number, col: number): Date | null;
   /** `getDate` at the A1 address `a1`. */
@@ -5527,9 +5587,9 @@ export interface Sheet {
    *  is coerced with Excel's CF rules: error / blank / text / numeric-zero
    *  yield `false` (an evaluation error is not thrown), any non-zero number
    *  yields `true`. Read-only. */
-  evaluateCfFormula(row: number, col: number, anchorRow: number, anchorCol: number, formula: string): Value;
+  evaluateCfFormula(row: number, col: number, anchorRow: number, anchorCol: number, formula: string): boolean;
   /** `evaluateCfFormula` at the A1 addresses `a1` and `anchor`. */
-  evaluateCfFormula(a1: string, anchor: string, formula: string): Value;
+  evaluateCfFormula(a1: string, anchor: string, formula: string): boolean;
 
   /** Renders the lambda value cached at `(row, col)` as Excel formula text in `=LAMBDA(p1,p2,body)`
    *  form; `null` when the cell is absent or its value is not a lambda. */
@@ -5627,11 +5687,11 @@ export interface Sheet {
   /** Evaluates the sheet AutoFilter without changing the sheet. */
   evaluateAutoFilter(): AutoFilterEval;
 
-  /** Checks `value` against the validation rule covering `(row, col)` without
+  /** Checks `value` (anything `setValue` accepts) against the validation rule covering `(row, col)` without
    *  storing it. The first rule in `listValidations` order wins on overlap. */
-  validateValue(row: number, col: number, value: Value): ValidationOutcome;
+  validateValue(row: number, col: number, value: CellValueInput): ValidationOutcome;
   /** `validateValue` at the A1 address `a1`. */
-  validateValue(a1: string, value: Value): ValidationOutcome;
+  validateValue(a1: string, value: CellValueInput): ValidationOutcome;
   /** Enumerates populated cells whose value fails their validation rule, in
    *  row-major order, one page at a time; paging as `getCellsInRange`. */
   getInvalidCells(cursor?: number | null, limit?: number | null): CellsInRange;
@@ -5766,11 +5826,9 @@ export interface Sheet {
   removeTable(table: TableRef): void;
 
   /** Evaluates every CF block on the sheet against the cells of `range` and returns only the cells that
-   *  produced at least one match. `todaySerial` pins the
-   *  date basis for `TimePeriod` rules (default: the pinned clock, else today); pass `NaN` to disable them (no
-   *  `TimePeriod` rule then matches). `0` does *not* disable them -- it is
-   *  the valid serial for 1899-12-30. */
-  evaluateCfRange(range: CellRect | string, todaySerial?: number): readonly CfCell[];
+   *  produced at least one match. `options.today` pins the date basis for `TimePeriod` rules (default: the pinned
+   *  clock, else today), a {@link DateInput}. */
+  evaluateCfRange(range: CellRect | string, options?: { today?: DateInput }): readonly CfCell[];
 
   /** Computes print-area page breaks and physical page count for the sheet. */
   getPagination(): Pagination;
@@ -6480,8 +6538,8 @@ export interface Pivot {
    *  field's place, coarsest outermost, and another pivot showing the field
    *  shows them before it. `PivotCalendar.Japanese` groups the years by era
    *  year (`calendar` defaults to Gregorian). `intervalDays` (default `1`) above 1 groups by runs of days and
-   *  needs `periods === PivotDatePeriod.Days`. `start` / `end` are date
-   *  serials; `NaN` (the default) takes the field's first value and its
+   *  needs `periods === PivotDatePeriod.Days`. `start` / `end` are a
+   *  {@link DateInput}; omitted, they take the field's first value and its
    *  last (the midnight after it for a date without a time). An empty or
    *  unknown mask, a zero interval, an invalid bound, a start after the end
    *  or a field holding anything but dates is `StatusCode.InvalidArgument`. */
@@ -6573,14 +6631,10 @@ export interface PivotCache {
   removeCalculatedItem(calculatedItemIndex: number): void;
   /** Lists the shared items of cache field `fieldIndex`; an item's position is its index. */
   listFieldSharedItems(fieldIndex: number): readonly PivotCacheSharedItem[];
-  /** Appends `value` as a shared item of cache field `fieldIndex`. `options.date` stores a number as a date
-   *  serial in the workbook's date system (finite, non-negative and not past 9999-12-31, else
-   *  `StatusCode.InvalidArgument`), saved with seconds precision; with any other type it throws `TypeError`. */
-  addFieldSharedItem(
-    fieldIndex: number,
-    value: number | string | boolean | null | ErrorValue,
-    options?: { date?: boolean },
-  ): void;
+  /** Appends `value` as a shared item of cache field `fieldIndex`. A `Date` is stored as a date in the
+   *  workbook's date system (not before 1900, not past 9999-12-31, else `StatusCode.InvalidArgument`), saved with
+   *  seconds precision, and read through its local getters (see {@link DateInput}); a number is a number. */
+  addFieldSharedItem(fieldIndex: number, value: number | string | boolean | null | Date | ErrorValue): void;
   /** Drops every shared item from cache field `fieldIndex`. */
   clearFieldSharedItems(fieldIndex: number): void;
   /** Returns the number of records on the cache. */
@@ -6589,13 +6643,12 @@ export interface PivotCache {
   addRecord(): number;
   /** Drops every record from the cache. */
   clearRecords(): void;
-  /** Sets cell `(recordIndex, fieldIndex)` to `value`; `null` is Blank and `options.date` is read as in
+  /** Sets cell `(recordIndex, fieldIndex)` to `value`; `null` is Blank and a `Date` is read as in
    *  `addFieldSharedItem`. */
   setRecordValue(
     recordIndex: number,
     fieldIndex: number,
-    value: number | string | boolean | null | ErrorValue,
-    options?: { date?: boolean },
+    value: number | string | boolean | null | Date | ErrorValue,
   ): void;
 }
 
@@ -6809,11 +6862,9 @@ export interface Formulon {
   PivotCalendar: typeof PivotCalendar;
   PivotSortOrder: typeof PivotSortOrder;
   PivotReportLayout: typeof PivotReportLayout;
-  PivotFilterOperandKind: typeof PivotFilterOperandKind;
   CfMatchKind: typeof CfMatchKind;
   CfRuleType: typeof CfRuleType;
-  CfOperator: typeof CfOperator;
-  CfTimePeriod: typeof CfTimePeriod;
+  DatePeriod: typeof DatePeriod;
   CfValueObjectType: typeof CfValueObjectType;
   IconSetName: typeof IconSetName;
   ErrorCode: typeof ErrorCode;
@@ -6827,14 +6878,13 @@ export interface Formulon {
   LogLevel: typeof LogLevel;
   ExternalLinkKind: typeof ExternalLinkKind;
   FilterKind: typeof FilterKind;
-  FilterOperator: typeof FilterOperator;
+  ComparisonOperator: typeof ComparisonOperator;
   DynamicFilterType: typeof DynamicFilterType;
   SortBy: typeof SortBy;
   SortMethod: typeof SortMethod;
   DateTimeGrouping: typeof DateTimeGrouping;
   ValidationErrorStyle: typeof ValidationErrorStyle;
   ValidationType: typeof ValidationType;
-  ValidationOperator: typeof ValidationOperator;
   ColorContext: typeof ColorContext;
   ImageFormat: typeof ImageFormat;
   DrawingObjectKind: typeof DrawingObjectKind;
@@ -6845,12 +6895,20 @@ export interface Formulon {
   SlicerCrossFilter: typeof SlicerCrossFilter;
   SparklineType: typeof SparklineType;
   SparklineAxisType: typeof SparklineAxisType;
-  SparklineEmptyCells: typeof SparklineEmptyCells;
   ChartPlotType: typeof ChartPlotType;
   ChartExtendedLayout: typeof ChartExtendedLayout;
   ChartInsertKind: typeof ChartInsertKind;
   ChartGrouping: typeof ChartGrouping;
-  ChartBlanksAs: typeof ChartBlanksAs;
+  BlanksAs: typeof BlanksAs;
+  PhoneticType: typeof PhoneticType;
+  PhoneticAlignment: typeof PhoneticAlignment;
+  PageOrder: typeof PageOrder;
+  PaperSize: typeof PaperSize;
+  TableTotalsRowFunction: typeof TableTotalsRowFunction;
+  TableStyleElementType: typeof TableStyleElementType;
+  ChartTickLabelPosition: typeof ChartTickLabelPosition;
+  ChartDomain: typeof ChartDomain;
+  WidthPlatform: typeof WidthPlatform;
   ChartPointState: typeof ChartPointState;
   ChartAxisKind: typeof ChartAxisKind;
   ChartAxisCrosses: typeof ChartAxisCrosses;

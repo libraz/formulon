@@ -67,15 +67,15 @@ class EvalFormulaTests(unittest.TestCase):
     def test_sum_returns_number_six(self) -> None:
         v = formulon.evaluate_typed_formula("=SUM(1,2,3)")
         self.assertEqual(v.kind, ValueKind.NUMBER)
-        self.assertEqual(v.to_python(), 6.0)
+        self.assertEqual(formulon.to_native(v), 6.0)
 
     def test_division_by_zero_surfaces_as_value(self) -> None:
         v = formulon.evaluate_typed_formula("=1/0")
         self.assertEqual(v.kind, ValueKind.ERROR)
-        # to_python returns an ExcelError for ERROR; callers inspect
+        # to_native returns an ExcelError for ERROR; callers inspect
         # the code rather than catching an exception.
-        self.assertEqual(v.to_python(), formulon.ExcelError(formulon.ErrorCode.DIV0))
-        self.assertEqual(str(v.to_python()), "#DIV/0!")
+        self.assertEqual(formulon.to_native(v), formulon.ExcelError(formulon.ErrorCode.DIV0))
+        self.assertEqual(str(formulon.to_native(v)), "#DIV/0!")
         self.assertEqual(v.error_code, formulon.ErrorCode.DIV0)
 
     def test_intersection_uses_read_only_evaluation(self) -> None:
@@ -86,12 +86,12 @@ class EvalFormulaTests(unittest.TestCase):
     def test_text_concat(self) -> None:
         v = formulon.evaluate_typed_formula('="hello "&"world"')
         self.assertEqual(v.kind, ValueKind.TEXT)
-        self.assertEqual(v.to_python(), "hello world")
+        self.assertEqual(formulon.to_native(v), "hello world")
 
     def test_boolean_literal(self) -> None:
         v = formulon.evaluate_typed_formula("=TRUE()")
         self.assertEqual(v.kind, ValueKind.BOOL)
-        self.assertIs(v.to_python(), True)
+        self.assertIs(formulon.to_native(v), True)
 
 
 class WorkbookLifecycleTests(unittest.TestCase):
@@ -293,7 +293,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
             wb.recalc()
             v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.NUMBER)
-            self.assertEqual(v.to_python(), 42.0)
+            self.assertEqual(formulon.to_native(v), 42.0)
 
     def test_set_get_text(self) -> None:
         with Workbook.create_default() as wb:
@@ -301,7 +301,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
             wb.recalc()
             v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.TEXT)
-            self.assertEqual(v.to_python(), "hello")
+            self.assertEqual(formulon.to_native(v), "hello")
 
     def test_set_get_bool(self) -> None:
         with Workbook.create_default() as wb:
@@ -309,7 +309,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
             wb.recalc()
             v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.BOOL)
-            self.assertIs(v.to_python(), True)
+            self.assertIs(formulon.to_native(v), True)
 
     def test_blank_cell_returns_blank_value(self) -> None:
         with Workbook.create_default() as wb:
@@ -318,7 +318,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
             wb.recalc()
             v = wb.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v.kind, ValueKind.BLANK)
-            self.assertIsNone(v.to_python())
+            self.assertIsNone(formulon.to_native(v))
 
     def test_formula_recalc_chain(self) -> None:
         with Workbook.create_default() as wb:
@@ -327,13 +327,13 @@ class WorkbookRoundtripTests(unittest.TestCase):
             wb.recalc()
             v = wb.sheet(0).get_typed_value(0, 1)
             self.assertEqual(v.kind, ValueKind.NUMBER)
-            self.assertEqual(v.to_python(), 42.0)
+            self.assertEqual(formulon.to_native(v), 42.0)
 
             # Mutate, recalc, observe.
             wb.sheet(0).set_number(0, 0, 100.0)
             wb.recalc()
             v = wb.sheet(0).get_typed_value(0, 1)
-            self.assertEqual(v.to_python(), 200.0)
+            self.assertEqual(formulon.to_native(v), 200.0)
 
 
 class WorkbookSaveLoadTests(unittest.TestCase):
@@ -352,10 +352,10 @@ class WorkbookSaveLoadTests(unittest.TestCase):
             wb2.recalc()
             v0 = wb2.sheet(0).get_typed_value(0, 0)
             self.assertEqual(v0.kind, ValueKind.NUMBER)
-            self.assertEqual(v0.to_python(), 7.5)
+            self.assertEqual(formulon.to_native(v0), 7.5)
             v1 = wb2.sheet(0).get_typed_value(0, 1)
             self.assertEqual(v1.kind, ValueKind.TEXT)
-            self.assertEqual(v1.to_python(), "world")
+            self.assertEqual(formulon.to_native(v1), "world")
 
     def test_load_rejects_garbage(self) -> None:
         # Empty buffer triggers BINDING_NULL_POINTER (ABI contract: len == 0

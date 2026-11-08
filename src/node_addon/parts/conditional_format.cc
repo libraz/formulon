@@ -48,7 +48,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
     return env.Undefined();
   }
-  // The registration guard requires `todaySerial`; NaN disables
+  // The registration guard requires a serial; NaN disables
   // `timePeriod` rules, as the C ABI documents.
   const double today_serial = ArgDouble(info, 2);
   fm_cf_results_t* results = nullptr;
@@ -205,7 +205,7 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
       Napi::Array icons = Napi::Array::New(env, rule.icon_set_icon_count);
       for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
         Napi::Object icon = Napi::Object::New(env);
-        icon.Set("iconSet", JsString(env, rule.icon_set_icons[j].icon_set));
+        icon.Set("iconSet", Napi::Number::New(env, rule.icon_set_icons[j].icon_set));
         icon.Set("iconIndex", Napi::Number::New(env, rule.icon_set_icons[j].icon_index));
         icons.Set(j, icon);
       }
@@ -483,9 +483,9 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
         if (!reader.Object(element, "icons[]", &icon)) {
           break;
         }
-        std::string icon_set_name;
-        reader.String(icon, "iconSet", &icon_set_name);
-        icon_set_icons.push_back(fm_cf_icon_t{cfvo_strings.emplace(icon_set_name), reader.I32(icon, "iconIndex", 0)});
+        // A missing set stays out of range, which the C layer rejects.
+        const int32_t icon_set = reader.I32(icon, "iconSet", -1);
+        icon_set_icons.push_back(fm_cf_icon_t{icon_set, reader.I32(icon, "iconIndex", 0)});
       }
       rule.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
       rule.icon_set_icon_count = static_cast<uint32_t>(icon_set_icons.size());

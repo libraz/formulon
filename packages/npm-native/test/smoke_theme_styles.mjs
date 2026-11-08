@@ -284,18 +284,18 @@ test('getThemeScriptFont reads the default script faces and setThemeScriptFont r
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const face = (book, major, script) => book.getThemeScriptFont({ major, script })?.typeface;
-    assert.equal(face(wb, false, 'Jpan'), '游ゴシック');
-    assert.equal(face(wb, false, 'Hang'), '맑은 고딕');
-    const majorJpan = face(wb, true, 'Jpan');
+    const face = (book, scheme, script) => book.getThemeScriptFont({ scheme, script })?.typeface;
+    assert.equal(face(wb, mod.FontScheme.Minor, 'Jpan'), '游ゴシック');
+    assert.equal(face(wb, mod.FontScheme.Minor, 'Hang'), '맑은 고딕');
+    const majorJpan = face(wb, mod.FontScheme.Major, 'Jpan');
 
-    wb.setThemeScriptFont({ major: false, script: 'Hang', typeface: 'Test Face' });
+    wb.setThemeScriptFont({ scheme: mod.FontScheme.Minor, script: 'Hang', typeface: 'Test Face' });
     const saved = wb.save();
     const reloaded = mod.Workbook.load(saved);
     try {
-      assert.equal(face(reloaded, false, 'Hang'), 'Test Face');
-      assert.equal(face(reloaded, false, 'Jpan'), '游ゴシック');
-      assert.equal(face(reloaded, true, 'Jpan'), majorJpan);
+      assert.equal(face(reloaded, mod.FontScheme.Minor, 'Hang'), 'Test Face');
+      assert.equal(face(reloaded, mod.FontScheme.Minor, 'Jpan'), '游ゴシック');
+      assert.equal(face(reloaded, mod.FontScheme.Major, 'Jpan'), majorJpan);
     } finally {
       reloaded.dispose();
     }
@@ -308,8 +308,14 @@ test('setThemeScriptFont rejects an invalid script or empty typeface', async () 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.throws(() => wb.setThemeScriptFont({ major: true, script: 'Jp', typeface: 'X' }), isFormulonError);
-    assert.throws(() => wb.setThemeScriptFont({ major: true, script: 'Jpan', typeface: '' }), isFormulonError);
+    assert.throws(
+      () => wb.setThemeScriptFont({ scheme: mod.FontScheme.Major, script: 'Jp', typeface: 'X' }),
+      isFormulonError,
+    );
+    assert.throws(
+      () => wb.setThemeScriptFont({ scheme: mod.FontScheme.Major, script: 'Jpan', typeface: '' }),
+      isFormulonError,
+    );
   } finally {
     wb.dispose();
   }

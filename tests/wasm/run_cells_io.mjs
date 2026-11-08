@@ -417,6 +417,32 @@ export function registerCellsIo(Module, test) {
     }
   });
 
+  test('a CF match reports its flags as booleans and a CF predicate evaluates to a boolean', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const dxf = wb.addDxf({ font: { bold: true } });
+      wb.setNumber(0, 0, 0, 20);
+      wb.addCfRule(0, {
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 1,
+        operator: 6,
+        formula1: '10',
+        dxfIndex: dxf,
+        stopIfTrue: false,
+      });
+      const cells = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
+      const match = cells[0].matches[0];
+      assert.equal(match.dxfIndexEngaged, true);
+      assert.equal(match.barIsNegative, false);
+      assert.equal(match.barBorderEngaged, false);
+      assert.equal(match.barGradient, false);
+      assert.strictEqual(wb.evaluateCfFormula(0, 0, 0, 0, 0, '=A1>10'), true);
+      assert.strictEqual(wb.evaluateCfFormula(0, 0, 0, 0, 0, '=A1>100'), false);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('data bar x14 fields survive save and load', () => {
     // The six live in the `x14` extension, not the legacy `<dataBar>`
     // element. An in-session round-trip would still pass with a writer that
@@ -515,7 +541,7 @@ export function registerCellsIo(Module, test) {
       wb.addCfRule(0, {
         ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 1,
-        operator: 5,
+        operator: 6,
         formula1: '10',
         dxfIndex: dxf,
         stopIfTrue: false,

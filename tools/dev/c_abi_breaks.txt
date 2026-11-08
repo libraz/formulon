@@ -173,13 +173,13 @@ removed fm_workbook_delete_cols :: renamed to fm_sheet_delete_columns
 removed fm_workbook_delete_rows :: renamed to fm_sheet_delete_rows
 removed fm_workbook_dependents :: renamed to fm_sheet_get_dependents
 removed fm_workbook_evaluate_cf_formula :: renamed to fm_sheet_evaluate_cf_formula
-removed fm_workbook_evaluate_formula :: renamed to fm_sheet_evaluate_formula
+removed fm_workbook_evaluate_formula :: removed; fm_sheet_evaluate_formula_array evaluates the same formula and returns the whole result, a scalar as a 1 x 1 array
 removed fm_workbook_evaluate_formula_array :: renamed to fm_sheet_evaluate_formula_array
 removed fm_workbook_excel_profile_id :: renamed to fm_workbook_get_profile_id
 removed fm_workbook_external_link_at :: renamed to fm_workbook_get_external_link
 removed fm_workbook_external_link_count :: renamed to fm_workbook_get_external_link_count
 removed fm_workbook_get_cell_phonetic :: renamed to fm_sheet_get_cell_phonetic
-removed fm_workbook_get_cell_phonetic_properties :: renamed to fm_sheet_get_cell_phonetic_properties
+removed fm_workbook_get_cell_phonetic_properties :: renamed to fm_sheet_get_cell_phonetic_properties; the type and alignment outs are int32_t (fm_phonetic_type_t / fm_phonetic_alignment_t)
 removed fm_workbook_get_cell_phonetic_run :: renamed to fm_sheet_get_cell_phonetic_run
 removed fm_workbook_get_cell_phonetic_run_count :: renamed to fm_sheet_get_cell_phonetic_run_count
 removed fm_workbook_get_display_text :: renamed to fm_sheet_get_display_text
@@ -266,7 +266,7 @@ signature fm_workbook_resolve_color :: parameter type renamed (fm_color_spec -> 
 removed fm_workbook_set_blank :: renamed to fm_sheet_set_blank
 removed fm_workbook_set_bool :: renamed to fm_sheet_set_bool
 removed fm_workbook_set_cell_phonetic :: renamed to fm_sheet_set_cell_phonetic
-removed fm_workbook_set_cell_phonetic_properties :: renamed to fm_sheet_set_cell_phonetic_properties
+removed fm_workbook_set_cell_phonetic_properties :: renamed to fm_sheet_set_cell_phonetic_properties; type and alignment are int32_t (fm_phonetic_type_t / fm_phonetic_alignment_t)
 removed fm_workbook_set_cell_phonetic_runs :: renamed to fm_sheet_set_cell_phonetic_runs
 signature fm_workbook_set_default_font :: parameter type renamed (fm_font_record -> fm_font_record_t); record passed as const pointer
 removed fm_workbook_set_error :: renamed to fm_sheet_set_error
@@ -284,8 +284,8 @@ removed fm_workbook_table_count :: moved to fm_sheet_get_table_count, counting t
 removed fm_workbook_table_create :: moved to fm_sheet_add_table, which takes one table name and writes a sheet-local table index
 removed fm_workbook_table_remove :: moved to fm_sheet_remove_table, addressing the table by sheet_index and a sheet-local table_index
 removed fm_workbook_table_update :: moved to fm_sheet_update_table, addressing the table by sheet_index and a sheet-local table_index
-removed fm_workbook_theme_script_font_at :: renamed to fm_workbook_get_theme_script_font_at
-removed fm_workbook_theme_script_font_count :: renamed to fm_workbook_get_theme_script_font_count
+removed fm_workbook_theme_script_font_at :: renamed to fm_workbook_get_theme_script_font_at; the font set is an fm_font_scheme_t (MAJOR or MINOR) instead of a nonzero-means-major flag
+removed fm_workbook_theme_script_font_count :: renamed to fm_workbook_get_theme_script_font_count; the font set is an fm_font_scheme_t (MAJOR or MINOR) instead of a nonzero-means-major flag
 signature fm_sheet_add_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_clear_hyperlinks :: sheet index widened to size_t sheet_index
 signature fm_sheet_clear_merges :: sheet index widened to size_t sheet_index

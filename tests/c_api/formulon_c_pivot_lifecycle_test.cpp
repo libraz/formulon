@@ -291,7 +291,7 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(field_count, 2U);
 
   ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, 0, FM_PIVOT_AXIS_ROW), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, 0, "Amount"), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_ASCENDING, "Amount"), 0);
   ASSERT_EQ(fm_sheet_set_pivot_field_subtotal_top(wb.handle, 0, pivot_index, 0, 1), 0);
   ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_index, 0, 0, 0), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);

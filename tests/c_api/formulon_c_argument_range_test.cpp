@@ -271,8 +271,8 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     std::size_t count = 0;
     fm_phonetic_run_t run{};
     std::size_t font = 0;
-    std::uint32_t type = 0;
-    std::uint32_t alignment = 0;
+    std::int32_t type = 0;
+    std::int32_t alignment = 0;
     std::int32_t flag = 0;
     const char* lambda = nullptr;
     fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
@@ -318,8 +318,8 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   const char* text = nullptr;
   std::size_t count = 0;
   std::size_t font = 0;
-  std::uint32_t type = 0;
-  std::uint32_t alignment = 0;
+  std::int32_t type = 0;
+  std::int32_t alignment = 0;
   std::int32_t flag = 0;
   const char* lambda = nullptr;
   fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);

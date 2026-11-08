@@ -205,11 +205,14 @@ __attribute__((noinline)) std::size_t measure_format(const std::string& src) {
 // answer is how a stack that ran into the data segment below it shows up.
 __attribute__((noinline)) std::size_t measure_evaluate(const std::string& formula, fm_workbook_t* wb, double expected) {
   const std::string src = "=" + formula;
-  fm_value_t v{};
+  fm_value_array_t* result = nullptr;
   paint_free_stack();
-  const fm_status_t rc = fm_sheet_evaluate_formula(wb, 0, 1, 0, src.c_str(), &v);
+  const fm_status_t rc = fm_sheet_evaluate_formula_array(wb, 0, 1, 0, src.c_str(), &result);
   const std::size_t peak = peak_since_paint();
-  if (expected >= 0.0 && (rc != 0 || v.kind != FM_VALUE_KIND_NUMBER || v.u.number != expected)) {
+  fm_value_t v{};
+  const bool read = rc == 0 && fm_value_array_get_value_at(result, 0, &v) == 0;
+  fm_value_array_destroy(result);
+  if (expected >= 0.0 && (!read || v.kind != FM_VALUE_KIND_NUMBER || v.u.number != expected)) {
     fail("a formula at a nesting limit did not evaluate to its value");
   }
   return peak;

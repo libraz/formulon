@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "cell.h"
+#include "formulon_c_evaluate_top_left.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
@@ -224,12 +225,15 @@ TEST(FormulonCApiStructuredRef, ArrayFormulaReadsAtItsAnchor) {
 TEST(FormulonCApiStructuredRef, TotalsRowShowsTheInsideForm) {
   WorkbookGuard wb;
   BuildSales(wb);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, "sum", nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
   EXPECT_EQ(Stored(wb, 0, 4, 0), "=SUBTOTAL(109,tblSales[Qty])");
   EXPECT_EQ(Formula(wb, 0, 4, 0), "=SUBTOTAL(109,[Qty])");
 
   // A custom formula entered in the display form binds at the totals cell.
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 3, "custom", nullptr, "=SUM([Price])*2"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 3, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
+                                             "=SUM([Price])*2"),
+            0)
       << fm_get_last_error_message();
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 3, &column), 0);
@@ -285,10 +289,10 @@ TEST(FormulonCApiStructuredRef, EvaluateFormulaBindsAtItsCell) {
   BuildSales(wb);
   fm_value_t v{};
   // Row 3 holds Qty 3.
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 2, kInsideCol, "=[@Qty]*10", &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 2, kInsideCol, "=[@Qty]*10", &v), 0) << fm_get_last_error_message();
   ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 30.0);
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, kOutsideRow, kOutsideCol, "=ROWS(tblSales)", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, kOutsideRow, kOutsideCol, "=ROWS(tblSales)", &v), 0);
   ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 3.0);
 }
@@ -314,7 +318,8 @@ TEST(FormulonCApiStructuredRef, RenameColumnRewritesEveryReference) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, kInsideCol, "=SUM(tblSales[[#This Row],[Qty]:[Price]])"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, kOtherSheet, 1, 1, "=SUM(tblSales[Qty])"), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "NmQ", "=tblSales[Qty]"), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, "sum", nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
 
   EXPECT_EQ(Rename(wb, 0, "Amount"), "Amount");
   EXPECT_EQ(ColumnName(wb, 0), "Amount");
@@ -344,7 +349,9 @@ TEST(FormulonCApiStructuredRef, RenamedColumnSavesInExcelsStoredForm) {
   WorkbookGuard wb;
   BuildSales(wb);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kInsideRow, kInsideCol, "=[@Qty]"), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, "custom", nullptr, "=SUBTOTAL(109,[Qty])"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
+                                             "=SUBTOTAL(109,[Qty])"),
+            0)
       << fm_get_last_error_message();
   ASSERT_EQ(Rename(wb, 0, "Amount"), "Amount");
 

@@ -650,7 +650,7 @@ test('threaded comments: done on a thread resolves it, on a reply is ThreadedCom
       row: 1,
       col: 1,
       personId: PERSON,
-      created: '2026-01-02T03:04:05.67',
+      created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
       text: 'Check',
       parentId: '',
     });
@@ -659,7 +659,7 @@ test('threaded comments: done on a thread resolves it, on a reply is ThreadedCom
       row: 1,
       col: 1,
       personId: PERSON,
-      created: '2026-01-02T03:05:05.67',
+      created: { year: 2026, month: 1, day: 2, hour: 3, minute: 5, second: 5 },
       text: 'Done?',
       parentId: THREAD,
     });
@@ -707,7 +707,7 @@ test('sparklines: update replaces, keeps or refuses to empty the group', async (
     assert.deepEqual(plain(ws.listSparklineGroups()[0].sparklines), plain(original));
 
     // The key replaces them.
-    const replacement = [{ formula: 'Sheet1!B1:B5', location: 'H1' }];
+    const replacement = [{ formula: '=Sheet1!B1:B5', location: 'H1' }];
     ws.updateSparklineGroup(0, { ...ws.listSparklineGroups()[0], sparklines: replacement });
     assert.deepEqual(plain(ws.listSparklineGroups()[0].sparklines), replacement);
     assert.equal(ws.listSparklineGroups()[0].markers, true);

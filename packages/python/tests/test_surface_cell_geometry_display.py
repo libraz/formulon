@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from _xf_input import input_of
 
-from formulon import CellXfInput, FormulonError, PrintTitles, RowBreak, Value, ValueKind, Workbook
+from formulon import CellXfInput, FormulonError, PrintTitles, RowBreak, Value, ValueKind, WidthPlatform, Workbook
 from formulon._workbook import (
     CellRect,
     DisplayStatus,
@@ -189,7 +189,7 @@ class GeometryTests(unittest.TestCase):
                 self.assertGreater(model.points_per_char, 0.0)
                 self.assertGreater(model.normal_font_size_pt, 0.0)
                 self.assertTrue(model.normal_font_name)
-                self.assertEqual(model.platform, "win")
+                self.assertEqual(model.platform, WidthPlatform.WIN)
                 pt = wb.sheet(0).convert_column_chars_to_pt(10.0, mode)
                 self.assertAlmostEqual(wb.sheet(0).convert_column_pt_to_chars(pt, mode), 10.0, places=6)
                 self.assertEqual(wb.sheet(0).convert_column_chars_to_pt(0.0, mode), 0.0)

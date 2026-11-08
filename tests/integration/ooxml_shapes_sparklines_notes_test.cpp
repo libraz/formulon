@@ -617,6 +617,7 @@ TEST(SparklineFidelity, EveryAttributeAndColorSurvivesAResave) {
   EXPECT_EQ(groups[1].type, io::SparklineType::kLine);
   EXPECT_DOUBLE_EQ(groups[1].line_weight, 0.75);
   EXPECT_EQ(groups[1].color_series.rgb, 0xFF376092U);
+  EXPECT_EQ(groups[1].empty_cells_as, io::SparklineEmptyCells::kZero);
 
   const auto saved = SaveOrDie(first);
   const std::string sheet = ReadPart(saved, "xl/worksheets/sheet1.xml");
@@ -626,6 +627,25 @@ TEST(SparklineFidelity, EveryAttributeAndColorSurvivesAResave) {
   const auto again = io::read_sparkline_groups(second.sheet(0).ext_lst_xml());
   ASSERT_EQ(again.size(), 2U);
   ExpectFirstGroup(again[0]);
+}
+
+TEST(SparklineFidelity, AbsentEmptyCellsAsIsZeroAndANewZeroGroupLeavesItImplicit) {
+  Workbook wb = LoadOrDie(SparklinePackage());
+  auto groups = io::read_sparkline_groups(wb.sheet(0).ext_lst_xml());
+  ASSERT_EQ(groups.size(), 2U);
+  std::string ext = wb.sheet(0).ext_lst_xml();
+  groups[1].empty_cells_as = io::SparklineEmptyCells::kGap;
+  ASSERT_TRUE(io::update_sparkline_group(ext, 1, groups[1]).has_value());
+  EXPECT_TRUE(Has(ext, "displayEmptyCellsAs=\"gap\"")) << ext;
+  EXPECT_EQ(io::read_sparkline_groups(ext)[1].empty_cells_as, io::SparklineEmptyCells::kGap);
+  groups[1].empty_cells_as = io::SparklineEmptyCells::kZero;
+  ASSERT_TRUE(io::update_sparkline_group(ext, 1, groups[1]).has_value());
+  EXPECT_EQ(io::read_sparkline_groups(ext)[1].empty_cells_as, io::SparklineEmptyCells::kZero);
+
+  std::string fresh = wb.sheet(0).ext_lst_xml();
+  ASSERT_TRUE(io::add_sparkline_group(fresh, groups[1]).has_value());
+  const std::string added = fresh.substr(fresh.rfind("<x14:sparklineGroup"));
+  EXPECT_EQ(added.find("displayEmptyCellsAs"), std::string::npos) << added;
 }
 
 TEST(SparklineFidelity, ReferencesShiftWithRowInsertionAndDeletion) {

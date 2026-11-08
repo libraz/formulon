@@ -1,14 +1,15 @@
 //
 // End-to-end tests for the ad-hoc, side-effect-free formula evaluation C
-// ABI: `fm_sheet_evaluate_formula` / `fm_sheet_evaluate_cf_formula`.
-// Exercises anchoring, cross-sheet resolution, defined names, the
-// documented array-to-scalar reduction, the self-reference stale-read
+// ABI: `fm_sheet_evaluate_formula_array` / `fm_sheet_evaluate_cf_formula`.
+// Exercises anchoring, cross-sheet resolution, defined names, the bindings'
+// fold of a result to its top-left cell, the self-reference stale-read
 // caveat, Excel CF-predicate coercion, and the read-only purity guarantee.
 
 #include <cstdint>
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_evaluate_top_left.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_setters.h"
 #include "gtest/gtest.h"
@@ -49,7 +50,7 @@ TEST(EvaluateFormula, ScalarArithmeticAgainstCells) {
   seed_ab(wb.handle);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 2, "=A1+B1", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 2, "=A1+B1", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 30.0);
 }
@@ -60,7 +61,7 @@ TEST(EvaluateFormula, LeadingEqualsOptional) {
   seed_ab(wb.handle);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 2, "A1*2", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 2, "A1*2", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 20.0);
 }
@@ -72,12 +73,12 @@ TEST(EvaluateFormula, RowColumnAnchoredAtTarget) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t r{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 4, 2, "=ROW()", &r), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 4, 2, "=ROW()", &r), 0);
   EXPECT_EQ(r.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(r.u.number, 5.0);
 
   fm_value_t c{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 4, 2, "=COLUMN()", &c), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 4, 2, "=COLUMN()", &c), 0);
   EXPECT_EQ(c.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(c.u.number, 3.0);
 }
@@ -90,7 +91,7 @@ TEST(EvaluateFormula, CrossSheetReference) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=Data!A1", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=Data!A1", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 99.0);
 }
@@ -101,33 +102,33 @@ TEST(EvaluateFormula, WorkbookScopedDefinedName) {
   ASSERT_EQ(SetDefinedName(wb.handle, "TAX", "0.08"), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TAX*100", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=TAX*100", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
 }
 
-// An array/spill result is reduced to its top-left element.
-// This is the pragmatic API shape, documented as an intentional divergence
-// (see divergence.yaml: evaluate_formula_array_scalar_reduction). It is NOT
-// implicit intersection and NOT spilling.
-TEST(EvaluateFormula, ArrayResultReducesToTopLeft) {
+// The bindings fold an array/spill result to its top-left element, the
+// documented intentional divergence (see divergence.yaml:
+// evaluate_formula_array_scalar_reduction). It is NOT implicit intersection
+// and NOT spilling.
+TEST(EvaluateFormula, ArrayResultFoldsToTopLeft) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
 // SINGLE()/@ perform true intersection inside the evaluated
-// formula, independent of the outer scalar reduction.
+// formula, independent of the outer top-left fold.
 TEST(EvaluateFormula, SingleOperatorEvaluates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SINGLE(SEQUENCE(3))", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=SINGLE(SEQUENCE(3))", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
@@ -144,7 +145,7 @@ TEST(EvaluateFormula, SelfReferenceReadsCachedValue) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=A1", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=A1", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 7.0);
 }
@@ -159,7 +160,7 @@ TEST(EvaluateFormula, IsSideEffectFree) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t discard{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 1, "=A1+A1", &discard), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 1, "=A1+A1", &discard), 0);
 
   // A1 is unchanged, and the anchor cell B1 was never written.
   fm_value_t a1{};
@@ -169,37 +170,6 @@ TEST(EvaluateFormula, IsSideEffectFree) {
   fm_value_t b1{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &b1), 0);
   EXPECT_EQ(b1.kind, FM_VALUE_KIND_BLANK);
-}
-
-TEST(EvaluateFormula, NullArgumentsRejected) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-
-  fm_value_t v{};
-  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, nullptr, &v),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=1", nullptr),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-}
-
-TEST(EvaluateFormula, SheetIndexOutOfRange) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-
-  fm_value_t v{};
-  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 99, 0, 0, "=1", &v),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
-}
-
-TEST(EvaluateFormula, TargetOutsideSheetIsRejected) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-
-  fm_value_t v{};
-  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &v),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &v),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +241,7 @@ TEST(EvaluateFormulaArray, ExpandBlankPadProjectsToZeroAndNestedCountSkipsIt) {
   }
 
   fm_value_t count{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=COUNT(EXPAND({1,2;3,4},3,4,))", &count), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=COUNT(EXPAND({1,2;3,4},3,4,))", &count), 0);
   ASSERT_EQ(count.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(count.u.number, 4.0);
 }
@@ -379,18 +349,6 @@ TEST(EvaluateFormulaArray, TextCellsStayValidAfterEvaluation) {
   ASSERT_EQ(fm_value_array_get_value_at(array.handle, 1, &b), 0);
   ASSERT_EQ(b.kind, FM_VALUE_KIND_TEXT);
   EXPECT_EQ(std::string(b.u.text), "2x");
-}
-
-// The legacy scalar API keeps its top-left reduction (backward compat): the
-// same array formula that the array API preserves must still degrade here.
-TEST(EvaluateFormulaArray, ScalarApiStillReducesToTopLeft) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-
-  fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
-  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
-  EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
 TEST(EvaluateFormulaArray, IndexOutOfRangeRejected) {

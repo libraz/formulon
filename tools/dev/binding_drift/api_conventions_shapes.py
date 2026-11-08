@@ -1002,11 +1002,10 @@ def _rule_py_closed(ctx: Context) -> Iterable[Violation]:
 # value of a field-level absence is `-1`. Keyed by the binding enum name; the flag says whether C keeps the
 # member as `-1` (a field that reads `null`) or as a patch instruction (a record that reads `null`).
 ABSENT_MEMBERS = {
-    "ChartBlanksAs": ("Absent", True),
+    "BlanksAs": ("Absent", True),
     "ChartAxisCrosses": ("Absent", True),
     "ShapePaint": ("Unset", True),
     "ChartBarDirection": ("Absent", True),
-    "PivotFilterOperandKind": ("None", True),
     "ChartTitleKind": ("None", False),
     "ChartLegendPosition": ("None", False),
 }

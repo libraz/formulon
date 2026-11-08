@@ -249,7 +249,7 @@ TEST(EvalContextRecursive, ReadOnlyRangeUsesCommittedSpillAnchorScalar) {
   EXPECT_DOUBLE_EQ(phantom_column.as_number(), 12.0);
 }
 
-// fm_sheet_evaluate_formula documents ad-hoc evaluation as a single
+// fm_sheet_evaluate_formula_array documents ad-hoc evaluation as a single
 // pass decoupled from iterative calc: a self-reference reads the cell's
 // cached value instead of engaging the evaluate()-level fixed-point
 // driver. Without suppression, resolving A1 while evaluating "=A1+1"

@@ -31,7 +31,7 @@ namespace {
 // without it `EvalContext::dispatch_array_result` is inert and recursive
 // `resolve_ref` never commits a spill, so the workbook is never mutated.
 //
-// The ad-hoc drivers are documented (see `fm_sheet_evaluate_formula` in
+// The ad-hoc drivers are documented (see `fm_sheet_evaluate_formula_array` in
 // `formulon_c.h`) to be a single-pass evaluation decoupled from iterative
 // calc: a self-reference reads the cell's cached value rather than engaging
 // the `evaluate()`-level fixed-point driver. Suppressing it here mirrors
@@ -89,11 +89,6 @@ bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint
     return false;
   }
   return evaluate_parsed_cf_formula(workbook, sheet, row, col, anchor_row, anchor_col, *root, arena, registry);
-}
-
-Value evaluate_parsed_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
-                              const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry) {
-  return implicit_intersect_value(evaluate_parsed_formula_array(workbook, sheet, row, col, root, arena, registry));
 }
 
 Value evaluate_parsed_formula_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,

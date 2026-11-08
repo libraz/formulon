@@ -40,7 +40,7 @@ Napi::Object TableStyleToJs(Napi::Env env, const fm_table_style_t& style) {
   for (uint32_t i = 0; i < style.element_count; ++i) {
     const fm_table_style_element_t& element = style.elements[i];
     Napi::Object e = Napi::Object::New(env);
-    e.Set("type", JsString(env, element.type));
+    e.Set("type", Napi::Number::New(env, element.type));
     e.Set("size", Napi::Number::New(env, element.size));
     if (element.has_dxf_index != 0) {
       e.Set("dxfIndex", Napi::Number::New(env, element.dxf_index));
@@ -169,7 +169,6 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
   const bool table = reader.Bool(record, "table", true);
   Napi::Array elements;
   const bool has_elements = reader.Array(record, "elements", &elements);
-  std::vector<std::string> types;
   std::vector<fm_table_style_element_t> records;
   for (uint32_t i = 0; has_elements && reader.ok() && i < elements.Length(); ++i) {
     Napi::Value value;
@@ -177,10 +176,9 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
     if (!reader.ArrayElement(elements, i, &value) || !reader.Object(value, "elements[]", &element)) {
       continue;
     }
-    std::string type;
-    reader.String(element, "type", &type);
-    types.push_back(std::move(type));
     fm_table_style_element_t out{};
+    // A missing type stays out of range, which the C layer rejects.
+    out.type = reader.I32(element, "type", -1);
     out.size = reader.U32(element, "size", 1U);
     bool has_dxf = false;
     out.dxf_index = reader.U32(element, "dxfIndex", 0U, &has_dxf);
@@ -189,10 +187,6 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
   }
   if (!reader.ok()) {
     return env.Undefined();
-  }
-  // `types` has stopped growing, so its `c_str()` views stay put.
-  for (std::size_t i = 0; i < records.size(); ++i) {
-    records[i].type = types[i].c_str();
   }
   fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
   style.name = name.c_str();

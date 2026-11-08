@@ -180,7 +180,7 @@ fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten:
   g.date_axis = reader.boolean(spec, "dateAxis", false, "group.dateAxis") ? 1 : 0;
   g.date_axis_ref = reader.optional_string(spec, "dateAxisRef", ref_store, "group.dateAxisRef");
   g.line_weight = reader.number(spec, "lineWeight", 0.75, "group.lineWeight");
-  g.empty_cells_as = reader.i32(spec, "emptyCellsAs", FM_SPARKLINE_EMPTY_CELLS_GAP, "group.emptyCellsAs");
+  g.empty_cells_as = reader.i32(spec, "emptyCellsAs", FM_BLANKS_AS_GAP, "group.emptyCellsAs");
   return g;
 }
 

@@ -35,10 +35,6 @@ constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::Form
 constexpr fm_status_t kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 constexpr fm_status_t kXmlParse = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoXmlParse);
 
-constexpr int32_t kSourcePart = 0;
-constexpr int32_t kSourceDefault = 1;
-constexpr int32_t kSourceUnparseable = 2;
-
 constexpr uint32_t kDefaultScheme[12] = {0xFF000000U, 0xFFFFFFFFU, 0xFF0E2841U, 0xFFE8E8E8U, 0xFF156082U, 0xFFE97132U,
                                          0xFF196B24U, 0xFF0F9ED5U, 0xFFA02B93U, 0xFF4EA72EU, 0xFF467886U, 0xFF96607DU};
 constexpr const char* kYuGothic = "\xE6\xB8\xB8\xE3\x82\xB4\xE3\x82\xB7\xE3\x83\x83\xE3\x82\xAF";
@@ -135,7 +131,7 @@ TEST(FormulonCApiTheme, WorkbookWithoutThemePartReportsDefaultTheme) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   int32_t source = -1;
   const fm_theme_colors_t colors = ReadColors(wb.handle, &source);
-  EXPECT_EQ(source, kSourceDefault);
+  EXPECT_EQ(source, FM_THEME_SOURCE_DEFAULT);
   for (std::size_t i = 0; i < 12U; ++i) {
     EXPECT_EQ(colors.argb[i], kDefaultScheme[i]) << i;
   }
@@ -159,7 +155,7 @@ TEST(FormulonCApiTheme, SetColorsOnWorkbookWithoutThemeSurvivesSaveReload) {
 
   int32_t source = -1;
   fm_theme_colors_t live = ReadColors(wb.handle, &source);
-  EXPECT_EQ(source, kSourcePart);
+  EXPECT_EQ(source, FM_THEME_SOURCE_PART);
   EXPECT_EQ(live.argb[0], 0xFF101010U);
   EXPECT_EQ(live.argb[4], 0xFF123456U);
   EXPECT_EQ(live.argb[11], 0xFF10101BU);
@@ -172,7 +168,7 @@ TEST(FormulonCApiTheme, SetColorsOnWorkbookWithoutThemeSurvivesSaveReload) {
   Load(Save(wb.handle), &loaded);
   source = -1;
   const fm_theme_colors_t reread = ReadColors(loaded.handle, &source);
-  EXPECT_EQ(source, kSourcePart);
+  EXPECT_EQ(source, FM_THEME_SOURCE_PART);
   for (std::size_t i = 0; i < 12U; ++i) {
     EXPECT_EQ(reread.argb[i], live.argb[i]) << i;
   }
@@ -199,7 +195,7 @@ TEST(FormulonCApiTheme, SetFontsSurvivesSaveReload) {
   // Setting the fonts generated the part with the default colours.
   int32_t source = -1;
   const fm_theme_colors_t colors = ReadColors(loaded.handle, &source);
-  EXPECT_EQ(source, kSourcePart);
+  EXPECT_EQ(source, FM_THEME_SOURCE_PART);
   EXPECT_EQ(colors.argb[4], kDefaultScheme[4]);
 }
 
@@ -218,7 +214,7 @@ TEST(FormulonCApiTheme, UnparseablePartIsReportedAndRefusesEdits) {
   Load(broken, &loaded);
   int32_t source = -1;
   const fm_theme_colors_t reread = ReadColors(loaded.handle, &source);
-  EXPECT_EQ(source, kSourceUnparseable);
+  EXPECT_EQ(source, FM_THEME_SOURCE_UNPARSEABLE);
   EXPECT_EQ(reread.argb[4], kDefaultScheme[4]);
   EXPECT_EQ(fm_workbook_set_theme_colors(loaded.handle, &colors), kXmlParse);
   fm_theme_fonts_t fonts = FM_STRUCT_INIT(fm_theme_fonts_t);
@@ -244,13 +240,13 @@ TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
   ASSERT_EQ(fm_workbook_set_theme_fonts(wb.handle, &fonts), 0);
   int32_t source = -1;
   ReadColors(wb.handle, &source);
-  ASSERT_EQ(source, kSourcePart);
+  ASSERT_EQ(source, FM_THEME_SOURCE_PART);
   const Bytes edited = Save(wb.handle);
   ASSERT_FALSE(EntryText(edited, "xl/theme/theme1.xml").empty());
 
   ASSERT_EQ(fm_workbook_reset_theme(wb.handle), 0) << fm_get_last_error_message();
   const fm_theme_colors_t reset = ReadColors(wb.handle, &source);
-  EXPECT_EQ(source, kSourceDefault);
+  EXPECT_EQ(source, FM_THEME_SOURCE_DEFAULT);
   for (std::size_t i = 0; i < 12U; ++i) {
     EXPECT_EQ(reset.argb[i], kDefaultScheme[i]) << i;
   }
@@ -265,12 +261,12 @@ TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
   WorkbookGuard loaded;
   Load(saved, &loaded);
   ReadColors(loaded.handle, &source);
-  EXPECT_EQ(source, kSourceDefault);
+  EXPECT_EQ(source, FM_THEME_SOURCE_DEFAULT);
 
   // The theme can be written again after a reset.
   ASSERT_EQ(fm_workbook_set_theme_colors(wb.handle, &colors), 0);
   ReadColors(wb.handle, &source);
-  EXPECT_EQ(source, kSourcePart);
+  EXPECT_EQ(source, FM_THEME_SOURCE_PART);
 }
 
 TEST(FormulonCApiTheme, ResetOnWorkbookWithoutThemeSucceeds) {
@@ -279,7 +275,7 @@ TEST(FormulonCApiTheme, ResetOnWorkbookWithoutThemeSucceeds) {
   ASSERT_EQ(fm_workbook_reset_theme(wb.handle), 0) << fm_get_last_error_message();
   int32_t source = -1;
   ReadColors(wb.handle, &source);
-  EXPECT_EQ(source, kSourceDefault);
+  EXPECT_EQ(source, FM_THEME_SOURCE_DEFAULT);
 }
 
 TEST(FormulonCApiTheme, ResetRemovesUnparseablePartAndRejectsNull) {
@@ -293,10 +289,10 @@ TEST(FormulonCApiTheme, ResetRemovesUnparseablePartAndRejectsNull) {
   Load(broken, &loaded);
   int32_t source = -1;
   ReadColors(loaded.handle, &source);
-  ASSERT_EQ(source, kSourceUnparseable);
+  ASSERT_EQ(source, FM_THEME_SOURCE_UNPARSEABLE);
   ASSERT_EQ(fm_workbook_reset_theme(loaded.handle), 0) << fm_get_last_error_message();
   ReadColors(loaded.handle, &source);
-  EXPECT_EQ(source, kSourceDefault);
+  EXPECT_EQ(source, FM_THEME_SOURCE_DEFAULT);
   EXPECT_TRUE(EntryText(Save(loaded.handle), "xl/theme/theme1.xml").empty());
 
   EXPECT_EQ(fm_workbook_reset_theme(nullptr), kNullPointer);
@@ -321,7 +317,7 @@ TEST(FormulonCApiTheme, ThemeAccessorsRejectNullArguments) {
   EXPECT_EQ(fm_workbook_set_theme_fonts(wb.handle, &fonts), kNullPointer);
   // A rejected edit generates no theme part.
   ReadColors(wb.handle, &source);
-  EXPECT_EQ(source, kSourceDefault);
+  EXPECT_EQ(source, FM_THEME_SOURCE_DEFAULT);
 }
 
 TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
@@ -501,13 +497,14 @@ TEST(FormulonCApiEffectiveStyle, CellRowColumnDefaultPrecedence) {
     int32_t source;
     uint32_t xf;
   } kCases[] = {
-      {4, 0, 0, static_cast<uint32_t>(xfs.cell)},    // A5: the cell's own xf
-      {4, 1, 1, static_cast<uint32_t>(xfs.row)},     // B5: no cell, the customFormat row
-      {4, 2, 1, static_cast<uint32_t>(xfs.row)},     // C5: the row wins over the column
-      {0, 2, 2, static_cast<uint32_t>(xfs.column)},  // C1: the column
-      {6, 2, 2, static_cast<uint32_t>(xfs.column)},  // C7: a row style without customFormat is inert
-      {6, 0, 3, 0U},                                 // A7: nothing applies
-      {0, 0, 3, 0U},                                 // A1: nothing applies
+      {4, 0, FM_EFFECTIVE_STYLE_SOURCE_CELL, static_cast<uint32_t>(xfs.cell)},      // A5: the cell's own xf
+      {4, 1, FM_EFFECTIVE_STYLE_SOURCE_ROW, static_cast<uint32_t>(xfs.row)},        // B5: no cell, the customFormat row
+      {4, 2, FM_EFFECTIVE_STYLE_SOURCE_ROW, static_cast<uint32_t>(xfs.row)},        // C5: the row wins over the column
+      {0, 2, FM_EFFECTIVE_STYLE_SOURCE_COLUMN, static_cast<uint32_t>(xfs.column)},  // C1: the column
+      // C7: a row style without customFormat is inert
+      {6, 2, FM_EFFECTIVE_STYLE_SOURCE_COLUMN, static_cast<uint32_t>(xfs.column)},
+      {6, 0, FM_EFFECTIVE_STYLE_SOURCE_DEFAULT, 0U},  // A7: nothing applies
+      {0, 0, FM_EFFECTIVE_STYLE_SOURCE_DEFAULT, 0U},  // A1: nothing applies
   };
   for (const auto& c : kCases) {
     const fm_effective_style_t style = Effective(loaded.handle, c.row, c.col);
@@ -516,7 +513,7 @@ TEST(FormulonCApiEffectiveStyle, CellRowColumnDefaultPrecedence) {
   }
   // An existing cell without its own style still reads as the cell level.
   const fm_effective_style_t d7 = Effective(loaded.handle, 6, 3);
-  EXPECT_EQ(d7.source, 0);
+  EXPECT_EQ(d7.source, FM_EFFECTIVE_STYLE_SOURCE_CELL);
   EXPECT_EQ(d7.xf_index, 0U);
 }
 
@@ -560,10 +557,17 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   EXPECT_EQ(Effective(wb.handle, 0, 0).font_resolution, FM_COLOR_RESOLUTION_EXACT);
 
   const fm_effective_style_t plain = Effective(wb.handle, 3, 3);
-  EXPECT_EQ(plain.source, 3);
+  EXPECT_EQ(plain.source, FM_EFFECTIVE_STYLE_SOURCE_DEFAULT);
   EXPECT_EQ(plain.locked, 1);
   EXPECT_EQ(plain.hidden, 0);
   EXPECT_STREQ(plain.num_fmt_code, "General");
+}
+
+TEST(FormulonCApiEffectiveStyle, SourceOrdinalsNameTheLevelsInPrecedenceOrder) {
+  EXPECT_EQ(FM_EFFECTIVE_STYLE_SOURCE_CELL, 0);
+  EXPECT_EQ(FM_EFFECTIVE_STYLE_SOURCE_ROW, 1);
+  EXPECT_EQ(FM_EFFECTIVE_STYLE_SOURCE_COLUMN, 2);
+  EXPECT_EQ(FM_EFFECTIVE_STYLE_SOURCE_DEFAULT, 3);
 }
 
 TEST(FormulonCApiEffectiveStyle, RejectsInvalidArguments) {
@@ -584,14 +588,14 @@ struct ScriptFont {
   std::string typeface;
 };
 
-std::vector<ScriptFont> ReadScriptFonts(const fm_workbook_t* wb, int32_t major) {
+std::vector<ScriptFont> ReadScriptFonts(const fm_workbook_t* wb, int32_t scheme) {
   size_t count = 0;
-  EXPECT_EQ(fm_workbook_get_theme_script_font_count(wb, major, &count), 0);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_count(wb, scheme, &count), 0);
   std::vector<ScriptFont> out;
   for (size_t i = 0; i < count; ++i) {
     const char* script = nullptr;
     const char* typeface = nullptr;
-    EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb, major, i, &script, &typeface), 0);
+    EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb, scheme, i, &script, &typeface), 0);
     if (script != nullptr && typeface != nullptr) {
       out.push_back({script, typeface});
     }
@@ -614,13 +618,13 @@ TEST(FormulonCApiTheme, ScriptFontsOfAThemelessWorkbookAreTheOfficeDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   size_t count = 0;
-  ASSERT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, 1, &count), 0);
+  ASSERT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, FM_FONT_SCHEME_MAJOR, &count), 0);
   EXPECT_EQ(count, 47U);
-  ASSERT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, FM_FONT_SCHEME_MINOR, &count), 0);
   EXPECT_EQ(count, 47U);
 
-  const std::vector<ScriptFont> major = ReadScriptFonts(wb.handle, 1);
-  const std::vector<ScriptFont> minor = ReadScriptFonts(wb.handle, 0);
+  const std::vector<ScriptFont> major = ReadScriptFonts(wb.handle, FM_FONT_SCHEME_MAJOR);
+  const std::vector<ScriptFont> minor = ReadScriptFonts(wb.handle, FM_FONT_SCHEME_MINOR);
   EXPECT_EQ(Typeface(major, "Jpan"), kYuGothicLight);
   EXPECT_EQ(Typeface(minor, "Jpan"), kYuGothic);
   EXPECT_EQ(Typeface(major, "Khmr"), "MoolBoran");
@@ -632,27 +636,28 @@ TEST(FormulonCApiTheme, ScriptFontAtRejectsAnOutOfRangeIndexAndNulls) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* script = nullptr;
   const char* typeface = nullptr;
-  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, 1, 47U, &script, &typeface), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, FM_FONT_SCHEME_MAJOR, 47U, &script, &typeface),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   size_t count = 0;
-  EXPECT_EQ(fm_workbook_get_theme_script_font_count(nullptr, 1, &count), kNullPointer);
-  EXPECT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, 1, nullptr), kNullPointer);
-  EXPECT_EQ(fm_workbook_get_theme_script_font_at(nullptr, 1, 0, &script, &typeface), kNullPointer);
-  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, 1, 0, nullptr, &typeface), kNullPointer);
-  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, 1, 0, &script, nullptr), kNullPointer);
-  EXPECT_EQ(fm_workbook_set_theme_script_font(nullptr, 1, "Hang", "X"), kNullPointer);
-  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, nullptr, "X"), kNullPointer);
-  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Hang", nullptr), kNullPointer);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_count(nullptr, FM_FONT_SCHEME_MAJOR, &count), kNullPointer);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, FM_FONT_SCHEME_MAJOR, nullptr), kNullPointer);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_at(nullptr, FM_FONT_SCHEME_MAJOR, 0, &script, &typeface), kNullPointer);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, FM_FONT_SCHEME_MAJOR, 0, nullptr, &typeface), kNullPointer);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, FM_FONT_SCHEME_MAJOR, 0, &script, nullptr), kNullPointer);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(nullptr, FM_FONT_SCHEME_MAJOR, "Hang", "X"), kNullPointer);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, nullptr, "X"), kNullPointer);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Hang", nullptr), kNullPointer);
 }
 
 TEST(FormulonCApiTheme, SetScriptFontSurvivesSaveReloadAndLeavesTheRestAlone) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const std::vector<ScriptFont> before = ReadScriptFonts(wb.handle, 1);
-  ASSERT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Hang", "Test Face"), 0);
+  const std::vector<ScriptFont> before = ReadScriptFonts(wb.handle, FM_FONT_SCHEME_MAJOR);
+  ASSERT_EQ(fm_workbook_set_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Hang", "Test Face"), 0);
 
   WorkbookGuard reloaded;
   Load(Save(wb.handle), &reloaded);
-  const std::vector<ScriptFont> after = ReadScriptFonts(reloaded.handle, 1);
+  const std::vector<ScriptFont> after = ReadScriptFonts(reloaded.handle, FM_FONT_SCHEME_MAJOR);
   ASSERT_EQ(after.size(), 47U);
   EXPECT_EQ(Typeface(after, "Hang"), "Test Face");
   for (const ScriptFont& font : before) {
@@ -661,13 +666,50 @@ TEST(FormulonCApiTheme, SetScriptFontSurvivesSaveReloadAndLeavesTheRestAlone) {
     }
   }
   // The minor set is untouched.
-  EXPECT_NE(Typeface(ReadScriptFonts(reloaded.handle, 0), "Hang"), "Test Face");
+  EXPECT_NE(Typeface(ReadScriptFonts(reloaded.handle, FM_FONT_SCHEME_MINOR), "Hang"), "Test Face");
+}
+
+TEST(FormulonCApiTheme, ThemeSourceOrdinals) {
+  EXPECT_EQ(FM_THEME_SOURCE_PART, 0);
+  EXPECT_EQ(FM_THEME_SOURCE_DEFAULT, 1);
+  EXPECT_EQ(FM_THEME_SOURCE_UNPARSEABLE, 2);
+}
+
+// The font set is named by `fm_font_scheme_t`; `NONE` names no set, and a
+// zero no longer means the minor set.
+TEST(FormulonCApiTheme, ScriptFontCallsTakeMajorOrMinorSchemeOnly) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  size_t count = 0;
+  const char* script = nullptr;
+  const char* typeface = nullptr;
+  int32_t present = 0;
+  for (int32_t scheme :
+       {static_cast<int32_t>(FM_FONT_SCHEME_NONE), static_cast<int32_t>(FM_FONT_SCHEME_MINOR) + 1, -1}) {
+    EXPECT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, scheme, &count), kInvalidArgument) << scheme;
+    EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, scheme, 0, &script, &typeface), kInvalidArgument)
+        << scheme;
+    EXPECT_EQ(fm_workbook_get_theme_script_font(wb.handle, scheme, "Jpan", &present, &typeface), kInvalidArgument)
+        << scheme;
+    EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, scheme, "Jpan", "X"), kInvalidArgument) << scheme;
+  }
+  // A rejected set leaves the workbook without a theme part.
+  int32_t source = -1;
+  ReadColors(wb.handle, &source);
+  EXPECT_EQ(source, FM_THEME_SOURCE_DEFAULT);
+
+  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, FM_FONT_SCHEME_MINOR, "Jpan", &present, &typeface), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_STREQ(typeface, kYuGothic);
+  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Jpan", &present, &typeface), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_STREQ(typeface, kYuGothicLight);
 }
 
 TEST(FormulonCApiTheme, SetScriptFontRejectsAMalformedScriptOrEmptyTypeface) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Jp", "X"), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Jpa1", "X"), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Jpan", ""), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Jp", "X"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Jpa1", "X"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Jpan", ""), kInvalidArgument);
 }

@@ -69,11 +69,7 @@ collections:
   table_style: { key: natural, by: name, plural: table_styles, ops: [table_style.get, table_style.get_at, table_style.get_count, table_style.remove, table_style.set] }
   cell_style: { key: natural, by: name, plural: cell_styles, ops: [cell_style.get, cell_style.get_at, cell_style.get_count, cell_style.remove, cell_style.set] }
 enum_families:
-  sort_order: [enum.pivot_sort_order, enum.slicer_sort]
   anchor: [enum.anchor_kind, enum.anchor_edit_as]
-  blanks: [enum.chart_blanks_as, enum.sparkline_empty_cells]
-  # side: Bottom 0, Top 1, Left 2, Right 3; the legend adds TopRight 4 (its None is a record null)
-  side: [enum.chart_axis_position, enum.chart_legend_position]
   # reading direction: Context 0, LeftToRight 1, RightToLeft 2 (`readingOrder` / `<x14:dataBar direction>`)
   reading_direction: [enum.reading_order, enum.cf_data_bar_direction]
 enum_distinct:
@@ -102,13 +98,22 @@ enum_distinct:
   - { enums: [enum.pivot_filter_value_kind, enum.underline_style], reason: "share None / Double: filter operand kind vs font underline; values follow the OOXML vocabulary order" }
   - { enums: [enum.fill_pattern, enum.shape_paint], reason: "share None / Solid: cell fill pattern vs shape fill paint; values follow the OOXML vocabulary order" }
   - { enums: [enum.cf_match_kind, enum.cf_rule_type], reason: "share ColorScale / DataBar / IconSet: kind of a matched rule's result vs kind of the rule" }
+  - { enums: [enum.chart_label_position, enum.phonetic_alignment], reason: "share Left / Center: data-label placement vs furigana alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.horizontal_align, enum.phonetic_alignment], reason: "share Left / Center / Distributed: cell horizontal alignment vs furigana alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.phonetic_alignment, enum.vertical_align], reason: "share Center / Distributed: furigana alignment vs cell vertical alignment; values follow the OOXML vocabulary order" }
+  - { enums: [enum.cf_time_period, enum.pivot_filter_type], reason: "the pivot filter kinds are a larger set mixing label, value and date kinds; the shared date periods are spelled alike" }
+  - { enums: [enum.dynamic_filter_type, enum.pivot_filter_type], reason: "AutoFilter dynamic kinds vs pivot filter kinds: different sets over different schema types; the shared periods are spelled alike" }
+  - { enums: [enum.cf_value_object_type, enum.table_totals_row_function], reason: "share Min / Max: threshold source vs totals-row function" }
+  - { enums: [enum.chart_axis_crosses, enum.table_totals_row_function], reason: "share Min / Max: axis crossing point vs totals-row function" }
+  - { enums: [enum.filter_kind, enum.table_totals_row_function], reason: "share None / Custom: filter criterion kind vs totals-row function" }
+  - { enums: [enum.pivot_aggregation, enum.table_totals_row_function], reason: "totals-row functions follow ST_TotalsRowFunction (with None and Custom) and pivot aggregations ST_DataConsolidateFunction; the order differs by schema" }
+  - { enums: [enum.table_totals_row_function, enum.validation_type], reason: "share None / Custom: totals-row function vs validation type" }
   - { enums: [enum.cf_value_object_type, enum.chart_axis_crosses], reason: "share Min / Max: threshold kind vs axis crossing point" }
   - { enums: [enum.cf_time_period, enum.dynamic_filter_type], reason: "share Today / Yesterday / week and month periods: conditional-format time period vs AutoFilter dynamic filter" }
-  - { enums: [enum.cf_operator, enum.filter_operator], reason: "share the comparison operators: conditional-format cell-is operator vs AutoFilter custom-filter operator" }
   - { enums: [enum.cf_value_object_type, enum.pivot_aggregation], reason: "share Min / Max: threshold kind vs aggregation function" }
-  - { enums: [enum.cf_operator, enum.validation_operator], reason: "share the comparison operators: conditional-format cell-is operator vs data-validation operator" }
-  - { enums: [enum.filter_operator, enum.validation_operator], reason: "share the comparison operators: AutoFilter custom-filter operator vs data-validation operator" }
   - { enums: [enum.filter_kind, enum.validation_type], reason: "share None / Custom: AutoFilter column kind vs data-validation type" }
+  - { enums: [enum.pivot_sort_order, enum.slicer_sort], reason: "share Ascending / Descending: each zero is its OOXML default, Manual for a pivot field and Ascending for a slicer" }
+  - { enums: [enum.chart_axis_position, enum.chart_legend_position], reason: "share Bottom / Top / Left / Right: axis side vs legend placement; the legend's zero is its OOXML default Right" }
 # R42: field and parameter names that carry a dimension word but no unit; reasons in the R42-11 row.
 unitless: [indent, relative_indent, text_rotation, fit_to_width, fit_to_height, custom_height, zero_height, scale_with_doc, align_with_margins, struct_size, column_offset]
 entries:
@@ -283,6 +288,8 @@ entries:
     js: ValidationOperator
     py: ValidationOperator
     surfaces: [c, wasm, native, py]
+    replaced_by: enum.filter_operator
+    closes: R19.c
   record.data_validation:
     kind: record
     role: result
@@ -411,11 +418,13 @@ entries:
     js: CfOperator
     py: CfOperator
     surfaces: [c, wasm, native, py]
+    replaced_by: enum.filter_operator
+    closes: R19.c
   enum.cf_time_period:
     kind: enum
-    c: fm_cf_time_period_t
-    js: CfTimePeriod
-    py: CfTimePeriod
+    c: fm_date_period_t
+    js: DatePeriod
+    py: DatePeriod
     surfaces: [c, wasm, native, py]
   enum.cf_value_object_type:
     kind: enum
@@ -425,7 +434,7 @@ entries:
     surfaces: [c, wasm, native, py]
   enum.icon_set:
     kind: enum
-    c: fm_icon_set_t
+    c: fm_icon_set_name_t
     js: IconSetName
     py: IconSetName
     surfaces: [c, wasm, native, py]
@@ -700,6 +709,7 @@ entries:
     py: PivotFilterOperandKind
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_filter_value_kind_t, js: PivotFilterValueKind, py: PivotFilterValueKind }
+    drop: { js: PivotFilterOperandKind, py: PivotFilterOperandKind, closes: R7.js }
   record.pivot_field_spec:
     kind: record
     role: input
@@ -900,9 +910,9 @@ entries:
     was: { c: fm_filter_kind_t, js: FilterKind, py: FilterKind }
   enum.filter_operator:
     kind: enum
-    c: fm_filter_operator_t
-    js: FilterOperator
-    py: FilterOperator
+    c: fm_comparison_operator_t
+    js: ComparisonOperator
+    py: ComparisonOperator
     surfaces: [c, wasm, native, py]
     was: { c: fm_filter_operator_t, js: FilterOperator, py: FilterOperator }
   enum.dynamic_filter_type:
@@ -1670,6 +1680,8 @@ entries:
     py: SparklineEmptyCells
     surfaces: [c, wasm, native, py]
     was: { c: fm_sparkline_empty_cells_t, js: SparklineEmptyCells, py: SparklineEmptyCells }
+    replaced_by: enum.chart_blanks_as
+    closes: R19.c
   record.sparkline:
     kind: record
     role: result
@@ -1771,9 +1783,9 @@ entries:
     was: { c: fm_chart_grouping_t, js: ChartGrouping, py: ChartGrouping }
   enum.chart_blanks_as:
     kind: enum
-    c: fm_chart_blanks_as_t
-    js: ChartBlanksAs
-    py: ChartBlanksAs
+    c: fm_blanks_as_t
+    js: BlanksAs
+    py: BlanksAs
     surfaces: [c, wasm, native, py]
     was: { c: fm_chart_blanks_as_t, js: ChartBlanksAs, py: ChartBlanksAs }
   enum.chart_point_state:
@@ -2450,7 +2462,8 @@ entries:
     kind: enum
     js: EffectiveStyleSource
     py: EffectiveStyleSource
-    surfaces: [wasm, native, py]
+    c: fm_effective_style_source_t
+    surfaces: [c, wasm, native, py]
     was: { js: EffectiveStyleSource, py: EffectiveStyleSource }
   record.eval_array_result:
     kind: record
@@ -2827,6 +2840,10 @@ entries:
     py: PivotDatePeriod
     surfaces: [wasm, native, py]
     was: { js: PivotDatePeriod, py: PivotDatePeriod }
+  type.pivot_date_period_mask:
+    kind: typedef
+    js: PivotDatePeriodMask
+    surfaces: [wasm, native]
   record.pivot_field_order_result:
     kind: record
     role: result
@@ -3210,13 +3227,19 @@ entries:
   enum.table_style_element_type:
     kind: enum
     js: TableStyleElementType
-    surfaces: [wasm, native]
+    py: TableStyleElementType
+    c: fm_table_style_element_type_t
+    surfaces: [c, wasm, native, py]
     was: { js: TableStyleElementType }
+    closes: R38.enum.numeric
   enum.table_totals_row_function:
     kind: enum
     js: TableTotalsRowFunction
-    surfaces: [wasm, native]
+    py: TableTotalsRowFunction
+    c: fm_table_totals_row_function_t
+    surfaces: [c, wasm, native, py]
     was: { js: TableTotalsRowFunction }
+    closes: R38.enum.numeric
   record.table_update_input:
     kind: record
     role: input
@@ -3274,7 +3297,8 @@ entries:
     kind: enum
     js: ThemeSource
     py: ThemeSource
-    surfaces: [wasm, native, py]
+    c: fm_theme_source_t
+    surfaces: [c, wasm, native, py]
     was: { js: ThemeSource, py: ThemeSource }
   record.threaded_comments_result:
     kind: record
@@ -3981,13 +4005,14 @@ entries:
     kind: op
     scope: sheet
     noun: formula
-    c: fm_sheet_evaluate_formula
     js: evaluateFormula
     py: evaluate_formula
     cell_args: [[0, 1]]
-    reads_values: true
-    surfaces: [c, wasm, native, py]
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: the top-left element of fm_sheet_evaluate_formula_array"
     was: { c: fm_workbook_evaluate_formula, js: evaluateFormulaText }
+    drop: { c: fm_workbook_evaluate_formula, closes: R0.coverage }
+    facade: handwritten
   cf_formula.evaluate:
     kind: op
     scope: sheet
@@ -3997,6 +4022,7 @@ entries:
     py: evaluate_cf_formula
     cell_args: [[0, 1], [2, 3]]
     reads_values: true
+    returns: bool
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_cf_formula, js: evaluateConditionalFormula, py: evaluate_cf_formula }
   formula_array.evaluate:
@@ -5145,6 +5171,7 @@ entries:
     scope: pagination
     noun: page_order
     c: fm_pagination_get_page_order
+    returns: "enum:page_order"
     surfaces: [c]
     was: { c: fm_pagination_page_order }
   pagination.get_print_titles:
@@ -5508,7 +5535,6 @@ entries:
     py: evaluate_cf_range
     rect_args: [0]
     reads_values: true
-    params: { today_serial: { default: today } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_cf_evaluate_range, js: evaluateCfRange, py: evaluate_cf_range }
   cf_results.destroy:
@@ -8211,7 +8237,7 @@ entries:
     c: fm_workbook_set_theme_script_font
     js: setThemeScriptFont
     py: set_theme_script_font
-    params: { major: bool }
+    params: { scheme: "enum:font_scheme" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_theme_script_font, js: setThemeScriptFont, py: set_theme_script_font }
     facade: handwritten
@@ -9089,7 +9115,7 @@ entries:
     c: fm_workbook_get_theme_script_font
     js: getThemeScriptFont
     py: get_theme_script_font
-    params: { major: bool }
+    params: { scheme: "enum:font_scheme" }
     surfaces: [c, wasm, native, py]
     missing: null
   function_names.list:
@@ -9962,195 +9988,259 @@ entries:
     was: { c: FM_PIVOT_FILTER_DATE_NOT_BETWEEN }
   constant.fm_pivot_filter_date_tomorrow:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_TOMORROW
+    c: FM_PIVOT_FILTER_KIND_TOMORROW
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: Tomorrow
+    py: TOMORROW
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_TOMORROW }
   constant.fm_pivot_filter_date_today:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_TODAY
+    c: FM_PIVOT_FILTER_KIND_TODAY
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: Today
+    py: TODAY
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_TODAY }
   constant.fm_pivot_filter_date_yesterday:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_YESTERDAY
+    c: FM_PIVOT_FILTER_KIND_YESTERDAY
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: Yesterday
+    py: YESTERDAY
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_YESTERDAY }
   constant.fm_pivot_filter_date_next_week:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_NEXT_WEEK
+    c: FM_PIVOT_FILTER_KIND_NEXT_WEEK
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: NextWeek
+    py: NEXT_WEEK
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NEXT_WEEK }
   constant.fm_pivot_filter_date_this_week:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_THIS_WEEK
+    c: FM_PIVOT_FILTER_KIND_THIS_WEEK
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ThisWeek
+    py: THIS_WEEK
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_THIS_WEEK }
   constant.fm_pivot_filter_date_last_week:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_LAST_WEEK
+    c: FM_PIVOT_FILTER_KIND_LAST_WEEK
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LastWeek
+    py: LAST_WEEK
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_LAST_WEEK }
   constant.fm_pivot_filter_date_next_month:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_NEXT_MONTH
+    c: FM_PIVOT_FILTER_KIND_NEXT_MONTH
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: NextMonth
+    py: NEXT_MONTH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NEXT_MONTH }
   constant.fm_pivot_filter_date_this_month:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_THIS_MONTH
+    c: FM_PIVOT_FILTER_KIND_THIS_MONTH
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ThisMonth
+    py: THIS_MONTH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_THIS_MONTH }
   constant.fm_pivot_filter_date_last_month:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_LAST_MONTH
+    c: FM_PIVOT_FILTER_KIND_LAST_MONTH
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LastMonth
+    py: LAST_MONTH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_LAST_MONTH }
   constant.fm_pivot_filter_date_next_quarter:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_NEXT_QUARTER
+    c: FM_PIVOT_FILTER_KIND_NEXT_QUARTER
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: NextQuarter
+    py: NEXT_QUARTER
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NEXT_QUARTER }
   constant.fm_pivot_filter_date_this_quarter:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_THIS_QUARTER
+    c: FM_PIVOT_FILTER_KIND_THIS_QUARTER
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ThisQuarter
+    py: THIS_QUARTER
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_THIS_QUARTER }
   constant.fm_pivot_filter_date_last_quarter:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_LAST_QUARTER
+    c: FM_PIVOT_FILTER_KIND_LAST_QUARTER
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LastQuarter
+    py: LAST_QUARTER
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_LAST_QUARTER }
   constant.fm_pivot_filter_date_next_year:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_NEXT_YEAR
+    c: FM_PIVOT_FILTER_KIND_NEXT_YEAR
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: NextYear
+    py: NEXT_YEAR
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NEXT_YEAR }
   constant.fm_pivot_filter_date_this_year:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_THIS_YEAR
+    c: FM_PIVOT_FILTER_KIND_THIS_YEAR
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ThisYear
+    py: THIS_YEAR
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_THIS_YEAR }
   constant.fm_pivot_filter_date_last_year:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_LAST_YEAR
+    c: FM_PIVOT_FILTER_KIND_LAST_YEAR
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LastYear
+    py: LAST_YEAR
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_LAST_YEAR }
   constant.fm_pivot_filter_date_year_to_date:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_YEAR_TO_DATE
+    c: FM_PIVOT_FILTER_KIND_YEAR_TO_DATE
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: YearToDate
+    py: YEAR_TO_DATE
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_YEAR_TO_DATE }
   constant.fm_pivot_filter_date_q1:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_Q1
+    c: FM_PIVOT_FILTER_KIND_Q1
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: Q1
+    py: Q1
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_Q1 }
   constant.fm_pivot_filter_date_q2:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_Q2
+    c: FM_PIVOT_FILTER_KIND_Q2
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: Q2
+    py: Q2
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_Q2 }
   constant.fm_pivot_filter_date_q3:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_Q3
+    c: FM_PIVOT_FILTER_KIND_Q3
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: Q3
+    py: Q3
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_Q3 }
   constant.fm_pivot_filter_date_q4:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_Q4
+    c: FM_PIVOT_FILTER_KIND_Q4
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: Q4
+    py: Q4
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_Q4 }
   constant.fm_pivot_filter_date_m1:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M1
+    c: FM_PIVOT_FILTER_KIND_M1
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M1
+    py: M1
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M1 }
   constant.fm_pivot_filter_date_m2:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M2
+    c: FM_PIVOT_FILTER_KIND_M2
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M2
+    py: M2
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M2 }
   constant.fm_pivot_filter_date_m3:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M3
+    c: FM_PIVOT_FILTER_KIND_M3
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M3
+    py: M3
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M3 }
   constant.fm_pivot_filter_date_m4:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M4
+    c: FM_PIVOT_FILTER_KIND_M4
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M4
+    py: M4
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M4 }
   constant.fm_pivot_filter_date_m5:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M5
+    c: FM_PIVOT_FILTER_KIND_M5
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M5
+    py: M5
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M5 }
   constant.fm_pivot_filter_date_m6:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M6
+    c: FM_PIVOT_FILTER_KIND_M6
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M6
+    py: M6
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M6 }
   constant.fm_pivot_filter_date_m7:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M7
+    c: FM_PIVOT_FILTER_KIND_M7
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M7
+    py: M7
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M7 }
   constant.fm_pivot_filter_date_m8:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M8
+    c: FM_PIVOT_FILTER_KIND_M8
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M8
+    py: M8
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M8 }
   constant.fm_pivot_filter_date_m9:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M9
+    c: FM_PIVOT_FILTER_KIND_M9
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M9
+    py: M9
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M9 }
   constant.fm_pivot_filter_date_m10:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M10
+    c: FM_PIVOT_FILTER_KIND_M10
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M10
+    py: M10
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M10 }
   constant.fm_pivot_filter_date_m11:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M11
+    c: FM_PIVOT_FILTER_KIND_M11
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M11
+    py: M11
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M11 }
   constant.fm_pivot_filter_date_m12:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_DATE_M12
+    c: FM_PIVOT_FILTER_KIND_M12
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: M12
+    py: M12
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_M12 }
   constant.fm_pivot_calendar_gregorian:
     kind: constant
@@ -10364,37 +10454,37 @@ entries:
     was: { c: FM_FILTER_KIND_ICON }
   constant.fm_filter_operator_equal:
     kind: constant
-    c: FM_FILTER_OPERATOR_EQUAL
+    c: FM_COMPARISON_OPERATOR_EQUAL
     enum: enum.filter_operator
     surfaces: [c]
     was: { c: FM_FILTER_OPERATOR_EQUAL }
   constant.fm_filter_operator_less_than:
     kind: constant
-    c: FM_FILTER_OPERATOR_LESS_THAN
+    c: FM_COMPARISON_OPERATOR_LESS_THAN
     enum: enum.filter_operator
     surfaces: [c]
     was: { c: FM_FILTER_OPERATOR_LESS_THAN }
   constant.fm_filter_operator_less_than_or_equal:
     kind: constant
-    c: FM_FILTER_OPERATOR_LESS_THAN_OR_EQUAL
+    c: FM_COMPARISON_OPERATOR_LESS_THAN_OR_EQUAL
     enum: enum.filter_operator
     surfaces: [c]
     was: { c: FM_FILTER_OPERATOR_LESS_THAN_OR_EQUAL }
   constant.fm_filter_operator_not_equal:
     kind: constant
-    c: FM_FILTER_OPERATOR_NOT_EQUAL
+    c: FM_COMPARISON_OPERATOR_NOT_EQUAL
     enum: enum.filter_operator
     surfaces: [c]
     was: { c: FM_FILTER_OPERATOR_NOT_EQUAL }
   constant.fm_filter_operator_greater_than_or_equal:
     kind: constant
-    c: FM_FILTER_OPERATOR_GREATER_THAN_OR_EQUAL
+    c: FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL
     enum: enum.filter_operator
     surfaces: [c]
     was: { c: FM_FILTER_OPERATOR_GREATER_THAN_OR_EQUAL }
   constant.fm_filter_operator_greater_than:
     kind: constant
-    c: FM_FILTER_OPERATOR_GREATER_THAN
+    c: FM_COMPARISON_OPERATOR_GREATER_THAN
     enum: enum.filter_operator
     surfaces: [c]
     was: { c: FM_FILTER_OPERATOR_GREATER_THAN }
@@ -10980,18 +11070,21 @@ entries:
     enum: enum.sparkline_empty_cells
     surfaces: [c]
     was: { c: FM_SPARKLINE_EMPTY_GAP }
+    drop: { c: FM_SPARKLINE_EMPTY_CELLS_GAP, closes: R19.c }
   constant.fm_sparkline_empty_zero:
     kind: constant
     c: FM_SPARKLINE_EMPTY_CELLS_ZERO
     enum: enum.sparkline_empty_cells
     surfaces: [c]
     was: { c: FM_SPARKLINE_EMPTY_ZERO }
+    drop: { c: FM_SPARKLINE_EMPTY_CELLS_ZERO, closes: R19.c }
   constant.fm_sparkline_empty_span:
     kind: constant
     c: FM_SPARKLINE_EMPTY_CELLS_SPAN
     enum: enum.sparkline_empty_cells
     surfaces: [c]
     was: { c: FM_SPARKLINE_EMPTY_SPAN }
+    drop: { c: FM_SPARKLINE_EMPTY_CELLS_SPAN, closes: R19.c }
   constant.fm_chart_plot_bar:
     kind: constant
     c: FM_CHART_PLOT_TYPE_BAR
@@ -11164,25 +11257,25 @@ entries:
     was: { c: FM_CHART_GROUPING_STANDARD }
   constant.fm_chart_blanks_absent:
     kind: constant
-    c: FM_CHART_BLANKS_AS_ABSENT
+    c: FM_BLANKS_AS_ABSENT
     enum: enum.chart_blanks_as
     surfaces: [c]
     was: { c: FM_CHART_BLANKS_ABSENT }
   constant.fm_chart_blanks_gap:
     kind: constant
-    c: FM_CHART_BLANKS_AS_GAP
+    c: FM_BLANKS_AS_GAP
     enum: enum.chart_blanks_as
     surfaces: [c]
     was: { c: FM_CHART_BLANKS_GAP }
   constant.fm_chart_blanks_zero:
     kind: constant
-    c: FM_CHART_BLANKS_AS_ZERO
+    c: FM_BLANKS_AS_ZERO
     enum: enum.chart_blanks_as
     surfaces: [c]
     was: { c: FM_CHART_BLANKS_ZERO }
   constant.fm_chart_blanks_span:
     kind: constant
-    c: FM_CHART_BLANKS_AS_SPAN
+    c: FM_BLANKS_AS_SPAN
     enum: enum.chart_blanks_as
     surfaces: [c]
     was: { c: FM_CHART_BLANKS_SPAN }
@@ -11658,42 +11751,66 @@ entries:
   constant.fm_phonetic_type_halfwidth_katakana:
     kind: constant
     c: FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA
-    surfaces: [c]
+    enum: enum.phonetic_type
+    js: HalfwidthKatakana
+    py: HALFWIDTH_KATAKANA
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA }
   constant.fm_phonetic_type_fullwidth_katakana:
     kind: constant
     c: FM_PHONETIC_TYPE_FULLWIDTH_KATAKANA
-    surfaces: [c]
+    enum: enum.phonetic_type
+    js: FullwidthKatakana
+    py: FULLWIDTH_KATAKANA
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_TYPE_FULLWIDTH_KATAKANA }
   constant.fm_phonetic_type_hiragana:
     kind: constant
     c: FM_PHONETIC_TYPE_HIRAGANA
-    surfaces: [c]
+    enum: enum.phonetic_type
+    js: Hiragana
+    py: HIRAGANA
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_TYPE_HIRAGANA }
   constant.fm_phonetic_type_no_conversion:
     kind: constant
     c: FM_PHONETIC_TYPE_NO_CONVERSION
-    surfaces: [c]
+    enum: enum.phonetic_type
+    js: NoConversion
+    py: NO_CONVERSION
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_TYPE_NO_CONVERSION }
   constant.fm_phonetic_alignment_no_control:
     kind: constant
     c: FM_PHONETIC_ALIGNMENT_NO_CONTROL
-    surfaces: [c]
+    enum: enum.phonetic_alignment
+    js: NoControl
+    py: NO_CONTROL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_ALIGNMENT_NO_CONTROL }
   constant.fm_phonetic_alignment_left:
     kind: constant
     c: FM_PHONETIC_ALIGNMENT_LEFT
-    surfaces: [c]
+    enum: enum.phonetic_alignment
+    js: Left
+    py: LEFT
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_ALIGNMENT_LEFT }
   constant.fm_phonetic_alignment_center:
     kind: constant
     c: FM_PHONETIC_ALIGNMENT_CENTER
-    surfaces: [c]
+    enum: enum.phonetic_alignment
+    js: Center
+    py: CENTER
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_ALIGNMENT_CENTER }
   constant.fm_phonetic_alignment_distributed:
     kind: constant
     c: FM_PHONETIC_ALIGNMENT_DISTRIBUTED
-    surfaces: [c]
+    enum: enum.phonetic_alignment
+    js: Distributed
+    py: DISTRIBUTED
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PHONETIC_ALIGNMENT_DISTRIBUTED }
   constant.fm_pivot_values_field:
     kind: constant
@@ -12807,7 +12924,8 @@ entries:
     kind: free
     scope: process
     js: toNative
-    surfaces: [wasm, native]
+    py: to_native
+    surfaces: [wasm, native, py]
     exception: "binding-only helper that maps a Value to its native JS value; Python has Value.to_python()"
   binding.table:
     kind: op
@@ -13703,147 +13821,155 @@ entries:
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_BETWEEN }
+    drop: { c: FM_VALIDATION_OPERATOR_BETWEEN, closes: R19.c }
   constant.fm_validation_operator_not_between:
     kind: constant
     c: FM_VALIDATION_OPERATOR_NOT_BETWEEN
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_NOT_BETWEEN }
+    drop: { c: FM_VALIDATION_OPERATOR_NOT_BETWEEN, closes: R19.c }
   constant.fm_validation_operator_equal:
     kind: constant
     c: FM_VALIDATION_OPERATOR_EQUAL
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_EQUAL }
+    drop: { c: FM_VALIDATION_OPERATOR_EQUAL, closes: R19.c }
   constant.fm_validation_operator_not_equal:
     kind: constant
     c: FM_VALIDATION_OPERATOR_NOT_EQUAL
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_NOT_EQUAL }
+    drop: { c: FM_VALIDATION_OPERATOR_NOT_EQUAL, closes: R19.c }
   constant.fm_validation_operator_greater_than:
     kind: constant
     c: FM_VALIDATION_OPERATOR_GREATER_THAN
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_GREATER_THAN }
+    drop: { c: FM_VALIDATION_OPERATOR_GREATER_THAN, closes: R19.c }
   constant.fm_validation_operator_less_than:
     kind: constant
     c: FM_VALIDATION_OPERATOR_LESS_THAN
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_LESS_THAN }
+    drop: { c: FM_VALIDATION_OPERATOR_LESS_THAN, closes: R19.c }
   constant.fm_validation_operator_greater_than_or_equal:
     kind: constant
     c: FM_VALIDATION_OPERATOR_GREATER_THAN_OR_EQUAL
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_GREATER_THAN_OR_EQUAL }
+    drop: { c: FM_VALIDATION_OPERATOR_GREATER_THAN_OR_EQUAL, closes: R19.c }
   constant.fm_validation_operator_less_than_or_equal:
     kind: constant
     c: FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL
     enum: enum.validation_operator
     surfaces: [c]
     was: { c: FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL }
+    drop: { c: FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL, closes: R19.c }
   constant.fm_icon_set_3_arrows:
     kind: constant
-    c: FM_ICON_SET_3_ARROWS
+    c: FM_ICON_SET_NAME_3_ARROWS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_ARROWS }
   constant.fm_icon_set_3_arrows_gray:
     kind: constant
-    c: FM_ICON_SET_3_ARROWS_GRAY
+    c: FM_ICON_SET_NAME_3_ARROWS_GRAY
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_ARROWS_GRAY }
   constant.fm_icon_set_3_flags:
     kind: constant
-    c: FM_ICON_SET_3_FLAGS
+    c: FM_ICON_SET_NAME_3_FLAGS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_FLAGS }
   constant.fm_icon_set_3_traffic_lights_1:
     kind: constant
-    c: FM_ICON_SET_3_TRAFFIC_LIGHTS_1
+    c: FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_1
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_TRAFFIC_LIGHTS_1 }
   constant.fm_icon_set_3_traffic_lights_2:
     kind: constant
-    c: FM_ICON_SET_3_TRAFFIC_LIGHTS_2
+    c: FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_2
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_TRAFFIC_LIGHTS_2 }
   constant.fm_icon_set_3_signs:
     kind: constant
-    c: FM_ICON_SET_3_SIGNS
+    c: FM_ICON_SET_NAME_3_SIGNS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_SIGNS }
   constant.fm_icon_set_3_symbols:
     kind: constant
-    c: FM_ICON_SET_3_SYMBOLS
+    c: FM_ICON_SET_NAME_3_SYMBOLS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_SYMBOLS }
   constant.fm_icon_set_3_symbols_2:
     kind: constant
-    c: FM_ICON_SET_3_SYMBOLS_2
+    c: FM_ICON_SET_NAME_3_SYMBOLS_2
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_3_SYMBOLS_2 }
   constant.fm_icon_set_4_arrows:
     kind: constant
-    c: FM_ICON_SET_4_ARROWS
+    c: FM_ICON_SET_NAME_4_ARROWS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_4_ARROWS }
   constant.fm_icon_set_4_arrows_gray:
     kind: constant
-    c: FM_ICON_SET_4_ARROWS_GRAY
+    c: FM_ICON_SET_NAME_4_ARROWS_GRAY
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_4_ARROWS_GRAY }
   constant.fm_icon_set_4_red_to_black:
     kind: constant
-    c: FM_ICON_SET_4_RED_TO_BLACK
+    c: FM_ICON_SET_NAME_4_RED_TO_BLACK
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_4_RED_TO_BLACK }
   constant.fm_icon_set_4_rating:
     kind: constant
-    c: FM_ICON_SET_4_RATING
+    c: FM_ICON_SET_NAME_4_RATING
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_4_RATING }
   constant.fm_icon_set_4_traffic_lights:
     kind: constant
-    c: FM_ICON_SET_4_TRAFFIC_LIGHTS
+    c: FM_ICON_SET_NAME_4_TRAFFIC_LIGHTS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_4_TRAFFIC_LIGHTS }
   constant.fm_icon_set_5_arrows:
     kind: constant
-    c: FM_ICON_SET_5_ARROWS
+    c: FM_ICON_SET_NAME_5_ARROWS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_5_ARROWS }
   constant.fm_icon_set_5_arrows_gray:
     kind: constant
-    c: FM_ICON_SET_5_ARROWS_GRAY
+    c: FM_ICON_SET_NAME_5_ARROWS_GRAY
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_5_ARROWS_GRAY }
   constant.fm_icon_set_5_rating:
     kind: constant
-    c: FM_ICON_SET_5_RATING
+    c: FM_ICON_SET_NAME_5_RATING
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_5_RATING }
   constant.fm_icon_set_5_quarters:
     kind: constant
-    c: FM_ICON_SET_5_QUARTERS
+    c: FM_ICON_SET_NAME_5_QUARTERS
     enum: enum.icon_set
     surfaces: [c]
     was: { c: FM_ICON_SET_5_QUARTERS }
@@ -13961,108 +14087,136 @@ entries:
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_LESS_THAN }
+    drop: { c: FM_CF_OPERATOR_LESS_THAN, closes: R19.c }
   constant.fm_cf_operator_less_than_or_equal:
     kind: constant
     c: FM_CF_OPERATOR_LESS_THAN_OR_EQUAL
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_LESS_THAN_OR_EQUAL }
+    drop: { c: FM_CF_OPERATOR_LESS_THAN_OR_EQUAL, closes: R19.c }
   constant.fm_cf_operator_equal:
     kind: constant
     c: FM_CF_OPERATOR_EQUAL
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_EQUAL }
+    drop: { c: FM_CF_OPERATOR_EQUAL, closes: R19.c }
   constant.fm_cf_operator_not_equal:
     kind: constant
     c: FM_CF_OPERATOR_NOT_EQUAL
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_NOT_EQUAL }
+    drop: { c: FM_CF_OPERATOR_NOT_EQUAL, closes: R19.c }
   constant.fm_cf_operator_greater_than_or_equal:
     kind: constant
     c: FM_CF_OPERATOR_GREATER_THAN_OR_EQUAL
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_GREATER_THAN_OR_EQUAL }
+    drop: { c: FM_CF_OPERATOR_GREATER_THAN_OR_EQUAL, closes: R19.c }
   constant.fm_cf_operator_greater_than:
     kind: constant
     c: FM_CF_OPERATOR_GREATER_THAN
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_GREATER_THAN }
+    drop: { c: FM_CF_OPERATOR_GREATER_THAN, closes: R19.c }
   constant.fm_cf_operator_between:
     kind: constant
     c: FM_CF_OPERATOR_BETWEEN
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_BETWEEN }
+    drop: { c: FM_CF_OPERATOR_BETWEEN, closes: R19.c }
   constant.fm_cf_operator_not_between:
     kind: constant
     c: FM_CF_OPERATOR_NOT_BETWEEN
     enum: enum.cf_operator
     surfaces: [c]
     was: { c: FM_CF_OPERATOR_NOT_BETWEEN }
+    drop: { c: FM_CF_OPERATOR_NOT_BETWEEN, closes: R19.c }
   constant.fm_cf_time_period_today:
     kind: constant
-    c: FM_CF_TIME_PERIOD_TODAY
+    c: FM_DATE_PERIOD_TODAY
     enum: enum.cf_time_period
-    surfaces: [c]
+    js: Today
+    py: TODAY
+    surfaces: [c, wasm, native, py]
     was: { c: FM_CF_TIME_PERIOD_TODAY }
   constant.fm_cf_time_period_yesterday:
     kind: constant
-    c: FM_CF_TIME_PERIOD_YESTERDAY
+    c: FM_DATE_PERIOD_YESTERDAY
     enum: enum.cf_time_period
-    surfaces: [c]
+    js: Yesterday
+    py: YESTERDAY
+    surfaces: [c, wasm, native, py]
     was: { c: FM_CF_TIME_PERIOD_YESTERDAY }
   constant.fm_cf_time_period_tomorrow:
     kind: constant
-    c: FM_CF_TIME_PERIOD_TOMORROW
+    c: FM_DATE_PERIOD_TOMORROW
     enum: enum.cf_time_period
-    surfaces: [c]
+    js: Tomorrow
+    py: TOMORROW
+    surfaces: [c, wasm, native, py]
     was: { c: FM_CF_TIME_PERIOD_TOMORROW }
   constant.fm_cf_time_period_last_7_days:
     kind: constant
-    c: FM_CF_TIME_PERIOD_LAST_7_DAYS
+    c: FM_DATE_PERIOD_LAST_7_DAYS
     enum: enum.cf_time_period
-    surfaces: [c]
+    js: Last7Days
+    py: LAST_7_DAYS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_CF_TIME_PERIOD_LAST_7_DAYS }
-  constant.fm_cf_time_period_this_week:
-    kind: constant
-    c: FM_CF_TIME_PERIOD_THIS_WEEK
-    enum: enum.cf_time_period
-    surfaces: [c]
-    was: { c: FM_CF_TIME_PERIOD_THIS_WEEK }
-  constant.fm_cf_time_period_last_week:
-    kind: constant
-    c: FM_CF_TIME_PERIOD_LAST_WEEK
-    enum: enum.cf_time_period
-    surfaces: [c]
-    was: { c: FM_CF_TIME_PERIOD_LAST_WEEK }
-  constant.fm_cf_time_period_next_week:
-    kind: constant
-    c: FM_CF_TIME_PERIOD_NEXT_WEEK
-    enum: enum.cf_time_period
-    surfaces: [c]
-    was: { c: FM_CF_TIME_PERIOD_NEXT_WEEK }
   constant.fm_cf_time_period_this_month:
     kind: constant
-    c: FM_CF_TIME_PERIOD_THIS_MONTH
+    c: FM_DATE_PERIOD_THIS_MONTH
     enum: enum.cf_time_period
-    surfaces: [c]
+    js: ThisMonth
+    py: THIS_MONTH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_CF_TIME_PERIOD_THIS_MONTH }
   constant.fm_cf_time_period_last_month:
     kind: constant
-    c: FM_CF_TIME_PERIOD_LAST_MONTH
+    c: FM_DATE_PERIOD_LAST_MONTH
     enum: enum.cf_time_period
-    surfaces: [c]
+    js: LastMonth
+    py: LAST_MONTH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_CF_TIME_PERIOD_LAST_MONTH }
   constant.fm_cf_time_period_next_month:
     kind: constant
-    c: FM_CF_TIME_PERIOD_NEXT_MONTH
+    c: FM_DATE_PERIOD_NEXT_MONTH
     enum: enum.cf_time_period
-    surfaces: [c]
+    js: NextMonth
+    py: NEXT_MONTH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_CF_TIME_PERIOD_NEXT_MONTH }
+  constant.fm_cf_time_period_this_week:
+    kind: constant
+    c: FM_DATE_PERIOD_THIS_WEEK
+    enum: enum.cf_time_period
+    js: ThisWeek
+    py: THIS_WEEK
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_CF_TIME_PERIOD_THIS_WEEK }
+  constant.fm_cf_time_period_last_week:
+    kind: constant
+    c: FM_DATE_PERIOD_LAST_WEEK
+    enum: enum.cf_time_period
+    js: LastWeek
+    py: LAST_WEEK
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_CF_TIME_PERIOD_LAST_WEEK }
+  constant.fm_cf_time_period_next_week:
+    kind: constant
+    c: FM_DATE_PERIOD_NEXT_WEEK
+    enum: enum.cf_time_period
+    js: NextWeek
+    py: NEXT_WEEK
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_CF_TIME_PERIOD_NEXT_WEEK }
   constant.fm_cf_value_object_type_number:
     kind: constant
     c: FM_CF_VALUE_OBJECT_TYPE_NUMBER
@@ -16008,3 +16162,605 @@ entries:
     py: column_input
     surfaces: [wasm, native, py]
     was: { js: colInput, py: col_input }
+  constant.fm_comparison_operator_between:
+    kind: constant
+    c: FM_COMPARISON_OPERATOR_BETWEEN
+    enum: enum.filter_operator
+    surfaces: [c]
+  constant.fm_comparison_operator_not_between:
+    kind: constant
+    c: FM_COMPARISON_OPERATOR_NOT_BETWEEN
+    enum: enum.filter_operator
+    surfaces: [c]
+  constant.fm_effective_style_source_cell:
+    kind: constant
+    c: FM_EFFECTIVE_STYLE_SOURCE_CELL
+    enum: enum.effective_style_source
+    surfaces: [c]
+  constant.fm_effective_style_source_row:
+    kind: constant
+    c: FM_EFFECTIVE_STYLE_SOURCE_ROW
+    enum: enum.effective_style_source
+    surfaces: [c]
+  constant.fm_effective_style_source_column:
+    kind: constant
+    c: FM_EFFECTIVE_STYLE_SOURCE_COLUMN
+    enum: enum.effective_style_source
+    surfaces: [c]
+  constant.fm_effective_style_source_default:
+    kind: constant
+    c: FM_EFFECTIVE_STYLE_SOURCE_DEFAULT
+    enum: enum.effective_style_source
+    surfaces: [c]
+  constant.fm_theme_source_part:
+    kind: constant
+    c: FM_THEME_SOURCE_PART
+    enum: enum.theme_source
+    surfaces: [c]
+  constant.fm_theme_source_default:
+    kind: constant
+    c: FM_THEME_SOURCE_DEFAULT
+    enum: enum.theme_source
+    surfaces: [c]
+  constant.fm_theme_source_unparseable:
+    kind: constant
+    c: FM_THEME_SOURCE_UNPARSEABLE
+    enum: enum.theme_source
+    surfaces: [c]
+  enum.phonetic_type:
+    kind: enum
+    c: fm_phonetic_type_t
+    js: PhoneticType
+    py: PhoneticType
+    surfaces: [c, wasm, native, py]
+    closes: R6.closed.js
+    note: "zero is the state of an absent `<phoneticPr>`, not the schema default (recorded D3 exception)"
+  enum.phonetic_alignment:
+    kind: enum
+    c: fm_phonetic_alignment_t
+    js: PhoneticAlignment
+    py: PhoneticAlignment
+    surfaces: [c, wasm, native, py]
+    closes: R6.closed.js
+    note: "zero is the state of an absent `<phoneticPr>`, not the schema default (recorded D3 exception)"
+  enum.page_order:
+    kind: enum
+    c: fm_page_order_t
+    js: PageOrder
+    py: PageOrder
+    surfaces: [c, wasm, native, py]
+    closes: R6.closed.js
+  type.paper_size:
+    kind: typedef
+    js: PaperSize
+    py: PaperSize
+    surfaces: [wasm, native, py]
+  constant.fm_page_order_down_then_over:
+    kind: constant
+    c: FM_PAGE_ORDER_DOWN_THEN_OVER
+    enum: enum.page_order
+    js: DownThenOver
+    py: DOWN_THEN_OVER
+    surfaces: [c, wasm, native, py]
+  constant.fm_page_order_over_then_down:
+    kind: constant
+    c: FM_PAGE_ORDER_OVER_THEN_DOWN
+    enum: enum.page_order
+    js: OverThenDown
+    py: OVER_THEN_DOWN
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_none:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: None
+    py: NONE
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_NONE
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_sum:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: Sum
+    py: SUM
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_SUM
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_min:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: Min
+    py: MIN
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_MIN
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_max:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: Max
+    py: MAX
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_MAX
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_average:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: Average
+    py: AVERAGE
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_AVERAGE
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_count:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: Count
+    py: COUNT
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_COUNT
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_count_numbers:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: CountNumbers
+    py: COUNT_NUMBERS
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_COUNT_NUMBERS
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_std_dev:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: StdDev
+    py: STD_DEV
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_STD_DEV
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_var:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: Var
+    py: VAR
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_VAR
+    surfaces: [c, wasm, native, py]
+  constant.table_totals_row_function_custom:
+    kind: constant
+    enum: enum.table_totals_row_function
+    js: Custom
+    py: CUSTOM
+    c: FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_whole_table:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: WholeTable
+    py: WHOLE_TABLE
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_header_row:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: HeaderRow
+    py: HEADER_ROW
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_HEADER_ROW
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_total_row:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: TotalRow
+    py: TOTAL_ROW
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_TOTAL_ROW
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_column:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstColumn
+    py: FIRST_COLUMN
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_last_column:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: LastColumn
+    py: LAST_COLUMN
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_LAST_COLUMN
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_row_stripe:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstRowStripe
+    py: FIRST_ROW_STRIPE
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_STRIPE
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_second_row_stripe:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: SecondRowStripe
+    py: SECOND_ROW_STRIPE
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_ROW_STRIPE
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_column_stripe:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstColumnStripe
+    py: FIRST_COLUMN_STRIPE
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN_STRIPE
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_second_column_stripe:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: SecondColumnStripe
+    py: SECOND_COLUMN_STRIPE
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_COLUMN_STRIPE
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_header_cell:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstHeaderCell
+    py: FIRST_HEADER_CELL
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_HEADER_CELL
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_last_header_cell:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: LastHeaderCell
+    py: LAST_HEADER_CELL
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_LAST_HEADER_CELL
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_total_cell:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstTotalCell
+    py: FIRST_TOTAL_CELL
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_TOTAL_CELL
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_last_total_cell:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: LastTotalCell
+    py: LAST_TOTAL_CELL
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_LAST_TOTAL_CELL
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_subtotal_column:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstSubtotalColumn
+    py: FIRST_SUBTOTAL_COLUMN
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_SUBTOTAL_COLUMN
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_second_subtotal_column:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: SecondSubtotalColumn
+    py: SECOND_SUBTOTAL_COLUMN
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_SUBTOTAL_COLUMN
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_third_subtotal_column:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: ThirdSubtotalColumn
+    py: THIRD_SUBTOTAL_COLUMN
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_SUBTOTAL_COLUMN
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_subtotal_row:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstSubtotalRow
+    py: FIRST_SUBTOTAL_ROW
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_SUBTOTAL_ROW
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_second_subtotal_row:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: SecondSubtotalRow
+    py: SECOND_SUBTOTAL_ROW
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_SUBTOTAL_ROW
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_third_subtotal_row:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: ThirdSubtotalRow
+    py: THIRD_SUBTOTAL_ROW
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_SUBTOTAL_ROW
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_blank_row:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: BlankRow
+    py: BLANK_ROW
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_BLANK_ROW
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_column_subheading:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstColumnSubheading
+    py: FIRST_COLUMN_SUBHEADING
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN_SUBHEADING
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_second_column_subheading:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: SecondColumnSubheading
+    py: SECOND_COLUMN_SUBHEADING
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_COLUMN_SUBHEADING
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_third_column_subheading:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: ThirdColumnSubheading
+    py: THIRD_COLUMN_SUBHEADING
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_COLUMN_SUBHEADING
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_first_row_subheading:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: FirstRowSubheading
+    py: FIRST_ROW_SUBHEADING
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_SUBHEADING
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_second_row_subheading:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: SecondRowSubheading
+    py: SECOND_ROW_SUBHEADING
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_ROW_SUBHEADING
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_third_row_subheading:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: ThirdRowSubheading
+    py: THIRD_ROW_SUBHEADING
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_ROW_SUBHEADING
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_page_field_labels:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: PageFieldLabels
+    py: PAGE_FIELD_LABELS
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_LABELS
+    surfaces: [c, wasm, native, py]
+  constant.table_style_element_type_page_field_values:
+    kind: constant
+    enum: enum.table_style_element_type
+    js: PageFieldValues
+    py: PAGE_FIELD_VALUES
+    c: FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_VALUES
+    surfaces: [c, wasm, native, py]
+  enum.chart_tick_label_position:
+    kind: enum
+    js: ChartTickLabelPosition
+    py: ChartTickLabelPosition
+    c: fm_chart_tick_label_position_t
+    surfaces: [c, wasm, native, py]
+    closes: R38.enum.numeric
+  constant.chart_tick_label_position_next_to:
+    kind: constant
+    enum: enum.chart_tick_label_position
+    js: NextTo
+    py: NEXT_TO
+    c: FM_CHART_TICK_LABEL_POSITION_NEXT_TO
+    surfaces: [c, wasm, native, py]
+  constant.chart_tick_label_position_high:
+    kind: constant
+    enum: enum.chart_tick_label_position
+    js: High
+    py: HIGH
+    c: FM_CHART_TICK_LABEL_POSITION_HIGH
+    surfaces: [c, wasm, native, py]
+  constant.chart_tick_label_position_low:
+    kind: constant
+    enum: enum.chart_tick_label_position
+    js: Low
+    py: LOW
+    c: FM_CHART_TICK_LABEL_POSITION_LOW
+    surfaces: [c, wasm, native, py]
+  constant.chart_tick_label_position_none:
+    kind: constant
+    enum: enum.chart_tick_label_position
+    js: None
+    py: NONE
+    c: FM_CHART_TICK_LABEL_POSITION_NONE
+    surfaces: [c, wasm, native, py]
+  constant.fm_chart_tick_label_position_absent:
+    kind: constant
+    c: FM_CHART_TICK_LABEL_POSITION_ABSENT
+    enum: enum.chart_tick_label_position
+    surfaces: [c]
+  enum.chart_domain:
+    kind: enum
+    js: ChartDomain
+    py: ChartDomain
+    surfaces: [wasm, native, py]
+    closes: R38.enum.numeric
+  constant.chart_domain_category:
+    kind: constant
+    enum: enum.chart_domain
+    js: Category
+    py: CATEGORY
+    surfaces: [wasm, native, py]
+  constant.chart_domain_xy:
+    kind: constant
+    enum: enum.chart_domain
+    js: Xy
+    py: XY
+    surfaces: [wasm, native, py]
+  enum.width_platform:
+    kind: enum
+    js: WidthPlatform
+    py: WidthPlatform
+    c: fm_width_platform_t
+    surfaces: [c, wasm, native, py]
+    closes: R38.enum.numeric
+  constant.width_platform_win:
+    kind: constant
+    enum: enum.width_platform
+    js: Win
+    py: WIN
+    c: FM_WIDTH_PLATFORM_WIN
+    surfaces: [c, wasm, native, py]
+  constant.width_platform_mac:
+    kind: constant
+    enum: enum.width_platform
+    js: Mac
+    py: MAC
+    c: FM_WIDTH_PLATFORM_MAC
+    surfaces: [c, wasm, native, py]
+  constant.fm_icon_set_3_stars:
+    kind: constant
+    c: FM_ICON_SET_NAME_3_STARS
+    enum: enum.icon_set
+    js: ThreeStars
+    py: THREE_STARS
+    surfaces: [c, wasm, native, py]
+  constant.fm_icon_set_3_triangles:
+    kind: constant
+    c: FM_ICON_SET_NAME_3_TRIANGLES
+    enum: enum.icon_set
+    js: ThreeTriangles
+    py: THREE_TRIANGLES
+    surfaces: [c, wasm, native, py]
+  constant.fm_icon_set_5_boxes:
+    kind: constant
+    c: FM_ICON_SET_NAME_5_BOXES
+    enum: enum.icon_set
+    js: FiveBoxes
+    py: FIVE_BOXES
+    surfaces: [c, wasm, native, py]
+  constant.fm_icon_set_no_icons:
+    kind: constant
+    c: FM_ICON_SET_NAME_NO_ICONS
+    enum: enum.icon_set
+    js: NoIcons
+    py: NO_ICONS
+    surfaces: [c, wasm, native, py]
+  field.theme_script_font_scheme:
+    kind: field
+    record: record.theme_script_font
+    js: scheme
+    surfaces: [wasm, native, py]
+    closes: R6.closed.js
+  field.theme_script_font_input_scheme:
+    kind: field
+    record: record.theme_script_font_input
+    js: scheme
+    surfaces: [wasm, native]
+    closes: R6.closed.js
+  field.pivot_filter_spec_value_kind:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueKind, py: value_kind, closes: R7.js }
+    was: { js: valueKind, py: value_kind }
+  field.pivot_filter_spec_value_int:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueInt, py: value_int, closes: R7.js }
+    was: { js: valueInt, py: value_int }
+  field.pivot_filter_spec_value_double:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueDouble, py: value_double, closes: R7.js }
+    was: { js: valueDouble, py: value_double }
+  field.pivot_filter_spec_value_text:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueText, py: value_text, closes: R7.js }
+    was: { js: valueText, py: value_text }
+  field.pivot_filter_spec_value_high_kind:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighKind, py: value_high_kind, closes: R7.js }
+    was: { js: valueHighKind, py: value_high_kind }
+  field.pivot_filter_spec_value_high_int:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighInt, py: value_high_int, closes: R7.js }
+    was: { js: valueHighInt, py: value_high_int }
+  field.pivot_filter_spec_value_high_double:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighDouble, py: value_high_double, closes: R7.js }
+    was: { js: valueHighDouble, py: value_high_double }
+  field.pivot_filter_spec_value_high_text:
+    kind: field
+    record: record.pivot_filter_spec
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighText, py: value_high_text, closes: R7.js }
+    was: { js: valueHighText, py: value_high_text }
+  field.pivot_filter_spec_value:
+    kind: field
+    record: record.pivot_filter_spec
+    js: value
+    surfaces: [wasm, native, py]
+    closes: R7.js
+  field.pivot_filter_spec_value_high:
+    kind: field
+    record: record.pivot_filter_spec
+    js: valueHigh
+    py: value_high
+    surfaces: [wasm, native, py]
+    closes: R7.js
+  field.pivot_filter_result_value_kind:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueKind, py: value_kind, closes: R7.js }
+    was: { js: valueKind, py: value_kind }
+  field.pivot_filter_result_value_int:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueInt, py: value_int, closes: R7.js }
+    was: { js: valueInt, py: value_int }
+  field.pivot_filter_result_value_double:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueDouble, py: value_double, closes: R7.js }
+    was: { js: valueDouble, py: value_double }
+  field.pivot_filter_result_value_text:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueText, py: value_text, closes: R7.js }
+    was: { js: valueText, py: value_text }
+  field.pivot_filter_result_value_high_kind:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighKind, py: value_high_kind, closes: R7.js }
+    was: { js: valueHighKind, py: value_high_kind }
+  field.pivot_filter_result_value_high_int:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighInt, py: value_high_int, closes: R7.js }
+    was: { js: valueHighInt, py: value_high_int }
+  field.pivot_filter_result_value_high_double:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighDouble, py: value_high_double, closes: R7.js }
+    was: { js: valueHighDouble, py: value_high_double }
+  field.pivot_filter_result_value_high_text:
+    kind: field
+    record: record.pivot_filter_result
+    surfaces: [wasm, native, py]
+    drop: { js: valueHighText, py: value_high_text, closes: R7.js }
+    was: { js: valueHighText, py: value_high_text }
+  field.pivot_filter_result_value:
+    kind: field
+    record: record.pivot_filter_result
+    js: value
+    surfaces: [wasm, native, py]
+    closes: R7.js
+  field.pivot_filter_result_value_high:
+    kind: field
+    record: record.pivot_filter_result
+    js: valueHigh
+    py: value_high
+    surfaces: [wasm, native, py]
+    closes: R7.js
+  type.date_input:
+    kind: typedef
+    js: DateInput
+    surfaces: [wasm, native]
+  type.cell_value_input:
+    kind: typedef
+    js: CellValueInput
+    surfaces: [wasm, native]

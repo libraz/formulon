@@ -102,8 +102,8 @@ void JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_
   }
   JsNarrowNumericReader reader("setCellPhoneticProperties");
   const uint32_t font_id = reader.u32(properties, "fontIndex", 0U, "phoneticProperties.fontIndex");
-  const uint32_t type = reader.u32(properties, "type", 0U, "phoneticProperties.type");
-  const uint32_t alignment = reader.u32(properties, "alignment", 0U, "phoneticProperties.alignment");
+  const int32_t type = reader.i32(properties, "type", 0, "phoneticProperties.type");
+  const int32_t alignment = reader.i32(properties, "alignment", 0, "phoneticProperties.alignment");
   if (!reader.ok()) {
     return;
   }
@@ -162,8 +162,8 @@ emscripten::val JsWorkbook::getCellPhoneticRun(uint32_t sheet, uint32_t row, uin
 
 emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const {
   size_t font_id = 0;
-  uint32_t type = 0;
-  uint32_t alignment = 0;
+  int32_t type = 0;
+  int32_t alignment = 0;
   int32_t present = 0;
   if (!succeeded(handle_ != nullptr
                      ? fm_sheet_get_cell_phonetic_properties(handle_, sheet, row, col, &font_id, &type, &alignment)
@@ -193,16 +193,6 @@ void JsWorkbook::setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col,
                                : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col,
-                                                const std::string& formula) const {
-  fm_value_t v{};
-  if (!succeeded(handle_ != nullptr ? fm_sheet_evaluate_formula(handle_, sheet, row, col, formula.c_str(), &v)
-                                    : kBindingInvalidHandle)) {
-    return emscripten::val::undefined();
-  }
-  return value_to_val(v);
-}
-
 emscripten::val JsWorkbook::evaluateConditionalFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t anchorRow,
                                                        uint32_t anchorCol, const std::string& formula) const {
   fm_value_t v{};
@@ -211,7 +201,7 @@ emscripten::val JsWorkbook::evaluateConditionalFormula(uint32_t sheet, uint32_t 
                      : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  return value_to_val(v);
+  return emscripten::val(v.u.boolean != 0);
 }
 
 emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, uint32_t col,
@@ -371,7 +361,7 @@ emscripten::val JsWorkbook::tableAt(uint32_t sheet, uint32_t idx) const {
     if (rc == 0) {
       emscripten::val c = emscripten::val::object();
       js_set_cstr(c, "name", column.name);
-      js_set_cstr(c, "totalsRowFunction", column.totals_row_function);
+      c.set("totalsRowFunction", column.totals_row_function);
       js_set_cstr(c, "totalsRowLabel", column.totals_row_label);
       js_set_cstr(c, "totalsRowFormula", column.totals_row_formula);
       columns.call<void>("push", c);
@@ -581,16 +571,15 @@ void JsWorkbook::setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t col
     return;
   }
   JsNarrowNumericReader reader("setTableColumnTotals");
-  std::string function;
   std::string label;
   std::string formula;
-  const char* function_ptr = reader.optional_string(totals, "function", function, "totals.function");
+  const int32_t function = reader.i32(totals, "function", FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "totals.function");
   const char* label_ptr = reader.optional_string(totals, "label", label, "totals.label");
   const char* formula_ptr = reader.optional_string(totals, "formula", formula, "totals.formula");
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function_ptr, label_ptr, formula_ptr));
+  succeeded(fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function, label_ptr, formula_ptr));
 }
 
 void JsWorkbook::removeTable(uint32_t sheet, uint32_t idx) {

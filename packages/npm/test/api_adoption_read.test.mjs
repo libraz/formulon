@@ -308,8 +308,9 @@ test('getDate follows the shared read cases', async () => {
         assert.equal(ws.getDate('A1'), want.value, c.id);
       } else {
         const d = want.date;
-        const at = Date.UTC(d.year, d.month - 1, d.day, d.hour, d.minute, d.second, d.millisecond);
-        assert.equal(ws.getDate('A1').getTime(), at, c.id);
+        const at = new Date(d.year, d.month - 1, d.day, d.hour, d.minute, d.second, d.millisecond);
+        at.setFullYear(d.year);
+        assert.equal(ws.getDate('A1').getTime(), at.getTime(), c.id);
       }
     });
   }
@@ -331,11 +332,10 @@ test('a Date written with setValue stores its serial and, on a General cell, a d
       if (c.effective_format === 'column_style') ws.ooxml.setColumnXfIndex(0, 0, styled);
       let date;
       if (i.kind === 'invalid_date') date = new Date(Number.NaN);
-      else if (i.kind === 'instant') date = new Date(i.iso);
       else {
         const ms = i.subsecond?.js_ms ?? 0;
-        date = new Date(Date.UTC(i.year, i.month - 1, i.day, i.hour ?? 0, i.minute ?? 0, i.second ?? 0, ms));
-        date.setUTCFullYear(i.year);
+        date = new Date(i.year, i.month - 1, i.day, i.hour ?? 0, i.minute ?? 0, i.second ?? 0, ms);
+        date.setFullYear(i.year);
       }
       const want = c.expect.js;
       if (want.error === 'RangeError') {

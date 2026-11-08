@@ -23,6 +23,7 @@ from formulon import (
     Value,
     ValueKind,
     Workbook,
+    to_native,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -108,7 +109,7 @@ class NativeReadTests(unittest.TestCase):
     def test_evaluate_typed_forms(self) -> None:
         folded = self.ws.evaluate_typed_formula("H20", "=SEQUENCE(2,1)")
         self.assertEqual(folded.kind, ValueKind.ARRAY)
-        self.assertEqual(folded.to_python(), [[1.0], [2.0]])
+        self.assertEqual(to_native(folded), [[1.0], [2.0]])
         self.assertEqual(self.ws.evaluate_typed_formula(19, 7, "=1+2"), Value(ValueKind.NUMBER, number=3.0))
         grid = self.ws.evaluate_typed_formula_array("H20", "=1+2")
         self.assertEqual(grid, [[Value(ValueKind.NUMBER, number=3.0)]])

@@ -13,7 +13,7 @@ handle address it again.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence, Tuple, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Tuple, Type, Union, cast
 
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
@@ -26,9 +26,9 @@ from ._workbook import (
     UNCHANGED,
     AnchorEditAs,
     AnchorKind,
+    BlanksAs,
     ChartAxisCrosses,
     ChartAxisPatch,
-    ChartBlanksAs,
     ChartData,
     ChartDataSource,
     ChartDisplayPatch,
@@ -48,6 +48,7 @@ from ._workbook import (
     ChartSeriesDirection,
     ChartSeriesInput,
     ChartSeriesPatch,
+    ChartTickLabelPosition,
     ChartTitle,
     ColorInput,
     DrawingAnchor,
@@ -514,7 +515,7 @@ class Chart(Drawing):
         direction: Union[ChartSeriesDirection, Unchanged] = UNCHANGED,
         header_row: Union[bool, Unchanged] = UNCHANGED,
         header_column: Union[bool, Unchanged] = UNCHANGED,
-        blanks_as: Union[ChartBlanksAs, Unchanged] = UNCHANGED,
+        blanks_as: Union[BlanksAs, Unchanged] = UNCHANGED,
         plot_visible_only: Union[bool, Unchanged] = UNCHANGED,
         na_as_blank: Union[bool, Unchanged] = UNCHANGED,
     ) -> ChartData:
@@ -578,7 +579,7 @@ class Chart(Drawing):
 
         Raises:
           TypeError: when ``legend`` is neither a :class:`ChartLegend` nor ``None``.
-          InvalidArgumentError: when ``legend.position`` is :attr:`ChartLegendPosition.NONE`.
+          InvalidArgumentError: when ``legend.position`` is not a :class:`ChartLegendPosition`.
         """
         if legend is not None and not isinstance(legend, ChartLegend):
             raise TypeError(f"formulon: legend must be a ChartLegend or None, got {type(legend).__name__}")
@@ -660,14 +661,13 @@ class Chart(Drawing):
         log_base: Union[float, None, Unchanged] = UNCHANGED,
         crosses: Union[ChartAxisCrosses, None, Unchanged] = UNCHANGED,
         crosses_at: Union[float, None, Unchanged] = UNCHANGED,
-        tick_label_position: Union[Literal["nextTo", "low", "high", "none"], None, Unchanged] = UNCHANGED,
+        tick_label_position: Union[ChartTickLabelPosition, None, Unchanged] = UNCHANGED,
     ) -> None:
         """Update axis ``axis_id``; an omitted argument keeps its value, ``None`` removes the element.
 
         ``title`` takes the forms of :meth:`set_title`. ``None`` on ``title``
         removes the axis title, on ``log_base`` makes the axis linear and on
-        ``tick_label_position`` (``nextTo``, ``low``, ``high``, ``none``)
-        restores the default. ``crosses_at`` is read when ``crosses`` is
+        ``tick_label_position`` restores the default. ``crosses_at`` is read when ``crosses`` is
         ``AT``.
         """
         patch = _given(dict(locals()), ChartAxisPatch)
@@ -681,7 +681,7 @@ class Chart(Drawing):
     def update_display(
         self,
         *,
-        blanks_as: Union[ChartBlanksAs, None, Unchanged] = UNCHANGED,
+        blanks_as: Union[BlanksAs, None, Unchanged] = UNCHANGED,
         plot_visible_only: Union[bool, None, Unchanged] = UNCHANGED,
         na_as_blank: Union[bool, None, Unchanged] = UNCHANGED,
     ) -> None:

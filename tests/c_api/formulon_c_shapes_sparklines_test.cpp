@@ -12,6 +12,8 @@
 #include "formulon_c_out_index.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
+#include "miniz.h"
+#include "support/ooxml_package_fixture.h"
 #include "utils/error.h"
 
 namespace {
@@ -60,7 +62,6 @@ TEST(FormulonCApiShapes, EnumOrdinalsAndFieldBits) {
   EXPECT_EQ(FM_SHAPE_FIELD_HIDDEN, 0x200u);
   EXPECT_EQ(FM_SPARKLINE_TYPE_STACKED, 2);
   EXPECT_EQ(FM_SPARKLINE_AXIS_TYPE_CUSTOM, 2);
-  EXPECT_EQ(FM_SPARKLINE_EMPTY_CELLS_SPAN, 2);
 }
 
 TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
@@ -292,7 +293,7 @@ fm_sparkline_group_t ColumnGroup() {
   g.has_manual_min = 1;
   g.manual_min = -1.5;
   g.line_weight = 1.25;
-  g.empty_cells_as = FM_SPARKLINE_EMPTY_CELLS_ZERO;
+  g.empty_cells_as = FM_BLANKS_AS_GAP;
   g.color_series.kind = FM_COLOR_KIND_RGB;
   g.color_series.argb = 0xFF336699U;
   g.color_negative.kind = FM_COLOR_KIND_THEME;
@@ -341,7 +342,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   EXPECT_DOUBLE_EQ(out.manual_min, -1.5);
   EXPECT_EQ(out.has_manual_max, 0);
   EXPECT_DOUBLE_EQ(out.line_weight, 1.25);
-  EXPECT_EQ(out.empty_cells_as, FM_SPARKLINE_EMPTY_CELLS_ZERO);
+  EXPECT_EQ(out.empty_cells_as, FM_BLANKS_AS_GAP);
   EXPECT_EQ(out.color_series.kind, FM_COLOR_KIND_RGB);
   EXPECT_EQ(out.color_series.argb, 0xFF336699U);
   EXPECT_EQ(out.color_negative.kind, FM_COLOR_KIND_THEME);
@@ -354,7 +355,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(out.sparkline_count, 2U);
   fm_sparkline_t sp{};
   ASSERT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 1, &sp), 0);
-  EXPECT_STREQ(sp.formula, "Sheet1!A2:D2");
+  EXPECT_STREQ(sp.formula, "=Sheet1!A2:D2");
   EXPECT_STREQ(sp.location, "F2");
   EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 2, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 5, 0, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -371,7 +372,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   EXPECT_EQ(changed.type, FM_SPARKLINE_TYPE_STACKED);
   EXPECT_EQ(changed.high, 1);
   EXPECT_EQ(changed.date_axis, 1);
-  EXPECT_STREQ(changed.date_axis_ref, "Sheet1!A1:D1");
+  EXPECT_STREQ(changed.date_axis_ref, "=Sheet1!A1:D1");
   EXPECT_EQ(changed.sparkline_count, 2U);
 
   // Update with items replaces the sparklines; the group read back and written
@@ -383,9 +384,9 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   EXPECT_EQ(changed.sparkline_count, 1U);
   EXPECT_EQ(changed.type, FM_SPARKLINE_TYPE_STACKED);
   EXPECT_EQ(changed.high, 1);
-  EXPECT_STREQ(changed.date_axis_ref, "Sheet1!A1:D1");
+  EXPECT_STREQ(changed.date_axis_ref, "=Sheet1!A1:D1");
   ASSERT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 0, &sp), 0);
-  EXPECT_STREQ(sp.formula, "Sheet1!B1:B5");
+  EXPECT_STREQ(sp.formula, "=Sheet1!B1:B5");
   EXPECT_STREQ(sp.location, "H1");
 
   ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), 0);
@@ -414,6 +415,12 @@ TEST(FormulonCApiSparklines, Validation) {
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
   bad = g;
   bad.line_weight = -1.0;
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
+  // A group always states how it draws empty cells.
+  bad = g;
+  bad.empty_cells_as = FM_BLANKS_AS_ABSENT;
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
+  bad.empty_cells_as = FM_BLANKS_AS_SPAN + 1;
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
   size_t count = 5;
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(wb.handle, 0, &count), 0);
@@ -452,6 +459,103 @@ TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
   ASSERT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, &read), 0);
   EXPECT_EQ(read.type, FM_SPARKLINE_TYPE_COLUMN);
   EXPECT_EQ(read.sparkline_count, 2U);
+}
+
+std::string SavedSheetXml(fm_workbook_t* wb) {
+  BufferGuard buf;
+  EXPECT_EQ(fm_workbook_save(wb, &buf.data, &buf.len), 0) << fm_get_last_error_message();
+  mz_zip_archive reader{};
+  if (mz_zip_reader_init_mem(&reader, buf.data, buf.len, 0) == MZ_FALSE) {
+    ADD_FAILURE() << "mz_zip_reader_init_mem failed";
+    return {};
+  }
+  std::size_t size = 0;
+  void* bytes = mz_zip_reader_extract_file_to_heap(&reader, "xl/worksheets/sheet1.xml", &size, 0);
+  mz_zip_reader_end(&reader);
+  if (bytes == nullptr) {
+    ADD_FAILURE() << "xl/worksheets/sheet1.xml not found";
+    return {};
+  }
+  std::string xml(static_cast<const char*>(bytes), size);
+  mz_free(bytes);
+  return xml;
+}
+
+std::string SparklineSheetXml(const char* empty_cells_as) {
+  return std::string(
+             "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+             "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
+             "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"><sheetData/><extLst>"
+             "<ext uri=\"{05C60535-1F16-4fd2-B633-F4F36F0B64E0}\"><x14:sparklineGroups>"
+             "<x14:sparklineGroup displayEmptyCellsAs=\"") +
+         empty_cells_as +
+         "\"><x14:sparklines><x14:sparkline><xm:f>Sheet1!A1:D1</xm:f><xm:sqref>F1</xm:sqref>"
+         "</x14:sparkline></x14:sparklines></x14:sparklineGroup></x14:sparklineGroups></ext></extLst></worksheet>";
+}
+
+// The sparkline group shares the chart's blanks table: each `displayEmptyCellsAs`
+// token reads as its member, and each member writes its token.
+TEST(FormulonCApiSparklines, EmptyCellsAsMapsEachTokenToTheSharedBlanksMember) {
+  const struct {
+    int32_t blanks_as;
+    const char* token;
+  } kCases[] = {{FM_BLANKS_AS_ZERO, "zero"}, {FM_BLANKS_AS_GAP, "gap"}, {FM_BLANKS_AS_SPAN, "span"}};
+  for (const auto& c : kCases) {
+    const std::vector<std::uint8_t> package = formulon::test::BuildOoxmlPackage(
+        formulon::test::OoxmlContentTypes(formulon::test::kXlsxWorkbookContentType), SparklineSheetXml(c.token));
+    WorkbookGuard loaded;
+    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
+    fm_sparkline_group_t read = FM_STRUCT_INIT(fm_sparkline_group_t);
+    ASSERT_EQ(fm_sheet_get_sparkline_group(loaded.handle, 0, 0, &read), 0) << c.token;
+    EXPECT_EQ(read.empty_cells_as, c.blanks_as) << c.token;
+
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}};
+    fm_sparkline_group_t g = ColumnGroup();
+    g.empty_cells_as = c.blanks_as;
+    ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 1, ignored_index()), 0)
+        << fm_get_last_error_message();
+    // Zero is the schema default, which the writer leaves implicit.
+    const bool written =
+        SavedSheetXml(wb.handle).find(std::string("displayEmptyCellsAs=\"") + c.token + "\"") != std::string::npos;
+    EXPECT_EQ(written, c.blanks_as != FM_BLANKS_AS_ZERO) << c.token;
+  }
+}
+
+// A sparkline formula and a date-axis range read with a leading `=`; input
+// takes either spelling and stores the same range.
+TEST(FormulonCApiSparklines, FormulasReadWithALeadingEqualsAndTakeEitherSpelling) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_sparkline_t items[] = {{"=Sheet1!A1:D1", "F1"}, {"Sheet1!A2:D2", "F2"}};
+  fm_sparkline_group_t g = ColumnGroup();
+  g.date_axis = 1;
+  g.date_axis_ref = "=Sheet1!A5:D5";
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_index()), 0)
+      << fm_get_last_error_message();
+  g.date_axis_ref = "Sheet1!A6:D6";
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_index()), 0)
+      << fm_get_last_error_message();
+
+  WorkbookGuard again;
+  SaveAndReload(wb.handle, &again);
+  for (fm_workbook_t* book : {wb.handle, again.handle}) {
+    fm_sparkline_t sp{};
+    ASSERT_EQ(fm_sheet_get_sparkline(book, 0, 0, 0, &sp), 0);
+    EXPECT_STREQ(sp.formula, "=Sheet1!A1:D1");
+    ASSERT_EQ(fm_sheet_get_sparkline(book, 0, 0, 1, &sp), 0);
+    EXPECT_STREQ(sp.formula, "=Sheet1!A2:D2");
+    fm_sparkline_group_t read = FM_STRUCT_INIT(fm_sparkline_group_t);
+    ASSERT_EQ(fm_sheet_get_sparkline_group(book, 0, 0, &read), 0);
+    EXPECT_STREQ(read.date_axis_ref, "=Sheet1!A5:D5");
+    ASSERT_EQ(fm_sheet_get_sparkline_group(book, 0, 1, &read), 0);
+    EXPECT_STREQ(read.date_axis_ref, "=Sheet1!A6:D6");
+  }
+  // The file keeps the `xm:f` spelling without `=`.
+  const std::string xml = SavedSheetXml(wb.handle);
+  EXPECT_NE(xml.find("<xm:f>Sheet1!A1:D1</xm:f>"), std::string::npos);
+  EXPECT_EQ(xml.find("<xm:f>=Sheet1!"), std::string::npos);
 }
 
 }  // namespace

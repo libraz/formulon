@@ -590,7 +590,7 @@ Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
   out.Set("normalFontSizePt", Napi::Number::New(env, model.normal_font_size_pt));
   out.Set("calibrated", Napi::Boolean::New(env, model.calibrated != 0));
   out.Set("normalFontName", JsString(env, model.normal_font_name));
-  out.Set("platform", JsString(env, model.platform));
+  out.Set("platform", Napi::Number::New(env, model.platform));
   return out;
 }
 

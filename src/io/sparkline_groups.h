@@ -34,7 +34,8 @@ struct SparklineItem {
 
 enum class SparklineType : std::int32_t { kLine = 0, kColumn = 1, kStacked = 2 };
 enum class SparklineAxisType : std::int32_t { kIndividual = 0, kGroup = 1, kCustom = 2 };
-enum class SparklineEmptyCells : std::int32_t { kGap = 0, kZero = 1, kSpan = 2 };
+/// Zero is the schema default, which an absent `displayEmptyCellsAs` means.
+enum class SparklineEmptyCells : std::int32_t { kZero = 0, kGap = 1, kSpan = 2 };
 
 /// A sparkline group. A colour of kind `kNone` is an absent element.
 struct SparklineGroup {

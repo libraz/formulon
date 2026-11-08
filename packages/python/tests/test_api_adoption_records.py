@@ -18,15 +18,15 @@ from formulon import (
     CalcMode,
     CellAddress,
     CellRect,
-    CfOperator,
     CfRuleType,
-    CfTimePeriod,
     CfValueObjectType,
     Cfvo,
     Color,
     ColorKind,
+    ComparisonOperator,
     ConditionalFormatInput,
     DataValidationInput,
+    DatePeriod,
     DefinedNameInput,
     ErrorCode,
     ExcelError,
@@ -46,7 +46,6 @@ from formulon import (
     RangeCell,
     SheetRect,
     TableInput,
-    ValidationOperator,
     ValidationType,
     Value,
     ValueKind,
@@ -98,7 +97,7 @@ class NativeEvaluateTests(unittest.TestCase):
         self.assertIs(grid.kind, ValueKind.ARRAY)
         self.assertEqual(len(grid.array), 2)
         self.assertEqual(grid.array[0][1], Value(kind=ValueKind.TEXT, text="a"))
-        self.assertEqual(grid.to_python(), [[1.0, "a"], [True, ExcelError(ErrorCode.NA)]])
+        self.assertEqual(formulon.to_native(grid), [[1.0, "a"], [True, ExcelError(ErrorCode.NA)]])
         self.assertEqual(repr(grid), "Value(ARRAY, 2x2)")
 
     def test_a_non_string_formula_is_a_type_error(self) -> None:
@@ -178,12 +177,11 @@ def _header_enum(c_type: str) -> dict:
 class EnumTests(unittest.TestCase):
     TABLES = (
         (ValidationType, "fm_validation_type_t", "FM_VALIDATION_TYPE_"),
-        (ValidationOperator, "fm_validation_operator_t", "FM_VALIDATION_OPERATOR_"),
+        (ComparisonOperator, "fm_comparison_operator_t", "FM_COMPARISON_OPERATOR_"),
         (CfRuleType, "fm_cf_rule_type_t", "FM_CF_RULE_TYPE_"),
-        (CfOperator, "fm_cf_operator_t", "FM_CF_OPERATOR_"),
-        (CfTimePeriod, "fm_cf_time_period_t", "FM_CF_TIME_PERIOD_"),
+        (DatePeriod, "fm_date_period_t", "FM_DATE_PERIOD_"),
         (CfValueObjectType, "fm_cf_value_object_type_t", "FM_CF_VALUE_OBJECT_TYPE_"),
-        (IconSetName, "fm_icon_set_t", "FM_ICON_SET_"),
+        (IconSetName, "fm_icon_set_name_t", "FM_ICON_SET_NAME_"),
     )
     DIGITS = {"3": "THREE", "4": "FOUR", "5": "FIVE"}
 

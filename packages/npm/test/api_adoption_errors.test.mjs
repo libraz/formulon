@@ -30,12 +30,11 @@ const { ErrorCode, ExcelError, FormulonError, ParseErrorCode, StatusCode, ValueK
 const ORDINAL_TABLES = [
   'ParseErrorCode',
   'CfRuleType',
-  'CfOperator',
-  'CfTimePeriod',
+  'ComparisonOperator',
+  'DatePeriod',
   'CfValueObjectType',
   'IconSetName',
   'ValidationType',
-  'ValidationOperator',
 ];
 
 function withSheet(body) {
@@ -243,7 +242,7 @@ test('enumName names an ordinal of any table and is the same function as the nam
   assert.equal(formulon.enumName(formulon.CfRuleType, 3), 'DataBar');
   assert.equal(formulon.enumName(ParseErrorCode, ParseErrorCode.EntryDoubleEquals), 'EntryDoubleEquals');
   assert.equal(formulon.enumName(formulon.IconSetName, 16), 'FiveQuarters');
-  assert.equal(formulon.enumName(formulon.ValidationOperator, 99), null);
+  assert.equal(formulon.enumName(formulon.ComparisonOperator, 99), null);
   assert.equal(mod.enumName, formulon.enumName);
   assert.throws(() => formulon.enumName(null, 0), TypeError);
 });

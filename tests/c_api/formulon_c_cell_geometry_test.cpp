@@ -130,6 +130,12 @@ void SeedSparseSheet(fm_workbook_t* wb) {
 /* Geometry                                                                   */
 /* -------------------------------------------------------------------------- */
 
+// Zero is Windows, the platform of the runtime default profile.
+TEST(FormulonCApiCellGeometry, WidthPlatformOrdinals) {
+  EXPECT_EQ(FM_WIDTH_PLATFORM_WIN, 0);
+  EXPECT_EQ(FM_WIDTH_PLATFORM_MAC, 1);
+}
+
 TEST(FormulonCApiCellGeometry, WidthModelReportsCalibratedCalibri) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -140,7 +146,7 @@ TEST(FormulonCApiCellGeometry, WidthModelReportsCalibratedCalibri) {
   EXPECT_EQ(display.calibrated, 1);
   EXPECT_STREQ(display.normal_font_name, "Calibri");
   EXPECT_DOUBLE_EQ(display.normal_font_size_pt, 11.0);
-  EXPECT_STREQ(display.platform, "win");
+  EXPECT_EQ(display.platform, FM_WIDTH_PLATFORM_WIN);
 
   fm_width_model_t print = FM_STRUCT_INIT(fm_width_model_t);
   ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_PRINT, &print), 0);
@@ -498,6 +504,12 @@ TEST(FormulonCApiPaginationDetail, UnknownPaperFallsBackAndSaysSo) {
   EXPECT_EQ(paper.known, 0);
 }
 
+// Zero is the OOXML default `downThenOver`.
+TEST(FormulonCApiPaginationDetail, PageOrderOrdinalsStartAtTheSchemaDefault) {
+  EXPECT_EQ(FM_PAGE_ORDER_DOWN_THEN_OVER, 0);
+  EXPECT_EQ(FM_PAGE_ORDER_OVER_THEN_DOWN, 1);
+}
+
 TEST(FormulonCApiPaginationDetail, PagesFollowPageOrderAndCoverEveryPage) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -508,7 +520,7 @@ TEST(FormulonCApiPaginationDetail, PagesFollowPageOrderAndCoverEveryPage) {
   ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &p.handle), 0);
   int32_t order = -1;
   ASSERT_EQ(fm_pagination_get_page_order(p.handle, &order), 0);
-  EXPECT_EQ(order, 1);
+  EXPECT_EQ(order, FM_PAGE_ORDER_OVER_THEN_DOWN);
 
   const std::size_t page_count = count_of(fm_pagination_get_page_count, p.handle);
   ASSERT_GT(count_of(fm_pagination_get_column_break_count, p.handle), 0U);

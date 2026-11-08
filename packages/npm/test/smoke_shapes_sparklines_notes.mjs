@@ -153,10 +153,10 @@ const sparklineGroup = (mod) => ({
   minAxisType: mod.SparklineAxisType.Custom,
   manualMin: -1.5,
   lineWeight: 1.25,
-  emptyCellsAs: mod.SparklineEmptyCells.Zero,
+  emptyCellsAs: mod.BlanksAs.Zero,
   sparklines: [
-    { formula: 'Sheet1!A1:D1', location: 'F1' },
-    { formula: 'Sheet1!A2:D2', location: 'F2' },
+    { formula: '=Sheet1!A1:D1', location: 'F1' },
+    { formula: '=Sheet1!A2:D2', location: 'F2' },
   ],
 });
 
@@ -183,17 +183,17 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(first.manualMin, -1.5);
   assert.equal(first.manualMax, null);
   assert.equal(first.lineWeight, 1.25);
-  assert.equal(first.emptyCellsAs, mod.SparklineEmptyCells.Zero);
+  assert.equal(first.emptyCellsAs, mod.BlanksAs.Zero);
   assert.deepEqual(first.sparklines, [
-    { formula: 'Sheet1!A1:D1', location: 'F1' },
-    { formula: 'Sheet1!A2:D2', location: 'F2' },
+    { formula: '=Sheet1!A1:D1', location: 'F1' },
+    { formula: '=Sheet1!A2:D2', location: 'F2' },
   ]);
   assert.equal(second.type, mod.SparklineType.Line);
   assert.equal(second.lineWeight, 0.75);
 
   loaded.sheet(0).insertRows(0, 2);
   assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[1].location, 'F4');
-  assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[1].formula, 'Sheet1!A4:D4');
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[1].formula, '=Sheet1!A4:D4');
 
   // Update rewrites the modelled fields; without a `sparklines` key it keeps the sparklines.
   const { sparklines: _stale, ...firstFields } = first;
@@ -209,7 +209,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(updated.type, mod.SparklineType.Stacked);
   assert.equal(updated.high, true);
   assert.equal(updated.dateAxis, true);
-  assert.equal(updated.dateAxisRef, 'Sheet1!A4:D4');
+  assert.equal(updated.dateAxisRef, '=Sheet1!A4:D4');
   assert.equal(updated.sparklines.length, 2);
 
   // A `sparklines` key replaces them.
@@ -217,7 +217,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
     ...loaded.sheet(0).listSparklineGroups()[0],
     sparklines: [{ formula: 'Sheet1!B1:B5', location: 'H1' }],
   });
-  assert.deepEqual(loaded.sheet(0).listSparklineGroups()[0].sparklines, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  assert.deepEqual(loaded.sheet(0).listSparklineGroups()[0].sparklines, [{ formula: '=Sheet1!B1:B5', location: 'H1' }]);
   expectFailure(() => loaded.sheet(0).updateSparklineGroup(0, { sparklines: [] }));
   loaded.sheet(0).updateSparklineGroup(0, { high: false });
   assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines.length, 1);

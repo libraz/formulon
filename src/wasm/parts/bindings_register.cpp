@@ -143,7 +143,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
       .function("evaluateCfFormula", &JsWorkbook::evaluateConditionalFormula)
       .function("evaluateFormulaArray", &JsWorkbook::evaluateFormulaArray)
-      .function("evaluateFormula", &JsWorkbook::evaluateFormulaText)
       // Profile ids are {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,
       // th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}. New workbooks default to win-365-en_US.
       .function("getProfileId", &JsWorkbook::profileId)

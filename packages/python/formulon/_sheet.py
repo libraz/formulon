@@ -42,7 +42,7 @@ from ._c import (
     _uint,
     fm_value_t_size,
 )
-from ._inputs import color_input, date_serial, normalize_record_ranges, serial_datetime
+from ._inputs import civil_datetime, color_input, date_serial, normalize_record_ranges, serial_datetime
 from ._refs import resolve_ref
 from ._status import (
     StatusCode,
@@ -59,6 +59,7 @@ from ._workbook import (
     ArrayFormula,
     AutoFilter,
     AutoFilterEval,
+    BlanksAs,
     Border,
     BorderPatch,
     BorderStyle,
@@ -128,8 +129,10 @@ from ._workbook import (
     PageSetup,
     Pagination,
     Paper,
+    PhoneticAlignment,
     PhoneticProperties,
     PhoneticRun,
+    PhoneticType,
     PictureInput,
     PivotInput,
     PrintOptions,
@@ -153,7 +156,6 @@ from ._workbook import (
     SlicerInput,
     Sparkline,
     SparklineAxisType,
-    SparklineEmptyCells,
     SparklineGroup,
     SparklineType,
     Spill,
@@ -178,6 +180,7 @@ from ._workbook import (
     _decode_cell_rect_at,
     _decode_color,
     _enum,
+    _format_created,
     _header_mode,
     _hyperlink_from,
     _image_anchor_fields,
@@ -200,6 +203,7 @@ from ._workbook import (
     _tristate_default,
     _write_mentions,
     _write_value_input,
+    to_native,
 )
 
 __all__ = ["Sheet", "SheetOoxml"]
@@ -535,6 +539,7 @@ HANDWRITTEN = (
     "chart",
     "copy_sheet",
     "drawing",
+    "evaluate_formula",
     "evaluate_typed_formula",
     "evaluate_typed_formula_array",
     "get_cell_format",
@@ -887,6 +892,28 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
     raise TypeError(f"formulon: cannot store a {type(value).__name__} in a cell")
 
 
+def _value_of_input(value: Any, *, date1904: bool) -> Value:
+    """A :class:`Value` of any :data:`CellInput`; a ``str`` is text, a date its serial.
+
+    Raises:
+      TypeError: for a type no cell holds.
+    """
+    if isinstance(value, Value):
+        return value
+    setter, payload = _cell_input(value)
+    if setter == "set_blank":
+        return Value(kind=ValueKind.BLANK)
+    if setter == "set_bool":
+        return Value(kind=ValueKind.BOOL, boolean=payload[0])
+    if setter == "set_error":
+        return Value(kind=ValueKind.ERROR, error_code=payload[0])
+    if setter == "_set_date":
+        return Value(kind=ValueKind.NUMBER, number=date_serial(payload[0], date1904=date1904)[0])
+    if setter == "set_number":
+        return Value(kind=ValueKind.NUMBER, number=payload[0])
+    return Value(kind=ValueKind.TEXT, text=value)
+
+
 def _normalize_auto_filter(auto_filter: AutoFilter, workbook: Workbook, sheet: Optional[int]) -> AutoFilter:
     """``auto_filter`` with the A1 text of its sort state resolved."""
     if auto_filter.sort is None:
@@ -896,7 +923,7 @@ def _normalize_auto_filter(auto_filter: AutoFilter, workbook: Workbook, sheet: O
 
 
 def _range_cell(row: int, col: int, formula: Optional[str], value: Value) -> RangeCell:
-    return RangeCell(row=row, col=col, formula=formula, value=value.to_python(), kind=value.kind)
+    return RangeCell(row=row, col=col, formula=formula, value=to_native(value), kind=value.kind)
 
 
 def _with_cell_context(exc: FormulonError, row: int, col: int) -> FormulonError:
@@ -1524,23 +1551,26 @@ class Sheet:
 
     @overload
     @_coordinate_form
-    def set_error(self, row: int, col: int, error_code: ErrorCode) -> None: ...
+    def set_error(self, row: int, col: int, error: Union[ErrorCode, ExcelError]) -> None: ...
 
     @overload
-    def set_error(self, a1: str, error_code: ErrorCode) -> None: ...
+    def set_error(self, a1: str, error: Union[ErrorCode, ExcelError]) -> None: ...
 
     def set_error(self, *args: Any, **kwargs: Any) -> None:
         """Store an Excel cell error at ``(row, col)``.
 
-        ``row`` and ``col`` are 0-based. ``error_code`` is an
-        :class:`ErrorCode` member, not a display literal; the same member
-        comes back out through :attr:`Value.error_code`.
+        ``row`` and ``col`` are 0-based. ``error`` is an :class:`ErrorCode`
+        member, not a display literal, or an :class:`ExcelError` as the cell
+        reads return it; the same member comes back out through
+        :attr:`Value.error_code`.
         """
-        row, col, error_code = self._cell_args("set_error", args, kwargs, ("error_code",))
+        row, col, error = self._cell_args("set_error", args, kwargs, ("error",))
+        if isinstance(error, ExcelError):
+            error = error.code
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_error(
-            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), _sint(error_code, "error")
+            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), _sint(error, "error")
         )
         _check(status)
 
@@ -1797,11 +1827,13 @@ class Sheet:
     @overload
     @_coordinate_form
     def set_cell_phonetic_properties(
-        self, row: int, col: int, *, font_index: int, type: int, alignment: int
+        self, row: int, col: int, *, font_index: int, type: PhoneticType, alignment: PhoneticAlignment
     ) -> None: ...
 
     @overload
-    def set_cell_phonetic_properties(self, a1: str, *, font_index: int, type: int, alignment: int) -> None: ...
+    def set_cell_phonetic_properties(
+        self, a1: str, *, font_index: int, type: PhoneticType, alignment: PhoneticAlignment
+    ) -> None: ...
 
     def set_cell_phonetic_properties(self, *args: Any, **kwargs: Any) -> None:
         """Set how the cell's phonetic guide renders.
@@ -1972,7 +2004,7 @@ class Sheet:
             ws.get_value("B1")  # 42.0
         """
         row, col = self._cell_args("get_value", args, kwargs, ())
-        return self._value_at(row, col).to_python()
+        return to_native(self._value_at(row, col))
 
     @overload
     @_coordinate_form
@@ -2019,7 +2051,7 @@ class Sheet:
 
             grid = ws.get_values("A1:B2")  # grid[row][col]
         """
-        return [[value.to_python() for value in line] for line in self.get_typed_values(range)]
+        return [[to_native(value) for value in line] for line in self.get_typed_values(range)]
 
     def get_typed_values(self, range: Union[CellRect, str]) -> List[List[Value]]:
         """:meth:`get_values` with each value tagged with its kind; :meth:`set_values` stores the grid back unchanged.
@@ -2111,7 +2143,7 @@ class Sheet:
             line: List[NativeValue] = [None] * width
             band = CellRect(first_row=row, first_col=rect.first_col, last_row=row, last_col=rect.last_col)
             for _, col, _, value in self._typed_cells(band):
-                line[col - rect.first_col] = value.to_python()
+                line[col - rect.first_col] = to_native(value)
             yield line
 
     @overload
@@ -2232,7 +2264,7 @@ class Sheet:
             ws.evaluate_formula("A1", "=SUM(B1:B3)")
         """
         row, col, formula = self._cell_args("evaluate_formula", args, kwargs, ("formula",))
-        return self._workbook._evaluate_typed_formula(self._index(), row, col, formula).to_python()
+        return to_native(self._workbook._evaluate_typed_formula(self._index(), row, col, formula))
 
     @overload
     @_coordinate_form
@@ -2267,7 +2299,7 @@ class Sheet:
         """
         row, col, formula = self._cell_args("evaluate_formula_array", args, kwargs, ("formula",))
         grid = self._evaluate_grid(row, col, formula)
-        return [[value.to_python() for value in line] for line in grid]
+        return [[to_native(value) for value in line] for line in grid]
 
     @overload
     @_coordinate_form
@@ -3274,7 +3306,7 @@ class Sheet:
                 normal_font_size_pt=d["normal_font_size_pt"],
                 calibrated=bool(d["calibrated"]),
                 normal_font_name=LIB.read_cstr(d["normal_font_name"]),
-                platform=LIB.read_cstr(d["platform"]),
+                platform=d["platform"],
             )
 
     def convert_column_chars_to_pt(self, chars: float, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
@@ -3461,17 +3493,21 @@ class Sheet:
     # -- Validation checks -----------------------------------------------------
     @overload
     @_coordinate_form
-    def validate_value(self, row: int, col: int, value: Value) -> ValidationOutcome: ...
+    def validate_value(self, row: int, col: int, value: CellInput) -> ValidationOutcome: ...
 
     @overload
-    def validate_value(self, a1: str, value: Value) -> ValidationOutcome: ...
+    def validate_value(self, a1: str, value: CellInput) -> ValidationOutcome: ...
 
     def validate_value(self, *args: Any, **kwargs: Any) -> ValidationOutcome:
-        """Check ``value`` against the data-validation rule covering ``(row, col)`` without storing it."""
+        """Check ``value`` against the data-validation rule covering ``(row, col)`` without storing it.
+
+        ``value`` is anything :meth:`set_value` accepts, except that a ``str``
+        is always text (a leading ``=`` does not make it a formula).
+        """
         row, col, value = self._cell_args("validate_value", args, kwargs, ("value",))
         sheet = self._index()
         h = self._workbook._require()
-        _check_value(value)
+        value = _check_value(_value_of_input(value, date1904=self._workbook.get_date1904()))
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
             ptr = scope.struct(S.VALIDATION_OUTCOME)
@@ -3541,8 +3577,14 @@ class Sheet:
                     "done": 1 if comment.done else 0,
                 },
             )
-            for fld in ("id", "person_id", "created", "text", "parent_id"):
-                S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, getattr(comment, fld), scope)
+            for fld, text in (
+                ("id", comment.id),
+                ("person_id", comment.person_id),
+                ("created", _format_created(comment.created)),
+                ("text", comment.text),
+                ("parent_id", comment.parent_id),
+            ):
+                S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, text, scope)
             _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, scope)
             _check(LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index"), ptr))
 
@@ -4073,7 +4115,7 @@ class Sheet:
         date_axis: Union[bool, Unchanged] = UNCHANGED,
         date_axis_ref: Union[str, None, Unchanged] = UNCHANGED,
         line_weight: Union[float, Unchanged] = UNCHANGED,
-        empty_cells_as: Union[SparklineEmptyCells, Unchanged] = UNCHANGED,
+        empty_cells_as: Union[BlanksAs, Unchanged] = UNCHANGED,
         sparklines: Union[Sequence[Sparkline], Unchanged] = UNCHANGED,
     ) -> None:
         """Update group ``group_index``; an omitted argument keeps the group's value.
@@ -5269,26 +5311,23 @@ class Sheet:
     def evaluate_cf_range(
         self,
         range: Union[CellRect, str],
-        today_serial: Optional[float] = None,
+        today: Optional[Union[datetime.datetime, datetime.date]] = None,
     ) -> List[CfCell]:
         """Evaluate every CF block on the sheet against the cells of ``range``.
 
         Args:
           range: the cells to evaluate.
-          today_serial: date basis for ``timePeriod`` rules, as an Excel
-            serial date. Omitted, it is today: the pinned date when the
-            workbook has one, else the host's local date. ``float("nan")``
-            disables those rules. ``0.0`` is *not* a disabling value -- it is
-            the valid serial for 1899-12-30.
+          today: date basis for ``timePeriod`` rules, a ``date`` or
+            ``datetime`` (a naive local wall clock; an aware one is a
+            ValueError; only the day counts). Omitted, it is today: the pinned
+            date when the workbook has one, else the host's local date.
         """
-        if today_serial is None:
-            today_serial = self._today_serial()
-        return self._evaluate_cf_rect(self._rect(range), today_serial)
+        day = self._today_date() if today is None else civil_datetime(today, "today").date()
+        return self._evaluate_cf_rect(self._rect(range), date_serial(day, date1904=self._workbook.get_date1904())[0])
 
-    def _today_serial(self) -> float:
+    def _today_date(self) -> datetime.date:
         pinned = self._workbook.get_pinned_now()
-        today = pinned.date() if pinned is not None else datetime.date.today()
-        return date_serial(today, date1904=self._workbook.get_date1904())[0]
+        return pinned.date() if pinned is not None else datetime.date.today()
 
     def _evaluate_cf_rect(self, rect: CellRect, today_serial: float) -> List[CfCell]:
         sheet = self._index()
@@ -5445,7 +5484,7 @@ class Sheet:
                     self._decode_cfvo(ptr + offsets["icon_set_floor"][1]) if d["icon_set_floor_engaged"] else None,
                     [
                         CfIcon(
-                            LIB.read_cstr(LIB.read_u32(d["icon_set_icons"] + i * S.CF_ICON.size)),
+                            LIB.read_i32(d["icon_set_icons"] + i * S.CF_ICON.size),
                             LIB.read_i32(d["icon_set_icons"] + i * S.CF_ICON.size + S.CF_ICON.offsets["icon_index"][1]),
                         )
                         for i in range(d["icon_set_icon_count"])
@@ -5589,11 +5628,13 @@ class Sheet:
                 if icon_set.icons:
                     icons_ptr = scope.alloc(len(icon_set.icons) * S.CF_ICON.size)
                     for i, icon in enumerate(icon_set.icons):
-                        name_ptr = scope.cstr(icon.icon_set)
                         S.CF_ICON.pack(
                             LIB,
                             icons_ptr + i * S.CF_ICON.size,
-                            {"icon_set": name_ptr, "icon_index": _sint(icon.icon_index, "icon_index")},
+                            {
+                                "icon_set": _sint(icon.icon_set, "icon_set"),
+                                "icon_index": _sint(icon.icon_index, "icon_index"),
+                            },
                         )
                     LIB.write_bytes(ptr + ro["icon_set_icons"][1], struct.pack("<I", icons_ptr))
                     LIB.write_bytes(ptr + ro["icon_set_icon_count"][1], struct.pack("<I", len(icon_set.icons)))

@@ -289,8 +289,8 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
       const layout = wb.sheet(0).pivot(pivot).getLayout();
       let total = 0;
       for (const cell of layout.cells) {
-        if (cell.kind === mod.PivotCellKind.Data && cell.value.kind === mod.ValueKind.Number) {
-          total += cell.value.number;
+        if (cell.kind === mod.PivotCellKind.Data && typeof cell.value === 'number') {
+          total += cell.value;
         }
       }
       return total;

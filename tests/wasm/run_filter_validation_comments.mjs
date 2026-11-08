@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import {
+  ComparisonOperator,
   DateTimeGrouping,
   DynamicFilterType,
   FilterKind,
-  FilterOperator,
   SortBy,
   SortMethod,
   StatusCode,
@@ -44,14 +44,14 @@ const customGreaterThanThree = {
   columnOffset: 0,
   kind: FilterKind.Custom,
   customCount: 1,
-  operator1: FilterOperator.GreaterThan,
+  operator1: ComparisonOperator.GreaterThan,
   value1: '3',
 };
 
 export function registerFilterValidationComments(Module, test) {
   test('filter, sort and validation enums keep their C ordinals', () => {
     assert.equal(FilterKind.Icon, 6);
-    assert.equal(FilterOperator.GreaterThan, 5);
+    assert.equal(ComparisonOperator.GreaterThan, 6);
     assert.equal(DynamicFilterType.YearToDate, 18);
     assert.equal(DynamicFilterType.M12, 34);
     assert.equal(SortBy.Icon, 3);
@@ -91,9 +91,9 @@ export function registerFilterValidationComments(Module, test) {
             kind: FilterKind.Custom,
             customAnd: true,
             customCount: 2,
-            operator1: FilterOperator.GreaterThan,
+            operator1: ComparisonOperator.GreaterThan,
             value1: '1',
-            operator2: FilterOperator.LessThan,
+            operator2: ComparisonOperator.LessThan,
             value2: '9',
           },
         ],

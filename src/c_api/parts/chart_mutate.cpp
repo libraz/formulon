@@ -33,6 +33,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::ingest_entered_formula;
+using formulon::c_api::parts::kTickLabelPositionTokens;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::saturate_index;
@@ -180,7 +181,7 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   r.enum_ok(opts->direction, formulon::ChartSeriesDirection::kRows, "direction");
   r.enum_ok(opts->header_row, FM_TRISTATE_TRUE, "header_row");
   r.enum_ok(opts->header_column, FM_TRISTATE_TRUE, "header_column");
-  r.enum_ok(opts->legend, FM_CHART_LEGEND_POSITION_NONE, FM_CHART_LEGEND_POSITION_TOP_RIGHT, "legend");
+  r.enum_ok(opts->legend, FM_CHART_LEGEND_POSITION_NONE, FM_CHART_LEGEND_POSITION_TOP, "legend");
   r.enum_ok(opts->placement.anchor.anchor_kind, FM_ANCHOR_KIND_ABSOLUTE, "placement.anchor.anchor_kind");
   r.enum_ok(opts->placement.anchor.edit_as, FM_ANCHOR_EDIT_AS_ABSOLUTE, "placement.anchor.edit_as");
   if (r.status() != 0) {
@@ -265,7 +266,7 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
     return null_argument();
   }
   PatchReader r;
-  r.enum_ok(legend->position, FM_CHART_LEGEND_POSITION_BOTTOM, FM_CHART_LEGEND_POSITION_TOP_RIGHT, "position");
+  r.enum_ok(legend->position, FM_CHART_LEGEND_POSITION_RIGHT, FM_CHART_LEGEND_POSITION_TOP, "position");
   r.enum_ok(legend->overlay, 1, "overlay");
   if (r.status() != 0) {
     return r.status();
@@ -292,7 +293,7 @@ extern "C" fm_status_t fm_sheet_update_chart_legend(fm_workbook_t* wb, size_t sh
   }
   PatchReader r;
   // Removal is fm_sheet_set_chart_legend(..., NULL); a merge always names a position.
-  r.enum_ok(legend->position, FM_CHART_LEGEND_POSITION_NONE + 1, FM_CHART_LEGEND_POSITION_TOP_RIGHT, "position");
+  r.enum_ok(legend->position, FM_CHART_LEGEND_POSITION_RIGHT, FM_CHART_LEGEND_POSITION_TOP, "position");
   formulon::ChartLegendPatch model;
   model.position = chart_legend_position_from_c(legend->position);
   model.overlay = legend->overlay != 0;
@@ -334,8 +335,8 @@ extern "C" fm_status_t fm_sheet_update_chart_axis(fm_workbook_t* wb, size_t shee
   r.enum_optional(patch->crosses_op, patch->crosses, FM_CHART_AXIS_CROSSES_ABSENT, FM_CHART_AXIS_CROSSES_AT,
                   chart_axis_crosses_from_c, model.crosses, "crosses");
   model.crosses_at = patch->crosses_at;
-  r.text_field(patch->tick_label_position_op, patch->tick_label_position, model.tick_label_pos,
-               "tick_label_position_op");
+  r.token_field(patch->tick_label_position_op, patch->tick_label_position, kTickLabelPositionTokens,
+                model.tick_label_pos, "tick_label_position");
   if (r.status() != 0) {
     return r.status();
   }
@@ -355,11 +356,11 @@ extern "C" fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t s
   }
   PatchReader r;
   formulon::ChartDisplayPatch model;
-  if (patch->blanks_as_op == FM_CHART_PATCH_OP_SET && patch->blanks_as == FM_CHART_BLANKS_AS_ABSENT) {
+  if (patch->blanks_as_op == FM_CHART_PATCH_OP_SET && patch->blanks_as == FM_BLANKS_AS_ABSENT) {
     r.fail("blanks_as", "cannot be set to ABSENT");
   }
-  r.enum_field(patch->blanks_as_op, patch->blanks_as, FM_CHART_BLANKS_AS_ABSENT, FM_CHART_BLANKS_AS_SPAN,
-               chart_blanks_as_from_c, model.blanks_as, "blanks_as");
+  r.enum_field(patch->blanks_as_op, patch->blanks_as, FM_BLANKS_AS_ABSENT, FM_BLANKS_AS_SPAN, chart_blanks_as_from_c,
+               model.blanks_as, "blanks_as");
   r.bool_field(patch->plot_visible_only_op, patch->plot_visible_only, model.plot_vis_only, "plot_visible_only");
   r.bool_field(patch->na_as_blank_op, patch->na_as_blank, model.na_as_blank, "na_as_blank");
   if (r.status() != 0) {

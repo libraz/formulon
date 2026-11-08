@@ -97,7 +97,7 @@ export function registerAdoption(factory, test) {
     return withWorkbook((wb) => {
       for (const c of cases) {
         const error = thrown(() =>
-          c.entry === 'set_formula' ? wb.setFormula(0, 0, 0, c.formula) : wb.evaluateFormula(0, 0, 0, c.formula),
+          c.entry === 'set_formula' ? wb.setFormula(0, 0, 0, c.formula) : wb.evaluateFormulaArray(0, 0, 0, c.formula),
         );
         assert.ok(error instanceof RawError, `${c.id}: ${error}`);
         assert.equal(error.code, c.status, c.id);

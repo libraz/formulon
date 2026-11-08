@@ -1,4 +1,4 @@
-"""Conformance of the high-level style API, ``Value.to_python`` and whole-row / whole-column span strings.
+"""Conformance of the high-level style API, ``to_native`` and whole-row / whole-column span strings.
 
 The cases come from the shared tables under ``tools/api/``: ``cell_format_cases.json``, ``to_native_cases.json``
 and the ``span_args`` of ``address_args.json``. Each table-driven test fails when its table is empty.
@@ -242,7 +242,7 @@ class CellFormatShapeTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Value.to_python: tools/api/to_native_cases.json
+# to_native: tools/api/to_native_cases.json
 # ---------------------------------------------------------------------------
 
 NATIVE_CASES: List[Dict[str, Any]] = _read_json("tools/api/to_native_cases.json")["cases"]
@@ -262,7 +262,7 @@ class ToNativeCaseTests(unittest.TestCase):
                 else:
                     with Workbook.create_default() as wb:
                         value = wb.sheet(0).get_typed_value(case["cell"])
-                native = value.to_python()
+                native = formulon.to_native(value)
                 want = case["native"]
                 if isinstance(want, dict) and "error" in want:
                     self.assertIsInstance(native, ExcelError)
@@ -280,20 +280,20 @@ class ToNativeCaseTests(unittest.TestCase):
                     self.assertEqual(native, want)
 
     def test_edge_rows(self) -> None:
-        self.assertIsNone(Value(kind=ValueKind.BLANK).to_python())
-        negative_zero = Value(kind=ValueKind.NUMBER, number=-0.0).to_python()
+        self.assertIsNone(formulon.to_native(Value(kind=ValueKind.BLANK)))
+        negative_zero = formulon.to_native(Value(kind=ValueKind.NUMBER, number=-0.0))
         self.assertEqual(str(negative_zero), "-0.0")
-        self.assertEqual(str(Value(kind=ValueKind.NUMBER, number=0.0).to_python()), "0.0")
-        self.assertIs(Value(kind=ValueKind.BOOL, boolean=False).to_python(), False)
-        self.assertEqual(Value(kind=ValueKind.TEXT, text="").to_python(), "")
+        self.assertEqual(str(formulon.to_native(Value(kind=ValueKind.NUMBER, number=0.0))), "0.0")
+        self.assertIs(formulon.to_native(Value(kind=ValueKind.BOOL, boolean=False)), False)
+        self.assertEqual(formulon.to_native(Value(kind=ValueKind.TEXT, text="")), "")
         astral = "\U0001f600x￿"
-        self.assertEqual(Value(kind=ValueKind.TEXT, text=astral).to_python(), astral)
+        self.assertEqual(formulon.to_native(Value(kind=ValueKind.TEXT, text=astral)), astral)
         array = Value(
             kind=ValueKind.ARRAY, array=((Value(kind=ValueKind.NUMBER, number=1.0), Value(kind=ValueKind.BLANK)),)
         )
-        self.assertEqual(array.to_python(), [[1.0, None]])
+        self.assertEqual(formulon.to_native(array), [[1.0, None]])
         error = Value(kind=ValueKind.ERROR, error_code=ErrorCode.NA)
-        self.assertEqual(error.to_python(), ExcelError(ErrorCode.NA))
+        self.assertEqual(formulon.to_native(error), ExcelError(ErrorCode.NA))
 
 
 # ---------------------------------------------------------------------------

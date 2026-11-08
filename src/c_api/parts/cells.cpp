@@ -281,8 +281,8 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
 }
 
 extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                             uint32_t col, size_t font_index, uint32_t type,
-                                                             uint32_t alignment) {
+                                                             uint32_t col, size_t font_index, int32_t type,
+                                                             int32_t alignment) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -293,11 +293,10 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
   // Both enumerations occupy two bits of the XLSB trailer's flags word, so
   // an out-of-range value would not survive an `.xlsb` save intact. Reject
   // it here rather than truncate it into a different, valid-looking form.
-  constexpr uint32_t kMaxOrdinal = 3U;
-  if (type > kMaxOrdinal) {
+  if (type < FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA || type > FM_PHONETIC_TYPE_NO_CONVERSION) {
     return invalid_argument("type out of range", "type=" + std::to_string(type));
   }
-  if (alignment > kMaxOrdinal) {
+  if (alignment < FM_PHONETIC_ALIGNMENT_NO_CONTROL || alignment > FM_PHONETIC_ALIGNMENT_DISTRIBUTED) {
     return invalid_argument("alignment out of range", "alignment=" + std::to_string(alignment));
   }
   constexpr size_t kMaxFontIndex = 0xFFFFU;
@@ -485,8 +484,8 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run(const fm_workbook_t* wb, s
 }
 
 extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                             uint32_t col, size_t* out_font_index, uint32_t* out_type,
-                                                             uint32_t* out_alignment) {
+                                                             uint32_t col, size_t* out_font_index, int32_t* out_type,
+                                                             int32_t* out_alignment) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, nullptr, nullptr, &cell); rc != 0) {

@@ -495,7 +495,7 @@ CF_RULE = Struct(
     ],
 )
 
-CF_ICON = Struct("fm_cf_icon_t", [("icon_set", PTR), ("icon_index", I32)])
+CF_ICON = Struct("fm_cf_icon_t", [("icon_set", I32), ("icon_index", I32)])
 
 CELL_NODE = Struct(
     "fm_cell_node_t",
@@ -630,7 +630,7 @@ TABLE_COLUMN_INFO = Struct(
     "fm_table_column_info_t",
     [
         ("name", PTR),
-        ("totals_row_function", PTR),
+        ("totals_row_function", I32),
         ("totals_row_label", PTR),
         ("totals_row_formula", PTR),
     ],
@@ -638,7 +638,7 @@ TABLE_COLUMN_INFO = Struct(
 
 TABLE_STYLE_ELEMENT = Struct(
     "fm_table_style_element_t",
-    [("type", PTR), ("size", U32), ("has_dxf_index", I32), ("dxf_index", U32)],
+    [("type", I32), ("size", U32), ("has_dxf_index", I32), ("dxf_index", U32)],
 )
 
 TABLE_STYLE = Struct(
@@ -925,9 +925,8 @@ WIDTH_MODEL = Struct(
         ("padding_pt", F64),
         ("normal_font_size_pt", F64),
         ("calibrated", I32),
-        ("_pad", I32),
+        ("platform", I32),
         ("normal_font_name", PTR),
-        ("platform", PTR),
     ],
 )
 
@@ -1788,7 +1787,7 @@ CHART_AXIS = Struct(
         ("title", nested(CHART_TITLE)),
         ("major_gridlines", I32),
         ("minor_gridlines", I32),
-        ("tick_label_position", PTR),
+        ("tick_label_position", I32),
     ],
 )
 
@@ -2008,7 +2007,7 @@ CHART_AXIS_PATCH = Struct(
         ("crosses", I32),
         ("crosses_at", F64),
         ("tick_label_position_op", I32),
-        ("tick_label_position", PTR),
+        ("tick_label_position", I32),
     ],
 )
 

@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_evaluate_top_left.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -120,13 +121,13 @@ TEST(FormulonCApiClock, TodayAndNowResolveThroughThePin) {
   ASSERT_EQ(fm_workbook_set_pinned_now(wb.handle, &kPinned), 0);
 
   fm_value_t today{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TODAY()", &today), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=TODAY()", &today), 0);
   ASSERT_EQ(today.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(today.u.number, kPinnedSerial);
 
   // 15:30:45 is 55,845 seconds into the day.
   fm_value_t now{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=NOW()", &now), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=NOW()", &now), 0);
   ASSERT_EQ(now.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(now.u.number, kPinnedSerial + 55845.0 / 86400.0);
 }
@@ -139,7 +140,7 @@ TEST(FormulonCApiClock, MovingThePinMovesTheResult) {
   ASSERT_EQ(fm_workbook_set_pinned_now(wb.handle, &next), 0);
 
   fm_value_t today{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TODAY()", &today), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=TODAY()", &today), 0);
   ASSERT_EQ(today.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(today.u.number, kPinnedSerial + 1.0);
 }

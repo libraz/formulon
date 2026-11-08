@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 
+#include "formulon_c_evaluate_top_left.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
@@ -77,7 +78,7 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedByReadOnlyEntryPoints) {
     EXPECT_EQ(fm_compare_text("a", bad, FM_COLLATION_STRENGTH_COMPARE, "win-365-en_US", &order), kUtf8Error);
     EXPECT_EQ(order, 99);
     fm_value_t value{};
-    EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, (std::string("=LEN(\"") + bad + "\")").c_str(), &value),
+    EXPECT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, (std::string("=LEN(\"") + bad + "\")").c_str(), &value),
               kUtf8Error);
     fm_value_t text{};
     text.kind = FM_VALUE_KIND_TEXT;

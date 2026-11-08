@@ -14,6 +14,88 @@ export const ValueKind = Object.freeze({
   Lambda: 7,
 });
 export const WorkbookFormat = Object.freeze({ Unknown: 0, Xlsx: 1, Xlsb: 2 });
+export const TableTotalsRowFunction = Object.freeze({
+  None: 0,
+  Sum: 1,
+  Min: 2,
+  Max: 3,
+  Average: 4,
+  Count: 5,
+  CountNumbers: 6,
+  StdDev: 7,
+  Var: 8,
+  Custom: 9,
+});
+export const TableStyleElementType = Object.freeze({
+  WholeTable: 0,
+  HeaderRow: 1,
+  TotalRow: 2,
+  FirstColumn: 3,
+  LastColumn: 4,
+  FirstRowStripe: 5,
+  SecondRowStripe: 6,
+  FirstColumnStripe: 7,
+  SecondColumnStripe: 8,
+  FirstHeaderCell: 9,
+  LastHeaderCell: 10,
+  FirstTotalCell: 11,
+  LastTotalCell: 12,
+  FirstSubtotalColumn: 13,
+  SecondSubtotalColumn: 14,
+  ThirdSubtotalColumn: 15,
+  FirstSubtotalRow: 16,
+  SecondSubtotalRow: 17,
+  ThirdSubtotalRow: 18,
+  BlankRow: 19,
+  FirstColumnSubheading: 20,
+  SecondColumnSubheading: 21,
+  ThirdColumnSubheading: 22,
+  FirstRowSubheading: 23,
+  SecondRowSubheading: 24,
+  ThirdRowSubheading: 25,
+  PageFieldLabels: 26,
+  PageFieldValues: 27,
+});
+export const PhoneticType = Object.freeze({
+  HalfwidthKatakana: 0,
+  FullwidthKatakana: 1,
+  Hiragana: 2,
+  NoConversion: 3,
+});
+export const PhoneticAlignment = Object.freeze({
+  NoControl: 0,
+  Left: 1,
+  Center: 2,
+  Distributed: 3,
+});
+export const PageOrder = Object.freeze({
+  DownThenOver: 0,
+  OverThenDown: 1,
+});
+export const PaperSize = Object.freeze({
+  Letter: 1,
+  Legal: 5,
+  A3: 8,
+  A4: 9,
+  A5: 11,
+  B4: 12,
+  B5: 13,
+  A6: 70,
+});
+export const WidthPlatform = Object.freeze({
+  Win: 0,
+  Mac: 1,
+});
+export const ChartTickLabelPosition = Object.freeze({
+  NextTo: 0,
+  High: 1,
+  Low: 2,
+  None: 3,
+});
+export const ChartDomain = Object.freeze({
+  Category: 0,
+  Xy: 1,
+});
 export const PivotCellKind = Object.freeze({
   Header: 0,
   RowLabel: 1,
@@ -96,38 +178,38 @@ export const PivotFilterKind = Object.freeze({
   DateNewerThan: 33,
   DateNewerThanOrEqual: 34,
   DateNotBetween: 35,
-  DateTomorrow: 36,
-  DateToday: 37,
-  DateYesterday: 38,
-  DateNextWeek: 39,
-  DateThisWeek: 40,
-  DateLastWeek: 41,
-  DateNextMonth: 42,
-  DateThisMonth: 43,
-  DateLastMonth: 44,
-  DateNextQuarter: 45,
-  DateThisQuarter: 46,
-  DateLastQuarter: 47,
-  DateNextYear: 48,
-  DateThisYear: 49,
-  DateLastYear: 50,
-  DateYearToDate: 51,
-  DateQ1: 52,
-  DateQ2: 53,
-  DateQ3: 54,
-  DateQ4: 55,
-  DateM1: 56,
-  DateM2: 57,
-  DateM3: 58,
-  DateM4: 59,
-  DateM5: 60,
-  DateM6: 61,
-  DateM7: 62,
-  DateM8: 63,
-  DateM9: 64,
-  DateM10: 65,
-  DateM11: 66,
-  DateM12: 67,
+  Tomorrow: 36,
+  Today: 37,
+  Yesterday: 38,
+  NextWeek: 39,
+  ThisWeek: 40,
+  LastWeek: 41,
+  NextMonth: 42,
+  ThisMonth: 43,
+  LastMonth: 44,
+  NextQuarter: 45,
+  ThisQuarter: 46,
+  LastQuarter: 47,
+  NextYear: 48,
+  ThisYear: 49,
+  LastYear: 50,
+  YearToDate: 51,
+  Q1: 52,
+  Q2: 53,
+  Q3: 54,
+  Q4: 55,
+  M1: 56,
+  M2: 57,
+  M3: 58,
+  M4: 59,
+  M5: 60,
+  M6: 61,
+  M7: 62,
+  M8: 63,
+  M9: 64,
+  M10: 65,
+  M11: 66,
+  M12: 67,
 });
 export const PivotDatePeriod = Object.freeze({
   Seconds: 1,
@@ -139,9 +221,12 @@ export const PivotDatePeriod = Object.freeze({
   Years: 64,
 });
 export const PivotCalendar = Object.freeze({ Gregorian: 0, Japanese: 1 });
-export const PivotSortOrder = Object.freeze({ Descending: 0, Ascending: 1, Manual: 2 });
+export const PivotSortOrder = Object.freeze({
+  Manual: 0,
+  Ascending: 1,
+  Descending: 2,
+});
 export const PivotReportLayout = Object.freeze({ Compact: 0, Tabular: 1, Outline: 2 });
-export const PivotFilterOperandKind = Object.freeze({ Int: 0, Double: 1, Text: 2 });
 export const CfMatchKind = Object.freeze({ DifferentialFormat: 0, ColorScale: 1, DataBar: 2, IconSet: 3 });
 export const CfDataBarDirection = Object.freeze({ Context: 0, LeftToRight: 1, RightToLeft: 2 });
 export const CfDataBarAxisPosition = Object.freeze({ Automatic: 0, Middle: 1, None: 2 });
@@ -165,27 +250,17 @@ export const CfRuleType = Object.freeze({
   DuplicateValues: 16,
   UniqueValues: 17,
 });
-export const CfOperator = Object.freeze({
-  LessThan: 0,
-  LessThanOrEqual: 1,
-  Equal: 2,
-  NotEqual: 3,
-  GreaterThanOrEqual: 4,
-  GreaterThan: 5,
-  Between: 6,
-  NotBetween: 7,
-});
-export const CfTimePeriod = Object.freeze({
+export const DatePeriod = Object.freeze({
   Today: 0,
   Yesterday: 1,
   Tomorrow: 2,
   Last7Days: 3,
-  ThisWeek: 4,
-  LastWeek: 5,
-  NextWeek: 6,
-  ThisMonth: 7,
-  LastMonth: 8,
-  NextMonth: 9,
+  ThisMonth: 4,
+  LastMonth: 5,
+  NextMonth: 6,
+  ThisWeek: 7,
+  LastWeek: 8,
+  NextWeek: 9,
 });
 export const CfValueObjectType = Object.freeze({
   Number: 0,
@@ -215,6 +290,10 @@ export const IconSetName = Object.freeze({
   FiveArrowsGray: 14,
   FiveRating: 15,
   FiveQuarters: 16,
+  ThreeStars: 17,
+  ThreeTriangles: 18,
+  FiveBoxes: 19,
+  NoIcons: 20,
 });
 export const ValidationType = Object.freeze({
   None: 0,
@@ -225,16 +304,6 @@ export const ValidationType = Object.freeze({
   Time: 5,
   TextLength: 6,
   Custom: 7,
-});
-export const ValidationOperator = Object.freeze({
-  Between: 0,
-  NotBetween: 1,
-  Equal: 2,
-  NotEqual: 3,
-  GreaterThan: 4,
-  LessThan: 5,
-  GreaterThanOrEqual: 6,
-  LessThanOrEqual: 7,
 });
 export const ParseErrorCode = Object.freeze({
   LexerInvalidCharacter: 0,
@@ -324,13 +393,15 @@ export const PageOrientation = Object.freeze({ Portrait: 0, Landscape: 1 });
 export const LocaleDateOrder = Object.freeze({ Mdy: 0, Ymd: 1, Dmy: 2 });
 export const GeometryMode = Object.freeze({ Display: 0, Print: 1 });
 export const FilterKind = Object.freeze({ None: 0, Values: 1, Custom: 2, Top10: 3, Dynamic: 4, Color: 5, Icon: 6 });
-export const FilterOperator = Object.freeze({
-  Equal: 0,
-  LessThan: 1,
-  LessThanOrEqual: 2,
+export const ComparisonOperator = Object.freeze({
+  Between: 0,
+  NotBetween: 1,
+  Equal: 2,
   NotEqual: 3,
-  GreaterThanOrEqual: 4,
-  GreaterThan: 5,
+  LessThan: 4,
+  LessThanOrEqual: 5,
+  GreaterThan: 6,
+  GreaterThanOrEqual: 7,
 });
 export const DynamicFilterType = Object.freeze({
   Null: 0,
@@ -468,11 +539,13 @@ export const DrawingObjectKind = Object.freeze({
 export const AnchorKind = Object.freeze({ OneCell: 0, TwoCell: 1, Absolute: 2 });
 export const AnchorEditAs = Object.freeze({ OneCell: 0, TwoCell: 1, Absolute: 2 });
 export const ShapePaint = Object.freeze({ Solid: 0, None: 1, Other: 2 });
-export const SlicerSortOrder = Object.freeze({ Descending: 0, Ascending: 1 });
+export const SlicerSortOrder = Object.freeze({
+  Ascending: 0,
+  Descending: 1,
+});
 export const SlicerCrossFilter = Object.freeze({ ShowItemsWithDataAtTop: 0, ShowItemsWithNoData: 1, None: 2 });
 export const SparklineType = Object.freeze({ Line: 0, Column: 1, Stacked: 2 });
 export const SparklineAxisType = Object.freeze({ Individual: 0, Group: 1, Custom: 2 });
-export const SparklineEmptyCells = Object.freeze({ Gap: 0, Zero: 1, Span: 2 });
 export const ChartPlotType = Object.freeze({
   Bar: 0,
   Bar3D: 1,
@@ -514,14 +587,24 @@ export const ChartRole = Object.freeze({
 });
 export const ChartInsertKind = Object.freeze({ Column: 0, Bar: 1, Line: 2, Area: 3, Pie: 4, Scatter: 5, Doughnut: 6 });
 export const ChartGrouping = Object.freeze({ Clustered: 0, Stacked: 1, PercentStacked: 2, Standard: 3 });
-export const ChartBlanksAs = Object.freeze({ Gap: 0, Zero: 1, Span: 2 });
+export const BlanksAs = Object.freeze({
+  Zero: 0,
+  Gap: 1,
+  Span: 2,
+});
 export const ChartPointState = Object.freeze({ Value: 0, Gap: 1, Connect: 2 });
 export const ChartAxisKind = Object.freeze({ Category: 0, Value: 1, Date: 2, Series: 3 });
 export const ChartAxisCrosses = Object.freeze({ AutoZero: 0, Min: 1, Max: 2, At: 3 });
 export const ChartTitleKind = Object.freeze({ Text: 1, Ref: 2, Auto: 3 });
 export const ChartSeriesDirection = Object.freeze({ Auto: 0, Columns: 1, Rows: 2 });
 export const ChartSourceKind = Object.freeze({ None: 0, Ref: 1, Literal: 2 });
-export const ChartLegendPosition = Object.freeze({ Bottom: 0, Top: 1, Left: 2, Right: 3, TopRight: 4 });
+export const ChartLegendPosition = Object.freeze({
+  Right: 0,
+  Bottom: 1,
+  TopRight: 2,
+  Left: 3,
+  Top: 4,
+});
 export const ChartAxisPosition = Object.freeze({ Bottom: 0, Top: 1, Left: 2, Right: 3 });
 export const ChartBarDirection = Object.freeze({ Col: 0, Bar: 1 });
 export const ChartLineDash = Object.freeze({ Solid: 0, Dash: 1, Dot: 2, DashDot: 3, Other: 4 });
@@ -820,11 +903,9 @@ export const FORMULON_MEMBERS = Object.freeze([
   'PivotCalendar',
   'PivotSortOrder',
   'PivotReportLayout',
-  'PivotFilterOperandKind',
   'CfMatchKind',
   'CfRuleType',
-  'CfOperator',
-  'CfTimePeriod',
+  'DatePeriod',
   'CfValueObjectType',
   'IconSetName',
   'ErrorCode',
@@ -838,14 +919,13 @@ export const FORMULON_MEMBERS = Object.freeze([
   'LogLevel',
   'ExternalLinkKind',
   'FilterKind',
-  'FilterOperator',
+  'ComparisonOperator',
   'DynamicFilterType',
   'SortBy',
   'SortMethod',
   'DateTimeGrouping',
   'ValidationErrorStyle',
   'ValidationType',
-  'ValidationOperator',
   'ColorContext',
   'ImageFormat',
   'DrawingObjectKind',
@@ -856,13 +936,21 @@ export const FORMULON_MEMBERS = Object.freeze([
   'SlicerCrossFilter',
   'SparklineType',
   'SparklineAxisType',
-  'SparklineEmptyCells',
   'ChartPlotType',
   'ChartExtendedLayout',
   'ChartRole',
   'ChartInsertKind',
   'ChartGrouping',
-  'ChartBlanksAs',
+  'BlanksAs',
+  'PhoneticType',
+  'PhoneticAlignment',
+  'PageOrder',
+  'PaperSize',
+  'TableTotalsRowFunction',
+  'TableStyleElementType',
+  'ChartTickLabelPosition',
+  'ChartDomain',
+  'WidthPlatform',
   'ChartPointState',
   'ChartAxisKind',
   'ChartAxisCrosses',
@@ -1434,6 +1522,7 @@ const HANDWRITTEN = Object.freeze([
   'chart',
   'copySheet',
   'drawing',
+  'evaluateFormula',
   'evaluateTypedFormula',
   'evaluateTypedFormulaArray',
   'getCellFormat',
@@ -2228,7 +2317,7 @@ const METHOD_ARITY = Object.freeze({
   'PivotCache.addCalculatedField': 2,
   'PivotCache.addCalculatedItem': 3,
   'PivotCache.addField': 1,
-  'PivotCache.addFieldSharedItem': 3,
+  'PivotCache.addFieldSharedItem': 2,
   'PivotCache.addRecord': 0,
   'PivotCache.clearFieldSharedItems': 1,
   'PivotCache.clearFields': 0,
@@ -2244,7 +2333,7 @@ const METHOD_ARITY = Object.freeze({
   'PivotCache.removeCalculatedItem': 1,
   'PivotCache.setCalculatedFieldFormula': 2,
   'PivotCache.setCalculatedItemFormula': 2,
-  'PivotCache.setRecordValue': 4,
+  'PivotCache.setRecordValue': 3,
   'PivotCache.setWorksheetSource': 1,
   'PivotCache.updateOptions': 1,
   'Shape.getProperties': 0,
@@ -2578,7 +2667,6 @@ const TYPED_ARGS = Object.freeze({
   'Workbook.formatReference': [[0, 'ReferenceRangeInput']],
 });
 const DEFAULT_ARGS = Object.freeze({
-  'Sheet.evaluateCfRange': [[1, 'today']],
   'Sheet.getDependents': [[2, 1]],
   'Sheet.getPrecedents': [[2, 1]],
   'Workbook.copySheet': [[1, null]],
@@ -3216,13 +3304,13 @@ function normalizeTypedArgs(raw, sheet, where, typed, args) {
   return out;
 }
 
-// `args` with each omitted `DEFAULT_ARGS` slot filled; `'today'` is the pinned date, else the host's local date.
-function fillDefaults(runtime, raw, defaults, args) {
+// `args` with each omitted `DEFAULT_ARGS` slot filled.
+function fillDefaults(defaults, args) {
   let out = args;
   for (const [at, value] of defaults) {
     if (args[at] !== undefined) continue;
     if (out === args) out = [...args];
-    out[at] = value === 'today' ? todaySerial(runtime, raw) : value;
+    out[at] = value;
   }
   return out;
 }
@@ -3393,18 +3481,13 @@ function geometryMode(mode, where, position) {
   return mode;
 }
 
-/** The typed raw suffix and arguments for a pivot-cache value (`date` only with a number). */
-function cacheValue(where, position, value, options) {
-  let date = false;
-  if (options !== undefined && options !== null) {
-    requireObject(options, `${where} argument ${position + 1}`);
-    if (options.date !== undefined) date = requireBoolean(options.date, `${where} date`);
-  }
-  if (date && typeof value !== 'number') throw new TypeError(`${where} date applies only to a number`);
+/** The typed raw suffix and arguments for a pivot-cache value; `dateSerialOf(date)` is a `Date`'s serial. */
+function cacheValue(where, position, value, dateSerialOf) {
   if (value === null) return ['Blank', []];
+  if (value instanceof Date) return ['Date', [dateSerialOf(value)]];
   switch (typeof value) {
     case 'number':
-      return [date ? 'Date' : 'Number', [value]];
+      return ['Number', [value]];
     case 'string':
       return ['Text', [value]];
     case 'boolean':
@@ -3413,7 +3496,7 @@ function cacheValue(where, position, value, options) {
       if (value.kind === ValueKind.Error && typeof value.errorCode === 'number') return ['Error', [value.errorCode]];
       break;
   }
-  throw new TypeError(`${where} argument ${position} must be a number, string, boolean, null or an ErrorValue`);
+  throw new TypeError(`${where} argument ${position} must be a number, string, boolean, null, Date or an ErrorValue`);
 }
 
 // The payload field and its type of each scalar `Value` kind but Blank.
@@ -3479,26 +3562,81 @@ const DATE_TIME_FORMAT = 'm/d/yyyy h:mm';
 const BUILTIN_NUM_FMT_IDS = Object.freeze({ [DATE_FORMAT]: 14, [DATE_TIME_FORMAT]: 22 });
 
 /**
- * The serial of `date`'s UTC fields under the date system `date1904`, and whether it has a time of day. The
+ * A `CivilTime` from a date-time input: a `CivilTime` passes after its fields are checked, a `Date` is read
+ * through its local getters (milliseconds dropped) and an Invalid Date is a `RangeError`. `method` and `param`
+ * word the errors.
+ */
+function toCivil(input, method, param) {
+  const where = `${method} ${param}`;
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) throw new RangeError(`${where} is an invalid Date`);
+    return {
+      year: input.getFullYear(),
+      month: input.getMonth() + 1,
+      day: input.getDate(),
+      hour: input.getHours(),
+      minute: input.getMinutes(),
+      second: input.getSeconds(),
+    };
+  }
+  requireObject(input, where);
+  const civil = {};
+  for (const field of CIVIL_FIELDS) civil[field] = requireInteger(input[field], `${where}.${field}`);
+  return civil;
+}
+
+/** The serial of `civil` under the date system `date1904`. */
+const civilSerial = (runtime, civil, date1904) => runtime.convertCivilToSerial(civil, date1904);
+
+/** The serial of a date-time input under the date system `date1904`. */
+const dateInputSerial = (runtime, input, date1904, method, param) =>
+  civilSerial(runtime, toCivil(input, method, param), date1904);
+
+/** The `YYYY-MM-DDTHH:MM:SS.00` stamp of a civil time, as the C threaded comment carries `created`. */
+function civilStamp(civil) {
+  const pad = (value, width) => String(value).padStart(width, '0');
+  const date = `${pad(civil.year, 4)}-${pad(civil.month, 2)}-${pad(civil.day, 2)}`;
+  return `${date}T${pad(civil.hour, 2)}:${pad(civil.minute, 2)}:${pad(civil.second, 2)}.00`;
+}
+
+/** The `CivilTime` a C threaded-comment stamp names, hundredths dropped; `null` when it names none. */
+function stampCivil(text) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(text);
+  if (match === null) return null;
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
+  return { year, month, day, hour, minute, second };
+}
+
+/** Throws `TypeError: <where> argument <position> has no field <key>` for a key of `object` outside `accepted`. */
+function refuseOtherKeys(where, position, object, accepted) {
+  for (const [key, value] of Object.entries(object)) {
+    if (value !== undefined && !accepted.includes(key)) {
+      throw new TypeError(`${where} argument ${position} has no field ${key}`);
+    }
+  }
+}
+
+/**
+ * The serial of `date`'s local fields under the date system `date1904`, and whether it has a time of day. The
  * engine converts the calendar date; the time of day is added here.
  */
 function dateSerial(runtime, date, date1904, where) {
   if (Number.isNaN(date.getTime())) throw new RangeError(`${where} is an invalid Date`);
   const civil = {
-    year: date.getUTCFullYear(),
-    month: date.getUTCMonth() + 1,
-    day: date.getUTCDate(),
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
     hour: 0,
     minute: 0,
     second: 0,
   };
-  const seconds = date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds();
-  const ms = date.getUTCMilliseconds();
+  const seconds = date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+  const ms = date.getMilliseconds();
   const serial = runtime.convertCivilToSerial(civil, date1904) + seconds / 86400 + ms / MS_PER_DAY;
   return [serial, seconds !== 0 || ms !== 0];
 }
 
-/** The `Date` whose UTC fields carry `serial` under the date system `date1904`, rounded to the millisecond. */
+/** The `Date` whose local fields carry `serial` under the date system `date1904`, rounded to the millisecond. */
 function serialDate(runtime, serial, date1904) {
   let days = Math.floor(serial);
   let ms = Math.round((serial - days) * MS_PER_DAY);
@@ -3508,8 +3646,8 @@ function serialDate(runtime, serial, date1904) {
   }
   const { year, month, day } = runtime.convertSerialToCivil(days, date1904);
   const date = new Date(0);
-  date.setUTCFullYear(year, month - 1, day);
-  date.setUTCHours(0, 0, 0, ms);
+  date.setFullYear(year, month - 1, day);
+  date.setHours(Math.floor(ms / 3600000), Math.floor(ms / 60000) % 60, Math.floor(ms / 1000) % 60, ms % 1000);
   return date;
 }
 
@@ -4079,6 +4217,30 @@ function makeFacade(Raw, registry, runtime) {
       return pivotCacheOf(this.#sheet.workbook, raw.getPivotCacheId(sheet, pivot));
     }
 
+    getLayout() {
+      const [raw, sheet, pivot] = this.#locate();
+      const layout = raw.getPivotLayout(sheet, pivot);
+      const cells = layout.cells.map(({ row, col, value, kind, depth, fieldName, numberFormat }) => ({
+        row,
+        col,
+        value: toNative(value),
+        kind,
+        depth,
+        fieldName,
+        numberFormat,
+      }));
+      return { rect: layout.rect, cells };
+    }
+
+    // `value` / `valueHigh` reach the raw method as they are; it maps them onto the C operand union.
+    addFilter(spec) {
+      const where = 'Pivot.addFilter';
+      requireObject(spec, `${where} argument 1`);
+      refuseOtherKeys(where, 1, spec, ['axis', 'fieldName', 'type', 'dataFieldIndex', 'value', 'valueHigh']);
+      const [raw, sheet, pivot] = this.#locate();
+      return raw.addPivotFilter(sheet, pivot, spec);
+    }
+
     showDetails(row, col) {
       const [raw, sheet, pivot] = this.#locate();
       return insertSheet(this.#sheet.workbook, raw.showPivotDetails(sheet, pivot, row, col));
@@ -4177,14 +4339,18 @@ function makeFacade(Raw, registry, runtime) {
     setFieldDateGroup(field, group) {
       const where = 'Pivot.setFieldDateGroup';
       requireObject(group, `${where} argument 2`);
-      const optional = (key) => (group[key] === undefined ? undefined : requireNumber(group[key], `${where} ${key}`));
+      const [raw, sheet, pivot] = this.#locate();
+      const bound = (key) =>
+        group[key] === undefined ? undefined : dateInputSerial(runtime, group[key], raw.getDate1904(), where, key);
       const args = [
         requireInteger(group.periods, `${where} periods`),
         group.calendar === undefined ? PivotCalendar.Gregorian : requireInteger(group.calendar, `${where} calendar`),
       ];
-      const tail = [optional('intervalDays'), optional('start'), optional('end')];
-      while (tail.length > 0 && tail.at(-1) === undefined) tail.pop();
-      const [raw, sheet, pivot] = this.#locate();
+      const intervalDays =
+        group.intervalDays === undefined ? undefined : requireNumber(group.intervalDays, `${where} intervalDays`);
+      // The raw call is positional: a bound after an omitted slot needs that slot's default spelled out.
+      const tail = [intervalDays ?? 1, bound('start') ?? Number.NaN, bound('end') ?? Number.NaN];
+      while (tail.length > 0 && (tail.length === 1 ? tail[0] === 1 : Number.isNaN(tail.at(-1)))) tail.pop();
       raw.setPivotFieldDateGroup(sheet, pivot, field, ...args, ...tail);
     }
   }
@@ -4242,21 +4408,29 @@ function makeFacade(Raw, registry, runtime) {
       const items = [];
       for (let i = 0; i < n; i++) {
         items.push({
-          value: raw.getPivotCacheFieldSharedItemValue(id, field, i),
+          value: toNative(raw.getPivotCacheFieldSharedItemValue(id, field, i)),
           isDate: raw.isPivotCacheFieldSharedItemDate(id, field, i),
         });
       }
       return items;
     }
 
-    addFieldSharedItem(field, value, options) {
-      const [kind, args] = cacheValue('PivotCache.addFieldSharedItem', 2, value, options);
-      this.#raw()[`addPivotCacheFieldSharedItem${kind}`](this.#cacheId, field, ...args);
+    addFieldSharedItem(field, value) {
+      const where = 'PivotCache.addFieldSharedItem';
+      const raw = this.#raw();
+      const [kind, args] = cacheValue(where, 2, value, (date) =>
+        dateInputSerial(runtime, date, raw.getDate1904(), where, 'argument 2'),
+      );
+      raw[`addPivotCacheFieldSharedItem${kind}`](this.#cacheId, field, ...args);
     }
 
-    setRecordValue(record, field, value, options) {
-      const [kind, args] = cacheValue('PivotCache.setRecordValue', 3, value, options);
-      this.#raw()[`setPivotCacheRecord${kind}`](this.#cacheId, record, field, ...args);
+    setRecordValue(record, field, value) {
+      const where = 'PivotCache.setRecordValue';
+      const raw = this.#raw();
+      const [kind, args] = cacheValue(where, 3, value, (date) =>
+        dateInputSerial(runtime, date, raw.getDate1904(), where, 'argument 3'),
+      );
+      raw[`setPivotCacheRecord${kind}`](this.#cacheId, record, field, ...args);
     }
 
     // `null` removes the source; an object writes one with the attributes it gives (`null` is one left off).
@@ -5227,7 +5401,7 @@ function makeFacade(Raw, registry, runtime) {
       );
     }
 
-    // The serial of the date's UTC fields; a General cell also gets the built-in date format.
+    // The serial of the date's local fields; a General cell also gets the built-in date format.
     #setDate(row, col, date) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
@@ -5303,6 +5477,67 @@ function makeFacade(Raw, registry, runtime) {
         checkPatch(where, protection, fields, nullable, source);
       }
       rawOf(this.#workbook).setSheetProtection(this.#current(), protection);
+    }
+
+    // `created` is a `DateInput`; the raw record carries the C stamp.
+    addThreadedComment(comment) {
+      const where = 'Sheet.addThreadedComment';
+      requireObject(comment, `${where} argument 1`);
+      const input =
+        comment.created === undefined || comment.created === null
+          ? comment
+          : { ...comment, created: civilStamp(toCivil(comment.created, where, 'created')) };
+      rawOf(this.#workbook).addThreadedComment(this.#current(), input);
+    }
+
+    listThreadedComments() {
+      return rawOf(this.#workbook)
+        .listThreadedComments(this.#current())
+        .map((comment) => ({ ...comment, created: stampCivil(comment.created) }));
+    }
+
+    getThreadedComment(id) {
+      const comment = rawOf(this.#workbook).getThreadedComment(this.#current(), id);
+      return comment === null ? null : { ...comment, created: stampCivil(comment.created) };
+    }
+
+    // `today` is a `DateInput`, else the pinned clock, else the host's local date.
+    evaluateCfRange(range, options) {
+      const where = 'Sheet.evaluateCfRange';
+      const raw = rawOf(this.#workbook);
+      let today;
+      if (options !== undefined) {
+        requireObject(options, `${where} argument 2`);
+        refuseOtherKeys(where, 2, options, ['today']);
+        if (options.today !== undefined) {
+          const civil = { ...toCivil(options.today, where, 'today'), hour: 0, minute: 0, second: 0 };
+          today = civilSerial(runtime, civil, raw.getDate1904());
+        }
+      }
+      return raw.evaluateCfRange(this.#current(), range, today ?? todaySerial(runtime, raw));
+    }
+
+    // An `ExcelError` names its `ErrorCode`.
+    setError(row, col, error) {
+      const code = error instanceof ExcelError ? error.code : error;
+      rawOf(this.#workbook).setError(this.#current(), row, col, code);
+    }
+
+    // The candidate is coerced as `setValue` coerces a value, except that a string is always text.
+    validateValue(row, col, value) {
+      const where = 'Sheet.validateValue';
+      checkCellValue(value, `${where} argument 3`);
+      const raw = rawOf(this.#workbook);
+      let proposed = value;
+      if (value === null) proposed = BLANK;
+      else if (typeof value === 'number') proposed = { kind: ValueKind.Number, number: value };
+      else if (typeof value === 'string') proposed = { kind: ValueKind.Text, text: value };
+      else if (typeof value === 'boolean') proposed = { kind: ValueKind.Bool, boolean: value };
+      else if (value instanceof ExcelError) proposed = { kind: ValueKind.Error, errorCode: value.code };
+      else if (value instanceof Date) {
+        proposed = { kind: ValueKind.Number, number: dateSerial(runtime, value, raw.getDate1904(), where)[0] };
+      }
+      return raw.validateValue(this.#current(), row, col, proposed);
     }
 
     // Only the keys the patch gives reach the engine; a record's other fields are ignored.
@@ -5634,21 +5869,8 @@ function makeFacade(Raw, registry, runtime) {
 
     setPinnedNow(time) {
       if (time === null) return this.#raw.setPinnedNow(null);
-      const where = 'Workbook.setPinnedNow';
-      if (time instanceof Date) {
-        if (Number.isNaN(time.getTime())) throw new RangeError(`${where} argument 1 is an invalid Date`);
-        return this.#raw.setPinnedNow(
-          time.getUTCFullYear(),
-          time.getUTCMonth() + 1,
-          time.getUTCDate(),
-          time.getUTCHours(),
-          time.getUTCMinutes(),
-          time.getUTCSeconds(),
-        );
-      }
-      requireObject(time, `${where} argument 1`);
-      const fields = ['year', 'month', 'day', 'hour', 'minute', 'second'];
-      return this.#raw.setPinnedNow(...fields.map((f) => requireInteger(time[f], `${where} ${f}`)));
+      const civil = toCivil(time, 'Workbook.setPinnedNow', 'argument 1');
+      return this.#raw.setPinnedNow(...CIVIL_FIELDS.map((field) => civil[field]));
     }
 
     getThemeFonts() {
@@ -5673,8 +5895,9 @@ function makeFacade(Raw, registry, runtime) {
     setThemeScriptFont(font) {
       const where = 'Workbook.setThemeScriptFont';
       requireObject(font, `${where} argument 1`);
+      refuseOtherKeys(where, 1, font, ['scheme', 'script', 'typeface']);
       this.#raw.setThemeScriptFont(
-        requireBoolean(font.major, `${where} major`),
+        requireInteger(font.scheme, `${where} scheme`),
         requireString(font.script, `${where} script`),
         requireString(font.typeface, `${where} typeface`),
       );
@@ -5683,8 +5906,9 @@ function makeFacade(Raw, registry, runtime) {
     getThemeScriptFont(key) {
       const where = 'Workbook.getThemeScriptFont';
       requireObject(key, `${where} argument 1`);
+      refuseOtherKeys(where, 1, key, ['scheme', 'script']);
       return this.#raw.getThemeScriptFont(
-        requireBoolean(key.major, `${where} major`),
+        requireInteger(key.scheme, `${where} scheme`),
         requireString(key.script, `${where} script`),
       );
     }
@@ -5872,7 +6096,7 @@ function makeFacade(Raw, registry, runtime) {
     ],
   ];
   for (const [owner, cls, rawFor, sheetFor] of argumentForms) {
-    installArgumentForms(cls.prototype, owner, rawFor, sheetFor, handleIndex, runtime);
+    installArgumentForms(cls.prototype, owner, rawFor, sheetFor, handleIndex);
   }
   // Under the arity guard: the handle is checked before a call reads or validates its input, and the workbook
   // cannot be disposed from inside the call.
@@ -5911,9 +6135,9 @@ function makeFacade(Raw, registry, runtime) {
  * omitted trailing argument given its ledger default. `rawOf(self)` and
  * `sheetOf(self)` give the raw workbook and the sheet index a string key is
  * resolved against; `handleIndex(self, kind, value, label)` the index a handle
- * names; `runtime` converts the `'today'` default.
+ * names.
  */
-function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex, runtime) {
+function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
   const prefix = `${owner}.`;
   const tables = [CELL_ARGS, RECT_ARGS, SPAN_ARGS, REF_ARGS, TYPED_ARGS, DEFAULT_ARGS];
   const keys = new Set(tables.flatMap((table) => Object.keys(table)));
@@ -5934,7 +6158,7 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex, runtime
       namedFunction(name, function (args) {
         if (spans !== undefined) args = expandSpans(rawOf(this), spans, args);
         if (pairs !== undefined) args = expandCells(rawOf(this), where, pairs, args);
-        if (defaults !== undefined) args = fillDefaults(runtime, rawOf(this), defaults, args);
+        if (defaults !== undefined) args = fillDefaults(defaults, args);
         if (typed !== undefined) args = normalizeTypedArgs(rawOf(this), sheetOf(this), where, typed, args);
         if (rects !== undefined) args = expandRects(rawOf(this), rects, args);
         if (ref !== undefined && typeof args[ref[0]] !== 'number') {

@@ -72,10 +72,9 @@ fm_slicer_t Anchored(std::uint32_t fields) {
 }
 
 TEST(FormulonCApiSlicers, EnumOrdinalsAndFieldBits) {
-  // The sort_order family: the slicer order takes the pivot order's values.
-  EXPECT_EQ(FM_SLICER_SORT_ORDER_DESCENDING, 0);
-  EXPECT_EQ(static_cast<int>(FM_SLICER_SORT_ORDER_DESCENDING), static_cast<int>(FM_PIVOT_SORT_ORDER_DESCENDING));
-  EXPECT_EQ(static_cast<int>(FM_SLICER_SORT_ORDER_ASCENDING), static_cast<int>(FM_PIVOT_SORT_ORDER_ASCENDING));
+  // Zero is the OOXML default `ascending`.
+  EXPECT_EQ(FM_SLICER_SORT_ORDER_ASCENDING, 0);
+  EXPECT_EQ(FM_SLICER_SORT_ORDER_DESCENDING, 1);
   EXPECT_EQ(FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_NO_DATA, 1);
   EXPECT_EQ(FM_SLICER_CROSS_FILTER_NONE, 2);
   EXPECT_EQ(FM_SLICER_FIELD_CROSS_FILTER, 0x80u);
@@ -116,6 +115,7 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   EXPECT_EQ(out.column_count, 2U);
   EXPECT_EQ(out.row_height_emu, 241300);
   EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_DESCENDING);
+  EXPECT_TRUE(Has(ExtractZipEntry(Save(wb.handle), "xl/slicerCaches/slicerCache1.xml"), "sortOrder=\"descending\""));
   EXPECT_EQ(out.cross_filter, FM_SLICER_CROSS_FILTER_NONE);
   EXPECT_EQ(out.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
   EXPECT_EQ(out.from_row, 4U);
@@ -146,7 +146,7 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   EXPECT_EQ(out.from_row, 0U);
   EXPECT_EQ(out.to_row, 8U);
 
-  // Ascending is the domain's upper end and must be accepted.
+  // Ascending, the schema default, is accepted as well.
   fm_slicer_t ascending = Anchored(FM_SLICER_FIELD_SORT_ORDER);
   ascending.sort_order = FM_SLICER_SORT_ORDER_ASCENDING;
   ascending.from_row = 0;

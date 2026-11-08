@@ -290,7 +290,7 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
         for (std::size_t i = 0; i < columns.size(); ++i) {
           Napi::Object c = Napi::Object::New(env);
           c.Set("name", JsString(env, columns[i].name));
-          c.Set("totalsRowFunction", JsString(env, columns[i].totals_row_function));
+          c.Set("totalsRowFunction", JsNumber(env, columns[i].totals_row_function));
           c.Set("totalsRowLabel", JsString(env, columns[i].totals_row_label));
           c.Set("totalsRowFormula", Napi::String::New(env, totals_formulas[i]));
           list.Set(static_cast<uint32_t>(i), c);
@@ -520,17 +520,16 @@ Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
   const std::size_t column = static_cast<std::size_t>(ArgU32(info, 2));
   const Napi::Object totals = ArgObject(info, 3);
   CheckedSpecReader reader(env);
-  std::string function;
   std::string label;
   std::string formula;
-  const bool has_function = reader.String(totals, "function", &function);
+  const int32_t function = reader.I32(totals, "function", FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
   const bool has_label = reader.String(totals, "label", &label);
   const bool has_formula = reader.String(totals, "formula", &formula);
   if (!reader.ok()) {
     return env.Undefined();
   }
   const fm_status_t rc =
-      fm_sheet_set_table_column_totals(handle_, sheet, idx, column, has_function ? function.c_str() : nullptr,
+      fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function,
                                        has_label ? label.c_str() : nullptr, has_formula ? formula.c_str() : nullptr);
   return ValueOrThrow(env, rc, env.Undefined());
 }

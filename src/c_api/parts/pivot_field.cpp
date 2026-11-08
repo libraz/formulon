@@ -354,7 +354,8 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_sort(fm_workbook_t* wb, std::siz
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  fm_status_t enum_status = check_enum_domain(order, 0, FM_PIVOT_SORT_ORDER_MANUAL, "order");
+  fm_status_t enum_status =
+      check_enum_domain(order, FM_PIVOT_SORT_ORDER_MANUAL, FM_PIVOT_SORT_ORDER_DESCENDING, "order");
   if (enum_status != 0) {
     return enum_status;
   }

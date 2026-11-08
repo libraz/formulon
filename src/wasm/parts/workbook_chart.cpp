@@ -133,7 +133,7 @@ constexpr WrField kAxisWr[] = {
     WR("logBase", fm_chart_axis_patch_t, kF64, log_base_op, log_base),
     WR("crosses", fm_chart_axis_patch_t, kI32, crosses_op, crosses),
     WR_PLAIN("crossesAt", fm_chart_axis_patch_t, crosses_at),
-    WR("tickLabelPosition", fm_chart_axis_patch_t, kStr, tick_label_position_op, tick_label_position),
+    WR("tickLabelPosition", fm_chart_axis_patch_t, kI32, tick_label_position_op, tick_label_position),
     WR_END,
 };
 

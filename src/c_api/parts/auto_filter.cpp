@@ -15,6 +15,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/xml_fragment.h"
 #include "cf/auto_filter_eval.h"
@@ -30,6 +31,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ensure_calculated;
+using formulon::c_api::parts::filter_operator_from_c;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::fresh_arena;
@@ -43,6 +45,7 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::to_c;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::validate_single_element_fragment;
@@ -139,11 +142,11 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
         c.custom_and = in.custom.and_join ? 1 : 0;
         c.custom_count = static_cast<int32_t>(in.custom.filters.size());
         if (!in.custom.filters.empty()) {
-          c.op1 = static_cast<int32_t>(in.custom.filters[0].op);
+          c.op1 = to_c(in.custom.filters[0].op);
           c.val1 = keep(in.custom.filters[0].val);
         }
         if (in.custom.filters.size() > 1U) {
-          c.op2 = static_cast<int32_t>(in.custom.filters[1].op);
+          c.op2 = to_c(in.custom.filters[1].op);
           c.val2 = keep(in.custom.filters[1].val);
         }
         break;
@@ -266,21 +269,21 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
                                  "custom filter needs one or two conditions",
                                  "custom_count=" + std::to_string(in.custom_count));
       }
-      constexpr auto kLastOp = static_cast<int64_t>(formulon::FilterOperator::kGreaterThan);
+      // A condition always states a relational operator; the range members are not one.
+      constexpr int64_t kFirstOp = FM_COMPARISON_OPERATOR_EQUAL;
+      constexpr int64_t kLastOp = FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL;
       out->custom.and_join = in.custom_and != 0;
       if (in.custom_count >= 1) {
-        if (auto rc = check_enum_domain(in.op1, 0, kLastOp, "op1"); rc != 0) {
+        if (auto rc = check_enum_domain(in.op1, kFirstOp, kLastOp, "op1"); rc != 0) {
           return rc;
         }
-        out->custom.filters.push_back(
-            formulon::CustomFilter{static_cast<formulon::FilterOperator>(in.op1), text_or_empty(in.val1)});
+        out->custom.filters.push_back(formulon::CustomFilter{filter_operator_from_c(in.op1), text_or_empty(in.val1)});
       }
       if (in.custom_count == 2) {
-        if (auto rc = check_enum_domain(in.op2, 0, kLastOp, "op2"); rc != 0) {
+        if (auto rc = check_enum_domain(in.op2, kFirstOp, kLastOp, "op2"); rc != 0) {
           return rc;
         }
-        out->custom.filters.push_back(
-            formulon::CustomFilter{static_cast<formulon::FilterOperator>(in.op2), text_or_empty(in.val2)});
+        out->custom.filters.push_back(formulon::CustomFilter{filter_operator_from_c(in.op2), text_or_empty(in.val2)});
       }
       return 0;
     }

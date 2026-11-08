@@ -13,6 +13,7 @@ from formulon import (
     ColorResolution,
     EffectiveStyleSource,
     Font,
+    FontScheme,
     FormulonError,
     ThemeFonts,
     ThemeScriptFont,
@@ -211,31 +212,31 @@ class CreateForProfileTests(unittest.TestCase):
 class ThemeScriptFontTests(unittest.TestCase):
     def test_default_theme_reports_its_scripts(self) -> None:
         with Workbook.create_for_profile("mac-365-ja_JP") as wb:
-            jpan = wb.get_theme_script_font(major=False, script="Jpan")
-            hang = wb.get_theme_script_font(major=False, script="Hang")
-            missing = wb.get_theme_script_font(major=True, script="Zzzz")
-        self.assertEqual(jpan, ThemeScriptFont(major=False, script="Jpan", typeface="游ゴシック"))
-        self.assertEqual(hang, ThemeScriptFont(major=False, script="Hang", typeface="맑은 고딕"))
+            jpan = wb.get_theme_script_font(scheme=FontScheme.MINOR, script="Jpan")
+            hang = wb.get_theme_script_font(scheme=FontScheme.MINOR, script="Hang")
+            missing = wb.get_theme_script_font(scheme=FontScheme.MAJOR, script="Zzzz")
+        self.assertEqual(jpan, ThemeScriptFont(scheme=FontScheme.MINOR, script="Jpan", typeface="游ゴシック"))
+        self.assertEqual(hang, ThemeScriptFont(scheme=FontScheme.MINOR, script="Hang", typeface="맑은 고딕"))
         self.assertIsNone(missing)
 
     def test_set_script_font_roundtrip(self) -> None:
         with Workbook.create_for_profile("mac-365-en_US") as wb:
-            jpan = wb.get_theme_script_font(major=False, script="Jpan")
-            wb.set_theme_script_font(major=False, script="Hang", typeface="Test Face")
+            jpan = wb.get_theme_script_font(scheme=FontScheme.MINOR, script="Jpan")
+            wb.set_theme_script_font(scheme=FontScheme.MINOR, script="Hang", typeface="Test Face")
             data = wb.save()
         with Workbook.load(data) as wb2:
             self.assertEqual(
-                wb2.get_theme_script_font(major=False, script="Hang"),
-                ThemeScriptFont(major=False, script="Hang", typeface="Test Face"),
+                wb2.get_theme_script_font(scheme=FontScheme.MINOR, script="Hang"),
+                ThemeScriptFont(scheme=FontScheme.MINOR, script="Hang", typeface="Test Face"),
             )
-            self.assertEqual(wb2.get_theme_script_font(major=False, script="Jpan"), jpan)
+            self.assertEqual(wb2.get_theme_script_font(scheme=FontScheme.MINOR, script="Jpan"), jpan)
 
     def test_invalid_script_raises(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_theme_script_font(major=True, script="Jp", typeface="Face")
+                wb.set_theme_script_font(scheme=FontScheme.MAJOR, script="Jp", typeface="Face")
             with self.assertRaises(FormulonError):
-                wb.set_theme_script_font(major=True, script="Jpan", typeface="")
+                wb.set_theme_script_font(scheme=FontScheme.MAJOR, script="Jpan", typeface="")
 
 
 if __name__ == "__main__":

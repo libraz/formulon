@@ -27,16 +27,16 @@ emscripten::val js_resolved_color(uint32_t argb, int32_t resolution) {
 
 }  // namespace
 
-emscripten::val JsWorkbook::getThemeScriptFont(bool major, const std::string& script) const {
+emscripten::val JsWorkbook::getThemeScriptFont(int32_t scheme, const std::string& script) const {
   const char* typeface = nullptr;
   int32_t present = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_theme_script_font(handle_, major ? 1 : 0, script.c_str(),
-                                                                                &present, &typeface)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_theme_script_font(handle_, scheme, script.c_str(), &present, &typeface)
+                             : kBindingInvalidHandle;
   emscripten::val item = emscripten::val::null();
   if (rc == 0 && present != 0) {
     item = emscripten::val::object();
-    item.set("major", major);
+    item.set("scheme", scheme);
     js_set_cstr_fields(item, {{"script", script.c_str()}, {"typeface", typeface}});
   }
   return optional_or_null(rc, present, item);
@@ -119,10 +119,9 @@ void JsWorkbook::setThemeFonts(emscripten::val fonts) {
   succeeded(fm_workbook_set_theme_fonts(handle_, &tf));
 }
 
-void JsWorkbook::setThemeScriptFont(bool major, const std::string& script, const std::string& typeface) {
-  succeeded(handle_ != nullptr
-                ? fm_workbook_set_theme_script_font(handle_, major ? 1 : 0, script.c_str(), typeface.c_str())
-                : kBindingInvalidHandle);
+void JsWorkbook::setThemeScriptFont(int32_t scheme, const std::string& script, const std::string& typeface) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_theme_script_font(handle_, scheme, script.c_str(), typeface.c_str())
+                               : kBindingInvalidHandle);
 }
 
 void JsWorkbook::resetTheme() {

@@ -8,6 +8,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "column_width.h"
 #include "sheet.h"
@@ -22,7 +23,9 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_row;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::kWidthPlatformTokens;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::publish_scratch;
 
 namespace {
@@ -129,7 +132,7 @@ extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t 
   out->normal_font_size_pt = model.normal_font_size;
   out->calibrated = model.calibrated ? 1 : 0;
   out->normal_font_name = publish_scratch(wb, model.normal_font_name);
-  out->platform = model.platform;
+  out->platform = ordinal_of(kWidthPlatformTokens, model.platform, FM_WIDTH_PLATFORM_WIN);
   return 0;
 }
 

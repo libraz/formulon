@@ -217,9 +217,6 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
     ASSERT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, 0, 1, &lambda_present, &lambda_text), 0);
     ASSERT_EQ(lambda_present, 1);
 
-    fm_value_t adhoc_value{};
-    ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=\"adhoc\"", &adhoc_value), 0);
-
     fm_value_array_t* array = nullptr;
     ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=\"array\"", &array), 0);
     fm_value_t array_value{};

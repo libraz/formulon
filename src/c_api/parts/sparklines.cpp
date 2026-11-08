@@ -13,8 +13,10 @@
 #include "c_api/parts/struct_v1_sizes.h"
 #include "io/sparkline_groups.h"
 #include "utils/error.h"
+#include "utils/formula_text.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
@@ -30,6 +32,7 @@ using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::to_c;
+using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
 
@@ -61,10 +64,15 @@ io::SparklineGroup group_from_c(const fm_sparkline_group_t& g) {
   out.manual_min = g.manual_min;
   out.manual_max = g.manual_max;
   out.date_axis = g.date_axis != 0;
-  out.date_axis_ref = text_or_empty(g.date_axis_ref);
+  out.date_axis_ref = std::string(formulon::strip_formula_prefix(text_or_empty(g.date_axis_ref)));
   out.line_weight = g.line_weight;
   out.empty_cells_as = sparkline_empty_cells_from_c(g.empty_cells_as);
   return out;
+}
+
+// A group always states how it draws empty cells, so `ABSENT` is not a value here.
+fm_status_t check_group_enums(const fm_sparkline_group_t& g) {
+  return check_enum_domain(g.empty_cells_as, FM_BLANKS_AS_ZERO, FM_BLANKS_AS_SPAN, "empty_cells_as");
 }
 
 // Rejects a sparkline whose formula or location is malformed UTF-8.
@@ -81,7 +89,8 @@ std::vector<io::SparklineItem> items_from_c(const fm_sparkline_t* items, size_t 
   std::vector<io::SparklineItem> out;
   out.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    out.push_back({text_or_empty(items[i].formula), text_or_empty(items[i].location)});
+    out.push_back({std::string(formulon::strip_formula_prefix(text_or_empty(items[i].formula))),
+                   text_or_empty(items[i].location)});
   }
   return out;
 }
@@ -183,7 +192,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   out->has_manual_max = g.has_manual_max ? 1 : 0;
   out->date_axis = g.date_axis ? 1 : 0;
   out->empty_cells_as = to_c(g.empty_cells_as);
-  out->date_axis_ref = store_cstr(store, g.date_axis_ref);
+  out->date_axis_ref = store_cstr(store, with_formula_prefix(g.date_axis_ref));
   out->sparkline_count = static_cast<std::uint32_t>(g.items.size());
   return 0;
 }
@@ -207,7 +216,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sh
   }
   const io::SparklineItem& item = groups[group_index].items[idx];
   TextStore& store = fresh_read_scratch(wb);
-  out->formula = store_cstr(store, item.formula);
+  out->formula = store_cstr(store, with_formula_prefix(item.formula));
   out->location = store_cstr(store, item.location);
   return 0;
 }
@@ -226,6 +235,9 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
     return rc;
   }
   if (auto rc = check_utf8({group->date_axis_ref}); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_group_enums(*group); rc != 0) {
     return rc;
   }
   if (auto rc = check_items_utf8(items, count); rc != 0) {
@@ -256,6 +268,9 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
     return rc;
   }
   if (auto rc = check_utf8({group->date_axis_ref}); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_group_enums(*group); rc != 0) {
     return rc;
   }
   if (items != nullptr) {

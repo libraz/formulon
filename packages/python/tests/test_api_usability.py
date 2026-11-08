@@ -8,6 +8,7 @@ call each of them, and a method missing from the table (or an empty set) fails.
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import inspect
 import io
 import json
@@ -761,7 +762,7 @@ class NoCountNamesTests(unittest.TestCase):
         self.assertFalse(hasattr(Sheet, "remove_hyperlink_at"))
         self.assertTrue(hasattr(Sheet, "evaluate_formula"))
         self.assertTrue(hasattr(formulon, "get_status_name"))
-        self.assertIn("major", {f.name for f in dataclasses.fields(formulon.ThemeScriptFont)})
+        self.assertIn("scheme", {f.name for f in dataclasses.fields(formulon.ThemeScriptFont)})
         self.assertIn("scope", inspect.signature(Workbook.get_defined_name).parameters)
         self.assertIn("scope", inspect.signature(Workbook.remove_defined_name).parameters)
         by_field = inspect.signature(formulon.Pivot.set_field_sort).parameters["by_field"]
@@ -1251,30 +1252,26 @@ class PivotCacheWriterTests(unittest.TestCase):
             for value in ("East", 4.5, True, None, ExcelError(ErrorCode.NA)):
                 wb.pivot_cache(cache).add_field_shared_item(0, value)
             items = wb.pivot_cache(cache).list_field_shared_items(0)
-            self.assertEqual(
-                [i.value.kind for i in items],
-                [ValueKind.TEXT, ValueKind.NUMBER, ValueKind.BOOL, ValueKind.BLANK, ValueKind.ERROR],
-            )
+            self.assertEqual([i.value for i in items], ["East", 4.5, True, None, ExcelError(ErrorCode.NA)])
             self.assertFalse(any(i.is_date for i in items))
 
     def test_date_flag(self) -> None:
         with _open() as wb:
             cache = self._cache(wb)
-            wb.pivot_cache(cache).add_field_shared_item(0, 5, date=True)
-            item = wb.pivot_cache(cache).list_field_shared_items(0)[0]
-            self.assertTrue(item.is_date)
-            self.assertEqual(item.value.number, 5.0)
-            with self.assertRaises(TypeError):
-                wb.pivot_cache(cache).add_field_shared_item(0, "x", date=True)
+            wb.pivot_cache(cache).add_field_shared_item(0, datetime.date(1900, 1, 5))
+            wb.pivot_cache(cache).add_field_shared_item(0, 5)
+            items = wb.pivot_cache(cache).list_field_shared_items(0)
+            self.assertEqual([i.is_date for i in items], [True, False])
+            self.assertEqual([i.value for i in items], [5.0, 5.0])
 
     def test_record_value(self) -> None:
         with _open() as wb:
             cache = self._cache(wb)
             rec = wb.pivot_cache(cache).add_record()
             wb.pivot_cache(cache).set_record_value(rec, 0, "x")
-            wb.pivot_cache(cache).set_record_value(rec, 0, 3.0, date=True)
+            wb.pivot_cache(cache).set_record_value(rec, 0, datetime.date(1900, 1, 3))
             with self.assertRaises(TypeError):
-                wb.pivot_cache(cache).set_record_value(rec, 0, True, date=True)
+                wb.pivot_cache(cache).set_record_value(rec, 0, datetime.time(1, 2))
 
 
 # ---------------------------------------------------------------------------

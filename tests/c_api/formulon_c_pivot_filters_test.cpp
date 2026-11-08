@@ -559,7 +559,7 @@ fm_pivot_filter_spec_t FilterSpecFor(int type) {
                              type == FM_PIVOT_FILTER_KIND_LABEL_DATE || type == FM_PIVOT_FILTER_KIND_DATE_NOT_BETWEEN;
   const bool amount = type == FM_PIVOT_FILTER_KIND_VALUE_TOP_10 || (type >= FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT &&
                                                                     type <= FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_SUM);
-  if (type >= FM_PIVOT_FILTER_KIND_DATE_TOMORROW) {
+  if (type >= FM_PIVOT_FILTER_KIND_TOMORROW) {
     spec.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
   } else if (label) {
     spec.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
@@ -582,6 +582,20 @@ fm_pivot_filter_spec_t FilterSpecFor(int type) {
   return spec;
 }
 
+// The relative-period kinds are spelled as `fm_date_period_t` spells them and
+// keep their values; the date comparison kinds keep their `DATE_` prefix.
+TEST(FormulonCApiPivot, RelativePeriodFilterKindsKeepTheirValues) {
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_DATE_NOT_BETWEEN, 35);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_TOMORROW, 36);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_TODAY, 37);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_YESTERDAY, 38);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_LAST_MONTH, 44);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_YEAR_TO_DATE, 51);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_Q1, 52);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_M1, 56);
+  EXPECT_EQ(FM_PIVOT_FILTER_KIND_M12, 67);
+}
+
 // Every type is accepted, saved, and listed again by `filter_at` after a
 // reload, with the payload it was added with.
 TEST(FormulonCApiPivot, EveryFilterTypeRoundTripsThroughSaveAndLoad) {
@@ -590,7 +604,7 @@ TEST(FormulonCApiPivot, EveryFilterTypeRoundTripsThroughSaveAndLoad) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
-  for (int type = 0; type <= FM_PIVOT_FILTER_KIND_DATE_M12; ++type) {
+  for (int type = 0; type <= FM_PIVOT_FILTER_KIND_M12; ++type) {
     const fm_pivot_filter_spec_t spec = FilterSpecFor(type);
     ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), 0)
         << "type=" << type << " " << fm_get_last_error_message();
@@ -602,8 +616,8 @@ TEST(FormulonCApiPivot, EveryFilterTypeRoundTripsThroughSaveAndLoad) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &back.handle), 0) << fm_get_last_error_message();
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(back.handle, 0, 0, &count), 0);
-  ASSERT_EQ(count, static_cast<std::size_t>(FM_PIVOT_FILTER_KIND_DATE_M12) + 1U);
-  for (int type = 0; type <= FM_PIVOT_FILTER_KIND_DATE_M12; ++type) {
+  ASSERT_EQ(count, static_cast<std::size_t>(FM_PIVOT_FILTER_KIND_M12) + 1U);
+  for (int type = 0; type <= FM_PIVOT_FILTER_KIND_M12; ++type) {
     SCOPED_TRACE(type);
     const fm_pivot_filter_spec_t want = FilterSpecFor(type);
     fm_pivot_filter_spec_t got = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
@@ -654,7 +668,7 @@ TEST(FormulonCApiPivot, FilterAddRejectsPayloadsThatDoNotFitTheType) {
     edit(spec);
     cases.push_back(Case{label, spec});
   };
-  with("operandless with a value", FM_PIVOT_FILTER_KIND_DATE_TODAY, [](fm_pivot_filter_spec_t& s) {
+  with("operandless with a value", FM_PIVOT_FILTER_KIND_TODAY, [](fm_pivot_filter_spec_t& s) {
     s.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_INT;
     s.value_int = 1;
   });
@@ -694,7 +708,7 @@ TEST(FormulonCApiPivot, FilterAddRejectsPayloadsThatDoNotFitTheType) {
   with("data field out of range", FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT,
        [](fm_pivot_filter_spec_t& s) { s.data_field_index = 3; });
   cases.back().names_collection_element = true;
-  with("type past the last", FM_PIVOT_FILTER_KIND_DATE_M12,
+  with("type past the last", FM_PIVOT_FILTER_KIND_M12,
        [](fm_pivot_filter_spec_t& s) { s.type = RawEnumValue<fm_pivot_filter_kind_t>(68); });
 
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);

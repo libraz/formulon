@@ -107,16 +107,16 @@ Napi::Value Workbook::GetThemeScriptFont(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const bool major = ArgBool(info, 0);
+  const int32_t scheme = ArgI32(info, 0);
   const std::string script = ArgString(info, 1);
   const char* typeface = nullptr;
   int32_t present = 0;
-  const fm_status_t rc = fm_workbook_get_theme_script_font(handle_, major ? 1 : 0, script.c_str(), &present, &typeface);
+  const fm_status_t rc = fm_workbook_get_theme_script_font(handle_, scheme, script.c_str(), &present, &typeface);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
   }
   Napi::Object item = Napi::Object::New(env);
-  item.Set("major", Napi::Boolean::New(env, major));
+  item.Set("scheme", Napi::Number::New(env, scheme));
   item.Set("script", JsString(env, script.c_str()));
   item.Set("typeface", JsString(env, typeface));
   return OptionalOrNull(env, rc, present, item);
@@ -130,7 +130,7 @@ Napi::Value Workbook::SetThemeScriptFont(const Napi::CallbackInfo& info) {
   const std::string script = ArgString(info, 1);
   const std::string typeface = ArgString(info, 2);
   const fm_status_t rc =
-      fm_workbook_set_theme_script_font(handle_, ArgBool(info, 0) ? 1 : 0, script.c_str(), typeface.c_str());
+      fm_workbook_set_theme_script_font(handle_, ArgI32(info, 0), script.c_str(), typeface.c_str());
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

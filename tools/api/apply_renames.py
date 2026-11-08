@@ -69,8 +69,11 @@ EXCLUDED_FILES = frozenset(
         # Prove with @ts-expect-error / synthetic fixtures that former names are rejected.
         "packages/npm/test/types/api.typecheck.ts",
         "tools/dev/binding_drift/api_conventions_consistency_test.py",
-        # Asserts that a former name is no longer exported.
+        # Assert that a former name is no longer exported.
         "packages/python/tests/test_api_adoption_records.py",
+        "packages/python/tests/test_api_surface_names.py",
+        "packages/npm/test/api_surface_names.test.mjs",
+        "packages/npm-native/test/api_surface_names.test.mjs",
         # Names Node's own process.memoryUsage(), not a Formulon member.
         "packages/npm-native/README.md",
         "tools/dev/binding_drift/api_conventions_bindings_test.py",

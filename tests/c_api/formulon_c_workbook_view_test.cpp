@@ -345,12 +345,12 @@ TEST(FormulonCApiWorkbookView, PhoneticPropertiesPresenceTracksExplicitTriples) 
   ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &present), 0);
   EXPECT_EQ(present, 1);
   size_t font_id = 9;
-  uint32_t type = 9;
-  uint32_t alignment = 9;
+  int32_t type = 9;
+  int32_t alignment = 9;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
   EXPECT_EQ(font_id, 0U);
-  EXPECT_EQ(type, 0U);
-  EXPECT_EQ(alignment, 0U);
+  EXPECT_EQ(type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
+  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
 
   // A value write drops the guide, the triple and its presence together.
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);

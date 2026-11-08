@@ -55,7 +55,7 @@ fm_auto_filter_t GreaterThanThree(fm_filter_column_t* column) {
   column->kind = 2;
   column->show_button = 1;
   column->custom_count = 1;
-  column->op1 = 5;
+  column->op1 = FM_COMPARISON_OPERATOR_GREATER_THAN;
   column->val1 = "3";
   fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 0};

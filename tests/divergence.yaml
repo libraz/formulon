@@ -145,7 +145,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/c_api/formulon_c_evaluate_formula_test.cpp]
-    reason: "fm_sheet_evaluate_formula / evaluateFormulaText reduce an array result to its top-left element (Phase 1 scalar API shape); a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
+    reason: "The bindings' evaluateFormula / evaluate_formula (over fm_sheet_evaluate_formula_array) and evaluateFormulaText fold an array result to its top-left element; a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
     prefer: formulon
     first_noted: 2026-07-03
     last_verified_excel_version: "16.111.2"

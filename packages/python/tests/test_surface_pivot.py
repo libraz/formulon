@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import inspect
 import io
 import unittest
@@ -31,7 +32,6 @@ from formulon import (
     PivotSortOrder,
     Sheet,
     StatusCode,
-    ValueKind,
     Workbook,
 )
 
@@ -64,7 +64,7 @@ class PivotTests(unittest.TestCase):
 
             layout = wb.sheet(0).pivot(pivot).get_layout()
             self.assertGreater(len(layout.cells), 0)
-            numbers = [c.value.to_python() for c in layout.cells if c.value.kind == ValueKind.NUMBER]
+            numbers = [c.value for c in layout.cells if isinstance(c.value, float)]
             # The single grand total of 10 + 20 + 30 must appear.
             self.assertIn(60.0, numbers)
 
@@ -79,13 +79,11 @@ class PivotTests(unittest.TestCase):
             wb.pivot_cache(cache_id).add_field_shared_item(0, ExcelError(ErrorCode(1)))
             items = wb.pivot_cache(cache_id).list_field_shared_items(0)
             self.assertEqual(
-                [item.value.kind for item in items],
-                [ValueKind.TEXT, ValueKind.NUMBER, ValueKind.BOOL, ValueKind.BLANK, ValueKind.ERROR],
+                [item.value for item in items],
+                ["East", 45292.0, True, None, ExcelError(ErrorCode(1))],
             )
-            self.assertEqual(items[0].value.text, "East")
-            self.assertEqual(items[1].value.number, 45292.0)
-            self.assertIs(items[2].value.boolean, True)
-            self.assertEqual(items[4].value.error_code, 1)
+            self.assertIs(type(items[1].value), float)
+            self.assertIs(items[2].value, True)
             self.assertFalse(any(item.is_date for item in items))
             with self.assertRaises(FormulonError):
                 wb.pivot_cache(cache_id).list_field_shared_items(1)
@@ -94,21 +92,19 @@ class PivotTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             cache_id = wb.add_pivot_cache().cache_id
             wb.pivot_cache(cache_id).add_field("When")
-            wb.pivot_cache(cache_id).add_field_shared_item(0, 45292.0, date=True)
+            wb.pivot_cache(cache_id).add_field_shared_item(0, datetime.date(2024, 1, 1))
             wb.pivot_cache(cache_id).add_field_shared_item(0, 45292.0)
-            wb.pivot_cache(cache_id).add_field_shared_item(0, 45292.5, date=True)
+            wb.pivot_cache(cache_id).add_field_shared_item(0, datetime.datetime(2024, 1, 1, 12, 0, 0))
             items = wb.pivot_cache(cache_id).list_field_shared_items(0)
             self.assertEqual([item.is_date for item in items], [True, False, True])
-            self.assertEqual(items[0].value.kind, ValueKind.NUMBER)
-            self.assertEqual(items[0].value.number, 45292.0)
-            for bad in (-1.0, float("nan")):
-                with self.assertRaises(FormulonError) as caught:
-                    wb.pivot_cache(cache_id).add_field_shared_item(0, bad, date=True)
-                self.assertEqual(caught.exception.code, 2)
+            self.assertEqual([item.value for item in items], [45292.0, 45292.0, 45292.5])
+            with self.assertRaises(FormulonError) as caught:
+                wb.pivot_cache(cache_id).add_field_shared_item(0, datetime.date(1800, 1, 1))
+            self.assertEqual(caught.exception.code, 2)
             wb.pivot_cache(cache_id).add_record()
-            wb.pivot_cache(cache_id).set_record_value(0, 0, 45292.0, date=True)
+            wb.pivot_cache(cache_id).set_record_value(0, 0, datetime.date(2024, 1, 1))
             with self.assertRaises(FormulonError):
-                wb.pivot_cache(cache_id).set_record_value(0, 0, float("nan"), date=True)
+                wb.pivot_cache(cache_id).set_record_value(0, 0, datetime.date(1800, 1, 1))
 
     def test_cache_source_and_report_layout_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
@@ -170,12 +166,14 @@ def _grid(wb: Workbook, pivot: int = 0) -> List[str]:
     rows: Dict[int, List[str]] = {}
     for cell in layout.cells:
         v = cell.value
-        if v.kind == ValueKind.NUMBER:
-            text = "%.15g" % v.number
-        elif v.kind == ValueKind.TEXT:
-            text = v.text
-        elif v.kind == ValueKind.ERROR:
-            text = f"#{v.error_code}"
+        if isinstance(v, bool):
+            text = ""
+        elif isinstance(v, float):
+            text = "%.15g" % v
+        elif isinstance(v, str):
+            text = v
+        elif isinstance(v, ExcelError):
+            text = f"#{int(v.code)}"
         else:
             text = ""
         assert layout.rect is not None
@@ -204,7 +202,7 @@ _WEST_ONLY = ["行ラベル|Sum of Amount", "West|37", "総計|37"]
 
 
 _GREATER_THAN_20 = PivotFilterInput(
-    axis=PivotAxis.ROW, field_name="Region", type=PivotFilterKind.VALUE_GREATER_THAN, value_kind=1, value_double=20.0
+    axis=PivotAxis.ROW, field_name="Region", type=PivotFilterKind.VALUE_GREATER_THAN, value=20.0
 )
 
 
@@ -212,10 +210,8 @@ _BETWEEN_10_20 = PivotFilterInput(
     axis=PivotAxis.ROW,
     field_name="Region",
     type=PivotFilterKind.VALUE_BETWEEN,
-    value_kind=1,
-    value_double=10.0,
-    value_high_kind=1,
-    value_high_double=20.0,
+    value=10.0,
+    value_high=20.0,
 )
 
 
@@ -251,7 +247,7 @@ _PIVOT_READERS = {
 def _first_number_cell(f: _PivotFixture) -> Tuple[int, int]:
     """Position of a data cell of the fixture pivot's layout."""
     for cell in f.wb.sheet(0).pivot(f.pivot).get_layout().cells:
-        if cell.value.kind == ValueKind.NUMBER:
+        if isinstance(cell.value, float):
             return cell.row, cell.col
     raise AssertionError("pivot layout has no number cell")
 
@@ -405,9 +401,7 @@ class PivotMutatorTableTests(unittest.TestCase):
         def data_field_set(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.grid(), ["行ラベル|Count of Amount", "East|2", "West|2", "総計|4"])
             formats = [
-                c.number_format
-                for c in f.wb.sheet(0).pivot(f.pivot).get_layout().cells
-                if c.value.kind == ValueKind.NUMBER
+                c.number_format for c in f.wb.sheet(0).pivot(f.pivot).get_layout().cells if isinstance(c.value, float)
             ]
             eq(formats, ["2", "2", "2"])
 
@@ -661,7 +655,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             ),
             "PivotCache.add_field_shared_item#date": (
                 None,
-                lambda f: f.wb.pivot_cache(f.cache).add_field_shared_item(0, 45292.0, date=True),
+                lambda f: f.wb.pivot_cache(f.cache).add_field_shared_item(0, datetime.date(2024, 1, 1)),
                 None,
                 lambda t, f, r: eq(f.wb.pivot_cache(f.cache).list_field_shared_items(0)[2].is_date, True),
             ),
@@ -711,7 +705,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             ),
             "PivotCache.set_record_value#date": (
                 None,
-                lambda f: f.wb.pivot_cache(f.cache).set_record_value(0, 2, 45292.0, date=True),
+                lambda f: f.wb.pivot_cache(f.cache).set_record_value(0, 2, datetime.date(2024, 1, 1)),
                 None,
                 lambda t, f, r: eq(r, None),
             ),
@@ -1232,7 +1226,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             loaded.set_profile_id("win-365-ja_JP")
             self.assertEqual(len(loaded.sheet(0).pivot(0).list_filters()), 1)
             spec = loaded.sheet(0).pivot(0).list_filters()[0]
-            self.assertEqual((spec.type, spec.field_name, spec.value_double), (_GREATER_THAN_20.type, "Region", 20.0))
+            self.assertEqual((spec.type, spec.field_name, spec.value), (_GREATER_THAN_20.type, "Region", 20.0))
             self.assertEqual(_grid(loaded), _WEST_ONLY)
             region = loaded.sheet(0).pivot(0).list_fields()[f.region]
             self.assertFalse(region.default_subtotal)
@@ -1338,9 +1332,9 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         with Workbook.load(data) as loaded:
             self.assertEqual(loaded.sheet(0).pivot(0).get_options(), options)
 
-    def test_new_filter_types_and_high_text_round_trip(self) -> None:
+    def test_new_filter_types_and_high_bound_round_trip(self) -> None:
         self.assertEqual(len(PivotFilterKind), 68)
-        self.assertEqual(PivotFilterKind.DATE_M12, 67)
+        self.assertEqual(PivotFilterKind.M12, 67)
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
             wb.sheet(0).pivot(f.pivot).add_filter(
@@ -1348,16 +1342,12 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                     axis=PivotAxis.ROW,
                     field_name="Region",
                     type=PivotFilterKind.LABEL_BETWEEN,
-                    value_kind=2,
-                    value_text="A",
-                    value_high_kind=2,
-                    value_high_text="Z",
+                    value="A",
+                    value_high="Z",
                 )
             )
             spec = wb.sheet(0).pivot(f.pivot).list_filters()[0]
-            self.assertEqual(
-                (spec.type, spec.value_text, spec.value_high_text), (PivotFilterKind.LABEL_BETWEEN, "A", "Z")
-            )
+            self.assertEqual((spec.type, spec.value, spec.value_high), (PivotFilterKind.LABEL_BETWEEN, "A", "Z"))
 
     def test_derived_name_needs_an_in_range_field(self) -> None:
         with Workbook.create_default() as wb:

@@ -5,9 +5,12 @@
 #ifndef FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
 #define FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "c_api/formulon_c.h"
@@ -92,6 +95,18 @@ class PatchReader {
       }
     }
     field(op, color_spec_from_c(value), out, name);
+  }
+
+  // A closed set the model keeps as its OOXML token; `tokens` is indexed by
+  // the C ordinal.
+  template <std::size_t N>
+  void token_field(std::int32_t op, std::int32_t value, const std::array<std::string_view, N>& tokens,
+                   ChartPatchField<std::string>& out, const char* name) {
+    if (op == FM_CHART_PATCH_OP_SET && !enum_ok(value, 0, static_cast<std::int64_t>(N) - 1, name)) {
+      return;
+    }
+    field(op, op == FM_CHART_PATCH_OP_SET ? std::string(tokens[static_cast<std::size_t>(value)]) : std::string(), out,
+          name);
   }
 
   void text_field(std::int32_t op, const char* value, ChartPatchField<std::string>& out, const char* name) {

@@ -112,18 +112,18 @@ class ExcelErrorTests(unittest.TestCase):
         self.assertEqual(str(ExcelError(ErrorCode.DIV0)), "#DIV/0!")
         self.assertEqual(str(ExcelError(ErrorCode.NA)), "#N/A")
 
-    def test_to_python_returns_excel_error(self) -> None:
+    def test_to_native_returns_excel_error(self) -> None:
         v = formulon.evaluate_typed_formula("=1/0")
         self.assertIs(v.kind, ValueKind.ERROR)
         self.assertIs(v.error_code, ErrorCode.DIV0)
-        self.assertEqual(v.to_python(), ExcelError(ErrorCode.DIV0))
+        self.assertEqual(formulon.to_native(v), ExcelError(ErrorCode.DIV0))
 
     def test_value_error_code_is_error_code(self) -> None:
         self.assertIs(Value(kind=ValueKind.ERROR, error_code=6).error_code, ErrorCode.NA)
 
     def test_array_value_converts_to_nested_lists(self) -> None:
         v = Value(kind=ValueKind.ARRAY, array=((Value(kind=ValueKind.NUMBER, number=1.0),),))
-        self.assertEqual(v.to_python(), [[1.0]])
+        self.assertEqual(formulon.to_native(v), [[1.0]])
 
 
 class LoadSaveTests(unittest.TestCase):
@@ -984,9 +984,9 @@ class SetterRoundTripTests(unittest.TestCase):
         self.wb.set_theme_colors(colors=colors.colors)
         self.assertEqual(self.wb.get_theme_colors().colors, colors.colors)
 
-        script = self.wb.get_theme_script_font(major=True, script="Jpan")
-        self.wb.set_theme_script_font(major=True, script=script.script, typeface=script.typeface)
-        self.assertEqual(self.wb.get_theme_script_font(major=True, script="Jpan"), script)
+        script = self.wb.get_theme_script_font(scheme=formulon.FontScheme.MAJOR, script="Jpan")
+        self.wb.set_theme_script_font(scheme=formulon.FontScheme.MAJOR, script=script.script, typeface=script.typeface)
+        self.assertEqual(self.wb.get_theme_script_font(scheme=formulon.FontScheme.MAJOR, script="Jpan"), script)
 
         style = self.ws.pivot(self.pivot).get_style_options()
         self.ws.pivot(self.pivot).update_style_options(**dataclasses.asdict(style))
@@ -1233,14 +1233,8 @@ class ListBoundaryTests(unittest.TestCase):
 class EnumBoundaryTests(unittest.TestCase):
     def test_families_agree(self) -> None:
         # N1, S5
-        self.assertEqual(formulon.SlicerSortOrder.DESCENDING, formulon.PivotSortOrder.DESCENDING)
-        self.assertEqual(formulon.SlicerSortOrder.ASCENDING, formulon.PivotSortOrder.ASCENDING)
         self.assertEqual(formulon.AnchorEditAs.ONE_CELL, formulon.AnchorKind.ONE_CELL)
         self.assertEqual(formulon.AnchorEditAs.TWO_CELL, formulon.AnchorKind.TWO_CELL)
-        self.assertEqual(formulon.ChartBlanksAs.GAP, formulon.SparklineEmptyCells.GAP)
-        self.assertEqual(formulon.ChartBlanksAs.SPAN, formulon.SparklineEmptyCells.SPAN)
-        self.assertEqual(formulon.ChartAxisPosition.LEFT, formulon.ChartLegendPosition.LEFT)
-        self.assertEqual(formulon.ChartAxisPosition.RIGHT, formulon.ChartLegendPosition.RIGHT)
 
     def test_out_of_range_and_absent_values(self) -> None:
         # N2, N4
@@ -1257,10 +1251,9 @@ class EnumBoundaryTests(unittest.TestCase):
 
     def test_absent_members_are_gone(self) -> None:
         for enum, member in (
-            (formulon.ChartBlanksAs, "ABSENT"),
+            (formulon.BlanksAs, "ABSENT"),
             (formulon.ChartAxisCrosses, "ABSENT"),
             (formulon.ShapePaint, "UNSET"),
-            (formulon.PivotFilterOperandKind, "NONE"),
             (formulon.ChartTitleKind, "NONE"),
             (formulon.ChartLegendPosition, "NONE"),
         ):
@@ -1272,10 +1265,15 @@ class DateTimeBoundaryTests(unittest.TestCase):
     def test_pinned_now_inputs(self) -> None:
         # D1
         with Workbook.create_default() as wb:
-            with self.assertRaises(ValueError):
-                wb.set_pinned_now(datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc))
             with self.assertRaises(TypeError):
-                wb.set_pinned_now(datetime.date(2026, 1, 1))  # type: ignore[arg-type]
+                wb.set_pinned_now("2026-01-01")  # type: ignore[arg-type]
+            wb.set_pinned_now(datetime.date(2026, 1, 1))
+            self.assertEqual(wb.get_pinned_now(), datetime.datetime(2026, 1, 1))
+            aware = datetime.datetime(2026, 1, 1, 12, tzinfo=datetime.timezone.utc)
+            with self.assertRaises(ValueError):
+                wb.set_pinned_now(aware)
+            self.assertEqual(wb.get_pinned_now(), datetime.datetime(2026, 1, 1))
+            wb.set_pinned_now(None)
             with self.assertRaises(InvalidArgumentError):
                 wb.set_pinned_now(datetime.datetime(1899, 12, 31))
             self.assertIsNone(wb.get_pinned_now())
@@ -1288,7 +1286,7 @@ class PivotDetailsHandleTests(unittest.TestCase):
         with wb:
             ws = wb.sheet(0)
             layout = ws.pivot(pivot).get_layout()
-            row, col = next((c.row, c.col) for c in layout.cells if c.value.kind == ValueKind.NUMBER)
+            row, col = next((c.row, c.col) for c in layout.cells if isinstance(c.value, float))
             details = ws.pivot(pivot).show_details(row, col)
             self.assertIsInstance(details, Sheet)
             self.assertEqual(details.index, 0)

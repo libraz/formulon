@@ -9,6 +9,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_evaluate_top_left.h"
 #include "gtest/gtest.h"
 #include "support/json_cases.h"
 
@@ -98,7 +99,7 @@ bool CallEntry(fm_workbook_t* wb, const std::string& entry, const std::string& f
     *status = fm_sheet_set_array_formula(wb, 0, &range, text);
   } else if (entry == "evaluate_formula") {
     fm_value_t v{};
-    *status = fm_sheet_evaluate_formula(wb, 0, 0, 0, text, &v);
+    *status = evaluate_top_left(wb, 0, 0, 0, text, &v);
   } else if (entry == "evaluate_formula_array") {
     fm_value_array_t* array = nullptr;
     *status = fm_sheet_evaluate_formula_array(wb, 0, 0, 0, text, &array);

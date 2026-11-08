@@ -5,6 +5,7 @@ Covers the print getters, pivot number formats, threaded-comment ``done`` and sp
 
 from __future__ import annotations
 
+import datetime
 import io
 import re
 import unittest
@@ -662,7 +663,12 @@ class ThreadedDoneTests(HandleTestCase):
             wb.add_person(Person(id=PERSON, display_name="Alice", user_id="alice", provider_id="None"))
             ws.add_threaded_comment(
                 ThreadedCommentInput(
-                    id=THREAD, row=1, col=1, person_id=PERSON, created="2026-01-02T03:04:05.67", text="Check"
+                    id=THREAD,
+                    row=1,
+                    col=1,
+                    person_id=PERSON,
+                    created=datetime.datetime(2026, 1, 2, 3, 4, 5),
+                    text="Check",
                 )
             )
             ws.add_threaded_comment(
@@ -671,7 +677,7 @@ class ThreadedDoneTests(HandleTestCase):
                     row=1,
                     col=1,
                     person_id=PERSON,
-                    created="2026-01-02T03:05:05.67",
+                    created=datetime.datetime(2026, 1, 2, 3, 5, 5),
                     text="Done?",
                     parent_id=THREAD,
                 )
@@ -723,7 +729,7 @@ class SparklineUpdateTests(HandleTestCase):
             # A new list replaces them.
             replacement = [Sparkline("Sheet1!B1:B5", "H1")]
             ws.update_sparkline_group(0, sparklines=replacement)
-            self.assertEqual(ws.list_sparkline_groups()[0].sparklines, replacement)
+            self.assertEqual(ws.list_sparkline_groups()[0].sparklines, [Sparkline("=Sheet1!B1:B5", "H1")])
             self.assertTrue(ws.list_sparkline_groups()[0].markers)
 
             # An empty list is refused and the group is untouched.
@@ -732,7 +738,7 @@ class SparklineUpdateTests(HandleTestCase):
                 lambda: ws.update_sparkline_group(0, sparklines=[]),
                 StatusCode.INVALID_ARGUMENT,
             )
-            self.assertEqual(ws.list_sparkline_groups()[0].sparklines, replacement)
+            self.assertEqual(ws.list_sparkline_groups()[0].sparklines, [Sparkline("=Sheet1!B1:B5", "H1")])
             self.assertFalse(hasattr(Sheet, "set_sparkline_group_sparklines"))
 
 

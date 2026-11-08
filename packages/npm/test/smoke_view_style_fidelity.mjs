@@ -160,9 +160,9 @@ test('custom icon sets round-trip through the conditional-format API', async () 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const icons = [
-    { iconSet: '3Triangles', iconIndex: 0 },
-    { iconSet: 'NoIcons', iconIndex: 0 },
-    { iconSet: '5Boxes', iconIndex: 4 },
+    { iconSet: mod.IconSetName.ThreeTriangles, iconIndex: 0 },
+    { iconSet: mod.IconSetName.NoIcons, iconIndex: 0 },
+    { iconSet: mod.IconSetName.FiveBoxes, iconIndex: 4 },
   ];
   const rule = (list) => ({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
@@ -184,7 +184,7 @@ test('custom icon sets round-trip through the conditional-format API', async () 
     .find((r) => r.iconSet);
   assert.deepEqual(back.iconSet.icons, icons);
   expectFailure(() => wb.sheet(0).addCfRule(rule(icons.slice(0, 2))));
-  expectFailure(() => wb.sheet(0).addCfRule(rule([icons[0], { iconSet: '7Dwarfs', iconIndex: 0 }, icons[2]])));
+  expectFailure(() => wb.sheet(0).addCfRule(rule([icons[0], { iconSet: 99, iconIndex: 0 }, icons[2]])));
   release(loaded);
   release(wb);
 });

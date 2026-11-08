@@ -1195,17 +1195,29 @@ FM_API fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_in
 FM_API fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                    const fm_phonetic_run_t* runs, size_t count);
 
-/** `type` values for `fm_sheet_set_cell_phonetic_properties`. */
-#define FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA 0u
-#define FM_PHONETIC_TYPE_FULLWIDTH_KATAKANA 1u
-#define FM_PHONETIC_TYPE_HIRAGANA 2u
-#define FM_PHONETIC_TYPE_NO_CONVERSION 3u
+/**
+ * @brief Kana form a phonetic guide generates readings in (OOXML
+ *        `<phoneticPr type>`). Zero is the state of an absent
+ *        `<phoneticPr>`, not the schema default.
+ */
+typedef enum {
+  FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA = 0,
+  FM_PHONETIC_TYPE_FULLWIDTH_KATAKANA = 1,
+  FM_PHONETIC_TYPE_HIRAGANA = 2,
+  FM_PHONETIC_TYPE_NO_CONVERSION = 3,
+} fm_phonetic_type_t;
 
-/** `alignment` values for `fm_sheet_set_cell_phonetic_properties`. */
-#define FM_PHONETIC_ALIGNMENT_NO_CONTROL 0u
-#define FM_PHONETIC_ALIGNMENT_LEFT 1u
-#define FM_PHONETIC_ALIGNMENT_CENTER 2u
-#define FM_PHONETIC_ALIGNMENT_DISTRIBUTED 3u
+/**
+ * @brief How a phonetic guide's kana is distributed over the characters it
+ *        covers (OOXML `<phoneticPr alignment>`). Zero is the state of an
+ *        absent `<phoneticPr>`, not the schema default.
+ */
+typedef enum {
+  FM_PHONETIC_ALIGNMENT_NO_CONTROL = 0,
+  FM_PHONETIC_ALIGNMENT_LEFT = 1,
+  FM_PHONETIC_ALIGNMENT_CENTER = 2,
+  FM_PHONETIC_ALIGNMENT_DISTRIBUTED = 3,
+} fm_phonetic_alignment_t;
 
 /**
  * @brief Sets the cell's "Show Phonetic" display flag (OOXML `<c ph="1">`,
@@ -1232,9 +1244,9 @@ FM_API fm_status_t fm_sheet_set_cell_show_phonetic(fm_workbook_t* wb, size_t she
  * @brief Stores how a cell's phonetic guide renders (OOXML `<phoneticPr>`).
  *
  * `font_index` indexes the workbook's font table for the ruby text; `type` is
- * the kana form Excel generates readings in (`FM_PHONETIC_TYPE_*`) and
- * `alignment` how the kana is distributed over the characters it covers
- * (`FM_PHONETIC_ALIGNMENT_*`).
+ * an `fm_phonetic_type_t`, the kana form Excel generates readings in, and
+ * `alignment` an `fm_phonetic_alignment_t`, how the kana is distributed over
+ * the characters it covers.
  *
  * Deliberately separate from `fm_sheet_set_cell_phonetic_runs` in both
  * directions: editing the readings does not reset the rendering, and
@@ -1253,12 +1265,12 @@ FM_API fm_status_t fm_sheet_set_cell_show_phonetic(fm_workbook_t* wb, size_t she
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the cell coordinate is out of range, when
- *         `font_index` exceeds 65535, or when `type` or `alignment` is not one of the
- *         four values above.
+ *         `font_index` exceeds 65535, or when `type` or `alignment` is outside its
+ *         enumeration.
  */
 FM_API fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                         uint32_t col, size_t font_index, uint32_t type,
-                                                         uint32_t alignment);
+                                                         uint32_t col, size_t font_index, int32_t type,
+                                                         int32_t alignment);
 
 /**
  * @brief Stores a `Blank` literal at `(row, col)`. Equivalent to
@@ -1403,15 +1415,17 @@ FM_API fm_status_t fm_sheet_get_cell_phonetic_run(const fm_workbook_t* wb, size_
  * that does not exist — the same state Excel infers for a guide written
  * without a `<phoneticPr>` element.
  *
- * Any out-parameter may be `NULL` to skip that field.
+ * `*out_type` is an `fm_phonetic_type_t` and `*out_alignment` an
+ * `fm_phonetic_alignment_t`. Any out-parameter may be `NULL` to skip that
+ * field.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                         uint32_t col, size_t* out_font_index, uint32_t* out_type,
-                                                         uint32_t* out_alignment);
+                                                         uint32_t col, size_t* out_font_index, int32_t* out_type,
+                                                         int32_t* out_alignment);
 
 /**
  * @brief Reports whether the cell's `<phoneticPr>` triple is explicit.
@@ -1478,55 +1492,6 @@ FM_API fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t shee
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Evaluates `formula` as if entered at `(row, col)` on
- *        `sheet_index`, returning a single scalar result — WITHOUT
- *        mutating the workbook.
- *
- * The formula is parsed and evaluated against a read-only view of the
- * workbook: local and qualified/renamed cross-sheet references,
- * workbook-scoped defined names, and `ROW()` / `COLUMN()` all resolve
- * relative to `(row, col)`, with full locale / coercion / 1904 fidelity
- * from the workbook profile. No cell value is written, no dynamic-array
- * spill is committed, and the dependency graph is untouched. The `const`
- * on `wb` is the ABI-level purity contract. Structured references are bound
- * at `(row, col)` as `fm_sheet_set_formula` binds them (`[@Qty]` in a
- * table cell).
- *
- * The evaluation computes every precedent it reads, even under
- * `FM_CALC_MODE_MANUAL`, without storing the results; `fm_sheet_get_value`
- * follows the calc mode.
- *
- * An Array / spill result is reduced to its top-left element. This is a
- * pragmatic API-shape choice, NOT Excel implicit intersection (which
- * selects the element sharing the anchor's row / column and yields
- * `#VALUE!` when there is none) and NOT dynamic-array spilling (which
- * returns the whole array). To recover the full multi-cell result instead,
- * use `fm_sheet_evaluate_formula_array`.
- *
- * For `FM_VALUE_KIND_TEXT`, `out->u.text` is a read-scratch-backed view and may be
- * invalidated by the next successful scratch-backed read on this handle;
- * a validation-rejected call does not refresh the storage. Mutation and
- * handle destruction also invalidate it; copy it before another call if you
- * need to retain it.
- *
- * @note Because the ad-hoc formula is never inserted into the dependency
- *       graph, a self-reference such as `=A1` anchored at A1's own address
- *       reads A1's *cached* value rather than raising `#REF!` or engaging
- *       iterative calc. This diverges from true in-cell F9 entry;
- *       self-reference detection is out of scope for this API.
- *
- * Lifetime: transient.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `formula`, or `out` is `NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row` or `col` is out of range;
- *         `FM_STATUS_OUT_OF_MEMORY` (4) when the evaluation arena is exhausted.
- */
-FM_API fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                             const char* formula, fm_value_t* out);
-
-/**
  * @brief Evaluates `formula` as a conditional-formatting rule predicate
  *        anchored at `(row, col)`, with relative references written
  *        relative to `(anchor_row, anchor_col)` (the CF-applied range's
@@ -1538,9 +1503,9 @@ FM_API fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t she
  * propagated verbatim: an error, blank, text, or numeric-zero result
  * yields `FALSE` (rule does not fire); any non-zero number yields `TRUE`.
  * `*out` is always `FM_VALUE_KIND_BOOL`. Read-only, identical purity contract to
- * `fm_sheet_evaluate_formula`.
+ * `fm_sheet_evaluate_formula_array`.
  *
- * @note The same self-reference caveat as `fm_sheet_evaluate_formula`
+ * @note The same self-reference caveat as `fm_sheet_evaluate_formula_array`
  *       applies: a rule that reads its own anchored cell sees the cached
  *       value rather than raising `#REF!`.
  *
@@ -1569,23 +1534,37 @@ FM_API fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, size_t 
 typedef struct fm_value_array fm_value_array_t;
 
 /**
- * @brief Evaluates `formula` as if entered at `(row, col)` and returns the
- *        WHOLE result — array included — as an owned handle.
+ * @brief Evaluates `formula` as if entered at `(row, col)` on
+ *        `sheet_index` and returns the WHOLE result — array included — as an
+ *        owned handle, WITHOUT mutating the workbook.
  *
- * This is the multi-cell counterpart to `fm_sheet_evaluate_formula`,
- * which reduces an array / spill result to its top-left element. Here the
- * result is preserved in full: a dynamic-array formula such as
+ * The formula is parsed and evaluated against a read-only view of the
+ * workbook: local and qualified/renamed cross-sheet references,
+ * workbook-scoped defined names, and `ROW()` / `COLUMN()` all resolve
+ * relative to `(row, col)`, with full locale / coercion / 1904 fidelity
+ * from the workbook profile. No cell value is written, no dynamic-array
+ * spill is committed, and the dependency graph is untouched. The `const`
+ * on `wb` is the ABI-level purity contract. Structured references are bound
+ * at `(row, col)` as `fm_sheet_set_formula` binds them (`[@Qty]` in a
+ * table cell).
+ *
+ * The evaluation computes every precedent it reads, even under
+ * `FM_CALC_MODE_MANUAL`, without storing the results; `fm_sheet_get_value`
+ * follows the calc mode.
+ *
+ * The result is preserved in full: a dynamic-array formula such as
  * `=SEQUENCE(2,3)` yields a 2 x 3 array; a scalar result such as `=1+2`
- * yields a 1 x 1 array. Parsing, anchoring, cross-sheet / defined-name
- * resolution, `ROW()` / `COLUMN()`, and the read-only purity contract are
- * identical to `fm_sheet_evaluate_formula`.
+ * yields a 1 x 1 array. The bindings' `evaluateFormula` / `evaluate_formula`
+ * use this entry point and fold a 1 x 1 result to a scalar.
  *
  * A degenerate empty array result (which producers should never emit)
- * surfaces as a single `#VALUE!` cell, matching the scalar reduction's
- * empty-array handling.
+ * surfaces as a single `#VALUE!` cell.
  *
- * @note The same self-reference caveat as `fm_sheet_evaluate_formula`
- *       applies: a self-reference reads the target cell's cached value.
+ * @note Because the ad-hoc formula is never inserted into the dependency
+ *       graph, a self-reference such as `=A1` anchored at A1's own address
+ *       reads A1's *cached* value rather than raising `#REF!` or engaging
+ *       iterative calc. This diverges from true in-cell F9 entry;
+ *       self-reference detection is out of scope for this API.
  *
  * Lifetime: owned (until fm_value_array_destroy).
  *
@@ -2210,11 +2189,26 @@ typedef struct {
 } fm_table_info_t;
 
 /**
+ * @brief A table column's totals-row function (OOXML `totalsRowFunction`), in
+ *        `ST_TotalsRowFunction` order; zero is the schema default `none`.
+ */
+typedef enum {
+  FM_TABLE_TOTALS_ROW_FUNCTION_NONE = 0,
+  FM_TABLE_TOTALS_ROW_FUNCTION_SUM = 1,
+  FM_TABLE_TOTALS_ROW_FUNCTION_MIN = 2,
+  FM_TABLE_TOTALS_ROW_FUNCTION_MAX = 3,
+  FM_TABLE_TOTALS_ROW_FUNCTION_AVERAGE = 4,
+  FM_TABLE_TOTALS_ROW_FUNCTION_COUNT = 5,
+  FM_TABLE_TOTALS_ROW_FUNCTION_COUNT_NUMBERS = 6,
+  FM_TABLE_TOTALS_ROW_FUNCTION_STD_DEV = 7,
+  FM_TABLE_TOTALS_ROW_FUNCTION_VAR = 8,
+  FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM = 9,
+} fm_table_totals_row_function_t;
+
+/**
  * @brief One table column (`fm_sheet_get_table_column`).
  *
- *   * `totals_row_function` — the `ST_TotalsRowFunction` token: `none`, `sum`,
- *                             `min`, `max`, `average`, `count`, `countNums`,
- *                             `stdDev`, `var` or `custom`.
+ *   * `totals_row_function` — an `fm_table_totals_row_function_t`.
  *   * `totals_row_label`    — the totals-row label, empty when absent.
  *   * `totals_row_formula`  — the `custom` function's formula with its
  *                             leading `=`, empty otherwise, spelled as
@@ -2223,13 +2217,13 @@ typedef struct {
  * `totals_row_formula` is spelled as at the column's totals cell, inside
  * the table (`=SUBTOTAL(109,[Qty])`).
  *
- * Views share the lifetime of `fm_sheet_get_table`'s; none is `NULL`. A
- * non-empty `totals_row_formula` is read-scratch-backed instead.
+ * String views share the lifetime of `fm_sheet_get_table`'s; none is `NULL`.
+ * A non-empty `totals_row_formula` is read-scratch-backed instead.
  */
 typedef struct {
   uint32_t struct_size;
   const char* name;
-  const char* totals_row_function;
+  int32_t totals_row_function; /* fm_table_totals_row_function_t */
   const char* totals_row_label;
   const char* totals_row_formula;
 } fm_table_column_info_t;
@@ -2371,8 +2365,8 @@ FM_API fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sheet_
 /**
  * @brief Sets column `column`'s totals-row function and label.
  *
- * `function` is an `ST_TotalsRowFunction` token (see `fm_table_column_info_t`);
- * `NULL` means `none`. `formula` is required for `custom` and ignored
+ * `function` is an `fm_table_totals_row_function_t`. `formula` is required
+ * for `FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM` and ignored
  * otherwise; it is taken with or without one leading `=` and stored without
  * it (`fm_sheet_get_table_column` reads it back with it), its structured
  * references bound as `fm_sheet_set_formula` binds them at the column's totals
@@ -2386,12 +2380,13 @@ FM_API fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sheet_
  *
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the token is unknown, or `custom` has no formula;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `function` is outside its enumeration, or
+ *         `custom` has no formula;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when
  *         `formula` does not parse.
  */
 FM_API fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                    size_t column, const char* function, const char* label,
+                                                    size_t column, int32_t function, const char* label,
                                                     const char* formula);
 
 /**
@@ -2882,17 +2877,26 @@ typedef enum {
   FM_VALIDATION_TYPE_CUSTOM = 7,
 } fm_validation_type_t;
 
-/** @brief Data-validation comparison (`fm_data_validation_t::op`), OOXML `ST_DataValidationOperator` order. */
+/**
+ * @brief Relational comparison shared by data validation
+ *        (`fm_data_validation_t::op`), conditional formatting `cellIs`
+ *        (`fm_cf_rule_t::op`) and AutoFilter custom conditions
+ *        (`fm_filter_column_t::op1` / `op2`).
+ *
+ * OOXML `ST_DataValidationOperator` order, the one schema order covering all
+ * eight; zero is its default `between`. An AutoFilter condition always states
+ * its operator and takes only the six non-range members.
+ */
 typedef enum {
-  FM_VALIDATION_OPERATOR_BETWEEN = 0,
-  FM_VALIDATION_OPERATOR_NOT_BETWEEN = 1,
-  FM_VALIDATION_OPERATOR_EQUAL = 2,
-  FM_VALIDATION_OPERATOR_NOT_EQUAL = 3,
-  FM_VALIDATION_OPERATOR_GREATER_THAN = 4,
-  FM_VALIDATION_OPERATOR_LESS_THAN = 5,
-  FM_VALIDATION_OPERATOR_GREATER_THAN_OR_EQUAL = 6,
-  FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL = 7,
-} fm_validation_operator_t;
+  FM_COMPARISON_OPERATOR_BETWEEN = 0,
+  FM_COMPARISON_OPERATOR_NOT_BETWEEN = 1,
+  FM_COMPARISON_OPERATOR_EQUAL = 2,
+  FM_COMPARISON_OPERATOR_NOT_EQUAL = 3,
+  FM_COMPARISON_OPERATOR_LESS_THAN = 4,
+  FM_COMPARISON_OPERATOR_LESS_THAN_OR_EQUAL = 5,
+  FM_COMPARISON_OPERATOR_GREATER_THAN = 6,
+  FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL = 7,
+} fm_comparison_operator_t;
 
 /**
  * @brief Data-validation rule descriptor.
@@ -2906,7 +2910,7 @@ typedef enum {
  *     it alive for the duration of the call only; the implementation
  *     deep-copies every range into the sheet's owned storage.
  *   * `type` — an `fm_validation_type_t`.
- *   * `op`   — an `fm_validation_operator_t`.
+ *   * `op`   — an `fm_comparison_operator_t`.
  *   * `error_style` — an `fm_validation_error_style_t`.
  *   * `allow_blank` / `show_in_cell_dropdown` — `fm_tristate_t`s whose
  *     `FM_TRISTATE_DEFAULT` is Excel's default, true for both: blanks pass,
@@ -2930,7 +2934,7 @@ typedef struct {
   const fm_cell_rect_t* ranges;
   uint32_t range_count;
   uint8_t type;                  /* fm_validation_type_t */
-  uint8_t op;                    /* fm_validation_operator_t */
+  uint8_t op;                    /* fm_comparison_operator_t */
   uint8_t error_style;           /* fm_validation_error_style_t */
   int32_t allow_blank;           /* fm_tristate_t */
   int32_t show_input_message;    /* fm_tristate_t */
@@ -3960,40 +3964,49 @@ typedef enum {
 } fm_cf_match_kind_t;
 
 /**
- * @brief Built-in icon set (`fm_cf_rule_t::icon_set_name`,
- *        `fm_cf_match_t::icon_set_name`). Mirrors `formulon::cf::IconSetName`,
- *        in OOXML `ST_IconSetType` order.
+ * @brief Icon set (`fm_cf_rule_t::icon_set_name`, `fm_cf_match_t::icon_set_name`,
+ *        `fm_cf_icon_t::icon_set`), in OOXML `ST_IconSetType` order.
+ *
+ * The first 17 members are the built-in sets a rule draws and mirror
+ * `formulon::cf::IconSetName`. `FM_ICON_SET_NAME_3_STARS` ..
+ * `FM_ICON_SET_NAME_NO_ICONS` are the x14-only sets a custom icon level
+ * (`fm_cf_icon_t`) can take its icon from; a rule's own `icon_set_name`
+ * rejects them with `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 typedef enum {
-  FM_ICON_SET_3_ARROWS = 0,
-  FM_ICON_SET_3_ARROWS_GRAY = 1,
-  FM_ICON_SET_3_FLAGS = 2,
-  FM_ICON_SET_3_TRAFFIC_LIGHTS_1 = 3,
-  FM_ICON_SET_3_TRAFFIC_LIGHTS_2 = 4,
-  FM_ICON_SET_3_SIGNS = 5,
-  FM_ICON_SET_3_SYMBOLS = 6,
-  FM_ICON_SET_3_SYMBOLS_2 = 7,
-  FM_ICON_SET_4_ARROWS = 8,
-  FM_ICON_SET_4_ARROWS_GRAY = 9,
-  FM_ICON_SET_4_RED_TO_BLACK = 10,
-  FM_ICON_SET_4_RATING = 11,
-  FM_ICON_SET_4_TRAFFIC_LIGHTS = 12,
-  FM_ICON_SET_5_ARROWS = 13,
-  FM_ICON_SET_5_ARROWS_GRAY = 14,
-  FM_ICON_SET_5_RATING = 15,
-  FM_ICON_SET_5_QUARTERS = 16,
-} fm_icon_set_t;
+  FM_ICON_SET_NAME_3_ARROWS = 0,
+  FM_ICON_SET_NAME_3_ARROWS_GRAY = 1,
+  FM_ICON_SET_NAME_3_FLAGS = 2,
+  FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_1 = 3,
+  FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_2 = 4,
+  FM_ICON_SET_NAME_3_SIGNS = 5,
+  FM_ICON_SET_NAME_3_SYMBOLS = 6,
+  FM_ICON_SET_NAME_3_SYMBOLS_2 = 7,
+  FM_ICON_SET_NAME_4_ARROWS = 8,
+  FM_ICON_SET_NAME_4_ARROWS_GRAY = 9,
+  FM_ICON_SET_NAME_4_RED_TO_BLACK = 10,
+  FM_ICON_SET_NAME_4_RATING = 11,
+  FM_ICON_SET_NAME_4_TRAFFIC_LIGHTS = 12,
+  FM_ICON_SET_NAME_5_ARROWS = 13,
+  FM_ICON_SET_NAME_5_ARROWS_GRAY = 14,
+  FM_ICON_SET_NAME_5_RATING = 15,
+  FM_ICON_SET_NAME_5_QUARTERS = 16,
+  FM_ICON_SET_NAME_3_STARS = 17,
+  FM_ICON_SET_NAME_3_TRIANGLES = 18,
+  FM_ICON_SET_NAME_5_BOXES = 19,
+  FM_ICON_SET_NAME_NO_ICONS = 20,
+} fm_icon_set_name_t;
 
 /**
  * @brief The icon drawn for one level of a custom icon set (x14 `cfIcon`).
  *
- * `icon_set` is the `ST_IconSetType` spelling of the set the icon comes
- * from: a built-in name such as `"3Arrows"`, `"3Triangles"`, `"3Stars"`,
- * `"5Boxes"`, or `"NoIcons"` for a level that draws nothing (`icon_index` 0).
- * `icon_index` is the zero-based icon within that set.
+ * `icon_set` is an `fm_icon_set_name_t`, the set the icon comes from;
+ * `FM_ICON_SET_NAME_NO_ICONS` is a level that draws nothing (`icon_index` 0).
+ * A file spelling outside the enumeration reads as -1. `icon_index` is the
+ * zero-based icon within that set.
  */
 typedef struct {
-  const char* icon_set;
+  int32_t icon_set; /* fm_icon_set_name_t */
   int32_t icon_index;
 } fm_cf_icon_t;
 
@@ -4024,7 +4037,7 @@ typedef enum {
  *     `bar_border` when engaged), `bar_gradient`, and `bar_direction`
  *     (the rule's `data_bar_direction`; the geometry is stated from the
  *     left edge, and a host mirrors it for a right-to-left bar).
- *   * `FM_CF_MATCH_KIND_ICON_SET` — `icon_set_name` is an `fm_icon_set_t`;
+ *   * `FM_CF_MATCH_KIND_ICON_SET` — `icon_set_name` is an `fm_icon_set_name_t`;
  *     `icon_index` is `0..N-1` after the rule's `reverse` flag has been
  *     applied.
  *
@@ -4053,7 +4066,7 @@ typedef struct {
   int32_t bar_border_engaged; /* 0/1 */
   fm_color_spec_t bar_border;
   int32_t bar_gradient;  /* 0/1 */
-  int32_t icon_set_name; /* fm_icon_set_t */
+  int32_t icon_set_name; /* fm_icon_set_name_t */
   uint8_t icon_index;
   uint8_t bar_direction; /* fm_cf_data_bar_direction_t */
   uint8_t _pad[2];       /* padding for alignment determinism */
@@ -4210,9 +4223,14 @@ FM_API fm_status_t fm_pagination_get_printable(const fm_pagination_t* pagination
  */
 FM_API fm_status_t fm_pagination_get_scale(const fm_pagination_t* pagination, double* out_scale_pct);
 
+/** @brief Print page order (`<pageSetup pageOrder>`); zero is the OOXML default `downThenOver`. */
+typedef enum {
+  FM_PAGE_ORDER_DOWN_THEN_OVER = 0,
+  FM_PAGE_ORDER_OVER_THEN_DOWN = 1,
+} fm_page_order_t;
+
 /**
- * @brief Reads the page order: `0` down-then-over (the OOXML default), `1`
- *        over-then-down.
+ * @brief Reads the page order into `*out_order`, an `fm_page_order_t`.
  *
  * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
@@ -4607,13 +4625,17 @@ typedef enum { FM_PAGE_ORIENTATION_PORTRAIT = 0, FM_PAGE_ORIENTATION_LANDSCAPE =
  * an explicit setting from an inherited default. An absent `orientation`
  * (`orientation_engaged == 0`) prints portrait, as does the file value
  * `default`.
+ *
+ * `paper_size` is an open OOXML `paperSize` code, and an unknown code round
+ * trips. The engine lays out the eight it knows: 1 Letter, 5 Legal, 8 A3,
+ * 9 A4, 11 A5, 12 B4 (JIS), 13 B5 (JIS), 70 A6.
  */
 typedef struct {
   uint32_t struct_size;
   int32_t orientation_engaged;
   int32_t orientation; /* fm_page_orientation_t */
   int32_t paper_size_engaged;
-  uint32_t paper_size; /* OOXML paperSize code; 9 = A4 */
+  uint32_t paper_size; /* OOXML paperSize code */
   int32_t scale_pct_engaged;
   uint32_t scale_pct; /* [10, 400] */
   int32_t fit_to_width_engaged;
@@ -4843,31 +4865,24 @@ typedef enum {
   FM_CF_RULE_TYPE_UNIQUE_VALUES = 17,
 } fm_cf_rule_type_t;
 
-/** @brief `cellIs` comparison (`fm_cf_rule_t::op`). Mirrors `formulon::cf::CellIsOperator`. */
+/**
+ * @brief Relative date period (`fm_cf_rule_t::time_period`), in OOXML
+ *        `ST_TimePeriod` order. `fm_dynamic_filter_type_t` and
+ *        `fm_pivot_filter_kind_t` spell every period they share with it the
+ *        same way.
+ */
 typedef enum {
-  FM_CF_OPERATOR_LESS_THAN = 0,
-  FM_CF_OPERATOR_LESS_THAN_OR_EQUAL = 1,
-  FM_CF_OPERATOR_EQUAL = 2,
-  FM_CF_OPERATOR_NOT_EQUAL = 3,
-  FM_CF_OPERATOR_GREATER_THAN_OR_EQUAL = 4,
-  FM_CF_OPERATOR_GREATER_THAN = 5,
-  FM_CF_OPERATOR_BETWEEN = 6,
-  FM_CF_OPERATOR_NOT_BETWEEN = 7,
-} fm_cf_operator_t;
-
-/** @brief `timePeriod` bucket (`fm_cf_rule_t::time_period`). Mirrors `formulon::cf::TimePeriod`. */
-typedef enum {
-  FM_CF_TIME_PERIOD_TODAY = 0,
-  FM_CF_TIME_PERIOD_YESTERDAY = 1,
-  FM_CF_TIME_PERIOD_TOMORROW = 2,
-  FM_CF_TIME_PERIOD_LAST_7_DAYS = 3,
-  FM_CF_TIME_PERIOD_THIS_WEEK = 4,
-  FM_CF_TIME_PERIOD_LAST_WEEK = 5,
-  FM_CF_TIME_PERIOD_NEXT_WEEK = 6,
-  FM_CF_TIME_PERIOD_THIS_MONTH = 7,
-  FM_CF_TIME_PERIOD_LAST_MONTH = 8,
-  FM_CF_TIME_PERIOD_NEXT_MONTH = 9,
-} fm_cf_time_period_t;
+  FM_DATE_PERIOD_TODAY = 0,
+  FM_DATE_PERIOD_YESTERDAY = 1,
+  FM_DATE_PERIOD_TOMORROW = 2,
+  FM_DATE_PERIOD_LAST_7_DAYS = 3,
+  FM_DATE_PERIOD_THIS_MONTH = 4,
+  FM_DATE_PERIOD_LAST_MONTH = 5,
+  FM_DATE_PERIOD_NEXT_MONTH = 6,
+  FM_DATE_PERIOD_THIS_WEEK = 7,
+  FM_DATE_PERIOD_LAST_WEEK = 8,
+  FM_DATE_PERIOD_NEXT_WEEK = 9,
+} fm_date_period_t;
 
 /** @brief `<cfvo type>` (`fm_cfvo_t::type`). Mirrors `formulon::cf::CfvoType`. */
 typedef enum {
@@ -4886,7 +4901,9 @@ typedef enum {
  *
  * `type` is an `fm_cf_value_object_type_t`. `value` is optional and is
  * copied by `fm_sheet_add_cf_rule`; pass `NULL` for valueless min/max
- * thresholds. `gte` maps to OOXML `gte` (`1` by default).
+ * thresholds. A `FM_CF_VALUE_OBJECT_TYPE_FORMULA` value reads with a leading
+ * `=`, and input takes it with or without one. `gte` maps to OOXML `gte`
+ * (`1` by default).
  */
 typedef struct {
   uint8_t type; /* fm_cf_value_object_type_t */
@@ -4953,8 +4970,8 @@ typedef struct {
    * for most rules this is an in-memory handle and nothing more. */
   const char* id;
   uint8_t type;        /* fm_cf_rule_type_t */
-  uint8_t op;          /* fm_cf_operator_t */
-  uint8_t time_period; /* fm_cf_time_period_t */
+  uint8_t op;          /* fm_comparison_operator_t */
+  uint8_t time_period; /* fm_date_period_t */
   uint8_t _pad0;       /* alignment */
   int32_t priority;
   int32_t stop_if_true;      /* 0/1 */
@@ -5009,7 +5026,7 @@ typedef struct {
 
   /* IconSet payload. */
   int32_t icon_set_engaged; /* 0/1 */
-  uint8_t icon_set_name;    /* fm_icon_set_t */
+  uint8_t icon_set_name;    /* fm_icon_set_name_t */
   uint8_t _pad2[3];
   const fm_cfvo_t* icon_set_thresholds;
   uint32_t icon_set_threshold_count;
@@ -5418,12 +5435,12 @@ typedef enum {
 /**
  * @brief Sibling item order of a pivot field.
  *
- * Mirrors OOXML `sortType` (`descending` / `ascending` / `manual`).
+ * OOXML `sortType` in `ST_FieldSortType` order; zero is its default `manual`.
  */
 typedef enum {
-  FM_PIVOT_SORT_ORDER_DESCENDING = 0,
+  FM_PIVOT_SORT_ORDER_MANUAL = 0,
   FM_PIVOT_SORT_ORDER_ASCENDING = 1,
-  FM_PIVOT_SORT_ORDER_MANUAL = 2
+  FM_PIVOT_SORT_ORDER_DESCENDING = 2
 } fm_pivot_sort_order_t;
 
 /**
@@ -5521,38 +5538,38 @@ typedef enum {
   FM_PIVOT_FILTER_KIND_DATE_NEWER_THAN = 33,
   FM_PIVOT_FILTER_KIND_DATE_NEWER_THAN_OR_EQUAL = 34,
   FM_PIVOT_FILTER_KIND_DATE_NOT_BETWEEN = 35,
-  FM_PIVOT_FILTER_KIND_DATE_TOMORROW = 36,
-  FM_PIVOT_FILTER_KIND_DATE_TODAY = 37,
-  FM_PIVOT_FILTER_KIND_DATE_YESTERDAY = 38,
-  FM_PIVOT_FILTER_KIND_DATE_NEXT_WEEK = 39,
-  FM_PIVOT_FILTER_KIND_DATE_THIS_WEEK = 40,
-  FM_PIVOT_FILTER_KIND_DATE_LAST_WEEK = 41,
-  FM_PIVOT_FILTER_KIND_DATE_NEXT_MONTH = 42,
-  FM_PIVOT_FILTER_KIND_DATE_THIS_MONTH = 43,
-  FM_PIVOT_FILTER_KIND_DATE_LAST_MONTH = 44,
-  FM_PIVOT_FILTER_KIND_DATE_NEXT_QUARTER = 45,
-  FM_PIVOT_FILTER_KIND_DATE_THIS_QUARTER = 46,
-  FM_PIVOT_FILTER_KIND_DATE_LAST_QUARTER = 47,
-  FM_PIVOT_FILTER_KIND_DATE_NEXT_YEAR = 48,
-  FM_PIVOT_FILTER_KIND_DATE_THIS_YEAR = 49,
-  FM_PIVOT_FILTER_KIND_DATE_LAST_YEAR = 50,
-  FM_PIVOT_FILTER_KIND_DATE_YEAR_TO_DATE = 51,
-  FM_PIVOT_FILTER_KIND_DATE_Q1 = 52,
-  FM_PIVOT_FILTER_KIND_DATE_Q2 = 53,
-  FM_PIVOT_FILTER_KIND_DATE_Q3 = 54,
-  FM_PIVOT_FILTER_KIND_DATE_Q4 = 55,
-  FM_PIVOT_FILTER_KIND_DATE_M1 = 56,
-  FM_PIVOT_FILTER_KIND_DATE_M2 = 57,
-  FM_PIVOT_FILTER_KIND_DATE_M3 = 58,
-  FM_PIVOT_FILTER_KIND_DATE_M4 = 59,
-  FM_PIVOT_FILTER_KIND_DATE_M5 = 60,
-  FM_PIVOT_FILTER_KIND_DATE_M6 = 61,
-  FM_PIVOT_FILTER_KIND_DATE_M7 = 62,
-  FM_PIVOT_FILTER_KIND_DATE_M8 = 63,
-  FM_PIVOT_FILTER_KIND_DATE_M9 = 64,
-  FM_PIVOT_FILTER_KIND_DATE_M10 = 65,
-  FM_PIVOT_FILTER_KIND_DATE_M11 = 66,
-  FM_PIVOT_FILTER_KIND_DATE_M12 = 67
+  FM_PIVOT_FILTER_KIND_TOMORROW = 36,
+  FM_PIVOT_FILTER_KIND_TODAY = 37,
+  FM_PIVOT_FILTER_KIND_YESTERDAY = 38,
+  FM_PIVOT_FILTER_KIND_NEXT_WEEK = 39,
+  FM_PIVOT_FILTER_KIND_THIS_WEEK = 40,
+  FM_PIVOT_FILTER_KIND_LAST_WEEK = 41,
+  FM_PIVOT_FILTER_KIND_NEXT_MONTH = 42,
+  FM_PIVOT_FILTER_KIND_THIS_MONTH = 43,
+  FM_PIVOT_FILTER_KIND_LAST_MONTH = 44,
+  FM_PIVOT_FILTER_KIND_NEXT_QUARTER = 45,
+  FM_PIVOT_FILTER_KIND_THIS_QUARTER = 46,
+  FM_PIVOT_FILTER_KIND_LAST_QUARTER = 47,
+  FM_PIVOT_FILTER_KIND_NEXT_YEAR = 48,
+  FM_PIVOT_FILTER_KIND_THIS_YEAR = 49,
+  FM_PIVOT_FILTER_KIND_LAST_YEAR = 50,
+  FM_PIVOT_FILTER_KIND_YEAR_TO_DATE = 51,
+  FM_PIVOT_FILTER_KIND_Q1 = 52,
+  FM_PIVOT_FILTER_KIND_Q2 = 53,
+  FM_PIVOT_FILTER_KIND_Q3 = 54,
+  FM_PIVOT_FILTER_KIND_Q4 = 55,
+  FM_PIVOT_FILTER_KIND_M1 = 56,
+  FM_PIVOT_FILTER_KIND_M2 = 57,
+  FM_PIVOT_FILTER_KIND_M3 = 58,
+  FM_PIVOT_FILTER_KIND_M4 = 59,
+  FM_PIVOT_FILTER_KIND_M5 = 60,
+  FM_PIVOT_FILTER_KIND_M6 = 61,
+  FM_PIVOT_FILTER_KIND_M7 = 62,
+  FM_PIVOT_FILTER_KIND_M8 = 63,
+  FM_PIVOT_FILTER_KIND_M9 = 64,
+  FM_PIVOT_FILTER_KIND_M10 = 65,
+  FM_PIVOT_FILTER_KIND_M11 = 66,
+  FM_PIVOT_FILTER_KIND_M12 = 67
 } fm_pivot_filter_kind_t;
 
 /**
@@ -7830,16 +7847,6 @@ typedef enum {
   FM_FILTER_KIND_ICON = 6,
 } fm_filter_kind_t;
 
-/** @brief Custom-filter comparison operator (`fm_filter_column_t::op1` / `op2`); mirrors `ST_FilterOperator`. */
-typedef enum {
-  FM_FILTER_OPERATOR_EQUAL = 0,
-  FM_FILTER_OPERATOR_LESS_THAN = 1,
-  FM_FILTER_OPERATOR_LESS_THAN_OR_EQUAL = 2,
-  FM_FILTER_OPERATOR_NOT_EQUAL = 3,
-  FM_FILTER_OPERATOR_GREATER_THAN_OR_EQUAL = 4,
-  FM_FILTER_OPERATOR_GREATER_THAN = 5,
-} fm_filter_operator_t;
-
 /** @brief Dynamic-filter type (`fm_filter_column_t::dynamic_type`); `ST_DynamicFilterType` in schema order. */
 typedef enum {
   FM_DYNAMIC_FILTER_TYPE_NULL = 0,
@@ -7921,7 +7928,9 @@ typedef struct {
  *     texts and `date_groups` date-group items.
  *   * custom -- `custom_count` (1 or 2) conditions `op1`/`val1` and
  *     `op2`/`val2`, joined by AND when `custom_and` is set. Operators
- *     are `fm_filter_operator_t`.
+ *     are `fm_comparison_operator_t` members other than `BETWEEN` /
+ *     `NOT_BETWEEN`, which the setter rejects with
+ *     `FM_STATUS_INVALID_ARGUMENT` (2).
  *   * top10 -- `top` (else bottom), `percent`, the rank `top_val`, and the
  *     `filter_val` threshold Excel last stored when `has_filter_val`.
  *   * dynamic -- `dynamic_type` is an `fm_dynamic_filter_type_t`; `dyn_val` / `dyn_max_val` are the
@@ -7929,7 +7938,7 @@ typedef struct {
  *     `max_val_iso` their ISO spellings.
  *   * color -- `dxf_index` names the differential format whose fill
  *     (`cell_color` set) or font colour matches; `UINT32_MAX` means absent.
- *   * icon -- `icon_set` is an `fm_icon_set_t` and
+ *   * icon -- `icon_set` is an `fm_icon_set_name_t` and
  *     `icon_index` the icon index when `has_icon_index` (else "no icon").
  *
  * On input every `const char*` may be `NULL`, meaning empty, and an array
@@ -7975,7 +7984,7 @@ typedef struct {
  *
  * `sort_by` is an `fm_sort_by_t`. `dxf_index` is read
  * only when `has_dxf_index`, `icon_index` only when `has_icon_index`; `icon_set` is
- * an `fm_icon_set_t`.
+ * an `fm_icon_set_name_t`.
  */
 typedef struct {
   fm_cell_rect_t ref;
@@ -8048,7 +8057,8 @@ FM_API fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t shee
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an
- *         enumeration field is outside the domain listed on the record, or an
+ *         enumeration field is outside the domain listed on the record (a custom
+ *         condition's `FM_COMPARISON_OPERATOR_BETWEEN` / `NOT_BETWEEN` included), or an
  *         array pointer is `NULL` with a non-zero count;
  *         `FM_STATUS_AUTO_FILTER_INVALID` (8006) when the range is outside the grid,
  *         column offsets are outside the range or not ascending, a custom filter
@@ -8585,6 +8595,16 @@ typedef enum {
 } fm_geometry_mode_t;
 
 /**
+ * @brief Platform whose column-width metrics a width model uses
+ *        (`fm_width_model_t::platform`). Zero is Windows, the platform of the
+ *        runtime default profile.
+ */
+typedef enum {
+  FM_WIDTH_PLATFORM_WIN = 0,
+  FM_WIDTH_PLATFORM_MAC = 1,
+} fm_width_platform_t;
+
+/**
  * @brief The character-unit to point conversion for the workbook's Normal
  *        font in one mode.
  *
@@ -8594,8 +8614,9 @@ typedef enum {
  * which also snaps to whole screen pixels.
  *
  * `calibrated` is `0` when the Normal font is not a tabulated calibration
- * point and the Calibri 11 figure was extrapolated. `normal_font_name` is a
- * read-scratch-backed view; `platform` is a static view (`"win"`).
+ * point and the Calibri 11 figure was extrapolated. `platform` is the
+ * `fm_width_platform_t` whose metrics the model uses. `normal_font_name` is a
+ * read-scratch-backed view.
  */
 typedef struct {
   uint32_t struct_size;
@@ -8603,9 +8624,8 @@ typedef struct {
   double padding_pt;
   double normal_font_size_pt;
   int32_t calibrated; /* 0/1 */
-  int32_t _pad;
+  int32_t platform;   /* fm_width_platform_t */
   const char* normal_font_name;
-  const char* platform;
 } fm_width_model_t;
 
 /**
@@ -9597,25 +9617,52 @@ FM_API fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_index
 FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_record_t* record, size_t* out_dxf_index);
 
 /**
+ * @brief The region a custom table style element formats
+ *        (`fm_table_style_element_t::type`), in OOXML `ST_TableStyleType`
+ *        order; the schema has no default, so zero is its first member.
+ */
+typedef enum {
+  FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE = 0,
+  FM_TABLE_STYLE_ELEMENT_TYPE_HEADER_ROW = 1,
+  FM_TABLE_STYLE_ELEMENT_TYPE_TOTAL_ROW = 2,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN = 3,
+  FM_TABLE_STYLE_ELEMENT_TYPE_LAST_COLUMN = 4,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_STRIPE = 5,
+  FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_ROW_STRIPE = 6,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN_STRIPE = 7,
+  FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_COLUMN_STRIPE = 8,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_HEADER_CELL = 9,
+  FM_TABLE_STYLE_ELEMENT_TYPE_LAST_HEADER_CELL = 10,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_TOTAL_CELL = 11,
+  FM_TABLE_STYLE_ELEMENT_TYPE_LAST_TOTAL_CELL = 12,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_SUBTOTAL_COLUMN = 13,
+  FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_SUBTOTAL_COLUMN = 14,
+  FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_SUBTOTAL_COLUMN = 15,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_SUBTOTAL_ROW = 16,
+  FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_SUBTOTAL_ROW = 17,
+  FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_SUBTOTAL_ROW = 18,
+  FM_TABLE_STYLE_ELEMENT_TYPE_BLANK_ROW = 19,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN_SUBHEADING = 20,
+  FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_COLUMN_SUBHEADING = 21,
+  FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_COLUMN_SUBHEADING = 22,
+  FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_SUBHEADING = 23,
+  FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_ROW_SUBHEADING = 24,
+  FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_ROW_SUBHEADING = 25,
+  FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_LABELS = 26,
+  FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_VALUES = 27,
+} fm_table_style_element_type_t;
+
+/**
  * @brief One region of a custom table style (`fm_table_style_t`).
  *
- *   * `type`   — the `ST_TableStyleType` token: `wholeTable`, `headerRow`,
- *                `totalRow`, `firstColumn`, `lastColumn`, `firstRowStripe`,
- *                `secondRowStripe`, `firstColumnStripe`, `secondColumnStripe`,
- *                `firstHeaderCell`, `lastHeaderCell`, `firstTotalCell`,
- *                `lastTotalCell`, `firstSubtotalColumn`,
- *                `secondSubtotalColumn`, `thirdSubtotalColumn`,
- *                `firstSubtotalRow`, `secondSubtotalRow`, `thirdSubtotalRow`,
- *                `blankRow`, `firstColumnSubheading`,
- *                `secondColumnSubheading`, `thirdColumnSubheading`,
- *                `firstRowSubheading`, `secondRowSubheading`,
- *                `thirdRowSubheading`, `pageFieldLabels`, `pageFieldValues`.
+ *   * `type`   — an `fm_table_style_element_type_t`; a file spelling outside
+ *                the enumeration reads as -1.
  *   * `size`   — stripe band size, at least 1 (1 for non-stripe regions).
  *   * `dxf_index` — read only when `has_dxf_index`; indexes `<dxfs>`
  *                (`fm_workbook_add_dxf`).
  */
 typedef struct {
-  const char* type;
+  int32_t type; /* fm_table_style_element_type_t */
   uint32_t size;
   int32_t has_dxf_index;
   uint32_t dxf_index;
@@ -9625,8 +9672,8 @@ typedef struct {
  * @brief A custom table / PivotTable style from `<tableStyles>`.
  *
  * `pivot` / `table` are non-zero when PivotTables / tables may use the style.
- * On read, `name` and the element `type`s are model-backed views valid until
- * the next styles mutation, and `elements` is a read-scratch-backed array.
+ * On read, `name` is a model-backed view valid until the next styles
+ * mutation, and `elements` is a read-scratch-backed array.
  */
 typedef struct {
   uint32_t struct_size;
@@ -9685,8 +9732,8 @@ FM_API fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, const ch
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `style` or `style->name` is `NULL`,
  *         or `elements` is `NULL` with a non-zero count;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) for an invalid name, an unknown or repeated
- *         element type, a zero `size`, or a `dxf_index` past `<dxfs>`.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an invalid name, an element type outside its
+ *         enumeration or repeated, a zero `size`, or a `dxf_index` past `<dxfs>`.
  */
 FM_API fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_table_style_t* style);
 
@@ -10110,13 +10157,21 @@ typedef enum {
   FM_COLOR_RESOLUTION_AUTO_CONTEXT = 4,
 } fm_color_resolution_t;
 
+/** @brief The level that supplied an effective style's xf (`fm_effective_style_t::source`). */
+typedef enum {
+  FM_EFFECTIVE_STYLE_SOURCE_CELL = 0,
+  FM_EFFECTIVE_STYLE_SOURCE_ROW = 1,
+  FM_EFFECTIVE_STYLE_SOURCE_COLUMN = 2,
+  FM_EFFECTIVE_STYLE_SOURCE_DEFAULT = 3,
+} fm_effective_style_source_t;
+
 /**
  * @brief The formatting a cell shows, read from the selected `<cellXfs>`
  *        record directly.
  *
- * `source` names the level that supplied `xf_index`: 0 the cell, 1 its row
- * (a row style takes effect only with `customFormat`), 2 its column, 3 the
- * default xf 0. An xf, font, fill or border index beyond its table reads as
+ * `source` is an `fm_effective_style_source_t` naming the level that
+ * supplied `xf_index`: the cell, its row (a row style takes effect only with
+ * `customFormat`), its column, or the default xf 0. An xf, font, fill or border index beyond its table reads as
  * 0. Colours are resolved against the theme and `<indexedColors>`; each
  * `*_resolution` is an `fm_color_resolution_t`. `border_*[5]` are left,
  * right, top, bottom, diagonal. Named-style inheritance is not recomputed
@@ -10126,7 +10181,7 @@ typedef enum {
 typedef struct {
   uint32_t struct_size;
   uint32_t xf_index;
-  int32_t source; /* 0=cell, 1=row, 2=column, 3=default */
+  int32_t source; /* fm_effective_style_source_t */
   uint32_t font_index;
   uint32_t fill_index;
   uint32_t border_index;
@@ -10143,12 +10198,19 @@ typedef struct {
   const char* num_fmt_code;
 } fm_effective_style_t;
 
+/** @brief Where theme values were read from (`fm_workbook_get_theme_colors`'s `*out_source`). */
+typedef enum {
+  FM_THEME_SOURCE_PART = 0,        /**< The workbook's own theme part. */
+  FM_THEME_SOURCE_DEFAULT = 1,     /**< The workbook has no theme part; the default theme. */
+  FM_THEME_SOURCE_UNPARSEABLE = 2, /**< The theme part cannot be parsed; the default theme. */
+} fm_theme_source_t;
+
 /**
  * @brief Reads the theme's 12 scheme colours.
  *
- * `*out_source` is 0 when they come from the workbook's theme part, 1 when
- * the workbook has no theme part and 2 when its theme part cannot be
- * parsed; in both latter cases the default theme's colours are reported.
+ * `*out_source` is an `fm_theme_source_t`: `FM_THEME_SOURCE_PART` when they
+ * come from the workbook's theme part, otherwise the default theme's
+ * colours are reported.
  * The theme is parsed on every call.
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -10195,16 +10257,20 @@ FM_API fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme
 
 /**
  * @brief Counts the `a:font script=... typeface=...` entries of the theme's
- *        major (`major` nonzero) or minor (`major == 0`) font set.
+ *        major or minor font set.
  *
- * The default Office theme's 47 scripts are reported when the theme part is
- * absent or unparseable (the same rule as `fm_workbook_get_theme_fonts`).
- * The theme is parsed on every call.
+ * `scheme` is an `fm_font_scheme_t`: `FM_FONT_SCHEME_MAJOR` or
+ * `FM_FONT_SCHEME_MINOR` selects the set, and the same holds for every
+ * theme script-font call. The default Office theme's 47 scripts are reported
+ * when the theme part is absent or unparseable (the same rule as
+ * `fm_workbook_get_theme_fonts`). The theme is parsed on every call.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `scheme` is `FM_FONT_SCHEME_NONE` or any other
+ *         value that is not `FM_FONT_SCHEME_MAJOR` / `FM_FONT_SCHEME_MINOR`.
  */
-FM_API fm_status_t fm_workbook_get_theme_script_font_count(const fm_workbook_t* wb, int32_t major, size_t* out_count);
+FM_API fm_status_t fm_workbook_get_theme_script_font_count(const fm_workbook_t* wb, int32_t scheme, size_t* out_count);
 
 /**
  * @brief Reads one script entry (in the theme part's file order) of the
@@ -10225,16 +10291,17 @@ FM_API fm_status_t fm_workbook_get_theme_script_font_count(const fm_workbook_t* 
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `scheme` is not `FM_FONT_SCHEME_MAJOR` /
+ *         `FM_FONT_SCHEME_MINOR`;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is not below the count.
  */
-FM_API fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t* wb, int32_t major, size_t index,
+FM_API fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t* wb, int32_t scheme, size_t index,
                                                         const char** out_script, const char** out_typeface);
 
 /**
  * @brief Reads the typeface of script `script` (an ISO 15924 code such as
- *        `Jpan`, matched exactly) in the major (`major` nonzero) or minor font
- *        set. `*out_present` is `1` and `*out_typeface` set when the set lists
- *        the script, else `0` and `*out_typeface` `NULL` (still `FM_STATUS_OK` (0)).
+ *        `Jpan`, matched exactly) in the `scheme` font set (major or minor). `*out_present` is `1` and `*out_typeface`
+ * set when the set lists the script, else `0` and `*out_typeface` `NULL` (still `FM_STATUS_OK` (0)).
  *
  * `*out_typeface` is a read-scratch-backed view with the lifetime
  * `fm_workbook_get_theme_script_font_at` describes.
@@ -10243,14 +10310,15 @@ FM_API fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t* wb,
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `script` is not valid UTF-8.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `script` is not valid UTF-8, or `scheme` is not
+ *         `FM_FONT_SCHEME_MAJOR` / `FM_FONT_SCHEME_MINOR`.
  */
-FM_API fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb, int32_t major, const char* script,
+FM_API fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb, int32_t scheme, const char* script,
                                                      int32_t* out_present, const char** out_typeface);
 
 /**
- * @brief Sets the typeface of one script in the major (`major` nonzero) or
- *        minor font set. The strings are copied.
+ * @brief Sets the typeface of one script in the `scheme` font set (major or
+ *        minor). The strings are copied.
  *
  * Other scripts are unchanged; a script not yet in the set is appended.
  * Setting `Jpan` also changes the east-Asian face reported by
@@ -10261,16 +10329,17 @@ FM_API fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb, in
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `script` is not exactly four ASCII letters
- *         or `typeface` is empty;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `scheme` is not `FM_FONT_SCHEME_MAJOR` /
+ *         `FM_FONT_SCHEME_MINOR`, `script` is not exactly four ASCII letters, or `typeface`
+ *         is empty;
  *         `FM_STATUS_IO_XML_PARSE` (5007) when the existing theme part cannot be parsed.
  */
-FM_API fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t major, const char* script,
+FM_API fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t scheme, const char* script,
                                                      const char* typeface);
 
 /**
  * @brief Returns the workbook to the state of having no theme part, so
- *        `fm_workbook_get_theme_colors` reports source 1 and the default
+ *        `fm_workbook_get_theme_colors` reports `FM_THEME_SOURCE_DEFAULT` and the default
  *        theme's colours and faces.
  *
  * The theme part, its relationships and anything only it referenced are
@@ -10954,10 +11023,10 @@ FM_API fm_status_t fm_sheet_remove_shape(fm_workbook_t* wb, size_t sheet_index, 
 /* Table slicers                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** @brief `fm_slicer_t::sort_order`. */
+/** @brief `fm_slicer_t::sort_order`; zero is the OOXML default `ascending`. */
 typedef enum {
-  FM_SLICER_SORT_ORDER_DESCENDING = 0,
-  FM_SLICER_SORT_ORDER_ASCENDING = 1,
+  FM_SLICER_SORT_ORDER_ASCENDING = 0,
+  FM_SLICER_SORT_ORDER_DESCENDING = 1,
 } fm_slicer_sort_order_t;
 
 /** @brief `fm_slicer_t::cross_filter`. */
@@ -11126,17 +11195,26 @@ typedef enum {
   FM_SPARKLINE_AXIS_TYPE_CUSTOM = 2,
 } fm_sparkline_axis_type_t;
 
-/** @brief `fm_sparkline_group_t::empty_cells_as`. */
+/**
+ * @brief How blank cells are drawn: a chart's `c:dispBlanksAs`
+ *        (`fm_chart_data_t::blanks_as`) and a sparkline group's
+ *        `displayEmptyCellsAs` (`fm_sparkline_group_t::empty_cells_as`).
+ *
+ * Zero is the OOXML default `zero`. `ABSENT` is a chart read whose element
+ * is not written; a sparkline group always states the value and rejects it.
+ */
 typedef enum {
-  FM_SPARKLINE_EMPTY_CELLS_GAP = 0,
-  FM_SPARKLINE_EMPTY_CELLS_ZERO = 1,
-  FM_SPARKLINE_EMPTY_CELLS_SPAN = 2,
-} fm_sparkline_empty_cells_t;
+  FM_BLANKS_AS_ABSENT = -1,
+  FM_BLANKS_AS_ZERO = 0,
+  FM_BLANKS_AS_GAP = 1,
+  FM_BLANKS_AS_SPAN = 2,
+} fm_blanks_as_t;
 
 /**
- * @brief One sparkline: the data `formula` (`xm:f`, a sheet-qualified range
- *        without `=`) and the single-cell `location` (`xm:sqref`, A1 text)
- *        that shows it. Read-scratch-backed views on read.
+ * @brief One sparkline: the data `formula` (`xm:f`, a sheet-qualified range)
+ *        and the single-cell `location` (`xm:sqref`, A1 text) that shows it.
+ *        Read-scratch-backed views on read. `formula` reads with a leading
+ *        `=`; input takes it with or without one.
  */
 typedef struct {
   const char* formula;
@@ -11150,9 +11228,11 @@ typedef struct {
  * Each colour has `kind == FM_COLOR_KIND_NONE` when the element is absent.
  * `has_manual_min` / `has_manual_max` say whether `manualMin` / `manualMax`
  * are present. `date_axis_ref` is the group's own `xm:f` date range, empty
- * when absent. `line_weight` is in points (default 0.75). `sparkline_count`
- * is filled on read and ignored on input. Enumerations are the
- * `fm_sparkline_*_t` types; flags are 0/1.
+ * when absent; it reads with a leading `=`, and input takes it with or
+ * without one. `line_weight` is in points (default 0.75). `sparkline_count`
+ * is filled on read and ignored on input. `empty_cells_as` is an
+ * `fm_blanks_as_t` other than `FM_BLANKS_AS_ABSENT`; the other enumerations
+ * are the `fm_sparkline_*_t` types; flags are 0/1.
  */
 typedef struct {
   uint32_t struct_size;
@@ -11181,7 +11261,7 @@ typedef struct {
   int32_t has_manual_min;
   int32_t has_manual_max;
   int32_t date_axis;
-  int32_t empty_cells_as;
+  int32_t empty_cells_as; /* fm_blanks_as_t */
   const char* date_axis_ref;
   uint32_t sparkline_count;
 } fm_sparkline_group_t;
@@ -11359,14 +11439,6 @@ typedef enum {
   FM_CHART_GROUPING_STANDARD = 3,
 } fm_chart_grouping_t;
 
-/** @brief `c:dispBlanksAs`; `ABSENT` means the element is not written. */
-typedef enum {
-  FM_CHART_BLANKS_AS_ABSENT = -1,
-  FM_CHART_BLANKS_AS_GAP = 0,
-  FM_CHART_BLANKS_AS_ZERO = 1,
-  FM_CHART_BLANKS_AS_SPAN = 2,
-} fm_chart_blanks_as_t;
-
 /** @brief How a resolved point is drawn. */
 typedef enum {
   FM_CHART_POINT_STATE_VALUE = 0,
@@ -11387,6 +11459,19 @@ typedef enum {
   FM_CHART_AXIS_POSITION_LEFT = 2,
   FM_CHART_AXIS_POSITION_RIGHT = 3,
 } fm_chart_axis_position_t;
+
+/**
+ * @brief Where an axis draws its tick labels (`c:tickLblPos`). Zero is the
+ *        OOXML default `nextTo`; the others follow `ST_TickLblPos`. `NONE`
+ *        draws no labels; `ABSENT` is a read whose element is not written.
+ */
+typedef enum {
+  FM_CHART_TICK_LABEL_POSITION_ABSENT = -1,
+  FM_CHART_TICK_LABEL_POSITION_NEXT_TO = 0,
+  FM_CHART_TICK_LABEL_POSITION_HIGH = 1,
+  FM_CHART_TICK_LABEL_POSITION_LOW = 2,
+  FM_CHART_TICK_LABEL_POSITION_NONE = 3,
+} fm_chart_tick_label_position_t;
 
 /** @brief Where an axis crosses its cross axis; `AT` uses `crosses_at`. */
 typedef enum {
@@ -11411,13 +11496,18 @@ typedef enum {
   FM_CHART_SERIES_DIRECTION_ROWS = 2,
 } fm_chart_series_direction_t;
 
+/**
+ * @brief Chart legend position (`c:legendPos`). Zero is the OOXML default
+ *        `r`; the others follow `ST_LegendPos`. `NONE` is a chart without a
+ *        legend.
+ */
 typedef enum {
   FM_CHART_LEGEND_POSITION_NONE = -1,
-  FM_CHART_LEGEND_POSITION_BOTTOM = 0,
-  FM_CHART_LEGEND_POSITION_TOP = 1,
-  FM_CHART_LEGEND_POSITION_LEFT = 2,
-  FM_CHART_LEGEND_POSITION_RIGHT = 3,
-  FM_CHART_LEGEND_POSITION_TOP_RIGHT = 4,
+  FM_CHART_LEGEND_POSITION_RIGHT = 0,
+  FM_CHART_LEGEND_POSITION_BOTTOM = 1,
+  FM_CHART_LEGEND_POSITION_TOP_RIGHT = 2,
+  FM_CHART_LEGEND_POSITION_LEFT = 3,
+  FM_CHART_LEGEND_POSITION_TOP = 4,
 } fm_chart_legend_position_t;
 
 typedef enum {
@@ -11565,7 +11655,7 @@ typedef struct {
  * `FM_CHART_LEGEND_POSITION_NONE` when the chart has no legend. `auto_title_deleted`,
  * `plot_visible_only` and `na_as_blank` (`c16r3:dispNaAsBlank`, whether `#N/A`
  * points draw as blank cells) are `fm_tristate_t`; `blanks_as` an
- * `fm_chart_blanks_as_t`. `source_range` is the sheet-qualified rectangle
+ * `fm_blanks_as_t`. `source_range` is the sheet-qualified rectangle
  * every series was split from, `NULL` (with the other `source_*` fields
  * zero) when the series share no such rectangle.
  */
@@ -11705,9 +11795,10 @@ typedef struct {
  * @brief One axis. `kind` is an `fm_chart_axis_kind_t`, `position` an
  *        `fm_chart_axis_position_t`, `crosses` an `fm_chart_axis_crosses_t`.
  *        `crosses_at`, `log_base`, `min`, `max`, `major_unit` and
- *        `minor_unit` are NaN when absent; `number_format` and
- *        `tick_label_position` are `NULL` when absent. `visible` is `1` for a
- *        shown axis and `0` for a deleted one (`c:delete`).
+ *        `minor_unit` are NaN when absent; `number_format` is `NULL` when
+ *        absent. `tick_label_position` is an `fm_chart_tick_label_position_t`,
+ *        `FM_CHART_TICK_LABEL_POSITION_ABSENT` when absent. `visible` is `1`
+ *        for a shown axis and `0` for a deleted one (`c:delete`).
  */
 typedef struct {
   uint32_t struct_size;
@@ -11729,7 +11820,7 @@ typedef struct {
   fm_chart_title_t title;
   int32_t major_gridlines;
   int32_t minor_gridlines;
-  const char* tick_label_position;
+  int32_t tick_label_position; /* fm_chart_tick_label_position_t */
 } fm_chart_axis_t;
 
 /**
@@ -11861,7 +11952,7 @@ typedef struct fm_chart_data fm_chart_data_t;
  *        chart. `source` is `NULL` to keep the chart's own range; each other
  *        field applies when its `_op` is `FM_CHART_PATCH_OP_SET` (`CLEAR` is
  *        rejected). `direction` is an `fm_chart_series_direction_t`,
- *        `blanks_as` an `fm_chart_blanks_as_t`; the rest are 0/1.
+ *        `blanks_as` an `fm_blanks_as_t`; the rest are 0/1.
  *        `na_as_blank` overrides whether `#N/A` points draw as blank cells.
  */
 typedef struct {
@@ -12276,7 +12367,8 @@ typedef struct {
  * kinds of `fm_sheet_set_chart_title` (`NONE` removes the axis title, `AUTO`
  * leaves the text to the viewer). `CLEAR` on `title` removes the axis
  * title, on `log_base` makes the axis linear, and on `tick_label_position`
- * (`nextTo`, `low`, `high`, `none`) restores the default.
+ * restores the default. A set `tick_label_position` is an
+ * `fm_chart_tick_label_position_t` other than `ABSENT`.
  */
 typedef struct {
   uint32_t struct_size;
@@ -12302,7 +12394,7 @@ typedef struct {
   int32_t crosses;
   double crosses_at;
   int32_t tick_label_position_op;
-  const char* tick_label_position;
+  int32_t tick_label_position; /* fm_chart_tick_label_position_t */
 } fm_chart_axis_patch_t;
 
 /**
@@ -12343,7 +12435,7 @@ typedef struct {
 
 /**
  * @brief Display-option patch. `blanks_as` (`c:dispBlanksAs`) is an
- *        `fm_chart_blanks_as_t` of `GAP`, `ZERO` or `SPAN`; `plot_visible_only`
+ *        `fm_blanks_as_t` of `GAP`, `ZERO` or `SPAN`; `plot_visible_only`
  *        (`c:plotVisOnly`) and `na_as_blank` (`c16r3:dispNaAsBlank`, `#N/A`
  *        points drawn as blank cells) are 0/1. `CLEAR` removes the element;
  *        `na_as_blank` set to 0 removes it too, as Excel writes it.

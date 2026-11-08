@@ -17,6 +17,7 @@ from formulon import (
     ValueKind,
     Workbook,
     _c,
+    to_native,
 )
 from formulon import _structs as S
 
@@ -222,8 +223,8 @@ class AdHocArrayEvalTests(unittest.TestCase):
             self.assertEqual(len(grid), 2)
             self.assertEqual(len(grid[0]), 3)
             # Row-major 1..6.
-            self.assertEqual(grid[0][0].to_python(), 1.0)
-            self.assertEqual(grid[1][2].to_python(), 6.0)
+            self.assertEqual(to_native(grid[0][0]), 1.0)
+            self.assertEqual(to_native(grid[1][2]), 6.0)
 
     def test_scalar_reported_as_one_by_one(self) -> None:
         with Workbook.create_default() as wb:
@@ -231,7 +232,7 @@ class AdHocArrayEvalTests(unittest.TestCase):
             self.assertEqual(len(grid), 1)
             self.assertEqual(len(grid[0]), 1)
             self.assertEqual(grid[0][0].kind, ValueKind.NUMBER)
-            self.assertEqual(grid[0][0].to_python(), 3.0)
+            self.assertEqual(to_native(grid[0][0]), 3.0)
 
 
 class DefinedNameTests(unittest.TestCase):
@@ -296,9 +297,7 @@ class CalcPolicyTests(unittest.TestCase):
             with self.assertRaises(InvalidArgumentError):
                 wb.set_pinned_now(datetime.datetime(1899, 12, 31))
             with self.assertRaises(TypeError):
-                wb.set_pinned_now(datetime.date(2026, 1, 1))  # type: ignore[arg-type]
-            with self.assertRaises(ValueError):
-                wb.set_pinned_now(datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc))
+                wb.set_pinned_now("2026-01-01")  # type: ignore[arg-type]
             self.assertIsNone(wb.get_pinned_now())
 
     def test_excel_profile_roundtrip(self) -> None:
@@ -352,7 +351,7 @@ class CalcPolicyTests(unittest.TestCase):
                     self.assertEqual(wb.get_profile_id(), profile_id)
                     wb.recalc()
                     if profile_id in dollar:
-                        self.assertEqual(wb.sheet(0).get_typed_value(0, 0).to_python(), dollar[profile_id], profile_id)
+                        self.assertEqual(to_native(wb.sheet(0).get_typed_value(0, 0)), dollar[profile_id], profile_id)
             with self.assertRaises(FormulonError):
                 wb.set_profile_id("mac-365-xx_XX")
 
@@ -364,7 +363,7 @@ class PartialRecalcTests(unittest.TestCase):
             wb.sheet(0).set_formula(0, 1, "=A1*2")  # B1
             recomputed = wb.sheet(0).recalc_viewport(CellRect(0, 1, 0, 1))
             self.assertGreater(recomputed, 0)
-            self.assertEqual(wb.sheet(0).get_typed_value(0, 1).to_python(), 20.0)
+            self.assertEqual(to_native(wb.sheet(0).get_typed_value(0, 1)), 20.0)
             with self.assertRaises(TypeError):
                 wb.sheet(0).recalc_viewport((0, 1, 0, 1))  # type: ignore[arg-type]
 
@@ -418,7 +417,7 @@ class ArrayFormulaTests(unittest.TestCase):
                 assert found is not None
                 self.assertEqual(found.rect, CellRect(0, 2, 2, 2))
                 self.assertIn("A1:A3", found.formula)
-            self.assertEqual(wb.sheet(0).get_typed_value(2, 2).to_python(), 6.0)
+            self.assertEqual(to_native(wb.sheet(0).get_typed_value(2, 2)), 6.0)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).set_array_formula(ArrayFormula(CellRect(1, 2, 2, 2), "=1"))
             with self.assertRaises(FormulonError):

@@ -62,7 +62,14 @@ function pivotGrid(wb, pivot = 0) {
   const rows = new Map();
   for (const cell of layout.cells) {
     const v = cell.value;
-    const text = v.kind === 1 ? String(v.number) : v.kind === 3 ? v.text : v.kind === 4 ? `#${v.errorCode}` : '';
+    const text =
+      typeof v === 'number'
+        ? String(v)
+        : typeof v === 'string'
+          ? v
+          : v !== null && typeof v === 'object'
+            ? `#${v.code}`
+            : '';
     if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.rect.lastCol - layout.rect.firstCol + 1).fill(''));
     rows.get(cell.row)[cell.col - layout.rect.firstCol] = text;
   }
@@ -88,15 +95,13 @@ const twoLevels = (b) => b.wb.sheet(0).pivot(b.pivot).setRowFieldOrder([b.region
 const dateRows = (b) => b.wb.sheet(0).pivot(b.pivot).setRowFieldOrder([b.date]);
 const hideEast = (b) => b.wb.sheet(0).pivot(b.pivot).updateFieldItem(b.region, 0, { visible: false });
 const WEST_ONLY = ['行ラベル|Sum of Amount', 'West|37', '総計|37'];
-const GREATER_THAN_20 = Object.freeze({ axis: 0, fieldName: 'Region', type: 1, valueKind: 1, valueDouble: 20 });
+const GREATER_THAN_20 = Object.freeze({ axis: 0, fieldName: 'Region', type: 1, value: 20 });
 const BETWEEN_10_20 = Object.freeze({
   axis: 0,
   fieldName: 'Region',
   type: 2,
-  valueKind: 1,
-  valueDouble: 10,
-  valueHighKind: 1,
-  valueHighDouble: 20,
+  value: 10,
+  valueHigh: 20,
 });
 // Points record 0's Region at the shared item a row has just appended.
 const pointAtNewItem = (b) => b.wb.pivotCache(b.cacheId).setRecordValue(0, 0, 2);
@@ -136,11 +141,11 @@ const SHARED_ITEM_CASES = [
   },
   {
     label: 'date',
-    act: (b) => b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, 45292, { date: true }),
+    act: (b) => b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, new Date(2024, 0, 1)),
     expect: (b) => {
       const items = b.wb.pivotCache(b.cacheId).listFieldSharedItems(3);
       assert.equal(items[0].isDate, true);
-      assert.equal(items[0].value.number, 45292);
+      assert.equal(items[0].value, 45292);
     },
     noPointing: true,
   },
@@ -177,7 +182,7 @@ const RECORD_VALUE_CASES = [
   },
   {
     label: 'date',
-    act: (b) => b.wb.pivotCache(b.cacheId).setRecordValue(0, 3, 45300, { date: true }),
+    act: (b) => b.wb.pivotCache(b.cacheId).setRecordValue(0, 3, new Date(2024, 0, 9)),
     expect: (b) => assert.deepEqual(pivotGrid(b.wb), BASE_GRID),
   },
   {
@@ -848,7 +853,7 @@ const PIVOT_MUTATORS = [
           .sheet(0)
           .pivot(b.pivot)
           .getLayout()
-          .cells.filter((c) => c.value.kind === 1);
+          .cells.filter((c) => typeof c.value === 'number');
         assert.deepEqual(
           counts.map((c) => c.numberFormat),
           ['0.00', '0.00', '0.00'],
@@ -971,7 +976,7 @@ test('the cache value writers dispatch on every value kind', async () => {
   }
 });
 
-test('a date flag on a value that is not a number is a TypeError and writes nothing', async () => {
+test('a date option on the cache value writers is refused as a TypeError and writes nothing', async () => {
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
@@ -1032,8 +1037,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
       const filter = back.sheet(0).pivot(0).listFilters()[0];
       assert.equal(filter.type, 1);
       assert.equal(filter.fieldName, 'Region');
-      assert.equal(filter.valueKind, 1);
-      assert.equal(filter.valueDouble, 20);
+      assert.equal(filter.value, 20);
       assert.deepEqual(pivotGrid(back), WEST_ONLY);
       const field = back.sheet(0).pivot(0).listFields()[0];
       assert.equal(field.defaultSubtotal, false);
@@ -1234,8 +1238,6 @@ test('setPivotFieldDateGroup defaults its omitted fields', async () => {
       periods: days,
       calendar: 0,
       intervalDays: 1,
-      start: Number.NaN,
-      end: Number.NaN,
     });
     defaulted.wb.sheet(0).pivot(defaulted.pivot).setFieldDateGroup(defaulted.date, { periods: days });
     const field = defaulted.wb.sheet(0).pivot(defaulted.pivot).listFields()[defaulted.date];
@@ -1248,12 +1250,12 @@ test('setPivotFieldDateGroup defaults its omitted fields', async () => {
   }
 });
 
-test('pivot cache date shared items report as dates and reject invalid serials', async () => {
+test('pivot cache date shared items report as dates and reject dates the engine cannot store', async () => {
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, 45292, { date: true });
-    b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, 45323.5, { date: true });
+    b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, new Date(2024, 0, 1));
+    b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, new Date(2024, 1, 1, 12));
     b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, 7);
     assert.deepEqual(
       b.wb
@@ -1263,10 +1265,12 @@ test('pivot cache date shared items report as dates and reject invalid serials',
       [true, true, false],
     );
     expectFailure(() => b.wb.pivotCache(9999).listFieldSharedItems(3));
-    for (const bad of [-1, Number.NaN]) {
-      expectFailure(() => b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, bad, { date: true }));
-      expectFailure(() => b.wb.pivotCache(b.cacheId).setRecordValue(0, 3, bad, { date: true }));
-    }
+    const before = new Date(1899, 11, 30);
+    expectFailure(() => b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, before));
+    expectFailure(() => b.wb.pivotCache(b.cacheId).setRecordValue(0, 3, before));
+    const invalid = new Date(Number.NaN);
+    assert.throws(() => b.wb.pivotCache(b.cacheId).addFieldSharedItem(3, invalid), RangeError);
+    assert.throws(() => b.wb.pivotCache(b.cacheId).setRecordValue(0, 3, invalid), RangeError);
   } finally {
     b.wb.dispose();
   }
@@ -1277,8 +1281,8 @@ test('a pivot cache shared item reads back by index', async () => {
   const b = buildPivot(mod);
   try {
     const items = b.wb.pivotCache(b.cacheId).listFieldSharedItems(0);
-    assert.equal(items[0].value.text, 'East');
-    assert.equal(items[1].value.text, 'West');
+    assert.equal(items[0].value, 'East');
+    assert.equal(items[1].value, 'West');
     assert.equal(items.length, 2);
     expectFailure(() => b.wb.pivotCache(b.cacheId).listFieldSharedItems(99));
   } finally {
@@ -1582,7 +1586,7 @@ test('pivot filters take the full type range and an upper text bound', async () 
   assert.equal(Object.keys(PivotFilterKind).length, 68);
   assert.equal(PivotFilterKind.ValueEqual, 6);
   assert.equal(PivotFilterKind.LabelBetween, 22);
-  assert.equal(PivotFilterKind.DateM12, 67);
+  assert.equal(PivotFilterKind.M12, 67);
   const b = buildPivot(mod);
   try {
     const { wb, pivot } = b;
@@ -1590,16 +1594,14 @@ test('pivot filters take the full type range and an upper text bound', async () 
       axis: 0,
       fieldName: 'Region',
       type: PivotFilterKind.LabelBetween,
-      valueKind: 2,
-      valueText: 'A',
-      valueHighKind: 2,
-      valueHighText: 'F',
+      value: 'A',
+      valueHigh: 'F',
     };
     // Nothing the upper bound's rules reject is added.
     for (const bad of [
-      { ...between, valueHighText: undefined },
+      { ...between, valueHigh: undefined },
       { ...between, type: PivotFilterKind.LabelContains },
-      { ...between, type: PivotFilterKind.ValueEqual, valueKind: 1, valueDouble: 15 },
+      { ...between, type: PivotFilterKind.ValueEqual, value: 15 },
       { ...between, type: 68 },
     ]) {
       expectFailure(() => wb.sheet(0).pivot(pivot).addFilter(bad));
@@ -1610,8 +1612,8 @@ test('pivot filters take the full type range and an upper text bound', async () 
     wb.sheet(0).pivot(pivot).addFilter(between);
     const at = wb.sheet(0).pivot(pivot).listFilters()[0];
     assert.equal(at.type, PivotFilterKind.LabelBetween);
-    assert.equal(at.valueText, 'A');
-    assert.equal(at.valueHighText, 'F');
+    assert.equal(at.value, 'A');
+    assert.equal(at.valueHigh, 'F');
     assert.deepEqual(pivotGrid(wb), ['\u884c\u30e9\u30d9\u30eb|Sum of Amount', 'East|15', '\u7dcf\u8a08|15']);
 
     wb.sheet(0).pivot(pivot).clearFilters();
@@ -1619,10 +1621,9 @@ test('pivot filters take the full type range and an upper text bound', async () 
       axis: 0,
       fieldName: 'Region',
       type: PivotFilterKind.ValueEqual,
-      valueKind: 1,
-      valueDouble: 15,
+      value: 15,
     });
-    assert.equal(wb.sheet(0).pivot(pivot).listFilters()[0].valueHighText, null);
+    assert.equal(wb.sheet(0).pivot(pivot).listFilters()[0].valueHigh, null);
     assert.deepEqual(pivotGrid(wb), ['\u884c\u30e9\u30d9\u30eb|Sum of Amount', 'East|15', '\u7dcf\u8a08|15']);
   } finally {
     b.wb.dispose();

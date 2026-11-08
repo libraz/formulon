@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_evaluate_top_left.h"
 #include "gtest/gtest.h"
 #include "support/json_cases.h"
 #include "utils/error.h"
@@ -74,7 +75,7 @@ double Evaluate(bool date1904, double a1, const std::string& formula) {
   EXPECT_EQ(fm_workbook_set_date1904(wb.handle, date1904 ? 1 : 0), 0);
   EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, a1), 0);
   fm_value_t v{};
-  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 1, formula.c_str(), &v), 0) << formula;
+  EXPECT_EQ(evaluate_top_left(wb.handle, 0, 0, 1, formula.c_str(), &v), 0) << formula;
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER) << formula;
   return v.u.number;
 }

@@ -801,10 +801,10 @@ test('criterion 6: listPivots, listPivotFieldItems and the pivot cache lists des
       ['Region', 'Amount'],
     );
     wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
-    wb.pivotCache(cacheId).addFieldSharedItem(0, 45292, { date: true });
+    wb.pivotCache(cacheId).addFieldSharedItem(0, new Date(2024, 0, 1));
     const shared = wb.pivotCache(cacheId).listFieldSharedItems(0);
     assert.equal(shared.length, 2);
-    assert.deepEqual(plain(shared[0]), { value: { kind: f.ValueKind.Text, text: 'East' }, isDate: false });
+    assert.deepEqual(plain(shared[0]), { value: 'East', isDate: false });
     assert.equal(shared[1].isDate, true);
     assert.deepEqual(plain(ws.pivot(pivot).listFieldItems(0)), []);
     expectCode(() => ws.pivot(pivot).getFieldItem(0, 0), f.StatusCode.IndexOutOfRange);
@@ -1240,11 +1240,11 @@ test('criterion 10: two dispatching writers replace the twelve typed ones', asyn
   });
 });
 
-test('criterion 10: PivotCache.addFieldSharedItem dispatches on the value type and date needs a number', async () => {
+test('criterion 10: PivotCache.addFieldSharedItem dispatches on the value type and a Date is a date', async () => {
   await withWorkbook((wb, f) => {
     const cacheId = wb.addPivotCache();
     wb.pivotCache(cacheId).addField('Mixed');
-    wb.pivotCache(cacheId).addFieldSharedItem(0, 5, { date: true });
+    wb.pivotCache(cacheId).addFieldSharedItem(0, new Date(1900, 0, 5));
     wb.pivotCache(cacheId).addFieldSharedItem(0, 5);
     wb.pivotCache(cacheId).addFieldSharedItem(0, 'x');
     wb.pivotCache(cacheId).addFieldSharedItem(0, true);
@@ -1252,17 +1252,18 @@ test('criterion 10: PivotCache.addFieldSharedItem dispatches on the value type a
     wb.pivotCache(cacheId).addFieldSharedItem(0, { kind: f.ValueKind.Error, errorCode: f.ErrorCode.NA });
     const items = wb.pivotCache(cacheId).listFieldSharedItems(0);
     assert.deepEqual(
-      items.map((i) => [i.value.kind, i.isDate]),
+      items.map((i) => [i.value instanceof f.ExcelError ? i.value.code : i.value, i.isDate]),
       [
-        [f.ValueKind.Number, true],
-        [f.ValueKind.Number, false],
-        [f.ValueKind.Text, false],
-        [f.ValueKind.Bool, false],
-        [f.ValueKind.Blank, false],
-        [f.ValueKind.Error, false],
+        [5, true],
+        [5, false],
+        ['x', false],
+        [true, false],
+        [null, false],
+        [f.ErrorCode.NA, false],
       ],
     );
     assert.throws(() => wb.pivotCache(cacheId).addFieldSharedItem(0, 'x', { date: true }), TYPE_ERROR);
+    assert.throws(() => wb.pivotCache(cacheId).addFieldSharedItem(0, new Date(Number.NaN)), RangeError);
     assert.equal(wb.pivotCache(cacheId).listFieldSharedItems(0).length, 6);
   });
 });
@@ -1274,7 +1275,7 @@ test('criterion 10: PivotCache.setRecordValue dispatches on the value type', asy
     const rec = wb.pivotCache(cacheId).addRecord();
     wb.pivotCache(cacheId).setRecordValue(rec, 0, 'West');
     wb.pivotCache(cacheId).setRecordValue(rec, 0, 7);
-    wb.pivotCache(cacheId).setRecordValue(rec, 0, 45300, { date: true });
+    wb.pivotCache(cacheId).setRecordValue(rec, 0, new Date(2024, 0, 9));
     assert.throws(() => wb.pivotCache(cacheId).setRecordValue(rec, 0, true, { date: true }), TYPE_ERROR);
     assert.equal(wb.pivotCache(cacheId).getRecordCount(), 1);
     void f;
@@ -1346,10 +1347,10 @@ test('criterion 13: defined names take an optional scope', async () => {
 });
 
 test('criterion 13: theme script fonts are read by a key record and written by a record', async () => {
-  await withWorkbook((wb) => {
-    wb.setThemeScriptFont({ major: false, script: 'Zzzz', typeface: 'Test Face' });
-    assert.equal(wb.getThemeScriptFont({ major: false, script: 'Zzzz' }).typeface, 'Test Face');
-    assert.equal(wb.getThemeScriptFont({ major: true, script: 'Zzzz' }), null);
+  await withWorkbook((wb, { FontScheme }) => {
+    wb.setThemeScriptFont({ scheme: FontScheme.Minor, script: 'Zzzz', typeface: 'Test Face' });
+    assert.equal(wb.getThemeScriptFont({ scheme: FontScheme.Minor, script: 'Zzzz' }).typeface, 'Test Face');
+    assert.equal(wb.getThemeScriptFont({ scheme: FontScheme.Major, script: 'Zzzz' }), null);
   });
 });
 

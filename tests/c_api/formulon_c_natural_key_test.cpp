@@ -82,7 +82,7 @@ TEST(FormulonCApiNaturalKey, RemovingADefinedNameRefreshesItsReaders) {
 TEST(FormulonCApiNaturalKey, TableAndCellStyleByName) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  const fm_table_style_element_t element{"wholeTable", 1U, 0, 0U};
+  const fm_table_style_element_t element{FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 0, 0U};
   const fm_table_style_t style{sizeof(fm_table_style_t), "Corporate", 0, 1, &element, 1U};
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
 
@@ -194,18 +194,18 @@ TEST(FormulonCApiNaturalKey, ThemeScriptFontAndPassthroughByKey) {
   CreateDefault(wb);
   int32_t present = 0;
   const char* typeface = nullptr;
-  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, 1, "Jpan", &present, &typeface), 0);
+  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Jpan", &present, &typeface), 0);
   ASSERT_EQ(present, 1);
   ASSERT_NE(typeface, nullptr);
   EXPECT_GT(std::strlen(typeface), 0U);
   ASSERT_EQ(fm_workbook_has_passthrough(wb.handle, "xl/theme/theme1.xml", &present), 0);
   EXPECT_EQ(present, 0);
 
-  ASSERT_EQ(fm_workbook_set_theme_script_font(wb.handle, 0, "Zzzz", "Test Face"), 0);
-  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, 0, "Zzzz", &present, &typeface), 0);
+  ASSERT_EQ(fm_workbook_set_theme_script_font(wb.handle, FM_FONT_SCHEME_MINOR, "Zzzz", "Test Face"), 0);
+  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, FM_FONT_SCHEME_MINOR, "Zzzz", &present, &typeface), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(typeface, "Test Face");
-  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, 1, "Zzzz", &present, &typeface), 0);
+  ASSERT_EQ(fm_workbook_get_theme_script_font(wb.handle, FM_FONT_SCHEME_MAJOR, "Zzzz", &present, &typeface), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(typeface, nullptr);
 

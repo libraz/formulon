@@ -2,8 +2,7 @@
   "js_only": {
     "Formulon": [
       "ErrorDisplayName",
-      "setLogSink",
-      "toNative"
+      "setLogSink"
     ],
     "Sheet": [],
     "Workbook": [
@@ -15,7 +14,6 @@
       "setIterativeProgress"
     ]
   },
-  "js_only_note": "toNative: the Python counterpart is Value.to_python(), a method because the Python Value is a class; the JS Value is a plain object embind builds, so the conversion is a module function.",
   "native_only": {
     "Workbook": []
   },

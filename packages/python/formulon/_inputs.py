@@ -21,6 +21,7 @@ from ._workbook import CellAddress, CellRect, Color, ColorKind, SheetRect, Workb
 __all__ = [
     "RECORD_RANGE_FIELDS",
     "cell_rect",
+    "civil_datetime",
     "color_input",
     "date_serial",
     "normalize_record_ranges",
@@ -199,6 +200,25 @@ def date_serial(value: Any, *, date1904: bool) -> Tuple[float, str]:
             raise ValueError("formulon: a time written to a cell must be naive; it is a wall-clock reading")
         return _day_fraction(value), _TIME_FORMAT
     raise TypeError(f"formulon: expected a date, datetime or time, got {type(value).__name__}")
+
+
+def civil_datetime(value: Any, label: str) -> datetime.datetime:
+    """A ``date`` or ``datetime`` input as a naive local ``datetime``.
+
+    A ``date`` is midnight; a naive ``datetime`` is the local wall clock as
+    given, as every date slot (a cell included) reads it.
+
+    Raises:
+      TypeError: for any other type (a ``str``, ``time`` or number included).
+      ValueError: for a ``datetime`` that carries a time zone.
+    """
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is not None:
+            raise ValueError(f"formulon: {label} must be a naive datetime; it is a wall-clock reading")
+        return value
+    if isinstance(value, datetime.date):
+        return datetime.datetime(value.year, value.month, value.day)
+    raise TypeError(f"formulon: {label} must be a datetime.date or datetime.datetime, got {type(value).__name__}")
 
 
 def serial_datetime(serial: Any, *, date1904: bool) -> datetime.datetime:

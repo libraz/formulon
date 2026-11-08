@@ -234,8 +234,7 @@ const PIVOT_FILTER = Object.freeze({
   axis: 0,
   fieldName: 'Region',
   type: 1,
-  valueKind: 1,
-  valueDouble: 15,
+  value: 15,
 });
 
 test('pivotFilterAt reads back an added filter field for field', async () => {
@@ -248,8 +247,7 @@ test('pivotFilterAt reads back an added filter field for field', async () => {
     assert.equal(got.axis, PIVOT_FILTER.axis);
     assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
     assert.equal(got.type, PIVOT_FILTER.type);
-    assert.equal(got.valueKind, PIVOT_FILTER.valueKind);
-    assert.equal(got.valueDouble, PIVOT_FILTER.valueDouble);
+    assert.equal(got.value, PIVOT_FILTER.value);
   } finally {
     wb.dispose();
   }
@@ -287,8 +285,7 @@ test('pivot filters survive save/load', async () => {
     const got = reloaded.sheet(0).pivot(0).listFilters()[0];
     assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
     assert.equal(got.type, PIVOT_FILTER.type);
-    assert.equal(got.valueKind, PIVOT_FILTER.valueKind);
-    assert.equal(got.valueDouble, PIVOT_FILTER.valueDouble);
+    assert.equal(got.value, PIVOT_FILTER.value);
   } finally {
     reloaded.dispose();
   }
@@ -322,7 +319,7 @@ test('a required pivot spec string field left out of the object is rejected, not
     const filterCountBefore = wb.sheet(0).pivot(pivot).listFilters().length;
     // no `fieldName`
     expectFailure(
-      () => wb.sheet(0).pivot(pivot).addFilter({ axis: 0, type: 1, valueKind: 1, valueDouble: 15 }),
+      () => wb.sheet(0).pivot(pivot).addFilter({ axis: 0, type: 1, value: 15 }),
       Module.StatusCode.BindingNullPointer,
     );
     assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, filterCountBefore, 'no filter must have been added');
@@ -473,12 +470,12 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.deepEqual(wb.sheet(0).pivot(pivot).getRowFieldOrder(), [0]);
     assert.deepEqual(wb.sheet(0).pivot(pivot).getColumnFieldOrder(), []);
 
-    wb.sheet(0).pivot(pivot).setFieldSort(0, 0, { byField: 'Sum of Amount' });
+    wb.sheet(0).pivot(pivot).setFieldSort(0, Module.PivotSortOrder.Descending, { byField: 'Sum of Amount' });
     const region = wb.sheet(0).pivot(pivot).listFields()[0];
     assert.equal(region.sourceName, 'Region');
     assert.equal(region.axis, 0);
     assert.equal(region.cacheFieldIndex, 0);
-    assert.equal(region.sortOrder, 0);
+    assert.equal(region.sortOrder, Module.PivotSortOrder.Descending);
     assert.equal(region.sortByField, 'Sum of Amount');
     assert.equal(region.datePeriods, 0);
     assert.equal(region.groupBaseIndex, null);

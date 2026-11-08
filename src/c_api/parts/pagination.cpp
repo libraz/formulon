@@ -219,6 +219,9 @@ extern "C" fm_status_t fm_pagination_get_scale(const fm_pagination_t* pagination
   return 0;
 }
 
+static_assert(FM_PAGE_ORDER_DOWN_THEN_OVER == static_cast<int>(formulon::PageOrder::kDownThenOver), "page order drift");
+static_assert(FM_PAGE_ORDER_OVER_THEN_DOWN == static_cast<int>(formulon::PageOrder::kOverThenDown), "page order drift");
+
 extern "C" fm_status_t fm_pagination_get_page_order(const fm_pagination_t* pagination, int32_t* out_order) {
   clear_last_error();
   if (pagination == nullptr || out_order == nullptr) {

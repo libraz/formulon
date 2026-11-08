@@ -38,7 +38,7 @@ function pivotGrid(wb, pivot) {
   const rows = new Map();
   for (const cell of layout.cells) {
     const value = cell.value;
-    const text = value.kind === 1 ? String(value.number) : value.kind === 3 ? value.text : '';
+    const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '';
     if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.rect.lastCol - layout.rect.firstCol + 1).fill(''));
     rows.get(cell.row)[cell.col - layout.rect.firstCol] = text;
   }
@@ -117,8 +117,7 @@ test('pivot nested integer fields reject wrong primitives without changing the p
           axis: 0,
           fieldName: 'Region',
           type: 1,
-          valueKind: symbol,
-          valueDouble: 15,
+          value: symbol,
         }),
       TypeError,
     );
@@ -126,17 +125,9 @@ test('pivot nested integer fields reject wrong primitives without changing the p
   });
 });
 
-test('pivot filters validate axis, value kind, and data-field index before mutation', async () => {
+test('pivot filters validate axis, type, and data-field index before mutation', async () => {
   const mod = await getModule();
-  const invalidSpecs = [
-    { axis: 2 ** 32 },
-    { type: 2 ** 32 },
-    { valueKind: 1.5 },
-    { valueInt: 1.5 },
-    { valueHighKind: Number.NaN },
-    { valueHighInt: Number.POSITIVE_INFINITY },
-    { dataFieldIndex: 2 ** 32 },
-  ];
+  const invalidSpecs = [{ axis: 2 ** 32 }, { type: 2 ** 32 }, { dataFieldIndex: 2 ** 32 }];
   for (const override of invalidSpecs) {
     withPivot(mod.Workbook, ({ wb, pivot }) => {
       const before = pivot.listFilters().length;
@@ -146,8 +137,7 @@ test('pivot filters validate axis, value kind, and data-field index before mutat
             axis: 0,
             fieldName: 'Region',
             type: 1,
-            valueKind: 1,
-            valueDouble: 15,
+            value: 15,
             ...override,
           }),
         RangeError,

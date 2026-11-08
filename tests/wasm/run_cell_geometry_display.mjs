@@ -281,7 +281,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(typeof model.calibrated, 'boolean');
       assert.equal(typeof model.normalFontName, 'string');
       assert.ok(model.pointsPerChar > 0);
-      assert.ok(model.platform.length > 0);
+      assert.equal(model.platform, 0);
 
       const pt = wb.convertColumnCharsToPt(0, 0, 10);
       // Stored width 10 is Truncate((2560 + 18) / 256 * 7) = 70 px with Calibri 11.

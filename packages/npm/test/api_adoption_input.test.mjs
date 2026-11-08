@@ -393,16 +393,17 @@ test('copySheet appends when insertBefore is omitted or null', () => {
 
 test('evaluateCfRange dates timePeriod rules by the pinned clock, else today', () => {
   withSheet((ws, wb) => {
-    const { CfRuleType, CfTimePeriod } = formulon;
-    ws.addCfRule({ type: CfRuleType.TimePeriod, ranges: 'A1:A2', timePeriod: CfTimePeriod.Today });
+    const { CfRuleType, DatePeriod } = formulon;
+    ws.addCfRule({ type: CfRuleType.TimePeriod, ranges: 'A1:A2', timePeriod: DatePeriod.Today });
     ws.setValue('A1', '=TODAY()');
-    ws.setValue('A2', new Date(Date.UTC(2020, 0, 15)));
+    ws.setValue('A2', new Date(2020, 0, 15));
     const matched = () => ws.evaluateCfRange('A1:A2').map(({ row, col }) => [row, col]);
     assert.deepEqual(matched(), [[0, 0]]);
     assert.deepEqual(
-      ws.evaluateCfRange('A1:A2', Number.NaN).map(({ row }) => row),
-      [],
+      ws.evaluateCfRange('A1:A2', { today: new Date(2020, 0, 15, 12) }).map(({ row }) => row),
+      [1],
     );
+    assert.throws(() => ws.evaluateCfRange('A1:A2', { today: new Date(Number.NaN) }), RangeError);
     wb.setPinnedNow({ year: 2020, month: 1, day: 15, hour: 12, minute: 0, second: 0 });
     wb.recalc();
     assert.deepEqual(matched(), [
@@ -454,11 +455,11 @@ test('a native string starting with = is a formula in setValue and setValues, ne
 
 test('dates reach a cell through setValue and setValues, and the clock pins to a Date', () => {
   withSheet((ws, wb) => {
-    ws.setValues('A1', [[new Date(Date.UTC(2024, 2, 1)), new Date(Date.UTC(2024, 2, 1, 12))]]);
+    ws.setValues('A1', [[new Date(2024, 2, 1), new Date(2024, 2, 1, 12)]]);
     assert.deepEqual(ws.getValues('A1:B1'), [[45352, 45352.5]]);
-    assert.equal(ws.getDate('B1').toISOString(), '2024-03-01T12:00:00.000Z');
+    assert.deepEqual(ws.getDate('B1'), new Date(2024, 2, 1, 12));
     assert.equal(formulon.convertCivilToSerial({ year: 2024, month: 3, day: 1 }), 45352);
-    wb.setPinnedNow(new Date(Date.UTC(2024, 2, 1, 6)));
+    wb.setPinnedNow(new Date(2024, 2, 1, 6));
     ws.setFormula('C1', '=NOW()');
     wb.recalc();
     assert.equal(ws.getValue('C1'), 45352.25);
@@ -621,7 +622,7 @@ const DRIVERS = {
         row: 4,
         col: 2,
         personId: PERSON,
-        created: '2026-01-02T03:04:05.67',
+        created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
         text: 'Hi',
       });
       return ws;

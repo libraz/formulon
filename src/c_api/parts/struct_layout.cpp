@@ -226,6 +226,16 @@ static_assert(offsetof(fm_row_layout_t, xf_index) == 32U);
 static_assert(offsetof(fm_row_layout_t, has_height_pt) == 36U);
 static_assert(offsetof(fm_row_layout_t, custom_height) == 40U);
 
+static_assert(sizeof(fm_cf_icon_t) == 8U);
+static_assert(offsetof(fm_cf_icon_t, icon_set) == 0U);
+static_assert(offsetof(fm_cf_icon_t, icon_index) == 4U);
+
+static_assert(sizeof(fm_table_style_element_t) == 16U);
+static_assert(offsetof(fm_table_style_element_t, type) == 0U);
+static_assert(offsetof(fm_table_style_element_t, size) == 4U);
+static_assert(offsetof(fm_table_style_element_t, has_dxf_index) == 8U);
+static_assert(offsetof(fm_table_style_element_t, dxf_index) == 12U);
+
 static_assert(sizeof(fm_date_group_item_t) == 8U);
 static_assert(offsetof(fm_date_group_item_t, year) == 0U);
 static_assert(offsetof(fm_date_group_item_t, month) == 2U);

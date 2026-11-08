@@ -9,6 +9,7 @@ from unittest import mock
 import formulon
 from formulon import (
     CellRect,
+    ComparisonOperator,
     ConditionalFormatInput,
     DataValidationInput,
     ReadDiagnostics,
@@ -84,7 +85,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 0, 0)],
                     type=1,
-                    operator=5,
+                    operator=ComparisonOperator.GREATER_THAN,
                     formula1="10",
                 ),
             )

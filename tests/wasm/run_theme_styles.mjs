@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { expectFailure } from './smoke_support.mjs';
 
+// FontScheme ordinals (None is 0).
+const MAJOR = 1;
+const MINOR = 2;
 const SOURCE_PART = 0;
 const SOURCE_DEFAULT = 1;
 const CONTEXT_FONT = 0;
@@ -313,19 +316,19 @@ export function registerThemeStyles(Module, test) {
 
   test('getThemeScriptFont reads the default script faces and setThemeScriptFont round-trips', () => {
     withWorkbook(Module, (wb) => {
-      const face = (book, major, script) => book.getThemeScriptFont(major, script);
-      assert.deepEqual(face(wb, false, 'Jpan'), { major: false, script: 'Jpan', typeface: '游ゴシック' });
-      assert.equal(face(wb, false, 'Hang').typeface, '맑은 고딕');
-      const majorHang = face(wb, true, 'Hang');
-      assert.equal(majorHang.major, true);
+      const face = (book, scheme, script) => book.getThemeScriptFont(scheme, script);
+      assert.deepEqual(face(wb, MINOR, 'Jpan'), { scheme: MINOR, script: 'Jpan', typeface: '游ゴシック' });
+      assert.equal(face(wb, MINOR, 'Hang').typeface, '맑은 고딕');
+      const majorHang = face(wb, MAJOR, 'Hang');
+      assert.equal(majorHang.scheme, MAJOR);
 
-      wb.setThemeScriptFont(false, 'Hang', 'Test Face');
+      wb.setThemeScriptFont(MINOR, 'Hang', 'Test Face');
       const saved = wb.save();
       const reloaded = Module.Workbook.load(saved);
       try {
-        assert.equal(face(reloaded, false, 'Hang').typeface, 'Test Face');
-        assert.equal(face(reloaded, false, 'Jpan').typeface, '游ゴシック');
-        assert.deepEqual(face(reloaded, true, 'Hang'), majorHang);
+        assert.equal(face(reloaded, MINOR, 'Hang').typeface, 'Test Face');
+        assert.equal(face(reloaded, MINOR, 'Jpan').typeface, '游ゴシック');
+        assert.deepEqual(face(reloaded, MAJOR, 'Hang'), majorHang);
       } finally {
         reloaded.delete();
       }
@@ -334,8 +337,9 @@ export function registerThemeStyles(Module, test) {
 
   test('setThemeScriptFont rejects an invalid script or empty typeface', () => {
     withWorkbook(Module, (wb) => {
-      expectFailure(() => wb.setThemeScriptFont(true, 'Jp', 'X'));
-      expectFailure(() => wb.setThemeScriptFont(true, 'Jpan', ''));
+      expectFailure(() => wb.setThemeScriptFont(MAJOR, 'Jp', 'X'));
+      expectFailure(() => wb.setThemeScriptFont(MAJOR, 'Jpan', ''));
+      expectFailure(() => wb.setThemeScriptFont(0, 'Jpan', 'X'));
     });
   });
 }

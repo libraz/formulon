@@ -17,6 +17,7 @@
 
 #include "c_api/binding_status.h"
 #include "c_api/formulon_c.h"
+#include "c_api/parts/enum_map.h"
 #include "cf/cf_types.h"
 #include "drawing/drawing_xml.h"
 #include "eval/builtin_names.h"
@@ -171,18 +172,15 @@ fm_status_t ensure_calculated(const fm_workbook_t* wb) {
       const_cast<fm_workbook_t*>(wb)->workbook().ensure_calculated(formulon::eval::default_registry()));
 }
 
-// The C enums carry the engine ordinals unchanged; pin the last member of each.
+// These C enums carry the engine ordinals unchanged; pin the last member of each.
+// The comparison operator and the date period cross through `enum_map.h`.
 static_assert(FM_COLOR_KIND_AUTO == static_cast<int>(formulon::ColorSpec::Kind::kAuto), "fm_color_kind_t drift");
 static_assert(FM_CF_RULE_TYPE_UNIQUE_VALUES == static_cast<int>(formulon::cf::RuleType::UniqueValues),
               "fm_cf_rule_type_t drift");
-static_assert(FM_CF_OPERATOR_NOT_BETWEEN == static_cast<int>(formulon::cf::CellIsOperator::NotBetween),
-              "fm_cf_operator_t drift");
-static_assert(FM_CF_TIME_PERIOD_NEXT_MONTH == static_cast<int>(formulon::cf::TimePeriod::NextMonth),
-              "fm_cf_time_period_t drift");
 static_assert(FM_CF_VALUE_OBJECT_TYPE_AUTO_MAX == static_cast<int>(formulon::cf::CfvoType::AutoMax),
               "fm_cf_value_object_type_t drift");
-static_assert(FM_ICON_SET_5_QUARTERS == static_cast<int>(formulon::cf::IconSetName::Five_Quarters),
-              "fm_icon_set_t drift");
+static_assert(FM_ICON_SET_NAME_5_QUARTERS == static_cast<int>(formulon::cf::IconSetName::Five_Quarters),
+              "fm_icon_set_name_t drift");
 
 fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb) {
   fm_color_spec_t out{};
@@ -473,15 +471,12 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
     return rc;
   }
   if (rule.op_engaged != 0) {
-    if (auto rc = check_enum_domain(rule.op, 0, static_cast<std::int64_t>(cf::CellIsOperator::NotBetween), "op");
-        rc != 0) {
+    if (auto rc = check_enum_domain(rule.op, 0, FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, "op"); rc != 0) {
       return rc;
     }
   }
   if (rule.time_period_engaged != 0) {
-    if (auto rc =
-            check_enum_domain(rule.time_period, 0, static_cast<std::int64_t>(cf::TimePeriod::NextMonth), "time_period");
-        rc != 0) {
+    if (auto rc = check_enum_domain(rule.time_period, 0, FM_DATE_PERIOD_NEXT_WEEK, "time_period"); rc != 0) {
       return rc;
     }
   }
@@ -543,7 +538,9 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
       }
       for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
         const fm_cf_icon_t& icon = rule.icon_set_icons[i];
-        const std::size_t available = icon.icon_set == nullptr ? 0U : cf::cf_icon_set_icon_count(icon.icon_set);
+        const std::size_t available = icon.icon_set < 0 || icon.icon_set > FM_ICON_SET_NAME_NO_ICONS
+                                          ? 0U
+                                          : cf::cf_icon_set_icon_count(token_of(kIconSetNameTokens, icon.icon_set));
         if (available == 0U || icon.icon_index < 0 || static_cast<std::size_t>(icon.icon_index) >= available) {
           return invalid_argument("icon_set_icons entry names no icon", "icon_set_icons[" + std::to_string(i) + "]");
         }
@@ -570,7 +567,7 @@ fm_status_t validate(const fm_data_validation_t& v) {
   if (auto rc = check_enum_domain(v.type, 0, 7, "type"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(v.op, 0, 7, "op"); rc != 0) {
+  if (auto rc = check_enum_domain(v.op, 0, FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, "op"); rc != 0) {
     return rc;
   }
   if (auto rc = check_enum_domain(v.error_style, 0, 2, "error_style"); rc != 0) {
@@ -735,7 +732,7 @@ fm_status_t validate(const fm_pivot_filter_spec_t& spec) {
   if (auto rc = check_enum_domain(spec.axis, 0, FM_PIVOT_AXIS_PAGE, "axis"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.type, 0, FM_PIVOT_FILTER_KIND_DATE_M12, "type");
+  return check_enum_domain(spec.type, 0, FM_PIVOT_FILTER_KIND_M12, "type");
 }
 
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {

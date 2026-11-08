@@ -55,14 +55,14 @@ test('chart enums keep their C ordinals', async () => {
   assert.equal(mod.ChartInsertKind.Scatter, 5);
   assert.equal(mod.ChartInsertKind.Doughnut, 6);
   assert.equal(mod.ChartGrouping.Standard, 3);
-  assert.equal(mod.ChartBlanksAs.Span, 2);
+  assert.equal(mod.BlanksAs.Span, 2);
   assert.equal(mod.ChartPointState.Connect, 2);
   assert.equal(mod.ChartAxisKind.Series, 3);
   assert.equal(mod.ChartAxisCrosses.At, 3);
   assert.equal(mod.ChartTitleKind.Auto, 3);
   assert.equal(mod.ChartSeriesDirection.Rows, 2);
   assert.deepEqual({ ...mod.ChartSourceKind }, { None: 0, Ref: 1, Literal: 2 });
-  assert.equal(mod.ChartLegendPosition.TopRight, 4);
+  assert.equal(mod.ChartLegendPosition.TopRight, 2);
   assert.equal(mod.ChartAxisPosition.Right, 3);
   assert.equal(mod.ChartBarDirection.Bar, 1);
   assert.equal(mod.ChartLineDash.Other, 4);
@@ -123,7 +123,7 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(chart.source.headerColumn, true);
 
     const data = dataOf(wb, id);
-    assert.equal(data.domain, 'category');
+    assert.equal(data.domain, mod.ChartDomain.Category);
     assert.equal(data.pointCount, 4);
     assert.deepEqual(data.categories.labels, ['a', 'b', 'c', 'd']);
     assert.equal(data.categories.values, null);
@@ -183,7 +183,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
     wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 1, firstCol: 5, lastRow: 4, lastCol: 5 }, xXf);
     const scatter = insert(wb, mod, { kind: mod.ChartInsertKind.Scatter, source: 'Sheet1!$F$1:$G$5' });
     const sdata = dataOf(wb, scatter);
-    assert.equal(sdata.domain, 'xy');
+    assert.equal(sdata.domain, mod.ChartDomain.Xy);
     assert.ok(sdata.series[0].x instanceof Float64Array);
     assert.deepEqual([...sdata.series[0].x], [0, 3, 6, 9]);
     assert.equal(sdata.series[0].xNumberFormat, '0.00');
@@ -230,9 +230,9 @@ test('typed chart edits are visible through getChart', async () => {
 
     // A new chart carries `dispNaAsBlank`.
     assert.equal(chartOf(wb, id).naAsBlank, true);
-    wb.sheet(0).chart(id).updateDisplay({ blanksAs: mod.ChartBlanksAs.Zero, plotVisibleOnly: false });
+    wb.sheet(0).chart(id).updateDisplay({ blanksAs: mod.BlanksAs.Zero, plotVisibleOnly: false });
     let info = chartOf(wb, id);
-    assert.equal(info.blanksAs, mod.ChartBlanksAs.Zero);
+    assert.equal(info.blanksAs, mod.BlanksAs.Zero);
     assert.equal(info.plotVisibleOnly, false);
     // An omitted key keeps, including `naAsBlank`.
     assert.equal(info.naAsBlank, true);
@@ -421,7 +421,7 @@ test('previewChartData resolves a draft without changing the chart', async () =>
   try {
     const id = insert(wb, mod);
     const before = JSON.stringify(chartOf(wb, id));
-    const preview = wb.sheet(0).chart(id).getPreview({ source: 'Sheet1!$A$1:$B$5', blanksAs: mod.ChartBlanksAs.Gap });
+    const preview = wb.sheet(0).chart(id).getPreview({ source: 'Sheet1!$A$1:$B$5', blanksAs: mod.BlanksAs.Gap });
     assert.equal(preview.series.length, 1);
     assert.deepEqual([...preview.series[0].values], [2, 4, 6, 8]);
     const rows = wb.sheet(0).chart(id).getPreview({

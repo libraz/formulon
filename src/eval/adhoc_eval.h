@@ -84,13 +84,9 @@ bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint
                          std::uint32_t anchor_row, std::uint32_t anchor_col, std::string_view formula, Arena& arena,
                          const FunctionRegistry& registry);
 
-/// `evaluate_formula_text` over an already-parsed `root` (from
+/// `evaluate_formula_text_array` over an already-parsed `root` (from
 /// `parse_formula_entry_with_diagnostics`), so an entry point can report a
 /// parse failure before evaluating. `root` must be owned by `arena`.
-Value evaluate_parsed_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
-                              const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry);
-
-/// `evaluate_formula_text_array` over an already-parsed `root`.
 Value evaluate_parsed_formula_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
                                     const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry);
 

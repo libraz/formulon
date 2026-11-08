@@ -378,7 +378,8 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
-  const fm_cf_icon_t icons[3] = {{"3Triangles", 0}, {"NoIcons", 0}, {"5Boxes", 4}};
+  const fm_cf_icon_t icons[3] = {
+      {FM_ICON_SET_NAME_3_TRIANGLES, 0}, {FM_ICON_SET_NAME_NO_ICONS, 0}, {FM_ICON_SET_NAME_5_BOXES, 4}};
   size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, icons, 3)), &rule_index), 0)
       << fm_get_last_error_message();
@@ -386,17 +387,20 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   fm_cf_rule_t added = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_index, &added), 0);
   ASSERT_EQ(added.icon_set_icon_count, 3U);
-  EXPECT_STREQ(added.icon_set_icons[1].icon_set, "NoIcons");
+  EXPECT_EQ(added.icon_set_icons[1].icon_set, FM_ICON_SET_NAME_NO_ICONS);
 
   WorkbookGuard reloaded;
   std::string xml;
   RoundTrip(wb, &reloaded, &xml);
   EXPECT_TRUE(Has(xml, "<x14:cfIcon iconSet=\"3Triangles\" iconId=\"0\"/>")) << xml;
+  EXPECT_TRUE(Has(xml, "<x14:cfIcon iconSet=\"NoIcons\" iconId=\"0\"/>")) << xml;
+  EXPECT_TRUE(Has(xml, "<x14:cfIcon iconSet=\"5Boxes\" iconId=\"4\"/>")) << xml;
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &back), 0);
   ASSERT_EQ(back.icon_set_icon_count, 3U);
-  EXPECT_STREQ(back.icon_set_icons[0].icon_set, "3Triangles");
-  EXPECT_STREQ(back.icon_set_icons[2].icon_set, "5Boxes");
+  EXPECT_EQ(back.icon_set_icons[0].icon_set, FM_ICON_SET_NAME_3_TRIANGLES);
+  EXPECT_EQ(back.icon_set_icons[1].icon_set, FM_ICON_SET_NAME_NO_ICONS);
+  EXPECT_EQ(back.icon_set_icons[2].icon_set, FM_ICON_SET_NAME_5_BOXES);
   EXPECT_EQ(back.icon_set_icons[2].icon_index, 4);
 }
 
@@ -419,17 +423,19 @@ TEST(FormulonCApiCustomIcons, MalformedIconListsAreRejected) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   size_t rule_index = 0;
-  const fm_cf_icon_t too_few[2] = {{"3Arrows", 0}, {"3Arrows", 1}};
+  const fm_cf_icon_t too_few[2] = {{FM_ICON_SET_NAME_3_ARROWS, 0}, {FM_ICON_SET_NAME_3_ARROWS, 1}};
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, too_few, 2)), &rule_index),
             kInvalidArgument);
-  const fm_cf_icon_t unknown_set[3] = {{"3Arrows", 0}, {"7Dwarfs", 1}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, unknown_set, 3)), &rule_index),
+  const fm_cf_icon_t past_last[3] = {
+      {FM_ICON_SET_NAME_3_ARROWS, 0}, {FM_ICON_SET_NAME_NO_ICONS + 1, 1}, {FM_ICON_SET_NAME_3_ARROWS, 2}};
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, past_last, 3)), &rule_index),
             kInvalidArgument);
-  const fm_cf_icon_t id_out_of_set[3] = {{"3Arrows", 0}, {"3Arrows", 3}, {"3Arrows", 2}};
+  const fm_cf_icon_t negative[3] = {{FM_ICON_SET_NAME_3_ARROWS, 0}, {-1, 1}, {FM_ICON_SET_NAME_3_ARROWS, 2}};
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, negative, 3)), &rule_index),
+            kInvalidArgument);
+  const fm_cf_icon_t id_out_of_set[3] = {
+      {FM_ICON_SET_NAME_3_ARROWS, 0}, {FM_ICON_SET_NAME_3_ARROWS, 3}, {FM_ICON_SET_NAME_3_ARROWS, 2}};
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, id_out_of_set, 3)), &rule_index),
-            kInvalidArgument);
-  const fm_cf_icon_t null_set[3] = {{"3Arrows", 0}, {nullptr, 0}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, null_set, 3)), &rule_index),
             kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, nullptr, 3)), &rule_index),
             kInvalidArgument);

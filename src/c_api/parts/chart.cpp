@@ -37,8 +37,10 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::fill_anchor;
+using formulon::c_api::parts::kTickLabelPositionTokens;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::to_c;
@@ -64,10 +66,6 @@ constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
 const char* opt_cstr(const std::optional<std::string>& s) {
   return s ? s->c_str() : nullptr;
-}
-
-const char* nonempty_cstr(const std::string& s) {
-  return s.empty() ? nullptr : s.c_str();
 }
 
 std::int32_t tri(formulon::Tri t) {
@@ -557,7 +555,9 @@ extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx,
   out->title = to_fm(a.title);
   out->major_gridlines = a.major_gridlines ? 1 : 0;
   out->minor_gridlines = a.minor_gridlines ? 1 : 0;
-  out->tick_label_position = nonempty_cstr(a.tick_label_pos);
+  out->tick_label_position = a.tick_label_pos.empty() ? FM_CHART_TICK_LABEL_POSITION_ABSENT
+                                                      : ordinal_of(kTickLabelPositionTokens, a.tick_label_pos,
+                                                                   FM_CHART_TICK_LABEL_POSITION_ABSENT);
   return 0;
 }
 
@@ -639,7 +639,7 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
                   "direction");
   r.flag(overrides->header_row_op, overrides->header_row, model.header_row, "header_row_op");
   r.flag(overrides->header_column_op, overrides->header_column, model.header_column, "header_column_op");
-  r.enum_optional(overrides->blanks_as_op, overrides->blanks_as, FM_CHART_BLANKS_AS_ABSENT, FM_CHART_BLANKS_AS_SPAN,
+  r.enum_optional(overrides->blanks_as_op, overrides->blanks_as, FM_BLANKS_AS_ABSENT, FM_BLANKS_AS_SPAN,
                   chart_blanks_as_from_c, model.blanks_as, "blanks_as");
   r.flag(overrides->plot_visible_only_op, overrides->plot_visible_only, model.plot_vis_only, "plot_visible_only_op");
   r.flag(overrides->na_as_blank_op, overrides->na_as_blank, model.na_as_blank, "na_as_blank_op");

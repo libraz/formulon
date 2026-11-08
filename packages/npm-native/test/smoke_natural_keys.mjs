@@ -57,7 +57,7 @@ test('hyperlinks, people and threaded comments are read by key', async () => {
     row: 4,
     col: 2,
     personId: ALICE,
-    created: '2026-01-02T03:04:05.67',
+    created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
     text: 'Check this',
     parentId: '',
   });
@@ -93,14 +93,14 @@ test('shapes and drawing objects are read by object id', async () => {
 test('theme script fonts and passthrough parts are queried by path', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(found(wb.getThemeScriptFont({ major: true, script: 'Jpan' })).typeface.length > 0);
-  wb.setThemeScriptFont({ major: false, script: 'Zzzz', typeface: 'Test Face' });
-  assert.deepEqual(found(wb.getThemeScriptFont({ major: false, script: 'Zzzz' })), {
-    major: false,
+  assert.ok(found(wb.getThemeScriptFont({ scheme: mod.FontScheme.Major, script: 'Jpan' })).typeface.length > 0);
+  wb.setThemeScriptFont({ scheme: mod.FontScheme.Minor, script: 'Zzzz', typeface: 'Test Face' });
+  assert.deepEqual(found(wb.getThemeScriptFont({ scheme: mod.FontScheme.Minor, script: 'Zzzz' })), {
+    scheme: mod.FontScheme.Minor,
     script: 'Zzzz',
     typeface: 'Test Face',
   });
-  missing(wb.getThemeScriptFont({ major: true, script: 'Zzzz' }));
+  missing(wb.getThemeScriptFont({ scheme: mod.FontScheme.Major, script: 'Zzzz' }));
   const path = wb.ooxml.listPassthroughs()[0];
   assert.equal(wb.ooxml.hasPassthrough(path), true);
   assert.equal(wb.ooxml.hasPassthrough(`/${path}`), false);

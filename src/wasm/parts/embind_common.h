@@ -101,16 +101,16 @@ struct JsReadDiagnostics {
 struct JsCfMatch {
   int32_t kind = 0;
   int32_t priority = 0;
-  int32_t dxfIndexEngaged = 0;
+  bool dxfIndexEngaged = false;
   uint32_t dxfIndex = 0;
   emscripten::val color = emscripten::val::null();
   double barLengthPct = 0.0;
   double barAxisPositionPct = 0.0;
-  int32_t barIsNegative = 0;
+  bool barIsNegative = false;
   emscripten::val barFill = emscripten::val::null();
-  int32_t barBorderEngaged = 0;
+  bool barBorderEngaged = false;
   emscripten::val barBorder = emscripten::val::null();
-  int32_t barGradient = 0;
+  bool barGradient = false;
   int32_t barDirection = 0;
   int32_t iconSetName = 0;
   int32_t iconIndex = 0;

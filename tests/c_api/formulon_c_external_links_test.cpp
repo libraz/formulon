@@ -10,6 +10,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_evaluate_top_left.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
 #include "formulon_c_setters.h"
@@ -407,7 +408,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
     EXPECT_EQ(Str(out.formula1), "=" + book + "LN>0");
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out), 0) << fm_get_last_error_message();
     ASSERT_EQ(out.color_scale_count, 2U);
-    EXPECT_EQ(Str(out.color_scale_thresholds[0].value), book + "LN");
+    EXPECT_EQ(Str(out.color_scale_thresholds[0].value), "=" + book + "LN");
   }
 }
 
@@ -421,7 +422,9 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
       fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", names, 2, nullptr, 1, 1, &table),
       0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 0, "custom", nullptr, "M5.xlsx!LN+1"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 0, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
+                                             "M5.xlsx!LN+1"),
+            0)
       << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
@@ -476,7 +479,7 @@ TEST(FormulonCApiExternalLinks, FileNameAdHocEvaluationReadsTheName) {
   CreateWithName(&wb);
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=M5.xlsx!LN*3", &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=M5.xlsx!LN*3", &v), 0) << fm_get_last_error_message();
   ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 30.0);
   ASSERT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, "M5.xlsx!LN>5", &v), 0)

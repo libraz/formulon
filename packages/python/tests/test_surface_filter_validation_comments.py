@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import unittest
 
 from formulon import (
@@ -12,11 +13,11 @@ from formulon import (
     AutoFilterSortCondition,
     AutoFilterSortState,
     CellRect,
+    ComparisonOperator,
     DataValidationInput,
     DateTimeGrouping,
     DynamicFilterType,
     FilterKind,
-    FilterOperator,
     FormulonError,
     Mention,
     Person,
@@ -35,7 +36,7 @@ ALICE = "{11111111-1111-4111-8111-111111111111}"
 BOB = "{22222222-2222-4222-8222-222222222222}"
 THREAD = "{33333333-3333-4333-8333-333333333333}"
 REPLY = "{44444444-4444-4444-8444-444444444444}"
-STAMP = "2026-01-01T10:00:00.00"
+STAMP = datetime.datetime(2026, 1, 1, 10, 0, 0)
 
 
 def _text(s: str) -> Value:
@@ -51,8 +52,8 @@ def _seed_numbers(wb: Workbook, col: int = 0, first_row: int = 0) -> None:
 class EnumOrdinalTests(unittest.TestCase):
     def test_ordinals_match_the_c_header(self) -> None:
         self.assertEqual(
-            (FilterKind.ICON, FilterOperator.GREATER_THAN, DynamicFilterType.YEAR_TO_DATE, DynamicFilterType.M12),
-            (6, 5, 18, 34),
+            (FilterKind.ICON, ComparisonOperator.GREATER_THAN, DynamicFilterType.YEAR_TO_DATE, DynamicFilterType.M12),
+            (6, 6, 18, 34),
         )
         self.assertEqual(
             (SortBy.ICON, SortMethod.STROKE, DateTimeGrouping.SECOND, ValidationErrorStyle.INFORMATION),
@@ -93,9 +94,9 @@ class AutoFilterTests(unittest.TestCase):
                         kind=FilterKind.CUSTOM,
                         custom_and=True,
                         custom_count=2,
-                        operator1=FilterOperator.GREATER_THAN,
+                        operator1=ComparisonOperator.GREATER_THAN,
                         value1="1",
-                        operator2=FilterOperator.LESS_THAN,
+                        operator2=ComparisonOperator.LESS_THAN,
                         value2="9",
                     ),
                 ],
@@ -114,7 +115,7 @@ class AutoFilterTests(unittest.TestCase):
             self.assertEqual(c0.date_groups, [AutoFilterDateGroup(year=2024, month=5, grouping=DateTimeGrouping.MONTH)])
             self.assertEqual(
                 (c1.kind, c1.custom_count, c1.operator1, c1.value1, c1.operator2, c1.value2),
-                (FilterKind.CUSTOM, 2, FilterOperator.GREATER_THAN, "1", FilterOperator.LESS_THAN, "9"),
+                (FilterKind.CUSTOM, 2, ComparisonOperator.GREATER_THAN, "1", ComparisonOperator.LESS_THAN, "9"),
             )
             self.assertTrue(c1.custom_and)
             assert got.sort is not None
@@ -165,7 +166,7 @@ class AutoFilterTests(unittest.TestCase):
                             column_offset=0,
                             kind=FilterKind.CUSTOM,
                             custom_count=1,
-                            operator1=FilterOperator.GREATER_THAN,
+                            operator1=ComparisonOperator.GREATER_THAN,
                             value1="2",
                         )
                     ],
@@ -218,7 +219,7 @@ class AutoFilterTests(unittest.TestCase):
                             column_offset=0,
                             kind=FilterKind.CUSTOM,
                             custom_count=1,
-                            operator1=FilterOperator.GREATER_THAN_OR_EQUAL,
+                            operator1=ComparisonOperator.GREATER_THAN_OR_EQUAL,
                             value1="2",
                         )
                     ],

@@ -19,7 +19,7 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
-  rule.op = 5;  // GreaterThan
+  rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   std::string formula = "50";
   rule.formula1 = formula.c_str();
   rule.dxf_index_engaged = 1;
@@ -38,7 +38,7 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.type, 1U);
   EXPECT_EQ(out.op_engaged, 1);
-  EXPECT_EQ(out.op, 5U);
+  EXPECT_EQ(out.op, FM_COMPARISON_OPERATOR_GREATER_THAN);
   EXPECT_EQ(out.priority, 1);  // auto-assigned since input <= 0
   EXPECT_EQ(out.dxf_index_engaged, 1);
   EXPECT_EQ(out.dxf_index, 0U);
@@ -52,6 +52,47 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   EXPECT_FALSE(std::string(out.id).empty());
 }
 
+// A `cellIs` rule takes the shared comparison table; each member reaches the
+// model as the operator it names, and reads back as the same member.
+TEST(FormulonCApiCfMutate, CellIsRuleTakesEachComparisonOperatorAsNamed) {
+  using formulon::cf::CellIsOperator;
+  const struct {
+    int32_t op;
+    CellIsOperator model;
+  } kCases[] = {
+      {FM_COMPARISON_OPERATOR_BETWEEN, CellIsOperator::Between},
+      {FM_COMPARISON_OPERATOR_NOT_BETWEEN, CellIsOperator::NotBetween},
+      {FM_COMPARISON_OPERATOR_EQUAL, CellIsOperator::Equal},
+      {FM_COMPARISON_OPERATOR_NOT_EQUAL, CellIsOperator::NotEqual},
+      {FM_COMPARISON_OPERATOR_LESS_THAN, CellIsOperator::LessThan},
+      {FM_COMPARISON_OPERATOR_LESS_THAN_OR_EQUAL, CellIsOperator::LessThanOrEqual},
+      {FM_COMPARISON_OPERATOR_GREATER_THAN, CellIsOperator::GreaterThan},
+      {FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, CellIsOperator::GreaterThanOrEqual},
+  };
+  for (const auto& c : kCases) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    fm_cell_rect_t sqref{0, 0, 9, 0};
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+    rule.type = 1;  // CellIs
+    rule.op_engaged = 1;
+    rule.op = static_cast<std::uint8_t>(c.op);
+    rule.formula1 = "1";
+    rule.formula2 = "10";
+    rule.ranges = &sqref;
+    rule.range_count = 1;
+    std::size_t index = 0;
+    ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+    const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
+    ASSERT_EQ(blocks.size(), 1U);
+    ASSERT_TRUE(blocks[0].rules[0].op.has_value()) << c.op;
+    EXPECT_EQ(blocks[0].rules[0].op.value(), c.model) << c.op;
+    fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+    ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+    EXPECT_EQ(out.op, c.op);
+  }
+}
+
 TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -61,7 +102,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
-  rule.op = 5;  // GreaterThan
+  rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
   rule.dxf_index_engaged = 1;
   rule.dxf_index = 2;  // one past the last registered `<dxf>`
@@ -96,7 +137,7 @@ TEST(FormulonCApiCfMutate, AddRuleWithoutDxfIdIgnoresTheEmptyStylesTable) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
-  rule.op = 5;  // GreaterThan
+  rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -391,7 +432,7 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
-  rule.op = 6;  // Between
+  rule.op = FM_COMPARISON_OPERATOR_BETWEEN;
   rule.formula1 = "=$B1>100";
   rule.formula2 = "=SUM($C$1:$C$2)";
   rule.ranges = &sqref;
@@ -421,7 +462,7 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   EXPECT_STREQ(out.formula2, "=SUM($C$1:$C$2)");
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out), 0);
   ASSERT_EQ(out.color_scale_count, 2U);
-  EXPECT_STREQ(out.color_scale_thresholds[0].value, "$D$1");
+  EXPECT_STREQ(out.color_scale_thresholds[0].value, "=$D$1");
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -439,6 +480,47 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   thresholds[0].value = "=SUM(";
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, &index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
+}
+
+// A formula threshold reads with a leading `=` and takes either spelling.
+TEST(FormulonCApiCfMutate, FormulaThresholdsReadWithALeadingEquals) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_rect_t sqref{0, 0, 9, 0};
+  fm_cfvo_t thresholds[2]{};
+  thresholds[0].type = 5;  // Formula
+  thresholds[0].value = "$D$1";
+  thresholds[0].gte = 1;
+  thresholds[1].type = 5;  // Formula
+  thresholds[1].value = "=$D$2";
+  thresholds[1].gte = 1;
+  fm_color_spec_t colors[2]{CfRgb(255, 0, 0, 255), CfRgb(0, 255, 0, 255)};
+  fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
+  scale.type = 2;  // ColorScale
+  scale.ranges = &sqref;
+  scale.range_count = 1;
+  scale.color_scale_thresholds = thresholds;
+  scale.color_scale_colors = colors;
+  scale.color_scale_count = 2;
+  std::size_t index = 0;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, &index), 0) << fm_get_last_error_message();
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  for (fm_workbook_t* book : {wb.handle, reloaded.handle}) {
+    fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+    ASSERT_EQ(fm_sheet_get_cf_rule(book, 0, 0, &out), 0);
+    ASSERT_EQ(out.color_scale_count, 2U);
+    EXPECT_STREQ(out.color_scale_thresholds[0].value, "=$D$1");
+    EXPECT_STREQ(out.color_scale_thresholds[1].value, "=$D$2");
+  }
+  // The model keeps the formula without the entry marker.
+  const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
+  ASSERT_TRUE(blocks[0].rules[0].color_scale.has_value());
+  EXPECT_EQ(blocks[0].rules[0].color_scale->thresholds[0].value, "$D$1");
+  EXPECT_EQ(blocks[0].rules[0].color_scale->thresholds[1].value, "$D$2");
 }
 
 // An N-icon set carries exactly N-1 thresholds; the floor is separate.
@@ -480,6 +562,69 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusO
   EXPECT_EQ(count, 3U);
 }
 
+// The icon set table is in `ST_IconSetType` order: the 17 built-ins a rule
+// draws, then the x14-only sets a custom icon level can name.
+TEST(FormulonCApiCfMutate, IconSetNameOrdinalsFollowTheSchemaOrder) {
+  EXPECT_EQ(FM_ICON_SET_NAME_3_ARROWS, 0);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_ARROWS_GRAY, 1);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_FLAGS, 2);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_1, 3);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_2, 4);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_SIGNS, 5);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_SYMBOLS, 6);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_SYMBOLS_2, 7);
+  EXPECT_EQ(FM_ICON_SET_NAME_4_ARROWS, 8);
+  EXPECT_EQ(FM_ICON_SET_NAME_4_ARROWS_GRAY, 9);
+  EXPECT_EQ(FM_ICON_SET_NAME_4_RED_TO_BLACK, 10);
+  EXPECT_EQ(FM_ICON_SET_NAME_4_RATING, 11);
+  EXPECT_EQ(FM_ICON_SET_NAME_4_TRAFFIC_LIGHTS, 12);
+  EXPECT_EQ(FM_ICON_SET_NAME_5_ARROWS, 13);
+  EXPECT_EQ(FM_ICON_SET_NAME_5_ARROWS_GRAY, 14);
+  EXPECT_EQ(FM_ICON_SET_NAME_5_RATING, 15);
+  EXPECT_EQ(FM_ICON_SET_NAME_5_QUARTERS, 16);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_STARS, 17);
+  EXPECT_EQ(FM_ICON_SET_NAME_3_TRIANGLES, 18);
+  EXPECT_EQ(FM_ICON_SET_NAME_5_BOXES, 19);
+  EXPECT_EQ(FM_ICON_SET_NAME_NO_ICONS, 20);
+}
+
+// A rule draws only a built-in set; the x14-only sets are for custom levels.
+TEST(FormulonCApiCfMutate, RuleRejectsAnIconSetOnlyACustomLevelNames) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_rect_t sqref{0, 0, 9, 0};
+  fm_cfvo_t thresholds[4]{};
+  for (fm_cfvo_t& t : thresholds) {
+    t.type = 1;  // Percent
+    t.value = "50";
+    t.gte = 1;
+  }
+  const struct {
+    int32_t name;
+    std::uint32_t threshold_count;
+  } kCases[] = {{FM_ICON_SET_NAME_3_STARS, 2U},
+                {FM_ICON_SET_NAME_3_TRIANGLES, 2U},
+                {FM_ICON_SET_NAME_5_BOXES, 4U},
+                {FM_ICON_SET_NAME_NO_ICONS, 2U}};
+  for (const auto& c : kCases) {
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+    rule.type = 4;  // IconSet
+    rule.ranges = &sqref;
+    rule.range_count = 1;
+    rule.icon_set_engaged = 1;
+    rule.icon_set_name = static_cast<std::uint8_t>(c.name);
+    rule.icon_set_thresholds = thresholds;
+    rule.icon_set_threshold_count = c.threshold_count;
+    std::size_t index = 0;
+    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
+        << c.name;
+  }
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
 // Text, blanks, errors and timePeriod rules authored without a formula carry
 // the one Excel stores, anchored at the top-left corner of the sqref bounding box.
 TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
@@ -503,8 +648,9 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
       {12, nullptr, -1, nullptr, "LEN(TRIM(B2))>0"},
       {13, nullptr, -1, nullptr, "ISERROR(B2)"},
       {14, nullptr, -1, nullptr, "NOT(ISERROR(B2))"},
-      {15, nullptr, 1, nullptr, "FLOOR(B2,1)=TODAY()-1"},
-      {15, nullptr, 8, nullptr, "AND(MONTH(B2)=MONTH(EDATE(TODAY(),0-1)),YEAR(B2)=YEAR(EDATE(TODAY(),0-1)))"},
+      {15, nullptr, FM_DATE_PERIOD_YESTERDAY, nullptr, "FLOOR(B2,1)=TODAY()-1"},
+      {15, nullptr, FM_DATE_PERIOD_LAST_MONTH, nullptr,
+       "AND(MONTH(B2)=MONTH(EDATE(TODAY(),0-1)),YEAR(B2)=YEAR(EDATE(TODAY(),0-1)))"},
       // A caller-supplied formula is kept.
       {11, nullptr, -1, "=ISBLANK(B2)", "ISBLANK(B2)"},
   };
@@ -546,6 +692,20 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
           << "format=" << format << " rule=" << i;
     }
   }
+}
+
+// The CF time period table is in `ST_TimePeriod` order.
+TEST(FormulonCApiCfMutate, DatePeriodOrdinalsFollowTheSchemaOrder) {
+  EXPECT_EQ(FM_DATE_PERIOD_TODAY, 0);
+  EXPECT_EQ(FM_DATE_PERIOD_YESTERDAY, 1);
+  EXPECT_EQ(FM_DATE_PERIOD_TOMORROW, 2);
+  EXPECT_EQ(FM_DATE_PERIOD_LAST_7_DAYS, 3);
+  EXPECT_EQ(FM_DATE_PERIOD_THIS_MONTH, 4);
+  EXPECT_EQ(FM_DATE_PERIOD_LAST_MONTH, 5);
+  EXPECT_EQ(FM_DATE_PERIOD_NEXT_MONTH, 6);
+  EXPECT_EQ(FM_DATE_PERIOD_THIS_WEEK, 7);
+  EXPECT_EQ(FM_DATE_PERIOD_LAST_WEEK, 8);
+  EXPECT_EQ(FM_DATE_PERIOD_NEXT_WEEK, 9);
 }
 
 // The anchor is the bounding box's top-left, not the first range's.

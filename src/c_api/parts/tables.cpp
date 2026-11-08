@@ -14,6 +14,7 @@
 #include "auto_filter.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/table_style_defaults.h"
 #include "defined_name.h"
@@ -32,6 +33,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_entered_cell_formula;
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
@@ -41,15 +43,18 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::kTotalsRowFunctionTokens;
 using formulon::c_api::parts::local_table_index;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
+using formulon::c_api::parts::token_of;
 using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
@@ -668,7 +673,8 @@ extern "C" fm_status_t fm_sheet_get_table_column(const fm_workbook_t* wb, size_t
   }
   const formulon::TableColumn& col = columns[column];
   out->name = col.name.c_str();
-  out->totals_row_function = col.totals_function.empty() ? "none" : col.totals_function.c_str();
+  out->totals_row_function =
+      ordinal_of(kTotalsRowFunctionTokens, col.totals_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
   out->totals_row_label = col.totals_label.c_str();
   // The formula sits in the table's totals row, so it is shown from inside the table.
   out->totals_row_formula =
@@ -843,7 +849,7 @@ extern "C" fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                        size_t column, const char* function, const char* label,
+                                                        size_t column, int32_t function, const char* label,
                                                         const char* formula) {
   clear_last_error();
   if (wb == nullptr) {
@@ -858,13 +864,15 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
   if (auto rc = check_index(column, tables[index].columns.size(), "column"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({function, label}); rc != 0) {
+  if (auto rc = check_utf8({label}); rc != 0) {
     return rc;
   }
-  const std::string_view token = function != nullptr ? function : "none";
-  if (find_totals_function(token) == nullptr) {
-    return invalid_argument("unknown totals-row function", "function=" + std::string(token));
+  if (auto rc = check_enum_domain(function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM,
+                                  "function");
+      rc != 0) {
+    return rc;
   }
+  const std::string_view token = token_of(kTotalsRowFunctionTokens, function);
   std::string stored_formula;
   if (token == "custom") {
     if (formula == nullptr || formula[0] == '\0') {

@@ -9,6 +9,7 @@ import zipfile
 
 from formulon import (
     AnchorKind,
+    BlanksAs,
     Color,
     ColorKind,
     Comment,
@@ -21,7 +22,6 @@ from formulon import (
     ShapeProperties,
     Sparkline,
     SparklineAxisType,
-    SparklineEmptyCells,
     SparklineGroup,
     SparklineType,
     Workbook,
@@ -132,7 +132,7 @@ def _group(**overrides) -> SparklineGroup:
         min_axis_type=SparklineAxisType.CUSTOM,
         manual_min=-1.5,
         line_weight=1.25,
-        empty_cells_as=SparklineEmptyCells.ZERO,
+        empty_cells_as=BlanksAs.ZERO,
         sparklines=[Sparkline("Sheet1!A1:D1", "F1"), Sparkline("Sheet1!A2:D2", "F2")],
     )
     for key, value in overrides.items():
@@ -159,14 +159,14 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual(first.min_axis_type, SparklineAxisType.CUSTOM)
                 self.assertEqual((first.manual_min, first.manual_max), (-1.5, None))
                 self.assertEqual(first.line_weight, 1.25)
-                self.assertEqual(first.empty_cells_as, SparklineEmptyCells.ZERO)
-                self.assertEqual(first.sparklines, [Sparkline("Sheet1!A1:D1", "F1"), Sparkline("Sheet1!A2:D2", "F2")])
+                self.assertEqual(first.empty_cells_as, BlanksAs.ZERO)
+                self.assertEqual(first.sparklines, [Sparkline("=Sheet1!A1:D1", "F1"), Sparkline("=Sheet1!A2:D2", "F2")])
                 self.assertEqual((second.type, second.line_weight), (SparklineType.LINE, 0.75))
 
                 loaded.sheet(0).insert_rows(0, 2)
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines[1],
-                    Sparkline("Sheet1!A4:D4", "F4"),
+                    Sparkline("=Sheet1!A4:D4", "F4"),
                 )
 
                 loaded.sheet(0).update_sparkline_group(
@@ -176,19 +176,19 @@ class SparklineGroupTests(unittest.TestCase):
                 # A partial update leaves every omitted field as it was.
                 self.assertEqual((updated.markers, updated.negative, updated.manual_min), (True, True, -1.5))
                 self.assertEqual((updated.type, updated.high, updated.date_axis), (SparklineType.STACKED, True, True))
-                self.assertEqual(updated.date_axis_ref, "Sheet1!A4:D4")
+                self.assertEqual(updated.date_axis_ref, "=Sheet1!A4:D4")
                 self.assertEqual(len(updated.sparklines), 2)
 
                 loaded.sheet(0).update_sparkline_group(0, sparklines=[Sparkline("Sheet1!B1:B5", "H1")])
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines,
-                    [Sparkline("Sheet1!B1:B5", "H1")],
+                    [Sparkline("=Sheet1!B1:B5", "H1")],
                 )
                 with self.assertRaises(InvalidArgumentError):
                     loaded.sheet(0).update_sparkline_group(0, sparklines=[])
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines,
-                    [Sparkline("Sheet1!B1:B5", "H1")],
+                    [Sparkline("=Sheet1!B1:B5", "H1")],
                 )
                 loaded.sheet(0).remove_sparkline_group(0)
                 remaining = loaded.sheet(0).list_sparkline_groups()

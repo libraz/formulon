@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import unittest
 
 from formulon import (
@@ -10,6 +11,7 @@ from formulon import (
     DataValidationInput,
     DefinedName,
     DefinedNameInput,
+    FontScheme,
     FormulonError,
     HyperlinkInput,
     NotFoundError,
@@ -58,7 +60,12 @@ class NaturalKeyLookupTests(unittest.TestCase):
             self.assertIsNone(wb.get_person(THREAD))
             wb.sheet(0).add_threaded_comment(
                 ThreadedCommentInput(
-                    id=THREAD, row=4, col=2, person_id=ALICE, created="2026-01-02T03:04:05.67", text="Check this"
+                    id=THREAD,
+                    row=4,
+                    col=2,
+                    person_id=ALICE,
+                    created=datetime.datetime(2026, 1, 2, 3, 4, 5),
+                    text="Check this",
                 ),
             )
             thread = wb.sheet(0).get_threaded_comment(THREAD)
@@ -97,16 +104,16 @@ class NaturalKeyLookupTests(unittest.TestCase):
 
     def test_theme_script_fonts_and_passthrough_parts_are_read_by_key(self) -> None:
         with Workbook.create_default() as wb:
-            jpan = wb.get_theme_script_font(major=True, script="Jpan")
+            jpan = wb.get_theme_script_font(scheme=FontScheme.MAJOR, script="Jpan")
             self.assertIsNotNone(jpan)
             assert jpan is not None
             self.assertTrue(jpan.typeface)
-            wb.set_theme_script_font(major=False, script="Zzzz", typeface="Test Face")
+            wb.set_theme_script_font(scheme=FontScheme.MINOR, script="Zzzz", typeface="Test Face")
             self.assertEqual(
-                wb.get_theme_script_font(major=False, script="Zzzz"),
-                ThemeScriptFont(major=False, script="Zzzz", typeface="Test Face"),
+                wb.get_theme_script_font(scheme=FontScheme.MINOR, script="Zzzz"),
+                ThemeScriptFont(scheme=FontScheme.MINOR, script="Zzzz", typeface="Test Face"),
             )
-            self.assertIsNone(wb.get_theme_script_font(major=True, script="Zzzz"))
+            self.assertIsNone(wb.get_theme_script_font(scheme=FontScheme.MAJOR, script="Zzzz"))
             path = wb.ooxml.list_passthroughs()[0].path
             self.assertTrue(wb.ooxml.has_passthrough(path))
             self.assertFalse(wb.ooxml.has_passthrough("/" + path))

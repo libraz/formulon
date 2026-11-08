@@ -6,10 +6,10 @@ pointing at the same table as the table list changes; see :class:`Table`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _uint
+from ._c import LIB, FormulonError, _sint, _uint
 from ._sheet import _normalize_auto_filter
 from ._status import StatusCode
 from ._workbook import (
@@ -22,6 +22,7 @@ from ._workbook import (
     SheetRect,
     TableColumn,
     TableStyleOptions,
+    TableTotalsRowFunction,
     Unchanged,
     _ArgScope,
     _check,
@@ -35,11 +36,6 @@ if TYPE_CHECKING:
     from ._workbook import TableProperties, Workbook
 
 __all__ = ["Table", "TableTotalsRowFunction"]
-
-#: The ``ST_TotalsRowFunction`` tokens :meth:`Table.set_column_totals` accepts.
-TableTotalsRowFunction = Literal[
-    "none", "sum", "min", "max", "average", "count", "countNums", "stdDev", "var", "custom"
-]
 
 _STYLE_TOGGLES = ("show_first_column", "show_last_column", "show_row_stripes", "show_column_stripes")
 
@@ -156,7 +152,7 @@ class Table:
                 columns.append(
                     TableColumn(
                         name=LIB.read_cstr(col["name"]),
-                        totals_row_function=LIB.read_cstr(col["totals_row_function"]),
+                        totals_row_function=col["totals_row_function"],
                         totals_row_label=LIB.read_cstr(col["totals_row_label"]),
                         totals_row_formula=LIB.read_cstr(col["totals_row_formula"]),
                     )
@@ -358,11 +354,11 @@ class Table:
     ) -> None:
         """Set column ``column``'s totals-row function and label.
 
-        ``function`` is an ``ST_TotalsRowFunction`` token (``None`` means
-        ``"none"``); ``formula`` is required for ``"custom"``. While the
+        ``function`` is a :class:`TableTotalsRowFunction` (``None`` means
+        ``NONE``); ``formula`` is required for ``CUSTOM``. While the
         totals row is shown its cell follows: ``SUBTOTAL(109,Table[Column])``
         and the other 1xx codes for a built-in function, the formula for
-        ``"custom"``, else the label as text, else nothing.
+        ``CUSTOM``, else the label as text, else nothing.
         """
         h, sheet, index = self._locate()
         with _ArgScope() as scope:
@@ -372,7 +368,7 @@ class Table:
                     _uint(sheet, "sheet_index"),
                     _uint(index, "table_index"),
                     _uint(column, "column"),
-                    scope.nonempty_cstr(function),
+                    _sint(TableTotalsRowFunction.NONE if function is None else function, "function"),
                     scope.nonempty_cstr(label),
                     scope.nonempty_cstr(formula),
                 )

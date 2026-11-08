@@ -161,9 +161,9 @@ class EveryKind {
     columns_[1].kind = 2;
     columns_[1].custom_and = 1;
     columns_[1].custom_count = 2;
-    columns_[1].op1 = 4;
+    columns_[1].op1 = FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL;
     columns_[1].val1 = "10";
-    columns_[1].op2 = 3;
+    columns_[1].op2 = FM_COMPARISON_OPERATOR_NOT_EQUAL;
     columns_[1].val2 = "a*";
 
     columns_[2].column_offset = 2;
@@ -245,9 +245,9 @@ void ExpectEveryKind(const FilterCopy& got) {
   EXPECT_EQ(custom.record.column_offset, 1U);
   EXPECT_EQ(custom.record.custom_and, 1);
   EXPECT_EQ(custom.record.custom_count, 2);
-  EXPECT_EQ(custom.record.op1, 4);
+  EXPECT_EQ(custom.record.op1, FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL);
   EXPECT_EQ(custom.val1, "10");
-  EXPECT_EQ(custom.record.op2, 3);
+  EXPECT_EQ(custom.record.op2, FM_COMPARISON_OPERATOR_NOT_EQUAL);
   EXPECT_EQ(custom.val2, "a*");
 
   const ColumnCopy& top = got.columns[2];
@@ -370,6 +370,43 @@ TEST(FormulonCApiAutoFilter, ApplyHidesRowsAndClearShowsThem) {
   EXPECT_EQ(cleared.record.range.last_row, 5U);
 }
 
+// A custom condition takes the shared comparison table; each relational
+// member keeps the rows it names.
+TEST(FormulonCApiAutoFilter, CustomConditionComparesAsEachSharedOperatorNames) {
+  const struct {
+    int32_t op;
+    std::vector<std::uint8_t> match;
+  } kCases[] = {
+      {FM_COMPARISON_OPERATOR_EQUAL, {0, 0, 1, 0, 0}},
+      {FM_COMPARISON_OPERATOR_NOT_EQUAL, {1, 1, 0, 1, 1}},
+      {FM_COMPARISON_OPERATOR_LESS_THAN, {1, 1, 0, 0, 0}},
+      {FM_COMPARISON_OPERATOR_LESS_THAN_OR_EQUAL, {1, 1, 1, 0, 0}},
+      {FM_COMPARISON_OPERATOR_GREATER_THAN, {0, 0, 0, 1, 1}},
+      {FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, {0, 0, 1, 1, 1}},
+  };
+  for (const auto& c : kCases) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    FillNumbers(wb.handle);
+    fm_filter_column_t column{};
+    column.kind = 2;
+    column.show_button = 1;
+    column.custom_count = 1;
+    column.op1 = c.op;
+    column.val1 = "3";
+    fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
+    filter.range = fm_cell_rect_t{0, 0, 5, 0};
+    filter.columns = &column;
+    filter.column_count = 1;
+    ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), 0) << fm_get_last_error_message();
+    std::vector<std::uint8_t> match(5U, 9U);
+    std::size_t len = 0;
+    std::uint32_t first_row = 0;
+    ASSERT_EQ(fm_sheet_evaluate_auto_filter(wb.handle, 0, match.data(), match.size(), &len, &first_row), 0);
+    EXPECT_EQ(match, c.match) << c.op;
+  }
+}
+
 TEST(FormulonCApiAutoFilter, ClearKeepsColumnsThatHideTheirButton) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -415,10 +452,21 @@ TEST(FormulonCApiAutoFilter, RejectsMalformedRecords) {
   column.custom_count = 3;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kAutoFilterInvalid);
   column.custom_count = 1;
-  column.op1 = 6;
+  column.op1 = FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL + 1;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
+  // A custom condition always states a relational operator; the range members are rejected.
+  column.op1 = FM_COMPARISON_OPERATOR_BETWEEN;
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
+  column.op1 = FM_COMPARISON_OPERATOR_NOT_BETWEEN;
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
+  column.op1 = FM_COMPARISON_OPERATOR_EQUAL;
+  column.custom_count = 2;
+  column.op2 = FM_COMPARISON_OPERATOR_BETWEEN;
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
+  column.custom_count = 1;
+  column.op2 = FM_COMPARISON_OPERATOR_EQUAL;
 
-  column.op1 = 0;
+  column.op1 = FM_COMPARISON_OPERATOR_EQUAL;
   filter.has_sort = 1;
   filter.sort_method = 3;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
@@ -472,7 +520,7 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   column.kind = 2;
   column.show_button = 1;
   column.custom_count = 1;
-  column.op1 = 5;
+  column.op1 = FM_COMPARISON_OPERATOR_GREATER_THAN;
   column.val1 = "3";
   fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 0};
@@ -495,7 +543,7 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   EXPECT_EQ(present, 1);
   ASSERT_EQ(out.column_count, 1U);
   EXPECT_EQ(out.columns[0].kind, 2);
-  EXPECT_EQ(out.columns[0].op1, 5);
+  EXPECT_EQ(out.columns[0].op1, FM_COMPARISON_OPERATOR_GREATER_THAN);
   EXPECT_STREQ(out.columns[0].val1, "3");
   EXPECT_EQ(HiddenRows(reloaded.handle), (std::set<std::uint32_t>{1, 2, 3}));
 

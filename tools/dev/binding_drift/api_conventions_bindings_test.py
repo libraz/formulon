@@ -2093,7 +2093,7 @@ class EnumFamilyTest(BindingRuleTestBase):
             "entries": {
                 "enum.pivot_sort": enum("fm_pivot_sort_t", "PivotSort"),
                 "enum.slicer_sort": enum("fm_slicer_sort_t", "SlicerSort"),
-                "enum.chart_blanks_as": enum("fm_chart_blanks_as_t", "ChartBlanksAs"),
+                "enum.chart_blanks_as": enum("fm_chart_blanks_as_t", "BlanksAs"),
                 "enum.empty_cells": enum("fm_empty_cells_t", "EmptyCells"),
             },
         }
@@ -2125,12 +2125,12 @@ class EnumFamilyTest(BindingRuleTestBase):
         bad = (
             table("PivotSort", "  Descending: 0;\n  Ascending: 1;\n")
             + table("SlicerSort", "  Ascending: 0;\n  Descending: 1;\n")
-            + table("ChartBlanksAs", "  Absent: 0;\n  Gap: 1;\n")
+            + table("BlanksAs", "  Absent: 0;\n  Gap: 1;\n")
         )
         good = (
             table("PivotSort", "  Descending: 0;\n  Ascending: 1;\n")
             + table("SlicerSort", "  Descending: 0;\n  Ascending: 1;\n")
-            + table("ChartBlanksAs", "  Gap: 0;\n")
+            + table("BlanksAs", "  Gap: 0;\n")
         )
         self.assert_rule(
             "R19.js",
@@ -2147,7 +2147,7 @@ class EnumFamilyTest(BindingRuleTestBase):
         bad = (
             "class PivotSort(IntEnum):\n    DESCENDING = 0\n    ASCENDING = 1\n\n"
             "class SlicerSort(IntEnum):\n    ASCENDING = 0\n    DESCENDING = 1\n\n"
-            "class ChartBlanksAs(IntEnum):\n    ABSENT = 0\n    GAP = 1\n"
+            "class BlanksAs(IntEnum):\n    ABSENT = 0\n    GAP = 1\n"
         )
         good = bad.replace("ASCENDING = 0\n    DESCENDING = 1", "DESCENDING = 0\n    ASCENDING = 1").replace(
             "    ABSENT = 0\n    GAP = 1\n", "    GAP = 0\n"

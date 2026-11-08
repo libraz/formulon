@@ -208,7 +208,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
       emscripten::val icons = emscripten::val::array();
       for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
         emscripten::val icon = emscripten::val::object();
-        js_set_cstr(icon, "iconSet", rule.icon_set_icons[j].icon_set);
+        icon.set("iconSet", rule.icon_set_icons[j].icon_set);
         icon.set("iconIndex", rule.icon_set_icons[j].icon_index);
         icons.set(j, icon);
       }
@@ -405,9 +405,8 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
       icon_set_icons.reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
         const emscripten::val icon = reader.array_element(icons, i, "iconSet.icons[]");
-        icon_set_icons.push_back(
-            fm_cf_icon_t{cfvo_strings.emplace(reader.string(icon, "iconSet", "iconSet.icons[].iconSet")),
-                         reader.i32(icon, "iconIndex", 0, "iconSet.icons[].iconIndex")});
+        icon_set_icons.push_back(fm_cf_icon_t{reader.i32(icon, "iconSet", 0, "iconSet.icons[].iconSet"),
+                                              reader.i32(icon, "iconIndex", 0, "iconSet.icons[].iconIndex")});
       }
       rule.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
       rule.icon_set_icon_count = static_cast<uint32_t>(icon_set_icons.size());

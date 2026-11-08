@@ -558,8 +558,8 @@ TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {
   // An unannotated cell reads the state Excel infers for a guide written
   // with no `<phoneticPr>` at all.
   size_t font_id = 9;
-  uint32_t type = 9;
-  uint32_t alignment = 9;
+  int32_t type = 9;
+  int32_t alignment = 9;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
   EXPECT_EQ(font_id, 0U);
   EXPECT_EQ(type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
@@ -578,7 +578,7 @@ TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {
   EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_CENTER);
 
   // Each out-parameter is optional.
-  uint32_t only_type = 0;
+  int32_t only_type = 0;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr, &only_type, nullptr), 0);
   EXPECT_EQ(only_type, FM_PHONETIC_TYPE_HIRAGANA);
 
@@ -586,8 +586,8 @@ TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "京都"), 0);
   ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
   EXPECT_EQ(font_id, 0U);
-  EXPECT_EQ(type, 0U);
-  EXPECT_EQ(alignment, 0U);
+  EXPECT_EQ(type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
+  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
 }
 TEST(FormulonCApi, CellPhoneticPropertiesRejectValuesTheContainerCannotHold) {
   WorkbookGuard wb;
@@ -596,22 +596,40 @@ TEST(FormulonCApi, CellPhoneticPropertiesRejectValuesTheContainerCannotHold) {
   // type and alignment are two bits each in the xlsb trailer, and font_id a
   // u16; a wider value would be truncated into a different, valid-looking
   // one on save.
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 4U, 0U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 0U, 4U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0x10000U, 0U, 0U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0U, 0U, 0U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 1U, 0, 0, 0U, 0U, 0U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(nullptr, 0, 0, 0, 0U, 0U, 0U), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 4, 0), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 0, 4), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0x10000U, 0, 0), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0U, 0, 0), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 1U, 0, 0, 0U, 0, 0), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(nullptr, 0, 0, 0, 0U, 0, 0), 0);
   EXPECT_NE(fm_sheet_get_cell_phonetic_properties(nullptr, 0, 0, 0, nullptr, nullptr, nullptr), 0);
 
   // A rejected call leaves the stored rendering alone.
   ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 1U, FM_PHONETIC_TYPE_NO_CONVERSION,
                                                   FM_PHONETIC_ALIGNMENT_DISTRIBUTED),
             0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 1U, 7U, 0U), 0);
-  uint32_t type = 0;
-  uint32_t alignment = 0;
+  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 1U, 7, 0), 0);
+  int32_t type = 0;
+  int32_t alignment = 0;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr, &type, &alignment), 0);
   EXPECT_EQ(type, FM_PHONETIC_TYPE_NO_CONVERSION);
   EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_DISTRIBUTED);
+}
+TEST(FormulonCApi, PhoneticEnumerationsKeepTheirOrdinals) {
+  EXPECT_EQ(FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA, 0);
+  EXPECT_EQ(FM_PHONETIC_TYPE_FULLWIDTH_KATAKANA, 1);
+  EXPECT_EQ(FM_PHONETIC_TYPE_HIRAGANA, 2);
+  EXPECT_EQ(FM_PHONETIC_TYPE_NO_CONVERSION, 3);
+  EXPECT_EQ(FM_PHONETIC_ALIGNMENT_NO_CONTROL, 0);
+  EXPECT_EQ(FM_PHONETIC_ALIGNMENT_LEFT, 1);
+  EXPECT_EQ(FM_PHONETIC_ALIGNMENT_CENTER, 2);
+  EXPECT_EQ(FM_PHONETIC_ALIGNMENT_DISTRIBUTED, 3);
+}
+TEST(FormulonCApi, CellPhoneticPropertiesRejectANegativeTypeOrAlignment) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, -1, FM_PHONETIC_ALIGNMENT_LEFT),
+            FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, FM_PHONETIC_TYPE_HIRAGANA, -1),
+            FM_STATUS_INVALID_ARGUMENT);
 }

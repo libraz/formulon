@@ -113,7 +113,7 @@ fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& sp
     g.date_axis_ref = ref_store.c_str();
   }
   g.line_weight = reader.Double(spec, "lineWeight", 0.75);
-  g.empty_cells_as = reader.I32(spec, "emptyCellsAs", FM_SPARKLINE_EMPTY_CELLS_GAP);
+  g.empty_cells_as = reader.I32(spec, "emptyCellsAs", FM_BLANKS_AS_GAP);
   return g;
 }
 

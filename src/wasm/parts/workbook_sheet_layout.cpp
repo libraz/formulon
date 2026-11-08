@@ -837,7 +837,7 @@ emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
   o.set("normalFontSizePt", m.normal_font_size_pt);
   o.set("calibrated", m.calibrated != 0);
   js_set_cstr(o, "normalFontName", m.normal_font_name);
-  js_set_cstr(o, "platform", m.platform);
+  o.set("platform", m.platform);
   return o;
 }
 

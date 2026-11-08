@@ -19,6 +19,7 @@ from formulon import (
     GradientFill,
     GradientStop,
     IconSet,
+    IconSetName,
     InvalidArgumentError,
     RefMode,
     Workbook,
@@ -151,7 +152,11 @@ class CustomIconTests(unittest.TestCase):
         )
 
     def test_icons_round_trip_through_save_load(self) -> None:
-        icons = [CfIcon("3Triangles", 0), CfIcon("NoIcons", 0), CfIcon("5Boxes", 4)]
+        icons = [
+            CfIcon(IconSetName.THREE_TRIANGLES, 0),
+            CfIcon(IconSetName.NO_ICONS, 0),
+            CfIcon(IconSetName.FIVE_BOXES, 4),
+        ]
         with Workbook.create_default() as wb:
             wb.sheet(0).add_cf_rule(self._rule(icons))
             with Workbook.load(wb.save()) as reloaded:
@@ -169,9 +174,15 @@ class CustomIconTests(unittest.TestCase):
     def test_malformed_icon_lists_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_cf_rule(self._rule([CfIcon("3Arrows", 0), CfIcon("3Arrows", 1)]))
+                wb.sheet(0).add_cf_rule(
+                    self._rule([CfIcon(IconSetName.THREE_ARROWS, 0), CfIcon(IconSetName.THREE_ARROWS, 1)])
+                )
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_cf_rule(self._rule([CfIcon("3Arrows", 0), CfIcon("7Dwarfs", 1), CfIcon("3Arrows", 2)]))
+                wb.sheet(0).add_cf_rule(
+                    self._rule(
+                        [CfIcon(IconSetName.THREE_ARROWS, 0), CfIcon(99, 1), CfIcon(IconSetName.THREE_ARROWS, 2)]
+                    )
+                )
             self.assertEqual(wb.sheet(0).list_cf_rules(), [])
 
 

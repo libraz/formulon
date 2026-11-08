@@ -194,6 +194,8 @@ def render_py_ranges(ranges: List[Range]) -> List[str]:
         "        if first <= code <= last:",
         "            return name",
         '    return "FormulonError"',
+        "",
+        "",
         RANGES_END,
     ]
     return lines

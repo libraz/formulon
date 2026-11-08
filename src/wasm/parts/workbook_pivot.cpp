@@ -11,6 +11,7 @@
 
 #include <emscripten/val.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -43,6 +44,60 @@ bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscript
   out.show_as_base_field = reader.i32(spec, "showAsBaseField", -1, "pivotDataField.showAsBaseField");
   out.show_as_base_item = reader.i32(spec, "showAsBaseItem", -1, "pivotDataField.showAsBaseItem");
   return reader.ok();
+}
+
+/// One pivot filter operand pulled from a JS `number | string | null` slot.
+struct FilterOperand {
+  int32_t kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
+  int32_t as_int = 0;
+  double as_double = 0.0;
+  std::string text;
+};
+
+/// Reads `owner[key]`: absent or null is no operand, a Number is an INT when
+/// `integral` and whole, else a DOUBLE, a String is TEXT.
+FilterOperand pull_filter_operand(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
+                                  const char* field, bool integral) {
+  FilterOperand out;
+  const emscripten::val value = reader.value(owner, key, field);
+  if (!reader.ok() || !js_value_present(value)) {
+    return out;
+  }
+  if (value.isNumber()) {
+    const double number = value.as<double>();
+    if (integral && number >= -2147483648.0 && number <= 2147483647.0 && std::floor(number) == number) {
+      out.kind = FM_PIVOT_FILTER_OPERAND_KIND_INT;
+      out.as_int = static_cast<int32_t>(number);
+    } else {
+      out.kind = FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
+      out.as_double = number;
+    }
+  } else if (value.isString()) {
+    out.kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
+    out.text = reader.string_value(value, field);
+  } else {
+    reader.fail_type(field, "a Number or a String");
+  }
+  return out;
+}
+
+/// Sets `o[key]` from one operand slot of a C filter spec.
+void set_filter_operand(emscripten::val& o, const char* key, int32_t kind, int32_t as_int, double as_double,
+                        const char* text) {
+  switch (kind) {
+    case FM_PIVOT_FILTER_OPERAND_KIND_INT:
+      o.set(key, as_int);
+      break;
+    case FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE:
+      o.set(key, as_double);
+      break;
+    case FM_PIVOT_FILTER_OPERAND_KIND_TEXT:
+      o.set(key, std::string(text != nullptr ? text : ""));
+      break;
+    default:
+      o.set(key, emscripten::val::null());
+      break;
+  }
 }
 
 }  // namespace
@@ -806,32 +861,26 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
   // than `js_pull_string`'s empty-string default, which the C ABI's own
   // required-field check does not treat the same as a missing argument.
   std::string field_name;
-  std::string value_text;
   JsNarrowNumericReader reader("addPivotFilter");
   const char* field_name_ptr = reader.optional_string(spec, "fieldName", field_name, "pivotFilter.fieldName");
-  const double value_double = reader.number(spec, "valueDouble", 0.0, "pivotFilter.valueDouble");
-  const char* value_text_ptr = reader.optional_string(spec, "valueText", value_text, "pivotFilter.valueText");
-  const double value_high_double = reader.number(spec, "valueHighDouble", 0.0, "pivotFilter.valueHighDouble");
-  std::string value_high_text;
-  const char* value_high_text_ptr =
-      reader.optional_string(spec, "valueHighText", value_high_text, "pivotFilter.valueHighText");
 
   fm_pivot_filter_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   c_spec.axis = static_cast<fm_pivot_axis_t>(reader.u32(spec, "axis", 0U, "pivotFilter.axis"));
   c_spec.field_name = field_name_ptr;
   c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.u32(spec, "type", 0U, "pivotFilter.type"));
-  // valueKind defaults to NONE (-1) when omitted; the C ABI rejects NONE
-  // for non-range filters.
-  c_spec.value_kind = static_cast<fm_pivot_filter_operand_kind_t>(
-      reader.i32(spec, "valueKind", FM_PIVOT_FILTER_OPERAND_KIND_NONE, "pivotFilter.valueKind"));
-  c_spec.value_int = reader.i32(spec, "valueInt", 0, "pivotFilter.valueInt");
-  c_spec.value_double = value_double;
-  c_spec.value_text = value_text_ptr;
-  c_spec.value_high_kind = static_cast<fm_pivot_filter_operand_kind_t>(
-      reader.i32(spec, "valueHighKind", FM_PIVOT_FILTER_OPERAND_KIND_NONE, "pivotFilter.valueHighKind"));
-  c_spec.value_high_int = reader.i32(spec, "valueHighInt", 0, "pivotFilter.valueHighInt");
-  c_spec.value_high_double = value_high_double;
-  c_spec.value_high_text = value_high_text_ptr;
+  // A count filter takes a whole number; every other numeric operand is a double.
+  const bool count_type =
+      c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_TOP_10 || c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT;
+  const FilterOperand value = pull_filter_operand(reader, spec, "value", "pivotFilter.value", count_type);
+  const FilterOperand value_high = pull_filter_operand(reader, spec, "valueHigh", "pivotFilter.valueHigh", false);
+  c_spec.value_kind = value.kind;
+  c_spec.value_int = value.as_int;
+  c_spec.value_double = value.as_double;
+  c_spec.value_text = value.kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT ? value.text.c_str() : nullptr;
+  c_spec.value_high_kind = value_high.kind;
+  c_spec.value_high_int = value_high.as_int;
+  c_spec.value_high_double = value_high.as_double;
+  c_spec.value_high_text = value_high.kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT ? value_high.text.c_str() : nullptr;
   c_spec.data_field_index = reader.u32(spec, "dataFieldIndex", 0U, "pivotFilter.dataFieldIndex");
 
   if (!reader.ok()) {
@@ -858,14 +907,9 @@ emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, u
   js_set_cstr(o, "fieldName", spec.field_name);
   o.set("type", static_cast<int32_t>(spec.type));
   o.set("dataFieldIndex", spec.data_field_index);
-  js_set_index_or_null(o, "valueKind", static_cast<int32_t>(spec.value_kind));
-  o.set("valueInt", spec.value_int);
-  o.set("valueDouble", spec.value_double);
-  js_set_cstr(o, "valueText", spec.value_text);
-  js_set_index_or_null(o, "valueHighKind", static_cast<int32_t>(spec.value_high_kind));
-  o.set("valueHighInt", spec.value_high_int);
-  o.set("valueHighDouble", spec.value_high_double);
-  js_set_cstr_or_null(o, "valueHighText", spec.value_high_text);
+  set_filter_operand(o, "value", spec.value_kind, spec.value_int, spec.value_double, spec.value_text);
+  set_filter_operand(o, "valueHigh", spec.value_high_kind, spec.value_high_int, spec.value_high_double,
+                     spec.value_high_text);
   return o;
 }
 

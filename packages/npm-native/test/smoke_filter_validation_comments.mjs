@@ -24,7 +24,7 @@ const RANGE = { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 0 };
 test('filter, sort and validation enums keep their C ordinals', async () => {
   const mod = await getModule();
   assert.equal(mod.FilterKind.Icon, 6);
-  assert.equal(mod.FilterOperator.GreaterThan, 5);
+  assert.equal(mod.ComparisonOperator.GreaterThan, 6);
   assert.equal(mod.DynamicFilterType.YearToDate, 18);
   assert.equal(mod.DynamicFilterType.M12, 34);
   assert.equal(mod.SortBy.Icon, 3);
@@ -96,7 +96,7 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
           columnOffset: 0,
           kind: mod.FilterKind.Custom,
           customCount: 1,
-          operator1: mod.FilterOperator.NotEqual,
+          operator1: mod.ComparisonOperator.NotEqual,
           value1: 'b',
         },
       ],
@@ -107,7 +107,7 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
     });
     const custom = wb.sheet(0).getAutoFilter();
     assert.equal(custom.columns[0].kind, 2);
-    assert.equal(custom.columns[0].operator1, mod.FilterOperator.NotEqual);
+    assert.equal(custom.columns[0].operator1, mod.ComparisonOperator.NotEqual);
     assert.equal(custom.columns[0].value1, 'b');
     assert.equal(custom.sort.conditions.length, 1);
     assert.equal(custom.sort.conditions[0].descending, true);
@@ -187,7 +187,8 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     const text = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Text, text: '5' });
     assert.equal(text.valid, false, 'text "5" is text, not a number');
     assert.throws(() => wb.sheet(99).validateValue(0, 0, { kind: mod.ValueKind.Number, number: 1 }), isFormulonError);
-    assert.throws(() => wb.sheet(0).validateValue(0, 0, null), TypeError);
+    assert.equal(wb.sheet(0).validateValue(0, 0, null).valid, true, 'null is a blank value');
+    assert.throws(() => wb.sheet(0).validateValue(0, 0, undefined), TypeError);
     assert.throws(
       () => wb.sheet(0).validateValue(0, 0, { number: 50 }),
       TypeError,
@@ -244,13 +245,13 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       row: 2,
       col: 3,
       personId: ANN,
-      created: '2026-01-01T10:00:00.00',
+      created: { year: 2026, month: 1, day: 1, hour: 10, minute: 0, second: 0 },
       text: 'Review this',
     });
     wb.sheet(0).addThreadedComment({
       id: REPLY,
       personId: BOB,
-      created: '2026-01-01T11:00:00.00',
+      created: { year: 2026, month: 1, day: 1, hour: 11, minute: 0, second: 0 },
       text: '@Ann done',
       parentId: THREAD,
       mentions: [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }],

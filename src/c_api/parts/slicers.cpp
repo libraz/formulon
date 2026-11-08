@@ -41,7 +41,9 @@ namespace {
 fm_status_t to_spec(const fm_slicer_t& slicer, formulon::SlicerSpec& spec) {
   spec.fields = slicer.fields;
   if ((slicer.fields & FM_SLICER_FIELD_SORT_ORDER) != 0U) {
-    if (auto rc = check_enum_domain(slicer.sort_order, 0, FM_SLICER_SORT_ORDER_ASCENDING, "sort_order"); rc != 0) {
+    if (auto rc = check_enum_domain(slicer.sort_order, FM_SLICER_SORT_ORDER_ASCENDING, FM_SLICER_SORT_ORDER_DESCENDING,
+                                    "sort_order");
+        rc != 0) {
       return rc;
     }
   }

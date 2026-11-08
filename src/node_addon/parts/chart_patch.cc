@@ -450,7 +450,7 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   ReadDoubleOp(reader, spec, "logBase", patch.log_base_op, patch.log_base);
   ReadI32Op(reader, spec, "crosses", patch.crosses_op, patch.crosses);
   patch.crosses_at = reader.Double(spec, "crossesAt", 0.0);
-  ReadStringOp(reader, spec, "tickLabelPosition", arena, patch.tick_label_position_op, patch.tick_label_position);
+  ReadI32Op(reader, spec, "tickLabelPosition", patch.tick_label_position_op, patch.tick_label_position);
   if (!reader.ok()) {
     return env.Undefined();
   }

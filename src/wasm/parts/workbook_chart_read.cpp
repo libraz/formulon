@@ -186,7 +186,7 @@ constexpr RdField kAxisRd[] = {
     RD_TITLE("title", fm_chart_axis_t, title, kTitleRd),
     RD("majorGridlines", fm_chart_axis_t, major_gridlines, kBool),
     RD("minorGridlines", fm_chart_axis_t, minor_gridlines, kBool),
-    RD("tickLabelPosition", fm_chart_axis_t, tick_label_position, kStrOrNull),
+    RD("tickLabelPosition", fm_chart_axis_t, tick_label_position, kEnumOrNull),
     RD_END,
 };
 
@@ -473,7 +473,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
     return val::object();
   }
   val o = val::object();
-  o.set("domain", val(std::string(info.is_xy != 0 ? "xy" : "category")));
+  o.set("domain", val(info.is_xy != 0 ? 1 : 0));
   o.set("pointCount", val(info.point_count));
 
   const bool numeric = info.category_value_count != 0;

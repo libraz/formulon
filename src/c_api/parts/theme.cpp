@@ -30,6 +30,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::store_cstr;
@@ -55,6 +56,25 @@ static_assert(FM_COLOR_RESOLUTION_THEME_UNPARSEABLE == static_cast<int>(formulon
               "colour resolution drift");
 static_assert(FM_COLOR_RESOLUTION_AUTO_CONTEXT == static_cast<int>(formulon::ColorResolution::kAutoContext),
               "colour resolution drift");
+static_assert(FM_EFFECTIVE_STYLE_SOURCE_CELL == static_cast<int>(formulon::StyleSource::kCell), "style source drift");
+static_assert(FM_EFFECTIVE_STYLE_SOURCE_ROW == static_cast<int>(formulon::StyleSource::kRow), "style source drift");
+static_assert(FM_EFFECTIVE_STYLE_SOURCE_COLUMN == static_cast<int>(formulon::StyleSource::kColumn),
+              "style source drift");
+static_assert(FM_EFFECTIVE_STYLE_SOURCE_DEFAULT == static_cast<int>(formulon::StyleSource::kDefault),
+              "style source drift");
+static_assert(FM_THEME_SOURCE_PART == static_cast<int>(formulon::ThemeSource::kPart), "theme source drift");
+static_assert(FM_THEME_SOURCE_DEFAULT == static_cast<int>(formulon::ThemeSource::kDefault), "theme source drift");
+static_assert(FM_THEME_SOURCE_UNPARSEABLE == static_cast<int>(formulon::ThemeSource::kUnparseable),
+              "theme source drift");
+
+// The script-font calls name a font set; `FM_FONT_SCHEME_NONE` names none.
+fm_status_t check_font_set(int32_t scheme) {
+  if (scheme != FM_FONT_SCHEME_MAJOR && scheme != FM_FONT_SCHEME_MINOR) {
+    return invalid_argument("scheme must be FM_FONT_SCHEME_MAJOR or FM_FONT_SCHEME_MINOR",
+                            "scheme=" + std::to_string(scheme));
+  }
+  return 0;
+}
 
 }  // namespace
 
@@ -128,44 +148,56 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
   return finish_status(wb->workbook().set_theme_fonts(model));
 }
 
-extern "C" fm_status_t fm_workbook_get_theme_script_font_count(const fm_workbook_t* wb, int32_t major,
+extern "C" fm_status_t fm_workbook_get_theme_script_font_count(const fm_workbook_t* wb, int32_t scheme,
                                                                size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_font_set(scheme); rc != 0) {
+    return rc;
+  }
+  const bool major = scheme == FM_FONT_SCHEME_MAJOR;
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   *out_count = loaded.source != formulon::ThemeSource::kPart
                    ? formulon::kOfficeScriptCount
-                   : (major != 0 ? loaded.theme.major_scripts : loaded.theme.minor_scripts).size();
+                   : (major ? loaded.theme.major_scripts : loaded.theme.minor_scripts).size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t* wb, int32_t major, size_t idx,
+extern "C" fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t* wb, int32_t scheme, size_t idx,
                                                             const char** out_script, const char** out_typeface) {
   clear_last_error();
   if (wb == nullptr || out_script == nullptr || out_typeface == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_font_set(scheme); rc != 0) {
+    return rc;
+  }
+  const bool major = scheme == FM_FONT_SCHEME_MAJOR;
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   const bool from_part = loaded.source == formulon::ThemeSource::kPart;
   const std::vector<formulon::ThemeScriptFont>& scripts =
-      major != 0 ? loaded.theme.major_scripts : loaded.theme.minor_scripts;
+      major ? loaded.theme.major_scripts : loaded.theme.minor_scripts;
   if (auto rc = check_index(idx, from_part ? scripts.size() : formulon::kOfficeScriptCount, "index"); rc != 0) {
     return rc;
   }
   TextStore& store = fresh_read_scratch(wb);
   *out_script = store_cstr(store, from_part ? scripts[idx].script : formulon::office_script(idx));
-  *out_typeface = store_cstr(store, from_part ? scripts[idx].typeface : formulon::office_script_face(idx, major != 0));
+  *out_typeface = store_cstr(store, from_part ? scripts[idx].typeface : formulon::office_script_face(idx, major));
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb, int32_t major, const char* script,
+extern "C" fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb, int32_t scheme, const char* script,
                                                          int32_t* out_present, const char** out_typeface) {
   clear_last_error();
   if (wb == nullptr || script == nullptr || out_present == nullptr || out_typeface == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_font_set(scheme); rc != 0) {
+    return rc;
+  }
+  const bool major = scheme == FM_FONT_SCHEME_MAJOR;
   if (auto rc = check_utf8({script}); rc != 0) {
     return rc;
   }
@@ -174,12 +206,12 @@ extern "C" fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   const bool from_part = loaded.source == formulon::ThemeSource::kPart;
   const std::vector<formulon::ThemeScriptFont>& scripts =
-      major != 0 ? loaded.theme.major_scripts : loaded.theme.minor_scripts;
+      major ? loaded.theme.major_scripts : loaded.theme.minor_scripts;
   const std::size_t count = from_part ? scripts.size() : formulon::kOfficeScriptCount;
   for (std::size_t i = 0; i < count; ++i) {
     if ((from_part ? std::string_view(scripts[i].script) : formulon::office_script(i)) == script) {
-      *out_typeface = publish_scratch(
-          wb, from_part ? scripts[i].typeface : std::string(formulon::office_script_face(i, major != 0)));
+      *out_typeface =
+          publish_scratch(wb, from_part ? scripts[i].typeface : std::string(formulon::office_script_face(i, major)));
       *out_present = 1;
       return 0;
     }
@@ -187,16 +219,20 @@ extern "C" fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t major, const char* script,
+extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t scheme, const char* script,
                                                          const char* typeface) {
   clear_last_error();
   if (wb == nullptr || script == nullptr || typeface == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_font_set(scheme); rc != 0) {
+    return rc;
+  }
+  const bool major = scheme == FM_FONT_SCHEME_MAJOR;
   if (auto rc = check_utf8({script, typeface}); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().set_theme_script_font(major != 0, script, typeface));
+  return finish_status(wb->workbook().set_theme_script_font(major, script, typeface));
 }
 
 extern "C" fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb) {

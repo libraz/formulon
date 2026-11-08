@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/table_style_defaults.h"
 #include "styles.h"
@@ -17,6 +18,7 @@
 #include "utils/strings.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
@@ -24,51 +26,13 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::kTableStyleElementTypeTokens;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::ordinal_of;
+using formulon::c_api::parts::token_of;
 
 namespace {
-
-/// `ST_TableStyleType`, in schema order.
-constexpr std::string_view kTableStyleTypes[] = {
-    "wholeTable",
-    "headerRow",
-    "totalRow",
-    "firstColumn",
-    "lastColumn",
-    "firstRowStripe",
-    "secondRowStripe",
-    "firstColumnStripe",
-    "secondColumnStripe",
-    "firstHeaderCell",
-    "lastHeaderCell",
-    "firstTotalCell",
-    "lastTotalCell",
-    "firstSubtotalColumn",
-    "secondSubtotalColumn",
-    "thirdSubtotalColumn",
-    "firstSubtotalRow",
-    "secondSubtotalRow",
-    "thirdSubtotalRow",
-    "blankRow",
-    "firstColumnSubheading",
-    "secondColumnSubheading",
-    "thirdColumnSubheading",
-    "firstRowSubheading",
-    "secondRowSubheading",
-    "thirdRowSubheading",
-    "pageFieldLabels",
-    "pageFieldValues",
-};
-
-bool is_table_style_type(std::string_view type) {
-  for (const std::string_view known : kTableStyleTypes) {
-    if (known == type) {
-      return true;
-    }
-  }
-  return false;
-}
 
 /// True for a built-in style name such as `TableStyleMedium2` or
 /// `PivotStyleDark28`, which a custom style may not take.
@@ -161,7 +125,7 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
   elements.reserve(style.elements.size());
   for (const formulon::TableStyleElement& element : style.elements) {
     fm_table_style_element_t c{};
-    c.type = element.type.c_str();
+    c.type = ordinal_of(kTableStyleElementTypeTokens, element.type, -1);
     c.size = element.size;
     c.has_dxf_index = element.dxf_id.has_value() ? 1 : 0;
     c.dxf_index = element.dxf_id.value_or(0U);
@@ -229,11 +193,13 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
   next.elements.reserve(style->element_count);
   for (uint32_t i = 0; i < style->element_count; ++i) {
     const fm_table_style_element_t& in = style->elements[i];
-    const std::string_view type = in.type != nullptr ? in.type : "";
-    const std::string context = "element=" + std::to_string(i) + " type=" + std::string(type);
-    if (!is_table_style_type(type)) {
-      return invalid_argument("unknown element type", context);
+    if (auto rc = check_enum_domain(in.type, FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE,
+                                    FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_VALUES, "type");
+        rc != 0) {
+      return rc;
     }
+    const std::string_view type = token_of(kTableStyleElementTypeTokens, in.type);
+    const std::string context = "element=" + std::to_string(i) + " type=" + std::string(type);
     for (const formulon::TableStyleElement& earlier : next.elements) {
       if (earlier.type == type) {
         return invalid_argument("element type repeated", context);

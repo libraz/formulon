@@ -106,8 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `InvalidArgumentError` (also a `ValueError`) and `WorkbookClosedError` for a
   call after `close()`. Code that catches `FormulonError` keeps working.
   `Workbook.closed` replaces `is_valid`, `Workbook.save(format=...)` replaces
-  `save_as`, and `Value.to_python()` returns an `ExcelError` for an Excel
-  error value. `Workbook.sheet(key)`, `wb[key]`, `len(wb)`, iteration and `in`
+  `save_as`, and `formulon.to_native(value)` returns an `ExcelError` for an
+  Excel error value. `Workbook.sheet(key)`, `wb[key]`, `len(wb)`, iteration and `in`
   give `Sheet` handles that carry every sheet-scoped method (see
   [Sheet handles](#sheet-handles)). The text of exception messages changed;
   match on the exception class, not the message.
@@ -191,7 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `add_border` takes a record and `add_cell_xf` a `CellXfInput`.
 - **Values:** `formulon.toNative(value)` converts a `Value` to a plain
   JavaScript value (`null`, number, boolean or string; an error, array,
-  reference or lambda stays a `Value`).
+  reference or lambda stays a `Value`; Python's
+  `formulon.to_native(value)` does the same).
 - **Spans:** row and column operations (`setColumnWidth`, `insertRows`,
   `deleteRows` and the others that take a first and last index or a count)
   also accept a span string such as `"B:D"` or `"2:5"`.
@@ -340,7 +341,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the output extension.
 - **Behaviour:** a conditional formatting rule whose id is already in use gets
   a fresh id instead of being refused. A JavaScript `Date` written to a
-  General cell gets the date format `m/d/yyyy` (id 14) at UTC midnight and
+  General cell gets the date format `m/d/yyyy` (id 14) at local midnight and
   `m/d/yyyy h:mm` (id 22) otherwise; a Python `date` takes 14, a `datetime`
   22 and a `time` `h:mm:ss` (21).
 
@@ -448,6 +449,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new `fm_tristate_t` (`FM_TRISTATE_DEFAULT` 0 is Excel's default,
   `FM_TRISTATE_FALSE` 1, `FM_TRISTATE_TRUE` 2); read records and `_patch_t`
   booleans stay `int32_t` 0 or 1.
+- **C ABI, JavaScript, Python:** one table per concept replaces the per-feature
+  copies, and a table's 0 is the file format's default. `ComparisonOperator`
+  (C `fm_comparison_operator_t`) is the operator of a `cellIs` rule, a
+  validation and an AutoFilter condition, and replaces `CfOperator`,
+  `ValidationOperator` and `FilterOperator`. `DatePeriod` (`fm_date_period_t`)
+  is the `timePeriod` of a conditional-format rule and replaces
+  `CfTimePeriod`. `BlanksAs` (`fm_blanks_as_t`) covers a chart's `blanksAs` and
+  a sparkline group's `emptyCellsAs` and replaces `ChartBlanksAs` and
+  `SparklineEmptyCells`. The new numbers are listed under [Enums](#enums).
+  A custom AutoFilter condition states its operator (Python
+  `AutoFilterColumn.operator1` and `operator2` default to `None` in an unused
+  slot), and the setter rejects `Between` and `NotBetween` with
+  `InvalidArgument`.
+- **C ABI, JavaScript, Python:** a string that named a closed set is an enum
+  number: the totals-row function of a table column
+  (`TableTotalsRowFunction`), a table style element type
+  (`TableStyleElementType`), an axis tick-label position
+  (`ChartTickLabelPosition`), the domain of chart data (`ChartDomain`), the
+  platform of a width model (`WidthPlatform`) and the icon set of a custom
+  icon level (`IconSetName`, which gains the four sets only a custom level
+  takes). In C each field is an `int32_t` holding the matching typedef
+  (`fm_table_totals_row_function_t`, `fm_table_style_element_type_t`,
+  `fm_chart_tick_label_position_t`, `fm_width_platform_t`,
+  `fm_icon_set_name_t`); an absent axis tick-label position reads
+  `FM_CHART_TICK_LABEL_POSITION_ABSENT` (-1). `fm_icon_set_t` and
+  `FM_ICON_SET_*` are `fm_icon_set_name_t` and `FM_ICON_SET_NAME_*`.
+- **C ABI, JavaScript, Python:** a bare number with a fixed set of meanings is
+  an enum: `PhoneticType` and `PhoneticAlignment` (`fm_phonetic_type_t`,
+  `fm_phonetic_alignment_t`, values unchanged), `PageOrder`
+  (`Pagination.pageOrder`, `fm_page_order_t`), `FunctionAvailability`
+  (Python `MergedFunctionMetadata.availability`) and `ChartPointState`
+  (Python `ChartDataSeries.states`). `PaperSize` names the eight codes the
+  engine knows (Letter 1, Legal 5, A3 8, A4 9, A5 11, B4 12, B5 13, A6 70);
+  `paperSize` stays a number, because other codes round-trip. C also has
+  `fm_effective_style_source_t` and `fm_theme_source_t`. The mask fields of
+  pivot date grouping are typed `PivotDatePeriodMask` in JavaScript (an OR of
+  `PivotDatePeriod` bits) and are an `IntFlag` in Python.
+- **JavaScript, Python:** a pivot filter states its operand as `value` and
+  `valueHigh` (number, string or `null`) instead of `valueKind`, `valueInt`,
+  `valueDouble`, `valueText` and `valueHighText`; the enum
+  `PivotFilterOperandKind` is removed from both bindings. `valueHigh` is the
+  upper bound of a `Between` filter. C keeps the operand union. A pivot cell's
+  `value` and a shared item's `value` are native values (a number, string,
+  boolean or `null`) instead of a `Value`; `cell.value.text` is `cell.value`.
+  A pivot cell has no date flag, because the layout has none: a date label
+  reads as its serial and the cell's `numberFormat` says it is a date, as a
+  sheet cell does. `PivotCacheSharedItem` has `isDate` (Python `is_date`), and
+  the value of a date item is its serial in both bindings.
+- **JavaScript, Python:** a date-time input takes the same union everywhere: a
+  `CivilTime` or a `Date` (Python `date` or `datetime`). A `Date` is read
+  through its local getters (`getFullYear()` to `getSeconds()`, milliseconds
+  dropped), as Python reads a naive `datetime`; `setValue(Date)` and
+  `setPinnedNow(Date)` used its UTC fields. An Invalid Date throws
+  `RangeError`. The slots are `setValue`, `setPinnedNow`,
+  `ThreadedCommentInput.created`, `PivotCache.setRecordValue`,
+  `PivotCache.addFieldSharedItem` (the `{ date: true }` option is gone: a
+  `Date` is a date and a number is a number), the `start` and `end` of
+  `PivotDateGroupInput`, and `evaluateCfRange(range, { today })` (Python
+  `evaluate_cf_range(range, today=None)`; the positional `todaySerial` is
+  gone, and an omitted `today` is the pinned clock, else the local date).
+  Reads return one type: `ThreadedComment.created` and the group bounds are
+  `CivilTime` (Python `datetime`), `null` when the stamp is absent or cannot
+  be parsed, and `getDate` returns a `Date` whose local fields carry the
+  serial, so `ws.setValue(r, c, ws.getDate(r, c))` round-trips. C keeps
+  serials and `fm_civil_time_t`. Python refuses an aware `datetime` with
+  `ValueError` in every one of these slots, as a cell write already did.
+- **JavaScript, Python:** `evaluateCfFormula` returns a `boolean`, as
+  `evaluate_cf_formula` does in Python. `Value.to_python()` is removed;
+  `formulon.to_native(value)` is the counterpart of `toNative`. `setError`
+  accepts an `ExcelError` as well as an `ErrorCode`, and `validateValue`
+  (`validate_value`) accepts the value union of `setValue`.
+- **C ABI, JavaScript, Python:** the theme script font takes `scheme`, a
+  `FontScheme` (`Major` or `Minor`), in place of the `major` boolean:
+  `wb.setThemeScriptFont({ scheme, script, typeface })`,
+  `wb.getThemeScriptFont({ scheme, script })`, Python
+  `set_theme_script_font(scheme=..., ...)`, and `int32_t scheme` in the C
+  functions. `FontScheme.None` and any other value are `InvalidArgument`.
+- **C ABI:** `fm_sheet_evaluate_formula` is removed; use
+  `fm_sheet_evaluate_formula_array` and take the top-left cell of a result.
+  The bindings' `evaluateFormula` does that.
 
 ### Sheet handles
 
@@ -500,14 +581,14 @@ argument is a keyword-only argument list there (see
 | Before | After |
 |---|---|
 | `setIterative(enabled, maxIterations, maxChange)` | `updateIterative(patch)`; an omitted field keeps the stored value |
-| `setPinnedNow(y, m, d, h, mi, s)` and `clearPinnedNow()` | `setPinnedNow(time)`; `null` clears the pin. Python takes and returns a naive `datetime.datetime` (`set_pinned_now(None)` clears it) |
+| `setPinnedNow(y, m, d, h, mi, s)` and `clearPinnedNow()` | `setPinnedNow(time)` with a `CivilTime` or a `Date` read through its local getters; `null` clears the pin. Python takes and returns a naive `datetime.datetime` (`set_pinned_now(None)` clears it) |
 | `setSheetPrintTitles(sheet, repeatRows, repeatCols)` / `getSheetPrintTitles(sheet)` | `ws.setPrintTitles(titles)` / `ws.getPrintTitles()` with `PrintTitles = { rows: Span \| null, columns: Span \| null }` and `Span = { first, last }` (0-based, inclusive); `null` clears. `Pagination.printTitles` has the same type |
 | `pivotSetGrandTotals(sheet, pivot, rows, cols)` | `ws.pivot(pivot).updateGrandTotals({ rows, columns })` |
 | `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { author, text })` writes the comment, empty text included; `ws.removeComment(row, col)` removes it and throws `NotFound` when the cell has none |
 | `setWorkbookProtection(p)` / `setSheetProtection(sheet, p)` (an all-zero record cleared them) | `wb.setWorkbookProtection(null)` and `ws.setSheetProtection(null)` remove them; an all-zero workbook-protection record still does. Sheet protection is described under [Behaviour changes](#behaviour-changes-under-an-unchanged-name) |
 | `setCellPhoneticRuns(sheet, row, col, runs)` | `ws.setCellPhoneticRuns(row, col, runs)`; `null` and `[]` clear |
 | `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink(row, col, { target, location?, display?, tooltip? })` sets or replaces the cell's link and `null` removes it; a `null` target is an in-workbook link and requires `location`. `setHyperlinkRange(rect, link)` likewise |
-| `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ major, script, typeface })` |
+| `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ scheme, script, typeface })`, with `scheme` a `FontScheme` (`Major` or `Minor`) |
 | `editThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
 | `addThreadedComment(sheet, partial)` | `ws.addThreadedComment(input)` with `ThreadedCommentInput` |
 | `setDefinedName`, `setDefinedNameScoped`, `setDefinedNameAttrs` | `setDefinedName({ name, formula, scope?, comment?, hidden? })`; `scope` is a sheet index or name, and `null` or omitted is workbook scope. `removeDefinedName(name, scope?)` takes the same. Setting an existing name replaces every attribute |
@@ -554,31 +635,65 @@ argument is `null` (Python `None`) instead. Reading the removed member gives
 | Enum | Removed member | Replaced by |
 |---|---|---|
 | `ChartAxisCrosses` | `Absent` | `null` |
-| `ChartBlanksAs` | `Absent` | `null` |
+| `BlanksAs` (was `ChartBlanksAs`) | `Absent` | `null` |
 | `ChartLegendPosition` | `None` | `null` (no legend) |
 | `ChartTitleKind` | `None` | `null` (no title) |
-| `PivotFilterOperandKind` (was `PivotFilterValueKind`) | `None` (`-1`) | `null` |
 | `ShapePaint` | `Unset` | `null` |
 
 `ChartRole` gains `Title` (6) and `AxisTitle` (7), and `unresolved.source` is
 a `ChartRole` (C `int32_t` `fm_chart_role_t`) instead of a string. `PivotFilterType`
-is `PivotFilterKind`. `ChartPlotType.Extended` marks the chartex plots, and
+is `PivotFilterKind`, and its relative-period members are spelled as
+`DatePeriod` and `DynamicFilterType` spell them (`Tomorrow` to `LastMonth`,
+`NextQuarter` to `YearToDate`, `Q1` to `Q4`, `M1` to `M12`; C
+`FM_PIVOT_FILTER_KIND_TODAY`, Python `TODAY`). Only the comparison kinds
+(`DateEqual`, `DateBetween`, `DateOlderThan` and the rest) keep the `Date`
+prefix. `ChartPlotType.Extended` marks the chartex plots, and
 the numeric enum `ChartExtendedLayout` (`BoxWhisker` 0, `ClusteredColumn` 1,
 `Funnel` 2, `ParetoLine` 3, `RegionMap` 4, `Sunburst` 5, `Treemap` 6,
 `Waterfall` 7) is read from `extendedLayout` (`ChartExtendedLayout | null`),
 with `isExtended`; Python has the same in snake_case.
 
-The numbers of these enums moved down to start at 0, and two others swapped
-order. Code that writes the numbers instead of the names changes meaning:
+A closed set that has a default in the file format puts that default at 0 and
+lists the rest in the order of the format's schema. Where one concept had a
+table per feature, one table now serves them all. The numbers moved, so code
+that writes the numbers instead of the names changes meaning:
 
 | Enum | Before | After |
 |---|---|---|
 | `AnchorEditAs` | `TwoCell` 0, `OneCell` 1, `Absolute` 2 | `OneCell` 0, `TwoCell` 1, `Absolute` 2 |
-| `SlicerSortOrder` | `Ascending` 0, `Descending` 1 | `Descending` 0, `Ascending` 1 |
 | `ChartAxisCrosses` | `AutoZero` 1, `Min` 2, `Max` 3, `At` 4 | `AutoZero` 0, `Min` 1, `Max` 2, `At` 3 |
-| `ChartBlanksAs` | `Gap` 1, `Zero` 2, `Span` 3 | `Gap` 0, `Zero` 1, `Span` 2 |
-| `ChartLegendPosition` | `Bottom` 1, `Top` 2, `Left` 3, `Right` 4, `TopRight` 5 | `Bottom` 0, `Top` 1, `Left` 2, `Right` 3, `TopRight` 4 |
 | `ShapePaint` | `Solid` 1, `None` 2, `Other` 3 | `Solid` 0, `None` 1, `Other` 2 |
+| `ChartLegendPosition` | `Bottom` 1, `Top` 2, `Left` 3, `Right` 4, `TopRight` 5 | `Right` 0, `Bottom` 1, `TopRight` 2, `Left` 3, `Top` 4 |
+| `BlanksAs` for a chart's `blanksAs` (was `ChartBlanksAs`) | `Gap` 1, `Zero` 2, `Span` 3 | `Zero` 0, `Gap` 1, `Span` 2 |
+| `BlanksAs` for a sparkline group's `emptyCellsAs` (was `SparklineEmptyCells`) | `Gap` 0, `Zero` 1, `Span` 2 | `Zero` 0, `Gap` 1, `Span` 2 |
+| `PivotSortOrder` | `Descending` 0, `Ascending` 1, `Manual` 2 | `Manual` 0, `Ascending` 1, `Descending` 2 |
+| `ComparisonOperator` for a `cellIs` rule's `operator` (was `CfOperator`) | `LessThan` 0, `LessThanOrEqual` 1, `Equal` 2, `NotEqual` 3, `GreaterThanOrEqual` 4, `GreaterThan` 5, `Between` 6, `NotBetween` 7 | `Between` 0, `NotBetween` 1, `Equal` 2, `NotEqual` 3, `LessThan` 4, `LessThanOrEqual` 5, `GreaterThan` 6, `GreaterThanOrEqual` 7 |
+| `ComparisonOperator` for a validation's `operator` (was `ValidationOperator`) | `Between` 0, `NotBetween` 1, `Equal` 2, `NotEqual` 3, `GreaterThan` 4, `LessThan` 5, `GreaterThanOrEqual` 6, `LessThanOrEqual` 7 | `Between` 0, `NotBetween` 1, `Equal` 2, `NotEqual` 3, `LessThan` 4, `LessThanOrEqual` 5, `GreaterThan` 6, `GreaterThanOrEqual` 7 |
+| `ComparisonOperator` for an AutoFilter condition (was `FilterOperator`) | `Equal` 0, `LessThan` 1, `LessThanOrEqual` 2, `NotEqual` 3, `GreaterThanOrEqual` 4, `GreaterThan` 5 | `Equal` 2, `NotEqual` 3, `LessThan` 4, `LessThanOrEqual` 5, `GreaterThan` 6, `GreaterThanOrEqual` 7 |
+| `DatePeriod` for a rule's `timePeriod` (was `CfTimePeriod`) | `Today` 0, `Yesterday` 1, `Tomorrow` 2, `Last7Days` 3, `ThisWeek` 4, `LastWeek` 5, `NextWeek` 6, `ThisMonth` 7, `LastMonth` 8, `NextMonth` 9 | `Today` 0, `Yesterday` 1, `Tomorrow` 2, `Last7Days` 3, `ThisMonth` 4, `LastMonth` 5, `NextMonth` 6, `ThisWeek` 7, `LastWeek` 8, `NextWeek` 9 |
+
+`SlicerSortOrder` keeps `Ascending` 0 and `Descending` 1. A custom AutoFilter
+condition always states its operator and takes only the six members that are
+not ranges; `Between` and `NotBetween` there throw `FormulonError` with
+`StatusCode.InvalidArgument`. `descending` stays a boolean on sort conditions.
+
+Strings that named a closed set are numbers too. A string passed to one of
+these fields throws `TypeError`:
+
+| Enum | Field | Before | After |
+|---|---|---|---|
+| `TableTotalsRowFunction` | `TableColumn.totalsRowFunction`, `TableColumnTotalsInput.function` | `'none'`, `'sum'`, `'min'`, `'max'`, `'average'`, `'count'`, `'countNums'`, `'stdDev'`, `'var'`, `'custom'` | `None` 0, `Sum` 1, `Min` 2, `Max` 3, `Average` 4, `Count` 5, `CountNumbers` 6, `StdDev` 7, `Var` 8, `Custom` 9 |
+| `TableStyleElementType` | `TableStyleElement.type` | the OOXML text (`'wholeTable'`, `'headerRow'`, `'firstRowStripe'` and the rest) | `WholeTable` 0, `HeaderRow` 1, `TotalRow` 2, `FirstColumn` 3, `LastColumn` 4, `FirstRowStripe` 5, `SecondRowStripe` 6 and so on in the order of the OOXML schema, to `PageFieldValues` 27 |
+| `ChartTickLabelPosition` | `ChartAxis.tickLabelPosition` and its patch | `'nextTo'`, `'high'`, `'low'`, `'none'` | `NextTo` 0, `High` 1, `Low` 2, `None` 3 |
+| `ChartDomain` | `ChartData.domain` | `'category'`, `'xy'` | `Category` 0, `Xy` 1 |
+| `WidthPlatform` | `WidthModel.platform` | `'win'`, `'mac'` | `Win` 0, `Mac` 1 |
+| `IconSetName` | `CfIconInput.iconSet` | the OOXML text (`'3Arrows'`, `'3Stars'` and the rest) | the existing numbers 0 to 16, and `ThreeStars` 17, `ThreeTriangles` 18, `FiveBoxes` 19, `NoIcons` 20 |
+
+Only a custom icon level takes the four sets above 16; a rule's own `iconSet`
+still rejects them with `InvalidArgument`. An absent tick-label position is
+still `null`, and `ChartTickLabelPosition.None` means no labels are drawn.
+Python has the same tables as `IntEnum`s (`TableTotalsRowFunction` was a
+`Literal` alias).
 
 `ChartLegendPosition` now shares `Bottom`, `Top`, `Left` and `Right` with the
 new `ChartAxisPosition`, which replaces the strings `'b' | 't' | 'l' | 'r'` of
@@ -639,7 +754,7 @@ These parameters can no longer be passed by position.
 | `Table.set_column_totals` | `function`, `label`, `formula` |
 | `Workbook.update_table_style_defaults` | `table_style`, `pivot_style` |
 | `Workbook.update_iterative` | `enabled`, `max_iterations`, `max_change` |
-| `Workbook.get_theme_script_font` | `major`, `script` |
+| `Workbook.get_theme_script_font` | `scheme`, `script` |
 
 `Sheet.add_table` takes the fields of the JavaScript `TableInput` (`range` is a
 `SheetRect`, `columns` the column names); `Sheet.set_selection` takes a
@@ -722,7 +837,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 - **JavaScript, Python:** `removeMergeAt` and `removeHyperlinkAt` are removed
   in favour of `removeMerge` and `removeHyperlink`. `getDefinedName` and
   `removeDefinedName` take an optional `scope`, `getThemeScriptFont` and
-  `setThemeScriptFont` take `{ major, script }`, `Chart.setType` defaults
+  `setThemeScriptFont` take `{ scheme, script }`, `Chart.setType` defaults
   `grouping`, and `Pivot.setFieldSort` and `Pivot.addFieldItem` take an
   `options` object.
 
@@ -731,9 +846,15 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 - Formula text read back carries a leading `=` where Excel shows one:
   `getFormulaR1C1`, `PivotCacheField.formula`, table totals-row formulas,
   calculated-item formulas, conditional-format and validation `formula1` /
-  `formula2`, array-formula text and `getLambdaText`. Ranges (sparklines,
-  chart titles and series, print areas) stay without it. Input accepts text
-  with or without the `=`.
+  `formula2`, formula thresholds of colour scales, data bars and icon sets,
+  sparkline formulas, `SparklineGroup.dateAxisRef`, array-formula text and
+  `getLambdaText`. C reads carry it too. Ranges (chart titles and series,
+  print areas) stay without it. Input accepts text with or without the `=`,
+  in C as well.
+- A sparkline group reads an absent `displayEmptyCellsAs` as zero, the schema
+  default, and leaves zero implicit on write. It used to read as gap and leave
+  gap implicit, so a file without the attribute now draws blanks as zero, as
+  Excel does, and a gap group is written with `displayEmptyCellsAs="gap"`.
 - `removeDrawing`, `Chart.getData` and `Chart.getPreview` report
   `NotFound` for a missing id instead of `InvalidArgument`. So does every
   pivot-cache lookup by `cacheId`, which makes a missing id `NotFound` on
@@ -1093,7 +1214,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_dependents` | `fm_sheet_get_dependents` |
 | `fm_workbook_evaluate_cf_formula` | `fm_sheet_evaluate_cf_formula` |
 | `fm_workbook_evaluate_formula_array` | `fm_sheet_evaluate_formula_array` |
-| `fm_workbook_evaluate_formula` | `fm_sheet_evaluate_formula` |
+| `fm_workbook_evaluate_formula` | removed; `fm_sheet_evaluate_formula_array` returns the same result as an array |
 | `fm_workbook_excel_profile_id` | `fm_workbook_get_profile_id` |
 | `fm_workbook_external_link_at` | `fm_workbook_get_external_link` |
 | `fm_workbook_external_link_count` | `fm_workbook_get_external_link_count` |
@@ -2098,6 +2219,9 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_sheet_clear_auto_filter`, the table AutoFilter clear | `fm_sheet_clear_auto_filter_criteria`, `fm_sheet_clear_table_auto_filter_criteria` |
 | the `fm_workbook_*table*` functions | `fm_sheet_*table*` with a sheet-local `table_index`; `fm_workbook_find_table` is unchanged |
 | `fm_sheet_set_pivot_anchor` taking a rectangle | takes one cell, as `fm_pivot_spec_t.anchor` does |
+| `fm_sheet_evaluate_formula` (top-left cell only) | removed; `fm_sheet_evaluate_formula_array` returns the array and a caller takes element (0, 0) |
+| `fm_sheet_set_cell_phonetic_properties` and `fm_sheet_get_cell_phonetic_properties` taking `uint32_t` type and alignment | `int32_t` `fm_phonetic_type_t` and `fm_phonetic_alignment_t`; a value outside the set is `FM_STATUS_INVALID_ARGUMENT` |
+| `fm_workbook_get_theme_script_font_count`, `_at`, `fm_workbook_get_theme_script_font`, `fm_workbook_set_theme_script_font` taking `int32_t major` | take `int32_t scheme`, an `fm_font_scheme_t`; `FM_FONT_SCHEME_NONE` and any other value are `FM_STATUS_INVALID_ARGUMENT` |
 
 Parameter names changed without a change of type: the out-parameter that
 returns a sheet's index is `out_sheet_index` (it was `out_index`), the one
@@ -2113,11 +2237,13 @@ where one exists, and the other members start at 0.
 | Typedef | Before | After |
 |---|---|---|
 | `fm_anchor_edit_as_t` | `TWO_CELL` 0, `ONE_CELL` 1, `ABSOLUTE` 2 | `ONE_CELL` 0, `TWO_CELL` 1, `ABSOLUTE` 2 |
-| `fm_slicer_sort_order_t` | `ASCENDING` 0, `DESCENDING` 1 | `DESCENDING` 0, `ASCENDING` 1 |
 | `fm_chart_axis_crosses_t` | `ABSENT` 0, `AUTO_ZERO` 1, `MIN` 2, `MAX` 3, `AT` 4 | `ABSENT` -1, `AUTO_ZERO` 0, `MIN` 1, `MAX` 2, `AT` 3 |
 | `fm_chart_bar_direction_t` | `ABSENT` 0, `COL` 1, `BAR` 2 | `ABSENT` -1, `COL` 0, `BAR` 1 |
-| `fm_chart_blanks_as_t` | `ABSENT` 0, `GAP` 1, `ZERO` 2, `SPAN` 3 | `ABSENT` -1, `GAP` 0, `ZERO` 1, `SPAN` 2 |
-| `fm_chart_legend_position_t` | `NONE` 0, `BOTTOM` 1, `TOP` 2, `LEFT` 3, `RIGHT` 4, `TOP_RIGHT` 5 | `NONE` -1, `BOTTOM` 0, `TOP` 1, `LEFT` 2, `RIGHT` 3, `TOP_RIGHT` 4 |
+| `fm_blanks_as_t` (was `fm_chart_blanks_as_t`; also replaces `fm_sparkline_empty_cells_t`) | chart: `ABSENT` 0, `GAP` 1, `ZERO` 2, `SPAN` 3; sparkline: `GAP` 0, `ZERO` 1, `SPAN` 2 | `ABSENT` -1, `ZERO` 0, `GAP` 1, `SPAN` 2 |
+| `fm_chart_legend_position_t` | `NONE` 0, `BOTTOM` 1, `TOP` 2, `LEFT` 3, `RIGHT` 4, `TOP_RIGHT` 5 | `NONE` -1, `RIGHT` 0, `BOTTOM` 1, `TOP_RIGHT` 2, `LEFT` 3, `TOP` 4 |
+| `fm_pivot_sort_order_t` | `DESCENDING` 0, `ASCENDING` 1, `MANUAL` 2 | `MANUAL` 0, `ASCENDING` 1, `DESCENDING` 2 |
+| `fm_comparison_operator_t` (replaces `fm_cf_operator_t`, `fm_validation_operator_t` and `fm_filter_operator_t`) | one table per feature (see the JavaScript table under [Enums](#enums)) | `BETWEEN` 0, `NOT_BETWEEN` 1, `EQUAL` 2, `NOT_EQUAL` 3, `LESS_THAN` 4, `LESS_THAN_OR_EQUAL` 5, `GREATER_THAN` 6, `GREATER_THAN_OR_EQUAL` 7 |
+| `fm_date_period_t` (was `fm_cf_time_period_t`) | `TODAY` 0, `YESTERDAY` 1, `TOMORROW` 2, `LAST_7_DAYS` 3, `THIS_WEEK` 4, `LAST_WEEK` 5, `NEXT_WEEK` 6, `THIS_MONTH` 7, `LAST_MONTH` 8, `NEXT_MONTH` 9 | `TODAY` 0, `YESTERDAY` 1, `TOMORROW` 2, `LAST_7_DAYS` 3, `THIS_MONTH` 4, `LAST_MONTH` 5, `NEXT_MONTH` 6, `THIS_WEEK` 7, `LAST_WEEK` 8, `NEXT_WEEK` 9 |
 | `fm_shape_paint_t` | `UNSET` 0, `SOLID` 1, `NONE` 2, `OTHER` 3 | `UNSET` -1, `SOLID` 0, `NONE` 1, `OTHER` 2 |
 
 New enum typedefs replace `#define` sets and plain integers:
@@ -2128,6 +2254,20 @@ orientation prints portrait), `fm_external_link_kind_t` (the values of
 `PAGE_BREAK_PREVIEW` 1, `PAGE_LAYOUT` 2), `fm_cf_data_bar_direction_t`
 (`CONTEXT` 0, `LEFT_TO_RIGHT` 1, `RIGHT_TO_LEFT` 2) and
 `fm_cf_data_bar_axis_position_t` (`AUTOMATIC` 0, `MIDDLE` 1, `NONE` 2).
+The closed sets that were text or `#define` constants are enums as well:
+`fm_table_totals_row_function_t` (`NONE` 0, `SUM` 1, `MIN` 2, `MAX` 3,
+`AVERAGE` 4, `COUNT` 5, `COUNT_NUMBERS` 6, `STD_DEV` 7, `VAR` 8, `CUSTOM` 9),
+`fm_table_style_element_type_t` (`WHOLE_TABLE` 0 to `PAGE_FIELD_VALUES` 27),
+`fm_chart_tick_label_position_t` (`ABSENT` -1, `NEXT_TO` 0, `HIGH` 1, `LOW` 2,
+`NONE` 3), `fm_width_platform_t` (`WIN` 0, `MAC` 1), `fm_page_order_t`
+(`DOWN_THEN_OVER` 0, `OVER_THEN_DOWN` 1), `fm_phonetic_type_t` and
+`fm_phonetic_alignment_t` (the values of the `FM_PHONETIC_*` constants they
+replace), `fm_effective_style_source_t` (`CELL` 0, `ROW` 1, `COLUMN` 2,
+`DEFAULT` 3), `fm_theme_source_t` (`PART` 0, `DEFAULT` 1, `UNPARSEABLE` 2) and
+`fm_icon_set_name_t`, which gains `3_STARS` 17, `3_TRIANGLES` 18, `5_BOXES` 19
+and `NO_ICONS` 20. The `fm_pivot_filter_kind_t` members for relative periods
+drop the `DATE_` infix (`FM_PIVOT_FILTER_KIND_TODAY`); their values are
+unchanged.
 
 **Zero-initialised records.** A record that was zeroed and then filled in
 field by field reads differently when a field is left at 0:
@@ -2135,9 +2275,13 @@ field by field reads differently when a field is left at 0:
 | Field | 0 meant | 0 means |
 |---|---|---|
 | `fm_picture_insert_spec_t` anchor `edit_as` | `FM_ANCHOR_EDIT_AS_TWO_CELL` | `FM_ANCHOR_EDIT_AS_ONE_CELL` |
-| a legend position (`fm_chart_legend_position_t`) | no legend | `FM_CHART_LEGEND_BOTTOM` |
+| a legend position (`fm_chart_legend_position_t`) | no legend | `FM_CHART_LEGEND_POSITION_RIGHT` |
 | a shape fill or line (`fm_shape_paint_t`) | unset | `FM_SHAPE_PAINT_SOLID` |
-| chart blanks, crossing and bar direction | absent | gap, automatic zero and column |
+| chart blanks, crossing and bar direction | absent | zero, automatic zero and column |
+| a sparkline group's `empty_cells_as` | `FM_SPARKLINE_EMPTY_CELLS_GAP` | `FM_BLANKS_AS_ZERO` |
+| a pivot field sort order (`fm_pivot_sort_order_t`) | descending | manual |
+| a conditional-format rule's `op` | less than | between |
+| an AutoFilter condition's operator | equal | between, which the setter rejects |
 
 Set the `ABSENT`, `NONE` or `UNSET` member (`-1`) to say "not there".
 `fm_chart_display_patch_t` rejects `-1` as a value to set: clear the field
@@ -2166,6 +2310,12 @@ through its operation instead.
 | `fm_sparkline_group_t` | `sparkline_count` is `uint32_t` |
 | `fm_threaded_comment_patch_t` | new (see `fm_sheet_update_threaded_comment`) |
 | `fm_cell_xf_t` | `reading_order` is `int32_t` (an `fm_reading_order_t`) |
+| `fm_table_column_info_t` | `totals_row_function` is an `int32_t` `fm_table_totals_row_function_t` instead of text; the totals setter's function argument is the same enum |
+| `fm_table_style_element_t` | `type` is an `int32_t` `fm_table_style_element_type_t` instead of text |
+| `fm_chart_axis_t`, `fm_chart_axis_patch_t` | `tick_label_position` is an `int32_t` `fm_chart_tick_label_position_t` (`FM_CHART_TICK_LABEL_POSITION_ABSENT` -1 when the axis has no element) instead of text |
+| `fm_width_model_t` | `platform` is an `int32_t` `fm_width_platform_t` instead of text |
+| `fm_cf_icon_t` | `icon_set` is an `int32_t` `fm_icon_set_name_t` instead of text |
+| `fm_cf_rule_t`, `fm_data_validation_t`, the AutoFilter column | the operator fields are an `fm_comparison_operator_t`; the sparkline group's `empty_cells_as` is an `fm_blanks_as_t` and `FM_BLANKS_AS_ABSENT` is `FM_STATUS_INVALID_ARGUMENT` there |
 | `fm_styles_batch_t` | `font_count`, `fill_count`, `border_count`, `cell_xf_count`, `num_fmt_count` are `uint32_t` |
 
 **Additive changes (no ABI break).** `fm_convert_civil_to_serial` and
@@ -2204,9 +2354,8 @@ order.
   `evaluate_typed_formula` and `enum_name` in Python. A `Workbook` iterates
   its sheets, `Workbook.load` accepts an `ArrayBuffer` or typed array, and
   `getMemoryUsage` is on the WebAssembly package as on the native one.
-- Enum tables for `CfRuleType`, `CfOperator`, `CfTimePeriod`,
-  `CfValueObjectType`, `IconSetName`, `ValidationType`, `ValidationOperator`
-  and `ParseErrorCode`.
+- Enum tables for `CfRuleType`, `ComparisonOperator`, `DatePeriod`,
+  `CfValueObjectType`, `IconSetName`, `ValidationType` and `ParseErrorCode`.
 - Record fields that hold a cell or a range accept A1 text (`'B2'`,
   `'A1:C3'`) in JavaScript and Python, including `PivotInput.anchor`,
   validation and conditional-format ranges. An extra positional argument
@@ -2440,10 +2589,10 @@ order.
   `m/d/yy` under en-US and `yyyy/m/d` under ja-JP, so adding that code
   returns 14, and the ECMA-376 spelling `mm-dd-yy` is stored as a custom
   format. `get(add(code))` returns `code`.
-- `evaluate_cf_range` with `today_serial` omitted evaluates time-period rules
-  against today instead of disabling them, and the JavaScript
-  `evaluateCfRange` no longer requires `todaySerial`. Passing `NaN` still
-  disables those rules.
+- `evaluate_cf_range` with `today` omitted evaluates time-period rules against
+  the pinned clock, else the local date, instead of disabling them, and the
+  JavaScript `evaluateCfRange(range, { today })` takes the date as an option
+  that may be left out.
 - `fm_get_function_metadata` (`getFunctionMetadata`, `function_metadata`) reports the
   argument counts formula entry accepts for every built-in, including the
   functions it used to report as `0` with no upper bound (`IF` 2 to 3,
@@ -2565,6 +2714,13 @@ order.
   role `format` covers; and the `fm_sheet_remove_auto_filter`,
   `fm_sheet_remove_row_break`, `fm_sheet_remove_column_break` and
   `fm_workbook_clear_pinned_now` C functions.
+- `fm_sheet_evaluate_formula`, which returned the top-left cell of a result:
+  use `fm_sheet_evaluate_formula_array`. `CfOperator`, `ValidationOperator`,
+  `FilterOperator`, `CfTimePeriod`, `ChartBlanksAs`, `SparklineEmptyCells` and
+  `PivotFilterOperandKind` in the bindings, with the C typedefs they mirrored
+  where the tables merged (see [Enums](#enums)); `Value.to_python()`; the
+  `valueKind`, `valueInt`, `valueDouble`, `valueText` and `valueHighText` keys
+  of a pivot filter; the `todaySerial` argument of `evaluateCfRange`.
 
 ### Fixed
 

@@ -637,11 +637,11 @@ describe('data validation', () => {
       ws.addValidation({
         ranges: 'C1:C3',
         type: f.ValidationType.Whole,
-        operator: f.ValidationOperator.GreaterThan,
+        operator: f.ComparisonOperator.GreaterThan,
         formula1: '1',
       });
       const dv = ws.listValidations()[0];
-      assert.equal(dv.operator, f.ValidationOperator.GreaterThan);
+      assert.equal(dv.operator, f.ComparisonOperator.GreaterThan);
     });
   });
 });
@@ -653,12 +653,12 @@ describe('conditional formats and auto filters', () => {
       ws.addCfRule({
         type: f.CfRuleType.CellIs,
         ranges: 'A1:A3',
-        operator: f.CfOperator.GreaterThanOrEqual,
+        operator: f.ComparisonOperator.GreaterThanOrEqual,
         formula1: '1',
         dxfIndex: dxf,
       });
       const rule = ws.listCfRules()[0];
-      assert.equal(rule.operator, f.CfOperator.GreaterThanOrEqual);
+      assert.equal(rule.operator, f.ComparisonOperator.GreaterThanOrEqual);
       assert.equal(rule.dxfIndex, dxf);
       lacksKeys(rule, ['op', 'dxfId']);
     });
@@ -700,18 +700,18 @@ describe('conditional formats and auto filters', () => {
             kind: f.FilterKind.Custom,
             customCount: 2,
             customAnd: true,
-            operator1: f.FilterOperator.LessThan,
+            operator1: f.ComparisonOperator.LessThan,
             value1: '20',
-            operator2: f.FilterOperator.NotEqual,
+            operator2: f.ComparisonOperator.NotEqual,
             value2: '5',
           },
         ],
       });
       const column = ws.getAutoFilter().columns[0];
       assert.equal(column.columnOffset, 1);
-      assert.equal(column.operator1, f.FilterOperator.LessThan);
+      assert.equal(column.operator1, f.ComparisonOperator.LessThan);
       assert.equal(column.value1, '20');
-      assert.equal(column.operator2, f.FilterOperator.NotEqual);
+      assert.equal(column.operator2, f.ComparisonOperator.NotEqual);
       assert.equal(column.value2, '5');
       hasKeys(column, [
         'topValue',

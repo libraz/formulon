@@ -140,7 +140,7 @@ TEST(FormulonCApiTable, CreateDefaultsAndReadBack) {
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 1, &column), 0);
   EXPECT_STREQ(column.name, "Amount");
-  EXPECT_STREQ(column.totals_row_function, "none");
+  EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
   EXPECT_STREQ(column.totals_row_label, "");
   EXPECT_STREQ(column.totals_row_formula, "");
   EXPECT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 2, &column), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -393,8 +393,10 @@ TEST(FormulonCApiTable, AddWithAnEmptyStyleNameCreatesNoStyleElement) {
 TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, nullptr, "Total", nullptr), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, "sum", nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total", nullptr),
+            0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t total = Value(wb.handle, 3, 1);
@@ -417,37 +419,70 @@ TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_sheet_get_table_column(reloaded.handle, 0, 0, 0, &column), 0);
   EXPECT_STREQ(column.totals_row_label, "Total");
-  EXPECT_STREQ(column.totals_row_function, "none");
+  EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
   ASSERT_EQ(fm_sheet_get_table_column(reloaded.handle, 0, 0, 1, &column), 0);
-  EXPECT_STREQ(column.totals_row_function, "sum");
+  EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
   EXPECT_EQ(Info(reloaded.handle).totals_row_count, 1U);
   EXPECT_EQ(Formula(reloaded.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
 
-  // Each built-in token maps to its SUBTOTAL number; `none` clears the cell.
+  // Each built-in function maps to its SUBTOTAL number; `none` clears the cell.
   const struct {
-    const char* token;
+    int32_t function;
     const char* formula;
-  } kCases[] = {{"average", "=SUBTOTAL(101,[Amount])"}, {"countNums", "=SUBTOTAL(102,[Amount])"},
-                {"count", "=SUBTOTAL(103,[Amount])"},   {"max", "=SUBTOTAL(104,[Amount])"},
-                {"min", "=SUBTOTAL(105,[Amount])"},     {"stdDev", "=SUBTOTAL(107,[Amount])"},
-                {"var", "=SUBTOTAL(110,[Amount])"}};
+  } kCases[] = {{FM_TABLE_TOTALS_ROW_FUNCTION_AVERAGE, "=SUBTOTAL(101,[Amount])"},
+                {FM_TABLE_TOTALS_ROW_FUNCTION_COUNT_NUMBERS, "=SUBTOTAL(102,[Amount])"},
+                {FM_TABLE_TOTALS_ROW_FUNCTION_COUNT, "=SUBTOTAL(103,[Amount])"},
+                {FM_TABLE_TOTALS_ROW_FUNCTION_MAX, "=SUBTOTAL(104,[Amount])"},
+                {FM_TABLE_TOTALS_ROW_FUNCTION_MIN, "=SUBTOTAL(105,[Amount])"},
+                {FM_TABLE_TOTALS_ROW_FUNCTION_STD_DEV, "=SUBTOTAL(107,[Amount])"},
+                {FM_TABLE_TOTALS_ROW_FUNCTION_VAR, "=SUBTOTAL(110,[Amount])"}};
   for (const auto& c : kCases) {
-    ASSERT_EQ(fm_sheet_set_table_column_totals(reloaded.handle, 0, 0, 1, c.token, nullptr, nullptr), 0) << c.token;
+    ASSERT_EQ(fm_sheet_set_table_column_totals(reloaded.handle, 0, 0, 1, c.function, nullptr, nullptr), 0)
+        << c.function;
     EXPECT_EQ(Formula(reloaded.handle, 3, 1), c.formula);
   }
-  ASSERT_EQ(fm_sheet_set_table_column_totals(reloaded.handle, 0, 0, 1, "none", nullptr, nullptr), 0);
+  ASSERT_EQ(
+      fm_sheet_set_table_column_totals(reloaded.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, nullptr, nullptr),
+      0);
   EXPECT_EQ(Formula(reloaded.handle, 3, 1), "");
   EXPECT_EQ(Value(reloaded.handle, 3, 1).kind, FM_VALUE_KIND_BLANK);
+}
+
+TEST(FormulonCApiTable, TotalsRowFunctionOrdinalsFollowTheSchemaOrder) {
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_NONE, 0);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_SUM, 1);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_MIN, 2);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_MAX, 3);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_AVERAGE, 4);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_COUNT, 5);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_COUNT_NUMBERS, 6);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_STD_DEV, 7);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_VAR, 8);
+  EXPECT_EQ(FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, 9);
+}
+
+TEST(FormulonCApiTable, ColumnTotalsRejectAFunctionOutsideTheEnumeration) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
+  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, -1, nullptr, nullptr), kInvalidArgument);
+  EXPECT_EQ(
+      fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM + 1, nullptr, nullptr),
+      kInvalidArgument);
+  fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
+  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 1, &column), 0);
+  EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
 }
 
 TEST(FormulonCApiTable, ColumnTotalsRefuseAnOutOfRangeTableSheetOrColumn) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 2, "sum", nullptr, nullptr),
+  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 2, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
             FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 1, 0, "sum", nullptr, nullptr),
+  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 1, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
             FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 6, 0, 0, "sum", nullptr, nullptr),
+  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 6, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   EXPECT_EQ(fm_sheet_get_table_column(wb.handle, 6, 0, 0, &column), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
@@ -457,13 +492,16 @@ TEST(FormulonCApiTable, ColumnTotalsRefuseAnOutOfRangeTableSheetOrColumn) {
 TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, "custom", nullptr, nullptr), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, "median", nullptr, nullptr), kInvalidArgument);
-  EXPECT_NE(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, "custom", nullptr, "=SUM(("), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, "custom", nullptr, "=SUM(Sales[Amount])*2"), 0);
+  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, nullptr),
+            kInvalidArgument);
+  EXPECT_NE(
+      fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, "=SUM(("), 0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
+                                             "=SUM(Sales[Amount])*2"),
+            0);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 1, &column), 0);
-  EXPECT_STREQ(column.totals_row_function, "custom");
+  EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM);
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Amount])*2");
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUM([Amount])*2");
 
@@ -476,7 +514,7 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   WorkbookGuard reloaded;
   Load(saved, reloaded);
   ASSERT_EQ(fm_sheet_get_table_column(reloaded.handle, 0, 0, 1, &column), 0);
-  EXPECT_STREQ(column.totals_row_function, "custom");
+  EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM);
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Amount])*2");
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
   const fm_value_t v = Value(reloaded.handle, 3, 1);
@@ -490,8 +528,10 @@ TEST(FormulonCApiTable, TurningTheTotalsRowOnRestoresItsCells) {
   // "never shown" marker.
   WorkbookGuard source;
   CreateSalesTable(source);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(source.handle, 0, 0, 0, nullptr, "Total", nullptr), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(source.handle, 0, 0, 1, "max", nullptr, nullptr), 0);
+  ASSERT_EQ(
+      fm_sheet_set_table_column_totals(source.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total", nullptr), 0);
+  ASSERT_EQ(
+      fm_sheet_set_table_column_totals(source.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_MAX, nullptr, nullptr), 0);
   EXPECT_EQ(Value(source.handle, 3, 1).kind, FM_VALUE_KIND_BLANK) << "no cell while the totals row is off";
   const std::vector<std::uint8_t> patched =
       RewriteEntry(Save(source.handle), "xl/tables/table1.xml", [](std::string xml) {
@@ -532,8 +572,10 @@ TEST(FormulonCApiTable, TotalsFormulaEscapesSpecialColumnNames) {
   std::size_t index = 0;
   ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "T", columns, 2, "", 1, 1, &index),
             0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, "sum", nullptr, nullptr), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, "sum", nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
   EXPECT_EQ(Formula(wb.handle, 2, 0), "=SUBTOTAL(109,[Q1 '#est])");
   EXPECT_EQ(Formula(wb.handle, 2, 1), "=SUBTOTAL(109,[a,b])");
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
@@ -619,10 +661,10 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
 
   const fm_table_style_element_t elements[] = {
-      {"wholeTable", 1U, 1, static_cast<uint32_t>(dxf)},
-      {"headerRow", 1U, 1, static_cast<uint32_t>(dxf)},
-      {"firstRowStripe", 2U, 1, static_cast<uint32_t>(dxf)},
-      {"totalRow", 1U, 0, 0U},
+      {FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 1, static_cast<uint32_t>(dxf)},
+      {FM_TABLE_STYLE_ELEMENT_TYPE_HEADER_ROW, 1U, 1, static_cast<uint32_t>(dxf)},
+      {FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_STRIPE, 2U, 1, static_cast<uint32_t>(dxf)},
+      {FM_TABLE_STYLE_ELEMENT_TYPE_TOTAL_ROW, 1U, 0, 0U},
   };
   fm_table_style_t style = MakeTableStyle("Corporate", 0, 1, elements, 4U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
@@ -679,7 +721,7 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   EXPECT_EQ(got.pivot, 0);
   EXPECT_EQ(got.table, 1);
   ASSERT_EQ(got.element_count, 4U);
-  EXPECT_STREQ(got.elements[2].type, "firstRowStripe");
+  EXPECT_EQ(got.elements[2].type, FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_STRIPE);
   EXPECT_EQ(got.elements[2].size, 2U);
   EXPECT_EQ(got.elements[2].has_dxf_index, 1);
   EXPECT_EQ(got.elements[2].dxf_index, dxf);
@@ -695,16 +737,47 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   EXPECT_EQ(ExtractZipEntry(Save(reloaded.handle), "xl/styles.xml"), before);
 }
 
+TEST(FormulonCApiTableStyles, ElementTypeOrdinalsFollowTheSchemaOrder) {
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 0);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_HEADER_ROW, 1);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_TOTAL_ROW, 2);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN, 3);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_LAST_COLUMN, 4);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_STRIPE, 5);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_ROW_STRIPE, 6);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN_STRIPE, 7);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_COLUMN_STRIPE, 8);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_HEADER_CELL, 9);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_LAST_HEADER_CELL, 10);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_TOTAL_CELL, 11);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_LAST_TOTAL_CELL, 12);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_SUBTOTAL_COLUMN, 13);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_SUBTOTAL_COLUMN, 14);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_SUBTOTAL_COLUMN, 15);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_SUBTOTAL_ROW, 16);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_SUBTOTAL_ROW, 17);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_SUBTOTAL_ROW, 18);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_BLANK_ROW, 19);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_COLUMN_SUBHEADING, 20);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_COLUMN_SUBHEADING, 21);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_COLUMN_SUBHEADING, 22);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_SUBHEADING, 23);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_SECOND_ROW_SUBHEADING, 24);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_THIRD_ROW_SUBHEADING, 25);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_LABELS, 26);
+  EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_VALUES, 27);
+}
+
 TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t dxf = 0;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
-  const fm_table_style_element_t one[] = {{"wholeTable", 1U, 1, static_cast<uint32_t>(dxf)}};
+  const fm_table_style_element_t one[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 1, static_cast<uint32_t>(dxf)}};
   fm_table_style_t style = MakeTableStyle("Mine", 1, 1, one, 1U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
-  const fm_table_style_element_t two[] = {{"pageFieldLabels", 1U, 0, 0U},
-                                          {"blankRow", 1U, 1, static_cast<uint32_t>(dxf)}};
+  const fm_table_style_element_t two[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_LABELS, 1U, 0, 0U},
+                                          {FM_TABLE_STYLE_ELEMENT_TYPE_BLANK_ROW, 1U, 1, static_cast<uint32_t>(dxf)}};
   fm_table_style_t replaced = MakeTableStyle("MINE", 1, 0, two, 2U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &replaced), 0);
   std::size_t count = 0;
@@ -715,18 +788,23 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   EXPECT_STREQ(got.name, "MINE");
   EXPECT_EQ(got.table, 0);
   ASSERT_EQ(got.element_count, 2U);
-  EXPECT_STREQ(got.elements[0].type, "pageFieldLabels");
+  EXPECT_EQ(got.elements[0].type, FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_LABELS);
 
-  const fm_table_style_element_t unknown[] = {{"bodyRow", 1U, 0, 0U}};
-  fm_table_style_t bad = MakeTableStyle("Other", 1, 1, unknown, 1U);
+  const fm_table_style_element_t past_last[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_VALUES + 1, 1U, 0, 0U}};
+  fm_table_style_t bad = MakeTableStyle("Other", 1, 1, past_last, 1U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  const fm_table_style_element_t repeated[] = {{"wholeTable", 1U, 0, 0U}, {"wholeTable", 1U, 0, 0U}};
+  const fm_table_style_element_t negative[] = {{-1, 1U, 0, 0U}};
+  bad = MakeTableStyle("Other", 1, 1, negative, 1U);
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
+  const fm_table_style_element_t repeated[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 0, 0U},
+                                               {FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 0, 0U}};
   bad = MakeTableStyle("Other", 1, 1, repeated, 2U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  const fm_table_style_element_t zero_size[] = {{"firstRowStripe", 0U, 0, 0U}};
+  const fm_table_style_element_t zero_size[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_STRIPE, 0U, 0, 0U}};
   bad = MakeTableStyle("Other", 1, 1, zero_size, 1U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  const fm_table_style_element_t dangling[] = {{"wholeTable", 1U, 1, static_cast<uint32_t>(dxf + 1U)}};
+  const fm_table_style_element_t dangling[] = {
+      {FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 1, static_cast<uint32_t>(dxf + 1U)}};
   bad = MakeTableStyle("Other", 1, 1, dangling, 1U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
   bad = MakeTableStyle("TableStyleMedium2", 1, 1, nullptr, 0U);

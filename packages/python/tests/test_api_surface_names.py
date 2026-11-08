@@ -1242,10 +1242,9 @@ class EnumMemberTests(SurfaceTestCase):
         self.assertFalse(hasattr(formulon.PivotFilterKind, "LABEL_DATE"))
         self.assertEqual(formulon.PivotFilterKind.VALUE_TOP_COUNT, 0)
 
-    def test_pivot_filter_operand_enum_is_named_operand_kind(self) -> None:
-        self.assertTrue(hasattr(formulon, "PivotFilterOperandKind"))
-        self.assertFalse(hasattr(formulon, "PivotFilterValueKind"))
-        self.assertFalse(hasattr(formulon, "PivotFilterType"))
+    def test_pivot_filter_operand_enum_is_not_public(self) -> None:
+        self.assertFalse(hasattr(formulon, "PivotFilterOperandKind"))
+        self.assertTrue(hasattr(formulon, "PivotFilterKind"))
 
     def test_extended_chart_plot_type_and_layout(self) -> None:
         self.assertEqual(formulon.ChartPlotType.EXTENDED, 16)

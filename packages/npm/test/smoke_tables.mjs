@@ -47,8 +47,8 @@ test('table properties and style options read the style toggles, header and tota
     assert.deepEqual(
       table.columns.map((c) => [c.name, c.totalsRowFunction, c.totalsRowLabel, c.totalsRowFormula]),
       [
-        ['Product', 'none', '', ''],
-        ['Amount', 'none', '', ''],
+        ['Product', mod.TableTotalsRowFunction.None, '', ''],
+        ['Amount', mod.TableTotalsRowFunction.None, '', ''],
       ],
     );
   } finally {
@@ -85,16 +85,19 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
   const wb = salesWorkbook(mod, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 }, true);
   try {
     wb.sheet(0).table(0).setColumnTotals(0, { label: 'Total' });
-    wb.sheet(0).table(0).setColumnTotals(1, { function: 'sum' });
+    wb.sheet(0).table(0).setColumnTotals(1, { function: mod.TableTotalsRowFunction.Sum });
     assert.equal(wb.sheet(0).getFormula(3, 1), '=SUBTOTAL(109,[Amount])');
     wb.recalc();
     assert.equal(wb.sheet(0).getTypedValue(3, 1).number, 30);
     assert.equal(wb.sheet(0).getTypedValue(3, 0).text, 'Total');
-    expectFailure(() => wb.sheet(0).table(0).setColumnTotals(1, { function: 'median' }));
+    assert.throws(() => wb.sheet(0).table(0).setColumnTotals(1, { function: 'median' }), TypeError);
+    expectFailure(() => wb.sheet(0).table(0).setColumnTotals(1, { function: 99 }));
     const columns = wb.sheet(0).listTables()[0].getProperties().columns;
     assert.equal(columns[0].totalsRowLabel, 'Total');
-    assert.equal(columns[1].totalsRowFunction, 'sum');
-    wb.sheet(0).table(0).setColumnTotals(1, { function: 'custom', formula: '=MAX(Sales[Amount])' });
+    assert.equal(columns[1].totalsRowFunction, mod.TableTotalsRowFunction.Sum);
+    wb.sheet(0)
+      .table(0)
+      .setColumnTotals(1, { function: mod.TableTotalsRowFunction.Custom, formula: '=MAX(Sales[Amount])' });
     assert.equal(wb.sheet(0).listTables()[0].getProperties().columns[1].totalsRowFormula, '=MAX([Amount])');
   } finally {
     release(wb);
@@ -154,14 +157,15 @@ test('custom table styles round-trip and a table can use one', async () => {
       pivot: false,
       table: true,
       elements: [
-        { type: 'wholeTable', size: 1, dxfIndex: dxf },
-        { type: 'firstRowStripe', size: 2, dxfIndex: dxf },
-        { type: 'totalRow', size: 1 },
+        { type: mod.TableStyleElementType.WholeTable, size: 1, dxfIndex: dxf },
+        { type: mod.TableStyleElementType.FirstRowStripe, size: 2, dxfIndex: dxf },
+        { type: mod.TableStyleElementType.TotalRow, size: 1 },
       ],
     };
     wb.setTableStyle(style);
     expectFailure(() => wb.setTableStyle({ name: 'TableStyleMedium2' }));
-    expectFailure(() => wb.setTableStyle({ name: 'Bad', elements: [{ type: 'bodyRow' }] }));
+    assert.throws(() => wb.setTableStyle({ name: 'Bad', elements: [{ type: 'bodyRow' }] }), TypeError);
+    expectFailure(() => wb.setTableStyle({ name: 'Bad', elements: [{ type: 99 }] }));
     assert.equal(wb.listTableStyles().length, 1);
     wb.sheet(0).table(0).updateStyleOptions({ styleName: 'Corporate' });
     const defaults = wb.getTableStyleDefaults();
@@ -185,9 +189,9 @@ test('custom table styles round-trip and a table can use one', async () => {
     assert.deepEqual(
       got.elements.map((e) => [e.type, e.size, e.dxfIndex]),
       [
-        ['wholeTable', 1, got.elements[0].dxfIndex],
-        ['firstRowStripe', 2, got.elements[0].dxfIndex],
-        ['totalRow', 1, undefined],
+        [mod.TableStyleElementType.WholeTable, 1, got.elements[0].dxfIndex],
+        [mod.TableStyleElementType.FirstRowStripe, 2, got.elements[0].dxfIndex],
+        [mod.TableStyleElementType.TotalRow, 1, undefined],
       ],
     );
     assert.equal(reloaded.sheet(0).listTables()[0].getStyleOptions().styleName, 'Corporate');

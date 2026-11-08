@@ -107,7 +107,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
-  rule.op = 5;  // GreaterThan
+  rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
   rule.dxf_index_engaged = 1;
   rule.dxf_index = 1;
@@ -322,7 +322,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
-  rule.op = 5;  // GreaterThan
+  rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
   rule.dxf_index_engaged = 1;
   rule.dxf_index = 0;
@@ -338,7 +338,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   fm_cf_rule_t rule2 = FM_STRUCT_INIT(fm_cf_rule_t);
   rule2.type = 1;  // CellIs
   rule2.op_engaged = 1;
-  rule2.op = 5;  // GreaterThan
+  rule2.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule2.formula1 = "50";
   rule2.dxf_index_engaged = 1;
   rule2.dxf_index = 0;

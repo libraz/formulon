@@ -3,6 +3,7 @@
 // date grouping, number format), data fields, filters,
 // and the row/column field-order setters.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -857,6 +858,62 @@ Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
   return PivotCountResult(info, handle_, &fm_sheet_get_pivot_filter_count);
 }
 
+namespace {
+
+/// One pivot filter operand slot of a C filter spec as `number | string | null`.
+Napi::Value FilterOperandToJs(Napi::Env env, int32_t kind, int32_t as_int, double as_double, const char* text) {
+  switch (kind) {
+    case FM_PIVOT_FILTER_OPERAND_KIND_INT:
+      return Napi::Number::New(env, as_int);
+    case FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE:
+      return Napi::Number::New(env, as_double);
+    case FM_PIVOT_FILTER_OPERAND_KIND_TEXT:
+      return JsString(env, text != nullptr ? text : "");
+    default:
+      return env.Null();
+  }
+}
+
+/// One pivot filter operand read from a JS `number | string | null` slot.
+struct FilterOperand {
+  int32_t kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
+  int32_t as_int = 0;
+  double as_double = 0.0;
+  std::string text;
+};
+
+/// Reads `owner[key]`: absent or null is no operand, a Number is an INT when `integral` and whole, else a
+/// DOUBLE, a String is TEXT; anything else is a TypeError.
+FilterOperand ReadFilterOperand(CheckedSpecReader& reader, const Napi::Object& owner, const char* key,
+                                bool integral) {
+  FilterOperand out;
+  const Napi::Value value = reader.Get(owner, key);
+  if (!reader.ok() || value.IsUndefined() || value.IsNull()) {
+    return out;
+  }
+  if (value.IsNumber()) {
+    const double number = reader.Double(owner, key, 0.0);
+    if (!reader.ok()) {
+      return out;
+    }
+    if (integral && number >= -2147483648.0 && number <= 2147483647.0 && std::floor(number) == number) {
+      out.kind = FM_PIVOT_FILTER_OPERAND_KIND_INT;
+      out.as_int = static_cast<int32_t>(number);
+    } else {
+      out.kind = FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
+      out.as_double = number;
+    }
+  } else if (value.IsString()) {
+    reader.String(owner, key, &out.text);
+    out.kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
+  } else {
+    reader.FailType(key, "a Number or a String");
+  }
+  return out;
+}
+
+}  // namespace
+
 Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -875,14 +932,9 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   out.Set("fieldName", JsString(env, spec.field_name));
   out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));
   out.Set("dataFieldIndex", Napi::Number::New(env, spec.data_field_index));
-  out.Set("valueKind", JsIndexOrNull(env, static_cast<int32_t>(spec.value_kind)));
-  out.Set("valueInt", Napi::Number::New(env, spec.value_int));
-  out.Set("valueDouble", Napi::Number::New(env, spec.value_double));
-  out.Set("valueText", JsString(env, spec.value_text));
-  out.Set("valueHighKind", JsIndexOrNull(env, static_cast<int32_t>(spec.value_high_kind)));
-  out.Set("valueHighInt", Napi::Number::New(env, spec.value_high_int));
-  out.Set("valueHighDouble", Napi::Number::New(env, spec.value_high_double));
-  out.Set("valueHighText", JsStringOrNull(env, spec.value_high_text));
+  out.Set("value", FilterOperandToJs(env, spec.value_kind, spec.value_int, spec.value_double, spec.value_text));
+  out.Set("valueHigh", FilterOperandToJs(env, spec.value_high_kind, spec.value_high_int, spec.value_high_double,
+                                         spec.value_high_text));
   return out;
 }
 
@@ -897,11 +949,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
 
   CheckedSpecReader reader(env);
   std::string field_name;
-  std::string value_text;
   const bool has_field = reader.String(spec, "fieldName", &field_name);
-  const bool has_text = reader.String(spec, "valueText", &value_text);
-  std::string value_high_text;
-  const bool has_high_text = reader.String(spec, "valueHighText", &value_high_text);
 
   fm_pivot_filter_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
   c_spec.axis = static_cast<fm_pivot_axis_t>(reader.U32(spec, "axis", 0U));
@@ -910,14 +958,19 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   // not the coerced literal string "undefined".
   c_spec.field_name = has_field ? field_name.c_str() : nullptr;
   c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.U32(spec, "type", 0U));
-  c_spec.value_kind = static_cast<fm_pivot_filter_operand_kind_t>(reader.I32(spec, "valueKind", -1));
-  c_spec.value_int = reader.I32(spec, "valueInt", 0);
-  c_spec.value_double = reader.Double(spec, "valueDouble", 0.0);
-  c_spec.value_text = has_text ? value_text.c_str() : nullptr;
-  c_spec.value_high_kind = static_cast<fm_pivot_filter_operand_kind_t>(reader.I32(spec, "valueHighKind", -1));
-  c_spec.value_high_int = reader.I32(spec, "valueHighInt", 0);
-  c_spec.value_high_double = reader.Double(spec, "valueHighDouble", 0.0);
-  c_spec.value_high_text = has_high_text ? value_high_text.c_str() : nullptr;
+  // A count filter takes a whole number; every other numeric operand is a double.
+  const bool count_type =
+      c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_TOP_10 || c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT;
+  const FilterOperand value = ReadFilterOperand(reader, spec, "value", count_type);
+  const FilterOperand value_high = ReadFilterOperand(reader, spec, "valueHigh", false);
+  c_spec.value_kind = static_cast<fm_pivot_filter_operand_kind_t>(value.kind);
+  c_spec.value_int = value.as_int;
+  c_spec.value_double = value.as_double;
+  c_spec.value_text = value.kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT ? value.text.c_str() : nullptr;
+  c_spec.value_high_kind = static_cast<fm_pivot_filter_operand_kind_t>(value_high.kind);
+  c_spec.value_high_int = value_high.as_int;
+  c_spec.value_high_double = value_high.as_double;
+  c_spec.value_high_text = value_high.kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT ? value_high.text.c_str() : nullptr;
   c_spec.data_field_index = reader.U32(spec, "dataFieldIndex", 0U);
 
   if (!reader.ok()) {

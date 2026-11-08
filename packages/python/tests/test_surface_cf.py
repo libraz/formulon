@@ -10,6 +10,7 @@ from formulon import (
     Color,
     ColorKind,
     ColorScale,
+    ComparisonOperator,
     ConditionalFormatInput,
     DataBar,
     DxfInput,
@@ -33,7 +34,7 @@ class ConditionalFormatTests(unittest.TestCase):
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 2, 0)],
                     type=1,  # cellIs
-                    operator=4,  # greaterThan
+                    operator=ComparisonOperator.GREATER_THAN,
                     formula1="4",
                     dxf_index=dxf_index,
                 ),
@@ -78,7 +79,9 @@ class ConditionalFormatTests(unittest.TestCase):
             dxf_index = wb.ooxml.add_dxf(DxfInput())
             sqref = [CellRect(0, 0, 2, 0)]
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(ranges=sqref, type=1, operator=0, formula1="1", dxf_index=dxf_index)
+                ConditionalFormatInput(
+                    ranges=sqref, type=1, operator=ComparisonOperator.LESS_THAN, formula1="1", dxf_index=dxf_index
+                )
             )
             wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=5, rank=0, dxf_index=dxf_index))
             wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=6, std_dev=0.0))
