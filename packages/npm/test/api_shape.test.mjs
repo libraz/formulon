@@ -36,6 +36,7 @@ const NON_TABLE_MEMBERS = new Set([
   'FormulonError',
   'mergeFunctionMetadata',
   'evaluateFormula',
+  'evaluateTypedFormula',
   'toNative',
   'convertCivilToSerial',
   'convertSerialToCivil',
@@ -155,9 +156,9 @@ test('calls after dispose throw BindingInvalidHandle; disposed answers', async (
   wb.dispose();
   const code = formulon.StatusCode.BindingInvalidHandle;
   expectFormulonError(() => wb.listSheets().length, code);
-  expectFormulonError(() => wb.sheet(0).getValue(0, 0), code);
+  expectFormulonError(() => wb.sheet(0).getTypedValue(0, 0), code);
   expectFormulonError(() => wb.sheet(0).setNumber(0, 0, 1), code);
-  expectFormulonError(() => view.getValue('A1'), code);
+  expectFormulonError(() => view.getTypedValue('A1'), code);
   expectFormulonError(() => view.setValue('A1', 1), code);
   expectFormulonError(() => view.getFormula('A1'), code);
   expectFormulonError(() => view.setFormula('A1', '=1'), code);
@@ -167,7 +168,7 @@ test('out-of-range indices and missing natural keys throw by code', async () => 
   await withWorkbook((wb, formulon) => {
     const { StatusCode } = formulon;
     expectFormulonError(() => wb.sheet(1).name, StatusCode.SheetIndexOutOfRange);
-    expectFormulonError(() => wb.getFont(wb.listFonts().length), StatusCode.IndexOutOfRange);
+    expectFormulonError(() => wb.ooxml.getFont(wb.ooxml.listFonts().length), StatusCode.IndexOutOfRange);
     expectFormulonError(() => wb.removeDefinedName('nope', null), StatusCode.NotFound);
     assert.equal(wb.getDefinedName('nope', null), null);
   });
@@ -236,7 +237,7 @@ test('an exception thrown by a progress callback is rethrown from recalc', async
     wb.setIterativeProgress(null);
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     wb.recalc();
-    const value = wb.sheet(0).getValue(0, 0);
+    const value = wb.sheet(0).getTypedValue(0, 0);
     assert.equal(value.kind, formulon.ValueKind.Number);
     assert.ok(Math.abs(value.number - 10) < 0.001);
   } finally {
@@ -252,7 +253,7 @@ test('a FormulonError raised inside a progress callback reaches the caller uncha
     let raised;
     wb.setIterativeProgress(() => {
       try {
-        other.getCellXf(99999);
+        other.ooxml.getCellXf(99999);
       } catch (e) {
         raised = e;
         throw e;
@@ -279,18 +280,21 @@ test('each scalar kind carries only its own fields', async () => {
     wb.sheet(0).setText(0, 2, 'hi');
     wb.sheet(0).setFormula(0, 3, '=1/0');
     wb.recalc();
-    assert.deepStrictEqual({ ...wb.sheet(0).getValue(0, 0) }, { kind: ValueKind.Number, number: 42 });
-    assert.deepStrictEqual({ ...wb.sheet(0).getValue(0, 1) }, { kind: ValueKind.Bool, boolean: true });
-    assert.deepStrictEqual({ ...wb.sheet(0).getValue(0, 2) }, { kind: ValueKind.Text, text: 'hi' });
-    assert.deepStrictEqual({ ...wb.sheet(0).getValue(0, 3) }, { kind: ValueKind.Error, errorCode: ErrorCode.Div0 });
-    assert.deepStrictEqual({ ...wb.sheet(0).getValue(0, 4) }, { kind: ValueKind.Blank });
-    assert.deepEqual(Object.keys(wb.sheet(0).getValue(0, 3)).sort(), ['errorCode', 'kind']);
+    assert.deepStrictEqual({ ...wb.sheet(0).getTypedValue(0, 0) }, { kind: ValueKind.Number, number: 42 });
+    assert.deepStrictEqual({ ...wb.sheet(0).getTypedValue(0, 1) }, { kind: ValueKind.Bool, boolean: true });
+    assert.deepStrictEqual({ ...wb.sheet(0).getTypedValue(0, 2) }, { kind: ValueKind.Text, text: 'hi' });
+    assert.deepStrictEqual(
+      { ...wb.sheet(0).getTypedValue(0, 3) },
+      { kind: ValueKind.Error, errorCode: ErrorCode.Div0 },
+    );
+    assert.deepStrictEqual({ ...wb.sheet(0).getTypedValue(0, 4) }, { kind: ValueKind.Blank });
+    assert.deepEqual(Object.keys(wb.sheet(0).getTypedValue(0, 3)).sort(), ['errorCode', 'kind']);
   });
 });
 
-test('evaluateFormula returns a bare Value', async () => {
-  const { evaluateFormula, ValueKind } = await getFormulon();
-  assert.deepStrictEqual({ ...evaluateFormula('=SUM(1,2,3)') }, { kind: ValueKind.Number, number: 6 });
+test('evaluateTypedFormula returns a bare Value', async () => {
+  const { evaluateTypedFormula, ValueKind } = await getFormulon();
+  assert.deepStrictEqual({ ...evaluateTypedFormula('=SUM(1,2,3)') }, { kind: ValueKind.Number, number: 6 });
 });
 
 test('setValue(getValue(...)) round-trips every scalar kind', async () => {
@@ -301,9 +305,9 @@ test('setValue(getValue(...)) round-trips every scalar kind', async () => {
     wb.sheet(0).setFormula(0, 3, '=NA()');
     wb.recalc();
     for (let col = 0; col <= 4; col += 1) {
-      const before = wb.sheet(0).getValue(0, col);
+      const before = wb.sheet(0).getTypedValue(0, col);
       wb.sheet(0).setValue(1, col, before);
-      assert.deepStrictEqual({ ...wb.sheet(0).getValue(1, col) }, { ...before }, `column ${col}`);
+      assert.deepStrictEqual({ ...wb.sheet(0).getTypedValue(1, col) }, { ...before }, `column ${col}`);
     }
   });
 });
@@ -317,7 +321,7 @@ test('setValue dispatches each primitive to the matching setter', async () => {
       [-0, (r) => wb.sheet(0).setNumber(r, 0, -0)],
       [2 ** 53, (r) => wb.sheet(0).setNumber(r, 0, 2 ** 53)],
       [2 ** 63, (r) => wb.sheet(0).setNumber(r, 0, 2 ** 63)],
-      ['=A1', (r) => wb.sheet(0).setText(r, 0, '=A1')],
+      ['=A1', (r) => wb.sheet(0).setFormula(r, 0, '=A1')],
       ['', (r) => wb.sheet(0).setText(r, 0, '')],
       [true, (r) => wb.sheet(0).setBool(r, 0, true)],
       [false, (r) => wb.sheet(0).setBool(r, 0, false)],
@@ -334,11 +338,15 @@ test('setValue dispatches each primitive to the matching setter', async () => {
       wb.sheet(0).setValue(row, 1, value);
       direct(row + 1);
       assert.deepStrictEqual(
-        { ...wb.sheet(0).getValue(row, 1) },
-        { ...wb.sheet(0).getValue(row + 1, 0) },
+        { ...wb.sheet(0).getTypedValue(row, 1) },
+        { ...wb.sheet(0).getTypedValue(row + 1, 0) },
         `row ${index}`,
       );
-      assert.equal(wb.sheet(0).getFormula(row, 1), null, `row ${index} stored a formula`);
+      assert.equal(
+        wb.sheet(0).getFormula(row, 1),
+        wb.sheet(0).getFormula(row + 1, 0),
+        `row ${index} stored a different formula`,
+      );
     });
   });
 });
@@ -413,17 +421,19 @@ test('Sheet getValue / setValue / getFormula / setFormula address one cell by A1
   await withWorkbook((wb, { ValueKind }) => {
     const view = wb.sheet(0);
     view.setValue('B3', 5);
-    assert.deepStrictEqual({ ...wb.sheet(0).getValue(2, 1) }, { kind: ValueKind.Number, number: 5 });
-    assert.deepStrictEqual({ ...view.getValue('B3') }, { kind: ValueKind.Number, number: 5 });
+    assert.deepStrictEqual({ ...wb.sheet(0).getTypedValue(2, 1) }, { kind: ValueKind.Number, number: 5 });
+    assert.deepStrictEqual({ ...view.getTypedValue('B3') }, { kind: ValueKind.Number, number: 5 });
     view.setValue('C1', '=B3');
-    assert.equal(view.getFormula('C1'), null);
+    assert.equal(view.getFormula('C1'), '=B3');
+    view.setValue('C2', "'=B3");
+    assert.equal(view.getFormula('C2'), null);
     view.setFormula('D1', '=B3*2');
     assert.equal(wb.sheet(0).getFormula(0, 3), '=B3*2');
     assert.equal(view.getFormula('D1'), '=B3*2');
     wb.recalc();
-    assert.deepStrictEqual({ ...view.getValue('D1') }, { kind: ValueKind.Number, number: 10 });
+    assert.deepStrictEqual({ ...view.getTypedValue('D1') }, { kind: ValueKind.Number, number: 10 });
     view.setValue('B3', null);
-    assert.deepStrictEqual({ ...view.getValue('B3') }, { kind: ValueKind.Blank });
+    assert.deepStrictEqual({ ...view.getTypedValue('B3') }, { kind: ValueKind.Blank });
   });
 });
 
@@ -432,16 +442,36 @@ test('Sheet addresses equivalent spellings of one cell alike', async () => {
     const view = wb.sheet(0);
     wb.sheet(0).setNumber(2, 1, 7);
     for (const a1 of ['B3', 'b3', '$B$3', '$b3', 'B$3']) {
-      assert.deepStrictEqual({ ...view.getValue(a1) }, { kind: ValueKind.Number, number: 7 }, a1);
+      assert.deepStrictEqual({ ...view.getTypedValue(a1) }, { kind: ValueKind.Number, number: 7 }, a1);
     }
     wb.sheet(0).setNumber(0, 0, 1);
     for (const a1 of ['A01', 'a0000001']) {
-      assert.deepStrictEqual({ ...view.getValue(a1) }, { kind: ValueKind.Number, number: 1 }, a1);
+      assert.deepStrictEqual({ ...view.getTypedValue(a1) }, { kind: ValueKind.Number, number: 1 }, a1);
     }
     wb.sheet(0).setNumber(1048575, 16383, 3);
-    assert.deepStrictEqual({ ...view.getValue('XFD1048576') }, { kind: ValueKind.Number, number: 3 });
+    assert.deepStrictEqual({ ...view.getTypedValue('XFD1048576') }, { kind: ValueKind.Number, number: 3 });
   });
 });
+
+// Text that is not an A1 reference fails as a parse error (1004); a well-formed range, span or sheet-qualified
+// address is refused as an argument (InvalidArgument).
+const A1_CELL = /^\$?([A-Za-z]{1,3})\$?(\d+)$/;
+function isCell(text) {
+  const m = A1_CELL.exec(text);
+  if (m === null) return false;
+  let col = 0;
+  for (const ch of m[1].toUpperCase()) col = col * 26 + ch.charCodeAt(0) - 64;
+  const row = Number(m[2]);
+  return col <= 16384 && row >= 1 && row <= 1048576;
+}
+function refusalStatus(a1, StatusCode) {
+  const body = a1.replace(/^Sheet\d+!/, '');
+  const parts = body.split(':');
+  const wholeColumns = parts.length === 2 && parts.every((p) => /^\$?[A-Za-z]{1,3}$/.test(p));
+  const wholeRows = parts.length === 2 && parts.every((p) => /^\$?\d+$/.test(p));
+  const wellFormed = parts.length <= 2 && parts.every(isCell);
+  return wellFormed || wholeColumns || wholeRows ? StatusCode.InvalidArgument : StatusCode.ParserInvalidReference;
+}
 
 test('Sheet rejects addresses that are not one unqualified cell', async () => {
   await withWorkbook((wb, { StatusCode }) => {
@@ -449,10 +479,10 @@ test('Sheet rejects addresses that are not one unqualified cell', async () => {
     const rejected = ['', '   ', 'A1:B2', 'Sheet2!A1', 'Sheet1!A1', 'R1C1', 'XFE1', 'A0', 'A1048577', 'B:B', '3:3'];
     rejected.push('Ａ１', 'Ａ1', '😀', 'A\uD800', ' A1', 'A1 ', 'A1\n');
     for (const a1 of rejected) {
-      expectFormulonError(() => view.getValue(a1), StatusCode.InvalidArgument);
-      expectFormulonError(() => view.setValue(a1, 1), StatusCode.InvalidArgument);
+      expectFormulonError(() => view.getTypedValue(a1), refusalStatus(a1, StatusCode));
+      expectFormulonError(() => view.setValue(a1, 1), refusalStatus(a1, StatusCode));
     }
-    assert.throws(() => view.getValue(1), TypeError);
+    assert.throws(() => view.getTypedValue(1), TypeError);
   });
 });
 
@@ -497,14 +527,14 @@ for (const [id, a1, cell] of PAIRWISE) {
     await withWorkbook((wb, { StatusCode, ValueKind }) => {
       const view = wb.sheet(0);
       if (cell === null) {
-        expectFormulonError(() => view.getValue(a1), StatusCode.InvalidArgument);
-        expectFormulonError(() => view.setValue(a1, 1), StatusCode.InvalidArgument);
+        expectFormulonError(() => view.getTypedValue(a1), refusalStatus(a1, StatusCode));
+        expectFormulonError(() => view.setValue(a1, 1), refusalStatus(a1, StatusCode));
         return;
       }
       const [row, col] = cell;
       view.setValue(a1, 7);
-      assert.deepStrictEqual({ ...wb.sheet(0).getValue(row, col) }, { kind: ValueKind.Number, number: 7 });
-      assert.deepStrictEqual({ ...view.getValue(a1) }, { kind: ValueKind.Number, number: 7 });
+      assert.deepStrictEqual({ ...wb.sheet(0).getTypedValue(row, col) }, { kind: ValueKind.Number, number: 7 });
+      assert.deepStrictEqual({ ...view.getTypedValue(a1) }, { kind: ValueKind.Number, number: 7 });
     });
   });
 }
@@ -576,7 +606,7 @@ test('H2 / H14: copySheet before a handle shifts it and returns the copy; at the
     assert.equal(copy.name, 'Copy');
     assert.equal(wb.sheet(0), copy);
     assert.equal(calc.index, 2);
-    assert.equal(calc.getValue(0, 0).number, 7);
+    assert.equal(calc.getTypedValue(0, 0).number, 7);
     const last = wb.copySheet(calc, wb.listSheets().length, 'Last');
     assert.equal(last.index, 4);
     expectFormulonError(() => wb.copySheet(calc, 6), formulon.StatusCode.SheetIndexOutOfRange);
@@ -594,7 +624,7 @@ test('H3 / H4 / H14: Sheet.move and Sheet.rename keep the handle on its sheet', 
     data.setNumber(0, 0, 1);
     wb.sheet(data).move(2);
     assert.equal(data.index, 2);
-    assert.equal(data.getValue(0, 0).number, 1);
+    assert.equal(data.getTypedValue(0, 0).number, 1);
     wb.sheet(data).move(data.index);
     assert.equal(data.index, 2);
     assertSheetsInSync(formulon, wb);
@@ -621,7 +651,7 @@ test('H5 / H6 / H15: a removed handle throws NotFound; later handles shift down'
     assert.equal(data.index, 0);
     assert.equal(notes.index, 1);
     assert.equal(wb.sheet(1), notes);
-    assert.equal(wb.sheet(1).getValue(0, 0).number, 3);
+    assert.equal(wb.sheet(1).getTypedValue(0, 0).number, 3);
     assertSheetsInSync(formulon, wb);
   } finally {
     wb.dispose();
@@ -853,8 +883,8 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     ws.setText(9, 0, 'x');
     assert.equal(ws.getCellPhonetic(9, 0), null);
     assert.equal(wb.getFileName(), null);
-    assert.equal(ws.getAutoFilterXml(), null);
-    assert.equal(ws.getPageSetupXml(), null);
+    assert.equal(ws.ooxml.getAutoFilterXml(), null);
+    assert.equal(ws.ooxml.getPageSetupXml(), null);
     assert.equal(ws.getPrintTitles(), null);
     ws.setPrintTitles({ rows: { first: 2, last: 3 }, columns: null });
     assert.deepEqual(ws.getPrintTitles(), { rows: { first: 2, last: 3 }, columns: null });
@@ -891,13 +921,13 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     ws.addSparklineGroup({ sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1' }] });
     assert.equal(ws.listSparklineGroups()[0].dateAxisRef, null);
 
-    const font = wb.getFont(wb.addFont({ name: 'Arial', size: 10 }));
+    const font = wb.ooxml.getFont(wb.ooxml.addFont({ name: 'Arial', size: 10 }));
     assert.deepEqual([font.bold, font.italic, font.family, font.charset], [null, null, null, null]);
-    const xf = wb.getCellXf(wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 0 }));
+    const xf = wb.ooxml.getCellXf(wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 0 }));
     assert.deepEqual([xf.horizontalAlign, xf.wrapText, xf.locked, xf.hidden], [null, null, null, null]);
     ws.setRowHeight(20, 20, 30);
     const row = ws.listRowOverrides().find((r) => r.row === 20);
-    assert.deepEqual([row.styleXf, row.hidden], [null, false]);
+    assert.deepEqual([ws.ooxml.getRowStyle(20), row.hidden], [null, false]);
     const outcome = ws.validateValue(30, 30, { kind: formulon.ValueKind.Number, number: 1 });
     assert.deepEqual([outcome.valid, outcome.ruleIndex, outcome.errorStyle], [true, null, null]);
   } finally {

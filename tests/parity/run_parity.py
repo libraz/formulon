@@ -271,7 +271,7 @@ def _normalize_cli_cell(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # This script is written to a temp file and run via `node <script>`.
-# It imports the staged module, calls evaluateFormula, and prints exactly one
+# It imports the staged module, calls evaluateTypedFormula, and prints exactly one
 # JSON line containing a *raw* payload. Numbers are emitted as the
 # big-endian IEEE-754 hex string (Buffer.writeDoubleBE) so the runner
 # never has to round-trip through JS's decimal printer; the Python side
@@ -302,9 +302,9 @@ const formula = process.argv[process.argv.length - 1];
 const M = await createFormulon();
 let value;
 try {{
-  value = M.evaluateFormula(formula);
+  value = M.evaluateTypedFormula(formula);
 }} catch (e) {{
-  process.stderr.write('npm-channel: evaluateFormula failed: ' + e.name + ' ' + e.code + ': ' + e.message + '\n');
+  process.stderr.write('npm-channel: evaluateTypedFormula failed: ' + e.name + ' ' + e.code + ': ' + e.message + '\n');
   process.exit(2);
 }}
 process.stdout.write(JSON.stringify(payloadOf(value)) + '\n');
@@ -466,9 +466,9 @@ class PythonChannel(Channel):
         # crash) from aborting the whole run. We surface it as a channel
         # failure on this fixture only.
         try:
-            value = self._mod.evaluate_formula(formula)
+            value = self._mod.evaluate_typed_formula(formula)
         except Exception as exc:  # noqa: BLE001 -- channel boundary
-            return ChannelResult(None, None, f"python evaluate_formula raised: {exc}")
+            return ChannelResult(None, None, f"python evaluate_typed_formula raised: {exc}")
         return ChannelResult(_normalize_python(value), value, None)
 
 

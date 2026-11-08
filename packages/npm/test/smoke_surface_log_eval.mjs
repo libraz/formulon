@@ -125,7 +125,7 @@ test('a throwing log sink surfaces its own exception and leaves the engine usabl
   try {
     wb.sheet(0).setFormula(0, 0, '=1+1');
     wb.recalc();
-    assert.equal(wb.sheet(0).getValue(0, 0).number, 2);
+    assert.equal(wb.sheet(0).getTypedValue(0, 0).number, 2);
   } finally {
     wb.dispose();
   }
@@ -141,19 +141,28 @@ const ONE_SHOT_CASES = [
   { formula: '=COUNTA(A1)', kind: 1, number: 0 },
   { formula: '=ISBLANK(A1)', kind: 2, boolean: true },
   { formula: '=SUM(A1:A3)', kind: 1, number: 0 },
-  { formula: '=SEQUENCE(3)', kind: 1, number: 1 },
+  { formula: '=SEQUENCE(3)', kind: 5, rows: 3, cols: 1, numbers: [1, 2, 3] },
   { formula: '=ROWS(SEQUENCE(3))', kind: 1, number: 3 },
 ];
 test('evaluateFormula evaluates read-only against a blank anchor', async () => {
   const Module = await getModule();
   for (const spec of ONE_SHOT_CASES) {
-    const r = Module.evaluateFormula(spec.formula);
+    const r = Module.evaluateTypedFormula(spec.formula);
     assert.equal(r.kind, spec.kind, spec.formula);
     if (spec.number !== undefined) {
       assert.equal(r.number, spec.number, spec.formula);
     }
     if (spec.boolean !== undefined) {
       assert.equal(r.boolean, spec.boolean, spec.formula);
+    }
+    if (spec.numbers !== undefined) {
+      assert.equal(r.rows, spec.rows, spec.formula);
+      assert.equal(r.cols, spec.cols, spec.formula);
+      assert.deepEqual(
+        r.cells.map((cell) => cell.number),
+        spec.numbers,
+        spec.formula,
+      );
     }
     assert.equal('errorCode' in r, false, spec.formula);
   }
@@ -331,20 +340,20 @@ test('getVersion returns a non-empty string', async () => {
 
 test('evaluateFormula(=SUM(1,2,3)) returns NUMBER 6', async () => {
   const Module = await getModule();
-  const r = Module.evaluateFormula('=SUM(1,2,3)');
+  const r = Module.evaluateTypedFormula('=SUM(1,2,3)');
   assert.equal(r.kind, VAL.NUMBER);
   assert.equal(r.number, 6);
 });
 
 test('evaluateFormula(=1/0) surfaces Excel error as a value (not failed status)', async () => {
   const Module = await getModule();
-  const r = Module.evaluateFormula('=1/0');
+  const r = Module.evaluateTypedFormula('=1/0');
   assert.equal(r.kind, VAL.ERROR);
 });
 
 test('evaluateFormula uses read-only evaluation for the intersection operator', async () => {
   const Module = await getModule();
-  const r = Module.evaluateFormula('=A1 B1');
+  const r = Module.evaluateTypedFormula('=A1 B1');
   assert.equal(r.kind, VAL.ERROR);
   assert.equal(r.errorCode, 0); // ErrorCode::Null / #NULL!
 });
@@ -384,24 +393,24 @@ const PROFILE_LOCALES = [
   'nl_NL',
 ];
 
-test('setExcelProfileId switches a live workbook through every profile id', async () => {
+test('setProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.getExcelProfileId(), 'win-365-en_US');
+    assert.equal(wb.getProfileId(), 'win-365-en_US');
     wb.sheet(0).setFormula(0, 0, '=DOLLAR(-1234.567)');
     for (const host of ['mac', 'win']) {
       for (const locale of PROFILE_LOCALES) {
         const id = `${host}-365-${locale}`;
-        wb.setExcelProfileId(id);
-        assert.equal(wb.getExcelProfileId(), id);
+        wb.setProfileId(id);
+        assert.equal(wb.getProfileId(), id);
         wb.recalc();
         if (id in PROFILE_DOLLAR) {
-          assert.equal(wb.sheet(0).getValue(0, 0).text, PROFILE_DOLLAR[id], id);
+          assert.equal(wb.sheet(0).getTypedValue(0, 0).text, PROFILE_DOLLAR[id], id);
         }
       }
     }
-    expectFailure(() => wb.setExcelProfileId('mac-365-xx_XX'));
+    expectFailure(() => wb.setProfileId('mac-365-xx_XX'));
   } finally {
     wb.dispose();
   }
@@ -577,7 +586,7 @@ test('an empty or omitted data field name is derived from the workbook profile',
       ['win-365-ja_JP', '合計 / Amount'],
       ['win-365-en_US', 'Sum of Amount'],
     ]) {
-      wb.setExcelProfileId(profile);
+      wb.setProfileId(profile);
       for (const spec of [
         { fieldIndex: 1, aggregation: 0 },
         { name: '', fieldIndex: 1, aggregation: 0 },
@@ -783,7 +792,7 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
     assert.equal(wb.sheet(0).name, 'Archive');
     assert.equal(auto.index, 2);
     wb.recalc();
-    assert.equal(wb.sheet(0).getValue(0, 1).number, 10);
+    assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 10);
     expectFailure(() => wb.copySheet(9, 0), Module.StatusCode.SheetIndexOutOfRange);
     expectFailure(() => wb.copySheet(0, 9), Module.StatusCode.SheetIndexOutOfRange);
     expectFailure(() => wb.copySheet(0, 0, ''), Module.StatusCode.InvalidSheetName);

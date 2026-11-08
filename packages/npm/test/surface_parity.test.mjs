@@ -45,8 +45,14 @@ function methodNames(body) {
   return new Set([...body.matchAll(/^ {4}(?:async )?def ([A-Za-z_][A-Za-z0-9_]*)\(/gm)].map((m) => m[1]));
 }
 
+/** Members attached to a class after its body, as `Cls.name = ...`. */
+function attachedNames(text, cls) {
+  return new Set([...text.matchAll(new RegExp(`^${cls}\\.([A-Za-z_][A-Za-z0-9_]*) = `, 'gm'))].map((m) => m[1]));
+}
+
 function pythonClassMembers(file, cls) {
-  return methodNames(classBody(readFileSync(path.join(pyRoot, file), 'utf8'), cls));
+  const text = readFileSync(path.join(pyRoot, file), 'utf8');
+  return new Set([...methodNames(classBody(text, cls)), ...attachedNames(text, cls)]);
 }
 
 function pythonModuleFunctions() {

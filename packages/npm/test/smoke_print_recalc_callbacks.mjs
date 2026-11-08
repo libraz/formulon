@@ -17,11 +17,11 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
   const wb = Module.Workbook.createDefault();
   try {
     // An absent element reads back as null.
-    assert.equal(wb.sheet(0).getPageSetupXml(), null);
+    assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), null);
 
     const fragment = '<pageSetup paperSize="9" orientation="portrait" scale="85"/>';
-    wb.sheet(0).setPageSetupXml(fragment);
-    assert.equal(wb.sheet(0).getPageSetupXml(), fragment);
+    wb.sheet(0).ooxml.setPageSetupXml(fragment);
+    assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), fragment);
 
     for (const bad of [
       '<pageSetup/><pageSetup/>',
@@ -29,13 +29,13 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
       '<pageSetup orientation="portrait"',
       '<x:pageSetup/>',
     ]) {
-      expectFailure(() => wb.sheet(0).setPageSetupXml(bad));
+      expectFailure(() => wb.sheet(0).ooxml.setPageSetupXml(bad));
     }
     // A rejected set leaves the stored fragment untouched.
-    assert.equal(wb.sheet(0).getPageSetupXml(), fragment);
+    assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), fragment);
 
-    wb.sheet(0).setPageSetupXml(null);
-    assert.equal(wb.sheet(0).getPageSetupXml(), null);
+    wb.sheet(0).ooxml.setPageSetupXml(null);
+    assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), null);
     const cleared = wb.sheet(0).getPageSetup();
     assert.equal(cleared.scale, 100);
     assert.equal(cleared.scaleStated, false);
@@ -48,10 +48,12 @@ test('print settings: typed patch leaves unstated attributes alone', async () =>
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    wb.sheet(0).setPageSetupXml('<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>');
+    wb.sheet(0).ooxml.setPageSetupXml(
+      '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>',
+    );
     wb.sheet(0).setPageSetup({ orientation: Module.PageOrientation.Landscape });
 
-    const xml = wb.sheet(0).getPageSetupXml();
+    const xml = wb.sheet(0).ooxml.getPageSetupXml();
     assert.match(xml, /orientation="landscape"/);
     // Attributes the engine does not model must survive the patch, or the
     // "open a template and change one thing" route loses data.
@@ -122,7 +124,7 @@ test('print settings: an authored report survives save and load', async () => {
     assert.deepEqual(reloaded.sheet(0).getPrintArea(), [{ firstRow: 0, firstCol: 0, lastRow: 79, lastCol: 5 }]);
     assert.deepEqual(reloaded.sheet(0).getPrintTitles(), { rows: { first: 0, last: 1 }, columns: null });
     // The header code is stored escaped and decodes back to `&C...`.
-    assert.match(reloaded.sheet(0).getHeaderFooterXml(), /<oddHeader>&amp;C月次報告<\/oddHeader>/);
+    assert.match(reloaded.sheet(0).ooxml.getHeaderFooterXml(), /<oddHeader>&amp;C月次報告<\/oddHeader>/);
     const breaks = reloaded.sheet(0).listRowBreaks();
     assert.deepEqual(
       breaks.map((b) => b.id),
@@ -138,7 +140,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    const xf = wb.addCellXf({
+    const xf = wb.ooxml.addCellXf({
       fontIndex: 0,
       fillIndex: 0,
       borderIndex: 0,
@@ -146,16 +148,16 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
       wrapText: true,
       hasWrapText: true,
     });
-    wb.sheet(0).setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf);
+    wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf);
     // Cells that held nothing are materialised so the ruled box renders.
     for (const [row, col] of [
       [0, 0],
       [1, 1],
       [2, 2],
     ]) {
-      assert.equal(wb.sheet(0).getCellXfIndex(row, col), xf);
+      assert.equal(wb.sheet(0).ooxml.getCellXfIndex(row, col), xf);
     }
-    assert.equal(wb.sheet(0).getCellXfIndex(3, 3), 0);
+    assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), 0);
   } finally {
     wb.dispose();
   }
@@ -173,7 +175,7 @@ test('sheet layout getters report an absent width, height or style as null', asy
     const widthZero = columns.find((column) => column.first === 0 && column.last === 0);
     assert.ok(widthZero);
     assert.equal(widthZero.width, 0);
-    assert.equal(widthZero.styleXf, null);
+    assert.equal(wb.sheet(0).ooxml.getColumnStyle(0), null);
     assert.equal(widthZero.hidden, false);
     const hidden = columns.find((column) => column.first === 1 && column.last === 1);
     assert.ok(hidden);
@@ -184,7 +186,7 @@ test('sheet layout getters report an absent width, height or style as null', asy
     const row = rows.find((entry) => entry.row === 3);
     assert.ok(row);
     assert.equal(row.height, 30);
-    assert.equal(row.styleXf, null);
+    assert.equal(wb.sheet(0).ooxml.getRowStyle(3), null);
     assert.equal(row.collapsed, false);
   } finally {
     wb.dispose();
@@ -216,7 +218,7 @@ test('setNumber + getValue round-trips bit-exactly', async () => {
     const x = 3.141592653589793;
     wb.sheet(0).setNumber(0, 0, x);
     wb.recalc();
-    const r = wb.sheet(0).getValue(0, 0);
+    const r = wb.sheet(0).getTypedValue(0, 0);
     assert.equal(r.kind, VAL.NUMBER);
     assert.equal(r.number, x);
   } finally {
@@ -231,7 +233,7 @@ test('setFormula + recalc computes 41 + 1 == 42 in B1', async () => {
     wb.sheet(0).setNumber(0, 0, 41);
     wb.sheet(0).setFormula(0, 1, '=A1+1');
     wb.recalc();
-    const b1 = wb.sheet(0).getValue(0, 1);
+    const b1 = wb.sheet(0).getTypedValue(0, 1);
     assert.equal(b1.kind, VAL.NUMBER);
     assert.equal(b1.number, 42);
   } finally {
@@ -275,8 +277,8 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
       assert.ok(parallel.workerThreadsUsed <= parallel.workerThreadsStarted);
     }
 
-    const first = wb.sheet(0).getValue(1, 1);
-    const last = wb.sheet(0).getValue(branchCount, 2);
+    const first = wb.sheet(0).getTypedValue(1, 1);
+    const last = wb.sheet(0).getTypedValue(branchCount, 2);
     assert.equal(first.kind, VAL.NUMBER);
     assert.equal(last.kind, VAL.NUMBER);
     assert.equal(first.number, 3);
@@ -288,7 +290,7 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
     assert.ok(callerOnly.serialFallbackSteps > 0);
     assert.equal(callerOnly.workerThreadsStarted, 0);
     assert.equal(callerOnly.workerThreadsUsed, 0);
-    assert.equal(wb.sheet(0).getValue(branchCount, 2).number, (5 + branchCount + 1) * 2);
+    assert.equal(wb.sheet(0).getTypedValue(branchCount, 2).number, (5 + branchCount + 1) * 2);
 
     expectFailure(() => wb.recalcParallel(9), Module.StatusCode.InvalidArgument);
 
@@ -339,7 +341,7 @@ test('a throwing iterative progress callback aborts the solve and surfaces its o
 
     // The workbook is still readable, and the recalc re-entry guard was
     // released on the way out.
-    const mid = wb.sheet(0).getValue(0, 0);
+    const mid = wb.sheet(0).getTypedValue(0, 0);
     assert.equal(mid.kind, VAL.NUMBER);
 
     try {
@@ -351,7 +353,7 @@ test('a throwing iterative progress callback aborts the solve and surfaces its o
     wb.setIterativeProgress(null);
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     wb.recalc();
-    const converged = wb.sheet(0).getValue(0, 0);
+    const converged = wb.sheet(0).getTypedValue(0, 0);
     assert.equal(converged.kind, VAL.NUMBER);
     assert.ok(Math.abs(converged.number - 10) < 0.001, `A1=${converged.number}`);
   } finally {

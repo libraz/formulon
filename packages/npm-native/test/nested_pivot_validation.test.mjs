@@ -3,7 +3,7 @@ import { assert, getModule } from './smoke_support.mjs';
 
 function makePivot(Workbook) {
   const wb = Workbook.createDefault();
-  wb.setExcelProfileId('win-365-ja_JP');
+  wb.setProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
   cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');

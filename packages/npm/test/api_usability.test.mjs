@@ -103,6 +103,8 @@ const CELL_METHODS = {
   'Sheet.evaluateCfFormula': { args: () => [CELL_ROW, CELL_COL, 0, 0, '=TRUE'] },
   'Sheet.evaluateFormula': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
   'Sheet.evaluateFormulaArray': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
+  'Sheet.evaluateTypedFormula': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
+  'Sheet.evaluateTypedFormulaArray': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
   'Sheet.getArrayFormula': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getCellFormat': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getCellPhonetic': { args: () => [CELL_ROW, CELL_COL] },
@@ -113,6 +115,7 @@ const CELL_METHODS = {
   'Sheet.getComment': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getCommentVisible': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getDataTable': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getDate': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getDependents': { args: () => [CELL_ROW, CELL_COL, 1] },
   'Sheet.getDisplayText': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getEffectiveStyle': { args: () => [CELL_ROW, CELL_COL] },
@@ -122,6 +125,7 @@ const CELL_METHODS = {
   'Sheet.getLambdaText': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getPrecedents': { args: () => [CELL_ROW, CELL_COL, 1] },
   'Sheet.getSpillInfo': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getTypedValue': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getValue': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.removeComment': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.removeDataTable': { args: () => [CELL_ROW, CELL_COL] },
@@ -172,7 +176,8 @@ const READERS = [
 // The object and method name a `Class.method` key of the argument tables addresses.
 function target(ws, ctx, key) {
   const [cls, method] = key.split('.');
-  return [cls === 'Pivot' ? ctx.pivot : ws, method];
+  if (cls === 'Pivot') return [ctx.pivot, method];
+  return [method in ws ? ws : ws.ooxml, method];
 }
 
 function attempt(fn) {
@@ -188,6 +193,9 @@ function normalize(result) {
   if (result !== null && typeof result === 'object' && typeof result.getValue === 'function') {
     return { sheet: result.index };
   }
+  if (result !== null && typeof result === 'object' && !Array.isArray(result) && Symbol.iterator in result) {
+    return plain(Array.from(result));
+  }
   return plain(result ?? null);
 }
 
@@ -197,11 +205,11 @@ function snapshot(ws) {
     [0, 0],
     [CELL_ROW, CELL_COL],
   ]) {
-    for (const m of READERS) out.push([m, r, c, attempt(() => ws[m](r, c))]);
+    for (const m of READERS) out.push([m, r, c, attempt(() => (m in ws ? ws : ws.ooxml)[m](r, c))]);
   }
   out.push(attempt(() => ws.getMergesInRange(rect(0, 0, 9, 9))));
   out.push(attempt(() => ws.getPrintArea()));
-  out.push(attempt(() => ws.getRangeStyleBases(rect(0, 0, 9, 9))));
+  out.push(attempt(() => ws.ooxml.getRangeStyleBases(rect(0, 0, 9, 9))));
   out.push(attempt(() => ws.listHyperlinks()));
   return out;
 }
@@ -299,7 +307,7 @@ test('criterion 1: a coordinate-form call with the pair at a non-string position
     withWorkbook((wb, f) => {
       seeded(wb, f, true);
       const sheet = call(wb.sheet(0));
-      return { index: sheet.index, values: plain(sheet.getValues('A1:B3')) };
+      return { index: sheet.index, values: plain(sheet.getTypedValues('A1:B3')) };
     });
   const expected = await details((ws) => ws.pivot(0).showDetails(1, 5));
   assert.equal(expected.values[1][1].number, 10);
@@ -313,20 +321,28 @@ test('edge: A1 spellings of one cell address the same cell', async () => {
     const ws = wb.sheet(0);
     ws.setNumber(0, 0, 4);
     for (const spelling of ['A1', 'a1', '$A$1', 'A01']) {
-      assert.deepEqual(plain(ws.getValue(spelling)), plain(ws.getValue(0, 0)), spelling);
-      assert.deepEqual(plain(ws.getValue(spelling)), { kind: f.ValueKind.Number, number: 4 }, spelling);
+      assert.deepEqual(plain(ws.getTypedValue(spelling)), plain(ws.getTypedValue(0, 0)), spelling);
+      assert.deepEqual(plain(ws.getTypedValue(spelling)), { kind: f.ValueKind.Number, number: 4 }, spelling);
     }
     ws.setNumber(1048575, 16383, 3);
-    assert.deepEqual(plain(ws.getValue('XFD1048576')), { kind: f.ValueKind.Number, number: 3 });
+    assert.deepEqual(plain(ws.getTypedValue('XFD1048576')), { kind: f.ValueKind.Number, number: 3 });
   });
 });
 
-test('edge: an A1 argument that is not one unqualified cell is InvalidArgument', async () => {
+test('edge: an A1 argument that is not one unqualified cell fails as InvalidArgument or a parse error', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    for (const bad of ['Sheet1!A1', 'A1:B2', '', 'R1C1', 'Ａ1', 'XFE1']) {
-      expectCode(() => ws.getValue(bad), f.StatusCode.InvalidArgument);
-      expectCode(() => ws.setNumber(bad, 1), f.StatusCode.InvalidArgument);
+    // A well-formed range or sheet-qualified address is refused as an argument; unparsable text is a reference error.
+    const refused = ['Sheet1!A1', 'A1:B2'];
+    const unparsable = ['', 'R1C1', 'Ａ1', 'XFE1'];
+    for (const [list, code] of [
+      [refused, f.StatusCode.InvalidArgument],
+      [unparsable, f.StatusCode.ParserInvalidReference],
+    ]) {
+      for (const bad of list) {
+        expectCode(() => ws.getTypedValue(bad), code);
+        expectCode(() => ws.setNumber(bad, 1), code);
+      }
     }
   });
 });
@@ -335,7 +351,7 @@ test('edge: setNumber, evaluateCfFormula and showPivotDetails take A1 like their
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     ws.setNumber('A1', 5);
-    assert.deepEqual(plain(ws.getValue(0, 0)), { kind: f.ValueKind.Number, number: 5 });
+    assert.deepEqual(plain(ws.getTypedValue(0, 0)), { kind: f.ValueKind.Number, number: 5 });
     assert.deepEqual(
       plain(ws.evaluateCfFormula('B2', 'A1', '=TRUE')),
       plain(ws.evaluateCfFormula(1, 1, 0, 0, '=TRUE')),
@@ -366,7 +382,9 @@ const RECT_METHODS = {
   'Sheet.getMergesInRange': { args: (r) => [r] },
   'Sheet.getRangeStyleBases': { args: (r) => [r] },
   'Sheet.getRangeStyleBasesExcluding': { args: (r) => [r, [], []] },
+  'Sheet.getTypedValues': { args: (r) => [r] },
   'Sheet.getValues': { args: (r) => [r] },
+  'Sheet.iterRows': { args: (r) => [r] },
   'Sheet.listCells': { args: (r) => [r], pre: (ws) => ws.setNumber(2, 2, 9) },
   'Sheet.recalcViewport': { args: (r) => [r] },
   'Sheet.remapRangeStyle': { args: (r) => [r, [0], [0]] },
@@ -452,12 +470,12 @@ test('criterion 3: Sheet has no get or set', async () => {
 
 test('criterion 4: getValues of an empty A1 range is a dense grid of Blank', async () => {
   await withWorkbook((wb, f) => {
-    const out = wb.sheet(0).getValues('A1:B2');
+    const out = wb.sheet(0).getTypedValues('A1:B2');
     assert.deepEqual(plain(out), [
       [blank(f), blank(f)],
       [blank(f), blank(f)],
     ]);
-    assert.deepEqual(plain(wb.sheet(0).getValues(rect(0, 0, 1, 1))), plain(out));
+    assert.deepEqual(plain(wb.sheet(0).getTypedValues(rect(0, 0, 1, 1))), plain(out));
   });
 });
 
@@ -466,11 +484,11 @@ test('criterion 4: getValues reads values and a single A1 cell as 1x1', async ()
     const ws = wb.sheet(0);
     ws.setNumber(0, 0, 3);
     ws.setText(1, 1, 'x');
-    assert.deepEqual(plain(ws.getValues('A1:B2')), [
+    assert.deepEqual(plain(ws.getTypedValues('A1:B2')), [
       [{ kind: f.ValueKind.Number, number: 3 }, blank(f)],
       [blank(f), { kind: f.ValueKind.Text, text: 'x' }],
     ]);
-    assert.deepEqual(plain(ws.getValues('A1')), [[{ kind: f.ValueKind.Number, number: 3 }]]);
+    assert.deepEqual(plain(ws.getTypedValues('A1')), [[{ kind: f.ValueKind.Number, number: 3 }]]);
   });
 });
 
@@ -486,7 +504,7 @@ test('criterion 4: getValues places every cell of a range larger than one page',
       }
     }
     for (const [r, c] of cells) ws.setNumber(r, c, r * 1000 + c);
-    const out = ws.getValues(rect(0, 0, rows - 1, cols - 1));
+    const out = ws.getTypedValues(rect(0, 0, rows - 1, cols - 1));
     assert.equal(rows * cols > 65536, true);
     assert.equal(out.length, rows);
     assert.ok(out.every((row) => row.length === cols));
@@ -510,17 +528,17 @@ test('criterion 4: getValues includes spilled values', async () => {
     const ws = wb.sheet(0);
     ws.setFormula(0, 0, '=SEQUENCE(3)');
     wb.recalc();
-    const out = ws.getValues('A1:A3').map((row) => row[0].number);
+    const out = ws.getTypedValues('A1:A3').map((row) => row[0].number);
     assert.deepEqual(out, [1, 2, 3]);
-    assert.equal(ws.getValues('A3')[0][0].kind, f.ValueKind.Number);
+    assert.equal(ws.getTypedValues('A3')[0][0].kind, f.ValueKind.Number);
   });
 });
 
 test('criterion 4: getValues bounds the cell count at 2^22', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    expectCode(() => ws.getValues('A:XFD'), f.StatusCode.InvalidArgument);
-    const out = ws.getValues('A1:D1048576');
+    expectCode(() => ws.getTypedValues('A:XFD'), f.StatusCode.InvalidArgument);
+    const out = ws.getTypedValues('A1:D1048576');
     assert.equal(out.length, 1048576);
     assert.equal(out[0].length, 4);
   });
@@ -534,7 +552,7 @@ test('criterion 4: setValues writes a dense grid by the setValue rules', async (
       [1, 'x'],
       [true, null],
     ]);
-    assert.deepEqual(plain(ws.getValues('A1:B2')), [
+    assert.deepEqual(plain(ws.getTypedValues('A1:B2')), [
       [
         { kind: f.ValueKind.Number, number: 1 },
         { kind: f.ValueKind.Text, text: 'x' },
@@ -542,7 +560,7 @@ test('criterion 4: setValues writes a dense grid by the setValue rules', async (
       [{ kind: f.ValueKind.Bool, boolean: true }, blank(f)],
     ]);
     ws.setValues(4, 1, [[{ kind: f.ValueKind.Number, number: 8 }]]);
-    assert.equal(ws.getValue(4, 1).number, 8);
+    assert.equal(ws.getTypedValue(4, 1).number, 8);
   });
 });
 
@@ -566,11 +584,11 @@ test('criterion 4: setValues writes nothing when validation fails', async () => 
         label,
       );
       assert.deepEqual(
-        plain(ws.getValues('A1:C2')),
+        plain(ws.getTypedValues('A1:C2')),
         Array.from({ length: 2 }, () => [blank(f), blank(f), blank(f)]),
         label,
       );
-      assert.deepEqual(plain(ws.getValue(0, 16383)), blank(f), label);
+      assert.deepEqual(plain(ws.getTypedValue(0, 16383)), blank(f), label);
     }
   });
 });
@@ -580,16 +598,18 @@ test('criterion 4: setValues of an empty grid or empty rows succeeds and does no
     const ws = wb.sheet(0);
     ws.setValues('A1', []);
     ws.setValues('A1', [[]]);
-    assert.deepEqual(plain(ws.getValue(0, 0)), blank(f));
+    assert.deepEqual(plain(ws.getTypedValue(0, 0)), blank(f));
   });
 });
 
-test('criterion 4: setValues writes a leading equals sign as text', async () => {
+test('criterion 4: setValues reads a leading equals sign as a formula; a Text value keeps it as text', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    ws.setValues('A1', [['=1+1']]);
-    assert.deepEqual(plain(ws.getValue(0, 0)), { kind: f.ValueKind.Text, text: '=1+1' });
-    assert.equal(ws.getFormula(0, 0), null);
+    ws.setValues('A1', [['=1+1', { kind: f.ValueKind.Text, text: '=1+1' }]]);
+    assert.equal(ws.getFormula(0, 0), '=1+1');
+    assert.deepEqual(plain(ws.getTypedValue(0, 0)), { kind: f.ValueKind.Number, number: 2 });
+    assert.deepEqual(plain(ws.getTypedValue(0, 1)), { kind: f.ValueKind.Text, text: '=1+1' });
+    assert.equal(ws.getFormula(0, 1), null);
   });
 });
 
@@ -606,7 +626,7 @@ test('criterion 4: setValues over a data-table body throws and keeps the cells w
       () => ws.setValues('A2', [[7, 8]]),
       (e) => e.name === 'FormulonError',
     );
-    assert.equal(ws.getValue(1, 0).number, 7);
+    assert.equal(ws.getTypedValue(1, 0).number, 7);
     assert.notEqual(ws.getDataTable(1, 1), null);
   });
 });
@@ -668,10 +688,10 @@ test('criterion 5: changing the profile marks a formula workbook dirty, the same
   await withWorkbook((wb, f) => {
     wb.sheet(0).setFormula(0, 0, '=1+1');
     wb.recalc();
-    const current = wb.getExcelProfileId();
-    wb.setExcelProfileId(current);
+    const current = wb.getProfileId();
+    wb.setProfileId(current);
     assert.equal(wb.hasDirtyCells(), false);
-    wb.setExcelProfileId(current === 'mac-365-de_DE' ? 'win-365-en_US' : 'mac-365-de_DE');
+    wb.setProfileId(current === 'mac-365-de_DE' ? 'win-365-en_US' : 'mac-365-de_DE');
     assert.equal(wb.hasDirtyCells(), true);
     void f;
   });
@@ -742,12 +762,12 @@ test('criterion 6: list methods replace the counted enumerations', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     for (const name of ['listFonts', 'listFills', 'listBorders', 'listCellXfs', 'listCellStyleXfs']) {
-      const list = wb[name]();
+      const list = wb.ooxml[name]();
       assert.ok(Array.isArray(list) && list.length > 0, name);
-      assert.deepEqual(plain(wb[name.replace(/^list(.*)s$/, 'get$1')](0)), plain(list[0]), name);
+      assert.deepEqual(plain(wb.ooxml[name.replace(/^list(.*)s$/, 'get$1')](0)), plain(list[0]), name);
     }
     // A new workbook has no differential formats.
-    assert.deepEqual(plain(wb.listDxfs()), []);
+    assert.deepEqual(plain(wb.ooxml.listDxfs()), []);
     assert.deepEqual(plain(ws.listCells()), []);
     ws.setNumber(2, 1, 5);
     ws.setText(0, 0, 'a');
@@ -943,7 +963,7 @@ test('criterion 7: setHeaderFooter clears a text key given as null or the empty 
       const ws = wb.sheet(0);
       ws.setHeaderFooter({ oddHeader: '&CTitle', oddFooter: '&RPage' });
       ws.setHeaderFooter({ oddHeader: cleared });
-      const xml = ws.getHeaderFooterXml() ?? '';
+      const xml = ws.ooxml.getHeaderFooterXml() ?? '';
       assert.doesNotMatch(xml, /<oddHeader>/, String(cleared));
       assert.match(xml, /<oddFooter>&amp;RPage<\/oddFooter>/);
     });
@@ -956,7 +976,7 @@ test('criterion 7: setPrintOptions rejects null', async () => {
     assert.throws(() => ws.setPrintOptions({ gridLines: null }), TYPE_ERROR);
     ws.setPrintOptions({ gridLines: true });
     ws.setPrintOptions({ horizontalCentered: true });
-    const xml = ws.getPrintOptionsXml() ?? '';
+    const xml = ws.ooxml.getPrintOptionsXml() ?? '';
     assert.match(xml, /gridLines="(1|true)"/);
     assert.match(xml, /horizontalCentered="(1|true)"/);
   });
@@ -1098,13 +1118,17 @@ function cfRule(id) {
   return { ranges: [rect(0, 0, 3, 0)], type: 0, formula1: 'TRUE', id };
 }
 
-test('criterion 8: removeCfRule takes an id; adding a duplicate id is InvalidArgument', async () => {
+test('criterion 8: removeCfRule takes an id; a colliding id is given a new one', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     ws.addCfRule(cfRule(CF_ID_FIRST));
     ws.addCfRule(cfRule(CF_ID_SECOND));
-    expectCode(() => ws.addCfRule(cfRule(CF_ID_FIRST)), f.StatusCode.InvalidArgument);
-    assert.equal(ws.listCfRules().length, 2);
+    ws.addCfRule(cfRule(CF_ID_FIRST));
+    const ids = ws.listCfRules().map((r) => r.id);
+    assert.equal(ids.length, 3);
+    assert.equal(new Set(ids).size, 3);
+    assert.deepEqual(ids.slice(0, 2), [CF_ID_FIRST, CF_ID_SECOND]);
+    ws.removeCfRule(ids[2]);
     ws.removeCfRule(CF_ID_SECOND);
     assert.deepEqual(
       ws.listCfRules().map((r) => r.id),

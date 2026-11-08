@@ -122,13 +122,13 @@ for (const c of FORMAT_CASES) {
       const cells = new Set([...(c.unchanged ?? []), ...Object.keys(c.expect ?? {}), 'A1']);
       const snapshot = () => new Map([...cells].map((cell) => [cell, plain(ws.getCellFormat(cell))]));
       const before = snapshot();
-      const xfCount = ws.workbook.listCellXfs().length;
+      const xfCount = ws.workbook.ooxml.listCellXfs().length;
 
       if (c.throws) {
         assertThrowsLike(() => ws.setCellFormat(c.range, patch), c.throws, formulon, c.id);
         // The failing call changed nothing.
         assert.deepEqual(snapshot(), before, 'a failed call changed a cell');
-        assert.equal(wb.listCellXfs().length, xfCount, 'a failed call added a cell format');
+        assert.equal(wb.ooxml.listCellXfs().length, xfCount, 'a failed call added a cell format');
         return;
       }
 
@@ -138,16 +138,16 @@ for (const c of FORMAT_CASES) {
         assertSubset(resolveEnums(ws.getCellFormat(cell), formulon), resolveEnums(fmt, formulon), `${c.id} ${cell}`);
       }
       for (const [cell, fields] of Object.entries(c.expect_xf ?? {})) {
-        const xf = wb.getCellXf(ws.getEffectiveStyle(cell).xfIndex);
+        const xf = wb.ooxml.getCellXf(ws.getEffectiveStyle(cell).xfIndex);
         for (const [field, want] of Object.entries(resolveEnums(fields, formulon))) {
           assert.equal(xf[field], want, `${c.id} ${cell} xf.${field}`);
         }
       }
       for (const cell of c.unchanged ?? []) assert.deepEqual(after.get(cell), before.get(cell), `${cell} changed`);
       if (c.idempotent) {
-        const count = wb.listCellXfs().length;
+        const count = wb.ooxml.listCellXfs().length;
         ws.setCellFormat(c.range, patch);
-        assert.equal(wb.listCellXfs().length, count, 'a second application added a cell format');
+        assert.equal(wb.ooxml.listCellXfs().length, count, 'a second application added a cell format');
       }
     });
   });
@@ -166,20 +166,19 @@ for (const [i, c] of NATIVE_CASES.entries()) {
     const formulon = await getFormulon();
     let value;
     if ('formula' in c) {
-      value = formulon.evaluateFormula(c.formula);
+      value = formulon.evaluateTypedFormula(c.formula);
     } else {
       const wb = formulon.Workbook.createDefault();
       try {
-        value = wb.sheet(0).getValue(c.cell);
+        value = wb.sheet(0).getTypedValue(c.cell);
       } finally {
         wb.dispose();
       }
     }
     const native = formulon.toNative(value);
     if (c.native !== null && typeof c.native === 'object' && 'error' in c.native) {
-      assert.equal(native, value, 'an error maps to the ErrorValue itself');
-      assert.equal(native.kind, formulon.ValueKind.Error);
-      assert.equal(native.errorCode, formulon.ErrorCode[c.native.error]);
+      assert.ok(native instanceof formulon.ExcelError, 'an error maps to an ExcelError');
+      assert.equal(native.code, formulon.ErrorCode[c.native.error]);
     } else if (c.native !== null && typeof c.native === 'object' && c.native.passthrough) {
       assert.equal(native, value, 'the input value itself comes back');
     } else {
@@ -189,7 +188,7 @@ for (const [i, c] of NATIVE_CASES.entries()) {
 }
 
 test('toNative: edge rows', async () => {
-  const { toNative, ValueKind, ErrorCode } = await getFormulon();
+  const { toNative, ValueKind, ErrorCode, ExcelError } = await getFormulon();
   // Blank, Number, Bool, Text map to their JS scalars; -0 and an astral string pass through unchanged.
   assert.equal(toNative({ kind: ValueKind.Blank }), null);
   assert.ok(Object.is(toNative({ kind: ValueKind.Number, number: -0 }), -0));
@@ -197,13 +196,13 @@ test('toNative: edge rows', async () => {
   assert.equal(toNative({ kind: ValueKind.Bool, boolean: false }), false);
   assert.equal(toNative({ kind: ValueKind.Text, text: '' }), '');
   assert.equal(toNative({ kind: ValueKind.Text, text: '\u{1F600}x\u{FFFF}' }), '\u{1F600}x\u{FFFF}');
-  // Array, Ref and Lambda come back as the same object.
-  for (const kind of [ValueKind.Array, ValueKind.Ref, ValueKind.Lambda]) {
-    const v = { kind };
-    assert.equal(toNative(v), v, `kind ${kind}`);
+  // An array maps to rows of native values; a reference or LAMBDA has no native form.
+  const cells = [{ kind: ValueKind.Number, number: 2 }];
+  assert.deepEqual(toNative({ kind: ValueKind.Array, rows: 1, cols: 1, cells }), [[2]]);
+  for (const kind of [ValueKind.Ref, ValueKind.Lambda]) {
+    assert.throws(() => toNative({ kind }), TypeError, `kind ${kind}`);
   }
-  const error = { kind: ValueKind.Error, errorCode: ErrorCode.NA };
-  assert.equal(toNative(error), error);
+  assert.deepEqual(toNative({ kind: ValueKind.Error, errorCode: ErrorCode.NA }), new ExcelError(ErrorCode.NA));
   // Anything that is not a Value is a TypeError.
   for (const bad of [null, undefined, 1, 'x', true, [], {}, { kind: 99 }, { kind: '1' }, { kind: -1 }, { kind: 1.5 }]) {
     assert.throws(() => toNative(bad), TypeError, JSON.stringify(bad));
@@ -223,7 +222,7 @@ const SPAN_METHODS = {
   'Sheet.setColumnOutline': { rest: () => [2], mutates: true },
   'Sheet.setColumnCollapsed': { rest: () => [true], mutates: true },
   'Sheet.setColumnStyle': { rest: (ws) => [xfOf(ws)], mutates: true },
-  'Sheet.clearColumnStyle': { rest: () => [], pre: (ws) => ws.setColumnStyle(1, 3, xfOf(ws)), mutates: true },
+  'Sheet.clearColumnStyle': { rest: () => [], pre: (ws) => ws.ooxml.setColumnStyle(1, 3, xfOf(ws)), mutates: true },
   'Sheet.clearColumnWidth': { rest: () => [], pre: (ws) => ws.setColumnWidth(1, 3, 12), mutates: true },
   'Sheet.setRowHeight': { rest: () => [30], mutates: true },
   'Sheet.setRowAutoHeight': { rest: () => [30], mutates: true },
@@ -231,7 +230,7 @@ const SPAN_METHODS = {
   'Sheet.setRowOutline': { rest: () => [2], mutates: true },
   'Sheet.setRowCollapsed': { rest: () => [true], mutates: true },
   'Sheet.setRowStyle': { rest: (ws) => [xfOf(ws)], mutates: true },
-  'Sheet.clearRowStyle': { rest: () => [], pre: (ws) => ws.setRowStyle(2, 4, xfOf(ws)), mutates: true },
+  'Sheet.clearRowStyle': { rest: () => [], pre: (ws) => ws.ooxml.setRowStyle(2, 4, xfOf(ws)), mutates: true },
   'Sheet.clearRowHeight': { rest: () => [], pre: (ws) => ws.setRowHeight(2, 4, 30), mutates: true },
   'Sheet.insertRows': { rest: () => [], mutates: true },
   'Sheet.deleteRows': { rest: () => [], mutates: true },
@@ -240,7 +239,7 @@ const SPAN_METHODS = {
 };
 
 function xfOf(ws) {
-  return ws.workbook.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
+  return ws.workbook.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
 }
 
 // Column operations take B:D (1..3), row operations 3:5 (2..4).
@@ -251,7 +250,7 @@ const SPAN_FORMS = {
 
 function readState(ws) {
   const values = [];
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 6; c++) values.push(plain(ws.getValue(r, c)));
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 6; c++) values.push(plain(ws.getTypedValue(r, c)));
   return plain({ cols: ws.listColumnOverrides(), rows: ws.listRowOverrides(), values });
 }
 
@@ -295,7 +294,7 @@ for (const [key, positions] of Object.entries(SPAN_ARGS)) {
           : form === 'start_count'
             ? [span.first, span.last - span.first + 1, ...rest]
             : [span.first, span.last, ...rest];
-        ws[method](...args);
+        (method in ws ? ws : ws.ooxml)[method](...args);
         return { before, after: readState(ws) };
       });
     const numeric = await run(false);
@@ -308,7 +307,7 @@ for (const [key, positions] of Object.entries(SPAN_ARGS)) {
 test('span edge rows: single, bounds, whole sheet, dollar signs and rejected spellings', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    const InvalidArgument = f.StatusCode.InvalidArgument;
+    const InvalidReference = f.StatusCode.ParserInvalidReference;
     // "B" and "3" are one column and one row; the grid's last column and row are valid.
     ws.setColumnWidth('B', 9);
     assert.deepEqual(
@@ -331,17 +330,21 @@ test('span edge rows: single, bounds, whole sheet, dollar signs and rejected spe
     ws.setColumnWidth('A:XFD', 10);
     ws.setRowHeight('1:1048576', 20);
     // Rejected spellings.
-    for (const bad of ['0', '', 'XFE', '1048577', 'Ｂ:Ｄ', 'Sheet1!B:D', 'B:', ':D', 'B:3']) {
-      expectCode(() => ws.setColumnWidth(bad, 9), InvalidArgument, `column ${JSON.stringify(bad)}`);
+    // A sheet-qualified span is refused as an argument, not as unparsable text.
+    expectCode(() => ws.setColumnWidth('Sheet1!B:D', 9), f.StatusCode.InvalidArgument, 'qualified column span');
+    expectCode(() => ws.setRowHeight('Sheet1!3:5', 9), f.StatusCode.InvalidArgument, 'qualified row span');
+    for (const bad of ['0', '', 'XFE', '1048577', 'Ｂ:Ｄ', 'B:', ':D', 'B:3']) {
+      expectCode(() => ws.setColumnWidth(bad, 9), InvalidReference, `column ${JSON.stringify(bad)}`);
     }
-    for (const bad of ['0', '', '1048577', 'B', 'Ｂ:Ｄ', 'Sheet1!3:5', '3:']) {
-      expectCode(() => ws.setRowHeight(bad, 9), InvalidArgument, `row ${JSON.stringify(bad)}`);
+    for (const bad of ['0', '', '1048577', 'Ｂ:Ｄ', '3:']) {
+      expectCode(() => ws.setRowHeight(bad, 9), InvalidReference, `row ${JSON.stringify(bad)}`);
     }
     // A column span on a row operation and the reverse.
-    expectCode(() => ws.setRowHeight('B:D', 9), InvalidArgument);
-    expectCode(() => ws.setColumnWidth('3:5', 9), InvalidArgument);
-    expectCode(() => ws.insertRows('B:D'), InvalidArgument);
-    expectCode(() => ws.deleteColumns('3:5'), InvalidArgument);
+    expectCode(() => ws.setRowHeight('B', 9), f.StatusCode.InvalidArgument);
+    expectCode(() => ws.setRowHeight('B:D', 9), f.StatusCode.InvalidArgument);
+    expectCode(() => ws.setColumnWidth('3:5', 9), f.StatusCode.InvalidArgument);
+    expectCode(() => ws.insertRows('B:D'), f.StatusCode.InvalidArgument);
+    expectCode(() => ws.deleteColumns('3:5'), f.StatusCode.InvalidArgument);
     // Types: null and undefined are not spans; a number is the numeric form.
     assert.throws(() => ws.setColumnWidth(null, 9), TypeError);
     assert.throws(() => ws.setColumnWidth(undefined, 9), TypeError);
@@ -350,7 +353,7 @@ test('span edge rows: single, bounds, whole sheet, dollar signs and rejected spe
     assert.throws(() => ws.setColumnWidth(1, 3), TypeError);
     // A rejected call changed nothing.
     const state = readState(ws);
-    expectCode(() => ws.deleteRows('0'), InvalidArgument);
+    expectCode(() => ws.deleteRows('0'), InvalidReference);
     assert.deepEqual(readState(ws), state);
   });
 });
@@ -361,15 +364,15 @@ test('span edge rows: insert and delete take the span as start and count', async
     seedGrid(ws);
     ws.insertRows('3:5');
     // Rows 3..5 (1-based) are three new blank rows; the old row 3 moved to row 6.
-    assert.equal(ws.getValue(2, 0).kind, 0);
-    assert.equal(ws.getValue(4, 0).kind, 0);
-    assert.equal(ws.getValue(5, 0).number, 20);
+    assert.equal(ws.getTypedValue(2, 0).kind, 0);
+    assert.equal(ws.getTypedValue(4, 0).kind, 0);
+    assert.equal(ws.getTypedValue(5, 0).number, 20);
     ws.deleteRows('3:5');
-    assert.equal(ws.getValue(2, 0).number, 20);
+    assert.equal(ws.getTypedValue(2, 0).number, 20);
     ws.insertColumns('B');
-    assert.equal(ws.getValue(0, 1).kind, 0);
-    assert.equal(ws.getValue(0, 2).number, 1);
+    assert.equal(ws.getTypedValue(0, 1).kind, 0);
+    assert.equal(ws.getTypedValue(0, 2).number, 1);
     ws.deleteColumns('B:B');
-    assert.equal(ws.getValue(0, 1).number, 1);
+    assert.equal(ws.getTypedValue(0, 1).number, 1);
   });
 });

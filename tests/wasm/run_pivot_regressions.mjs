@@ -310,7 +310,7 @@ export function registerPivotRegressions(Module, test) {
     // failure is not an error value: the shadow stack runs into the data
     // segment below it, and past that the module faults in a way no
     // `Expected` can report and no `try` can recover from. So the assertion is
-    // that the cap is reached by a diagnostic.
+    // that the cap is reached by a diagnostic (status 1007).
     //
     // Nested calls are the shape that matters -- parentheses are elided by the
     // parser and cost a fraction as much per level. The cap itself is
@@ -328,6 +328,11 @@ export function registerPivotRegressions(Module, test) {
         try {
           out = wb.evaluateFormula(0, 1, 0, formula);
         } catch (e) {
+          // A formula past the nesting cap is refused at entry with a parser status.
+          if (e?.code === 1007) {
+            rejectedAt = depth;
+            break;
+          }
           // Past this point the instance is gone and its worker threads keep
           // the process alive, so reporting and continuing would hang rather
           // than fail. Exit on the spot with the depth that did it.

@@ -16,7 +16,7 @@ import { assert, getModule, isFormulonError, path, pkgRoot, readFile } from './s
 // the baseline grid is two regions, their sums and the grand total.
 function buildPivot(mod) {
   const wb = mod.Workbook.createDefault();
-  wb.setExcelProfileId('win-365-ja_JP');
+  wb.setProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
   const { cacheId } = cache;
   wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:D5', sheet: 'Sheet1' });
@@ -949,7 +949,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
     );
     const back = mod.Workbook.load(saved);
     try {
-      back.setExcelProfileId('win-365-ja_JP');
+      back.setProfileId('win-365-ja_JP');
       assert.equal(back.sheet(0).pivot(0).listFilters().length, 1);
       const filter = back.sheet(0).pivot(0).listFilters()[0];
       assert.equal(filter.type, 1);
@@ -1021,7 +1021,7 @@ const STATUS_ACCESSORS = [
   ['getCommentVisible', null, [99, 0, 0]],
   ['getRefMode', [], null],
   ['getDate1904', [], null],
-  ['getExcelProfileId', [], null],
+  ['getProfileId', [], null],
   ['getPinnedNow', [], null],
   ['getSpillInfo', [0, 0, 0], [99, 0, 0]],
   ['getArrayFormula', [0, 0, 0], [99, 0, 0]],
@@ -1042,7 +1042,10 @@ function callAccessor(wb, name, args) {
       .pivot(args[1])
       [name.slice(6)](...args.slice(2));
   if (name.startsWith('PivotCache.')) return wb.pivotCache(args[0])[name.slice(11)](...args.slice(1));
-  return name in wb ? wb[name](...args) : wb.sheet(args[0])[name](...args.slice(1));
+  if (name in wb) return wb[name](...args);
+  if (name in wb.ooxml) return wb.ooxml[name](...args);
+  const sheet = wb.sheet(args[0]);
+  return name in sheet ? sheet[name](...args.slice(1)) : sheet.ooxml[name](...args.slice(1));
 }
 
 test('every row of the accessor table names a declared method', async () => {
@@ -1077,7 +1080,7 @@ test('fallible accessors succeed, throw on a rejection and on a released handle'
     }
   }
   assert.equal(wb.listSheets().length, 1);
-  assert.equal(wb.getExcelProfileId(), 'win-365-en_US');
+  assert.equal(wb.getProfileId(), 'win-365-en_US');
   assert.equal(mod.localizeFunctionName('SUM', 'win-365-ja_JP'), 'SUM');
   assert.throws(() => mod.localizeFunctionName('SUM', 'nope'), isFormulonError);
   assert.equal(mod.listFunctionNames().includes('SUM'), true);

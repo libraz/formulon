@@ -96,9 +96,9 @@ test('getEffectiveStyle reports the cell xf with resolved colours', async () => 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const font = wb.addFont({ name: 'Arial', size: 11, colorArgb: 0xffff0000 });
-    const xf = wb.addCellXf({ fontIndex: font, fillIndex: 0, borderIndex: 0, numFmtId: 0, applyFont: true });
-    wb.sheet(0).setCellXfIndex(2, 3, xf);
+    const font = wb.ooxml.addFont({ name: 'Arial', size: 11, color: '#FFFF0000' });
+    const xf = wb.ooxml.addCellXf({ fontIndex: font, fillIndex: 0, borderIndex: 0, numFmtId: 0, applyFont: true });
+    wb.sheet(0).ooxml.setCellXfIndex(2, 3, xf);
 
     const eff = wb.sheet(0).getEffectiveStyle(2, 3);
     assert.equal(eff.xfIndex, xf);
@@ -123,28 +123,28 @@ test('clearCellXfIndex restores row / column inheritance', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const xfCol = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
-    const xfCell = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
-    wb.sheet(0).setColumnStyle(0, 0, xfCol);
-    wb.sheet(0).setCellXfIndex(0, 0, xfCell);
+    const xfCol = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+    const xfCell = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+    wb.sheet(0).ooxml.setColumnStyle(0, 0, xfCol);
+    wb.sheet(0).ooxml.setCellXfIndex(0, 0, xfCell);
     let e = wb.sheet(0).getEffectiveStyle(0, 0);
     assert.equal(e.source, 0);
     assert.equal(e.xfIndex, xfCell);
 
-    wb.sheet(0).clearCellXfIndex(0, 0);
+    wb.sheet(0).ooxml.clearCellXfIndex(0, 0);
     e = wb.sheet(0).getEffectiveStyle(0, 0);
     assert.equal(e.source, 2);
     assert.equal(e.xfIndex, xfCol);
 
-    wb.sheet(0).setCellXfIndex(0, 0, 0);
+    wb.sheet(0).ooxml.setCellXfIndex(0, 0, 0);
     e = wb.sheet(0).getEffectiveStyle(0, 0);
     assert.equal(e.source, 0);
     assert.equal(e.xfIndex, 0);
 
     const before = wb.sheet(0).listCells().length;
-    wb.sheet(0).clearCellXfIndex(7, 7);
+    wb.sheet(0).ooxml.clearCellXfIndex(7, 7);
     assert.equal(wb.sheet(0).listCells().length, before);
-    assert.throws(() => wb.sheet(99).clearCellXfIndex(0, 0), isFormulonError);
+    assert.throws(() => wb.sheet(99).ooxml.clearCellXfIndex(0, 0), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -154,33 +154,46 @@ test('attribute patch over a column keeps the row style (bases / remap / snapsho
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const rowXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
-    const xfA = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
-    const xfB = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
-    wb.sheet(0).setRowStyle(2, 2, rowXf);
+    const rowXf = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+    const xfA = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
+    const xfB = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+    wb.sheet(0).ooxml.setRowStyle(2, 2, rowXf);
     assert.equal(wb.sheet(0).getEffectiveStyle(2, 1).source, 1);
-    assert.throws(() => wb.sheet(0).setRowStyle(5, 4, rowXf), isFormulonError);
+    assert.throws(() => wb.sheet(0).ooxml.setRowStyle(5, 4, rowXf), isFormulonError);
 
-    const bases = wb.sheet(0).getRangeStyleBases({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
+    const bases = wb.sheet(0).ooxml.getRangeStyleBases({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
     assert.ok(bases.includes(0) && bases.includes(rowXf));
     // Row 2 of a one-column selection is a single cell; excluding it hides the row style.
     const excluded = wb
       .sheet(0)
-      .getRangeStyleBasesExcluding({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2, 2, 9], [1, 1, 9]);
+      .ooxml.getRangeStyleBasesExcluding(
+        { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 },
+        [2, 2, 9],
+        [1, 1, 9],
+      );
     assert.deepEqual(excluded, [0]);
     assert.throws(
       () =>
-        wb.sheet(0).getRangeStyleBasesExcluding({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2], []),
+        wb
+          .sheet(0)
+          .ooxml.getRangeStyleBasesExcluding({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2], []),
       TypeError,
     );
 
     const snap = wb.sheet(0).snapshotRangeStyle({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
     assert.ok(snap.length > 0);
     assert.throws(
-      () => wb.sheet(0).remapRangeStyle({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf], [xfA]),
+      () =>
+        wb
+          .sheet(0)
+          .ooxml.remapRangeStyle({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf], [xfA]),
       TypeError,
     );
-    wb.sheet(0).remapRangeStyle({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf], [xfA, xfB]);
+    wb.sheet(0).ooxml.remapRangeStyle(
+      { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 },
+      [0, rowXf],
+      [xfA, xfB],
+    );
 
     let e = wb.sheet(0).getEffectiveStyle(2, 1);
     assert.equal(e.source, 0);
@@ -199,7 +212,7 @@ test('attribute patch over a column keeps the row style (bases / remap / snapsho
     assert.equal(wb.sheet(0).getEffectiveStyle(499, 1).source, 3);
     assert.throws(() => wb.sheet(0).restoreRangeStyle(new Uint8Array([1, 2, 3])), isFormulonError);
 
-    wb.sheet(0).clearRowStyle(2, 2);
+    wb.sheet(0).ooxml.clearRowStyle(2, 2);
     assert.equal(wb.sheet(0).getEffectiveStyle(2, 2).source, 3);
   } finally {
     wb.dispose();
@@ -210,22 +223,22 @@ test('setCellStyle round-trips a record and validates its fields', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const before = wb.listCellStyles().length;
+    const before = wb.ooxml.listCellStyles().length;
     const rec = { name: 'Probe Style', xfId: 0, builtinId: 53, iLevel: 0, hidden: true, customBuiltin: true };
-    wb.setCellStyle(rec);
-    assert.equal(wb.listCellStyles().length, before + 1);
-    const read = wb.listCellStyles()[before];
+    wb.ooxml.setCellStyle(rec);
+    assert.equal(wb.ooxml.listCellStyles().length, before + 1);
+    const read = wb.ooxml.listCellStyles()[before];
     assert.equal(read.name, 'Probe Style');
     assert.equal(read.builtinId, 53);
     assert.equal(read.hidden, true);
     assert.equal(read.customBuiltin, true);
 
-    wb.setCellStyle({ name: 'Probe Style' });
-    assert.equal(wb.listCellStyles().length, before + 1);
-    assert.equal(wb.listCellStyles()[before].builtinId, 0xffffffff);
+    wb.ooxml.setCellStyle({ name: 'Probe Style' });
+    assert.equal(wb.ooxml.listCellStyles().length, before + 1);
+    assert.equal(wb.ooxml.listCellStyles()[before].builtinId, 0xffffffff);
 
-    assert.throws(() => wb.setCellStyle({ name: 'Bad Level', iLevel: 3 }), isFormulonError);
-    assert.throws(() => wb.setCellStyle({ name: '' }), isFormulonError);
+    assert.throws(() => wb.ooxml.setCellStyle({ name: 'Bad Level', iLevel: 3 }), isFormulonError);
+    assert.throws(() => wb.ooxml.setCellStyle({ name: '' }), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -235,15 +248,15 @@ test('removeCellStyle rejects the Normal style and an unknown name', async () =>
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const styles = wb.listCellStyles();
+    const styles = wb.ooxml.listCellStyles();
     const normal = styles[0];
-    assert.throws(() => wb.removeCellStyle(normal.name), isFormulonError);
-    assert.throws(() => wb.removeCellStyle('No Such Style'), isFormulonError);
-    if (wb.listCellStyles().length > 1) {
-      const other = wb.listCellStyles()[1];
-      const before = wb.listCellStyles().length;
-      wb.removeCellStyle(other.name);
-      assert.equal(wb.listCellStyles().length, before - 1);
+    assert.throws(() => wb.ooxml.removeCellStyle(normal.name), isFormulonError);
+    assert.throws(() => wb.ooxml.removeCellStyle('No Such Style'), isFormulonError);
+    if (wb.ooxml.listCellStyles().length > 1) {
+      const other = wb.ooxml.listCellStyles()[1];
+      const before = wb.ooxml.listCellStyles().length;
+      wb.ooxml.removeCellStyle(other.name);
+      assert.equal(wb.ooxml.listCellStyles().length, before - 1);
     }
   } finally {
     wb.dispose();
@@ -266,8 +279,8 @@ test('createForProfile builds the locale defaults and reports a bad id as an inv
   const wb = mod.Workbook.createForProfile('mac-365-ja_JP');
   try {
     assert.equal(wb.disposed, false);
-    assert.equal(wb.getExcelProfileId(), 'mac-365-ja_JP');
-    const font = wb.getFont(0);
+    assert.equal(wb.getProfileId(), 'mac-365-ja_JP');
+    const font = wb.ooxml.getFont(0);
     assert.equal(font.name, '游ゴシック');
     assert.equal(font.size, 12);
   } finally {

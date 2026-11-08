@@ -79,14 +79,14 @@ test('font toggles round-trip and dedup', async () => {
     condense: true,
     extend: true,
   };
-  const added = wb.addFont(record);
-  assert.equal(wb.addFont(record), added);
-  const font = wb.getFont(added);
+  const added = wb.ooxml.addFont(record);
+  assert.equal(wb.ooxml.addFont(record), added);
+  const font = wb.ooxml.getFont(added);
   assert.deepEqual([font.outline, font.shadow, font.condense, font.extend], [true, false, true, true]);
   // An element the record leaves out reads back as null.
   assert.equal(font.bold, null);
   const loaded = roundTrip(mod, wb);
-  assert.equal(loaded.getFont(added).condense, true);
+  assert.equal(loaded.ooxml.getFont(added).condense, true);
   release(loaded);
   release(wb);
 });
@@ -103,25 +103,25 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
     top: 0.25,
     bottom: 0.75,
     stops: [
-      { position: 0, colorArgb: 0xffff0000, color: rgb(0xffff0000) },
-      { position: 1, colorArgb: 0, color: { kind: 2, rgb: 0, theme: 4, tint: 0.5, indexed: 0 } },
+      { position: 0, color: rgb(0xffff0000) },
+      { position: 1, color: { kind: 2, rgb: 0, theme: 4, tint: 0.5, indexed: 0 } },
     ],
   };
-  const added = wb.addFill({ gradient });
-  assert.equal(wb.addFill({ gradient }), added);
-  const fill = wb.getFill(added);
+  const added = wb.ooxml.addFill({ gradient });
+  assert.equal(wb.ooxml.addFill({ gradient }), added);
+  const fill = wb.ooxml.getFill(added);
   assert.equal(fill.gradient.type, 1);
   assert.equal(fill.gradient.top, 0.25);
   assert.equal(fill.gradient.stops.length, 2);
-  assert.equal(fill.gradient.stops[0].colorArgb, 0xffff0000);
+  assert.equal(fill.gradient.stops[0].color.rgb, 0xffff0000);
   assert.equal(fill.gradient.stops[1].color.theme, 4);
-  assert.equal(wb.getFill(0).gradient, undefined);
+  assert.equal(wb.ooxml.getFill(0).gradient, undefined);
 
-  const dxf = wb.addDxf({ fill: { gradient: { ...gradient, type: 0, degree: 45 } } });
+  const dxf = wb.ooxml.addDxf({ fill: { gradient: { ...gradient, type: 0, degree: 45 } } });
   const loaded = roundTrip(mod, wb);
-  assert.equal(loaded.getFill(added).gradient.stops.length, 2);
-  assert.equal(loaded.getDxf(dxf).fill.gradient.degree, 45);
-  assert.ok(rejected(() => wb.addFill({ gradient: { stops: [{ position: 'x' }] } })));
+  assert.equal(loaded.ooxml.getFill(added).gradient.stops.length, 2);
+  assert.equal(loaded.ooxml.getDxf(dxf).fill.gradient.degree, 45);
+  assert.ok(rejected(() => wb.ooxml.addFill({ gradient: { stops: [{ position: 'x' }] } })));
   release(loaded);
   release(wb);
 });

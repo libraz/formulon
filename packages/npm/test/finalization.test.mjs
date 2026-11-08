@@ -131,7 +131,7 @@ test('a Sheet handle keeps its workbook alive, so the raw handle is not deleted 
   }
   assert.equal(raws[0].isDeleted(), false, 'the reachable sheet holds the workbook');
   sheet.setNumber(0, 0, 7);
-  assert.equal(sheet.getValue(0, 0).number, 7);
+  assert.equal(sheet.getTypedValue(0, 0).number, 7);
   const wb = sheet.workbook;
   sheet = null;
   wb.dispose();

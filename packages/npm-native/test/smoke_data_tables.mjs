@@ -36,7 +36,7 @@ const readZipEntry = (bytes, name) => {
 };
 
 const num = (wb, row, col) => {
-  const r = wb.sheet(0).getValue(row, col);
+  const r = wb.sheet(0).getTypedValue(row, col);
   assert.equal(r.kind, KIND.Number, `${row},${col}`);
   return r.number;
 };
@@ -130,7 +130,7 @@ test('a data table survives save and load as a dataTable formula and follows row
   loaded.sheet(0).deleteRows(2, 1);
   assert.equal(loaded.sheet(0).getDataTable(5, 1).colInput.deleted, true);
   loaded.recalc();
-  assert.equal(loaded.sheet(0).getValue(3, 1).kind, KIND.Error);
+  assert.equal(loaded.sheet(0).getTypedValue(3, 1).kind, KIND.Error);
   release(loaded);
   release(wb);
 });
@@ -148,7 +148,7 @@ test('autoNoTable leaves tables to recalcDataTables and removal blanks them', as
 
   wb.sheet(0).removeDataTable(3, 1);
   assert.equal(wb.sheet(0).getDataTable(3, 1), null);
-  assert.equal(wb.sheet(0).getValue(3, 1).kind, KIND.Blank);
+  assert.equal(wb.sheet(0).getTypedValue(3, 1).kind, KIND.Blank);
   assert.throws(() => wb.sheet(0).removeDataTable(3, 1), isFormulonError);
   wb.sheet(0).setNumber(3, 1, 7);
   release(wb);

@@ -6,7 +6,7 @@ const A1_B2 = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
 test('getCellXf carries apply flags, quotePrefix and protection', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const added = wb.addCellXf({
+  const added = wb.ooxml.addCellXf({
     fontIndex: 0,
     fillIndex: 0,
     borderIndex: 0,
@@ -21,7 +21,7 @@ test('getCellXf carries apply flags, quotePrefix and protection', async () => {
     locked: false,
     hidden: true,
   });
-  const xf = wb.getCellXf(added);
+  const xf = wb.ooxml.getCellXf(added);
   assert.equal(xf.applyNumberFormat, true);
   assert.equal(xf.applyFont, true);
   assert.equal(xf.applyFill, false);
@@ -32,13 +32,13 @@ test('getCellXf carries apply flags, quotePrefix and protection', async () => {
   assert.equal(xf.locked, false);
   assert.equal(xf.hidden, true);
 
-  const plain = wb.getCellXf(0);
+  const plain = wb.ooxml.getCellXf(0);
   // Without a protection element both read null: the default (locked) applies.
   assert.equal(plain.locked, null);
   assert.equal(plain.hidden, null);
   assert.equal(plain.quotePrefix, false);
 
-  assert.throws(() => wb.getCellXf(99999), isFormulonError);
+  assert.throws(() => wb.ooxml.getCellXf(99999), isFormulonError);
 });
 
 test('row overrides report height / customHeight and clearRowHeight drops the height', async () => {
@@ -207,8 +207,8 @@ test('getCellsInRange pages through populated cells with a cursor', async () => 
     ],
   );
   assert.equal(all.cells[0].formula, null);
-  assert.equal(all.cells[0].value.number, 1);
-  assert.equal(all.cells[1].value.text, 'x');
+  assert.equal(all.cells[0].value, 1);
+  assert.equal(all.cells[1].value, 'x');
   assert.equal(all.cells[2].formula, '=A1+1');
 
   const first = wb.sheet(0).getCellsInRange(range, 0, 2);
@@ -243,8 +243,8 @@ test('getMergesInRange lists only intersecting merges', async () => {
 test('getDisplayText and formatValue render through the number format', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const fmt = wb.addNumFmt('0.00');
-  const xf = wb.addCellXf({
+  const fmt = wb.ooxml.addNumFmt('0.00');
+  const xf = wb.ooxml.addCellXf({
     fontIndex: 0,
     fillIndex: 0,
     borderIndex: 0,
@@ -254,7 +254,7 @@ test('getDisplayText and formatValue render through the number format', async ()
     wrapText: false,
   });
   wb.sheet(0).setNumber(0, 0, 3.14159);
-  wb.sheet(0).setCellXfIndex(0, 0, xf);
+  wb.sheet(0).ooxml.setCellXfIndex(0, 0, xf);
   const shown = wb.sheet(0).getDisplayText(0, 0);
   assert.equal(shown.text, '3.14');
   assert.equal(shown.displayStatus, 0);

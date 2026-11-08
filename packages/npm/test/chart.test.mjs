@@ -108,7 +108,7 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(s0.categories.formula, 'Sheet1!$A$2:$A$5');
     assert.equal(s0.values.formula, 'Sheet1!$B$2:$B$5');
     assert.equal(s0.x.kind, mod.ChartSourceKind.None);
-    assert.equal(typeof s0.fill.color, 'number');
+    assert.equal(s0.fill.color.kind, mod.ColorKind.Rgb);
     assert.equal(s0.marker, null);
     assert.equal(s0.labels, null);
     assert.deepEqual(s0.points, []);
@@ -177,8 +177,8 @@ test('insertChart covers the creation kinds and omitted options', async () => {
     assert.equal(barPlot.grouping, mod.ChartGrouping.Stacked);
     assert.equal(chartOf(wb, bar).title, null);
 
-    const xXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
-    wb.sheet(0).setRangeXfIndex({ firstRow: 1, firstCol: 5, lastRow: 4, lastCol: 5 }, xXf);
+    const xXf = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
+    wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 1, firstCol: 5, lastRow: 4, lastCol: 5 }, xXf);
     const scatter = insert(wb, mod, { kind: mod.ChartInsertKind.Scatter, source: 'Sheet1!$F$1:$G$5' });
     const sdata = dataOf(wb, scatter);
     assert.equal(sdata.domain, 'xy');
@@ -300,8 +300,8 @@ test('typed chart edits are visible through getChart', async () => {
     wb.sheet(0)
       .chart(id)
       .setSeries(0, 1, {
-        fill: { color: 0xffff0000, transparency: 25 },
-        line: { color: 0xff0000ff, widthPt: 2, dash: mod.ChartLineDash.Dash },
+        fill: { color: '#FF0000', transparency: 25 },
+        line: { color: '#0000FF', widthPt: 2, dash: mod.ChartLineDash.Dash },
         marker: { symbol: mod.ChartMarkerSymbol.Circle, size: 7 },
         smooth: true,
         labels: { showValue: true, position: mod.ChartLabelPosition.OutsideEnd, numberFormat: '0.00' },
@@ -310,7 +310,7 @@ test('typed chart edits are visible through getChart', async () => {
     // A line series takes no fill of its own; its colour is the line's.
     assert.equal(series.fill.color, null);
     assert.equal(series.fill.transparency, null);
-    assert.equal(series.line.color, 0xff0000ff);
+    assert.equal(series.line.color.rgb, 0xff0000ff);
     assert.equal(series.line.widthPt, 2);
     assert.equal(series.line.dash, mod.ChartLineDash.Dash);
     assert.equal(series.marker.symbol, mod.ChartMarkerSymbol.Circle);
@@ -324,7 +324,7 @@ test('typed chart edits are visible through getChart', async () => {
     series = chartOf(wb, id).plots[0].series[1];
     assert.equal(series.marker, null);
     assert.equal(series.labels, null);
-    assert.equal(series.line.color, 0xff0000ff);
+    assert.equal(series.line.color.rgb, 0xff0000ff);
 
     // Reference edits refill the cache and resolved data follows.
     wb.sheet(0).chart(id).setSeries(0, 0, { values: 'Sheet1!$D$2:$D$5', name: '' });
@@ -337,10 +337,10 @@ test('typed chart edits are visible through getChart', async () => {
     const otherPoints = chartOf(wb, id).plots[0].series[1].points.filter((point) => point.index !== 2);
     wb.sheet(0)
       .chart(id)
-      .setPoint(0, 1, 2, { line: { color: 0xff00ff00 } });
+      .setPoint(0, 1, 2, { line: { color: '#00FF00' } });
     const points = chartOf(wb, id).plots[0].series[1].points;
     assert.equal(points.length, otherPoints.length + 1);
-    assert.equal(points.find((point) => point.index === 2).line.color, 0xff00ff00);
+    assert.equal(points.find((point) => point.index === 2).line.color.rgb, 0xff00ff00);
     assert.deepEqual(
       points.filter((point) => point.index !== 2),
       otherPoints,
@@ -391,7 +391,7 @@ test('series can be added, removed and rebuilt from a new source', async () => {
 
     wb.sheet(0)
       .chart(id)
-      .setSeries(0, 0, { fill: { color: 0xff112233 } });
+      .setSeries(0, 0, { fill: { color: '#112233' } });
     wb.sheet(0).chart(id).setSource({
       source: 'Sheet1!$A$1:$D$5',
       direction: mod.ChartSeriesDirection.Columns,
@@ -400,7 +400,7 @@ test('series can be added, removed and rebuilt from a new source', async () => {
     });
     let chart = chartOf(wb, id);
     assert.equal(chart.plots[0].series.length, 3);
-    assert.equal(chart.plots[0].series[0].fill.color, 0xff112233);
+    assert.equal(chart.plots[0].series[0].fill.color.rgb, 0xff112233);
     assert.equal(chart.source.range, 'Sheet1!$A$1:$D$5');
 
     // Rows direction swaps the split: four series of three points.
@@ -527,7 +527,7 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
       wb
         .sheet(0)
         .chart(id)
-        .setSeries(0, 0, { fill: { color: 1 }, marker: { symbol: null } }),
+        .setSeries(0, 0, { fill: { color: '#010203' }, marker: { symbol: null } }),
     );
     expectFailure(() => wb.sheet(0).chart(id).setAxis(12345, {}));
     expectFailure(() => wb.sheet(0).chart(id).setPlot(0, { holeSize: 50 }));

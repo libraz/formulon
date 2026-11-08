@@ -45,7 +45,7 @@ const box = (mod) => ({
   toRow: 5,
   toCol: 4,
   fillKind: mod.ShapePaint.Solid,
-  fillRgb: 0xff0000,
+  fillColor: '#FF0000',
   lineKind: mod.ShapePaint.None,
   rotation: 900000,
 });
@@ -63,7 +63,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
     widthEmu: 914400,
     heightEmu: 0,
     lineKind: mod.ShapePaint.Solid,
-    lineRgb: 0x00ff00,
+    lineColor: '#00FF00',
     lineWidthEmu: 19050,
   });
   assert.notEqual(rect, line);
@@ -80,7 +80,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(props[0].anchorKind, mod.AnchorKind.TwoCell);
   assert.equal(props[0].toCol, 4);
   assert.equal(props[0].fillKind, mod.ShapePaint.Solid);
-  assert.equal(props[0].fillRgb, 0xff0000);
+  assert.equal(props[0].fillColor.rgb, 0xffff0000);
   assert.equal(props[0].lineKind, mod.ShapePaint.None);
   assert.equal(props[0].rotation, 900000);
   assert.equal(props[0].hidden, false);
@@ -88,7 +88,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(props[1].anchorKind, mod.AnchorKind.OneCell);
   assert.equal(props[1].fromColOffsetEmu, 500);
   assert.equal(props[1].widthEmu, 914400);
-  assert.equal(props[1].lineRgb, 0x00ff00);
+  assert.equal(props[1].lineColor.rgb, 0xff00ff00);
   assert.equal(props[1].lineWidthEmu, 19050);
 
   // An update changes the named fields only, and an anchor moves with a row insert.

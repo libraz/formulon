@@ -574,7 +574,7 @@ test('pivot numberFormat is a format code and the builtin id 27 survives a round
   const formulon = await getFormulon();
   const wb = formulon.Workbook.createDefault();
   try {
-    wb.setExcelProfileId('win-365-ja_JP');
+    wb.setProfileId('win-365-ja_JP');
     const ws = wb.sheet(0);
     fillSource(ws);
     const cache = addCache(wb, 'Sheet1');
@@ -582,7 +582,7 @@ test('pivot numberFormat is a format code and the builtin id 27 survives a round
     assert.equal(pivot.listFields()[amount].numberFormat, null);
 
     // The profile's code for id 27 maps back to id 27, and its read-back writes id 27 again.
-    const code27 = wb.getNumFmtString(27);
+    const code27 = wb.ooxml.getNumFmtString(27);
     assert.ok(code27, 'the profile has a code for numFmtId 27');
     pivot.updateField(amount, { numberFormat: code27 });
     assert.match(pivotPart(wb), /<pivotField [^>]*numFmtId="27"/);

@@ -93,6 +93,8 @@ test('cell geometry rejects fractional nested range coordinates before the query
 test('partial recalc rejects fractional nested viewport coordinates before recalc', () => {
   const wb = addon.Workbook.createDefault();
   try {
+    // Under Manual a read does not compute pending cells, so a blank read proves nothing was recalculated.
+    wb.setCalcMode(1);
     wb.setNumber(0, 0, 0, 1);
     wb.setFormula(0, 0, 1, '=A1+1');
     assert.throws(() => wb.recalcViewport(0, { ...RANGE, firstRow: 1.5 }), TypeError);

@@ -19,11 +19,7 @@ const COLOR_SCALE_RULE = Object.freeze({
       { type: 1, value: '50' },
       { type: 0, value: '100' },
     ],
-    colors: [
-      { r: 248, g: 105, b: 107, a: 255 },
-      { r: 255, g: 235, b: 132, a: 255 },
-      { r: 99, g: 190, b: 123, a: 255 },
-    ],
+    colors: ['#F8696B', '#FFEB84', '#63BE7B'],
   },
 });
 
@@ -33,7 +29,7 @@ const DATA_BAR_RULE = Object.freeze({
   dataBar: {
     min: { type: 0, value: '5' },
     max: { type: 0, value: '95' },
-    fill: { r: 0, g: 112, b: 192, a: 255 },
+    fill: '#0070C0',
   },
 });
 
@@ -98,8 +94,8 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
       [1, 1, 1],
     );
     assert.equal(byType.get(2).colorScale.colors.length, 3);
-    assert.equal(byType.get(2).colorScale.colors[2].g, 190);
-    assert.equal(byType.get(3).dataBar.fill.b, 192);
+    assert.equal(byType.get(2).colorScale.colors[2].rgb, 0xff63be7b);
+    assert.equal(byType.get(3).dataBar.fill.rgb, 0xff0070c0);
 
     const saved = wb.save();
     bytes = saved;

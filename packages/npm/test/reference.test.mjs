@@ -2,6 +2,7 @@ import test from 'node:test';
 import { assert, expectFailure, getModule } from './smoke_support.mjs';
 
 const kInvalidArgument = 2;
+const kInvalidReference = 1004;
 
 const dispose = (wb) => wb.dispose();
 
@@ -29,7 +30,7 @@ test('spillInfo reports a spill blocked by a value', async () => {
   }
 });
 
-test('parseReference reads the INDIRECT grammar', async () => {
+test('parseReference reads the INDIRECT grammar and fails with 1004 on anything else', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
@@ -47,10 +48,10 @@ test('parseReference reads the INDIRECT grammar', async () => {
     assert.equal(ref("'O''Brien'!A1").sheetName, "O'Brien");
     assert.deepEqual(ref('B:D'), { sheetName: null, rect: { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 3 } });
     assert.deepEqual(ref('2:11'), { sheetName: null, rect: { firstRow: 1, firstCol: 0, lastRow: 10, lastCol: 16383 } });
-    assert.equal(ref('XFE1'), null);
-    assert.equal(ref(''), null);
-    assert.equal(ref(' A1'), null);
-    assert.equal(ref('A1,B2'), null);
+    expectFailure(() => ref('XFE1'), kInvalidReference);
+    expectFailure(() => ref(''), kInvalidReference);
+    expectFailure(() => ref(' A1'), kInvalidReference);
+    expectFailure(() => ref('A1,B2'), kInvalidReference);
     assert.deepEqual(ref('R2C3', { r1c1: true }), {
       sheetName: null,
       rect: { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 },
@@ -59,7 +60,7 @@ test('parseReference reads the INDIRECT grammar', async () => {
       sheetName: null,
       rect: { firstRow: 4, firstCol: 5, lastRow: 4, lastCol: 5 },
     });
-    assert.equal(ref('R[-1]C', { r1c1: true }), null);
+    expectFailure(() => ref('R[-1]C', { r1c1: true }), kInvalidReference);
     assert.throws(() => ref('R[-1]C', { r1c1: true, baseRow: 5 }), TypeError);
     assert.throws(() => ref('R[-1]C', { r1c1: true, baseCol: 5 }), TypeError);
     expectFailure(() => wb.parseReference('A1', { baseRow: 2000000, baseCol: 0 }), kInvalidArgument);

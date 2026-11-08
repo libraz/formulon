@@ -138,13 +138,10 @@ export function registerThemeStyles(Module, test) {
         italic: false,
         strike: false,
         underline: 0,
-        colorArgb: 0,
         color: themeSpec(4, 0),
       });
       const fill = wb.addFill({
         pattern: 1,
-        fgArgb: 0xffff0000,
-        bgArgb: 0,
         fg: { kind: 1, rgb: 0xffff0000, theme: 0, tint: 0, indexed: 0 },
         bg: { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 },
       });
@@ -303,7 +300,7 @@ export function registerThemeStyles(Module, test) {
     const wb = Module.Workbook.createForProfile('mac-365-ja_JP');
     try {
       assert.equal(wb.disposed, false);
-      assert.equal(wb.getExcelProfileId(), 'mac-365-ja_JP');
+      assert.equal(wb.getProfileId(), 'mac-365-ja_JP');
       const font = wb.getFont(0);
       assert.equal(font.name, '游ゴシック');
       assert.equal(font.size, 12);

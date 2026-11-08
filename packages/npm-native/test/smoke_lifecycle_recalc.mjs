@@ -6,7 +6,7 @@ test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setFormula(0, 0, '=1+2');
   wb.recalc();
-  const r = wb.sheet(0).getValue(0, 0);
+  const r = wb.sheet(0).getTypedValue(0, 0);
   assert.equal(r.kind, mod.ValueKind.Number);
   assert.equal(r.number, 3);
 });
@@ -25,7 +25,7 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   assert.equal(serial.workerThreadsUsed, 0);
   assert.equal(serial.cellsEvaluated, width);
   for (let row = 0; row < width; row += 1) {
-    const value = wb.sheet(0).getValue(row, 1);
+    const value = wb.sheet(0).getTypedValue(row, 1);
     assert.equal(value.kind, mod.ValueKind.Number);
     assert.equal(value.number, (row + 1) * 2);
   }
@@ -46,7 +46,7 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   }
   assert.equal(parallel.cellsEvaluated, width);
   for (let row = 0; row < width; row += 1) {
-    const value = wb.sheet(0).getValue(row, 1);
+    const value = wb.sheet(0).getTypedValue(row, 1);
     assert.equal(value.kind, mod.ValueKind.Number);
     assert.equal(value.number, (row + 2) * 2);
   }
@@ -71,28 +71,27 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   wb.dispose();
 });
 
-test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
+test("evaluateTypedFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const r = wb.sheet(0).evaluateFormulaArray(0, 0, '=SEQUENCE(2,3)');
-  assert.equal(r.rows, 2);
-  assert.equal(r.cols, 3);
-  assert.equal(r.cells.length, 2);
-  assert.equal(r.cells[0].length, 3);
+  const r = wb.sheet(0).evaluateTypedFormulaArray(0, 0, '=SEQUENCE(2,3)');
+  assert.equal(r.length, 2);
+  assert.equal(r[0].length, 3);
+  assert.equal(r[1].length, 3);
   // Row-major 1..6.
-  assert.equal(r.cells[0][0].kind, mod.ValueKind.Number);
-  assert.equal(r.cells[0][0].number, 1);
-  assert.equal(r.cells[1][2].number, 6);
+  assert.equal(r[0][0].kind, mod.ValueKind.Number);
+  assert.equal(r[0][0].number, 1);
+  assert.equal(r[1][2].number, 6);
 });
 
-test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
+test("evaluateTypedFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const r = wb.sheet(0).evaluateFormulaArray(0, 0, '=1+2');
-  assert.equal(r.rows, 1);
-  assert.equal(r.cols, 1);
-  assert.equal(r.cells[0][0].kind, mod.ValueKind.Number);
-  assert.equal(r.cells[0][0].number, 3);
+  const r = wb.sheet(0).evaluateTypedFormulaArray(0, 0, '=1+2');
+  assert.equal(r.length, 1);
+  assert.equal(r[0].length, 1);
+  assert.equal(r[0][0].kind, mod.ValueKind.Number);
+  assert.equal(r[0][0].number, 3);
 });
 
 test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () => {
@@ -132,14 +131,15 @@ test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
   assert.ok(bytes.length > 0, 'expected non-empty save buffer');
 
   const wb2 = mod.Workbook.load(bytes);
-  const r = wb2.sheet(0).getValue(0, 0);
+  const r = wb2.sheet(0).getTypedValue(0, 0);
   assert.equal(r.kind, mod.ValueKind.Number);
   assert.equal(r.number, 42);
 });
 
-test('loadBytes rejects a non-byte view', async () => {
+test('load reads any view as its bytes, so a non-workbook view is a FormulonError', async () => {
   const mod = await getModule();
-  assert.throws(() => mod.Workbook.load(new Uint16Array([1])), TypeError);
+  assert.throws(() => mod.Workbook.load(new Uint16Array([1])), isFormulonError);
+  assert.throws(() => mod.Workbook.load('bytes'), TypeError);
 });
 
 // -- Expanded surface coverage -----------------------------------------
@@ -159,11 +159,11 @@ test('dispose deterministically releases a workbook and is idempotent', async ()
   assert.equal(wb.disposed, false);
   assert.equal(wb.dispose(), undefined);
   assert.equal(wb.disposed, true);
-  assert.throws(() => wb.sheet(0).getValue(0, 0), isFormulonError);
+  assert.throws(() => wb.sheet(0).getTypedValue(0, 0), isFormulonError);
   assert.equal(wb.dispose(), undefined);
 });
 
-test('memoryUsage grows with the workbook and reads zero after dispose', async () => {
+test('memoryUsage grows with the workbook and throws after dispose', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
 
@@ -179,7 +179,7 @@ test('memoryUsage grows with the workbook and reads zero after dispose', async (
   assert.ok(filled > empty, `expected growth, got ${empty} -> ${filled}`);
 
   wb.dispose();
-  assert.equal(wb.getMemoryUsage(), 0);
+  assert.throws(() => wb.getMemoryUsage(), isFormulonError);
 });
 
 test('memoryUsage is stable across repeated calls and survives a recalc', async () => {
@@ -226,7 +226,7 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
   assert.equal(named.name, 'Archive');
   assert.equal(wb.sheet(0), named);
   wb.recalc();
-  assert.equal(wb.sheet(0).getValue(0, 1).number, 10);
+  assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 10);
   assert.throws(
     () => wb.copySheet(9, 0),
     (e) => isFormulonError(e, 5050),

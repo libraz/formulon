@@ -94,9 +94,9 @@ test('theme script fonts and passthrough parts are read by key', async () => {
     typeface: 'Test Face',
   });
   missing(wb.getThemeScriptFont({ major: true, script: 'Zzzz' }));
-  const path = wb.listPassthroughs()[0];
-  assert.equal(found(wb.getPassthrough(path)), path);
-  missing(wb.getPassthrough(`/${path}`));
+  const path = wb.ooxml.listPassthroughs()[0];
+  assert.equal(found(wb.ooxml.getPassthrough(path)), path);
+  missing(wb.ooxml.getPassthrough(`/${path}`));
   release(wb);
 });
 

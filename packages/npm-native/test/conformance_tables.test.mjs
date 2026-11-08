@@ -109,11 +109,11 @@ for (const spec of FORMAT_TABLE.cases) {
       const watched = spec.unchanged ?? [];
       const snapshot = () => watched.map((cell) => ws.getCellFormat(cell));
       const beforeCells = snapshot();
-      const xfCount = wb.listCellXfs().length;
+      const xfCount = wb.ooxml.listCellXfs().length;
 
       if (spec.throws) {
         assert.throws(() => ws.setCellFormat(spec.range, patch), expectedThrow(mod, spec.throws));
-        assert.equal(wb.listCellXfs().length, xfCount, 'a refused patch adds no XF');
+        assert.equal(wb.ooxml.listCellXfs().length, xfCount, 'a refused patch adds no XF');
         assert.deepEqual(snapshot(), beforeCells, 'a refused patch changes nothing');
         return;
       }
@@ -124,15 +124,15 @@ for (const spec of FORMAT_TABLE.cases) {
         assertReads(mod, ws.getCellFormat(cell), expected, `${spec.id} ${cell}`);
       }
       for (const [cell, expected] of Object.entries(spec.expect_xf ?? {})) {
-        const xf = wb.getCellXf(ws.getEffectiveStyle(cell).xfIndex);
+        const xf = wb.ooxml.getCellXf(ws.getEffectiveStyle(cell).xfIndex);
         assertReads(mod, xf, expected, `${spec.id} ${cell} xf`, [], XF_ENUM_KEYS);
       }
       assert.deepEqual(snapshot(), beforeCells, 'cells outside the range keep their format');
 
       if (spec.idempotent) {
-        const count = wb.listCellXfs().length;
+        const count = wb.ooxml.listCellXfs().length;
         ws.setCellFormat(spec.range, patch);
-        assert.equal(wb.listCellXfs().length, count, 'applying the patch twice adds no XF');
+        assert.equal(wb.ooxml.listCellXfs().length, count, 'applying the patch twice adds no XF');
       }
     } finally {
       wb.dispose();
@@ -150,13 +150,12 @@ for (const spec of NATIVE_TABLE.cases) {
     const mod = await getModule();
     const { wb, ws } = buildSheet(mod);
     try {
-      const value = spec.formula ? mod.evaluateFormula(spec.formula) : ws.getValue(spec.cell);
+      const value = spec.formula ? mod.evaluateTypedFormula(spec.formula) : ws.getTypedValue(spec.cell);
       const native = mod.toNative(value);
       const want = spec.native;
       if (want !== null && typeof want === 'object' && 'error' in want) {
-        assert.equal(native, value, 'an error is returned as the ErrorValue itself');
-        assert.equal(native.kind, mod.ValueKind.Error);
-        assert.equal(native.errorCode, mod.ErrorCode[want.error]);
+        assert.ok(native instanceof mod.ExcelError, 'an error is returned as an ExcelError');
+        assert.equal(native.code, mod.ErrorCode[want.error]);
       } else if (want !== null && typeof want === 'object' && want.passthrough) {
         assert.equal(native, value, 'an array, reference or lambda is returned as is');
       } else {

@@ -3,6 +3,8 @@ import { StatusCode } from '../../packages/npm/common.mjs';
 import { expectFailure, readAll } from './smoke_support.mjs';
 
 const isNestedRangeValue = (value) => typeof value === 'number';
+const rgb = (value) => ({ kind: 1, rgb: value, theme: 0, tint: 0, indexed: 0 });
+const NO_COLOR = { kind: 0, rgb: 0, theme: 0, tint: 0, indexed: 0 };
 
 export function registerStyles(Module, test) {
   test('xf index round-trips through setCellXfIndex / getCellXfIndex', () => {
@@ -41,7 +43,7 @@ export function registerStyles(Module, test) {
         italic: false,
         strike: false,
         underline: 0,
-        colorArgb: 0xff112233,
+        color: rgb(0xff112233),
       });
       assert.equal(typeof f1, 'number');
 
@@ -53,18 +55,18 @@ export function registerStyles(Module, test) {
         italic: false,
         strike: false,
         underline: 0,
-        colorArgb: 0xff112233,
+        color: rgb(0xff112233),
       });
       assert.equal(f1b, f1);
       assert.equal(wb.getFontCount(), 2);
 
-      const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
+      const fill = wb.addFill({ pattern: 1, fg: rgb(0xffff0000), bg: rgb(0xff000000) });
       const border = wb.addBorder({
-        left: { style: 1, colorArgb: 0xff000000 },
-        right: { style: 1, colorArgb: 0xff000000 },
-        top: { style: 1, colorArgb: 0xff000000 },
-        bottom: { style: 1, colorArgb: 0xff000000 },
-        diagonal: { style: 0, colorArgb: 0 },
+        left: { style: 1, color: rgb(0xff000000) },
+        right: { style: 1, color: rgb(0xff000000) },
+        top: { style: 1, color: rgb(0xff000000) },
+        bottom: { style: 1, color: rgb(0xff000000) },
+        diagonal: { style: 0, color: NO_COLOR },
         diagonalUp: false,
         diagonalDown: false,
       });
@@ -164,7 +166,8 @@ export function registerStyles(Module, test) {
 
       const rfill = wb.getFill(fill);
       assert.equal(rfill.pattern, 1);
-      assert.equal(rfill.fgArgb, 0xffff0000);
+      assert.equal(rfill.fg.kind, 1);
+      assert.equal(rfill.fg.rgb, 0xffff0000);
 
       const rborder = wb.getBorder(border);
       assert.equal(rborder.left.style, 1);
@@ -186,21 +189,17 @@ export function registerStyles(Module, test) {
       const font = wb.addFont({
         name: 'SelectorFont',
         size: 11,
-        colorArgb: 0x01020304,
         color: theme,
       });
       const gotFont = wb.getFont(font);
       assert.equal(gotFont.color.kind, 2);
       assert.equal(gotFont.color.theme, 3);
       assert.equal(gotFont.color.tint, 0.5);
-      assert.equal(gotFont.colorArgb, 0x01020304);
       const fontAgain = wb.addFont(gotFont);
       assert.equal(fontAgain, font);
 
       const fill = wb.addFill({
         pattern: 1,
-        fgArgb: 0x05060708,
-        bgArgb: 0x090a0b0c,
         fg: indexed,
         bg: automatic,
       });
@@ -212,11 +211,11 @@ export function registerStyles(Module, test) {
       assert.equal(fillAgain, fill);
 
       const border = wb.addBorder({
-        left: { style: 1, colorArgb: 0x01020304, color: theme },
-        right: { style: 1, colorArgb: 0x05060708, color: indexed },
-        top: { style: 1, colorArgb: 0x090a0b0c, color: automatic },
-        bottom: { style: 0, colorArgb: 0 },
-        diagonal: { style: 0, colorArgb: 0 },
+        left: { style: 1, color: theme },
+        right: { style: 1, color: indexed },
+        top: { style: 1, color: automatic },
+        bottom: { style: 0, color: NO_COLOR },
+        diagonal: { style: 0, color: NO_COLOR },
       });
       const gotBorder = wb.getBorder(border);
       assert.equal(gotBorder.left.color.kind, 2);
@@ -228,9 +227,9 @@ export function registerStyles(Module, test) {
       assert.equal(borderAgain, border);
 
       const dxf = wb.addDxf({
-        font: { name: 'DxfSelector', size: 9, colorArgb: 0x11121314, color: automatic },
-        fill: { pattern: 1, fgArgb: 0x15161718, fg: indexed },
-        border: { left: { style: 1, colorArgb: 0x191a1b1c, color: theme } },
+        font: { name: 'DxfSelector', size: 9, color: automatic },
+        fill: { pattern: 1, fg: indexed },
+        border: { left: { style: 1, color: theme } },
       });
       const gotDxf = wb.getDxf(dxf);
       assert.equal(gotDxf.font.color.kind, 4);
@@ -324,7 +323,7 @@ export function registerStyles(Module, test) {
   test('addFont(getFont(i)) is the identity and does not grow the table', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
+      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, color: rgb(0xff112233) });
       const before = wb.getFontCount();
       const readBack = wb.getFont(added);
       const again = wb.addFont(readBack);
@@ -338,14 +337,14 @@ export function registerStyles(Module, test) {
   test('a one-field font rewrite keeps the superscript', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
+      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, color: rgb(0xff112233) });
       const edited = wb.getFont(added);
-      edited.colorArgb = 0xff00ff00;
+      edited.color = rgb(0xff00ff00);
       const recolored = wb.addFont(edited);
       assert.notEqual(recolored, added);
       const reread = wb.getFont(recolored);
       assert.equal(reread.vertAlign, 1);
-      assert.equal(reread.colorArgb, 0xff00ff00);
+      assert.equal(reread.color.rgb, 0xff00ff00);
     } finally {
       wb.delete();
     }
@@ -447,7 +446,7 @@ export function registerStyles(Module, test) {
       assert.equal(wb.getCellXfCount(), xfBefore);
 
       const fontBefore = wb.getFontCount();
-      assert.throws(() => wb.addFont({ name: 'bad-u32', colorArgb: 0x100000000 }), RangeError);
+      assert.throws(() => wb.addFont({ name: 'bad-u32', color: rgb(0x100000000) }), RangeError);
       assert.equal(wb.getFontCount(), fontBefore);
 
       const styleXfBefore = wb.getCellStyleXfCount();
@@ -467,7 +466,7 @@ export function registerStyles(Module, test) {
         type: 3,
         priority: 0x100000000,
         dxfId: dxf,
-        dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 1, g: 2, b: 3 } },
+        dataBar: { min: { type: 3 }, max: { type: 4 }, fill: rgb(0xff010203) },
       };
       const cfBefore = readAll(
         () => wb.getCfRuleCount(0),
@@ -545,11 +544,12 @@ export function registerStyles(Module, test) {
         dataBar: {
           min: { type: 3 },
           max: { type: 4 },
-          fill: { r: 1, g: 2, b: 3 },
+          fill: rgb(0xff010203),
         },
       };
       const invalid = [
-        ['dataBar.fill.r=256', { dataBar: { fill: { r: 256 } } }],
+        ['dataBar.fill.rgb=2^32', { dataBar: { fill: rgb(0x100000000) } }],
+        ['dataBar.fill.kind=256', { dataBar: { fill: { ...rgb(0), kind: 256 } } }],
         ['dataBar.minLengthPct=256', { dataBar: { minLengthPct: 256 } }],
         ['dataBar.maxLengthPct=256', { dataBar: { maxLengthPct: 256 } }],
         ['cfvo.type=256', { dataBar: { min: { type: 256 } } }],
@@ -590,13 +590,13 @@ export function registerStyles(Module, test) {
           dataBar: {
             min: { type: 3 },
             max: { type: 4 },
-            fill: { r: value, g: 2, b: 3 },
+            fill: { ...rgb(3), rgb: value },
           },
         };
         assert.throws(
           () => wb.addCfRule(0, rule),
           isNestedRangeValue(value) ? RangeError : TypeError,
-          `dataBar.fill.r=${String(value)} accepted`,
+          `dataBar.fill.rgb=${String(value)} accepted`,
         );
         assert.equal(
           readAll(
@@ -604,7 +604,7 @@ export function registerStyles(Module, test) {
             (i) => wb.getCfRule(0, i),
           ).length,
           0,
-          `dataBar.fill.r=${String(value)} mutated rules`,
+          `dataBar.fill.rgb=${String(value)} mutated rules`,
         );
       } finally {
         wb.delete();
@@ -621,7 +621,7 @@ export function registerStyles(Module, test) {
         dataBar: {
           min: { type: 3, gte: null },
           max: { type: 4, gte: undefined },
-          fill: { r: null, g: undefined, b: 3, a: null },
+          fill: { kind: 2, rgb: null, theme: 3, tint: undefined, indexed: null },
           minLengthPct: null,
           maxLengthPct: undefined,
           axisPosition: null,
@@ -632,10 +632,11 @@ export function registerStyles(Module, test) {
         () => wb.getCfRuleCount(0),
         (i) => wb.getCfRule(0, i),
       )[0].dataBar;
-      assert.equal(bar.fill.r, 0);
-      assert.equal(bar.fill.g, 0);
-      assert.equal(bar.fill.b, 3);
-      assert.equal(bar.fill.a, 255);
+      assert.equal(bar.fill.kind, 2);
+      assert.equal(bar.fill.rgb, 0);
+      assert.equal(bar.fill.theme, 3);
+      assert.equal(bar.fill.tint, 0);
+      assert.equal(bar.fill.indexed, 0);
       assert.equal(bar.minLengthPct, 10);
       assert.equal(bar.maxLengthPct, 90);
       assert.equal(bar.axisPosition, 0);
@@ -677,7 +678,7 @@ export function registerStyles(Module, test) {
         dataBar: {
           min: { type: 3 },
           max: { type: 4 },
-          fill: { r: 1, g: 2, b: 3 },
+          fill: rgb(0xff010203),
         },
       };
       Object.defineProperty(rule, 'dxfId', {

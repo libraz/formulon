@@ -80,8 +80,8 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
     wb.table(0).setColumnTotals(1, { function: 'sum' });
     assert.equal(wb.sheet(0).getFormula(3, 1), '=SUBTOTAL(109,[Amount])');
     wb.recalc();
-    assert.equal(wb.sheet(0).getValue(3, 1).number, 30);
-    assert.equal(wb.sheet(0).getValue(3, 0).text, 'Total');
+    assert.equal(wb.sheet(0).getTypedValue(3, 1).number, 30);
+    assert.equal(wb.sheet(0).getTypedValue(3, 0).text, 'Total');
     assert.throws(() => wb.table(0).setColumnTotals(1, { function: 'median' }), isFormulonError);
     const columns = wb.listTables()[0].getProperties().columns;
     assert.equal(columns[0].totalsRowLabel, 'Total');
@@ -130,7 +130,7 @@ test('renameTableColumn renames the column and its structured references', async
     const renamed = wb.table(0).renameColumn(1, 'Revenue');
     assert.equal(renamed, 'Revenue');
     assert.equal(wb.sheet(0).getFormula(0, 3), '=SUM(Sales[Revenue])');
-    assert.equal(wb.sheet(0).getValue(0, 1).text, 'Revenue');
+    assert.equal(wb.sheet(0).getTypedValue(0, 1).text, 'Revenue');
     assert.equal(wb.table(0).renameColumn(1, ''), 'Column1');
     assert.throws(() => wb.table(0).renameColumn(9, 'X'), isFormulonError);
   } finally {
@@ -143,7 +143,7 @@ test('custom table styles round-trip and a table can use one', async () => {
   const wb = salesWorkbook(mod);
   let bytes;
   try {
-    const dxf = wb.addDxf({ font: { name: 'Calibri', bold: true } });
+    const dxf = wb.ooxml.addDxf({ font: { name: 'Calibri', bold: true } });
     const style = {
       name: 'Corporate',
       pivot: false,

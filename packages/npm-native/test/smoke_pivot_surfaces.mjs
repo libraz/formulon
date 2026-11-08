@@ -268,7 +268,7 @@ test('an empty or omitted data field name is derived from the workbook profile',
       ['win-365-ja_JP', ['合計 / Amount', '合計 / Amount2']],
       ['win-365-en_US', ['Sum of Amount', 'Sum of Amount2']],
     ]) {
-      wb.setExcelProfileId(profile);
+      wb.setProfileId(profile);
       for (const [i, spec] of [
         { fieldIndex: 1, aggregation: 0 },
         { name: '', fieldIndex: 1, aggregation: 0 },

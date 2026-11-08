@@ -15,7 +15,7 @@ function interfaceBody(text, name) {
   throw new Error(`unbalanced interface ${name}`);
 }
 
-/** Member names of one interface: methods, properties and `[Symbol.dispose]`. */
+/** Member names of one interface: methods, properties, `[Symbol.dispose]` and `[Symbol.iterator]`. */
 export function memberNames(dtsPath, name) {
   const text = readFileSync(dtsPath, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -36,7 +36,7 @@ export function memberNames(dtsPath, name) {
   }
   const names = new Set();
   for (const statement of statements) {
-    const m = statement.trim().match(/^(?:readonly\s+)?(\[Symbol\.dispose\]|[A-Za-z_$][\w$]*)\??\s*[(<:]/);
+    const m = statement.trim().match(/^(?:readonly\s+)?(\[Symbol\.(?:dispose|iterator)\]|[A-Za-z_$][\w$]*)\??\s*[(<:]/);
     if (m) names.add(m[1]);
   }
   return names;
@@ -46,6 +46,8 @@ export function memberNames(dtsPath, name) {
 export function prototypeKeys(proto) {
   return [
     ...Object.getOwnPropertyNames(proto).filter((k) => k !== 'constructor'),
-    ...Object.getOwnPropertySymbols(proto).map((s) => (s === Symbol.dispose ? '[Symbol.dispose]' : String(s))),
+    ...Object.getOwnPropertySymbols(proto).map((s) =>
+      s === Symbol.dispose ? '[Symbol.dispose]' : s === Symbol.iterator ? '[Symbol.iterator]' : String(s),
+    ),
   ].sort();
 }

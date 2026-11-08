@@ -1,6 +1,9 @@
 import test from 'node:test';
 import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
+const rgb = (value) => ({ kind: 1, rgb: value, theme: 0, tint: 0, indexed: 0 });
+const NO_COLOR = { kind: 0, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+
 test('addMerge + getMerges round-trip a single range', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -138,7 +141,7 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
   const widthZero = columns.find((column) => column.first === 0 && column.last === 0);
   assert.ok(widthZero);
   assert.equal(widthZero.width, 0);
-  assert.equal(widthZero.styleXf, null);
+  assert.equal(wb.sheet(0).ooxml.getColumnStyle(0), null);
   assert.equal(widthZero.hidden, false);
   const hidden = columns.find((column) => column.first === 1 && column.last === 1);
   assert.ok(hidden);
@@ -149,7 +152,7 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
   const row = rows.find((entry) => entry.row === 3);
   assert.ok(row);
   assert.equal(row.height, 30);
-  assert.equal(row.styleXf, null);
+  assert.equal(wb.sheet(0).ooxml.getRowStyle(3), null);
 });
 
 test('getSheetView surfaces display / orientation defaults', async () => {
@@ -188,10 +191,10 @@ test('insertRows shifts an existing literal forward', async () => {
   // Populate row 0; insert one row at row 0; the literal is now at row 1.
   wb.sheet(0).setNumber(0, 0, 99);
   wb.sheet(0).insertRows(0, 1);
-  const r0 = wb.sheet(0).getValue(0, 0);
+  const r0 = wb.sheet(0).getTypedValue(0, 0);
   // The freshly-inserted row 0 is blank.
   assert.equal(r0.kind, mod.ValueKind.Blank);
-  const r1 = wb.sheet(0).getValue(1, 0);
+  const r1 = wb.sheet(0).getTypedValue(1, 0);
   assert.equal(r1.kind, mod.ValueKind.Number);
   assert.equal(r1.number, 99);
 });
@@ -202,8 +205,8 @@ test('setCellXfIndex + getCellXfIndex round-trip the xf id', async () => {
   // Seed the cell so the xf attaches to a stored slot.
   wb.sheet(0).setNumber(0, 0, 1);
   // xfIndex 0 is always the default xf and is guaranteed to be valid.
-  wb.sheet(0).setCellXfIndex(0, 0, 0);
-  const r = wb.sheet(0).getCellXfIndex(0, 0);
+  wb.sheet(0).ooxml.setCellXfIndex(0, 0, 0);
+  const r = wb.sheet(0).ooxml.getCellXfIndex(0, 0);
   assert.equal(typeof r, 'number');
   assert.equal(r, 0);
 });
@@ -215,51 +218,51 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   // one empty border, one default xf, and the two fills Excel reserves at
   // the front of every file (`none`, `gray125`). A caller's first record
   // therefore lands after them instead of displacing `none`.
-  assert.equal(wb.listFonts().length, 1);
-  assert.equal(wb.listFills().length, 2);
-  assert.equal(wb.listBorders().length, 1);
-  assert.equal(wb.listCellXfs().length, 1);
+  assert.equal(wb.ooxml.listFonts().length, 1);
+  assert.equal(wb.ooxml.listFills().length, 2);
+  assert.equal(wb.ooxml.listBorders().length, 1);
+  assert.equal(wb.ooxml.listCellXfs().length, 1);
 
-  const fontResult = wb.addFont({
+  const fontResult = wb.ooxml.addFont({
     name: 'Arial',
     size: 12,
     bold: true,
     italic: false,
     strike: false,
     underline: 0,
-    colorArgb: 0xff112233,
+    color: rgb(0xff112233),
   });
   // Linear-search dedup: the second call with the same payload returns the same index.
-  const fontDup = wb.addFont({
+  const fontDup = wb.ooxml.addFont({
     name: 'Arial',
     size: 12,
     bold: true,
     italic: false,
     strike: false,
     underline: 0,
-    colorArgb: 0xff112233,
+    color: rgb(0xff112233),
   });
   assert.equal(fontDup, fontResult);
-  assert.equal(wb.listFonts().length, 2);
+  assert.equal(wb.ooxml.listFonts().length, 2);
 
-  const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
-  const border = wb.addBorder({
-    left: { style: 1, colorArgb: 0xff000000 },
-    right: { style: 1, colorArgb: 0xff000000 },
-    top: { style: 1, colorArgb: 0xff000000 },
-    bottom: { style: 1, colorArgb: 0xff000000 },
-    diagonal: { style: 0, colorArgb: 0 },
+  const fill = wb.ooxml.addFill({ pattern: 1, fg: rgb(0xffff0000), bg: rgb(0xff000000) });
+  const border = wb.ooxml.addBorder({
+    left: { style: 1, color: rgb(0xff000000) },
+    right: { style: 1, color: rgb(0xff000000) },
+    top: { style: 1, color: rgb(0xff000000) },
+    bottom: { style: 1, color: rgb(0xff000000) },
+    diagonal: { style: 0, color: NO_COLOR },
     diagonalUp: false,
     diagonalDown: false,
   });
 
-  const builtin = wb.addNumFmt('General');
+  const builtin = wb.ooxml.addNumFmt('General');
   assert.equal(builtin, 0);
 
-  const custom = wb.addNumFmt('"USD" #,##0');
+  const custom = wb.ooxml.addNumFmt('"USD" #,##0');
   assert.ok(custom >= 164, `expected custom id >= 164, got ${custom}`);
 
-  const xf = wb.addCellXf({
+  const xf = wb.ooxml.addCellXf({
     fontIndex: fontResult,
     fillIndex: fill,
     borderIndex: border,
@@ -270,9 +273,9 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   });
 
   wb.sheet(0).setNumber(0, 0, 1);
-  wb.sheet(0).setCellXfIndex(0, 0, xf);
+  wb.sheet(0).ooxml.setCellXfIndex(0, 0, xf);
 
-  const reread = wb.getCellXf(xf);
+  const reread = wb.ooxml.getCellXf(xf);
   assert.equal(reread.fontIndex, fontResult);
   assert.equal(reread.numFmtId, custom);
   assert.equal(reread.wrapText, true);
@@ -280,7 +283,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(reread.verticalAlign, 2);
   assert.equal(reread.justifyLastLine, null);
 
-  const optional = wb.addCellXf({
+  const optional = wb.ooxml.addCellXf({
     fontIndex: fontResult,
     fillIndex: fill,
     borderIndex: border,
@@ -292,7 +295,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     readingOrder: 0,
     justifyLastLine: true,
   });
-  const optionalRead = wb.getCellXf(optional);
+  const optionalRead = wb.ooxml.getCellXf(optional);
   assert.equal(optionalRead.textRotation, 255);
   assert.equal(optionalRead.indent, 0);
   assert.equal(optionalRead.relativeIndent, -3);
@@ -300,21 +303,21 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(optionalRead.readingOrder, 0);
   assert.equal(optionalRead.justifyLastLine, true);
   assert.equal(optionalRead.horizontalAlign, null);
-  assert.equal(wb.addCellXf(optionalRead), optional);
+  assert.equal(wb.ooxml.addCellXf(optionalRead), optional);
 
-  const omitted = wb.addCellXf({
+  const omitted = wb.ooxml.addCellXf({
     fontIndex: fontResult,
     fillIndex: fill,
     borderIndex: border,
     numFmtId: custom,
   });
-  const omittedRead = wb.getCellXf(omitted);
+  const omittedRead = wb.ooxml.getCellXf(omitted);
   assert.deepEqual(
     [omittedRead.horizontalAlign, omittedRead.wrapText, omittedRead.justifyLastLine],
     [null, null, null],
   );
 
-  const explicitEmpty = wb.addCellXf({
+  const explicitEmpty = wb.ooxml.addCellXf({
     fontIndex: fontResult,
     fillIndex: fill,
     borderIndex: border,
@@ -323,18 +326,18 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   });
   assert.notEqual(explicitEmpty, omitted);
 
-  const rfont = wb.getFont(fontResult);
+  const rfont = wb.ooxml.getFont(fontResult);
   assert.equal(rfont.name, 'Arial');
   assert.equal(rfont.bold, true);
 
-  const rfill = wb.getFill(fill);
+  const rfill = wb.ooxml.getFill(fill);
   assert.equal(rfill.pattern, 1);
 
-  const rborder = wb.getBorder(border);
+  const rborder = wb.ooxml.getBorder(border);
   assert.equal(rborder.left.style, 1);
   assert.equal(rborder.diagonalUp, false);
 
-  const rfmt = wb.getNumFmtString(custom);
+  const rfmt = wb.ooxml.getNumFmtString(custom);
   assert.equal(rfmt, '"USD" #,##0');
 });
 
@@ -345,66 +348,63 @@ test('selector colours survive get/add identity and save/load', async () => {
   const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
   const automatic = { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 };
 
-  const font = wb.addFont({ name: 'SelectorFont', size: 11, colorArgb: 0x01020304, color: theme });
-  const gotFont = wb.getFont(font);
+  const font = wb.ooxml.addFont({ name: 'SelectorFont', size: 11, color: theme });
+  const gotFont = wb.ooxml.getFont(font);
   assert.equal(gotFont.color.kind, 2);
   assert.equal(gotFont.color.theme, 3);
   assert.equal(gotFont.color.tint, 0.5);
-  assert.equal(gotFont.colorArgb, 0x01020304);
-  const fontAgain = wb.addFont(gotFont);
+  const fontAgain = wb.ooxml.addFont(gotFont);
   assert.equal(fontAgain, font);
 
-  const fill = wb.addFill({
+  const fill = wb.ooxml.addFill({
     pattern: 1,
-    fgArgb: 0x05060708,
-    bgArgb: 0x090a0b0c,
     fg: indexed,
     bg: automatic,
   });
-  const gotFill = wb.getFill(fill);
+  const gotFill = wb.ooxml.getFill(fill);
   assert.equal(gotFill.fg.kind, 3);
   assert.equal(gotFill.fg.indexed, 9);
   assert.equal(gotFill.bg.kind, 4);
-  const fillAgain = wb.addFill(gotFill);
+  const fillAgain = wb.ooxml.addFill(gotFill);
   assert.equal(fillAgain, fill);
 
-  const border = wb.addBorder({
-    left: { style: 1, colorArgb: 0x01020304, color: theme },
-    right: { style: 1, colorArgb: 0x05060708, color: indexed },
-    top: { style: 1, colorArgb: 0x090a0b0c, color: automatic },
-    bottom: { style: 0, colorArgb: 0 },
-    diagonal: { style: 0, colorArgb: 0 },
+  const border = wb.ooxml.addBorder({
+    left: { style: 1, color: theme },
+    right: { style: 1, color: indexed },
+    top: { style: 1, color: automatic },
+    bottom: { style: 0, color: NO_COLOR },
+    diagonal: { style: 0, color: NO_COLOR },
   });
-  const gotBorder = wb.getBorder(border);
+  const gotBorder = wb.ooxml.getBorder(border);
   assert.equal(gotBorder.left.color.kind, 2);
   assert.equal(gotBorder.left.color.theme, 3);
   assert.equal(gotBorder.right.color.kind, 3);
   assert.equal(gotBorder.right.color.indexed, 9);
   assert.equal(gotBorder.top.color.kind, 4);
-  const borderAgain = wb.addBorder(gotBorder);
+  const borderAgain = wb.ooxml.addBorder(gotBorder);
   assert.equal(borderAgain, border);
 
-  const dxf = wb.addDxf({
-    font: { name: 'DxfSelector', size: 9, colorArgb: 0x11121314, color: automatic },
-    fill: { pattern: 1, fgArgb: 0x15161718, fg: indexed },
-    border: { left: { style: 1, colorArgb: 0x191a1b1c, color: theme } },
+  const dxf = wb.ooxml.addDxf({
+    font: { name: 'DxfSelector', size: 9, color: automatic },
+    fill: { pattern: 1, fg: indexed },
+    border: { left: { style: 1, color: theme } },
   });
-  const gotDxf = wb.getDxf(dxf);
+  const gotDxf = wb.ooxml.getDxf(dxf);
   assert.equal(gotDxf.font.color.kind, 4);
   assert.equal(gotDxf.fill.fg.kind, 3);
   assert.equal(gotDxf.border.left.color.kind, 2);
-  const dxfAgain = wb.addDxf(gotDxf);
+  const dxfAgain = wb.ooxml.addDxf(gotDxf);
   assert.notEqual(gotDxf.font.size, null);
-  const bareDxf = wb.addDxf({ font: { bold: true } });
-  assert.equal(wb.getDxf(bareDxf).font.size, null);
+  const bareDxf = wb.ooxml.addDxf({ font: { bold: true } });
+  assert.equal(wb.ooxml.getDxf(bareDxf).font.size, null);
   assert.equal(dxfAgain, dxf);
 
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
-  const loadedFont = loaded.getFont(font);
-  const loadedFill = loaded.getFill(fill);
-  const loadedBorder = loaded.getBorder(border);
-  const loadedDxf = loaded.getDxf(dxf);
+  const loadedFont = loaded.ooxml.getFont(font);
+  const loadedFill = loaded.ooxml.getFill(fill);
+  const loadedBorder = loaded.ooxml.getBorder(border);
+  const loadedDxf = loaded.ooxml.getDxf(dxf);
   assert.equal(loadedFont.color.kind, 2);
   assert.equal(loadedFill.fg.kind, 3);
   assert.equal(loadedBorder.left.color.kind, 2);
@@ -418,34 +418,34 @@ test('dxf alignment and protection XML survive get/add identity and save/load', 
   const wb = mod.Workbook.createDefault();
   const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
   const protectionXml = '<protection locked="0" hidden="1"/>';
-  const alignment = wb.addDxf({ alignmentXml });
-  const protection = wb.addDxf({ protectionXml });
+  const alignment = wb.ooxml.addDxf({ alignmentXml });
+  const protection = wb.ooxml.addDxf({ protectionXml });
   assert.notEqual(alignment, protection);
 
-  const gotAlignment = wb.getDxf(alignment);
+  const gotAlignment = wb.ooxml.getDxf(alignment);
   assert.equal(gotAlignment.alignmentXml, alignmentXml);
   assert.equal(gotAlignment.protectionXml, undefined);
-  const gotProtection = wb.getDxf(protection);
+  const gotProtection = wb.ooxml.getDxf(protection);
   assert.equal(gotProtection.alignmentXml, undefined);
   assert.equal(gotProtection.protectionXml, protectionXml);
 
-  const alignmentAgain = wb.addDxf(gotAlignment);
+  const alignmentAgain = wb.ooxml.addDxf(gotAlignment);
   assert.equal(alignmentAgain, alignment);
-  const protectionAgain = wb.addDxf(gotProtection);
+  const protectionAgain = wb.ooxml.addDxf(gotProtection);
   assert.equal(protectionAgain, protection);
 
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   assert.equal(loaded.disposed, false);
-  const loadedAlignment = loaded.getDxf(alignment);
+  const loadedAlignment = loaded.ooxml.getDxf(alignment);
   assert.equal(loadedAlignment.alignmentXml, alignmentXml);
   assert.equal(loadedAlignment.protectionXml, undefined);
-  const loadedProtection = loaded.getDxf(protection);
+  const loadedProtection = loaded.ooxml.getDxf(protection);
   assert.equal(loadedProtection.alignmentXml, undefined);
   assert.equal(loadedProtection.protectionXml, protectionXml);
-  const loadedAlignmentAgain = loaded.addDxf(loadedAlignment);
+  const loadedAlignmentAgain = loaded.ooxml.addDxf(loadedAlignment);
   assert.equal(loadedAlignmentAgain, alignment);
-  const loadedProtectionAgain = loaded.addDxf(loadedProtection);
+  const loadedProtectionAgain = loaded.ooxml.addDxf(loadedProtection);
   assert.equal(loadedProtectionAgain, protection);
   loaded.dispose();
   wb.dispose();
@@ -454,35 +454,35 @@ test('dxf alignment and protection XML survive get/add identity and save/load', 
 test('addFont / getFont preserve superscript and round-trip to the same index', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
-  assert.equal(wb.getFont(superscript).vertAlign, 1);
+  const superscript = wb.ooxml.addFont({ name: 'Arial', size: 12, vertAlign: 1, color: rgb(0xff112233) });
+  assert.equal(wb.ooxml.getFont(superscript).vertAlign, 1);
 
-  const before = wb.listFonts().length;
-  const again = wb.addFont(wb.getFont(superscript));
+  const before = wb.ooxml.listFonts().length;
+  const again = wb.ooxml.addFont(wb.ooxml.getFont(superscript));
   assert.equal(again, superscript);
-  assert.equal(wb.listFonts().length, before);
+  assert.equal(wb.ooxml.listFonts().length, before);
 
-  const edited = wb.getFont(superscript);
-  edited.colorArgb = 0xff00ff00;
-  const recolored = wb.addFont(edited);
+  const edited = wb.ooxml.getFont(superscript);
+  edited.color = rgb(0xff00ff00);
+  const recolored = wb.ooxml.addFont(edited);
   assert.notEqual(recolored, superscript);
-  const reread = wb.getFont(recolored);
+  const reread = wb.ooxml.getFont(recolored);
   assert.equal(reread.vertAlign, 1);
-  assert.equal(reread.colorArgb, 0xff00ff00);
+  assert.equal(reread.color.rgb, 0xff00ff00);
 });
 
 test('addFont/setFont with a non-numeric field throws and does not commit a coerced value', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
 
-  const before = wb.listFonts().length;
-  assert.throws(() => wb.addFont({ name: 'Arial', size: 'not a number' }), TypeError);
-  assert.equal(wb.listFonts().length, before, 'no font must have been added for the rejected call');
+  const before = wb.ooxml.listFonts().length;
+  assert.throws(() => wb.ooxml.addFont({ name: 'Arial', size: 'not a number' }), TypeError);
+  assert.equal(wb.ooxml.listFonts().length, before, 'no font must have been added for the rejected call');
 
-  const font = wb.addFont({ name: 'Arial', size: 12 });
-  assert.throws(() => wb.setFont(font, { name: 'Arial', size: 'not a number' }), TypeError);
+  const font = wb.ooxml.addFont({ name: 'Arial', size: 12 });
+  assert.throws(() => wb.ooxml.setFont(font, { name: 'Arial', size: 'not a number' }), TypeError);
   // The font slot must still hold its original size, not a coerced 0.
-  assert.equal(wb.getFont(font).size, 12);
+  assert.equal(wb.ooxml.getFont(font).size, 12);
 });
 
 test('phonetic runs keep their spans through a save/load round trip', async () => {
@@ -555,16 +555,16 @@ test('phonetic properties are independent of the runs and survive a round trip',
 test('setDefaultFont declares what an unstyled cell is saved as', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.getFont(0).name, 'Calibri');
+  assert.equal(wb.ooxml.getFont(0).name, 'Calibri');
 
   // addFont can only ever append beside the seeded default.
-  const appended = wb.addFont({ name: '游ゴシック', size: 11 });
+  const appended = wb.ooxml.addFont({ name: '游ゴシック', size: 11 });
   assert.ok(appended > 0);
-  assert.equal(wb.getFont(0).name, 'Calibri');
+  assert.equal(wb.ooxml.getFont(0).name, 'Calibri');
 
   wb.setDefaultFont({ name: '游ゴシック', size: 11, charset: 128 });
-  assert.equal(wb.getFont(0).name, '游ゴシック');
-  assert.equal(wb.getFont(0).charset, 128);
+  assert.equal(wb.ooxml.getFont(0).name, '游ゴシック');
+  assert.equal(wb.ooxml.getFont(0).charset, 128);
 
   wb.dispose();
 });
@@ -572,14 +572,14 @@ test('setDefaultFont declares what an unstyled cell is saved as', async () => {
 test('setFont overwrites an existing slot and refuses an absent index', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const added = wb.addFont({ name: 'Meiryo', size: 12 });
+  const added = wb.ooxml.addFont({ name: 'Meiryo', size: 12 });
 
-  wb.setFont(added, { name: 'MS Gothic', size: 9 });
-  assert.equal(wb.getFont(added).name, 'MS Gothic');
+  wb.ooxml.setFont(added, { name: 'MS Gothic', size: 9 });
+  assert.equal(wb.ooxml.getFont(added).name, 'MS Gothic');
 
-  const before = wb.listFonts().length;
-  assert.throws(() => wb.setFont(before, { name: 'MS Gothic', size: 9 }), isFormulonError);
-  assert.equal(wb.listFonts().length, before);
+  const before = wb.ooxml.listFonts().length;
+  assert.throws(() => wb.ooxml.setFont(before, { name: 'MS Gothic', size: 9 }), isFormulonError);
+  assert.equal(wb.ooxml.listFonts().length, before);
 
   wb.dispose();
 });
@@ -587,14 +587,14 @@ test('setFont overwrites an existing slot and refuses an absent index', async ()
 test('addDxf / getDxf round-trip a superscript differential font', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const added = wb.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
-  const readBack = wb.getDxf(added);
+  const added = wb.ooxml.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
+  const readBack = wb.ooxml.getDxf(added);
   assert.equal(readBack.font.vertAlign, 1);
 
-  const before = wb.listDxfs().length;
-  const again = wb.addDxf(readBack);
+  const before = wb.ooxml.listDxfs().length;
+  const again = wb.ooxml.addDxf(readBack);
   assert.equal(again, added);
-  assert.equal(wb.listDxfs().length, before);
+  assert.equal(wb.ooxml.listDxfs().length, before);
 });
 
 test('addXf rejects out-of-range font_index', async () => {
@@ -602,7 +602,7 @@ test('addXf rejects out-of-range font_index', async () => {
   const wb = mod.Workbook.createDefault();
   assert.throws(
     () =>
-      wb.addCellXf({
+      wb.ooxml.addCellXf({
         fontIndex: 99,
         fillIndex: 0,
         borderIndex: 0,

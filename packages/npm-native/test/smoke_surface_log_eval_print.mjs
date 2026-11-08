@@ -1,6 +1,9 @@
 import test from 'node:test';
 import { assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readFile } from './smoke_support.mjs';
 
+const rgb = (value) => ({ kind: 1, rgb: value, theme: 0, tint: 0, indexed: 0 });
+const NO_COLOR = { kind: 0, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+
 test('the Formulon object exposes Workbook + evaluateFormula + getVersion', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.Workbook, 'function');
@@ -176,7 +179,7 @@ test('a throwing log sink does not leave a pending exception at the ThreadSafeFu
   try {
     wb2.sheet(0).setFormula(0, 0, '=1+1');
     wb2.recalc();
-    assert.equal(wb2.sheet(0).getValue(0, 0).number, 2);
+    assert.equal(wb2.sheet(0).getTypedValue(0, 0).number, 2);
   } finally {
     wb2.dispose();
   }
@@ -248,19 +251,28 @@ const ONE_SHOT_CASES = [
   { formula: '=COUNTA(A1)', kind: 1, number: 0 },
   { formula: '=ISBLANK(A1)', kind: 2, boolean: true },
   { formula: '=SUM(A1:A3)', kind: 1, number: 0 },
-  { formula: '=SEQUENCE(3)', kind: 1, number: 1 },
+  { formula: '=SEQUENCE(3)', kind: 5, rows: 3, cols: 1, numbers: [1, 2, 3] },
   { formula: '=ROWS(SEQUENCE(3))', kind: 1, number: 3 },
 ];
 test('evaluateFormula evaluates read-only against a blank anchor', async () => {
   const mod = await getModule();
   for (const spec of ONE_SHOT_CASES) {
-    const r = mod.evaluateFormula(spec.formula);
+    const r = mod.evaluateTypedFormula(spec.formula);
     assert.equal(r.kind, spec.kind, spec.formula);
     if (spec.number !== undefined) {
       assert.equal(r.number, spec.number, spec.formula);
     }
     if (spec.boolean !== undefined) {
       assert.equal(r.boolean, spec.boolean, spec.formula);
+    }
+    if (spec.numbers !== undefined) {
+      assert.equal(r.rows, spec.rows, spec.formula);
+      assert.equal(r.cols, spec.cols, spec.formula);
+      assert.deepEqual(
+        r.cells.map((cell) => cell.number),
+        spec.numbers,
+        spec.formula,
+      );
     }
     // Writing into the anchor and recalcing would make these #REF!.
     assert.notEqual(r.kind, mod.ValueKind.Error, spec.formula);
@@ -269,14 +281,14 @@ test('evaluateFormula evaluates read-only against a blank anchor', async () => {
 
 test("evaluateFormula('=1+2') returns NUMBER 3", async () => {
   const mod = await getModule();
-  const r = mod.evaluateFormula('=1+2');
+  const r = mod.evaluateTypedFormula('=1+2');
   assert.equal(r.kind, mod.ValueKind.Number);
   assert.equal(r.number, 3);
 });
 
 test("evaluateFormula('=#REF!') returns an ERROR value (does not throw)", async () => {
   const mod = await getModule();
-  const r = mod.evaluateFormula('=#REF!');
+  const r = mod.evaluateTypedFormula('=#REF!');
   assert.equal(r.kind, mod.ValueKind.Error);
 });
 
@@ -285,7 +297,7 @@ test('Workbook.createDefault + setNumber + getValue round-trip', async () => {
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.listSheets().length, 1);
   wb.sheet(0).setNumber(0, 0, 42);
-  const r = wb.sheet(0).getValue(0, 0);
+  const r = wb.sheet(0).getTypedValue(0, 0);
   assert.equal(r.kind, mod.ValueKind.Number);
   assert.equal(r.number, 42);
 });
@@ -314,22 +326,22 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // An absent element reads back as null.
-  assert.equal(wb.sheet(0).getPageSetupXml(), null);
+  assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), null);
 
   const fragment = '<pageSetup paperSize="9" orientation="portrait" scale="85"/>';
-  wb.sheet(0).setPageSetupXml(fragment);
-  assert.equal(wb.sheet(0).getPageSetupXml(), fragment);
+  wb.sheet(0).ooxml.setPageSetupXml(fragment);
+  assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), fragment);
 
   // Two top-level elements, the wrong root name, and a truncated fragment
   // are all rejected at set time rather than producing a file Excel repairs.
   for (const bad of ['<pageSetup/><pageSetup/>', '<pageMargins left="1"/>', '<pageSetup orientation="portrait"']) {
-    assert.throws(() => wb.sheet(0).setPageSetupXml(bad), isFormulonError, `expected rejection for ${bad}`);
+    assert.throws(() => wb.sheet(0).ooxml.setPageSetupXml(bad), isFormulonError, `expected rejection for ${bad}`);
   }
-  assert.equal(wb.sheet(0).getPageSetupXml(), fragment);
+  assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), fragment);
 
   // null removes the element and restores the defaults.
-  wb.sheet(0).setPageSetupXml(null);
-  assert.equal(wb.sheet(0).getPageSetupXml(), null);
+  wb.sheet(0).ooxml.setPageSetupXml(null);
+  assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), null);
   const cleared = wb.sheet(0).getPageSetup();
   assert.equal(cleared.scale, 100);
   assert.equal(cleared.scaleStated, false);
@@ -338,10 +350,10 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
 test('print settings: typed patch touches only the keys it states', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setPageSetupXml('<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>');
+  wb.sheet(0).ooxml.setPageSetupXml('<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>');
   wb.sheet(0).setPageSetup({ orientation: mod.PageOrientation.Landscape });
 
-  const xml = wb.sheet(0).getPageSetupXml();
+  const xml = wb.sheet(0).ooxml.getPageSetupXml();
   assert.match(xml, /orientation="landscape"/);
   // Attributes the engine does not model must survive a patch.
   assert.match(xml, /horizontalDpi="600"/);
@@ -365,16 +377,16 @@ test('print settings: typed patch touches only the keys it states', async () => 
 test('print settings: fitToPage keeps the rest of sheetPr', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setSheetPrXml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>');
+  wb.sheet(0).ooxml.setSheetPrXml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>');
   wb.sheet(0).setPageSetup({ fitToPage: true });
-  const xml = wb.sheet(0).getSheetPrXml();
+  const xml = wb.sheet(0).ooxml.getSheetPrXml();
   assert.match(xml, /codeName="Sheet1"/);
   assert.match(xml, /<tabColor rgb="FFFF0000"\/>/);
   assert.match(xml, /fitToPage="true"/);
   assert.equal(wb.sheet(0).getPageSetup().fitToPage, true);
   // fitToPage: false removes the attribute and the stated flag reads false.
   wb.sheet(0).setPageSetup({ fitToPage: false });
-  assert.doesNotMatch(wb.sheet(0).getSheetPrXml(), /fitToPage/);
+  assert.doesNotMatch(wb.sheet(0).ooxml.getSheetPrXml(), /fitToPage/);
   assert.equal(wb.sheet(0).getPageSetup().fitToPage, false);
   assert.equal(wb.sheet(0).getPageSetup().fitToPageStated, false);
 });
@@ -385,18 +397,18 @@ test('print settings: header/footer sections take decoded text', async () => {
   wb.sheet(0).setHeaderFooter({ oddHeader: '&C\u5e33\u7968', oddFooter: '&R&P / &N' });
   // The codes reach the file escaped; a parser hands back `&C...`.
   assert.equal(
-    wb.sheet(0).getHeaderFooterXml(),
+    wb.sheet(0).ooxml.getHeaderFooterXml(),
     '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader><oddFooter>&amp;R&amp;P / &amp;N</oddFooter></headerFooter>',
   );
 
   // Omitting a key leaves that section alone; an empty string or null clears it.
   wb.sheet(0).setHeaderFooter({ oddFooter: '' });
   assert.equal(
-    wb.sheet(0).getHeaderFooterXml(),
+    wb.sheet(0).ooxml.getHeaderFooterXml(),
     '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>',
   );
   wb.sheet(0).setHeaderFooter({ oddHeader: null });
-  assert.doesNotMatch(wb.sheet(0).getHeaderFooterXml() ?? '', /oddHeader|oddFooter/);
+  assert.doesNotMatch(wb.sheet(0).ooxml.getHeaderFooterXml() ?? '', /oddHeader|oddFooter/);
 });
 
 test('print settings: print area, titles and manual breaks', async () => {
@@ -453,18 +465,18 @@ test('print settings: a change is visible to paginate without a save cycle', asy
 test('setRangeXfIndex applies one xf across a rectangle', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const border = wb.addBorder({
-    left: { style: 1, colorArgb: 0xff000000 },
-    right: { style: 1, colorArgb: 0xff000000 },
-    top: { style: 1, colorArgb: 0xff000000 },
-    bottom: { style: 1, colorArgb: 0xff000000 },
-    diagonal: { style: 0, colorArgb: 0 },
+  const border = wb.ooxml.addBorder({
+    left: { style: 1, color: rgb(0xff000000) },
+    right: { style: 1, color: rgb(0xff000000) },
+    top: { style: 1, color: rgb(0xff000000) },
+    bottom: { style: 1, color: rgb(0xff000000) },
+    diagonal: { style: 0, color: NO_COLOR },
     diagonalUp: false,
     diagonalDown: false,
   });
-  const xf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: border, numFmtId: 0 });
+  const xf = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: border, numFmtId: 0 });
 
-  wb.sheet(0).setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf);
+  wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf);
   // Every cell in the rectangle is materialised, including ones that held
   // no value, so the box renders.
   for (const [row, col] of [
@@ -472,9 +484,9 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
     [1, 1],
     [2, 2],
   ]) {
-    assert.equal(wb.sheet(0).getCellXfIndex(row, col), xf);
+    assert.equal(wb.sheet(0).ooxml.getCellXfIndex(row, col), xf);
   }
-  assert.equal(wb.sheet(0).getCellXfIndex(3, 3), 0);
+  assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), 0);
 });
 
 test('pivotCount + pivotLayout expose the PivotTable projection', async () => {

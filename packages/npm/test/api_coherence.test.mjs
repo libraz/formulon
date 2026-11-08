@@ -99,9 +99,9 @@ function addBox(f, ws, name, extra = {}) {
     toRow: 5,
     toCol: 4,
     fillKind: f.ShapePaint.Solid,
-    fillRgb: 0xff0000,
+    fillColor: '#FF0000',
     lineKind: f.ShapePaint.Solid,
-    lineRgb: 0x00ff00,
+    lineColor: '#00FF00',
     ...extra,
   });
 }
@@ -366,16 +366,16 @@ test('patch: an unknown key is a TypeError on every other patch entry point', as
   });
 });
 
-test('patch: Shape.update treats fillKind / lineKind null as "unchanged" and rejects null elsewhere', async () => {
+test('patch: Shape.update treats fill and line kind and colour null as "unchanged" and rejects null elsewhere', async () => {
   await withWorkbook((wb, f) => {
     const shape = addBox(f, wb.sheet(0), 'S1');
-    shape.update({ fillKind: null, lineKind: null, name: 'Renamed' });
+    shape.update({ fillKind: null, lineKind: null, fillColor: null, lineColor: null, name: 'Renamed' });
     const props = shape.getProperties();
     assert.equal(props.name, 'Renamed');
     assert.equal(props.fillKind, f.ShapePaint.Solid);
-    assert.equal(props.fillRgb, 0xff0000);
+    assert.equal(props.fillColor.rgb, 0xffff0000);
     assert.equal(props.lineKind, f.ShapePaint.Solid);
-    for (const key of ['presetGeometry', 'text', 'hidden', 'rotation', 'fillRgb', 'lineRgb', 'anchorKind']) {
+    for (const key of ['presetGeometry', 'text', 'hidden', 'rotation', 'anchorKind']) {
       assertMisuse(() => shape.update({ [key]: null }), TypeError, key);
     }
     assert.equal(shape.getProperties().name, 'Renamed');
@@ -666,7 +666,7 @@ function evaluateWithEngine(f, row) {
       const { year, month, day, hour, minute, second } = row.input;
       ws.setFormula(0, 0, `=DATE(${year},${month},${day})+TIME(${hour},${minute},${second})`);
       wb.recalc();
-      return ws.getValue(0, 0).number;
+      return ws.getTypedValue(0, 0).number;
     }
     ws.setNumber(0, 0, numeric(row.input.serial));
     for (const [i, fn] of ['YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND'].entries()) {
@@ -674,7 +674,7 @@ function evaluateWithEngine(f, row) {
     }
     wb.recalc();
     const keys = ['year', 'month', 'day', 'hour', 'minute', 'second'];
-    return Object.fromEntries(keys.map((key, i) => [key, ws.getValue(0, i + 1).number]));
+    return Object.fromEntries(keys.map((key, i) => [key, ws.getTypedValue(0, i + 1).number]));
   } finally {
     wb.dispose();
   }
@@ -953,8 +953,8 @@ function checkParallelRecalc(f) {
       // A documented serial degradation (launch refused, or the single-threaded build).
       assert.equal(stats.workerThreadsUsed, 0);
     }
-    assert.equal(ws.getValue(1, 1).number, 3);
-    assert.equal(ws.getValue(branches, 2).number, (1 + branches + 1) * 2);
+    assert.equal(ws.getTypedValue(1, 1).number, 3);
+    assert.equal(ws.getTypedValue(branches, 2).number, (1 + branches + 1) * 2);
   } finally {
     wb.dispose();
   }
@@ -966,7 +966,7 @@ function checkEvaluates(f) {
     wb.sheet(0).setNumber(0, 0, 20);
     wb.sheet(0).setFormula(0, 1, '=A1+22');
     wb.recalc();
-    assert.equal(wb.sheet(0).getValue(0, 1).number, 42);
+    assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 42);
   } finally {
     wb.dispose();
   }

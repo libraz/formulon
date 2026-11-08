@@ -47,8 +47,7 @@ test('listCells enumerates stored cells', async () => {
     assert.equal(typeof e.col, 'number');
     if (e.formula === '=A1+B1') {
       foundFormula = true;
-      assert.equal(e.value.kind, mod.ValueKind.Number);
-      assert.equal(e.value.number, 3);
+      assert.equal(e.value, 3);
     }
   }
   assert.ok(foundFormula, 'expected to find the =A1+B1 cell during iteration');
@@ -85,7 +84,7 @@ test('setError() rejects a non-number errorCode before mutating the cell', async
   wb.sheet(0).setNumber(0, 0, 7);
   assert.throws(() => wb.sheet(0).setError(0, 0, 'not a number'), TypeError);
   // The rejected call must not have overwritten the cell.
-  const got = wb.sheet(0).getValue(0, 0);
+  const got = wb.sheet(0).getTypedValue(0, 0);
   assert.equal(got.number, 7);
 });
 
@@ -110,7 +109,7 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
     formula1: '"Yes,No"',
   });
   // A CF rule's dxfId must resolve against a registered dxf.
-  const dxf = wb.addDxf({ font: { bold: true } });
+  const dxf = wb.ooxml.addDxf({ font: { bold: true } });
   wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 1,
@@ -242,7 +241,7 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.sheet(0).listCfRules().length, 0);
   // A CF rule's dxfId must resolve against a registered dxf.
-  const dxf = wb.addDxf({ font: { bold: true } });
+  const dxf = wb.ooxml.addDxf({ font: { bold: true } });
   // cellIs rule (type 1) comparing the cell to a literal.
   const add = wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
@@ -282,13 +281,13 @@ test('data bar x14 fields survive save and load', async () => {
     dataBar: {
       min: { type: 3 },
       max: { type: 4 },
-      fill: { r: 0, g: 0, b: 255 },
+      fill: '#0000FF',
       gradient: false,
       axisPosition: 1,
-      negativeFill: { r: 255, g: 0, b: 0 },
-      border: { r: 9, g: 9, b: 9 },
-      negativeBorder: { r: 8, g: 8, b: 8 },
-      axisColor: { r: 1, g: 2, b: 3 },
+      negativeFill: '#FF0000',
+      border: '#090909',
+      negativeBorder: '#080808',
+      axisColor: '#010203',
       direction: 2,
     },
   });
@@ -298,10 +297,10 @@ test('data bar x14 fields survive save and load', async () => {
   const bar = loaded.sheet(0).listCfRules()[0].dataBar;
   assert.equal(bar.gradient, false);
   assert.equal(bar.axisPosition, 1);
-  assert.equal(bar.negativeFill.r, 255);
-  assert.equal(bar.border.r, 9);
-  assert.equal(bar.negativeBorder.r, 8);
-  assert.equal(bar.axisColor.b, 3);
+  assert.equal(bar.negativeFill.rgb, 0xffff0000);
+  assert.equal(bar.border.rgb, 0xff090909);
+  assert.equal(bar.negativeBorder.rgb, 0xff080808);
+  assert.equal(bar.axisColor.rgb, 0xff010203);
   assert.equal(bar.direction, 2);
 
   // The decoded bar fed straight back must reproduce the same rule.
@@ -313,7 +312,7 @@ test('data bar x14 fields survive save and load', async () => {
   const reread = loaded.sheet(0).listCfRules()[1].dataBar;
   assert.equal(reread.gradient, false);
   assert.equal(reread.axisPosition, 1);
-  assert.equal(reread.axisColor.b, 3);
+  assert.equal(reread.axisColor.rgb, 0xff010203);
   assert.equal(reread.direction, 2);
 
   loaded.dispose();
@@ -351,14 +350,14 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
   wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
-    dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
+    dataBar: { min: { type: 3 }, max: { type: 4 }, fill: '#0000FF' },
   });
   const bar = wb.sheet(0).listCfRules()[0].dataBar;
   // The getter engages all six, so they read back as the defaults rather
   // than as absent keys.
   assert.equal(bar.gradient, true);
   assert.equal(bar.axisPosition, 0);
-  assert.equal(bar.negativeFill.b, 255);
+  assert.equal(bar.negativeFill.rgb, 0xff0000ff);
   wb.dispose();
 });
 
@@ -367,18 +366,18 @@ test('named cell styles: listCellStyles / getCellStyle / listCellStyleXfs', asyn
   const wb = mod.Workbook.createDefault();
   // A fresh workbook may carry zero named styles; the accessors must
   // still return well-formed values rather than throwing.
-  const count = wb.listCellStyles().length;
+  const count = wb.ooxml.listCellStyles().length;
   assert.equal(typeof count, 'number');
   assert.ok(count >= 0);
-  assert.equal(typeof wb.listCellStyleXfs().length, 'number');
+  assert.equal(typeof wb.ooxml.listCellStyleXfs().length, 'number');
   if (count > 0) {
-    const cs = wb.listCellStyles()[0];
+    const cs = wb.ooxml.listCellStyles()[0];
     assert.equal(typeof cs.name, 'string');
     assert.equal(typeof cs.xfId, 'number');
-    assert.deepEqual(wb.getCellStyle(cs.name), cs);
+    assert.deepEqual(wb.ooxml.getCellStyle(cs.name), cs);
   }
   // An unknown name is ok with a null value, not a throw.
-  const none = wb.getCellStyle('No Such Style');
+  const none = wb.ooxml.getCellStyle('No Such Style');
   assert.equal(none, null);
 });
 
@@ -410,7 +409,7 @@ test('setPinnedNow / getPinnedNow / setPinnedNow(null) drive the clock seam', as
   });
 
   // 2026-04-23 is serial 46135 under the 1900 date system.
-  const today = wb.sheet(0).evaluateFormula(0, 0, '=TODAY()');
+  const today = wb.sheet(0).evaluateTypedFormula(0, 0, '=TODAY()');
   assert.equal(today.number, 46135);
 
   // The pin is a calendar instant, not a normalising constructor.
@@ -425,14 +424,14 @@ test('setPinnedNow / getPinnedNow / setPinnedNow(null) drive the clock seam', as
   assert.equal(wb.getPinnedNow(), null);
 });
 
-test('excelProfileId / setExcelProfileId round-trip the profile id', async () => {
+test('excelProfileId / setProfileId round-trip the profile id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const def = wb.getExcelProfileId();
+  const def = wb.getProfileId();
   assert.equal(typeof def, 'string');
   assert.ok(def.length > 0);
-  wb.setExcelProfileId('mac-365-ja_JP');
-  assert.equal(wb.getExcelProfileId(), 'mac-365-ja_JP');
+  wb.setProfileId('mac-365-ja_JP');
+  assert.equal(wb.getProfileId(), 'mac-365-ja_JP');
 });
 
 // Values are the mac-365-* oracle captures of `DOLLAR(-1234.567)`; the
@@ -470,23 +469,23 @@ const PROFILE_LOCALES = [
   'nl_NL',
 ];
 
-test('setExcelProfileId switches a live workbook through every profile id', async () => {
+test('setProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.getExcelProfileId(), 'win-365-en_US');
+  assert.equal(wb.getProfileId(), 'win-365-en_US');
   wb.sheet(0).setFormula(0, 0, '=DOLLAR(-1234.567)');
   for (const host of ['mac', 'win']) {
     for (const locale of PROFILE_LOCALES) {
       const id = `${host}-365-${locale}`;
-      wb.setExcelProfileId(id);
-      assert.equal(wb.getExcelProfileId(), id);
+      wb.setProfileId(id);
+      assert.equal(wb.getProfileId(), id);
       wb.recalc();
       if (id in PROFILE_DOLLAR) {
-        assert.equal(wb.sheet(0).getValue(0, 0).text, PROFILE_DOLLAR[id], id);
+        assert.equal(wb.sheet(0).getTypedValue(0, 0).text, PROFILE_DOLLAR[id], id);
       }
     }
   }
-  assert.throws(() => wb.setExcelProfileId('mac-365-xx_XX'), isFormulonError);
+  assert.throws(() => wb.setProfileId('mac-365-xx_XX'), isFormulonError);
 });
 
 test('listFunctionNames + getFunctionMetadata expose the catalog', async () => {
@@ -735,7 +734,7 @@ test('array formulas can be authored, read from every cell and cleared', async (
     assert.deepEqual(found.rect, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 });
     assert.ok(found.formula.includes('A1:A3'));
   }
-  assert.equal(wb.sheet(0).getValue(2, 2).number, 6);
+  assert.equal(wb.sheet(0).getTypedValue(2, 2).number, 6);
   // A partial overlap and a write into a non-anchor cell are refused.
   assert.throws(
     () => wb.sheet(0).setArrayFormula({ rect: { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, formula: '=1' }),

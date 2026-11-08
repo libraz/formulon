@@ -70,7 +70,7 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
   // timePeriod rule (type 15) for "today" (period 0) over A1. The cell
   // holds the serial for 1899-12-30, which a 0.0 basis would match.
   wb.sheet(0).setNumber(0, 0, 0);
-  const dxf = wb.addDxf({ font: { bold: true } });
+  const dxf = wb.ooxml.addDxf({ font: { bold: true } });
   wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 15,

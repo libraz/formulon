@@ -61,12 +61,12 @@ test('a throwing iterative progress callback aborts the solve and its exception 
     assert.equal(caught, thrown);
     assert.equal(calls, 1, 'the solve must stop at the first throw');
 
-    wb.sheet(0).getValue(0, 0);
+    wb.sheet(0).getTypedValue(0, 0);
 
     wb.setIterativeProgress(null);
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     wb.recalc();
-    const converged = wb.sheet(0).getValue(0, 0);
+    const converged = wb.sheet(0).getTypedValue(0, 0);
     assert.ok(Math.abs(converged.number - 10) < 0.001, `A1=${converged.number}`);
   } finally {
     wb.setIterativeProgress(null);
@@ -86,11 +86,7 @@ const COLOR_SCALE_RULE = Object.freeze({
       { type: 1, value: '50' },
       { type: 0, value: '100' },
     ],
-    colors: [
-      { r: 248, g: 105, b: 107, a: 255 },
-      { r: 255, g: 235, b: 132, a: 255 },
-      { r: 99, g: 190, b: 123, a: 255 },
-    ],
+    colors: ['#F8696B', '#FFEB84', '#63BE7B'],
   },
 });
 
@@ -100,7 +96,7 @@ const DATA_BAR_RULE = Object.freeze({
   dataBar: {
     min: { type: 0, value: '5' },
     max: { type: 0, value: '95' },
-    fill: { r: 0, g: 112, b: 192, a: 255 },
+    fill: '#0070C0',
   },
 });
 
@@ -167,8 +163,8 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
       [1, 1, 1],
     );
     assert.equal(byType.get(2).colorScale.colors.length, 3);
-    assert.equal(byType.get(2).colorScale.colors[2].g, 190);
-    assert.equal(byType.get(3).dataBar.fill.b, 192);
+    assert.equal(byType.get(2).colorScale.colors[2].rgb, 0xff63be7b);
+    assert.equal(byType.get(3).dataBar.fill.rgb, 0xff0070c0);
 
     const saved = wb.save();
     bytes = saved;
@@ -234,12 +230,12 @@ test('getCellStyleXf reports xfId alongside the cell-format fields', async () =>
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const read = wb.getCellStyleXf(0);
+    const read = wb.ooxml.getCellStyleXf(0);
     // A named-style xf is its own parent, so it never inherits one.
     assert.equal(read.xfId, 0);
     // The record shape matches `getCellXf`, which the documented
     // read / edit / addCellStyleXf round-trip depends on.
-    const cellXf = wb.getCellXf(0);
+    const cellXf = wb.ooxml.getCellXf(0);
     for (const key of Object.keys(cellXf)) {
       assert.ok(key in read, `getCellStyleXf is missing '${key}'`);
     }
@@ -310,7 +306,7 @@ test('a rejected argument reports its own diagnostic, not the previous call', as
       }
       return assert.fail('expected the call to throw');
     };
-    const stale = failure(() => wb.sheet(99).getValue(0, 0));
+    const stale = failure(() => wb.sheet(99).getTypedValue(0, 0));
     assert.ok(isFormulonError(stale));
     assert.ok(stale.message.length > 0);
 

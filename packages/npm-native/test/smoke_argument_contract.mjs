@@ -132,7 +132,7 @@ test('a missing required argument throws TypeError and commits nothing', async (
     assert.throws(() => wb.sheet(0).setNumber(0, 0), TypeError);
     assert.throws(() => wb.sheet(0).setText(0, 0), TypeError);
     assert.throws(() => wb.sheet(0).setBool(0, 0), TypeError);
-    assert.equal(wb.sheet(0).getValue(0, 0).kind, mod.ValueKind.Blank);
+    assert.equal(wb.sheet(0).getTypedValue(0, 0).kind, mod.ValueKind.Blank);
 
     wb.setDefinedName({ name: 'X', formula: '=1' });
     const nameBefore = wb.listDefinedNames()[0];
@@ -158,11 +158,11 @@ test('a primitive or null where an object is declared throws TypeError and chang
     assert.throws(() => wb.sheet(0).setSheetProtection(5), TypeError);
     assert.deepEqual(wb.sheet(0).getSheetProtection(), protectionBefore);
 
-    const fonts = wb.listFonts().length;
-    assert.throws(() => wb.addFont(null), TypeError);
-    assert.throws(() => wb.addFont(1), TypeError);
+    const fonts = wb.ooxml.listFonts().length;
+    assert.throws(() => wb.ooxml.addFont(null), TypeError);
+    assert.throws(() => wb.ooxml.addFont(1), TypeError);
     assert.throws(() => wb.setDefaultFont(null), TypeError);
-    assert.equal(wb.listFonts().length, fonts);
+    assert.equal(wb.ooxml.listFonts().length, fonts);
 
     assert.throws(() => wb.sheet(0).recalcViewport(5), TypeError);
     assert.throws(() => wb.sheet(0).getCellRectPt(null, 0), TypeError);
@@ -182,7 +182,7 @@ test('an argument the binding cannot represent throws TypeError and changes noth
       ['restoreRangeStyle(0, {})', () => wb.sheet(0).restoreRangeStyle({})],
       [
         'remapRangeStyle mismatched lengths',
-        () => wb.sheet(0).remapRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
+        () => wb.sheet(0).ooxml.remapRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
       ],
       ['getImageInfo({})', () => mod.getImageInfo({})],
     ]) {
@@ -197,7 +197,7 @@ test('a failed read throws instead of returning a default payload', async () => 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    for (const read of [() => wb.getCellXf(99999), () => wb.getCellStyleXf(99999)]) {
+    for (const read of [() => wb.ooxml.getCellXf(99999), () => wb.ooxml.getCellStyleXf(99999)]) {
       assert.throws(read, (e) => isFormulonError(e, mod.StatusCode.IndexOutOfRange));
     }
     assert.throws(
@@ -217,7 +217,7 @@ test('a lone surrogate in a spec string is stored as U+FFFD', async () => {
     const person = wb.listPeople().find((p) => p.id === PERSON_ID);
     assert.equal(person.displayName, 'a\uFFFDb');
     wb.sheet(0).setText(0, 0, 'x\uDC00');
-    assert.equal(wb.sheet(0).getValue(0, 0).text, 'x\uFFFD');
+    assert.equal(wb.sheet(0).getTypedValue(0, 0).text, 'x\uFFFD');
   } finally {
     wb.dispose();
   }
@@ -236,7 +236,7 @@ test('every method called from the iterative progress callback throws and change
       setNumber: () => wb.sheet(1).setNumber(5, 5, 7),
       deleteRows: () => wb.sheet(1).deleteRows(0, 1),
       removeSheet: () => wb.removeSheet(1),
-      getValue: () => wb.sheet(1).getValue(5, 5),
+      getValue: () => wb.sheet(1).getTypedValue(5, 5),
     };
     const thrown = {};
     let calls = 0;
@@ -259,8 +259,8 @@ test('every method called from the iterative progress callback throws and change
       assert.match(thrown[name].message, /kGraphRecalcReentrant, 4005/, name);
     }
     assert.equal(wb.listSheets().length, 2);
-    assert.equal(wb.sheet(1).getValue(5, 5).number, 42);
-    assert.equal(wb.sheet(1).getValue(0, 0).kind, 0, 'the refused setFormula wrote nothing');
+    assert.equal(wb.sheet(1).getTypedValue(5, 5).number, 42);
+    assert.equal(wb.sheet(1).getTypedValue(0, 0).kind, 0, 'the refused setFormula wrote nothing');
   } finally {
     wb.setIterativeProgress(null);
     wb.dispose();
@@ -281,7 +281,7 @@ test('a CellRect argument requires four integer fields', async () => {
     ];
     for (const bad of malformed) {
       assert.throws(() => wb.sheet(0).addMerge(bad), TypeError, JSON.stringify(bad));
-      assert.throws(() => wb.sheet(0).setRangeXfIndex(bad, 0), TypeError, JSON.stringify(bad));
+      assert.throws(() => wb.sheet(0).ooxml.setRangeXfIndex(bad, 0), TypeError, JSON.stringify(bad));
       assert.throws(() => wb.sheet(0).getCellRectPt(bad, 0), TypeError, JSON.stringify(bad));
     }
     assert.throws(() => wb.sheet(0).addMerge({ ...rect, firstRow: -1 }), RangeError);
@@ -289,7 +289,7 @@ test('a CellRect argument requires four integer fields', async () => {
     // A well-typed rectangle the engine refuses is a FormulonError, not a TypeError.
     assert.throws(() => wb.sheet(0).addMerge({ firstRow: 1, firstCol: 0, lastRow: 0, lastCol: 0 }), isFormulonError);
     assert.throws(
-      () => wb.sheet(0).setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 1048576, lastCol: 0 }, 0),
+      () => wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 1048576, lastCol: 0 }, 0),
       isFormulonError,
     );
     wb.sheet(0).addMerge(rect);
