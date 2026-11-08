@@ -1,7 +1,8 @@
 // Input side of the facade: A1 text inside records, the positional arity guard and the method names in guard
-// messages, the table-name refusal, formula text versus setText, date inputs, and the getter -> setter round
-// trips of tools/api/roundtrip_cases.json. FORMULON_PACKAGE=native runs it against the staged
-// @libraz/formulon-native; otherwise FORMULON_NPM_ENTRY selects the staged @libraz/formulon subpath.
+// messages, the table-name refusal, trailing defaults, the defined-name scope, formula text versus setText, date
+// inputs, and the getter -> setter round trips of tools/api/roundtrip_cases.json. FORMULON_PACKAGE=native runs it
+// against the staged @libraz/formulon-native; otherwise FORMULON_NPM_ENTRY selects the staged @libraz/formulon
+// subpath.
 
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -334,6 +335,84 @@ test('a guard message names the method it guards', () => {
     assert.throws(() => ws.setValue('A1', new Date(Number.NaN)), { name: 'RangeError', message: /^Sheet\.setValue / });
     assert.throws(() => ws.setValue('A1', Symbol('x')), { name: 'TypeError', message: /^Sheet\.setValue / });
     assert.throws(() => ws.setValues('A1', [[Symbol('x')]]), { name: 'TypeError', message: /^Sheet\.setValues / });
+  });
+});
+
+// ---- Trailing defaults and the defined-name scope ----------------------------------------------------------
+
+test('an omitted trailing argument takes its ledger default', () => {
+  withSheet((ws, wb) => {
+    ws.setNumber('A1', 1);
+    ws.setValue('B1', '=A1+1');
+    ws.setValue('C1', '=B1+1');
+    const cells = (nodes) => nodes.map(({ row, col }) => [row, col]);
+    assert.deepEqual(cells(ws.getPrecedents('C1')), [[0, 1]]);
+    assert.deepEqual(cells(ws.getPrecedents(0, 2)), [[0, 1]]);
+    assert.deepEqual(cells(ws.getDependents('A1')), [[0, 1]]);
+    assert.deepEqual(cells(ws.getDependents(0, 0, undefined)), [[0, 1]]);
+    if (typeof wb.recalcParallel === 'function') assert.equal(typeof wb.recalcParallel().cellsEvaluated, 'number');
+  });
+});
+
+test('copySheet appends when insertBefore is omitted or null', () => {
+  withSheet((ws, wb) => {
+    wb.addSheet('Last');
+    const appended = wb.copySheet(0);
+    assert.equal(appended.index, 2);
+    assert.equal(appended.name, 'Sheet1 (2)');
+    const named = wb.copySheet(0, null, 'Copy');
+    assert.equal(named.index, 3);
+    assert.equal(named.name, 'Copy');
+    assert.equal(wb.copySheet(ws, 1, 'Front').index, 1);
+    assert.deepEqual(
+      wb.listSheets().map((sheet) => sheet.name),
+      ['Sheet1', 'Front', 'Last', 'Sheet1 (2)', 'Copy'],
+    );
+  });
+});
+
+test('evaluateCfRange dates timePeriod rules by the pinned clock, else today', () => {
+  withSheet((ws, wb) => {
+    const { CfRuleType, CfTimePeriod } = formulon;
+    ws.addCfRule({ type: CfRuleType.TimePeriod, ranges: 'A1:A2', timePeriod: CfTimePeriod.Today });
+    ws.setValue('A1', '=TODAY()');
+    ws.setValue('A2', new Date(Date.UTC(2020, 0, 15)));
+    const matched = () => ws.evaluateCfRange('A1:A2').map(({ row, col }) => [row, col]);
+    assert.deepEqual(matched(), [[0, 0]]);
+    assert.deepEqual(
+      ws.evaluateCfRange('A1:A2', Number.NaN).map(({ row }) => row),
+      [],
+    );
+    wb.setPinnedNow({ year: 2020, month: 1, day: 15, hour: 12, minute: 0, second: 0 });
+    wb.recalc();
+    assert.deepEqual(matched(), [
+      [0, 0],
+      [1, 0],
+    ]);
+  });
+});
+
+test('setDefinedName scopes a name to the sheet its scope names', () => {
+  withSheet((ws, wb) => {
+    wb.addSheet('Data');
+    wb.setDefinedName({ name: 'ByIndex', formula: '=Sheet1!$A$1', scope: 0 });
+    wb.setDefinedName({ name: 'ByName', formula: '=Data!$A$1', scope: 'Data' });
+    wb.setDefinedName({ name: 'ByHandle', formula: '=Sheet1!$A$2', scope: ws });
+    wb.setDefinedName({ name: 'Global', formula: '=Sheet1!$A$3', scope: null });
+    assert.equal(wb.getDefinedName('ByIndex', 0).localSheetId, 0);
+    assert.equal(wb.getDefinedName('ByName', 'Data').localSheetId, 1);
+    assert.equal(wb.getDefinedName('ByHandle', ws).localSheetId, 0);
+    assert.equal(wb.getDefinedName('Global').localSheetId, null);
+    assert.equal(wb.getDefinedName('ByIndex'), null);
+    rejectsWith(
+      () => wb.setDefinedName({ name: 'Lost', formula: '=1', scope: 'Missing' }),
+      StatusCode.NotFound,
+      /Missing/,
+    );
+    assert.throws(() => wb.setDefinedName({ name: 'Far', formula: '=1', scope: 1.5 }), {
+      name: 'RangeError',
+      message: /^Workbook\.setDefinedName scope /,
+    });
   });
 });
 

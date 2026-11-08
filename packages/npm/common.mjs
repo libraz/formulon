@@ -2442,6 +2442,13 @@ const TYPED_ARGS = Object.freeze({
   'Workbook.addTable': [[0, 'TableInput']],
   'Workbook.formatReference': [[0, 'ReferenceRangeInput']],
 });
+const DEFAULT_ARGS = Object.freeze({
+  'Sheet.evaluateCfRange': [[1, 'today']],
+  'Sheet.getDependents': [[2, 1]],
+  'Sheet.getPrecedents': [[2, 1]],
+  'Workbook.copySheet': [[1, null]],
+  'Workbook.recalcParallel': [[0, 0]],
+});
 // </method-signatures>
 // Arguments the declarations type `T | null` (or optional) where the raw method
 // takes the C sentinel: `Class.method` -> [position in the public call,
@@ -3017,6 +3024,28 @@ function normalizeTypedArgs(raw, sheet, where, typed, args) {
     }
   }
   return out;
+}
+
+// `args` with each omitted `DEFAULT_ARGS` slot filled; `'today'` is the pinned date, else the host's local date.
+function fillDefaults(runtime, raw, defaults, args) {
+  let out = args;
+  for (const [at, value] of defaults) {
+    if (args[at] !== undefined) continue;
+    if (out === args) out = [...args];
+    out[at] = value === 'today' ? todaySerial(runtime, raw) : value;
+  }
+  return out;
+}
+
+function todaySerial(runtime, raw) {
+  const now = new Date();
+  const { year, month, day } = raw.getPinnedNow() ?? {
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+    day: now.getDate(),
+  };
+  const civil = { year, month, day, hour: 0, minute: 0, second: 0 };
+  return runtime.convertCivilToSerial(civil, raw.getDate1904());
 }
 
 // Whether `text` reads as one unqualified A1 cell (`"T2"`), which a table name may not be.
@@ -5102,8 +5131,9 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     // Resolves a `SheetRef` the way `sheet(key)` does; `method` and `position` word the errors.
+    // `position` is an argument number, or the name of the record field that holds `ref`.
     #resolve(ref, method, position) {
-      const where = `Workbook.${method} argument ${position}`;
+      const where = `Workbook.${method} ${typeof position === 'number' ? `argument ${position}` : position}`;
       if (ref instanceof Sheet) {
         if (ref.workbook !== this) throw new TypeError(`${where} is a Sheet of another workbook`);
         return ref.index;
@@ -5157,10 +5187,9 @@ function makeFacade(Raw, registry, runtime) {
 
     copySheet(source, insertBefore, newName) {
       const index = this.#resolve(source, 'copySheet', 1);
+      const before = insertBefore === null ? this.#sheets.length : insertBefore;
       const position =
-        newName === undefined
-          ? this.#raw.copySheet(index, insertBefore)
-          : this.#raw.copySheet(index, insertBefore, newName);
+        newName === undefined ? this.#raw.copySheet(index, before) : this.#raw.copySheet(index, before, newName);
       return this.#insert(position);
     }
 
@@ -5334,6 +5363,13 @@ function makeFacade(Raw, registry, runtime) {
       return this.#raw.removeDefinedName(name, this.#scope(scope, 'removeDefinedName'));
     }
 
+    setDefinedName(definedName) {
+      requireObject(definedName, 'Workbook.setDefinedName argument 1');
+      const { scope, ...fields } = definedName;
+      if (scope === undefined || scope === null) return this.#raw.setDefinedName(fields);
+      return this.#raw.setDefinedName({ ...fields, localSheetId: this.#resolve(scope, 'setDefinedName', 'scope') });
+    }
+
     setIterative(patch) {
       const where = 'Workbook.setIterative';
       checkForwardedPatch(where, patch, PATCH_FIELDS[where]);
@@ -5488,7 +5524,7 @@ function makeFacade(Raw, registry, runtime) {
     ],
   ];
   for (const [owner, cls, rawFor, sheetFor] of argumentForms) {
-    installArgumentForms(cls.prototype, owner, rawFor, sheetFor, handleIndex);
+    installArgumentForms(cls.prototype, owner, rawFor, sheetFor, handleIndex, runtime);
   }
   // Under the arity guard: the handle is checked before a call reads or validates its input, and the workbook
   // cannot be disposed from inside the call.
@@ -5521,16 +5557,17 @@ function makeFacade(Raw, registry, runtime) {
 
 /**
  * Wraps every defined method of `owner` listed in `CELL_ARGS`, `RECT_ARGS`,
- * `SPAN_ARGS`, `REF_ARGS` or `TYPED_ARGS` so that A1 addresses, A1 ranges, A1
- * spans, `*Ref` strings, `*Ref` handles and the A1 text of record fields
- * (`normalizeRecordRanges`) reach it in coordinate, index and raw form. `rawOf(self)`
- * and `sheetOf(self)` give the raw workbook and the sheet index a string key is
+ * `SPAN_ARGS`, `REF_ARGS`, `TYPED_ARGS` or `DEFAULT_ARGS` so that A1 addresses, A1
+ * ranges, A1 spans, `*Ref` strings, `*Ref` handles and the A1 text of record fields
+ * (`normalizeRecordRanges`) reach it in coordinate, index and raw form, with an
+ * omitted trailing argument given its ledger default. `rawOf(self)` and
+ * `sheetOf(self)` give the raw workbook and the sheet index a string key is
  * resolved against; `handleIndex(self, kind, value, label)` the index a handle
- * names.
+ * names; `runtime` converts the `'today'` default.
  */
-function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
+function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex, runtime) {
   const prefix = `${owner}.`;
-  const tables = [CELL_ARGS, RECT_ARGS, SPAN_ARGS, REF_ARGS, TYPED_ARGS];
+  const tables = [CELL_ARGS, RECT_ARGS, SPAN_ARGS, REF_ARGS, TYPED_ARGS, DEFAULT_ARGS];
   const keys = new Set(tables.flatMap((table) => Object.keys(table)));
   for (const where of keys) {
     if (!where.startsWith(prefix)) continue;
@@ -5542,12 +5579,14 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
     const spans = SPAN_ARGS[where];
     const ref = REF_ARGS[where];
     const typed = TYPED_ARGS[where];
+    const defaults = DEFAULT_ARGS[where];
     defineMethod(
       proto,
       name,
       namedFunction(name, function (args) {
         if (spans !== undefined) args = expandSpans(rawOf(this), spans, args);
         if (pairs !== undefined) args = expandCells(rawOf(this), where, pairs, args);
+        if (defaults !== undefined) args = fillDefaults(runtime, rawOf(this), defaults, args);
         if (typed !== undefined) args = normalizeTypedArgs(rawOf(this), sheetOf(this), where, typed, args);
         if (rects !== undefined) args = expandRects(rawOf(this), rects, args);
         if (ref !== undefined && typeof args[ref[0]] !== 'number') {

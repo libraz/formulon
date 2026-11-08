@@ -238,6 +238,42 @@ class MethodSignaturesTest(unittest.TestCase):
         self.assertIn("const TYPED_ARGS = Object.freeze({\n  'Sheet.setPrintArea': [[0, 'CellRect[]']],\n", text)
 
 
+class DefaultArgsTest(unittest.TestCase):
+    DTS = """
+export interface Workbook { copySheet(source: number, insertBefore?: number | null, newName?: string): number; }
+export interface Sheet {
+  getPrecedents(row: number, col: number, depth?: number): number[];
+  getPrecedents(a1: string, depth?: number): number[];
+  evaluateCfRange(range: string, todaySerial?: number): number[];
+}
+"""
+    OPS = {
+        "sheet.copy": _op("copySheet", "workbook", params={"insert_before": {"default": None}}),
+        "precedents.get": _op("getPrecedents", "sheet", cell_args=[[0, 1]], params={"depth": {"default": 1}}),
+        "cf_range.evaluate": _op("evaluateCfRange", "sheet", params={"today_serial": {"default": "today"}}),
+    }
+
+    def test_defaults_sit_at_their_coordinate_form_positions(self) -> None:
+        self.assertEqual(
+            gen.default_args(_ledger(self.OPS), self.DTS),
+            {
+                "Sheet.evaluateCfRange": [[1, "today"]],
+                "Sheet.getPrecedents": [[2, 1]],
+                "Workbook.copySheet": [[1, None]],
+            },
+        )
+
+    def test_a_default_the_declaration_does_not_name_is_refused(self) -> None:
+        ops = {"sheet.copy": _op("copySheet", "workbook", params={"position": {"default": None}})}
+        with self.assertRaisesRegex(gen.GenError, r"Workbook\.copySheet declares no parameter `position`"):
+            gen.default_args(_ledger(ops), self.DTS)
+
+    def test_js_region(self) -> None:
+        text = gen.signatures_region(_ledger(self.OPS), self.DTS)
+        self.assertIn("const DEFAULT_ARGS = Object.freeze({\n  'Sheet.evaluateCfRange': [[1, 'today']],\n", text)
+        self.assertIn("  'Workbook.copySheet': [[1, null]],\n});\n", text)
+
+
 class RegionGateTest(unittest.TestCase):
     PATTERN = gen._RANGE_REGION["js"]
 

@@ -37,12 +37,14 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   union type alias of interfaces) has the fields of every alternative. Python keys and nested record
   names are the ledger's Python names, fields snake_case. Both files follow the
   ``sheet.py`` rule for an absent or empty region.
-* ``METHOD_ARITY`` (``{Class.method: count}``) and ``TYPED_ARGS``
+* ``METHOD_ARITY`` (``{Class.method: count}``), ``TYPED_ARGS``
   (``{Class.method: [[position, type], ...]}``) in the ``<method-signatures>``
   region of ``common.mjs``, read from the facade interfaces of
   src/wasm/formulon.d.ts: the most positional parameters any overload
   declares, and the parameters typed by an address record or a range type
-  other than a plain ``CellRect``. Same rule for an absent or empty region.
+  other than a plain ``CellRect``; ``DEFAULT_ARGS`` (``{Class.method:
+  [[position, default], ...]}``), the ledger's ``params`` defaults at their
+  positions in the longest overload. Same rule for an absent or empty region.
 * ``packages/python/formulon/_handle_tables.py``: the same tables for the handle
   classes, the whole file generated.
 * ``src/node_addon/generated/facade_scope.inc``: ``kSheetMethods``, the sorted
@@ -582,12 +584,52 @@ def method_signatures(
     return arity, args
 
 
+def _camel(snake: str) -> str:
+    head, *rest = snake.split("_")
+    return head + "".join(w[:1].upper() + w[1:] for w in rest)
+
+
+def default_args(
+    ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
+) -> Dict[str, List[List[object]]]:
+    """`DEFAULT_ARGS`: `{Class.method: [[position, default], ...]}` of the facade methods whose ledger op gives a
+    parameter a `default` (`params: {<c name>: {default: <value>}}`), sorted. The position is the parameter's in
+    the longest overload (the coordinate form); `'today'` stays the ledger's clock token."""
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    longest: Dict[str, List[str]] = {}
+    for interface, owner in _facade_interfaces(ledger).items():
+        decl = surface.decls.get(interface)
+        for member in decl.members if decl is not None and decl.kind == "interface" else ():
+            key = f"{owner}.{member.name}"
+            if member.is_method and len(member.params) >= len(longest.get(key, ())):
+                longest[key] = [name for name, _type in member.params]
+    out: Dict[str, List[List[object]]] = {}
+    for entry in ledger.entries.values():
+        params = entry.get("params") if isinstance(entry, dict) and entry.get("kind") == "op" else None
+        if not isinstance(params, dict):
+            continue
+        defaults = {n: s["default"] for n, s in params.items() if isinstance(s, dict) and "default" in s}
+        for key in facade_scope.qualified(entry, "js", ledger.collections) if defaults else ():
+            if key not in longest:
+                continue
+            slots = []
+            for name, value in defaults.items():
+                if _camel(name) not in longest[key]:
+                    raise GenError(f"{key} declares no parameter `{_camel(name)}` for the ledger default of `{name}`")
+                slots.append([longest[key].index(_camel(name)), value])
+            out[key] = sorted(slots, key=lambda slot: slot[0])
+    return dict(sorted(out.items()))
+
+
 def signatures_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
-    """The JS `METHOD_ARITY` and `TYPED_ARGS` tables."""
+    """The JS `METHOD_ARITY`, `TYPED_ARGS` and `DEFAULT_ARGS` tables."""
     arity, typed = method_signatures(ledger, dts)
     out = _js_frozen("METHOD_ARITY", "".join(f"{_INDENT}{_js_key(k)}: {n},\n" for k, n in arity.items()))
     body = "".join(f"{_INDENT}{_js_key(k)}: {_js_positions(v)},\n" for k, v in typed.items())
-    return out + _js_frozen("TYPED_ARGS", body)
+    out += _js_frozen("TYPED_ARGS", body)
+    body = "".join(f"{_INDENT}{_js_key(k)}: {_js_positions(v)},\n" for k, v in default_args(ledger, dts).items())
+    return out + _js_frozen("DEFAULT_ARGS", body)
 
 
 def _splice(text: str, pattern: "re.Pattern[str]", region: str, path: Path) -> str:

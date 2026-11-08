@@ -79,10 +79,10 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
   });
   wb.recalc();
 
-  // todaySerial is required: an omitted one is rejected rather than read as
-  // 0, the valid serial for 1899-12-30 that would make the rule match. NaN
-  // is the documented disabling value.
-  assert.throws(() => wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }), TypeError);
+  // An omitted todaySerial is today, not 0 (the valid serial for 1899-12-30
+  // that would make the rule match). NaN is the documented disabling value.
+  const omitted = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 });
+  assert.equal(omitted.filter((c) => c.matches).length, 0);
   const explicitNaN = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
   assert.equal(explicitNaN.length, 0);
 

@@ -55,7 +55,8 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   const assertRejected = (errorClass, input, label) => {
     assert.throws(() => (input === undefined ? wb.recalcParallel() : wb.recalcParallel(input)), errorClass, label);
   };
-  assertRejected(TypeError, undefined, 'missing threadCount');
+  // An omitted threadCount takes its default (0, the hardware width); null is still a shape error.
+  assert.equal(typeof wb.recalcParallel(), 'object');
   assertRejected(TypeError, null, 'null threadCount');
   assertRejected(RangeError, NaN, 'NaN threadCount');
   assertRejected(RangeError, Infinity, 'Infinity threadCount');

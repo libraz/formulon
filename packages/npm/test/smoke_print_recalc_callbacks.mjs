@@ -302,9 +302,8 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
       Number.NEGATIVE_INFINITY,
       2 ** 32 + 1,
       null,
-      undefined,
     ]) {
-      const expected = invalidThreadCount === null || invalidThreadCount === undefined ? TypeError : RangeError;
+      const expected = invalidThreadCount === null ? TypeError : RangeError;
       assert.throws(() => wb.recalcParallel(invalidThreadCount), expected, String(invalidThreadCount));
     }
   } finally {
