@@ -2645,6 +2645,17 @@ function checkDrawingPatch(where, patch) {
   if (stray !== undefined) throw new TypeError(`${where} ${stray} needs ${trigger} in the same patch`);
 }
 
+/** Refuses a shape fill or outline colour given without its kind, which the record would otherwise drop. */
+function checkShapePaint(where, spec) {
+  if (!isObject(spec)) return;
+  for (const [kind, color] of [
+    ['fillKind', 'fillColor'],
+    ['lineKind', 'lineColor'],
+  ]) {
+    if (spec[color] != null && spec[kind] == null) throw new TypeError(`${where} ${color} needs ${kind}`);
+  }
+}
+
 const COLOR_KEYS = Object.freeze(['indexed', 'kind', 'rgb', 'theme', 'tint']);
 const SPARKLINE_KEYS = Object.freeze(['formula', 'location']);
 
@@ -4169,6 +4180,7 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Shape.update';
       patch = colorInputs(patch, `${where} argument 1`);
       checkDrawingPatch(where, patch);
+      checkShapePaint(where, patch);
       const input = appliedFields(patch, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
       for (const key of ['fillKind', 'lineKind', 'fillColor', 'lineColor']) if (input[key] === null) delete input[key];
       const [raw, sheet, id] = drawingState.locate(this);
@@ -4664,7 +4676,9 @@ function makeFacade(Raw, registry, runtime) {
     addShape(spec) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      return this.#added(raw, sheet, raw.addShape(sheet, colorInputs(spec, 'Sheet.addShape argument 1')));
+      spec = colorInputs(spec, 'Sheet.addShape argument 1');
+      checkShapePaint('Sheet.addShape', spec);
+      return this.#added(raw, sheet, raw.addShape(sheet, spec));
     }
 
     addSlicer(table, column, spec) {

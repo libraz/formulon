@@ -4566,8 +4566,15 @@ def _pack_shape(
 ) -> int:
     """Build a shape input struct; a ``None`` argument is a field left out of the mask.
 
-    ``fill_color`` / ``line_color`` are the ``ColorInput`` of a solid kind, ``None`` for any other.
+    ``fill_color`` / ``line_color`` are the ``ColorInput`` of a solid kind, ``None`` for any other;
+    a colour without its kind raises ``TypeError``.
     """
+    for kind_name, kind, color_name, color in (
+        ("fill_kind", fill_kind, "fill_color", fill_color),
+        ("line_kind", line_kind, "line_color", line_color),
+    ):
+        if kind is None and color is not None:
+            raise TypeError(f"formulon: {color_name} needs {kind_name}")
     ptr = scope.struct_array(S.SHAPE, 1)
     mask = 0
     values: Dict[str, Any] = {}

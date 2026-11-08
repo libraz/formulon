@@ -376,6 +376,14 @@ class ChartEditTests(unittest.TestCase):
             self.assertAlmostEqual(paint.tint, 0.4, delta=1e-5)
             with self.assertRaises(InvalidArgumentError):
                 shape.update(fill_kind=ShapePaint.SOLID, fill_color=Color(ColorKind.INDEXED, indexed=5))
+            # A colour is never dropped: without its kind it is a TypeError, with NONE a status error.
+            with self.assertRaises(TypeError):
+                shape.update(fill_color=theme)
+            with self.assertRaises(TypeError):
+                shape.update(line_kind=None, line_color=theme)
+            with self.assertRaises(InvalidArgumentError):
+                shape.update(fill_kind=ShapePaint.NONE, fill_color=theme)
+            self.assertEqual(shape.get_properties().fill_color.theme, 4)
 
     def test_series_patch(self) -> None:
         wb, oid = _chart()

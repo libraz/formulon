@@ -2223,6 +2223,9 @@ order.
   `lumMod` / `lumOff` and quantised to 1e-5. Indexed and automatic colours are
   rejected with `FM_STATUS_INVALID_ARGUMENT`. A colour with any other
   transform reads as before: its rendered RGB on a chart, `Other` on a shape.
+- A shape fill or outline colour is no longer dropped silently: given without
+  its kind it fails with a `TypeError` in JavaScript and Python, and given with
+  a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.
 - Number-format codes (`fm_workbook_add_num_fmt`, `fm_workbook_get_num_fmt_string`
   and their JavaScript and Python forms) use the vocabulary of the workbook's
   Excel profile, as the pivot `number_format` field does. Built-in id 14 is

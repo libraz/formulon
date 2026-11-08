@@ -180,6 +180,18 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
     EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &s, &id), kInvalidArgument)
         << "kind=" << int(b.kind) << " theme=" << b.theme << " tint=" << b.tint;
   }
+
+  // A colour on a paint that is not solid is refused rather than dropped.
+  fm_shape_t none = Callout();
+  none.fill_kind = FM_SHAPE_PAINT_NONE;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
+  none = Callout();
+  none.line_color.kind = kFmColorRgb;
+  none.line_color.rgb = 0xFF000000U;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
+  // Without the field bit the colour is not read at all.
+  none.fields &= ~FM_SHAPE_FIELD_LINE;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), 0) << fm_get_last_error_message();
 }
 
 TEST(FormulonCApiShapes, Validation) {

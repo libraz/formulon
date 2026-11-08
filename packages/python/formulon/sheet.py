@@ -3699,7 +3699,8 @@ class Sheet:
         geometry makes a connector, which holds no text. A two-cell anchor's
         size is its box (``width_emu`` / ``height_emu`` are ignored); an absolute anchor's
         position is ``from_col_offset_emu`` (x) and ``from_row_offset_emu`` (y). ``fill_kind``
-        and ``line_kind`` must be ``SOLID`` (with an RGB or theme ``fill_color`` / ``line_color``) or ``NONE``.
+        and ``line_kind`` must be ``SOLID`` (with an RGB or theme ``fill_color`` / ``line_color``) or ``NONE``;
+        a colour needs its kind (``TypeError`` otherwise), and a colour with ``NONE`` fails with a status error.
         """
         sheet = self._index()
         h = self._workbook._require()

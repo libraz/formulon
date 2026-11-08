@@ -10524,7 +10524,8 @@ typedef enum {
  * = y, and `width_emu`/`height_emu` are the size. `fill_kind` / `line_kind`
  * are `fm_shape_paint_t` (`-1` when the element is absent);
  * `fill_color` / `line_color` are None, Rgb or Theme: Rgb or Theme when the
- * kind is solid (Indexed and Auto are rejected on write), None otherwise. `rotation` is in 60000ths of a degree and
+ * kind is solid (Indexed and Auto are rejected on write; None writes black), None otherwise
+ * (a colour with a non-solid kind is rejected on write). `rotation` is in 60000ths of a degree and
  * `line_width_emu` is `0` without a width. `preset_geometry` is the `prst` name, empty for custom geometry or a group;
  * `text` joins paragraphs with `\n`.
  *
@@ -10626,7 +10627,8 @@ FM_API fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_inde
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad enumeration, a missing anchor,
  *         a `preset_geometry` that is not an alphanumeric token, an offset or size
  *         outside [0, 2^31) EMU, a cell outside the sheet, a two-cell `to`
- *         before `from`, a fill or outline that is neither solid nor none,
+ *         before `from`, a fill or outline that is neither solid nor none, an Indexed or Auto
+ *         colour, a colour given with a kind other than solid,
  *         or text with control characters;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.

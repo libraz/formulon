@@ -897,8 +897,9 @@ class Shape(Drawing):
 
         Raises:
           TypeError: when an argument other than ``fill_kind`` / ``line_kind`` /
-            ``fill_color`` / ``line_color`` is ``None``, or an anchor argument (``edit_as``, ``from_*``,
-            ``to_*``, ``width_emu``, ``height_emu``) is given without ``anchor_kind``.
+            ``fill_color`` / ``line_color`` is ``None``, an anchor argument (``edit_as``, ``from_*``,
+            ``to_*``, ``width_emu``, ``height_emu``) is given without ``anchor_kind``, or
+            ``fill_color`` / ``line_color`` without ``fill_kind`` / ``line_kind``.
         """
         given = _present(
             dict(locals()), _SHAPE_UPDATE_NAMES, absent=("fill_kind", "line_kind", "fill_color", "line_color")

@@ -3969,7 +3969,8 @@ export interface ShapeProperties {
 /** Fields `Sheet.addShape` applies and the keys {@link ShapePatch} takes; a key left out is not applied.
  *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`; a
  *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with an RGB or theme
- *  `fillColor` / `lineColor`) or `None`. An insert needs `anchorKind`, defaults `presetGeometry` to
+ *  `fillColor` / `lineColor`) or `None`; a colour without its kind fails with a `TypeError`, and a colour with
+ *  `None` with a status error. An insert needs `anchorKind`, defaults `presetGeometry` to
  *  `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector geometry makes a
  *  connector, which holds no text. An update cannot change the anchor kind. */
 export interface ShapeInput {

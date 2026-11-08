@@ -608,6 +608,18 @@ test('a theme colour round-trips through a series fill and is refused when index
       () => shape.update({ fillKind: mod.ShapePaint.Solid, fillColor: indexed }),
       mod.StatusCode.InvalidArgument,
     );
+    // A colour is never dropped: without its kind it is a TypeError, with None a status error.
+    assert.throws(() => shape.update({ fillColor: theme }), TypeError);
+    assert.throws(() => shape.update({ lineKind: null, lineColor: theme }), TypeError);
+    assert.throws(
+      () => wb.sheet(0).addShape({ anchorKind: 0, widthEmu: 9144, heightEmu: 9144, lineColor: theme }),
+      TypeError,
+    );
+    expectFailure(
+      () => shape.update({ fillKind: mod.ShapePaint.None, fillColor: theme }),
+      mod.StatusCode.InvalidArgument,
+    );
+    assert.equal(shape.getProperties().fillColor.theme, 4);
   } finally {
     wb.dispose();
   }

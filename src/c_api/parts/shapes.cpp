@@ -50,11 +50,14 @@ fm_color_spec_t paint_color_to_c(formulon::ShapePaint paint, const formulon::Col
   return color_spec_to_c(paint == formulon::ShapePaint::kSolid ? color : formulon::ColorSpec{});
 }
 
-// The colour of a solid paint; a None colour is black. A non-solid paint carries no colour.
+// The colour of a solid paint; a None colour is black. A non-solid paint must carry None.
 fm_status_t paint_color_from_c(formulon::ShapePaint paint, const fm_color_spec_t& color, const char* field,
                                formulon::ColorSpec& out) {
   out = formulon::ColorSpec{};
   if (paint != formulon::ShapePaint::kSolid) {
+    if (color.kind != kFmColorNone) {
+      return invalid_argument("colour needs a solid paint", std::string("field=") + field);
+    }
     return 0;
   }
   if (const char* why = formulon::c_api::parts::color_spec_problem(color); why != nullptr) {
@@ -102,12 +105,16 @@ fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
   spec.cx = shape.width_emu;
   spec.cy = shape.height_emu;
   spec.fill = shape_paint_from_c(shape.fill_kind);
-  if (auto rc = paint_color_from_c(spec.fill, shape.fill_color, "fill_color", spec.fill_color); rc != 0) {
-    return rc;
+  if ((shape.fields & FM_SHAPE_FIELD_FILL) != 0U) {
+    if (auto rc = paint_color_from_c(spec.fill, shape.fill_color, "fill_color", spec.fill_color); rc != 0) {
+      return rc;
+    }
   }
   spec.line = shape_paint_from_c(shape.line_kind);
-  if (auto rc = paint_color_from_c(spec.line, shape.line_color, "line_color", spec.line_color); rc != 0) {
-    return rc;
+  if ((shape.fields & FM_SHAPE_FIELD_LINE) != 0U) {
+    if (auto rc = paint_color_from_c(spec.line, shape.line_color, "line_color", spec.line_color); rc != 0) {
+      return rc;
+    }
   }
   spec.line_width_emu = shape.line_width_emu;
   spec.rotation = shape.rotation;
