@@ -2985,6 +2985,20 @@ function normalizeAddress(raw, kind, value, sheet, label) {
 }
 
 /**
+ * A plain copy of every field the raw layer would read from `record`: it reads through the prototype chain, so
+ * a getter or a non-enumerable field counts as well as an own enumerable one.
+ */
+function readableCopy(record) {
+  const out = {};
+  for (let owner = record; owner !== null && owner !== Object.prototype; owner = Object.getPrototypeOf(owner)) {
+    for (const key of Object.getOwnPropertyNames(owner)) {
+      if (key !== 'constructor' && !Object.hasOwn(out, key)) out[key] = record[key];
+    }
+  }
+  return out;
+}
+
+/**
  * `record` (of input record `type`) in raw form, by `RECORD_RANGE_FIELDS`: a `CellRect` field takes an
  * unqualified A1 range, a `CellRect[]` field an array of them or one string, a `SheetRect` field a qualified
  * range (an unqualified one resolves on `sheet`) and a nested record its own fields. A `CellAddress` field `x`
@@ -2999,12 +3013,12 @@ function normalizeRecordRanges(raw, record, type, sheet, label) {
     const value = record[field];
     const next = normalizeAddress(raw, kind, value, sheet, label.endsWith(' ') ? label + field : `${label}.${field}`);
     if (kind === 'CellAddress' && isObject(next)) {
-      if (out === record) out = { ...record };
+      if (out === record) out = readableCopy(record);
       delete out[field];
       out[`${field}Row`] = next.row;
       out[`${field}Col`] = next.col;
     } else if (next !== value) {
-      if (out === record) out = { ...record };
+      if (out === record) out = readableCopy(record);
       out[field] = next;
     }
   }

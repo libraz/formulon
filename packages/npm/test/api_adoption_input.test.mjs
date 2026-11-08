@@ -112,6 +112,35 @@ test('a CF rule and a validation take their ranges as A1 strings, alone or in an
   });
 });
 
+test('a record field the raw layer reads stays visible when its ranges are rewritten', () => {
+  withSheet((ws, wb) => {
+    const { CfRuleType } = formulon;
+    const dxf = wb.ooxml.addDxf({ font: { bold: true } });
+    const hidden = { type: CfRuleType.Expression, ranges: 'A1:B2', formula1: 'TRUE' };
+    Object.defineProperty(hidden, 'dxfId', { value: dxf, enumerable: false });
+    ws.addCfRule(hidden);
+    class Rule {
+      get type() {
+        return CfRuleType.Expression;
+      }
+      get ranges() {
+        return 'C1';
+      }
+      get formula1() {
+        return 'TRUE';
+      }
+      get dxfId() {
+        return dxf;
+      }
+    }
+    ws.addCfRule(new Rule());
+    assert.deepEqual(
+      ws.listCfRules().map((rule) => rule.dxfId),
+      [dxf, dxf],
+    );
+  });
+});
+
 test('an auto filter takes A1 text in its range and in its nested sort state', () => {
   withSheet((ws) => {
     fillTableSource(ws);
