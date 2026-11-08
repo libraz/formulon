@@ -4,7 +4,10 @@
 One Markdown table per surface (C, JavaScript, Python), each row a former name
 and what replaces it:
 
-* a rename (``was`` differs from the current name), records and fields included;
+* a rename (``was`` differs from the current name), records and fields included
+  (a field as ``Record.field``); an enum member (``kind: constant`` with
+  ``enum:``) as ``Enum.Member``, the enum spelled as it was before and as it is
+  now;
 * an op a handle class now publishes (``handle:``): the former name and the
   handle method reached through its parent's lookup
   (``addPivotField()`` -> ``ws.pivot(...).addField()``);
@@ -139,6 +142,18 @@ def _target_call(data: dict, key: str, field: str) -> Optional[str]:
     return _call(name, field, str(entry.get("kind", ""))) if isinstance(name, str) else None
 
 
+def _owner_names(entries: Dict[str, dict], key: str, field: str) -> Tuple[str, str]:
+    """The `Enum.` prefix of an enum member, before and after: the enum's former and current name."""
+    owner = entries.get(key)
+    if not isinstance(owner, dict):
+        return "", ""
+    now = owner.get(field)
+    was = (owner.get("was") or {}).get(field) if isinstance(owner.get("was"), dict) else None
+    after = f"{now}." if isinstance(now, str) else ""
+    before = f"{was}." if isinstance(was, str) else after
+    return before, after
+
+
 def rows(data: dict) -> Dict[str, List[Row]]:
     """Per name field (`c` / `js` / `py`), the (before, after) cells."""
     entries: Dict[str, dict] = data["entries"]
@@ -156,6 +171,14 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                 old = drop.get(field) if kind != "field" else None
                 if not isinstance(old, str) or entry.get(field) != old:
                     continue
+            if kind == "constant" and "enum" in entry and field != "c":
+                before_owner, after_owner = _owner_names(entries, str(entry["enum"]), field)
+                new = entry.get(field)
+                if isinstance(new, str) and new != old:
+                    out[field].append((f"`{before_owner}{old}`", f"`{after_owner}{new}`"))
+                elif isinstance(drop.get(field), str):
+                    out[field].append((f"`{before_owner}{old}`", "removed"))
+                continue
             if kind == "field":
                 record = entries.get(str(entry.get("record")), {})
                 owner = record.get(field) if isinstance(record, dict) else None

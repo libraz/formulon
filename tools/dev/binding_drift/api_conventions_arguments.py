@@ -400,7 +400,8 @@ def _py_patch_problems(fn, name: str, fields: Optional[Set[str]]) -> Iterator[Tu
 
 @_owned("R18.all")
 def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
-    """An op with `patch: true` takes a declared `<X>Patch` last in JS, whose keys are fields of the
+    """An op with `patch: true` is named `update` / `update<X>` on every binding surface (a `set` replaces a whole
+    value and never merges) and takes a declared `<X>Patch` last in JS, whose keys are fields of the
     `patch_record` interface with the same types (`null` added, a nested record as its patch); in Python it takes
     keyword-only arguments defaulting to `UNCHANGED`, named after fields of the `patch_record` dataclass. Every
     patch reads back through a getter: `patch_record: none` is a violation. An op named `update` / `update<X>` is
@@ -432,6 +433,11 @@ def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
             if not _on(entry, surface):
                 continue
             for name, member, _overloads in _targets(ctx, entry, surface):
+                method = name.rpartition(".")[2]
+                if not (_PY_UPDATE_RE if surface == "py" else _JS_UPDATE_RE).fullmatch(method):
+                    yield _violation(
+                        ctx, "R18.all", surface, key, "verb", f"`{name}` merges a patch; name it with `update`"
+                    )
                 if surface == "py":
                     cls = found.py.classes.get(record) if record else None
                     if record and cls is None:

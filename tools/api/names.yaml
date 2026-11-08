@@ -1864,6 +1864,7 @@ entries:
     js: ChartPreviewOverridesInput
     surfaces: [c, wasm, native]
     was: { c: fm_chart_preview_overrides, js: ChartPreviewOverrides, py: ChartPreviewOverrides }
+    drop: { py: ChartPreviewOverrides, closes: R0.coverage }
   record.chart_data_info:
     kind: record
     role: result
@@ -12343,6 +12344,13 @@ entries:
     surfaces: [wasm, native]
     exception: "binding-only protocol: iterates the sheet handles in sheet order; Python's __iter__ is a py_only dunder"
     facade: handwritten
+  binding.ooxml:
+    kind: op
+    scope: workbook
+    js: ooxml
+    py: ooxml
+    surfaces: [wasm, native, py]
+    exception: "binding-only read-only property returning the OOXML-level view of the same workbook or sheet"
   binding.disposed:
     kind: op
     scope: workbook

@@ -15,7 +15,7 @@ from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
 from ._handle_tables import CELL_ARGS
 from ._status import StatusCode
-from .workbook import (
+from ._workbook import (
     _PIVOT_NO_DATA_FIELD,
     _PIVOT_VALUES_FIELD_C,
     _STATUS_NOT_FOUND,
@@ -58,9 +58,9 @@ from .workbook import (
 )
 
 if TYPE_CHECKING:
-    from .pivot_cache import PivotCache
-    from .sheet import Sheet
-    from .workbook import PivotProperties
+    from ._pivot_cache import PivotCache
+    from ._sheet import Sheet
+    from ._workbook import PivotProperties
 
 __all__ = ["Pivot"]
 
@@ -92,7 +92,7 @@ _PIVOT_OPTION_NAMES = frozenset((*_PIVOT_OPTION_FLAGS, *_PIVOT_OPTION_TEXTS, "in
 
 def _flag(value: Any, name: str) -> int:
     """``value`` as a C 0/1 flag; ``TypeError`` unless it is a ``bool``."""
-    from .sheet import _flag as flag
+    from ._sheet import _flag as flag
 
     return flag(value, name)
 
@@ -174,7 +174,7 @@ class Pivot:
 
     def get_properties(self) -> PivotProperties:
         """Read the pivot's name and the id of the cache it draws from."""
-        from .workbook import PivotProperties
+        from ._workbook import PivotProperties
 
         return PivotProperties(name=self.name, cache_id=self._cache_id())
 
@@ -193,7 +193,7 @@ class Pivot:
 
     # -- Layout ------------------------------------------------------------
     def get_layout(self) -> PivotLayout:
-        """Evaluate and project the pivot into concrete grid cells."""
+        """Return the pivot's layout, computed from its cache records; the sheet cells are not written (:meth:`project` writes them)."""
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             out = scope.out_ptr()
@@ -509,9 +509,9 @@ class Pivot:
             return LIB.read_i32(out) != 0
 
     def project(self) -> None:
-        """Write the pivot's report into its sheet cells now and clear its pending flag.
+        """Write the pivot's report, computed from its cache records, into its sheet cells now and clear its pending flag.
 
-        Raises when the report would overlap another structure; the pivot stays pending.
+        It does not re-read the cache's source range. Raises when the report would overlap another structure; the pivot stays pending.
         """
         h, sheet, pivot_index = self._locate()
         _check(LIB.fm_sheet_project_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
@@ -531,7 +531,7 @@ class Pivot:
         place, and every existing :class:`Sheet` handle keeps pointing at its
         sheet.
         """
-        from .sheet import _split_cell_args
+        from ._sheet import _split_cell_args
 
         cells, _ = _split_cell_args(args, kwargs, CELL_ARGS["Pivot.show_details"], ())
         cell = cells[0]
@@ -1174,12 +1174,13 @@ class Pivot:
     def list_filters(self) -> List[PivotFilter]:
         """Every listed filter of the pivot, in order; a filter's position is its ``filter_index``.
 
-        The filter list is saved as the definition's ``<filters>`` block. A
-        loaded file's caption contains / begins-with, top-N count, value
-        greater-than / between and date-between entries appear here, naming
-        their field by source name. Its other entries are not listed, still
-        filter, survive :meth:`clear_filters` / :meth:`remove_filter`, and are
-        saved verbatim.
+        The filter list is saved as the definition's ``<filters>`` block. Every
+        entry of a loaded block whose type the engine enumerates appears here,
+        naming its field by source name, and :meth:`clear_filters` /
+        :meth:`remove_filter` remove it. Only entries the model cannot express
+        (an unknown type, a member-property or OLAP measure filter, criteria
+        that do not decode) are not listed; they filter nothing and are saved
+        verbatim in their original position.
         """
         h, sheet, pivot_index = self._locate()
         count = _read_count(

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence, Tuple,
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
 from ._status import StatusCode
-from .workbook import (
+from ._workbook import (
     _CHART_TITLE_NONE,
     _DISPLAY_PATCH_SPEC,
     _PLOT_PATCH_SPEC,
@@ -72,8 +72,8 @@ from .workbook import (
 )
 
 if TYPE_CHECKING:
-    from .sheet import Sheet
-    from .workbook import (
+    from ._sheet import Sheet
+    from ._workbook import (
         ChartProperties,
         DrawingProperties,
         PictureProperties,
@@ -235,6 +235,9 @@ class Drawing:
     :meth:`~formulon.Sheet.restore_drawing` that puts the same id back makes
     the handle address it again. Remove an object with
     :meth:`Sheet.remove_drawing`.
+
+    A subclass reads its record with ``get_properties()``; a plain
+    :class:`Drawing` reads the common fields with ``get_drawing_properties()``.
     """
 
     __slots__ = ("_sheet", "_object_id", "_kind")
@@ -280,7 +283,7 @@ class Drawing:
         Raises:
           NotFoundError: when the object or its sheet was removed.
         """
-        from .workbook import _drawing_object_from
+        from ._workbook import _drawing_object_from
 
         _, sheet, object_id = self._at()
         found = self._sheet._workbook._lookup(
@@ -360,7 +363,7 @@ class Picture(Drawing):
           NotFoundError: when the picture or its sheet was removed, or the
             picture's media part is missing.
         """
-        from .workbook import PictureProperties
+        from ._workbook import PictureProperties
 
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
@@ -850,7 +853,7 @@ class Shape(Drawing):
         Raises:
           NotFoundError: when the shape or its sheet was removed.
         """
-        from .workbook import _shape_from
+        from ._workbook import _shape_from
 
         _, sheet, object_id = self._at()
         found = self._sheet._workbook._lookup(LIB.fm_sheet_get_shape, (sheet, object_id), S.SHAPE, _shape_from)
@@ -958,7 +961,7 @@ class Slicer(Drawing):
         Raises:
           NotFoundError: when the slicer or its sheet was removed.
         """
-        from .workbook import _slicer_from
+        from ._workbook import _slicer_from
 
         _, sheet, object_id = self._at()
         found = self._sheet._workbook._lookup(LIB.fm_sheet_get_slicer, (sheet, object_id), S.SLICER, _slicer_from)

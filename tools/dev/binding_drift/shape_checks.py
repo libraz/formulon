@@ -279,7 +279,7 @@ def check_style_record_fields() -> List[str]:
     header = re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S)
     wasm_dts = _read(WASM_DTS)
     node_dts = _read(NODE_DTS)
-    # Records stay in workbook.py or move next to `Sheet` in sheet.py; either module counts.
+    # Records stay in _workbook.py or move next to `Sheet` in _sheet.py; either module counts.
     python_text = "\n".join(_read(path) for path in (PYTHON_WORKBOOK, PYTHON_SHEET) if path.is_file())
 
     for type_name, struct_name in sorted(_STYLE_RECORD_STRUCTS.items()):

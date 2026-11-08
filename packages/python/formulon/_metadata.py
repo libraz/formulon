@@ -30,7 +30,7 @@ from . import _structs as S
 from ._c import LIB, _sint
 from ._c import decode_cstr as _decode_cstr
 from ._status import StatusCode
-from .workbook import FunctionMetadata, LogLevel, _ArgScope, _check
+from ._workbook import FunctionMetadata, LogLevel, _ArgScope, _check
 
 __all__ = [
     "FunctionMetadataEntry",
@@ -73,6 +73,10 @@ def set_log_min_level(level: LogLevel) -> None:
     unless the host asks it to. Raising the threshold to
     :attr:`LogLevel.WARN` or below makes the engine emit one JSON record
     per line on stderr, including the per-cell XLSB downgrade diagnostics.
+
+    There is no log sink: the wasmtime transport cannot bind a C function
+    pointer (as for the iterative-progress callback), so this threshold is
+    the only control over the log stream.
 
     Args:
       level: a :class:`LogLevel` member.
@@ -269,8 +273,7 @@ def merge_function_metadata(
         leave ``base`` unchanged (``signature_template`` / ``description``
         stay ``None``).
       locale: a BCP-47 display locale tag (e.g. ``"fr-FR"``) matching the
-        keys in ``aliases`` / ``localized``. Independent of the numeric
-        locale code passed to :func:`get_function_metadata`.
+        keys in ``aliases`` / ``localized``.
 
     Returns:
       ``base`` verbatim when ``entry`` is ``None``; otherwise a

@@ -89,21 +89,21 @@ function assertParity(label, jsNames, jsOnly, pyNames, pyOnly) {
 }
 
 const HANDLE_FILES = {
-  Table: 'table.py',
-  Pivot: 'pivot.py',
-  PivotCache: 'pivot_cache.py',
-  Drawing: 'drawing.py',
-  Picture: 'drawing.py',
-  Chart: 'drawing.py',
-  Shape: 'drawing.py',
-  Slicer: 'drawing.py',
+  Table: '_table.py',
+  Pivot: '_pivot.py',
+  PivotCache: '_pivot_cache.py',
+  Drawing: '_drawing.py',
+  Picture: '_drawing.py',
+  Chart: '_drawing.py',
+  Shape: '_drawing.py',
+  Slicer: '_drawing.py',
 };
 const DRAWING_SUBCLASSES = new Set(['Picture', 'Chart', 'Shape', 'Slicer']);
 
 /** Members a handle class exposes in Python; Drawing subclasses include the inherited base members. */
 function pythonHandleMembers(cls) {
   const own = pythonClassMembers(HANDLE_FILES[cls], cls);
-  return DRAWING_SUBCLASSES.has(cls) ? new Set([...own, ...pythonClassMembers('drawing.py', 'Drawing')]) : own;
+  return DRAWING_SUBCLASSES.has(cls) ? new Set([...own, ...pythonClassMembers('_drawing.py', 'Drawing')]) : own;
 }
 
 const PNG_1X1 = Buffer.from(
@@ -184,8 +184,8 @@ test('the platform diff ledger names only members that exist on its own side', a
     for (const n of DIFF.js_only.Workbook) assert.ok(jsWorkbook.has(n), `Workbook.${n}`);
     for (const n of DIFF.js_only.Sheet) assert.ok(jsSheet.has(n), `Sheet.${n}`);
     for (const n of DIFF.js_only.Formulon) assert.ok(n in formulon, `Formulon.${n}`);
-    const pyWorkbook = pythonClassMembers('workbook.py', 'Workbook');
-    const pySheet = pythonClassMembers('sheet.py', 'Sheet');
+    const pyWorkbook = pythonClassMembers('_workbook.py', 'Workbook');
+    const pySheet = pythonClassMembers('_sheet.py', 'Sheet');
     for (const n of DIFF.py_only.Workbook) assert.ok(pyWorkbook.has(n), `Python Workbook.${n}`);
     for (const n of DIFF.py_only.Sheet) assert.ok(pySheet.has(n), `Python Sheet.${n}`);
   } finally {
@@ -206,7 +206,7 @@ test('Workbook has the Python Workbook members apart from the platform differenc
       'Workbook',
       js,
       diffSet(DIFF.js_only, 'Workbook'),
-      pythonClassMembers('workbook.py', 'Workbook'),
+      pythonClassMembers('_workbook.py', 'Workbook'),
       new Set([...diffSet(DIFF.py_only, 'Workbook'), ...diffSet(DIFF.native_only, 'Workbook')]),
     );
   } finally {
@@ -223,7 +223,7 @@ test('Sheet has the Python Sheet members apart from the platform differences', a
       'Sheet',
       js,
       diffSet(DIFF.js_only, 'Sheet'),
-      pythonClassMembers('sheet.py', 'Sheet'),
+      pythonClassMembers('_sheet.py', 'Sheet'),
       diffSet(DIFF.py_only, 'Sheet'),
     );
   } finally {

@@ -684,7 +684,7 @@ class CountHandleOpsTest(unittest.TestCase):
         )  # fmt: skip
         with TemporaryDirectory() as tmp:
             package = Path(tmp)
-            (package / "pivot.py").write_text(
+            (package / "_pivot.py").write_text(
                 "class Pivot:\n"
                 "    @property\n    def sheet(self): ...\n"
                 "    @property\n    def name(self): ...\n"
@@ -694,7 +694,7 @@ class CountHandleOpsTest(unittest.TestCase):
             )
             result = count.compare("Pivot", ledger, package)
             self.assertEqual((result["ledger"], result["python"], result["missing"]), (2, 2, []))
-            (package / "pivot.py").write_text("class Pivot:\n    def add_field(self, spec): ...\n", encoding="utf-8")
+            (package / "_pivot.py").write_text("class Pivot:\n    def add_field(self, spec): ...\n", encoding="utf-8")
             self.assertEqual(count.compare("Pivot", ledger, package)["missing"], ["name"])
             self.assertTrue(count.compare("Chart", ledger, package)["absent"])
 
@@ -1630,7 +1630,7 @@ class DocTokenTest(unittest.TestCase):
     )
 
     def py_problems(self, doc: str) -> list[str]:
-        py = SimpleNamespace(classes=self.PY.classes, module=self.PY.module, docstrings=[("workbook.py:1", doc)])
+        py = SimpleNamespace(classes=self.PY.classes, module=self.PY.module, docstrings=[("_workbook.py:1", doc)])
         problems: list[str] = []
         readme_identifiers.check_py_doc_tokens(py, problems)
         return problems
@@ -1722,7 +1722,7 @@ class SheetSurfaceMigrationTest(unittest.TestCase):
         sheet = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Sheet")
         method = next(n for n in sheet.body if getattr(n, "name", "") == "get_pagination")
         moved = ast.get_source_segment(source, method)
-        sheet_py = self.write("sheet.py", source)
+        sheet_py = self.write("_sheet.py", source)
         with patch.object(python_checks, "PYTHON_SHEET", sheet_py):
             self.assertEqual(python_checks.check_python_inline_structs(), [])
             sheet_py.write_text(
@@ -1850,7 +1850,7 @@ class ErrorDisplayNamesGeneratorTest(unittest.TestCase):
         dts = self.gen.fill(self.region("//"), "dts", self.rows, "formulon.d.ts")
         self.assertIn("export const ErrorDisplayName: Readonly<Record<ErrorCode, string>>;\n", dts)
         self.assertEqual(declaration_checks.check_string_tables(js, _ERROR_DTS + dts, _VALUE_H), [])
-        py = self.gen.fill(self.region("#"), "py", self.rows, "workbook.py")
+        py = self.gen.fill(self.region("#"), "py", self.rows, "_workbook.py")
         self.assertIn('_ERROR_DISPLAY_NAMES = {\n    "NULL": "#NULL!",\n    "DIV0": "#DIV/0!",\n', py)
         self.assertIn('    "GETTING_DATA": "#GETTING_DATA",\n    "NA": "#N/A",\n}\n', py)
 

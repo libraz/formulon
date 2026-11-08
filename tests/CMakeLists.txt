@@ -694,14 +694,14 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   # The Workbook / Sheet facade tables in packages/npm/common.mjs and
-  # packages/python/formulon/sheet.py, and the addon's sheet-scope name list,
+  # packages/python/formulon/_sheet.py, and the addon's sheet-scope name list,
   # are the output of gen_facade_tables.py over tools/api/names.yaml.
   add_test(
     NAME FacadeTablesCodegenDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_facade_tables.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
-  # The error display-name tables (formulon.d.ts, common.mjs, workbook.py) are
+  # The error display-name tables (formulon.d.ts, common.mjs, _workbook.py) are
   # the output of gen_error_display_names.py over kErrorTable in src/value.h.
   add_test(
     NAME ErrorDisplayNamesCodegenDrift
@@ -718,6 +718,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME BindingDriftLedgerRuleTests
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.dev.binding_drift.api_conventions_bindings_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME BindingDriftConsistencyRuleTests
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.dev.binding_drift.api_conventions_consistency_test
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   # Structural invariants enforced by "exactly one implementation exists":

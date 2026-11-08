@@ -9,7 +9,9 @@ The checker is RED on any violation missing from the baseline and on any
 baseline line no longer violated, so a baseline can only shrink. Baseline
 files live in `tools/dev/api_convention_baseline/{c,wasm,native,py}.txt`,
 one `<rule-id>\\t<op-key>\\t<discriminator>\\t<message>` line per violation,
-no comments; a missing file reads as empty.
+no comments; a missing file reads as empty. A violation the ledger has to fix
+lands on the `ledger` surface, which has no baseline file: it is pending or
+fixed.
 
 A rule whose violations are owed by work still in progress is gated by a
 pending file, `api_convention_baseline/pending/<rule-id>.txt`, one
@@ -27,8 +29,8 @@ name, while the naming rules read the name in the tree.
 
 Further rule modules register into the same registry: the sibling modules
 `api_conventions_bindings.py`, `api_conventions_shapes.py`,
-`api_conventions_arguments.py` and `api_conventions_adoption.py`, if present,
-are imported before rules run.
+`api_conventions_arguments.py`, `api_conventions_adoption.py` and
+`api_conventions_consistency.py`, if present, are imported before rules run.
 """
 
 from __future__ import annotations
@@ -47,6 +49,9 @@ BASELINE_DIR = Path(__file__).resolve().parents[1] / "api_convention_baseline"
 PENDING_DIR_NAME = "pending"
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
 SURFACES = ("c", "wasm", "native", "py")
+# A violation the ledger itself has to fix (`tools/api/names.yaml`) lands on this surface; it is never baselined.
+LEDGER_SURFACE = "ledger"
+VIOLATION_SURFACES = (*SURFACES, LEDGER_SURFACE)
 NO_DISCRIMINATOR = "-"
 
 # ---------------------------------------------------------------------------
@@ -75,7 +80,7 @@ C_VERBS = frozenset(
         "get", "set", "is", "has", "clear",
         "add", "update", "remove", "insert", "delete",
         "create", "destroy",
-        "copy", "move", "rename", "load", "save", "recalc", "evaluate",
+        "copy", "move", "rename", "reset", "load", "save", "recalc", "evaluate",
         "parse", "format", "convert", "resolve",
         "snapshot", "restore", "remap", "apply", "refresh", "validate", "match", "next",
         "localize", "canonicalize", "compare", "group", "ungroup", "project", "show",
@@ -294,7 +299,8 @@ class Ledger:
     def key_for(self, name_field: str, symbol: str) -> Optional[str]:
         """Ledger key whose `<name_field>` or `was.<name_field>` names `symbol`; a current name wins a hand-over.
 
-        A `kind: field` entry names a member of its record, not a symbol, so it never claims a name here.
+        A `kind: field` entry names a member of its record, not a symbol, so it never claims a name here; nor
+        does an enum member's binding name (a `kind: constant` entry with `enum:`), which lives in its enum.
         """
         index = self._index.get(name_field)
         if index is None:
@@ -302,6 +308,8 @@ class Ledger:
             claims = []
             for key, entry in self.entries.items():
                 if not isinstance(entry, dict) or entry.get("kind") == "field":
+                    continue
+                if name_field != "c" and entry.get("kind") == "constant" and "enum" in entry:
                     continue
                 was = entry.get("was") if isinstance(entry.get("was"), dict) else {}
                 claims.append((0, key, entry.get(name_field)))
@@ -673,6 +681,7 @@ _EXTENSIONS = (
     "api_conventions_shapes",
     "api_conventions_arguments",
     "api_conventions_adoption",
+    "api_conventions_consistency",
 )
 
 
@@ -706,7 +715,7 @@ def collect(ctx: Context, rules: Optional[Dict[str, RuleFn]] = None) -> List[Vio
     seen: Dict[Tuple[str, str, str, str], Violation] = {}
     for rule_id, fn in (rules if rules is not None else all_rules()).items():
         for violation in fn(ctx):
-            if violation.rule != rule_id or violation.surface not in SURFACES:
+            if violation.rule != rule_id or violation.surface not in VIOLATION_SURFACES:
                 raise ValueError(f"rule {rule_id} produced {violation!r}")
             seen.setdefault(violation.identity, violation)
     return sorted(seen.values(), key=lambda v: v.identity)
@@ -753,7 +762,7 @@ def read_pending(baseline_dir: Path) -> Tuple[Dict[Tuple[str, str, str, str], st
         name = f"{PENDING_DIR_NAME}/{path.name}"
         for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             parts = raw.split("\t")
-            if len(parts) != 4 or not all(parts[:3]) or parts[0] not in SURFACES:
+            if len(parts) != 4 or not all(parts[:3]) or parts[0] not in VIOLATION_SURFACES:
                 problems.append(
                     f"api-conventions: {name}:{number} is not `<surface>\\t<op-key>\\t<discriminator>\\t<message>`: "
                     f"{raw!r}"

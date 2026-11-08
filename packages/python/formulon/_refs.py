@@ -40,9 +40,9 @@ def _handle_index(ref: Any, owner: Any, what: str) -> Optional[int]:
     Raises:
       InvalidArgumentError: when ``ref`` is such a handle of another sheet or workbook.
     """
-    from .pivot import Pivot
-    from .sheet import Sheet
-    from .table import Table
+    from ._pivot import Pivot
+    from ._sheet import Sheet
+    from ._table import Table
 
     if isinstance(owner, Sheet):
         if not isinstance(ref, Pivot):

@@ -28,6 +28,19 @@ reads; `resolved: true` a read whose XF-family indices are resolved output;
 `params` slot is a type, or `{type, default}` for a trailing argument the
 binding may omit; a default given there names a parameter of the C signature.
 
+`add_returns: handle | key | index` on an `add` op states what it returns: the
+element's handle, its stable key (id, GUID, name) or its position (checked
+against the collection by the R37 rule). `clearable: [field, ...]` on a record
+or typedef lists the snake_case fields a patch may clear (`null` / `None` /
+`*_op = CLEAR`); each names a field of the record's JS interface, and
+`tools/api/gen_patch_clear_cases.py` derives the shared clear-case table from
+it. The top-level `unitless: [name, ...]` lists the field and parameter names
+(any casing; compared in snake_case) that carry a dimension without a unit
+suffix (R42). A `kind: constant` entry with `enum:` and a `js` / `py` name is
+an enum member (`Enum.Member`), renamed through `was: {js, py}`; its names are
+unique within its enum. After every rename, no two entries take the same new
+name in one namespace of one surface.
+
 `--ledger-only` runs the schema, chain, index and rule checks without reading
 src/wasm/formulon.d.ts or the C header.
 
@@ -76,7 +89,7 @@ FIELDS = frozenset(
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
         "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "patch", "patch_record",
         "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved", "color",
-        "namespace", "a1_exempt",
+        "namespace", "a1_exempt", "add_returns", "clearable",
     }
 )  # fmt: skip
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
@@ -103,6 +116,7 @@ COLOR_MODES = frozenset({"resolved"})
 # Defaults the binding computes rather than spells: `today` is the pinned clock, else the current date.
 DYNAMIC_DEFAULTS = frozenset({"today"})
 A1_EXEMPT_ROLES = frozenset({"input", "patch", "both"})
+ADD_RETURNS = frozenset({"handle", "key", "index"})
 WASM_DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
 PATCH_RECORD_NONE = "none"
 _JS_CELL_PAIR_RE = re.compile(r"(\w*?)(?:row|Row)")
@@ -246,7 +260,34 @@ def check_schema(data) -> List[str]:
         if (access == "exempt") != isinstance(collection.get("exempt"), str):
             problems.append(f"{where}: `exempt` is the reason string of an `access: exempt` collection")
     problems += check_enum_groups(data, entries)
+    problems += check_unitless(data)
     return problems
+
+
+def _names_list(value) -> bool:
+    """A non-empty list of distinct non-empty strings."""
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(v, str) and v for v in value)
+        and len(set(value)) == len(value)
+    )
+
+
+def check_unitless(data: dict) -> List[str]:
+    """The top-level `unitless:` lists distinct names, distinct in snake_case too."""
+    if "unitless" not in data:
+        return []
+    names = data["unitless"]
+    if not _names_list(names):
+        return ["unitless: lists distinct non-empty names"]
+    snake = [_snake_case(n) for n in names]
+    doubled = sorted({n for n in snake if snake.count(n) > 1})
+    return [f"unitless: {n} is listed in two casings" for n in doubled]
+
+
+def _snake_case(name: str) -> str:
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).lower()
 
 
 def _index(value) -> bool:
@@ -338,9 +379,19 @@ def _param_default_schema(where: str, spec: dict) -> List[str]:
 
 
 def _adoption_schema(where: str, entry: dict) -> List[str]:
-    """`reads_values`, `resolved`, `color`, `namespace` and `a1_exempt` sit on the kinds they describe."""
+    """`reads_values`, `resolved`, `color`, `namespace`, `a1_exempt`, `add_returns` and `clearable` sit on the
+    kinds they describe."""
     problems: List[str] = []
     kind = entry.get("kind")
+    if "add_returns" in entry and (entry["add_returns"] not in ADD_RETURNS or kind != "op"):
+        problems.append(f"{where}: add_returns is one of {sorted(ADD_RETURNS)} on an op")
+    if "clearable" in entry:
+        if kind not in ("record", "typedef"):
+            problems.append(f"{where}: clearable belongs to a record or a typedef")
+        if not _names_list(entry["clearable"]):
+            problems.append(f"{where}: clearable lists distinct field names")
+        elif any(_snake_case(f) != f for f in entry["clearable"]):
+            problems.append(f"{where}: clearable names fields in snake_case")
     if "reads_values" in entry and (entry["reads_values"] is not True or kind != "op" or "c" not in entry):
         problems.append(f"{where}: reads_values is `true` on an op with a C name")
     if "resolved" in entry and (entry["resolved"] is not True or kind != "op"):
@@ -462,6 +513,8 @@ def _namespace(entry: dict, name_field: str) -> str:
     """
     if entry.get("kind") == "field":
         return f"field:{entry.get('record')}"
+    if entry.get("kind") == "constant" and "enum" in entry and name_field != "c":
+        return f"member:{name_field}:{entry.get('enum')}"
     if name_field != "c" and entry.get("kind") in _SCOPED_NAME_KINDS:
         return f"{name_field}@{entry.get('scope')}"
     return name_field
@@ -555,6 +608,24 @@ def check_ledger_index(data: dict, surfaces: Optional[extract_names.Surfaces] = 
     for name_field in NAME_FIELDS:
         ledger.key_for(name_field, "")
     return list(dict.fromkeys(ledger.problems))
+
+
+def check_clearable(entries: Dict[str, dict], dts_text: str) -> List[str]:
+    """Each `clearable` field is a field of the record's interface in src/wasm/formulon.d.ts."""
+    problems: List[str] = []
+    decls = JsSurface(dts_text).decls
+    for key, entry in sorted(entries.items()):
+        if not isinstance(entry, dict) or not _names_list(entry.get("clearable")):
+            continue
+        decl = decls.get(str(entry.get("js")))
+        if decl is None or decl.kind != "interface":
+            problems.append(f"entries.{key}: clearable needs the record's `js` interface in the d.ts")
+            continue
+        fields = {_snake_case(m.name) for m in decl.members if not m.is_method}
+        for field in entry["clearable"]:
+            if field not in fields:
+                problems.append(f"entries.{key}: clearable field {field} is not a field of {entry['js']}")
+    return problems
 
 
 def _list_js(py_name: str) -> str:
@@ -801,7 +872,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         problems += check_rules(entries, data["collections"])
         if surfaces is not None:
             problems += check_typed_slots(entries, surfaces)
-            problems += check_address_args(entries, WASM_DTS.read_text(encoding="utf-8"), data["collections"])
+            dts_text = WASM_DTS.read_text(encoding="utf-8")
+            problems += check_address_args(entries, dts_text, data["collections"])
+            problems += check_clearable(entries, dts_text)
         if args.coverage:
             problems += check_coverage(entries, surfaces, data["collections"])
         flagged = [(f"entries.{k}", e["flag"]) for k, e in entries.items() if isinstance(e, dict) and "flag" in e]

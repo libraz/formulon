@@ -77,7 +77,7 @@ the bug.
 
   1. Read the offending channel's binding shim
      (`src/cli/render.cpp`, `src/wasm/bindings.cpp`,
-     `packages/python/formulon/workbook.py`).
+     `packages/python/formulon/_workbook.py`).
   2. Reproduce the divergence by hand against the same fixture.
   3. Fix the binding, re-run `make parity-test`, confirm zero
      divergences.

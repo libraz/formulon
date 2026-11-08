@@ -17,8 +17,8 @@ from tools.dev.binding_drift.surface_files import _SKIPPED
 WASM = "src/wasm/formulon.d.ts"
 NATIVE = "packages/npm-native/index.d.ts"
 PY_INIT = "packages/python/formulon/__init__.py"
-PY_WORKBOOK = "packages/python/formulon/workbook.py"
-PY_SHEET = "packages/python/formulon/sheet.py"
+PY_WORKBOOK = "packages/python/formulon/_workbook.py"
+PY_SHEET = "packages/python/formulon/_sheet.py"
 COMMON = "packages/npm/common.mjs"
 
 RECT = (
@@ -37,7 +37,9 @@ STATIC_RULE_IDS = {
     "R22.c", "R22.js", "R22.py", "R23.js", "R23.py", "R23.track", "R23.list", "R24.missing.js",
     "R24.missing.py", "R18.all", "R25.a1", "R25.rect", "R25.count", "R26.ref", "R27.sheetparam",
     "R25.span", "R28.handles", "R29.record_a1", "R30.ooxml_namespace", "R31.color", "R32.struct_size",
-    "R33.lifetime", "R34.reads_values", "R35.trailing_default",
+    "R33.lifetime", "R34.reads_values", "R35.trailing_default", "R36.verb.update", "R37.add.returns",
+    "R38.enum.numeric", "R39.py.args", "R40.c.patch_op", "R41.bool.polarity", "R42.unit.suffix",
+    "R43.c.status_doc", "R44.singleton.null",
 }  # fmt: skip
 
 
@@ -99,7 +101,7 @@ class RegistryTest(unittest.TestCase):
     def test_without_a_ledger_the_bound_rules_are_skipped_visibly(self) -> None:
         ctx = api_conventions.Context("FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb);\n")
         bound = {r: fn for r, fn in api_conventions.all_rules().items() if fn.__module__.endswith("_bindings")}
-        self.assertEqual(len(bound), 52)
+        self.assertEqual(len(bound), 61)
         self.assertEqual(api_conventions.collect(ctx, bound), [])
         self.assertTrue(any("no name ledger" in note for note in _SKIPPED))
 
@@ -137,7 +139,7 @@ class DeclarationParserTest(BindingRuleTestBase):
         py = api_conventions_bindings.PySurface(
             {
                 "__init__.py": "__all__ = ['Workbook', 'get_version']\n",
-                "workbook.py": "def get_version() -> str: ...\n"
+                "_workbook.py": "def get_version() -> str: ...\n"
                 + _py_wb(
                     "    @classmethod\n    def load(cls, data: bytes) -> 'Workbook': ...\n"
                     "    def get_zoom(self, sheet: int) -> int: ...\n    def _private(self) -> None: ...\n"
@@ -1752,7 +1754,8 @@ class SetterSymmetryTest(BindingRuleTestBase):
             "  setOptions(o: Partial<Thing>): void;\n"
         )
         good = self.RECORDS.replace("  b?: number;\n", "") + _wb(
-            "  getIterative(): IterativeSettings;\n  setIterative(patch: IterativeSettingsPatch): void;\n"
+            "  getIterative(): IterativeSettings;\n  setIterative(settings: IterativeSettings): void;\n"
+            "  updateIterative(patch: IterativeSettingsPatch): void;\n"
             "  getThing(sheet: number): Thing | null;\n  setThing(sheet: number, t: ThingInput | null): void;\n"
         )
         self.assert_rule(
@@ -1760,6 +1763,14 @@ class SetterSymmetryTest(BindingRuleTestBase):
             self.fixture.context("", None, wasm=bad),
             self.fixture.context("", None, wasm=good),
             [("wasm", "setIterative", "shape"), ("wasm", "setOptions", "Partial:o"), ("wasm", "setThing", "fields")],
+        )
+
+    def test_r18_js_a_setter_taking_a_patch_is_a_merge(self) -> None:
+        merging = self.RECORDS + _wb(
+            "  getIterative(): IterativeSettings;\n  setIterative(patch: IterativeSettingsPatch): void;\n"
+        )
+        self.assertEqual(
+            hits(self.fixture.context("", None, wasm=merging), "R18.js"), [("wasm", "setIterative", "patch")]
         )
 
     def test_r18_js_reads_a_sheet_argument_through_its_alias(self) -> None:
@@ -1783,6 +1794,11 @@ class SetterSymmetryTest(BindingRuleTestBase):
         )
         good = records + _py_wb(
             "    def get_iterative(self) -> IterativeSettings: ...\n"
+            "    def set_iterative(self, settings: IterativeSettings) -> None: ...\n"
+            "    def update_iterative(self, *, enabled: bool = UNCHANGED, max_iterations: int = UNCHANGED) -> None: ...\n"
+        )
+        merging = records + _py_wb(
+            "    def get_iterative(self) -> IterativeSettings: ...\n"
             "    def set_iterative(self, *, enabled: bool = UNCHANGED, max_iterations: int = UNCHANGED) -> None: ...\n"
         )
         self.assert_rule(
@@ -1791,16 +1807,22 @@ class SetterSymmetryTest(BindingRuleTestBase):
             self.fixture.context("", None, py_workbook=good),
             [("py", "set_iterative", "shape")],
         )
+        self.assertEqual(
+            hits(self.fixture.context("", None, py_workbook=merging), "R18.py"), [("py", "set_iterative", "patch")]
+        )
 
-    def test_r18_py_full_keywords(self) -> None:
-        records = "@dataclass(frozen=True)\nclass IterativeSettings:\n    enabled: bool\n    max_iterations: int\n\n"
+    def test_r18_py_a_full_replacement_is_one_dataclass_not_keywords(self) -> None:
+        records = (
+            "@dataclass(frozen=True)\nclass IterativeSettings:\n    enabled: bool\n    max_iterations: int\n\n"
+            "@dataclass\nclass IterativeSettingsInput:\n    enabled: bool\n    max_iterations: int\n\n"
+        )
         bad = records + _py_wb(
             "    def get_iterative(self) -> IterativeSettings: ...\n"
-            "    def set_iterative(self, *, enabled: bool, iterations: int) -> None: ...\n"
+            "    def set_iterative(self, *, enabled: bool, max_iterations: int) -> None: ...\n"
         )
         good = records + _py_wb(
             "    def get_iterative(self) -> IterativeSettings: ...\n"
-            "    def set_iterative(self, *, enabled: bool, max_iterations: int) -> None: ...\n"
+            "    def set_iterative(self, settings: Union[IterativeSettingsInput, IterativeSettings, None]) -> None: ...\n"
         )
         self.assert_rule(
             "R18.py",
@@ -2185,7 +2207,7 @@ class MemberModelTest(BindingRuleTestBase):
     def test_python_first_stub_is_the_signature(self) -> None:
         py = api_conventions_bindings.PySurface(
             {
-                "sheet.py": _py_sheet(
+                "_sheet.py": _py_sheet(
                     "    @overload\n    def set_formula(self, row: int, col: int, formula: str) -> None: ...\n"
                     "    @typing.overload\n    def set_formula(self, a1: str, formula: str) -> None: ...\n"
                     "    def set_formula(self, *args: Any, **kwargs: Any) -> None: ...\n"
@@ -2203,7 +2225,7 @@ class MemberModelTest(BindingRuleTestBase):
 
     def test_without_stubs_the_last_definition_wins(self) -> None:
         py = api_conventions_bindings.PySurface(
-            {"sheet.py": _py_sheet("    def f(self, a: int) -> None: ...\n    def f(self, b: str) -> None: ...\n")}
+            {"_sheet.py": _py_sheet("    def f(self, a: int) -> None: ...\n    def f(self, b: str) -> None: ...\n")}
         )
         self.assertEqual(py.sheet["f"].params, (("b", "str"),))
 
@@ -2380,52 +2402,78 @@ class PatchShapeTest(BindingRuleTestBase):
 
         return {
             "entries": {
-                "chart_legend.set": op("setChartLegend", "set_chart_legend", patch_record="ChartLegend"),
-                "pivot_style_info.set": op("setPivotStyleInfo", "set_pivot_style_info", patch_record="PivotStyle"),
-                "print_options.set": op("setPrintOptions", "set_print_options", patch_record=print_record,
+                "chart_legend.update": op("updateChartLegend", "update_chart_legend", patch_record="ChartLegend"),
+                "pivot_style_info.update": op("updatePivotStyleInfo", "update_pivot_style_info", patch_record="PivotStyle"),
+                "print_options.update": op("updatePrintOptions", "update_print_options", patch_record=print_record,
                                         **({"patch_reason": "no record getter"} if print_record == "none" else {})),
             }
         }  # fmt: skip
 
     def test_r18_all(self) -> None:
         bad_js = self.RECORDS.replace("  overlay?: boolean;\n", "  overlay?: number;\n  extra?: string;\n") + _sheet(
-            "  setChartLegend(objectId: number, patch: ChartLegendPatch | null): void;\n"
-            "  setPivotStyleInfo(pivot: PivotRef, info: PivotStyleInput): void;\n"
-            "  setPrintOptions(options: PrintOptionsInput): void;\n"
+            "  updateChartLegend(objectId: number, patch: ChartLegendPatch | null): void;\n"
+            "  updatePivotStyleInfo(pivot: PivotRef, info: PivotStyleInput): void;\n"
+            "  updatePrintOptions(options: PrintOptionsInput): void;\n"
         )
         good_js = self.RECORDS + _sheet(
-            "  setChartLegend(objectId: number, patch: ChartLegendPatch | null): void;\n"
-            "  setPivotStyleInfo(pivot: PivotRef, patch: PivotStylePatch): void;\n"
-            "  setPrintOptions(patch: PrintOptionsPatch): void;\n"
+            "  updateChartLegend(objectId: number, patch: ChartLegendPatch | null): void;\n"
+            "  updatePivotStyleInfo(pivot: PivotRef, patch: PivotStylePatch): void;\n"
+            "  updatePrintOptions(patch: PrintOptionsPatch): void;\n"
         )
         bad_py = self.PY_RECORDS + _py_sheet(
-            "    def set_chart_legend(self, object_id: int, position: int, *, overlay: bool = False,"
+            "    def update_chart_legend(self, object_id: int, position: int, *, overlay: bool = False,"
             " colour: int = UNCHANGED) -> None: ...\n"
-            "    def set_pivot_style_info(self, pivot: Union[int, str], info: PivotStyle) -> None: ...\n"
-            "    def set_print_options(self, *, grid_lines: bool = UNCHANGED) -> None: ...\n"
+            "    def update_pivot_style_info(self, pivot: Union[int, str], info: PivotStyle) -> None: ...\n"
+            "    def update_print_options(self, *, grid_lines: bool = UNCHANGED) -> None: ...\n"
         )
         good_py = self.PY_RECORDS + _py_sheet(
-            "    def set_chart_legend(self, object_id: int, *, position: int = UNCHANGED,"
+            "    def update_chart_legend(self, object_id: int, *, position: int = UNCHANGED,"
             " overlay: bool = UNCHANGED, hidden_series: Sequence[int] = UNCHANGED) -> None: ...\n"
-            "    def set_pivot_style_info(self, pivot: Union[int, str], *, name: Optional[str] = UNCHANGED)"
+            "    def update_pivot_style_info(self, pivot: Union[int, str], *, name: Optional[str] = UNCHANGED)"
             " -> None: ...\n"
-            "    def set_print_options(self, *, grid_lines: bool = UNCHANGED) -> None: ...\n"
+            "    def update_print_options(self, *, grid_lines: bool = UNCHANGED) -> None: ...\n"
         )
         self.assert_rule(
             "R18.all",
             self.fixture.context("", self.ledger(), wasm=bad_js, native=good_js, py_sheet=bad_py),
             self.fixture.context("", self.ledger("PrintOptions"), wasm=good_js, native=good_js, py_sheet=good_py),
             [
-                ("c", "print_options.set", "patch_record"),
-                ("py", "chart_legend.set", "default:overlay"),
-                ("py", "chart_legend.set", "key:colour"),
-                ("py", "chart_legend.set", "positional:position"),
-                ("py", "pivot_style_info.set", "patch"),
-                ("wasm", "chart_legend.set", "key:extra"),
-                ("wasm", "chart_legend.set", "type:overlay"),
-                ("wasm", "pivot_style_info.set", "patch"),
-                ("wasm", "print_options.set", "patch"),
+                ("c", "print_options.update", "patch_record"),
+                ("py", "chart_legend.update", "default:overlay"),
+                ("py", "chart_legend.update", "key:colour"),
+                ("py", "chart_legend.update", "positional:position"),
+                ("py", "pivot_style_info.update", "patch"),
+                ("wasm", "chart_legend.update", "key:extra"),
+                ("wasm", "chart_legend.update", "type:overlay"),
+                ("wasm", "pivot_style_info.update", "patch"),
+                ("wasm", "print_options.update", "patch"),
             ],
+        )
+
+    def test_r18_all_a_patch_op_is_named_update_on_every_surface(self) -> None:
+        ledger = {
+            "entries": {
+                "print_options.update": {"kind": "op", "scope": "sheet", "js": "updatePrintOptions",
+                                         "py": "update_print_options", "surfaces": ["wasm", "py"], "patch": True,
+                                         "patch_record": "PrintOptions",
+                                         "was": {"js": "setPrintOptions", "py": "set_print_options"}},
+            }
+        }  # fmt: skip
+
+        def tree(js: str, py: str) -> api_conventions.Context:
+            return self.fixture.context(
+                "",
+                ledger,
+                wasm=self.RECORDS + _sheet(f"  {js}(patch: PrintOptionsPatch): void;\n"),
+                py_sheet=self.PY_RECORDS
+                + _py_sheet(f"    def {py}(self, *, grid_lines: bool = UNCHANGED) -> None: ...\n"),
+            )
+
+        self.assert_rule(
+            "R18.all",
+            tree("setPrintOptions", "set_print_options"),
+            tree("updatePrintOptions", "update_print_options"),
+            [("py", "print_options.update", "verb"), ("wasm", "print_options.update", "verb")],
         )
 
     def test_r18_all_resolves_pick_literal_and_nested_patches(self) -> None:
@@ -2625,7 +2673,7 @@ class HandleRuleTest(BindingRuleTestBase):
         records = "export interface CellFormat {\n  readonly numberFormat: string;\n}\n"
         records += "export interface CellFormatPatch {\n  readonly numberFormat?: string;\n}\n"
         getter = "  getCellFormat(row: number, col: number): CellFormat;\n"
-        good = records + _sheet(getter + "  setCellFormat(range: CellRect | string, patch: CellFormatPatch): void;\n")
+        good = records + _sheet(getter + "  setCellFormat(range: CellRect | string, format: CellFormat): void;\n")
         bad = records + _sheet(getter + "  setCellFormat(range: CellRect | string, patch: number): void;\n")
         self.assert_rule(
             "R18.js",
@@ -2906,7 +2954,7 @@ class AdoptedShapeTest(BindingRuleTestBase):
     def test_python_ooxml_layer_overloads(self) -> None:
         py = api_conventions_bindings.PySurface(
             {
-                "sheet.py": "class SheetOoxml:\n"
+                "_sheet.py": "class SheetOoxml:\n"
                 "    @overload\n    def get_cell_xf_index(self, row: int, col: int) -> int: ...\n"
                 "    @overload\n    def get_cell_xf_index(self, a1: str) -> int: ...\n"
                 "    def get_cell_xf_index(self, *args: Any) -> int: ...\n"

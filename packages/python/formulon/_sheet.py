@@ -47,7 +47,7 @@ from ._refs import resolve_ref
 from ._status import (
     StatusCode,
 )
-from .workbook import (
+from ._workbook import (
     _CELL_RANGE_NO_CURSOR,
     _STATUS_NOT_FOUND,
     UNCHANGED,
@@ -237,6 +237,7 @@ WORKBOOK_METHODS = (
     "list_sheets",
     "list_table_styles",
     "list_tables",
+    "ooxml",
     "parse_reference",
     "pivot_cache",
     "recalc",
@@ -1256,8 +1257,10 @@ class Sheet:
     :meth:`get_cells_in_range` to page through a large range, and
     :meth:`iter_rows` for the rows of the used range. A read returns native
     values (:data:`NativeValue`); its ``*_typed_*`` variant returns tagged
-    :class:`Value` objects. A read computes pending cells first, as
-    :class:`CalcMode` says.
+    :class:`Value` objects. A read computes dirty cells first under
+    ``CalcMode.AUTO`` and returns the values as of the last recalc under
+    ``CalcMode.MANUAL``; :meth:`evaluate_formula` computes every precedent it
+    reads, even in manual mode, without storing the results.
 
     ``sheet["A1"]`` and ``sheet[row, col]`` read the cell's native value and
     ``sheet["A1:B2"]`` the grid :meth:`get_values` reads; ``sheet["A1"] = v``
@@ -1944,8 +1947,9 @@ class Sheet:
 
         ``None`` for an empty cell, ``float`` for a number (Excel numbers are
         doubles, so ``42`` reads ``42.0``), ``bool``, ``str``, or an
-        :class:`ExcelError`. A read computes pending cells first, as
-        :class:`CalcMode` says. A sheet-qualified address is refused; read
+        :class:`ExcelError`. A read computes dirty cells first under
+        ``CalcMode.AUTO`` and returns the values as of the last recalc under
+        ``CalcMode.MANUAL``. A sheet-qualified address is refused; read
         ``wb.sheet("Sheet1").get_value("A1")`` instead.
 
         Example::
@@ -2202,7 +2206,9 @@ class Sheet:
 
         A 1x1 result is returned as its native value, any other as a list of
         rows. A cell-level Excel error is an :class:`ExcelError`. A reference
-        to the anchor cell itself reads its value.
+        to the anchor cell itself reads its value. Every precedent the
+        formula reads is computed, even under ``CalcMode.MANUAL``, without
+        storing the results; :meth:`get_value` follows the calc mode.
 
         Raises:
           TypeError: when ``formula`` is not a ``str``.
@@ -2419,7 +2425,11 @@ class Sheet:
 
     # -- Merges ------------------------------------------------------------
     def add_merge(self, range: Union[CellRect, str]) -> None:
-        """Append a merge range to the sheet."""
+        """Append a merge range to the sheet.
+
+        Covered cells keep their values and stay writable; clear them first to
+        match Excel's Merge.
+        """
         merge = self._rect(range)
         sheet = self._index()
         h = self._workbook._require()
@@ -2496,7 +2506,9 @@ class Sheet:
         ``target`` is the external address (URL, file path); ``None`` makes a
         link inside the workbook, which then needs ``location`` (a reference
         such as ``"Sheet2!A1"`` or a defined name). ``location`` beside a
-        ``target`` is the fragment within it.
+        ``target`` is the fragment within it. ``display`` is the hyperlink's
+        stored display attribute; the cell value is not written, so call
+        :meth:`set_text` with the same text to show it.
 
         Raises:
           TypeError: when ``target`` and ``location`` are both ``None``.
@@ -2630,7 +2642,14 @@ class Sheet:
         """Insert or replace the comment (note) at ``(row, col)``.
 
         An empty ``comment.text`` writes an empty note, as Excel keeps one;
-        :meth:`remove_comment` removes a note.
+        :meth:`remove_comment` removes a note. The ``*_comment`` family is
+        Excel 365's Notes (legacy comments); Excel's comments are the
+        ``*_threaded_comment`` family.
+
+        Raises:
+          FormulonError: with ``StatusCode.THREADED_COMMENT_INVALID`` when the
+            cell holds a threaded comment: a cell carries a note or a thread,
+            never both.
         """
         row, col, comment = self._cell_args("set_comment", args, kwargs, ("comment",))
         if not isinstance(comment, Comment):
@@ -3241,7 +3260,12 @@ class Sheet:
     def get_formula(self, a1: str) -> Optional[str]: ...
 
     def get_formula(self, *args: Any, **kwargs: Any) -> Optional[str]:
-        """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell."""
+        """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell.
+
+        A data table's result cell reads the table's formula,
+        ``=TABLE(row_input,col_input)``, with an absent input left empty
+        (``=TABLE(,B3)``) and a deleted one as ``#REF!``.
+        """
         row, col = self._cell_args("get_formula", args, kwargs, ())
         sheet = self._index()
         return self._read_formula_text(LIB.fm_sheet_get_formula, sheet, row, col)
@@ -3439,7 +3463,11 @@ class Sheet:
         return out
 
     def add_threaded_comment(self, comment: ThreadedCommentInput) -> None:
-        """Add a threaded comment: a new thread when ``parent_id`` is ``None``, else a reply."""
+        """Add a threaded comment: a new thread when ``parent_id`` is ``None``, else a reply.
+
+        A new thread's cell must hold neither a note nor a thread (else
+        ``StatusCode.THREADED_COMMENT_INVALID``).
+        """
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3519,13 +3547,13 @@ class Sheet:
     # ``_drawings`` and never drops it, so a restore that puts an id back makes
     # its old handle address the object again.
     def _drawing_handle(self, object_id: int) -> Drawing:
-        from .drawing import _drawing_for
+        from ._drawing import _drawing_for
 
         return _drawing_for(self, object_id)
 
     def _drawing_id(self, ref: Union[int, Drawing], where: str) -> int:
         """The object id ``ref`` names: an id, or a :class:`Drawing` of this sheet."""
-        from .drawing import Drawing
+        from ._drawing import Drawing
 
         if isinstance(ref, Drawing):
             if ref.sheet is not self:
@@ -3577,25 +3605,25 @@ class Sheet:
           NotFoundError: when the sheet's drawing has no such object.
           InvalidArgumentError: when the object is not a picture.
         """
-        from .drawing import Picture
+        from ._drawing import Picture
 
         return cast("Picture", self._typed_drawing(object_id, Picture, "object_id"))
 
     def chart(self, object_id: Union[int, Drawing]) -> Chart:
         """Return the :class:`Chart` handle of ``object_id``; fails as :meth:`picture` does when it is not a chart."""
-        from .drawing import Chart
+        from ._drawing import Chart
 
         return cast("Chart", self._typed_drawing(object_id, Chart, "object_id"))
 
     def shape(self, object_id: Union[int, Drawing]) -> Shape:
         """Return the :class:`Shape` handle of ``object_id`` (a shape, connector or group); fails as :meth:`picture` does otherwise."""
-        from .drawing import Shape
+        from ._drawing import Shape
 
         return cast("Shape", self._typed_drawing(object_id, Shape, "object_id"))
 
     def slicer(self, object_id: Union[int, Drawing]) -> Slicer:
         """Return the :class:`Slicer` handle of ``object_id`` (a table slicer's frame); fails as :meth:`picture` does otherwise."""
-        from .drawing import Slicer
+        from ._drawing import Slicer
 
         return cast("Slicer", self._typed_drawing(object_id, Slicer, "object_id"))
 
@@ -3611,13 +3639,13 @@ class Sheet:
 
     def list_pictures(self) -> List[Picture]:
         """Return the handles of the sheet's pictures, in document order."""
-        from .drawing import Picture
+        from ._drawing import Picture
 
         return [drawing for drawing in self.list_drawings() if isinstance(drawing, Picture)]
 
     def list_charts(self) -> List[Chart]:
         """Return the handles of the sheet's charts, in document order."""
-        from .drawing import Chart
+        from ._drawing import Chart
 
         return [drawing for drawing in self.list_drawings() if isinstance(drawing, Chart)]
 
@@ -3801,7 +3829,7 @@ class Sheet:
           InvalidArgumentError: when the object is not a picture, chart, shape
             or table slicer, or ``object_id`` is a :class:`Drawing` of another sheet.
         """
-        from .drawing import Chart, Picture, Shape, Slicer
+        from ._drawing import Chart, Picture, Shape, Slicer
 
         drawing = self.drawing(object_id)
         sheet = self._index()
@@ -5733,7 +5761,7 @@ class Sheet:
 
     def _pivot_at(self, pivot_index: int) -> Pivot:
         """The handle of the pivot at ``pivot_index``; the sheet keeps one per pivot."""
-        from .pivot import Pivot
+        from ._pivot import Pivot
 
         sheet = self._index()
         h = self._workbook._require()
@@ -6342,6 +6370,6 @@ _install_workbook_locks(SheetOoxml)
 
 # Bound after `Sheet` exists so `typing.get_type_hints` resolves the handle types its annotations name; the
 # package imports `workbook` first, which imports this module before any of these.
-from .drawing import Chart, Drawing, Picture, Shape, Slicer  # noqa: E402
-from .pivot import Pivot  # noqa: E402
-from .table import Table  # noqa: E402
+from ._drawing import Chart, Drawing, Picture, Shape, Slicer  # noqa: E402
+from ._pivot import Pivot  # noqa: E402
+from ._table import Table  # noqa: E402

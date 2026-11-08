@@ -24,7 +24,7 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   the getter's record in src/wasm/formulon.d.ts. Once an op carries
   ``namespace: ooxml``, ``OOXML_WORKBOOK_METHODS`` and ``OOXML_SHEET_METHODS``
   list the names published under ``.ooxml``, which leave the two class lists.
-* ``packages/python/formulon/sheet.py``: the ``Workbook`` / ``Sheet`` tables but
+* ``packages/python/formulon/_sheet.py``: the ``Workbook`` / ``Sheet`` tables but
   ``REF_ARGS`` and the patch tables in its ``# <facade-tables>`` region, with
   the Python names. ``--check`` skips the file while it has no region or an
   empty one; ``--write`` fills an empty one.
@@ -36,7 +36,7 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   field, less the ledger's ``a1_exempt`` fields. A discriminated input (a
   union type alias of interfaces) has the fields of every alternative. Python keys and nested record
   names are the ledger's Python names, fields snake_case. Both files follow the
-  ``sheet.py`` rule for an absent or empty region.
+  ``_sheet.py`` rule for an absent or empty region.
 * ``METHOD_ARITY`` (``{Class.method: count}``), ``TYPED_ARGS``
   (``{Class.method: [[position, type], ...]}``) in the ``<method-signatures>``
   region of ``common.mjs``, read from the facade interfaces of
@@ -86,9 +86,9 @@ from tools.dev.binding_drift.api_conventions_bindings import (  # noqa: E402
     _top_union,
 )
 from tools.dev.binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
+from tools.dev.binding_drift.surface_files import PYTHON_SHEET  # noqa: E402
 
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
-PYTHON_SHEET = REPO_ROOT / "packages/python/formulon/sheet.py"
 PYTHON_HANDLE_TABLES = REPO_ROOT / "packages/python/formulon/_handle_tables.py"
 NODE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 ADDRESS_ARGS_JSON = REPO_ROOT / "tools/api/address_args.json"
@@ -337,7 +337,7 @@ def _py_tuple(name: str, values: Sequence[str]) -> str:
 
 
 def py_region(ledger: Optional[facade_scope.Ledger] = None) -> str:
-    """The `Workbook` / `Sheet` tables of sheet.py's region."""
+    """The `Workbook` / `Sheet` tables of __sheet.py's region."""
     ledger = ledger or facade_scope.load()
     names, families = _tables("py", ledger)
     out = [_py_tuple("WORKBOOK_METHODS", names["WORKBOOK_METHODS"])]

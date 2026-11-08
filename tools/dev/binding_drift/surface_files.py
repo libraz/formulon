@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CAPI_HEADER = REPO_ROOT / "src" / "c_api" / "formulon_c.h"
 CAPI_EXPORTS = REPO_ROOT / "tools" / "wasm" / "capi_exports.txt"
 PYTHON_PKG_DIR = REPO_ROOT / "packages" / "python" / "formulon"
+
 PYTHON_C_BINDING = PYTHON_PKG_DIR / "_c.py"
 
 WASM_BINDINGS_CPP = REPO_ROOT / "src" / "wasm" / "parts" / "bindings_register.cpp"
@@ -82,11 +83,11 @@ def _format_diff(label_a: str, only_a: Set[str], label_b: str, only_b: Set[str])
 # writing it back through the other bindings silently demoted it.
 # ---------------------------------------------------------------------------
 
-PYTHON_WORKBOOK = PYTHON_PKG_DIR / "workbook.py"
-# The `Sheet` class of the Python binding; absent until the sheet-scope methods move out of workbook.py.
-PYTHON_SHEET = PYTHON_PKG_DIR / "sheet.py"
+PYTHON_WORKBOOK = PYTHON_PKG_DIR / "_workbook.py"
+# The `Sheet` class of the Python binding; absent until the sheet-scope methods move out of _workbook.py.
+PYTHON_SHEET = PYTHON_PKG_DIR / "_sheet.py"
 # The modules of the Python handle classes (`Table`, `Pivot`, `PivotCache`, the drawing classes); each is read
 # once it exists.
 PYTHON_HANDLE_MODULES = tuple(
-    PYTHON_PKG_DIR / name for name in ("table.py", "pivot.py", "pivot_cache.py", "drawing.py")
+    PYTHON_PKG_DIR / name for name in ("_table.py", "_pivot.py", "_pivot_cache.py", "_drawing.py")
 )

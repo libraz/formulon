@@ -9,7 +9,10 @@ Public API:
   * :class:`Table`, :class:`Pivot`, :class:`PivotCache`, :class:`Drawing`
     (:class:`Picture`, :class:`Chart`, :class:`Shape`, :class:`Slicer`) --
     handles of a workbook's tables, pivot tables, pivot caches and drawing
-    objects; each reads its record with ``get_properties()``.
+    objects. :class:`Table`, :class:`Pivot` and the drawing subclasses read
+    their record with ``get_properties()``; :class:`Drawing` itself with
+    ``get_drawing_properties()``; :class:`PivotCache` with ``get_options()`` /
+    ``get_worksheet_source()``.
   * :data:`NativeValue` -- a value as plain Python data (what reads return);
     :class:`Value`, :class:`ValueKind` -- the same value tagged with its kind.
   * :class:`ExcelError` -- an Excel cell error as a Python value;
@@ -27,8 +30,8 @@ Numbers read back as ``float``: every Excel number is an IEEE double.
 
 from __future__ import annotations
 
-# `workbook` loads before the handle modules so each module it imports in turn finds its definitions bound.
-from . import workbook  # noqa: F401
+# `_workbook` loads before the handle modules so each module it imports in turn finds its definitions bound.
+from . import _workbook  # noqa: F401
 from ._c import (
     FormulaSyntaxError,
     IndexOutOfRangeError,
@@ -39,9 +42,8 @@ from ._c import (
     ValueKind,
     WorkbookClosedError,
 )
-from ._status import StatusCode
-from .drawing import Chart, Drawing, Picture, Shape, Slicer
-from .metadata import (
+from ._drawing import Chart, Drawing, Picture, Shape, Slicer
+from ._metadata import (
     FunctionMetadataEntry,
     FunctionMetadataLocalized,
     FunctionMetadataProvider,
@@ -53,11 +55,12 @@ from .metadata import (
     merge_function_metadata,
     set_log_min_level,
 )
-from .pivot import Pivot
-from .pivot_cache import PivotCache
-from .sheet import CellInput, Sheet, SheetOoxml
-from .table import Table
-from .workbook import (
+from ._pivot import Pivot
+from ._pivot_cache import PivotCache
+from ._sheet import CellInput, Sheet, SheetOoxml
+from ._status import StatusCode
+from ._table import Table
+from ._workbook import (
     PIVOT_SHOW_AS_BASE_NEXT,
     PIVOT_SHOW_AS_BASE_PREVIOUS,
     PIVOT_VALUES_FIELD,

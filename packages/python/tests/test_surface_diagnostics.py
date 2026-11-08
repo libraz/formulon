@@ -126,7 +126,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
         # counter struct). If the second allocation raises, the first must
         # still be released rather than leaked into the WASM heap.
         with Workbook.create_default() as wb:
-            original_alloc = formulon.workbook.LIB.alloc
+            original_alloc = formulon._workbook.LIB.alloc
             calls = 0
 
             def alloc_then_fail(size: int) -> int:
@@ -137,8 +137,8 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 return original_alloc(size)
 
             with (
-                mock.patch.object(formulon.workbook.LIB, "alloc", side_effect=alloc_then_fail),
-                mock.patch.object(formulon.workbook.LIB, "free", wraps=formulon.workbook.LIB.free) as free,
+                mock.patch.object(formulon._workbook.LIB, "alloc", side_effect=alloc_then_fail),
+                mock.patch.object(formulon._workbook.LIB, "free", wraps=formulon._workbook.LIB.free) as free,
             ):
                 with self.assertRaises(RuntimeError):
                     wb.save_with_diagnostics(format=WorkbookFormat.XLSB)

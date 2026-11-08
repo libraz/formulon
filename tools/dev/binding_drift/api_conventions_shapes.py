@@ -7,7 +7,7 @@ setter mirrors its getter, how "absent" is spelled, which values are closed
 sets, how same-concept enums agree, and how records and index arguments are
 named. They read the same parsed surfaces as `api_conventions_bindings`, plus
 the generated facade tables of `packages/npm/common.mjs` and
-`packages/python/formulon/sheet.py`.
+`packages/python/formulon/_sheet.py`.
 """
 
 from __future__ import annotations
@@ -232,7 +232,7 @@ def _structure_name(ctx: Context, entry: dict, field: str) -> Optional[str]:
 def _rule_structure_tracking(ctx: Context) -> Iterable[Violation]:
     """Every op that adds, removes or reorders sheets is in `SHEET_STRUCTURE_OPS` of the generated facade
     tables, as `Class.method`, in `packages/npm/common.mjs` (both npm packages) and
-    `packages/python/formulon/sheet.py`.
+    `packages/python/formulon/_sheet.py`.
     """
     sources = {
         "wasm": ("js", ctx.repo_root / NPM_COMMON_MJS.relative_to(REPO_ROOT)),
@@ -538,11 +538,12 @@ def _accessor_pairs(pool: Dict[str, object], js: bool) -> Iterator[Tuple[str, st
 
 @_owned("R18.js")
 def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
-    """When `get<X>` returns a record `R` and `set<X>` exists, `set<X>` takes one value argument typed `R`,
-    `<R>Patch` or `<R>Input` (an input's fields are `R`'s, a `CellAddress` field `x` standing for `R`'s `xRow` /
-    `xCol` and a `SheetRef` field for `R`'s sheet index). The setter's address arguments are not values: those
-    the getter shares, and those the ledger names in `cell_args` / `rect_args` / `span_args` (a setter may address
-    a range where the getter reads a cell). No public argument is `Partial<...>`.
+    """When `get<X>` returns a record `R` and `set<X>` exists, `set<X>` replaces the whole value: it takes one
+    value argument typed `R` or `<R>Input` (`| null` removes it; an input's fields are `R`'s, a `CellAddress`
+    field `x` standing for `R`'s `xRow` / `xCol` and a `SheetRef` field for `R`'s sheet index). A merge is
+    `update<X>(<R>Patch)`, so a `set<X>` taking `<R>Patch` is a violation. The setter's address arguments are not
+    values: those the getter shares, and those the ledger names in `cell_args` / `rect_args` / `span_args` (a
+    setter may address a range where the getter reads a cell). No public argument is `Partial<...>`.
     """
     for surface in JS_SURFACES:
         pool = _public_pool(ctx, surface)
@@ -563,11 +564,20 @@ def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
                 and i not in addressed
                 and (not _is_coordinate(p, True) or record in _alias_alternatives(decls, t))
             ]
-            accepted = {record, f"{record}Patch", f"{record}Input", f"Patch<{record}>"}
+            accepted = {record, f"{record}Input"}
             kinds = _strip_null(values[0][1], True) if len(values) == 1 else []
             if len(values) == 1 and record in _alias_alternatives(decls, values[0][1]):
                 continue
-            if len(kinds) != 1 or kinds[0] not in accepted:
+            if len(kinds) == 1 and kinds[0] in (f"{record}Patch", f"Patch<{record}>"):
+                yield _violation(
+                    ctx,
+                    "R18.js",
+                    surface,
+                    _key(ctx, surface, setter),
+                    "patch",
+                    f"`{setter}` takes `{kinds[0]}`; a merge is `update{setter[3:]}`, `set` replaces",
+                )
+            elif len(kinds) != 1 or kinds[0] not in accepted:
                 shown = ", ".join(f"{p}: {t}" for p, t in values) or "nothing"
                 yield _violation(
                     ctx,
@@ -626,10 +636,10 @@ def _py_dataclasses(ctx: Context) -> Dict[str, Set[str]]:
 
 @_owned("R18.py")
 def _rule_py_symmetry(ctx: Context) -> Iterable[Violation]:
-    """When `get_<x>` returns a dataclass `R` and `set_<x>` exists, `set_<x>` takes one value argument typed
-    `R` / `<R>Input` / `<R>Patch`, keyword-only arguments named after `R`'s fields that default to
-    `UNCHANGED`, or keyword-only arguments named after `R`'s fields (a full replacement spelled as keywords,
-    the way `<R>Input` may carry a subset of `R`'s fields on the JS side).
+    """When `get_<x>` returns a dataclass `R` and `set_<x>` exists, `set_<x>` replaces the whole value: it takes
+    one positional value argument typed `R` or `<R>Input` (a dataclass; `None` removes it). Keyword-only
+    arguments defaulting to `UNCHANGED` are a merge, which is `update_<x>`; keyword arguments spelling a full
+    replacement are a violation too, since the input is one dataclass.
     """
     pool = _public_pool(ctx, "py")
     records = _py_dataclasses(ctx)
@@ -642,12 +652,22 @@ def _rule_py_symmetry(ctx: Context) -> Iterable[Violation]:
         values = [(p, t) for p, t in _value_params(fn.params, False) if p not in shared]
         defaults = dict(fn.defaults)
         kinds = _strip_null(values[0][1], False) if len(values) == 1 else []
-        whole = record in kinds or (len(kinds) == 1 and kinds[0] in {f"{record}Input", f"{record}Patch"})
-        partial = bool(values) and all(
-            p in fn.kwonly and p in records[record] and defaults.get(p) in _UNCHANGED_DEFAULTS for p, _ in values
+        whole = (
+            len(values) == 1
+            and values[0][0] not in fn.kwonly
+            and (record in kinds or (len(kinds) == 1 and kinds[0] == f"{record}Input"))
         )
-        full = bool(values) and all(p in fn.kwonly and p in records[record] for p, _ in values)
-        if not (whole or partial or full):
+        partial = bool(values) and all(p in fn.kwonly and defaults.get(p) in _UNCHANGED_DEFAULTS for p, _ in values)
+        if partial or (len(kinds) == 1 and kinds[0] == f"{record}Patch"):
+            yield _violation(
+                ctx,
+                "R18.py",
+                "py",
+                _key(ctx, "py", setter),
+                "patch",
+                f"`{setter}` merges a patch; a merge is `update_{setter[4:]}`, `set` replaces",
+            )
+        elif not whole:
             shown = ", ".join(p for p, _ in values) or "nothing"
             yield _violation(
                 ctx,

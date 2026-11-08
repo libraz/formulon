@@ -8,7 +8,7 @@
 #
 # This list mirrors the full Python binding surface: every fm_* entry
 # point reached from packages/python/formulon (the Workbook wrapper in
-# workbook.py plus the module-level helpers in __init__.py) is listed so
+# _workbook.py plus the module-level helpers in __init__.py) is listed so
 # the staged WASM exports it. When the Python binding grows a new entry
 # point, add the corresponding symbol here.
 

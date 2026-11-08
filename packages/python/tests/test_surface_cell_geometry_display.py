@@ -8,7 +8,7 @@ from dataclasses import replace
 from _xf_input import input_of
 
 from formulon import CellXfInput, FormulonError, PrintTitles, Value, ValueKind, Workbook
-from formulon.workbook import (
+from formulon._workbook import (
     CellRect,
     DisplayStatus,
     DisplayText,

@@ -50,7 +50,7 @@ NODE_SOURCES = (Path("src/node_addon/parts"), Path("src/node_addon/generated"), 
 NODE_DTS = Path("packages/npm-native/index.d.ts")
 PY_PKG = Path("packages/python/formulon")
 # The modules of the Python handle classes; a module not written yet is skipped.
-PY_HANDLE_MODULES = ("table.py", "pivot.py", "pivot_cache.py", "drawing.py")
+PY_HANDLE_MODULES = ("_table.py", "_pivot.py", "_pivot_cache.py", "_drawing.py")
 # The facade source whose generated tables name the JS handle methods `Class.method`.
 NPM_COMMON = Path("packages/npm/common.mjs")
 _JS_HANDLE_TABLES = ("HANDLE_FORWARDERS", "HANDLE_PROPERTIES")
@@ -365,7 +365,7 @@ def _scan_py(root: Path):
                 bases = {getattr(b, "id", getattr(b, "attr", "")) for b in node.bases}
                 if cited:
                     (py_enums if bases & {"IntEnum", "IntFlag"} else py_types).setdefault(node.name, cited[0])
-                if node.name == "Workbook" and path.name == "workbook.py":
+                if node.name == "Workbook" and path.name == "_workbook.py":
                     for item in node.body:
                         if isinstance(item, ast.FunctionDef):
                             methods[item.name] = item

@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from ._c import FormulonError
 from ._status import StatusCode
-from .workbook import CellAddress, CellRect, Color, ColorKind, SheetRect, Workbook
+from ._workbook import CellAddress, CellRect, Color, ColorKind, SheetRect, Workbook
 
 __all__ = [
     "RECORD_RANGE_FIELDS",
@@ -181,7 +181,7 @@ def date_serial(value: Any, *, date1904: bool) -> Tuple[float, str]:
       ValueError: for a ``datetime`` or ``time`` that carries a time zone.
       InvalidArgumentError: when the date lies outside the date system.
     """
-    from .metadata import convert_civil_to_serial
+    from ._metadata import convert_civil_to_serial
 
     if isinstance(value, datetime.datetime):
         if value.tzinfo is not None:
@@ -206,7 +206,7 @@ def serial_datetime(serial: Any, *, date1904: bool) -> datetime.datetime:
         system (before day 1 of the 1900 system or day 0 of the 1904 one, or
         past 9999-12-31).
     """
-    from .metadata import convert_serial_to_civil
+    from ._metadata import convert_serial_to_civil
 
     if isinstance(serial, bool) or not isinstance(serial, numbers.Real):
         raise TypeError(f"formulon: a serial must be a number, got {type(serial).__name__}")

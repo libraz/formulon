@@ -155,7 +155,7 @@ test('an argument the binding cannot represent is a TypeError', async () => {
         'remapRangeStyle mismatched lengths',
         () => wb.sheet(0).ooxml.remapRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
       ],
-      ['probeImage({})', () => mod.getImageInfo({})],
+      ['getImageInfo({})', () => mod.getImageInfo({})],
     ]) {
       assert.throws(call, TypeError, label);
     }

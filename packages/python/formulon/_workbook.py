@@ -2,7 +2,7 @@
 
 Public surface:
   * :class:`Workbook` -- context manager owning one engine workbook.
-  * :class:`Sheet` -- one sheet of a workbook (defined in :mod:`formulon.sheet`).
+  * :class:`Sheet` -- one sheet of a workbook (defined in :mod:`formulon._sheet`).
   * :class:`Value` -- frozen dataclass holding a cell value.
   * :class:`ExcelError` -- an Excel cell error as a Python value.
   * :class:`FormulonError` -- exception raised on host-side failures.
@@ -1170,7 +1170,7 @@ class CalcMode(IntEnum):
     """Workbook-level calc mode (``<calcPr calcMode>``).
 
     - ``AUTO`` (the default): a value read and a save first calculate the
-      pending cells.
+      dirty cells.
     - ``MANUAL``: nothing is calculated until :meth:`Workbook.recalc`.
     - ``AUTO_NO_TABLE``: as ``AUTO``, but the What-If data tables wait for
       :meth:`Workbook.recalc_data_tables`.
@@ -1527,7 +1527,7 @@ class PivotShowValuesAs(IntEnum):
 class PivotFilterType(IntEnum):
     """Filter type of a pivot filter: every OOXML pivot filter type.
 
-    Values 0-5 are the original six; the rest follow the header's ordinals.
+    The values are the C ABI's filter-type ordinals.
     """
 
     VALUE_TOP_10 = 0
@@ -1667,8 +1667,8 @@ PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828
 PIVOT_SHOW_AS_BASE_NEXT = 1048829
 
 # The "Σ Values" level in a pivot row / column field order, as read by
-# ``pivot_row_field_order`` / ``pivot_col_field_order`` and accepted by the
-# matching setters (``FM_PIVOT_VALUES_FIELD`` reinterpreted as a signed value).
+# ``Pivot.get_row_field_order`` / ``Pivot.get_column_field_order`` and accepted
+# by ``Pivot.set_row_field_order`` / ``Pivot.set_column_field_order`` (``FM_PIVOT_VALUES_FIELD`` reinterpreted as a signed value).
 PIVOT_VALUES_FIELD = -2
 _PIVOT_VALUES_FIELD_C = 0xFFFFFFFE
 _PIVOT_NO_DATA_FIELD = 0xFFFFFFFF
@@ -2674,8 +2674,8 @@ class ChartAxisPatch(TypedDict, total=False):
     """Axis patch.
 
     ``title`` takes the forms of :meth:`Chart.set_title`: text, or a
-    :class:`ChartTitle` (``AUTO`` leaves the text to the viewer, ``NONE``
-    removes the title). ``None`` on ``title`` removes the axis title, on
+    :class:`ChartTitle` (``AUTO`` leaves the text to the viewer).
+    ``None`` on ``title`` removes the axis title, on
     ``log_base`` makes the axis linear and on ``tick_label_position``
     (``nextTo``, ``low``, ``high``, ``none``) restores the default.
     ``crosses_at`` is read when ``crosses`` is ``AT``.
@@ -2855,7 +2855,7 @@ class TableStyleDefaults:
 
 @dataclass(frozen=True)
 class PivotGrandTotals:
-    """Grand-total flags read back by ``get_pivot_grand_totals``."""
+    """Grand-total flags read back by :meth:`Pivot.get_grand_totals`."""
 
     rows: bool
     columns: bool
@@ -3963,7 +3963,9 @@ class ThemeColors:
     """The theme's 12 scheme colours as ``0xFFRRGGBB`` values in ``a:clrScheme`` order.
 
     ``source`` says whether they come from the theme part or are the default
-    theme's (the part is absent or unparseable).
+    theme's (the part is absent or unparseable). This is not the order of a
+    colour's theme index, which swaps the first two pairs (0 = lt1, 1 = dk1,
+    2 = lt2, 3 = dk2).
     """
 
     source: ThemeSource
@@ -4224,7 +4226,7 @@ class PivotCalculatedItem:
 
 @dataclass
 class PivotDataFieldInput:
-    """Argument shape for ``pivot_data_field_add`` / ``pivot_data_field_set``.
+    """Argument shape for :meth:`Pivot.add_data_field` / :meth:`Pivot.set_data_field`.
 
     An empty or ``None`` ``name`` asks the engine to name the data field from
     the workbook profile's pivot wording (``"Sum of Sales"`` under en-US,
@@ -5865,7 +5867,9 @@ class Workbook:
       Each ``Workbook`` instance is single-threaded. Every engine call is
       serialised process-wide by an internal lock, so cross-thread misuse
       cannot corrupt engine state -- it just blocks. The wheel recalculates
-      serially; it has no parallel-recalc entry point.
+      serially; it has no parallel-recalc entry point. There is no
+      iterative-progress callback; cap the work with
+      ``set_iterative(max_iterations=...)``.
     """
 
     __slots__ = ("_handle", "_sheets", "_tables", "_pivot_caches", "_ooxml")
@@ -5916,7 +5920,7 @@ class Workbook:
         base column width set). Unlike :meth:`create_default` no theme part is
         written, so the workbook reads the default Office theme. Changing
         font 0 later (:meth:`set_default_font`) leaves font 1 untouched.
-        Unknown ids raise ``FormulonError``.
+        Unknown ids raise :class:`InvalidArgumentError`.
         """
         wb = cls._new()
         with _ArgScope() as scope:
@@ -5936,8 +5940,8 @@ class Workbook:
         :meth:`save`.
 
         The style table is seeded with Excel's reserved defaults exactly as
-        :meth:`create_default` seeds it, so the first index :meth:`add_font`
-        / :meth:`add_fill` / :meth:`add_border` hands back is non-zero.
+        :meth:`create_default` seeds it, so the first index :meth:`WorkbookOoxml.add_font`
+        / :meth:`WorkbookOoxml.add_fill` / :meth:`WorkbookOoxml.add_border` hands back is non-zero.
         """
         wb = cls._new()
         with _ArgScope() as scope:
@@ -6091,7 +6095,7 @@ class Workbook:
 
     def _sheet_handles(self) -> List[Sheet]:
         """The live handle list, built from the engine on first use and kept in sheet order after that."""
-        from .sheet import Sheet
+        from ._sheet import Sheet
 
         self._require()
         if self._sheets is None:
@@ -6100,7 +6104,7 @@ class Workbook:
 
     def _insert_sheet_handle(self, handles: List[Sheet], index: int) -> Sheet:
         """Track a sheet the engine inserted at ``index``; ``handles`` is the list read before the change."""
-        from .sheet import Sheet
+        from ._sheet import Sheet
 
         sheet = Sheet(self, index, self._sheet_name(index))
         handles.insert(index, sheet)
@@ -6135,7 +6139,7 @@ class Workbook:
             ws = wb.sheet("Sheet1")
             ws.set_text("A1", "Total")
         """
-        from .sheet import Sheet
+        from ._sheet import Sheet
 
         self._require()
         if isinstance(key, Sheet):
@@ -6185,7 +6189,7 @@ class Workbook:
 
     def __contains__(self, key: object) -> bool:
         """``True`` when ``key`` is a live :class:`Sheet` of this workbook, names a sheet, or is a valid index."""
-        from .sheet import Sheet
+        from ._sheet import Sheet
 
         if isinstance(key, Sheet):
             return key._workbook is self and key._position is not None and not self.closed
@@ -6224,7 +6228,17 @@ class Workbook:
         _check(LIB.fm_workbook_set_active_sheet(h, _uint(index, "sheet_index")))
 
     def add_sheet(self, name: str) -> Sheet:
-        """Append a new sheet with the given UTF-8 display name and return its handle."""
+        """Append a new sheet with the given UTF-8 display name and return its handle.
+
+        Raises:
+          FormulonError: ``StatusCode.INVALID_SHEET_NAME`` when the name is
+            empty, longer than 31 UTF-16 units, contains one of ``:``,
+            backslash, ``/``, ``?``, ``*``, ``[`` or ``]``, begins or ends
+            with an apostrophe, is ``History`` in any case, or collides
+            case-insensitively (Unicode simple case folding) with an existing
+            sheet; ``StatusCode.SHEET_COUNT_LIMIT_EXCEEDED`` at the maximum
+            sheet count.
+        """
         h = self._require()
         handles = self._sheet_handles()
         with _ArgScope() as scope:
@@ -6275,7 +6289,7 @@ class Workbook:
 
     # -- Recalc ------------------------------------------------------------
     def recalc(self) -> None:
-        """Calculate every pending cell now.
+        """Calculate every dirty cell now.
 
         Under ``CalcMode.AUTO`` reads already do this; call it under
         ``CalcMode.MANUAL``, or to re-evaluate volatile functions. The wheel
@@ -6292,12 +6306,13 @@ class Workbook:
         _check(status)
 
     def has_dirty_cells(self) -> bool:
-        """Whether a change since the last :meth:`recalc` is not yet reflected in the computed values.
+        """Whether any cell is dirty: a change has left its value uncomputed since the last :meth:`recalc`.
 
-        Edits to cells, defined names or the profile, row / column inserts and
-        deletes, and sheet removal make the workbook dirty; volatile functions
-        do not. A loaded workbook with formulas is dirty until it is first
-        calculated; :meth:`Sheet.recalc_viewport` does not clean it, and a
+        Edits to cells, defined names, the profile or the file name, row /
+        column inserts and deletes, and sheet removal make cells dirty;
+        volatile functions do not, and neither does a freshly created
+        workbook. A loaded workbook with formulas is dirty until its first
+        full recalc; :meth:`Sheet.recalc_viewport` does not clean it, and a
         failed recalc leaves it dirty. Under ``CalcMode.AUTO`` a value read
         calculates first, so this is mostly of use under ``CalcMode.MANUAL``.
         """
@@ -6538,7 +6553,7 @@ class Workbook:
 
     def _table_handle(self, index: int) -> Table:
         """The handle of the table at ``index``, created on first use and kept for the workbook's life."""
-        from .table import Table
+        from ._table import Table
 
         h = self._require()
         runtime_id = _read_count(LIB.fm_workbook_get_table_runtime_id, h, _uint(index, "table_index"))
@@ -6550,7 +6565,7 @@ class Workbook:
 
     def _table_index(self, table: Union[int, str, Table]) -> int:
         """The index ``table`` addresses: an index, a table's display name, or a :class:`Table` of this workbook."""
-        from .table import Table
+        from ._table import Table
 
         if isinstance(table, Table):
             if table.workbook is not self:
@@ -6671,6 +6686,9 @@ class Workbook:
 
     def remove_table(self, table: Union[int, str, Table]) -> None:
         """Remove ``table``; its handle raises :class:`NotFoundError` from then on.
+
+        Formulas that name the table keep their structured references and
+        evaluate to ``#NAME?``.
 
         Raises:
           NotFoundError: when no table has the display name ``table``, or
@@ -6911,8 +6929,10 @@ class Workbook:
         a second are dropped.
 
         This is model state, not file state: nothing in the OOXML package
-        records it, so :meth:`save` drops it. Existing formula cells keep
-        their cached values until the next :meth:`recalc`.
+        records it, so :meth:`save` drops it. Setting or clearing the pin
+        marks every formula cell dirty, as a profile or iterative change
+        does; in ``CalcMode.AUTO`` the next read recomputes, in
+        ``CalcMode.MANUAL`` :meth:`recalc` does.
 
         Raises:
           TypeError: when ``t`` is not a ``datetime.datetime`` (a bare
@@ -6961,6 +6981,7 @@ class Workbook:
 
         New workbooks use ``win-365-en_US`` by default. Ids have the form
         ``{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}``.
+        A change marks every formula cell dirty.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -6984,7 +7005,8 @@ class Workbook:
         """Set :meth:`get_file_name`, extension included and without a directory; ``None`` (or ``""``) unsets it.
 
         Entered formulas then read ``Book.xlsx!Name`` and ``[Book.xlsx]Sheet1!A1``
-        as this workbook and create no external link.
+        as this workbook and create no external link. A changed name marks
+        every formula cell dirty.
 
         Raises:
           FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when the name lacks a
@@ -7214,7 +7236,7 @@ class Workbook:
         """Declare the workbook's default font (font 0).
 
         Font 0 is what an unstyled cell resolves to. A new workbook seeds it
-        with Excel's Calibri 11, and :meth:`add_font` can only append beside
+        with Excel's Calibri 11, and :meth:`WorkbookOoxml.add_font` can only append beside
         it, so this is the way a ja-JP host declares e.g. ``游ゴシック`` for
         the cells it never styles explicitly. Read it back with
         ``get_font(0)``.
@@ -7465,6 +7487,9 @@ class Workbook:
         """Create a new empty pivot cache and return its handle.
 
         Its id is ``requested_id`` when non-zero, else one the engine assigns.
+        A new cache has no worksheet source, and a workbook containing one
+        cannot be saved: call :meth:`PivotCache.set_worksheet_source` before
+        saving.
         """
         h = self._require()
         return self._pivot_cache_handle(
@@ -7473,7 +7498,7 @@ class Workbook:
 
     def _pivot_cache_handle(self, cache_id: int) -> PivotCache:
         """The handle of cache id ``cache_id``, whether or not the workbook has that cache now."""
-        from .pivot_cache import PivotCache
+        from ._pivot_cache import PivotCache
 
         handle = self._pivot_caches.get(cache_id)
         if handle is None:
@@ -7483,7 +7508,7 @@ class Workbook:
 
     def _pivot_cache_id(self, cache: Union[int, PivotCache]) -> int:
         """The cache id a cache id or a :class:`PivotCache` of this workbook names."""
-        from .pivot_cache import PivotCache
+        from ._pivot_cache import PivotCache
 
         if isinstance(cache, PivotCache):
             if cache.workbook is not self:
@@ -8230,6 +8255,6 @@ def get_collation_classes(
 # Imported last: these modules import this one, and the annotations above name their classes, which
 # `typing.get_type_hints` resolves from this module's globals.
 from ._inputs import color_input, optional_color_input, sheet_rect  # noqa: E402
-from .pivot_cache import PivotCache  # noqa: E402
-from .sheet import Sheet  # noqa: E402
-from .table import Table  # noqa: E402
+from ._pivot_cache import PivotCache  # noqa: E402
+from ._sheet import Sheet  # noqa: E402
+from ._table import Table  # noqa: E402

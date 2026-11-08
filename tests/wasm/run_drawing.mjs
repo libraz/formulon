@@ -61,7 +61,7 @@ export function registerDrawing(Module, test) {
     assert.equal(AnchorEditAs.OneCell, AnchorKind.OneCell);
   });
 
-  test('probeImage reports the format and pixel size, and rejects non-images', () => {
+  test('getImageInfo reports the format and pixel size, and rejects non-images', () => {
     const info = Module.getImageInfo(makePng(3, 2));
     assert.equal(info.format, ImageFormat.Png);
     assert.equal(info.pxWidth, 3);

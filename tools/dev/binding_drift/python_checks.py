@@ -221,7 +221,7 @@ def _module_int_constants(paths: List[Path]) -> dict[str, int]:
 
     Collected across files because the constant a scratch allocation is sized
     with may be defined in one module and imported into another
-    (`fm_value_t_size` lives in `_c.py` and is used from `workbook.py`).
+    (`fm_value_t_size` lives in `_c.py` and is used from `_workbook.py`).
     """
     constants: dict[str, int] = {}
     for path in paths:
@@ -244,7 +244,7 @@ def _is_lib_call(node: ast.AST, attribute: Optional[str] = None) -> bool:
     return attribute is None or node.func.attr == attribute
 
 
-# `_ArgScope` (packages/python/formulon/workbook.py) owns every argument block.
+# `_ArgScope` (packages/python/formulon/_workbook.py) owns every argument block.
 # Its allocating methods, each mapped to how the block width is derived.
 _ARG_SCOPE_CLASS = "_ArgScope"
 _ARG_SCOPE_SIZERS = {
@@ -644,7 +644,7 @@ def check_python_call_signatures() -> List[str]:
 # (decoder qualnames, C struct). Each decoder is expected to consume the
 # whole struct, so its `struct` calls are read as a description of the C
 # layout and compared field for field. A sheet-scope decoder lives on
-# `Workbook` (workbook.py) or `Sheet` (sheet.py); the first one found counts.
+# `Workbook` (_workbook.py) or `Sheet` (_sheet.py); the first one found counts.
 _PYTHON_INLINE_DECODERS = (
     (("Value._from_wasm",), "fm_value_t"),
     (("Workbook.get_pagination", "Sheet.get_pagination"), "fm_cell_rect_t"),

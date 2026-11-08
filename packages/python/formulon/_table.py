@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple, Union
 
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
+from ._sheet import _normalize_auto_filter
 from ._status import StatusCode
-from .sheet import _normalize_auto_filter
-from .workbook import (
+from ._workbook import (
     UNCHANGED,
     AutoFilter,
     AutoFilterEval,
@@ -28,7 +28,7 @@ from .workbook import (
 )
 
 if TYPE_CHECKING:
-    from .workbook import TableProperties, Workbook
+    from ._workbook import TableProperties, Workbook
 
 __all__ = ["Table", "TableTotalsRowFunction"]
 
@@ -128,7 +128,7 @@ class Table:
         return self._properties(self._index())
 
     def _properties(self, index: int) -> TableProperties:
-        from .workbook import TableProperties
+        from ._workbook import TableProperties
 
         h = self._workbook._require()
         with _ArgScope() as scope:

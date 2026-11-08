@@ -1113,6 +1113,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'listSheets',
   'listTableStyles',
   'listTables',
+  'ooxml',
   'parseReference',
   'pivotCache',
   'recalc',

@@ -9,7 +9,7 @@ the two marker lines and never creates them. A missing marker is an error.
   ``ErrorCode`` members, so the region follows the ``ErrorCode`` table.
 * ``src/wasm/formulon.d.ts``: its ``Readonly<Record<ErrorCode, string>>``
   declaration.
-* ``packages/python/formulon/workbook.py``: ``_ERROR_DISPLAY_NAMES``, a
+* ``packages/python/formulon/_workbook.py``: ``_ERROR_DISPLAY_NAMES``, a
   module-level dict keyed by ``ErrorCode`` member name.
 
 Modes:
@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VALUE_H = REPO_ROOT / "src/value.h"
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
 WASM_DTS = REPO_ROOT / "src/wasm/formulon.d.ts"
-PY_WORKBOOK = REPO_ROOT / "packages/python/formulon/workbook.py"
+PY_WORKBOOK = REPO_ROOT / "packages/python/formulon/_workbook.py"
 OUTPUTS = {NPM_COMMON: "js", WASM_DTS: "dts", PY_WORKBOOK: "py"}
 
 BEGIN = "<error-display-names:begin>"

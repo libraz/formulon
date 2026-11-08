@@ -1378,16 +1378,17 @@ def _is_dataclass(cls: PyClass, frozen: bool) -> bool:
 @_owned("R7.py")
 def _rule_py_records(ctx: Context) -> Iterable[Violation]:
     """Python record shape by role: a result is `@dataclass(frozen=True)` (no `NamedTuple`), an input a
-    `@dataclass` named `<Name>Input`. A patch is a `TypedDict(total=False)` named `<Name>Patch` that only types a
-    nested field: a method takes the keys of its patch as keyword-only arguments defaulting to `UNCHANGED`
-    (R18.all), never the patch itself.
+    `@dataclass` named `<Name>Input`; an argument typed by an input also accepts the read record `<Name>` when the
+    package declares it, so a getter's value feeds back unchanged. A patch is a `TypedDict(total=False)` named
+    `<Name>Patch` that only types a nested field: a method takes the keys of its patch as keyword-only arguments
+    defaulting to `UNCHANGED` (R18.all), never the patch itself.
     """
     found = surfaces(ctx).py
     classes = found.classes
     # A nested patch field arrives as a keyword-only argument; only a positional one passes a whole patch.
-    params = [
-        (name, p, t) for name, fn in sorted(found.callables().items()) for p, t in fn.params if p not in fn.kwonly
-    ]
+    callables = found.callables()
+    every = [(name, p, t) for name, fn in sorted(callables.items()) for p, t in fn.params]
+    params = [(name, p, t) for name, p, t in every if p not in callables[name].kwonly]
     for key, entry, role in _records(ctx):
         name = _in_tree(classes, entry, "py")
         if name is None:
@@ -1400,6 +1401,12 @@ def _rule_py_records(ctx: Context) -> Iterable[Violation]:
             yield _violation(ctx, "R7.py", "py", key, "dataclass", f"`{name}` is a result; make it a frozen dataclass")
         elif role == "input" and not _is_dataclass(cls, frozen=False):
             yield _violation(ctx, "R7.py", "py", key, "dataclass", f"`{name}` is an input; make it a dataclass")
+        read = name[: -len("Input")] if role == "input" and name.endswith("Input") else None
+        if read in classes and _is_dataclass(classes[read], frozen=False):
+            for method in sorted({m for m, _, a in every if _mentions(a, name) and not _mentions(a, read)}):
+                yield _violation(
+                    ctx, "R7.py", "py", key, f"record:{method}", f"`{method}` takes `{name}`; accept `{read}` too"
+                )
         elif role == "patch":
             if "TypedDict" not in cls.bases or cls.keywords.get("total") != "False":
                 yield _violation(

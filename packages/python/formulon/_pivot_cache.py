@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint, fm_value_t_size
 from ._status import StatusCode
-from .workbook import (
+from ._workbook import (
     UNCHANGED,
     PivotCacheField,
     PivotCacheOptions,
@@ -29,7 +29,7 @@ from .workbook import (
 )
 
 if TYPE_CHECKING:
-    from .workbook import Workbook
+    from ._workbook import Workbook
 
 __all__ = ["PivotCache"]
 
@@ -45,6 +45,9 @@ class PivotCache:
     reading :attr:`workbook` and :attr:`cache_id` raises
     :class:`NotFoundError`; a cache added again with the same id is addressed
     again. Remove a cache with :meth:`Workbook.remove_pivot_cache`.
+
+    A cache reads its record with ``get_options()`` and
+    ``get_worksheet_source()``; it has no ``get_properties()``.
     """
 
     __slots__ = ("_workbook", "_cache_id")

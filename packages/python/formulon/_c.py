@@ -259,7 +259,7 @@ class FormulonError(Exception):
     The message and context are copied out when the failure is detected, so
     they stay valid whatever later calls do.
 
-    Defined here rather than in :mod:`formulon.workbook` (which
+    Defined here rather than in :mod:`formulon._workbook` (which
     re-exports it) so the low-level export trampoline below can raise it
     directly on a trap, without importing back into the module that
     imports ``LIB`` from here.
@@ -1311,7 +1311,7 @@ LIB = _WasmInstance()
 
 
 def decode_cstr(ptr_or_bytes) -> str:
-    """Backwards-compat shim for :class:`formulon.workbook.FormulonError`.
+    """Backwards-compat shim for :class:`formulon._workbook.FormulonError`.
 
     Accepts either an int WASM pointer (decoded via :class:`LIB`) or a
     bytes object (legacy ctypes path). Returns the empty string when
