@@ -168,6 +168,14 @@ std::string Between(const std::string& text, const std::string& open, const std:
   return end == std::string::npos ? std::string() : text.substr(at, end + close.size() - at);
 }
 
+std::size_t CountOf(const std::string& text, const std::string& needle) {
+  std::size_t n = 0;
+  for (std::size_t at = text.find(needle); at != std::string::npos; at = text.find(needle, at + 1)) {
+    ++n;
+  }
+  return n;
+}
+
 std::string NoUid(const std::string& text) {
   return std::regex_replace(text, std::regex("<c16:uniqueId val=\"[^\"]*\"/>"), "<c16:uniqueId/>");
 }
@@ -1395,6 +1403,91 @@ TEST(ChartEdit, TypeChangeConvertsAxesInPlace) {
   }
 }
 
+// Type changes to and from pie in charts with style parts, as Excel makes them on charts opened from a file: pie
+// points become points in the series colour that keep their outline, new axes take outside ticks and no
+// crossing, and a series line reaches the slices less what its old type's style draws by itself.
+TEST(ChartEdit, TypeChangeWithPieFollowsExcel) {
+  const auto change = [](const char* file, K kind) {
+    Workbook wb = LoadFixture(file);
+    const Located c = Find(wb, "xl/charts/chart1.xml");
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, kind, ChartGrouping::kClustered));
+    return PartText(wb, c.path);
+  };
+  const std::string column = change("chart_pie.xlsx", K::kColumn);
+  EXPECT_NE(column.find("<c:gapWidth val=\"100\"/>"), std::string::npos) << column;
+  EXPECT_EQ(CountOf(column,
+                    "<c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill><a:schemeClr "
+                    "val=\"accent1\"/></a:solidFill><a:ln w=\"19050\"><a:solidFill><a:schemeClr val=\"lt1\"/>"),
+            4U)
+      << column;
+  EXPECT_EQ(CountOf(column, "<c:majorTickMark val=\"out\"/>"), 2U) << column;
+  EXPECT_EQ(CountOf(column, "<c:crosses "), 0U) << column;
+
+  const std::string scatter = change("chart_pie.xlsx", K::kScatter);
+  const std::string x_axis = Between(scatter, "<c:valAx>", "</c:valAx>");
+  EXPECT_EQ(CountOf(x_axis, "<c:majorGridlines>") + CountOf(x_axis, "<c:numFmt "), 0U) << x_axis;
+  EXPECT_EQ(CountOf(scatter, "<c:tickLblPos val=\"nextTo\"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln>"), 2U)
+      << scatter;
+
+  const std::string from_line = change("chart_line.xlsx", K::kPie);
+  EXPECT_EQ(CountOf(from_line, "</c:tx><c:spPr>"), 0U) << from_line;
+  EXPECT_EQ(CountOf(from_line, "<a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr></c:dPt>"), 8U) << from_line;
+  const std::string from_scatter = change("chart_scatter.xlsx", K::kPie);
+  EXPECT_EQ(CountOf(from_scatter, "</c:tx><c:spPr><a:ln w=\"25400\"><a:noFill/></a:ln></c:spPr>"), 2U) << from_scatter;
+  EXPECT_EQ(CountOf(from_scatter, "<a:ln w=\"25400\"><a:noFill/></a:ln><a:effectLst/></c:spPr></c:dPt>"), 8U)
+      << from_scatter;
+  const std::string from_area = change("chart_area.xlsx", K::kPie);
+  EXPECT_EQ(CountOf(from_area, "</c:tx><c:spPr><a:ln w=\"25400\"/></c:spPr>"), 1U) << from_area;
+}
+
+// A type change keeps a date axis over a category plot and turns it into a value axis for a scatter plot, and a
+// scatter plot over dates gets a date axis; a converted axis links to the category data's number format.
+TEST(ChartEdit, TypeChangeKeepsOrConvertsDateAxes) {
+  {
+    Workbook wb = LoadFixture("chart_cache.xlsx");
+    const Located c = Find(wb, "xl/charts/chart8.xml");
+    const std::string before = Between(PartText(wb, c.path), "<c:dateAx>", "</c:dateAx>");
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, K::kColumn, ChartGrouping::kClustered));
+    EXPECT_EQ(Between(PartText(wb, c.path), "<c:dateAx>", "</c:dateAx>"), before);
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, K::kScatter, ChartGrouping::kClustered));
+    const std::string xml = PartText(wb, c.path);
+    EXPECT_EQ(CountOf(xml, "<c:dateAx>"), 0U) << xml;
+    const std::string x_axis = Between(xml, "<c:valAx>", "</c:valAx>");
+    EXPECT_NE(x_axis.find("<c:numFmt formatCode=\"m/d/yy\" sourceLinked=\"1\"/>"), std::string::npos) << x_axis;
+    EXPECT_EQ(CountOf(x_axis, "<c:baseTimeUnit ") + CountOf(x_axis, "<c:auto "), 0U) << x_axis;
+  }
+  const auto from_scatter = [](const std::string& format, const char* x0) {
+    Workbook wb = LoadFixture("chart_scatter.xlsx");
+    const Located c = Find(wb, "xl/charts/chart1.xml");
+    std::string xml = PartText(wb, c.path);
+    const std::string cache =
+        "<c:formatCode>General</c:formatCode><c:ptCount val=\"4\"/><c:pt idx=\"0\"><c:v>1</c:v>"
+        "</c:pt><c:pt idx=\"1\"><c:v>2</c:v></c:pt><c:pt idx=\"2\"><c:v>3</c:v></c:pt>"
+        "<c:pt idx=\"3\"><c:v>5</c:v></c:pt>";
+    const std::size_t at = xml.find(cache);
+    EXPECT_NE(at, std::string::npos);
+    xml.replace(at, cache.size(),
+                "<c:formatCode>" + format + "</c:formatCode><c:ptCount val=\"4\"/><c:pt idx=\"0\"><c:v>" + x0 +
+                    "</c:v></c:pt><c:pt idx=\"1\"><c:v>45323</c:v></c:pt><c:pt idx=\"2\"><c:v>45352</c:v></c:pt>"
+                    "<c:pt idx=\"3\"><c:v>45413</c:v></c:pt>");
+    MustOk(wb.replace_passthrough_part(c.path, std::vector<std::uint8_t>(xml.begin(), xml.end())));
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, K::kLine, ChartGrouping::kStandard));
+    return PartText(wb, c.path);
+  };
+  const std::string months = from_scatter("m/d/yy", "45292");
+  const std::string axis = Between(months, "<c:dateAx>", "</c:dateAx>");
+  EXPECT_NE(axis.find("<c:numFmt formatCode=\"m/d/yy\" sourceLinked=\"1\"/>"), std::string::npos) << months;
+  EXPECT_NE(axis.find("<c:auto val=\"1\"/><c:lblOffset val=\"100\"/><c:baseTimeUnit val=\"months\"/>"),
+            std::string::npos)
+      << axis;
+  EXPECT_NE(Between(from_scatter("m/d/yy", "45295"), "<c:dateAx>", "</c:dateAx>").find("\"days\""), std::string::npos);
+  const std::string numbers = from_scatter("0.00", "45292");
+  EXPECT_EQ(CountOf(numbers, "<c:dateAx>"), 0U) << numbers;
+  EXPECT_NE(Between(numbers, "<c:catAx>", "</c:catAx>").find("<c:numFmt formatCode=\"0.00\" sourceLinked=\"1\"/>"),
+            std::string::npos)
+      << numbers;
+}
+
 // A chart's automatic colours, re-derived by a type change, come from its own colour style.
 TEST(ChartEdit, TypeChangeColoursFromTheChartsColourStyle) {
   Workbook wb = LoadFixture("chart_column.xlsx");
@@ -2005,14 +2098,6 @@ std::string ChartWithoutExtLst(const std::string& part) {
                             "</c:chart>");
 }
 
-std::size_t CountOf(const std::string& text, const std::string& needle) {
-  std::size_t n = 0;
-  for (std::size_t at = text.find(needle); at != std::string::npos; at = text.find(needle, at + 1)) {
-    ++n;
-  }
-  return n;
-}
-
 /// The chart-level `c:extLst`, empty when absent.
 std::string ChartExtLst(const std::string& part) {
   const std::string tail = part.substr(0, part.find("</c:chart>"));
@@ -2180,7 +2265,9 @@ std::string PlotForm(const std::string& part) {
   return mapped;
 }
 
-// Doughnut insert and the type changes to and from it, against the Excel-saved results.
+// Doughnut insert and pie to doughnut against the Excel-saved results. The inserted charts have no style parts,
+// so a change between doughnut and column keeps their formatting, as Excel does on such a chart opened from a file:
+// the points stay, a new bar plot takes a gap of 100 and plain axes, and series shape properties stay.
 TEST(ChartEdit, DoughnutFormsMatchExcel) {
   Workbook wb = LoadFixture("chart_doughnut.xlsx");
   EXPECT_TRUE(NoRefresh(wb));  // Excel's caches already match the cells.
@@ -2208,10 +2295,20 @@ TEST(ChartEdit, DoughnutFormsMatchExcel) {
   MustOk(set_chart_type(wb, 0, pie, 0, K::kDoughnut, ChartGrouping::kClustered));
   ExpectSameForm(made(pie), excel(4));
   MustOk(set_chart_type(wb, 0, two, 0, K::kColumn, ChartGrouping::kClustered));
-  ExpectSameForm(made(two), excel(5));
+  const std::string bars = made(two);
+  EXPECT_NE(bars.find("<c:gapWidth val=\"100\"/>"), std::string::npos) << bars;
+  EXPECT_EQ(CountOf(bars,
+                    "<c:dPt><c:idx val=\"3\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/><c:spPr>"
+                    "<a:solidFill><a:schemeClr val=\"accent4\"/>"),
+            2U)
+      << bars;
+  EXPECT_EQ(CountOf(bars, "<c:majorTickMark val=\"out\"/>"), 2U) << bars;
+  EXPECT_EQ(CountOf(bars, "<c:crosses ") + CountOf(bars, "<c:txPr>"), 0U) << bars;
   const std::uint32_t column = insert(K::kColumn, "Sheet1!$A$1:$C$5");
   MustOk(set_chart_type(wb, 0, column, 0, K::kDoughnut, ChartGrouping::kClustered));
-  ExpectSameForm(made(column), excel(6));
+  const std::string ring = made(column);
+  EXPECT_EQ(CountOf(ring, "<c:dPt>"), 0U) << ring;
+  EXPECT_EQ(CountOf(ring, "</c:tx><c:spPr><a:solidFill><a:schemeClr val=\"accent2\"/>"), 1U) << ring;
   EXPECT_TRUE(NoRefresh(wb));
 
   const ChartModel m = Must(get_chart(wb, 0, column));

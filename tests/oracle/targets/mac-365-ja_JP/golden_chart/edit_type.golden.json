@@ -10,7 +10,7 @@
  "environment": {
   "excel_version": "Microsoft Excel for Mac 16.114.4",
   "excel_locale": "",
-  "generated_at": "2026-11-08T09:47:02Z"
+  "generated_at": "2026-11-08T18:23:18Z"
  },
  "cases": [
   {
@@ -2961,7 +2961,7 @@
          "bar_dir": "col",
          "grouping": "clustered",
          "vary_colors": false,
-         "gap_width": 150,
+         "gap_width": 100,
          "overlap": null,
          "hole_size": null,
          "first_slice_angle": null,
@@ -2996,7 +2996,68 @@
            "marker": null,
            "smooth": null,
            "labels": null,
-           "points": []
+           "points": [
+            {
+             "idx": 0,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 1,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 2,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 3,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            }
+           ]
           },
           {
            "idx": 1,
@@ -3015,7 +3076,68 @@
            "marker": null,
            "smooth": null,
            "labels": null,
-           "points": []
+           "points": [
+            {
+             "idx": 0,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 1,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 2,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 3,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            }
+           ]
           }
          ]
         }
@@ -3787,7 +3909,7 @@
             "none": false,
             "color": null,
             "alpha": null,
-            "width": null,
+            "width": 25400,
             "dash": null
            },
            "marker": null,

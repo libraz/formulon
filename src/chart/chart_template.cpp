@@ -116,43 +116,6 @@ bool ieq_prefix(std::string_view s, std::size_t pos, std::string_view word) {
   return true;
 }
 
-/// True when a number format code carries date or time tokens.
-bool is_date_code(std::string_view code) {
-  for (std::size_t i = 0; i < code.size(); ++i) {
-    const char c = code[i];
-    if (c == '"') {
-      i = code.find('"', i + 1);
-      if (i == std::string_view::npos) {
-        return false;
-      }
-    } else if (c == '\\' || c == '_' || c == '*') {
-      ++i;
-    } else if (c == '[') {
-      const std::size_t end = code.find(']', i);
-      if (end == std::string_view::npos) {
-        return false;
-      }
-      const char k = static_cast<char>(code[i + 1] | 0x20);
-      bool elapsed = (k == 'h' || k == 'm' || k == 's');
-      for (std::size_t j = i + 1; elapsed && j < end; ++j) {
-        elapsed = (code[j] | 0x20) == k;
-      }
-      if (elapsed) {
-        return true;
-      }
-      i = end;
-    } else if (ieq_prefix(code, i, "general")) {
-      i += 6;
-    } else {
-      const char k = static_cast<char>(c | 0x20);
-      if (k == 'y' || k == 'm' || k == 'd' || k == 'h' || k == 's') {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 /// Source rectangle on one sheet, read through a class lookup.
 struct Grid {
   const Workbook* wb = nullptr;
@@ -177,7 +140,7 @@ struct Grid {
     const std::uint32_t xf = select_effective_xf(*sheet, row, col).xf_index;
     auto it = date_xf.find(xf);
     if (it == date_xf.end()) {
-      it = date_xf.emplace(xf, is_date_code(effective_style(*wb, *sheet, row, col).num_fmt_code)).first;
+      it = date_xf.emplace(xf, chart_is_date_format(effective_style(*wb, *sheet, row, col).num_fmt_code)).first;
     }
     return it->second ? Cls::kDate : Cls::kNumber;
   }
@@ -390,6 +353,42 @@ std::uint64_t point_count(const std::string& formula) {
 }
 
 }  // namespace
+
+bool chart_is_date_format(std::string_view code) {
+  for (std::size_t i = 0; i < code.size(); ++i) {
+    const char c = code[i];
+    if (c == '"') {
+      i = code.find('"', i + 1);
+      if (i == std::string_view::npos) {
+        return false;
+      }
+    } else if (c == '\\' || c == '_' || c == '*') {
+      ++i;
+    } else if (c == '[') {
+      const std::size_t end = code.find(']', i);
+      if (end == std::string_view::npos) {
+        return false;
+      }
+      const char k = static_cast<char>(code[i + 1] | 0x20);
+      bool elapsed = (k == 'h' || k == 'm' || k == 's');
+      for (std::size_t j = i + 1; elapsed && j < end; ++j) {
+        elapsed = (code[j] | 0x20) == k;
+      }
+      if (elapsed) {
+        return true;
+      }
+      i = end;
+    } else if (ieq_prefix(code, i, "general")) {
+      i += 6;
+    } else {
+      const char k = static_cast<char>(c | 0x20);
+      if (k == 'y' || k == 'm' || k == 'd' || k == 'h' || k == 's') {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 void append_grey_ln(std::string& x, int lum) {
   x += "<a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"";

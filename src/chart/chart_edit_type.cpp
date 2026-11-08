@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <initializer_list>
 #include <set>
 #include <string>
@@ -19,6 +20,7 @@
 #include "io/ooxml/part_dom.h"
 #include "io/xml_utils.h"
 #include "sheet.h"
+#include "utils/date_time.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -184,6 +186,53 @@ void carry_series_line(const xml_node& from, xml_node to, int old_kind, int new_
   }
 }
 
+/// Gives pie or doughnut series `to` and its points the outline Excel derives from bar, area, line or scatter series
+/// `from` in a chart with style parts: `from`'s line less what the old type's style sets (a hidden outline; the
+/// automatic line's width, cap, join and colour), on the series when anything is left, and on every point, hidden
+/// when it states no fill.
+void ring_outline(const xml_node& from, xml_node to, Family before, const Palette& palette) {
+  const xml_node src = child_local(child_local(from, "spPr"), "ln");
+  if (!src) {
+    return;
+  }
+  pugi::xml_document doc;
+  xml_node ln = doc.append_copy(src);
+  if (before == Family::kFill) {
+    drop(ln, "noFill");
+  } else {
+    const std::string_view width = before == Family::kLine ? kAutoLineWidth : std::string_view("19050");
+    if (std::string_view(ln.attribute("w").value()) == width) {
+      ln.remove_attribute("w");
+    }
+    if (std::string_view(ln.attribute("cap").value()) == "rnd") {
+      ln.remove_attribute("cap");
+    }
+    drop(ln, "round");
+    pugi::xml_document frag;
+    const xml_node automatic =
+        fragment(frag, "<a:solidFill>" + chart_cycle_color(palette.colors.document_element(), val_u(from, "idx")) +
+                           "</a:solidFill>");
+    const xml_node colour = child_local(ln, "solidFill");
+    if (colour && automatic && same_tree(colour, automatic)) {
+      ln.remove_child(colour);
+    }
+  }
+  drop(to, "spPr");
+  if (ln.first_attribute() || io::first_element_child(ln)) {
+    ensure(to, "c:spPr", kSerOrder).append_copy(ln);
+  }
+  bool filled = false;
+  for (const char* f : {"noFill", "solidFill", "gradFill", "pattFill"}) {
+    filled = filled || child_local(ln, f);
+  }
+  if (!filled) {
+    ln.prepend_child("a:noFill");
+  }
+  for (const xml_node& d : children_local(to, "dPt")) {
+    replace_ln(child_local(d, "spPr"), ln);
+  }
+}
+
 /// Carries `from`'s points to `to` as Excel changes type: a line or scatter point takes the series' marker and
 /// line; a bar or area point keeps its shape properties, or from a line or scatter plot takes the series fill
 /// and keeps its own line.
@@ -228,11 +277,9 @@ void convert_points(const xml_node& from, xml_node to, Family old_family, Family
   }
 }
 
-/// Hides the line of scatter shape properties `sp` as Excel does in a chart without style parts: 2 pt wide when it
-/// was a visible line with a width, 3 pt otherwise.
-void hide_scatter_line(xml_node sp) {
-  const xml_node old = child_local(sp, "ln");
-  const bool sized = old && !child_local(old, "noFill") && old.attribute("w");
+/// Hides the line of scatter shape properties `sp` as Excel does in a chart without style parts: 2 pt wide when the
+/// line was visible with a width (for a point, its own and the series line both), 3 pt otherwise.
+void hide_scatter_line(xml_node sp, bool sized) {
   drop(sp, "ln");
   xml_node ln = ensure(sp, "a:ln", kShapeOrder);
   ln.append_attribute("w").set_value(sized ? "25400" : "38100");
@@ -240,30 +287,32 @@ void hide_scatter_line(xml_node sp) {
 }
 
 /// Carries `from`'s formatting to `to` as Excel changes type in a chart without style parts: the shape properties
-/// of the series and its points stay as they are, except that a line series loses a hidden line (and shape
-/// properties left with neither a line nor effects) and takes no markers, and a scatter series hides its lines
-/// and keeps only a shown marker.
+/// of the series and its points stay as they are, except that a line series without a visible series line loses
+/// every line (and series shape properties left with neither a line nor effects) and takes no markers, and a
+/// scatter series hides its lines and keeps only a shown marker.
 void carry_unstyled(const xml_node& from, xml_node to, Family after, bool bar) {
   drop(to, "spPr");
   drop(to, "dPt");
   if (after != Family::kLine) {
     drop(to, "marker");
   }
+  const xml_node series_ln = child_local(child_local(from, "spPr"), "ln");
+  const bool shown = series_ln && !child_local(series_ln, "noFill");
+  const bool sized = shown && series_ln.attribute("w");
   if (const xml_node sp = child_local(from, "spPr")) {
     copy_at(to, sp, kSerOrder);
   }
   if (after == Family::kLine) {
     if (xml_node sp = child_local(to, "spPr")) {
-      const xml_node ln = child_local(sp, "ln");
-      if (ln && child_local(ln, "noFill")) {
-        sp.remove_child(ln);
+      if (!shown) {
+        drop(sp, "ln");
       }
       if (!child_local(sp, "ln") && !child_local(sp, "effectLst")) {
         to.remove_child(sp);
       }
     }
   } else if (after == Family::kMarker) {
-    hide_scatter_line(ensure(to, "c:spPr", kSerOrder));
+    hide_scatter_line(ensure(to, "c:spPr", kSerOrder), sized);
     const xml_node m = child_local(from, "marker");
     if (m && std::string_view(child_local(m, "symbol").attribute("val").value()) != "none") {
       xml_node out = copy_at(to, m, kSerOrder);
@@ -280,7 +329,7 @@ void carry_unstyled(const xml_node& from, xml_node to, Family after, bool bar) {
     xml_node p = fragment(frag, data_point_open(idx) +
                                     (bar ? "<c:invertIfNegative val=\"" + invert_val + "\"/>" : std::string()) +
                                     "<c:bubble3D val=\"0\"/></c:dPt>");
-    if (after != Family::kFill) {
+    if (after == Family::kLine || after == Family::kMarker) {
       if (const xml_node marker = child_local(d, "marker")) {
         copy_at(p, marker, kPointOrder);
       }
@@ -288,7 +337,10 @@ void carry_unstyled(const xml_node& from, xml_node to, Family after, bool bar) {
     if (const xml_node sp = child_local(d, "spPr")) {
       xml_node out = copy_at(p, sp, kPointOrder);
       if (after == Family::kMarker) {
-        hide_scatter_line(out);
+        const xml_node own = child_local(sp, "ln");
+        hide_scatter_line(out, sized && own && !child_local(own, "noFill") && own.attribute("w"));
+      } else if (after == Family::kLine && !shown) {
+        drop(out, "ln");
       }
     }
     if (const xml_node ext = child_local(d, "extLst")) {
@@ -298,19 +350,48 @@ void carry_unstyled(const xml_node& from, xml_node to, Family after, bool bar) {
   }
 }
 
-/// Turns category axis `ax` into a value axis or back, as Excel changes type, keeping its identity, scaling
+/// The number format code of `ser`'s category data, as an axis linked to it shows: the cache's, General for text.
+std::string category_format(const xml_node& ser) {
+  const xml_node code = child_local(child_local(child_local(category_input(ser), "numRef"), "numCache"), "formatCode");
+  const std::string text = code.child_value();
+  return text.empty() ? "General" : text;
+}
+
+/// The base unit Excel gives a date axis over `ser`'s categories: years when every date is a 1 January, months when
+/// every date is a first of the month, days otherwise.
+const char* base_time_unit(const xml_node& ser, bool date1904) {
+  bool months = true;
+  bool years = true;
+  bool any = false;
+  const xml_node cache = child_local(child_local(category_input(ser), "numRef"), "numCache");
+  for (const xml_node& pt : children_local(cache, "pt")) {
+    const date_time::YMD d = date_time::ymd_from_serial(std::floor(child_local(pt, "v").text().as_double()), date1904);
+    months = months && d.d == 1U;
+    years = years && d.d == 1U && d.m == 1U;
+    any = true;
+  }
+  return !any ? "days" : years ? "years" : months ? "months" : "days";
+}
+
+/// Turns category or date axis `ax` into a value axis or back, as Excel changes type, keeping its identity, scaling
 /// direction, gridlines, title, ticks and formatting. Label and mark intervals become the major and minor units; a
-/// value axis loses its units, display units and bounds, and its log base too on a bar plot. The number format
-/// and the category settings are `tmpl`'s, except that the axis is not multi-level.
-void convert_axis(xml_node ax, const xml_node& tmpl, bool bar) {
+/// date axis keeps its units and loses its time units and bounds; a value axis loses its units, display units and
+/// bounds, and its log base too on a bar plot. A value axis becomes a date axis with base unit `time_unit` when that
+/// is set, else a category axis that is not multi-level, taking `tmpl`'s category settings. The number format links
+/// to the category data, of format `format`.
+void convert_axis(xml_node ax, const xml_node& tmpl, bool bar, const std::string& format, const char* time_unit) {
   const std::string name = ax.name();
   const std::string prefix = name.substr(0, name.find(':') + 1);
   if (local_name(tmpl) == "valAx") {
     const std::string major = child_local(ax, "tickLblSkip").attribute("val").value();
     const std::string minor = child_local(ax, "tickMarkSkip").attribute("val").value();
-    for (const char* e : {"auto", "lblAlgn", "lblOffset", "tickLblSkip", "tickMarkSkip", "noMultiLvlLbl"}) {
+    for (const char* e : {"auto", "lblAlgn", "lblOffset", "baseTimeUnit", "majorTimeUnit", "minorTimeUnit",
+                          "tickLblSkip", "tickMarkSkip", "noMultiLvlLbl"}) {
       drop(ax, e);
     }
+    xml_node scaling = child_local(ax, "scaling");
+    drop(scaling, "max");
+    drop(scaling, "min");
     ax.set_name((prefix + "valAx").c_str());
     if (!major.empty()) {
       put_val(ax, "c:majorUnit", kAxisOrder, major);
@@ -328,18 +409,23 @@ void convert_axis(xml_node ax, const xml_node& tmpl, bool bar) {
     if (bar) {
       drop(scaling, "logBase");
     }
-    ax.set_name((prefix + "catAx").c_str());
+    ax.set_name((prefix + (time_unit != nullptr ? "dateAx" : "catAx")).c_str());
     for (const char* e : {"auto", "lblAlgn", "lblOffset"}) {
-      if (const xml_node v = child_local(tmpl, e)) {
+      const xml_node v = child_local(tmpl, e);
+      if (v && (time_unit == nullptr || std::string_view(e) != "lblAlgn")) {
         put_val(ax, (std::string("c:") + e).c_str(), kAxisOrder, v.attribute("val").value());
       }
     }
-    put_val(ax, "c:noMultiLvlLbl", kAxisOrder, "1");
+    if (time_unit != nullptr) {
+      put_val(ax, "c:baseTimeUnit", kAxisOrder, time_unit);
+    } else {
+      put_val(ax, "c:noMultiLvlLbl", kAxisOrder, "1");
+    }
   }
   drop(ax, "numFmt");
-  if (const xml_node fmt = child_local(tmpl, "numFmt")) {
-    copy_at(ax, fmt, kAxisOrder);
-  }
+  xml_node fmt = ensure(ax, "c:numFmt", kAxisOrder);
+  fmt.append_attribute("formatCode").set_value(format.c_str());
+  fmt.append_attribute("sourceLinked").set_value("1");
 }
 
 }  // namespace
@@ -456,7 +542,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     if (k == static_cast<int>(ChartInsertKind::kLine) && old == static_cast<int>(ChartInsertKind::kArea)) {
       put_val(to, "c:smooth", kSerOrder, "1");
     }
-    if (!palette.styled && !old_ring && !new_ring) {
+    if (!palette.styled && !(old_ring && new_ring)) {
       carry_unstyled(from, to, family_of(k), is_bar(tplot));
       continue;
     }
@@ -475,13 +561,14 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
       for (const xml_node& d : children_local(from, "dPt")) {
         copy_at(to, d, kSerOrder);
       }
-    } else if (old_ring && family_of(k) == Family::kFill) {
-      replace_ln(child_local(to, "spPr"), child_local(child_local(child_local(from, "dPt"), "spPr"), "ln"));
-    } else if (family_of(old) == Family::kFill && new_ring) {
-      for (const xml_node& d : children_local(to, "dPt")) {
-        replace_ln(child_local(d, "spPr"), child_local(child_local(from, "spPr"), "ln"));
+    } else if (old_ring) {
+      if (family_of(k) == Family::kFill) {
+        replace_ln(child_local(to, "spPr"), child_local(child_local(child_local(from, "dPt"), "spPr"), "ln"));
       }
-    } else if (!old_ring && !new_ring) {
+      convert_points(from, to, Family::kNone, family_of(k), is_bar(tplot));
+    } else if (new_ring) {
+      ring_outline(from, to, family_of(old), palette);
+    } else {
       convert_points(from, to, family_of(old), family_of(k), is_bar(tplot));
     }
   }
@@ -496,14 +583,19 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   }
   bool same = old_axes.size() == new_axes.size() && !old_axes.empty();
   for (std::size_t i = 0; same && i < old_axes.size(); ++i) {
-    same = local_name(old_axes[i]) == "catAx" || local_name(old_axes[i]) == "valAx";
+    const std::string_view name = local_name(old_axes[i]);
+    same = name == "catAx" || name == "valAx" || name == "dateAx";
   }
   xml_node area = c.area();
   std::vector<std::uint32_t> new_ids;
   if (same) {
+    const std::string format = sers.empty() ? std::string("General") : category_format(sers[0]);
+    // A value axis over dates becomes a date axis, as Excel judges the category data.
+    const char* time_unit =
+        chart_is_date_format(format) ? base_time_unit(sers[0], flag(child_local(c.root(), "date1904"))) : nullptr;
     for (std::size_t i = 0; i < old_axes.size(); ++i) {
-      if (local_name(old_axes[i]) != local_name(new_axes[i])) {
-        convert_axis(old_axes[i], new_axes[i], is_bar(tplot));
+      if ((local_name(old_axes[i]) == "valAx") != (local_name(new_axes[i]) == "valAx")) {
+        convert_axis(old_axes[i], new_axes[i], is_bar(tplot), format, time_unit);
       } else {
         // A linked value-axis format follows the grouping, as Excel re-derives it: 0% for percent-stacked.
         xml_node fmt = child_local(old_axes[i], "numFmt");
@@ -547,20 +639,49 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
       const std::string_view name = local_name(n);
       before = name == "dTable" || name == "spPr" || name == "extLst" ? n : xml_node();
     }
-    for (std::size_t i = 0; i < new_axes.size(); ++i) {
+    // As Excel changes type from pie or doughnut: new axes take outside ticks and the default crossing, a bar
+    // plot lists its value axis first, a scatter plot's axes have no outline and its horizontal axis no gridlines
+    // or number format, and a chart without style parts leaves them unformatted.
+    const bool horizontal = std::string_view(child_local(tplot, "barDir").attribute("val").value()) == "bar";
+    std::vector<xml_node> made(new_axes.size());
+    for (std::size_t n = 0; n < new_axes.size(); ++n) {
+      const std::size_t i = old_ring && horizontal ? new_axes.size() - 1 - n : n;
       xml_node a = before ? area.insert_copy_before(new_axes[i], before) : area.append_copy(new_axes[i]);
       put_val(a, "c:axId", kAxisOrder, std::to_string(new_ids[i]));
       put_val(a, "c:crossAx", kAxisOrder, std::to_string(new_ids[1 - i]));
+      made[i] = a;
+    }
+    for (std::size_t i = 0; old_ring && i < made.size(); ++i) {
+      xml_node a = made[i];
+      put_val(a, "c:majorTickMark", kAxisOrder, "out");
+      drop(a, "crosses");
+      if (scatter) {
+        if (i == 0) {
+          drop(a, "majorGridlines");
+          drop(a, "numFmt");
+        }
+        if (xml_node sp = child_local(a, "spPr")) {
+          pugi::xml_document frag;
+          replace_ln(sp, fragment(frag, "<a:ln><a:noFill/></a:ln>"));
+        }
+      }
+      if (!palette.styled) {
+        drop(a, "spPr");
+        drop(a, "txPr");
+        drop(child_local(a, "majorGridlines"), "spPr");
+      }
     }
   }
   const std::vector<xml_node> axis_refs = children_local(tplot, "axId");
   for (std::size_t i = 0; i < axis_refs.size() && i < new_ids.size(); ++i) {
     io::set_attr(axis_refs[i], "val", std::to_string(new_ids[i]));
   }
-  // As Excel changes type: a new bar plot takes the schema default gap; a bar plot keeps its own.
+  // As Excel changes type: a new bar plot takes the schema default gap, 100 from pie or doughnut; a bar plot keeps
+  // its own.
   if (is_bar(tplot)) {
     const xml_node gap = child_local(plot, "gapWidth");
-    put_val(tplot, "c:gapWidth", kPlotOrder, is_bar(plot) && gap ? gap.attribute("val").value() : "150");
+    const char* fresh_gap = old_ring ? "100" : "150";
+    put_val(tplot, "c:gapWidth", kPlotOrder, is_bar(plot) && gap ? gap.attribute("val").value() : fresh_gap);
   }
   if (old_ring && new_ring && child_local(plot, "firstSliceAng")) {
     put_val(tplot, "c:firstSliceAng", kPlotOrder, child_local(plot, "firstSliceAng").attribute("val").value());

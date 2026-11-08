@@ -2567,10 +2567,12 @@ order.
   does; previously an RGB colour was carried to the scatter markers.
 - A chart without chart style parts, as `addChart` creates and as many
   non-Excel writers save, keeps its series and point formatting through a
-  type change, as Excel does for such a chart: a line plot drops hidden lines
-  and shows no markers, and a scatter plot hides every line (2 pt wide when a
-  visible line had a width, 3 pt otherwise) and keeps only shown markers.
-  Previously such a chart was restyled as a chart with style parts is.
+  type change, pie and doughnut included, as Excel does for such a chart: a
+  line plot drops every line when the series line is hidden and shows no
+  markers, and a scatter plot hides every line (2 pt wide when the series
+  line, and for a point its own line too, was visible with a width, 3 pt
+  otherwise) and keeps only shown markers. Previously such a chart was
+  restyled as a chart with style parts is.
 - A chart type change between category and value axes (scatter to or from
   column, bar, line or area) converts the existing axes in place, as Excel
   does, instead of replacing them with new default axes: each axis keeps its
@@ -2578,8 +2580,20 @@ order.
   its bounds and units. A category axis's label and mark intervals become the
   major and minor units of the value axis; an axis turned into a category
   axis drops its bounds and units (its log base too on a bar plot) and is not
-  multi-level. Every type change drops a category axis's label and mark
-  intervals, as Excel does.
+  multi-level. A converted axis links its number format to the category data
+  (General for text). A date axis stays as it is over a column, bar, line or
+  area plot and becomes a value axis, keeping its units and dropping its time
+  units and bounds, over a scatter plot; a scatter plot whose X values are
+  dates becomes a plot over a date axis whose base unit is years, months or
+  days as the dates fall. Every type change drops a category axis's label and
+  mark intervals, as Excel does.
+- A chart type change to or from pie or doughnut follows Excel's: pie points
+  become points in the series colour that keep their outline; a series line
+  reaches the slices less what the old type's style draws by default; new
+  axes have outside tick marks and the default crossing (a bar chart lists
+  its value axis first, and a scatter chart's axes have no outline and its
+  horizontal axis no gridlines or number format); and a new bar plot takes a
+  gap width of 100.
 - A shape fill or outline colour is no longer dropped silently: given without
   its kind it fails with a `TypeError` in JavaScript and Python, and given with
   a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.
