@@ -256,6 +256,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine functions that used it (`get_version`, `get_status_name`,
   `set_log_min_level`) are module-level functions of `formulon`.
 
+- **C ABI:** every input and output record starts with `uint32_t struct_size`.
+  Set it with `FM_STRUCT_INIT(T)` (`{.struct_size = sizeof(T)}` in C,
+  `fm_struct_init<T>()` in C++) before passing the record; a size below the
+  layout of the record in this release returns `FM_STATUS_INVALID_ARGUMENT`,
+  and a larger size is read as far as the library knows. From 1.0 a record
+  gains fields only at its end. Value types (`fm_cell_rect_t`, `fm_value_t`,
+  `fm_color_spec_t`, the style records and the chart parts) are frozen.
+  `FM_CHECK_VERSION()` compares the header version with the library's.
+- **C ABI:** colours share one record. `fm_color_spec_t` (`kind`, `rgb`,
+  `theme`, `tint`, `indexed`) replaces `fm_cf_color_t` and the `*_argb`
+  fields of the chart fill, line and label font records and of the shape
+  record. Before, a record held an `*_argb` integer beside a theme index;
+  after, one `fm_color_spec_t` field holds either. The shape fields are
+  `fill_color` and `line_color`, and a shape paint reads back as opaque ARGB.
+  A caller compiled against an earlier header must be recompiled.
+- **C ABI:** the text-comparison functions take the collation strength before
+  the profile id. `fm_compare_text(a, b, profile_id, strength, out_order)`
+  is `fm_compare_text(a, b, strength, profile_id, out_order)`, and
+  `fm_get_collation_classes(values, count, profile_id, strength, ...)` is
+  `fm_get_collation_classes(values, count, strength, profile_id, ...)`. Both
+  take `const char*` and `int32_t`, so a stale call compiles and passes the
+  wrong arguments.
+- **C ABI:** the three CLI-only statuses `kCliInvalidArgs` (7005),
+  `kCliFileNotFound` (7006) and `kCliOutputFailed` (7007) are removed from the
+  engine's status range, and the numbers stay unused. They are internal to the
+  command line now.
+- **C ABI:** formula entry fails with a parser status (1000 to 1014) instead
+  of a generic invalid-argument status, and `fm_get_last_parse_error` returns
+  the code, the UTF-16 start and end, and the line and column. Reading a value
+  recalculates first when the calculation mode is automatic, so a value read
+  can return the `FM_STATUS_GRAPH_*` recalculation statuses. The values of the
+  CF rule, operator, time-period and value-object fields, the validation type
+  and operator and the icon set have typed enums; the fields keep their
+  integer types. `fm_workbook_get_profile_id` and `fm_workbook_set_profile_id`
+  replace the `*_excel_profile_id` functions.
+- **C ABI:** every function that returns a pointer states how long it stays
+  valid: static (the process), transient (until the next `fm_*` call on the
+  same thread or the next call on the same handle) or owned (until the named
+  destroy function). Code that kept a transient pointer across calls was
+  already wrong; the header now says so per function.
+- **JavaScript:** `getValue`, `getValues`, `listCells`, `getCellsInRange`,
+  `iterRows` and `evaluateFormula` return native values: `null`, a number, a
+  boolean, a string, an `ExcelError` or a 2-D array. The tagged `Value` comes
+  from `getTypedValue`, `getTypedValues`, `evaluateTypedFormula` and
+  `evaluateTypedFormulaArray`. `toNative` is only needed on a `Value` you
+  already hold.
+- **JavaScript:** the part-level members (`addCellXf`, `listCellXfs`,
+  `getAutoFilterXml` and the others in the migration table) live on
+  `wb.ooxml` and `ws.ooxml`. A colour in or out is `{ kind, rgb, theme, tint,
+  indexed }`, or a `'#RRGGBB'` string on input; the `*Argb`, `fgArgb` and
+  `bgArgb` keys are gone, and `Shape.update` takes `fillColor` and `lineColor`
+  in place of `fillRgb` and `lineRgb`. A formula that does not parse throws
+  `FormulonError` with `parseError` (`code`, `start`, `end`, `line`,
+  `column`). `getExcelProfileId` / `setExcelProfileId` are `getProfileId` /
+  `setProfileId`. `parseReference` throws `ParserInvalidReference` instead of
+  returning `null`. A call on a disposed workbook reports the closed handle
+  before it validates its arguments.
+- **JavaScript:** `setValue` and `setValues` read a string that starts with
+  `=` as a formula, with the failure of `setFormula`; `'='` alone is a syntax
+  error. Enter untrusted text with `setText`, which always stores text.
+- **Python:** the part-level members move to `wb.ooxml` and `ws.ooxml`
+  (`get_font`, `list_fonts`, `add_cell_xf`, `get_auto_filter_xml` and the
+  others), and the `style_xf` field of the column and row layout records is
+  read with `ws.ooxml.get_column_style` and `get_row_style`. `ws["A1"]`,
+  `ws[row, col]` and `ws["A1:B2"]` read and write native values (the range
+  form is a list of rows); `get_value` and `get_values` agree with them, and
+  `get_typed_value` / `get_typed_values` return `Value`. `evaluate_formula`
+  returns the whole array result. A string that starts with `=` is a formula;
+  use `set_text` for untrusted text.
+- **Python:** colours are `Color` or `"#RRGGBB"` / `"#AARRGGBB"` text; the
+  `*_argb` fields, `CfColor`, and the shape fields `fill_rgb` / `line_rgb`
+  (now `fill_color` / `line_color`) are removed. `Cell` is `RangeCell`,
+  `ExcelProfileId` is `ProfileId`, and `get_excel_profile_id` /
+  `set_excel_profile_id` are `get_profile_id` / `set_profile_id`. A formula
+  that does not parse raises `FormulaSyntaxError` (a `FormulonError` with the
+  parse position); `parse_reference` raises it instead of returning `None`.
+  `save` picks `.xlsx` or `.xlsb` from the file extension and refuses any
+  other extension unless `format=` is given. Python 3.9 is no longer
+  supported; the package requires 3.10 or later.
+- **Command line:** a formula syntax error exits with status 65. `eval -`
+  reads the formula from standard input, and `recalc -o` takes the file format
+  from the output extension.
+- **Behaviour:** a conditional formatting rule whose id is already in use gets
+  a fresh id instead of being refused. A JavaScript `Date` written to a
+  General cell gets the date format `m/d/yyyy` (id 14) at UTC midnight and
+  `m/d/yyyy h:mm` (id 22) otherwise; a Python `date` takes 14, a `datetime`
+  22 and a `time` `h:mm:ss` (21).
+
 ### Sheet handles
 
 A sheet-scoped call moves from the workbook onto a `Sheet` handle, and the
@@ -1919,6 +2007,35 @@ order.
 
 ### Added
 
+- `fm_get_last_parse_error` (`FormulonError.parseError`,
+  `FormulaSyntaxError.parse_error`) reports where a formula failed to parse:
+  a `ParseErrorCode` (eight codes added for formula entry: argument count,
+  reference required, qualified built-in, refused whitespace,
+  parameter-shaped name, leading `==`, byte order mark and invalid structured
+  reference), UTF-16 start and end offsets, line and column. The same error
+  carries the parser statuses 1000 to 1014.
+- `fm_sheet_get_tab_color` / `fm_sheet_set_tab_color` (`getTabColor` /
+  `setTabColor`, `get_tab_color` / `set_tab_color`); `null` / `None` clears
+  the colour.
+- `getTypedValue`, `getTypedValues`, `getDate`, `getUsedRange`, `iterRows`,
+  `evaluateTypedFormula`, `evaluateTypedFormulaArray`, `enumName` and the
+  `ExcelError` class in JavaScript; `get_typed_value`, `get_typed_values`,
+  `get_date`, `get_used_range`, `iter_rows`, `list_cells`, `set_values`,
+  `evaluate_typed_formula` and `enum_name` in Python. A `Workbook` iterates
+  its sheets, `Workbook.load` accepts an `ArrayBuffer` or typed array, and
+  `getMemoryUsage` is on the WebAssembly package as on the native one.
+- Enum tables for `CfRuleType`, `CfOperator`, `CfTimePeriod`,
+  `CfValueObjectType`, `IconSetName`, `ValidationType`, `ValidationOperator`
+  and `ParseErrorCode`.
+- Record fields that hold a cell or a range accept A1 text (`'B2'`,
+  `'A1:C3'`) in JavaScript and Python, including `PivotInput.anchor`,
+  validation and conditional-format ranges. An extra positional argument
+  throws `TypeError` (`<Class>.<method> takes at most N arguments`).
+- `fm_get_image_info` reads picture properties from bytes without a workbook.
+- `GROUPBY` and `PIVOTBY` accept `total_depth` beyond plus or minus 2 (nested
+  subtotals for every key prefix), and `relative_to` follows the parent key
+  prefix at any depth.
+
 - Pictures and charts are written to `.xlsb` and read back as model drawings,
   so `listDrawingObjects` and `getChart` work after an XLSB round trip. A
   drawing holding other graphic frames (slicers, SmartArt) is not written and
@@ -2090,6 +2207,22 @@ order.
 - `make npm-typecheck` type-checks the README examples and the public
   declarations with TypeScript.
 
+### Removed
+
+- `fm_cf_color_t` and the `*_argb` fields of the chart and shape records
+  (see `fm_color_spec_t` under BREAKING), `CfColor`, the `*Argb` keys of
+  JavaScript colour patches, `fillRgb` / `lineRgb`, and `EvalArray`.
+- `kCliInvalidArgs`, `kCliFileNotFound` and `kCliOutputFailed` (7005 to 7007).
+- `fm_workbook_evaluate_formula_array_cell`: `fm_sheet_evaluate_formula_array`
+  returns an owned `fm_value_array_t` read with `fm_value_array_get_value_at`.
+- `fm_sheet_set_tab_hidden`, `fm_workbook_set_defined_name_scoped`,
+  `fm_workbook_set_iterative_enabled`, `fm_sheet_set_fit_to_page` and
+  `fm_sheet_set_thread_resolved`; the replacements are in the table under
+  [C ABI changes](#c-abi-changes).
+- `fm_workbook_probe_image`: use `fm_get_image_info`, which takes no workbook.
+- The former names of the renamed C functions (the `removed` rows of the
+  migration table), with no aliases.
+
 ### Changed
 
 - `fm_get_function_metadata` (`getFunctionMetadata`, `function_metadata`) reports the
@@ -2143,6 +2276,50 @@ order.
 - `fm_sheet_update_protected_range` leaves the stored ranges alone when
   `ranges` is `NULL` and `range_count` is 0, so a read-modify-write does not
   lose a range the engine cannot parse.
+
+- The record-taking C functions accept the new record layouts and
+  `size_t` indexes; each line below is a break for a stale caller.
+  `fm_sheet_add_hyperlink`, `fm_sheet_add_validation`,
+  `fm_sheet_add_merge`, `fm_sheet_remove_merge` and `fm_workbook_add_person`
+  take their records as `const` pointers and under renamed types
+  (`fm_hyperlink_t`, `fm_data_validation_t`, `fm_cell_rect_t`,
+  `fm_person_t`); `fm_sheet_add_threaded_comment` takes `fm_threaded_comment_t`.
+  `fm_sheet_get_auto_filter` and `fm_sheet_set_auto_filter` use
+  `fm_auto_filter_t`, `fm_sheet_get_effective_style` uses
+  `fm_effective_style_t`, `fm_sheet_get_format_defaults` and
+  `fm_sheet_set_format_defaults` use `fm_sheet_format_defaults_t`,
+  `fm_sheet_validate_value` uses `fm_validation_outcome_t`,
+  `fm_workbook_recalc_parallel` uses `fm_parallel_recalc_stats_t`,
+  `fm_workbook_get_theme_colors` / `fm_workbook_set_theme_colors` use
+  `fm_theme_colors_t`, and `fm_workbook_get_theme_fonts` /
+  `fm_workbook_set_theme_fonts` use `fm_theme_fonts_t`.
+  `fm_workbook_resolve_color` takes a `const fm_color_spec_t*`.
+- The sheet-scoped list and edit functions take `size_t sheet_index` and
+  `size_t` positions: `fm_sheet_clear_hyperlinks`, `fm_sheet_clear_merges`,
+  `fm_sheet_clear_validations`, `fm_sheet_get_hyperlink_at`,
+  `fm_sheet_get_hyperlink_count`, `fm_sheet_get_merge_at`,
+  `fm_sheet_get_merge_count`, `fm_sheet_get_validation_count`,
+  `fm_sheet_remove_hyperlink`, `fm_sheet_remove_hyperlink_at`,
+  `fm_sheet_remove_merge_at`, and the sheet operations
+  `fm_workbook_move_sheet`, `fm_workbook_remove_sheet` and
+  `fm_workbook_rename_sheet`. The count getters write through
+  `size_t* out_count`.
+- `fm_sheet_get_image` takes `int32_t* out_present` before its outputs. A
+  cell with no picture is `FM_STATUS_OK` with `*out_present = 0`; it was
+  `FM_STATUS_INVALID_ARGUMENT`.
+- `fm_sheet_get_print_area` and `fm_sheet_set_print_area` read and take
+  `fm_cell_rect_t` ranges with a count instead of A1 text.
+- Python: the package runs one WebAssembly instance per process, so calls are
+  serialised and memory it grew is not returned. The Python README lists the
+  limits.
+- `GROUPBY` and `PIVOTBY` with `total_depth` of 2 or more over a single key
+  column return `#VALUE!`. `TEXTBEFORE` and `TEXTAFTER` return `#N/A` on a
+  miss when `if_not_found` is omitted (they returned `0`). A union that holds
+  a 3-D reference is `#NAME?`, and a union of areas on different sheets is
+  `#VALUE!`. A list validation whose source is a range compares the proposed
+  number exactly, so `0.1+0.2` matches its own list entry.
+- The threads WebAssembly build skips Binaryen's memory packing: raw size
+  grows by 19 KB and the Brotli size shrinks by 1.5 KB.
 
 ### Fixed
 

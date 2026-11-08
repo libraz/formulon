@@ -1,28 +1,34 @@
 # @libraz/formulon-native
 
-[![npm: @libraz/formulon](https://img.shields.io/npm/v/@libraz/formulon?label=%40libraz%2Fformulon)](https://www.npmjs.com/package/@libraz/formulon)
-[![PyPI](https://img.shields.io/pypi/v/formulon)](https://pypi.org/project/formulon/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
+
+> **Not published.** This package is not on npm and has no release page. Build it from a source checkout ([Installation](#installation)); the packages `@libraz/formulon` (npm) and `formulon` (PyPI) are the published ones.
 
 **Recalculate Excel workbooks and formulas from Node on a native addon, with results checked against real Excel 365.**
 The addon is built directly against the engine's static archive and exposes the `Workbook` surface of the WebAssembly package `@libraz/formulon`, without the V8 WebAssembly runtime.
 
 📖 **[Documentation](https://formulon.libraz.net)** &nbsp;·&nbsp; **[API](https://formulon.libraz.net/api/wasm)** &nbsp;·&nbsp; **[Package surfaces](https://formulon.libraz.net/api/surfaces)**
 
-> This package is not distributed on npm; build it from the repository ([Build from source](#build-from-source)). The badges above track the sibling WebAssembly and Python packages, which are published.
-
 ## What's inside
 
 - **Multithreaded recalc** — pthreads are wired in by default through the engine's parallel scheduler.
 - **No V8 / WASM heap copies** — `load` and `save`, the most expensive operations on large workbooks, marshal straight to the engine.
 - **Larger workbooks** — not bound by the WASM package's 2 GiB growth ceiling.
-- **Same surface** — the declarations and the native class table register 427 instance methods plus the four static factories. Of those instance methods, 426 are shared with WASM; zero remain WASM-only, and `getMemoryUsage()` is the one native-only helper. [Package surfaces](https://formulon.libraz.net/api/surfaces)
+- **Same surface** — the declarations and the native class table register 429 instance methods plus the four static factories. Of those instance methods, 429 are shared with WASM; zero remain WASM-only. [Package surfaces](https://formulon.libraz.net/api/surfaces)
 - **Excel profiles** — a new workbook and the one-shot `evaluateFormula` start on the default `win-365-en_US` profile; `wb.setProfileId()` selects any of the 28 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 
 ## Installation
 
-A source checkout does not include a prebuilt `.node` binary. The `prebuild` CI workflow stages one build per supported OS and architecture into `dist/prebuilds/` as a workflow artifact; it is not attached to a release page or pushed to the npm registry. `createFormulon()` rejects when the native prebuild is not available.
+Build the addon from a checkout and use the staged package:
+
+```bash
+git clone https://github.com/libraz/formulon.git && cd formulon
+make node-native     # build the addon (cmake -DFM_BUILD_NODE_ADDON=ON)
+make node-package    # stage build/bin/formulon.node into packages/npm-native/dist/
+```
+
+Then import `packages/npm-native/dist/index.mjs`, or link the `packages/npm-native` directory into your project with `npm install /path/to/formulon/packages/npm-native`. A checkout carries no prebuilt `.node` binary; the `prebuild` CI workflow stages one per OS and architecture as a workflow artifact only. `createFormulon()` rejects when the native prebuild is not available.
 
 The package is ES modules only (no `require`); `createFormulon` is both the default export and a named export. Its TypeScript declarations need TypeScript 5.2 or later. Changes between releases are in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md).
 
@@ -48,7 +54,7 @@ try {
 }
 ```
 
-`getValue` and `getValues` return plain JavaScript values: a number, string, boolean, `null` for a blank cell, and an `ExcelError` for an Excel error. `getTypedValue` / `getTypedValues` return the tagged `Value` instead.
+`getValue` and `getValues` return plain JavaScript values: a number, string, boolean, `null` for a blank cell, and an `ExcelError` for an Excel error. `getTypedValue` / `getTypedValues` return the tagged `Value` instead. A string that starts with `=` passed to `setValue` or `setValues` is entered as a formula; enter untrusted text with `ws.setText('A1', text)`, which always stores text.
 
 A format is set with `setCellFormat`; only the keys you give change, and a colour is `'#RRGGBB'`:
 

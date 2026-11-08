@@ -36,7 +36,7 @@ Excel との既知の差分は [`tests/divergence.yaml`](https://github.com/libr
 
 ```bash
 npm install @libraz/formulon   # ブラウザと Node 22+
-pip install formulon            # Python 3.9+
+pip install formulon            # Python 3.10+
 ```
 
 `darwin-arm64`、`linux-x64`、`linux-arm64` 向けの CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/releases) にあります。リリース間の変更は [CHANGELOG](CHANGELOG.md) にあります。1.0 までは、マイナーリリースで API が壊れることがあり、パッチリリースでは壊れません。
@@ -55,6 +55,8 @@ import formulon
 
 print(formulon.evaluate_formula("=SUM(1,2,3)"))  # 6.0
 ```
+
+Python は数値を `float` で返します。Excel の数値はすべて double だからです。
 
 ```js run
 import createFormulon from '@libraz/formulon';
@@ -86,7 +88,7 @@ formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
 ```
 
-失敗時は、JavaScript では `FormulonError` が投げられ、Python では `FormulonError` のサブクラスが送出されます。ワークブックの読み込み、編集、保存は [ワークブックを再計算する](https://formulon.libraz.net/ja/start/recalculate) で説明しています。
+失敗時は、JavaScript では `FormulonError` が投げられ、Python では `FormulonError` のサブクラスが送出されます。`setValue` や `ws[...] =` に `=` で始まる文字列を渡すと数式として入力されます。信頼できない文字列は、常にテキストとして保存する `setText` / `set_text` で入れてください。ワークブックの読み込み、編集、保存は [ワークブックを再計算する](https://formulon.libraz.net/ja/start/recalculate) で説明しています。
 
 ## Excel プロファイルの切り替え
 

@@ -24,7 +24,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 ## Installation
 
 ```bash
-pip install formulon   # Python 3.9+
+pip install formulon   # Python 3.10+
 ```
 
 `wasmtime` is the only runtime dependency; `pip` picks its platform build. Recalculation is serial in this package, with results identical to the threaded surfaces. Changes between releases are in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md); until 1.0 a minor release may break the API and a patch release does not.
@@ -40,12 +40,18 @@ v = formulon.evaluate_formula("=1/0")
 print(type(v).__name__, v.code.name)  # ExcelError DIV0
 ```
 
+Numbers come back as `float`, because every Excel number is a double: `6.0`, not `6`.
+
 Excel errors come back as `ExcelError` values; a host-side failure raises `FormulonError`. Its subclasses are `IndexOutOfRangeError`, `NotFoundError`, `InvalidArgumentError` and `WorkbookClosedError`. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 
 ```python run
 from formulon import Workbook
+
+# Create input.xlsx first; any existing workbook file works the same way.
+with Workbook.create_default() as seed:
+    seed.save("input.xlsx")
 
 with Workbook.load("input.xlsx") as wb:
     ws = wb.sheet(0)  # or wb["Sheet1"]
@@ -63,7 +69,7 @@ with Workbook.load("input.xlsx") as wb:
     print(ws["A1"])  # 1.0
 ```
 
-Every method that takes a cell accepts either `(row, col)` or an A1 string, and a rectangle argument accepts `"A1:B2"`. `ws["A1"]` and `ws[row, col]` read and write native values; `get_values` and `set_values` move a block of cells. Reads return the value as of the last full `recalc()`, and `wb.has_dirty_cells()` tells whether edits are still waiting for one. `ErrorCode.DIV0.display_name` is `"#DIV/0!"`.
+Every method that takes a cell accepts either `(row, col)` or an A1 string, and a rectangle argument accepts `"A1:B2"`. `ws["A1"]` and `ws[row, col]` read and write native values; `get_values` and `set_values` move a block of cells. A string that starts with `=` is entered as a formula; enter untrusted text with `ws.set_text("A1", text)`, which always stores text. Reads return the value as of the last full `recalc()`, and `wb.has_dirty_cells()` tells whether edits are still waiting for one. `ErrorCode.DIV0.display_name` is `"#DIV/0!"`.
 
 A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet(key)` and `wb[key]` take an index or a name and raise `NotFoundError` or `IndexOutOfRangeError` when nothing matches; `wb.list_sheets()` lists every sheet.
 
@@ -91,31 +97,15 @@ with formulon.Workbook.create_default() as wb:
 
 `set_cell_format` merges only the groups and keys it is given into each cell's format; a column (`"D:D"`), row (`"3:3"`) or whole-sheet range formats that axis, so cells entered there later take the format too. Equal formats share one style record.
 
-## Switching Excel profiles
+## Threads and memory
 
-New workbooks use `win-365-en_US`, the default Excel profile. Formulas are always written with English function names and the stored separators; the Excel profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
+- One WebAssembly instance serves the whole process, and calls into it are serialised, so threads do not run workbook code in parallel.
+- Memory the instance grew is not given back while the process lives.
+- The instance has a 32-bit address space.
+- A trap makes every open workbook unusable; start a new process.
+- For parallel work, use `multiprocessing` and give each process its own workbooks.
 
-```python run
-import formulon
-
-with formulon.Workbook.create_default() as wb:
-    ws = wb.sheet(0)
-    ws.set_formula("A1", '=LENB("日本")')
-    ws.set_formula("A2", '=VALUE("1,5")')
-    ws.set_formula("A3", "=ISEVEN(2)")
-
-    for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
-        wb.set_profile_id(profile)
-        wb.recalc()
-        print(profile, [ws.get_display_text(f"A{row}").text for row in (1, 2, 3)])
-# mac-365-en_US ['2', '#VALUE!', 'TRUE']
-# mac-365-ja_JP ['4', '#VALUE!', 'TRUE']
-# mac-365-de_DE ['2', '1,5', 'WAHR']
-```
-
-The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. On a `mac-*` profile, text comparison, sorting, lookups and grouping follow that locale's measured Mac Excel collation; `win-*` profiles add the Windows word-sort rules measured on Windows Excel 365 ja-JP to that locale's collation. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
-
-For a new workbook that matches what Excel creates in a locale, use `Workbook.create_for_profile(id)` instead of `create_default`: it selects the profile and also sets the body and phonetic fonts, the localized Normal style and first sheet names, and the page margins Excel uses there. Sheets added later take the first sheet's row metrics, page margins and phonetic settings.
+New workbooks use `win-365-en_US`; `wb.set_profile_id(id)` takes any of `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Switching profiles is covered in the [root README](https://github.com/libraz/formulon#switching-excel-profiles).
 
 ## Non-goals
 

@@ -36,7 +36,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 
 ```bash
 npm install @libraz/formulon   # browsers and Node 22+
-pip install formulon            # Python 3.9+
+pip install formulon            # Python 3.10+
 ```
 
 CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Releases](https://github.com/libraz/formulon/releases). Changes between releases are in the [CHANGELOG](CHANGELOG.md); until 1.0 a minor release may break the API and a patch release does not.
@@ -55,6 +55,8 @@ import formulon
 
 print(formulon.evaluate_formula("=SUM(1,2,3)"))  # 6.0
 ```
+
+Python returns numbers as `float`, because every Excel number is a double.
 
 ```js run
 import createFormulon from '@libraz/formulon';
@@ -86,7 +88,7 @@ formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
 ```
 
-Failures throw `FormulonError` in JavaScript and `FormulonError` subclasses in Python. Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
+Failures throw `FormulonError` in JavaScript and `FormulonError` subclasses in Python. A string that starts with `=` passed to `setValue` / `ws[...] =` is entered as a formula; enter untrusted text with `setText` / `set_text`, which always stores text. Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
 
 ## Switching Excel profiles
 
