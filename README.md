@@ -47,8 +47,7 @@ CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Re
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
-const value = formulon.evaluateFormula('=SUM(1,2,3)');
-console.log(formulon.toNative(value)); // 6
+console.log(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
 ```
 
 ```python run

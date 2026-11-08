@@ -47,8 +47,7 @@ pip install formulon            # Python 3.9+
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
-const value = formulon.evaluateFormula('=SUM(1,2,3)');
-console.log(formulon.toNative(value)); // 6
+console.log(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
 ```
 
 ```python run

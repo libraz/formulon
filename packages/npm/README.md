@@ -36,12 +36,11 @@ Changes between releases are listed in the [CHANGELOG](https://github.com/libraz
 import createFormulon from '@libraz/formulon';
 
 const formulon = await createFormulon();
-const value = formulon.evaluateFormula('=SUM(1,2,3)');
-if (value.kind === formulon.ValueKind.Number) console.log(value.number); // 6
-console.log(formulon.toNative(value)); // 6
+console.log(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
+console.log(formulon.evaluateFormula('=1/0') instanceof formulon.ExcelError); // true
 ```
 
-`toNative` turns a `Value` into a plain JavaScript value: `null` for a blank, a number, a boolean or a string for the scalar kinds, and the `Value` itself for an error, array, reference or lambda. Excel errors such as `#DIV/0!` come back as values (`v.kind === ValueKind.Error`); a host-side failure throws `FormulonError`, whose `code` is a `StatusCode`. See [Errors](https://formulon.libraz.net/compatibility/errors).
+`evaluateFormula` returns a plain JavaScript value: `null` for a blank, a number, a boolean or a string, an `ExcelError` for an Excel error such as `#DIV/0!`, and a 2-D array for an array result. `evaluateTypedFormula` returns the tagged `Value` instead. A host-side failure throws `FormulonError`, whose `code` is a `StatusCode`. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 
@@ -58,7 +57,7 @@ try {
   console.log(wb.hasDirtyCells()); // true
   wb.recalc();
   console.log(wb.hasDirtyCells()); // false
-  console.log(formulon.toNative(ws.getValue('A2'))); // 84
+  console.log(ws.getValue('A2')); // 84
 
   await writeFile('output.xlsx', wb.save());
 } finally {
@@ -154,7 +153,7 @@ try {
   ws.setFormula('A3', '=ISEVEN(2)');
 
   for (const id of /** @type {const} */ (['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE'])) {
-    wb.setExcelProfileId(id);
+    wb.setProfileId(id);
     wb.recalc(); // a profile change marks formulas dirty
     console.log(id, [1, 2, 3].map((row) => ws.getDisplayText(`A${row}`).text));
   }

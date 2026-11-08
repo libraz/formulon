@@ -18,7 +18,7 @@ The addon is built directly against the engine's static archive and exposes the 
 - **No V8 / WASM heap copies** — `load` and `save`, the most expensive operations on large workbooks, marshal straight to the engine.
 - **Larger workbooks** — not bound by the WASM package's 2 GiB growth ceiling.
 - **Same surface** — the declarations and the native class table register 427 instance methods plus the four static factories. Of those instance methods, 426 are shared with WASM; zero remain WASM-only, and `getMemoryUsage()` is the one native-only helper. [Package surfaces](https://formulon.libraz.net/api/surfaces)
-- **Excel profiles** — a new workbook and the one-shot `evaluateFormula` start on the default `win-365-en_US` profile; `wb.setExcelProfileId()` selects any of the 28 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
+- **Excel profiles** — a new workbook and the one-shot `evaluateFormula` start on the default `win-365-en_US` profile; `wb.setProfileId()` selects any of the 28 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 
 ## Installation
 
@@ -32,8 +32,7 @@ The package is ES modules only (no `require`); `createFormulon` is both the defa
 import createFormulon from '@libraz/formulon-native';
 
 const formulon = await createFormulon();
-const { evaluateFormula, toNative } = formulon;
-console.log(toNative(evaluateFormula('=SUM(1,2,3)'))); // 6
+console.log(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
 
 const wb = formulon.Workbook.createDefault();
 try {
@@ -42,14 +41,14 @@ try {
   ws.setValues('B1', [[10, 20], [30, 40]]);
   console.log(wb.hasDirtyCells()); // true
   wb.recalc();
-  console.log(toNative(ws.getValue('A1'))); // 3
-  console.log(ws.getValues('B1:C2').map((row) => row.map(toNative))); // [ [ 10, 20 ], [ 30, 40 ] ]
+  console.log(ws.getValue('A1')); // 3
+  console.log(ws.getValues('B1:C2')); // [ [ 10, 20 ], [ 30, 40 ] ]
 } finally {
   wb.dispose(); // wb.disposed is now true
 }
 ```
 
-`toNative` turns a `Value` into a JavaScript value: a number, string, boolean or `null` for a blank cell. An error, array, reference or lambda value is returned as it is.
+`getValue` and `getValues` return plain JavaScript values: a number, string, boolean, `null` for a blank cell, and an `ExcelError` for an Excel error. `getTypedValue` / `getTypedValues` return the tagged `Value` instead.
 
 A format is set with `setCellFormat`; only the keys you give change, and a colour is `'#RRGGBB'`:
 
