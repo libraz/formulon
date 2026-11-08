@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `size_t* out_count`; a NULL handle reports
   `FM_STATUS_BINDING_NULL_POINTER`. Getters take `const` handles, enum
   parameters and fields cross the ABI as `int32_t`, and
-  `fm_workbook_get_pagination` is `fm_sheet_get_pagination`.
+  `fm_workbook_paginate` is `fm_sheet_get_pagination`.
 - **C ABI:** an out-of-range sheet index returns
   `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) instead of
   `FM_STATUS_INVALID_ARGUMENT`. Every sheet-taking function checks the handle,
@@ -46,16 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by that name (defined name, table style, cell style, hyperlink, person,
   threaded comment, shape, slicer, drawing object, passthrough part, theme
   script font). A missing key is reported as `out_present = 0` in C, as
-  `OptionalResult` in JavaScript and as `None` in Python. Adds that allocate an
+  `null` in JavaScript and as `None` in Python. Adds that allocate an
   index (`fm_workbook_add_sheet`, `fm_sheet_add_validation`,
   `fm_workbook_add_cell_style_xf` and the others) take a trailing
   `size_t* out_index`. `fm_workbook_evaluate_formula_array_cell` is replaced by
   an owned `fm_value_array_t`, and slicers are addressed by the object id
   `fm_sheet_add_slicer` returned.
 - **JavaScript, Python:** every collection is read with one `list*` method
-  (`listCfRules()`, `listValidations()`, `listTables()`, `listPivotFields()`
+  (`listCfRules()`, `listValidations()`, `listTables()`, `listFonts()`
   and the others in the migration table) that returns a fresh array. A count
-  method paired with a getter by index (`getTableCount()` + `getTable(i)`) is
+  method paired with a getter by index (`tableCount()` + `tableAt(i)`) is
   removed together with the getter; `listTables()[i]` replaces the pair. A
   phonetic run list is read with `getCellPhoneticRuns(row, col)` instead of
   `getCellPhoneticRunCount` and `getCellPhoneticRun`.
@@ -74,8 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exports `Workbook` and `evalFormula` at the top level; use
   `const formulon = await createFormulon()` and `formulon.Workbook`. Name the
   object `formulon`, not `Module`. `saveAs(format)` is `save(format)`, and
-  `getLastErrorMessage()` is the
-  `message` of the caught error.
+  `lastErrorMessage()` is the `message` of the caught error.
 - **JavaScript:** a value is a union discriminated by `kind`. Compare with
   `ValueKind` (`v.kind === ValueKind.Error`), not with a number. A value has
   only the fields of its kind, and `boolean` is a real `boolean`.
@@ -123,8 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exits with status 64, and an engine failure exits with status 1. `dump` and
   `paginate` accept `--json`, and `profiles --json` lists the profile ids as
   JSON; the usage text no longer lists the profile ids.
-- **C ABI:** `fm_sheet_set_pivot_field_date_group` (`setPivotFieldDateGroup`,
-  `set_pivot_field_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
+- **C ABI:** `fm_sheet_set_pivot_field_date_group` (`Pivot.setFieldDateGroup`,
+  `Pivot.set_field_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
   calendar, an interval in days and start and end serials (NaN for automatic)
   in place of a granularity and year arguments. `fm_pivot_date_grouping_t` and
   the `date_*` members of `fm_pivot_field_info_t` are gone; the struct now
@@ -148,21 +147,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_chart_preview_overrides_t` gains `na_as_blank_op` / `na_as_blank`, and
   `fm_spill_info_t` gains `blocked`, each at its end. A caller compiled
   against an earlier header must be recompiled.
-- `Sheet.setChartDisplay(objectId, patch)` (JavaScript) and
-  `Sheet.set_chart_display(object_id, patch)` (Python) take one patch object
-  in place of the positional values: `blanksAs`, `plotVisibleOnly` and
+- `Chart.setDisplay(patch)` (JavaScript) and `Chart.set_display(patch)`
+  (Python) take one patch object in place of the positional arguments of
+  `setChartDisplay(sheet, objectId, blanksAs, plotVisibleOnly)`: `blanksAs`, `plotVisibleOnly` and
   `naAsBlank` (`blanks_as`, `plot_visible_only`, `na_as_blank`). An omitted
   key keeps the element, `null` / `None` removes it, a value sets it.
 - **Handles:** `Table`, `Pivot`, `PivotCache` and `Drawing` (with its
   subclasses `Picture`, `Chart`, `Shape` and `Slicer`) are handle classes that
   stay on their object while others come and go. An operation on the object is
-  a method of the handle: `ws.addPivotField(p, spec)` is
+  a method of the handle: `pivotFieldAdd(sheet, p, spec)` is
   `ws.pivot(p).addField(spec)`, and a chart's title is set with
   `ws.chart(id).setTitle(...)`; Python has the same classes in `formulon.Table`,
   `formulon.Pivot`, `formulon.PivotCache` and `formulon.Drawing`. The parent
   keeps `add*`, `remove*`, `list*` and the accessor (`ws.table(name)`,
   `ws.pivot(p)`, `ws.chart(id)`), and every `add*` returns the handle.
-  `setPivotName` and `setDrawingName` are `rename`. `wb.renameSheet(s, n)` is
+  `pivotSetName` is `Pivot.rename`, and a drawing is renamed with
+  `Drawing.rename`. `wb.renameSheet(s, n)` is
   `wb.sheet(s).rename(n)` and `wb.moveSheet(s, i)` is `wb.sheet(s).move(i)`.
 - **Handles:** `listTables()`, `listPivots()`, `listCharts()`, `listShapes()`,
   `listSlicers()` and the other `list*` calls return handles. Code that passed
@@ -177,12 +177,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pivot tables:** a pivot number format is a format code. The
   `String(wb.addNumFmt(code))` bridge is gone: pass the code itself.
 - **Renames:** `evalFormula` is `evaluateFormula` and `eval_formula` is
-  `evaluate_formula`. `setFitToPage(b)` is `setPageSetup({ fitToPage: b })`.
+  `evaluate_formula`. `setSheetFitToPage(sheet, b)` is `ws.setPageSetup({ fitToPage: b })`.
   `setSparklineGroupSparklines` and `setThreadResolved` are folded into
-  `updateSparklineGroup` and `updateThreadedComment`. `addImage` is
-  `addPicture`; `removeShape`, `removeSlicer` and `removeDrawingObject` are
-  `removeDrawing`; `listDrawingObjects` is `listDrawings`, and `listPictures`
-  is new. Python uses the snake_case equivalents.
+  `updateSparklineGroup` and `updateThreadedComment`. `insertImage` is
+  `addPicture`; `removeShape` and `removeSlicer` are `removeDrawing`;
+  `listDrawingObjects` is `listDrawings`, and `listPictures` is new. Python
+  uses the snake_case equivalents.
 - **Cell formats:** `setCellFormat(range, patch)` and `getCellFormat(cell)`
   (`set_cell_format`, `get_cell_format`) change and read a cell's number
   format, font, fill, border, alignment and protection. A patch key that is
@@ -373,12 +373,13 @@ the handle of a removed sheet throws `FormulonError` with
 
 | Before | After |
 |---|---|
-| `getSheetCount()` / `get_sheet_count()` | `listSheets().length` / `len(wb)` |
-| `getSheetName(i)` / `get_sheet_name(i)` | `sheet(i).name` |
-| `getSheetIndex(name)` / `get_sheet_index(name)` | `sheet(name).index` (throws when there is no such sheet) |
-| `addSheet(name)` / `copySheet(...)` returning an index | return the new `Sheet` |
-| `getActiveSheet()` returning an index | returns a `Sheet`; `setActiveSheet`, `moveSheet`, `removeSheet` and `renameSheet` take a `Sheet`, an index or a name |
-| `showPivotDetails(sheet, pivot, row, col)` returning an index | `ws.pivot(pivot).showDetails(row, col)` returns a `Sheet` |
+| `sheetCount()` / `sheet_count()` | `listSheets().length` / `len(wb)` |
+| `sheetName(i)` / `sheet_name(i)` | `sheet(i).name` |
+| `addSheet(name)` | returns the new `Sheet`; `copySheet(...)` likewise |
+| `activeSheet()` returning an index | `getActiveSheet()` returns a `Sheet`; `setActiveSheet`, `moveSheet`, `removeSheet` and `renameSheet` take a `Sheet`, an index or a name |
+
+`sheet(name).index` finds a sheet by name and throws when there is no such
+sheet. `ws.pivot(pivot).showDetails(row, col)` returns the `Sheet` it adds.
 
 Every sheet method that takes a cell accepts an A1 address in place of
 `row, col` (see [A1 addresses](#a1-addresses-and-block-access)). Positional guard messages read
@@ -395,25 +396,25 @@ argument is a keyword-only argument list there (see
 |---|---|
 | `setIterative(enabled, maxIterations, maxChange)` | `setIterative(patch)`; an omitted field keeps the stored value |
 | `setPinnedNow(y, m, d, h, mi, s)` and `clearPinnedNow()` | `setPinnedNow(time)`; `null` clears the pin. Python takes and returns a naive `datetime.datetime` (`set_pinned_now(None)` clears it) |
-| `setPrintTitles(sheet, repeatRows, repeatCols)` / `getPrintTitles()` | `ws.setPrintTitles(titles)` / `ws.getPrintTitles()` with `PrintTitles = { rows: Span \| null, columns: Span \| null }` and `Span = { first, last }` (0-based, inclusive); `null` clears. `Pagination.printTitles` has the same type |
-| `setPivotGrandTotals(sheet, pivot, rows, cols)` | `ws.setPivotGrandTotals(pivot, { rows, columns })` |
+| `setSheetPrintTitles(sheet, repeatRows, repeatCols)` / `getSheetPrintTitles(sheet)` | `ws.setPrintTitles(titles)` / `ws.getPrintTitles()` with `PrintTitles = { rows: Span \| null, columns: Span \| null }` and `Span = { first, last }` (0-based, inclusive); `null` clears. `Pagination.printTitles` has the same type |
+| `pivotSetGrandTotals(sheet, pivot, rows, cols)` | `ws.pivot(pivot).setGrandTotals({ rows, columns })` |
 | `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { author, text })` writes the comment, empty text included; `ws.removeComment(row, col)` removes it and throws `NotFound` when the cell has none |
 | `setWorkbookProtection(p)` / `setSheetProtection(sheet, p)` (an all-zero record cleared them) | `null` clears them; an all-zero record still does |
 | `setCellPhoneticRuns(sheet, row, col, runs)` | `ws.setCellPhoneticRuns(row, col, runs)`; `null` and `[]` clear |
 | `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.addHyperlink(row, col, { target, location?, display?, tooltip? })`; a `null` target is an in-workbook link and requires `location`. `addHyperlinkRange(rect, link)` likewise |
 | `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ major, script, typeface })` |
-| `updateThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
+| `editThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
 | `addThreadedComment(sheet, partial)` | `ws.addThreadedComment(input)` with `ThreadedCommentInput` |
 | `setDefinedName`, `setDefinedNameScoped`, `setDefinedNameAttrs` | `setDefinedName({ name, formula, scope?, comment?, hidden? })`; `scope` is a sheet index or name, and `null` or omitted is workbook scope. `removeDefinedName(name, scope?)` takes the same. Setting an existing name replaces every attribute |
-| `getThemeFonts(): Theme` (fonts and colors) | `getThemeFonts(): ThemeFonts` and `getThemeColors(): ThemeColors`; the `Theme` type is gone |
-| `setViewMode(sheet, mode: string)` | `ws.setViewMode(mode: SheetViewMode)` |
-| `setTabHidden(sheet, hidden)` | removed; `setVisibility` covers every tab state, very hidden included. `SheetView.tabHidden` is gone, `SheetView.viewMode` is a `SheetViewMode` and `SheetView.visibility` a `SheetVisibility` |
-| `setTableStyleDefaults`, `setPivotOptions`, `setPivotCacheOptions`, `setFormatDefaults` taking an inline object | take a `...Patch` record: an omitted key keeps the value, `null` clears a nullable one |
-| `setPivotFieldAxis(..., axis \| -1)` | `axis: PivotAxis \| null` |
-| `addPivotCache(..., requestedId = 0)` | `requestedId?: number` (omitted picks one) |
-| `setPivotFieldNumberFormat(..., utf8)` | the argument is named `formatCode` |
-| `set*Xml(sheet, '')`, `setFileName('')`, `setCellPhonetic(..., '')`, empty captions, custom names, number formats and style names clearing a value | pass `null`; the matching getters return `null` instead of `''` |
-| `setPrintArea(sheet, [])` | `ws.setPrintArea(null)` and `ws.setPrintArea([])` both clear |
+| `getTheme(): Theme` (fonts and colors) | `getThemeFonts(): ThemeFonts` and `getThemeColors(): ThemeColors`; the `Theme` type is gone |
+| `setSheetViewMode(sheet, mode: string)` | `ws.setView({ viewMode })` with a `SheetViewMode` |
+| `setSheetTabHidden(sheet, hidden)` | removed; `ws.setView({ visibility })` covers every tab state, very hidden included. `SheetView.tabHidden` is gone, `SheetView.viewMode` is a `SheetViewMode` and `SheetView.visibility` a `SheetVisibility` |
+| `setTableStyleDefaults`, `setSheetFormatDefaults` taking an inline object | take a `...Patch` record: an omitted key keeps the value, `null` clears a nullable one |
+| `pivotFieldSetAxis(..., axis \| -1)` | `pivot.setFieldAxis(field, axis: PivotAxis \| null)` |
+| `pivotCacheCreate(requestedId = 0)` | `addPivotCache(requestedId?: number)` (omitted picks one) |
+| `pivotFieldSetNumberFormat(..., utf8)` | `pivot.updateField(field, { numberFormat })` takes a format code |
+| `set*Xml(sheet, '')`, `setCellPhonetic(..., '')`, empty captions, custom names, number formats and style names clearing a value | pass `null`; the matching getters return `null` instead of `''` |
+| `setSheetPrintArea(sheet, '')` | `ws.setPrintArea(null)` and `ws.setPrintArea([])` both clear |
 
 A chart without a title or legend reads `title: null` and `legend: null`
 instead of a record whose `kind` or `position` is `None`; a patch with
@@ -489,22 +490,21 @@ These parameters can no longer be passed by position.
 |---|---|
 | `Sheet.add_column_break`, `Sheet.add_row_break` | `manual` |
 | `Sheet.add_hyperlink`, `Sheet.add_hyperlink_range` | `target`, `location`, `display`, `tooltip` |
-| `Sheet.add_image` | `description` |
-| `Sheet.add_shape`, `Sheet.update_shape` | `from_row_offset_emu`, `from_col_offset_emu`, `to_row_offset_emu`, `to_col_offset_emu`, `width_emu`, `height_emu`, `preset_geometry` |
-| `Sheet.add_slicer`, `Sheet.update_slicer` | `from_row`, `from_col`, `to_row`, `to_col`, the four `*_offset_emu` fields, `row_height_emu` |
-| `Sheet.set_chart_legend` | `overlay` |
-| `Sheet.set_chart_source` | `direction`, `header_row`, `header_column` |
-| `Sheet.set_pivot_grand_totals` | `rows`, `columns` |
-| `Sheet.add_pivot_field_item`, `Sheet.add_pivot_field_shared_item` | `visible` |
-| `Sheet.update_threaded_comment` | `text`, `mentions` |
-| `Workbook.add_table` | `range`, `name`, `columns`, `display_name`, `style_name`, `header_row`, `totals_row` |
-| `Workbook.update_table` | `rect`, `style_name`, `header_row`, `totals_row` |
-| `Workbook.set_table_style_info` | `show_first_column`, `show_last_column`, `show_row_stripes`, `show_column_stripes` |
-| `Workbook.set_table_column_totals` | `function`, `label`, `formula` |
+| `Sheet.add_picture` | `name`, `description`, `anchor` |
+| `Sheet.add_shape`, `Shape.update` | `anchor_kind`, `edit_as`, the corner rows and columns, the four `*_offset_emu` fields, `width_emu`, `height_emu`, `preset_geometry` |
+| `Sheet.add_slicer`, `Slicer.update` | `from_row`, `from_col`, `to_row`, `to_col`, the four `*_offset_emu` fields, `row_height_emu` |
+| `Chart.set_legend` | `position`, `overlay`, `hidden_series` |
+| `Chart.set_source` | `direction`, `header_row`, `header_column` |
+| `Pivot.set_grand_totals` | `rows`, `columns` |
+| `Pivot.add_field_item`, `Pivot.add_field_shared_item` | `visible` |
+| `PivotCache.add_field_shared_item` | `date` |
+| `Sheet.update_threaded_comment` | `text`, `mentions`, `done` |
+| `Workbook.add_table` | `range`, `name`, `columns`, `display_name`, `style_name`, `header_row`, `totals_row` and the style toggles |
+| `Table.update` | `range`, `name`, `display_name`, `style_name`, `header_row`, `totals_row` and the style toggles |
+| `Table.set_column_totals` | `function`, `label`, `formula` |
 | `Workbook.set_table_style_defaults` | `table_style`, `pivot_style` |
 | `Workbook.set_iterative` | `enabled`, `max_iterations`, `max_change` |
 | `Workbook.get_theme_script_font` | `major`, `script` |
-| `Workbook.add_pivot_cache_field_shared_item_bool` | `value` |
 
 `add_table` takes the fields of the JavaScript `TableInput` (`range` is a
 `SheetRect`, `columns` the column names); `Sheet.set_selection` takes a
@@ -554,13 +554,13 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   recalculation.
 - **JavaScript, Python:** every collection is listed by `list*`, and the
   `get...Count` / `get...At` pairs are removed (`listCells`, `listPivots`,
-  `listPivotCacheFields`, `listPivotCacheFieldSharedItems`, `listFonts`,
+  `PivotCache.listFields`, `PivotCache.listFieldSharedItems`, `listFonts`,
   `listFills`, `listBorders`, `listCellXfs`, `listCellStyleXfs`, `listDxfs`,
-  `listPivotFieldItems`). Only `getPivotCacheRecordCount` remains.
+  `Pivot.listFieldItems`). Only `PivotCache.getRecordCount` remains.
 - **JavaScript, Python:** a partial update is one patch record whose omitted
-  keys keep their value: `setView`, `updatePivotField`, `updatePivotItem`,
-  `setPivotStyleInfo`, `setPrintOptions`, `setHeaderFooter` and
-  `setChartLegend` replace the per-property setters. `null` clears a nullable
+  keys keep their value: `setView`, `Pivot.updateField`, `Pivot.updateItem`,
+  `Pivot.setStyleInfo`, `setPrintOptions`, `setHeaderFooter` and
+  `Chart.setLegend` replace the per-property setters. `null` clears a nullable
   key. Python takes keyword-only arguments defaulting to `UNCHANGED`.
 - **JavaScript, Python:** tables, pivots, conditional-format rules and
   protected ranges are addressed by number or by name (`removeTable('Sales')`,
@@ -571,13 +571,13 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   `localizeFormula`, `canonicalizeFormula`, `getLocaleFacts`,
   `listLocaleErrorNames`, `compareText`, `getCollationClasses`,
   `getImageInfo`) are members of `Formulon`, not of `Workbook`.
-  `fm_workbook_get_image_info` is `fm_get_image_info` in C, and Python has
+  `fm_workbook_probe_image` is `fm_get_image_info` in C, and Python has
   `get_image_info` at module level.
-- **JavaScript, Python:** `getErrorDisplayName` is replaced by the
+- **JavaScript, Python:** `errorDisplayName` is replaced by the
   `ErrorDisplayName` table (`ErrorDisplayName[ErrorCode.Div0]`) and Python
   `ErrorCode.display_name`.
-- **JavaScript, Python:** `addPivotCacheFieldSharedItem(cacheId, field, value,
-  { date })` and `setPivotCacheRecordValue(...)` replace the twelve typed
+- **JavaScript, Python:** `PivotCache.addFieldSharedItem(field, value,
+  { date })` and `PivotCache.setRecordValue(...)` replace the twelve typed
   writers and dispatch on the type of `value`.
 - **Python:** `save(path)` picks XLSB for a `.xlsb` extension and XLSX
   otherwise; an explicit `format` that contradicts the extension raises
@@ -587,8 +587,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 - **JavaScript, Python:** `removeMergeAt` and `removeHyperlinkAt` are removed
   in favour of `removeMerge` and `removeHyperlink`. `getDefinedName` and
   `removeDefinedName` take an optional `scope`, `getThemeScriptFont` and
-  `setThemeScriptFont` take `{ major, script }`, `setChartType` defaults
-  `grouping`, and `setPivotFieldSort` and `addPivotFieldItem` take an
+  `setThemeScriptFont` take `{ major, script }`, `Chart.setType` defaults
+  `grouping`, and `Pivot.setFieldSort` and `Pivot.addFieldItem` take an
   `options` object.
 
 ### Behaviour changes under an unchanged name
@@ -599,7 +599,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   `formula2`, array-formula text and `getLambdaText`. Ranges (sparklines,
   chart titles and series, print areas) stay without it. Input accepts text
   with or without the `=`.
-- `removeDrawingObject`, `getChartData` and `getChartPreview` report
+- `removeDrawing`, `Chart.getData` and `Chart.getPreview` report
   `NotFound` for a missing id instead of `InvalidArgument`. So does every
   pivot-cache lookup by `cacheId`, which makes a missing id `NotFound` on
   every function.
@@ -631,13 +631,13 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   Python, where the old function returned `#UNKNOWN!`.
 - `setHeaderFooter` clears a text field for `null` as well as `""`.
 - Every JavaScript patch setter (`setPageSetup`, `setPageMargins`,
-  `setIterative`, `setView`, `updatePivotField` and the rest) takes the record
+  `setIterative`, `setView`, `Pivot.updateField` and the rest) takes the record
   its getter returns, ignoring the fields it cannot set, and throws
   `TypeError` for any other key. Several ignored every unknown key, and
-  `updatePivotField` refused `axis`.
+  `Pivot.updateField` refused `axis`.
 - CLI `dump --metadata` prints defined-name formulas with a leading `=`.
 - A drawing loaded from `.xlsb` (pictures and charts linked by one drawing
-  record) is editable like one loaded from `.xlsx`: `addImage`, `addChart`
+  record) is editable like one loaded from `.xlsx`: `addPicture`, `addChart`
   and the chart setters succeed instead of failing with `IoDrawingUnparseable`,
   `copySheet` copies it, and row and column inserts move its anchors. A
   drawing the reader cannot lift stays read-only. Its relationship id may
@@ -1913,7 +1913,7 @@ A caller compiled against an earlier header must be recompiled.
 | Before | After |
 |---|---|
 | `fm_workbook_set_defined_name(wb, name, formula)`, `fm_workbook_set_defined_name_scoped`, `fm_workbook_set_defined_name_attrs` | `fm_workbook_set_defined_name(wb, const fm_defined_name_input_t*)` (name, formula, `local_sheet_id`, comment, hidden); an empty formula is `FM_STATUS_INVALID_ARGUMENT` instead of a removal |
-| `fm_workbook_get_defined_name_at` (two strings and a scope), `fm_workbook_get_defined_name_attrs_at` | `fm_workbook_get_defined_name_at(wb, index, fm_defined_name_t*)` |
+| `fm_workbook_defined_name_at` (two strings and a scope), `fm_workbook_defined_name_attrs_at` | `fm_workbook_get_defined_name_at(wb, index, fm_defined_name_t*)` |
 | `fm_workbook_set_iterative(wb, enabled, max_iterations, max_change)`, `fm_workbook_set_iterative_enabled` | `fm_workbook_set_iterative(wb, const fm_iterative_settings_patch_t*)`; a negative field keeps the stored value |
 | `fm_sheet_set_print_titles(wb, sheet_index, rows_a1, cols_a1)`, `fm_sheet_get_print_titles` (A1 text) | take and fill an `fm_print_titles_t` (per-axis `has_*` flag and 0-based span); `NULL` clears |
 | `fm_sheet_set_view_mode(wb, sheet_index, const char* view)` | `int32_t` `fm_sheet_view_mode_t` |
@@ -2009,7 +2009,7 @@ order.
 
 - A trailing argument with an obvious default can be left out:
   `getPrecedents(cell)` / `getDependents(cell)` follow one level,
-  `recalcParallel()` uses every hardware thread, `copySheet(index)` appends
+  `recalcParallel()` picks the thread count itself (at most 8), `copySheet(index)` appends
   the copy, and `evaluateCfRange(range)` evaluates time-period rules against
   today (the pinned date when the workbook has one). Python takes the same
   defaults. An argument beyond the ones a method declares throws `TypeError`
@@ -2044,7 +2044,7 @@ order.
   prefix at any depth.
 
 - Pictures and charts are written to `.xlsb` and read back as model drawings,
-  so `listDrawingObjects` and `getChart` work after an XLSB round trip. A
+  so `listDrawings` and `ws.chart(id)` work after an XLSB round trip. A
   drawing holding other graphic frames (slicers, SmartArt) is not written and
   counts in `deferredFeatureCount`.
 - `FM_VERSION_MAJOR`, `FM_VERSION_MINOR` and `FM_VERSION_PATCH` in
@@ -2074,13 +2074,15 @@ order.
   field's number format.
 - Pivot report options: per field `fm_sheet_set_pivot_field_default_subtotal`,
   `_set_insert_blank_row`, `_set_fill_down_labels` and `_set_show_detail`
-  (`setPivotFieldShowDetail`, `set_pivot_field_show_detail`, and so on), and
-  the grand total caption and autofit flag in `fm_pivot_options_t`. The layout
+  (`Pivot.updateField` keys `defaultSubtotal`, `insertBlankRow`,
+  `fillDownLabels` and `showDetail`; `Pivot.setFieldShowDetail`,
+  `Pivot.set_field_show_detail`), and the grand total caption and autofit flag in `fm_pivot_options_t`. The layout
   draws the grand total caption, blank rows, repeated labels and collapsed
   items as Excel does, and loaded files keep them.
 - `fm_sheet_set_pivot_field_item_caption` renames an item without changing
   the value it stands for; `fm_sheet_set_pivot_field_item_show_detail`
-  expands or collapses one item. `fm_pivot_item_info_t` reports both. A
+  expands or collapses one item (`Pivot.updateItem` keys `caption` and
+  `showDetail`). `fm_pivot_item_info_t` reports both. A
   caption is at most 255 UTF-16 units and may not repeat another item's label
   in the field.
 - The Values level ("Σ Values") appears in the row and column field orders as
@@ -2088,27 +2090,28 @@ order.
   among the fields. Listing it in `fm_sheet_set_pivot_row_field_order` or
   `_set_col_field_order` moves it to that axis. It needs two or more data
   fields, and the axis that holds it must keep listing it.
-- `fm_sheet_show_pivot_details` (`showPivotDetails`, `show_pivot_details`)
+- `fm_sheet_show_pivot_details` (`Pivot.showDetails`, `Pivot.show_details`)
   runs Show Details on a data, subtotal or grand total cell: it adds a sheet
   with the matching source rows in a table, before the pivot's sheet, and
   makes it the active sheet. Sheets from the pivot's sheet onward move up by
   one.
-- `fm_sheet_set_drawing_name` (`setDrawingName`, `set_drawing_name`) renames a
+- `fm_sheet_set_drawing_name` (`Drawing.rename`) renames a
   picture or chart. Default object ids now count per sheet from 2 and are
   shared by pictures, charts, shapes and slicers, and default chart, picture
   and table names use the workbook locale's word.
 
 - `fm_workbook_get_pivot_cache_field_shared_item_value`
-  (`getPivotCacheFieldSharedItemValue`, `get_pivot_cache_field_shared_item_value`)
-  reads one shared item of a pivot cache field, so a refresh can keep the
+  (`PivotCache.listFieldSharedItems`, `PivotCache.list_field_shared_items`)
+  reads the shared items of a pivot cache field, so a refresh can keep the
   existing item order.
 - Pivot cache dates: `fm_workbook_add_pivot_cache_field_shared_item_date`
   and `fm_workbook_set_pivot_cache_record_date` store a serial as a date
   (`<d>`) rather than a number, and
   `fm_workbook_is_pivot_cache_field_shared_item_date` reads the mark back
-  (`addPivotCacheFieldSharedItemDate`, `setPivotCacheRecordDate`,
-  `isPivotCacheFieldSharedItemDate`; `add_pivot_cache_field_shared_item_date`,
-  and so on). A serial outside the workbook's date system is refused. Date
+  (`PivotCache.addFieldSharedItem(field, serial, { date: true })`,
+  `PivotCache.setRecordValue(record, field, serial, { date: true })`; Python
+  `add_field_shared_item(..., date=True)`, `set_record_value(..., date=True)`;
+  `listFieldSharedItems` reports the mark). A serial outside the workbook's date system is refused. Date
   filters, date grouping and the saved field hints treat these values as
   they treat dates loaded from a file.
 - `fm_sheet_set_row_auto_height` (`setRowAutoHeight`, `set_row_auto_height`)
@@ -2128,38 +2131,38 @@ order.
 
 - Calculated fields: `fm_workbook_add_pivot_cache_calculated_field`,
   `_calculated_field_set_formula`, `_calculated_field_remove` and
-  `fm_workbook_get_pivot_cache_field_formula` (`addPivotCacheCalculatedField`,
-  `add_pivot_cache_calculated_field`, and so on). A calculated field shows its
+  `fm_workbook_get_pivot_cache_field_formula` (`PivotCache.addCalculatedField`,
+  `PivotCache.add_calculated_field`, and so on). A calculated field shows its
   formula over the Sums of the fields it names, totals included, and is saved
   in Excel's form.
 - Calculated items: `fm_workbook_add_pivot_cache_calculated_item`, `_count`,
   `_at` (`fm_pivot_calculated_item_t`), `_set_formula`, `_move` and `_remove`
-  (`addPivotCacheCalculatedItem`, `add_pivot_cache_calculated_item`, and so
+  (`PivotCache.addCalculatedItem`, `PivotCache.add_calculated_item`, and so
   on). Items are evaluated in the context of each cell, the field's totals
   include them, and where items meet the one later in solve order wins. A data
   field cannot use Average, StdDev, StdDevP, Var or VarP beside them.
 - PivotTable options in one struct: `fm_sheet_get_pivot_options` /
   `fm_sheet_set_pivot_options` with `fm_pivot_options_t`
-  (`getPivotOptions` / `setPivotOptions`, `get_pivot_options` /
-  `set_pivot_options`): error and empty-cell captions, field headers, classic
+  (`Pivot.getOptions` / `Pivot.setOptions`, `Pivot.get_options` /
+  `Pivot.set_options`): error and empty-cell captions, field headers, classic
   grid layout, empty rows and columns, report filter wrapping, merged labels,
   compact indent, print titles, alternative text and the rest of the options
   dialog. The layout draws those that change the report.
 - Pivot cache options: `fm_workbook_get_pivot_cache_options` /
-  `_set_options` with `fm_pivot_cache_options_t` (`getPivotCacheOptions`,
-  `get_pivot_cache_options`): saving the source records, the missing-items
+  `_set_options` with `fm_pivot_cache_options_t` (`PivotCache.getOptions`,
+  `PivotCache.get_options`): saving the source records, the missing-items
   limit and refresh on open. A cache saved without records writes no records
   part.
-- `fm_sheet_set_pivot_field_custom_name` (`setPivotFieldCustomName`,
-  `set_pivot_field_custom_name`) renames a pivot field in the report, and
-  `fm_sheet_set_pivot_field_show_all` (`setPivotFieldShowAll`,
-  `set_pivot_field_show_all`) lists its items without data.
-- `fm_sheet_get_pivot_data_field_default_name` (`getPivotDataFieldDefaultName`,
-  `get_pivot_data_field_default_name`) reads the name a new data field would get,
+- `fm_sheet_set_pivot_field_custom_name` (the `customName` key of
+  `Pivot.updateField`) renames a pivot field in the report, and
+  `fm_sheet_set_pivot_field_show_all` (the `showAll` key) lists its items
+  without data.
+- `fm_sheet_get_pivot_data_field_default_name` (`Pivot.getDataFieldDefaultName`,
+  `Pivot.get_data_field_default_name`) reads the name a new data field would get,
   without adding one.
-- `fm_sheet_project_pivot` (`projectPivot`, `project_pivot`) writes a
+- `fm_sheet_project_pivot` (`Pivot.project`) writes a
   pivot's report into its cells now, and `fm_sheet_is_pivot_projection_pending`
-  (`isPivotProjectionPending`, `is_pivot_projection_pending`) tells whether a cache
+  (`Pivot.isProjectionPending`, `Pivot.is_projection_pending`) tells whether a cache
   change left them stale.
 - Charts read and write "Show #N/A as an empty cell" (`c16r3:dispNaAsBlank`):
   `na_as_blank` in `fm_chart_info_t` (`naAsBlank`, `na_as_blank`), the
@@ -2176,8 +2179,8 @@ order.
   writes a rectangle back as A1 text, quoting the sheet name as a formula
   does.
 
-- `fm_workbook_rename_table_column` (`renameTableColumn`,
-  `rename_table_column`) renames a table column as typing over its header
+- `fm_workbook_rename_table_column` (`Table.renameColumn`,
+  `Table.rename_column`) renames a table column as typing over its header
   does, and returns the final name. An empty name takes the locale's word
   with the lowest unused number (`Column1`, `列1`, `Spalte1`), and a name
   another column already has gets the lowest unused number from 2 appended
