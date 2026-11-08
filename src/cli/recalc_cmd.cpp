@@ -59,7 +59,8 @@ void print_recalc_usage(std::ostream& out) {
       << "1 stays on the caller thread, and 2.." << kMaxRecalcThreads << " select the worker cap. Without --threads,\n"
       << "recalc remains serial.\n"
       << "Options must precede --; after --, exactly one input path is accepted.\n"
-      << "An input of '-' reads the workbook from stdin; '-o -' writes it to stdout as .xlsx\n"
+      << "An input of '-' reads the workbook from stdin; '-o -' writes it to stdout as .xlsx unless --format says "
+         "otherwise\n"
       << "(refused when stdout is a terminal). Use './-' for a file named '-'.\n"
       << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
       << "--quiet is supplied; --quiet does not suppress load/save loss warnings.\n";

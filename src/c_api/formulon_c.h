@@ -74,7 +74,7 @@
  *     access safe, and the same-handle external-concurrency restriction
  *     remains in force.
  *   * A value read can calculate: under `FM_CALC_MODE_AUTO` /
- *     `FM_CALC_MODE_AUTO_NO_TABLE` it first recalculates pending cells, so the
+ *     `FM_CALC_MODE_AUTO_NO_TABLE` it first recalculates dirty cells, so the
  *     owner-thread contract covers reads exactly as it covers mutations. Such a
  *     read can invoke the caller's progress callback and can return any
  *     `FM_STATUS_GRAPH_*` recalc status (4000-4006); called from inside a
@@ -252,8 +252,9 @@ typedef enum {
 } fm_color_kind_t;
 
 /**
- * @brief A colour as the workbook specifies it; every colour field of the
- *        API takes this type.
+ * @brief A colour as the workbook specifies it; every unresolved colour
+ *        field of the API takes this type; a resolved colour (for example in
+ *        `fm_effective_style_t`) is a plain `0xAARRGGBB` integer.
  *
  * Only the members `kind` names are meaningful. A theme,
  * indexed or auto colour is a selector, not a rendered colour: resolve it
@@ -796,7 +797,7 @@ FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, 
  * rebound; sheet-scoped names, and workbook names referring to the source,
  * gain a copy scoped to the new sheet; pivot tables share the source's cache.
  * The active sheet and the tab selection do not change. See
- * `Workbook::copy_sheet` for the full contract. On any failure the workbook is
+ * the status list below for the failure cases. On any failure the workbook is
  * left unchanged.
  *
  * @param wb            Workbook handle. Must be non-NULL.
@@ -1287,8 +1288,11 @@ FM_API fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_index, u
 /**
  * @brief Reads the cached cell value at `(row, col)`.
  *
- * The cell value reflects the most recent recalc. Callers that just
- * mutated cells should invoke `fm_workbook_recalc` first.
+ * Read contract: the value follows the workbook's calc mode. Under
+ * `FM_CALC_MODE_AUTO` the read first computes the dirty cells (those a change
+ * left uncomputed); under `FM_CALC_MODE_MANUAL` it returns the values as of
+ * the last recalc, and only `fm_workbook_recalc` brings them up to date.
+ * The other value getters cite this contract.
  *
  * For `FM_VAL_TEXT`, `out->u.text` is a read-scratch-backed view into the
  * handle's transient read storage. It may be invalidated by the next
@@ -1459,6 +1463,10 @@ FM_API fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t shee
  * on `wb` is the ABI-level purity contract. Structured references are bound
  * at `(row, col)` as `fm_sheet_set_formula` binds them (`[@Qty]` in a
  * table cell).
+ *
+ * The evaluation computes every precedent it reads, even under
+ * `FM_CALC_MODE_MANUAL`, without storing the results; `fm_sheet_get_value`
+ * follows the calc mode.
  *
  * An Array / spill result is reduced to its top-left element. This is a
  * pragmatic API-shape choice, NOT Excel implicit intersection (which
@@ -1700,7 +1708,8 @@ FM_API fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t sheet
  * @brief Reads the `index`-th cell on `sheet_index`.
  *
  * Enumerates the coordinates counted by `fm_sheet_get_cell_count`, sorted by
- * `(row, col)` ascending; unwritten columns are not enumerated.
+ * `(row, col)` ascending; unwritten columns are not enumerated. The values
+ * follow the calc-mode read contract of `fm_sheet_get_value`.
  *
  * On success the call writes `*out_row`, `*out_col`, `*out_value`, and
  * — if `out_formula != NULL` — points `*out_formula` at the cell's
@@ -1881,7 +1890,8 @@ typedef enum {
  * width: a `*x` repeat fill contributes no characters and an overflow is
  * reported through `*out_status` rather than as a width-dependent `#` run.
  * A coordinate with no value or spill result is `""`. `*out_text` is a
- * read-scratch-backed view.
+ * read-scratch-backed view. The text follows the calc-mode read contract of
+ * `fm_sheet_get_value`.
  *
  * Lifetime: transient.
  *
@@ -2317,6 +2327,9 @@ typedef struct {
  * @brief Appends a hyperlink covering the inclusive rectangle
  *        `(hl.row, hl.col)..(hl.last_row, hl.last_col)` to `sheet_index`.
  *
+ * `display` is the hyperlink's stored display attribute; the cell value is
+ * not written. Call `fm_sheet_set_text` with the same text to show it.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
@@ -2359,6 +2372,9 @@ FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, size_t sheet_ind
 
 /**
  * @brief Appends a merge range to the sheet's merge list.
+ *
+ * Covered cells keep their values and stay writable; clear them first to
+ * match Excel's Merge.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `merge` is `NULL`;
@@ -2516,10 +2532,10 @@ FM_API fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, size_t 
 
 /**
  * @brief Inserts or replaces the comment at `(row, col)` on `sheet_index`.
- *        An empty or `NULL` `text` writes a comment with no text, as Excel
- *        keeps an empty note; `fm_sheet_remove_comment` removes one. The
- *        strings are copied into the workbook handle's text storage. The
- *        coordinate must lie within the Excel grid.
+ *        This family is Excel 365's Notes (legacy comments); Excel's
+ *        comments are the `fm_sheet_*_threaded_comment` family. An empty or `NULL` `text` writes a comment with no
+ * text, as Excel keeps an empty note; `fm_sheet_remove_comment` removes one. The strings are copied into the workbook
+ * handle's text storage. The coordinate must lie within the Excel grid.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
@@ -2817,10 +2833,10 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  * Every string field accepts `NULL`, which is treated as the empty
  * string. `v.ranges` must point to `v.range_count >= 1` consecutive
  * `fm_cell_rect_t` values that the implementation copies into the
- * rule's owned storage. Range corners
- * are not normalised — callers should pass already-normalised
- * `(first <= last)` rectangles. Every rectangle must lie within the
- * Excel grid; all ranges are validated before the rule is stored.
+ * rule's owned storage. Every rectangle must be normalised
+ * (`first <= last`) and lie within the Excel grid; an inverted or
+ * out-of-grid one is `FM_STATUS_INVALID_ARGUMENT`. All ranges are
+ * validated before the rule is stored.
  * `v.formula1` / `v.formula2` may carry one leading `=`, which is dropped:
  * the rule stores them as files carry them, spelled as
  * `fm_sheet_set_formula` stores a cell formula.
@@ -2831,7 +2847,7 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count` is 0 or
  *         exceeds the per-call range cap, when any supplied range is
- *         outside the Excel grid, or when `v.type`, `v.op` or
+ *         inverted or outside the Excel grid, or when `v.type`, `v.op` or
  *         `v.error_style` is outside the domain listed above;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a non-empty
  * `v.formula1` or `v.formula2` does not parse (the rule is not stored).
@@ -3143,7 +3159,7 @@ FM_API fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id);
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         a `kEval*` / `kGraph*` code on engine failure.
+ *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
 
@@ -3153,16 +3169,17 @@ FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
  *        has applied yet, else `0`.
  *
  * Cell reads report the values of the last full recalc, so a `1` means some
- * of them may be stale. A change is a cell write, a defined-name edit that a
- * formula reads, a row / column insert or delete, a sheet removal, or a
- * profile change on a workbook with formulas; setting the current profile
- * again is not. Volatile cells (`NOW()`, `RAND()`) do not count: they
+ * of them may be stale. A cell is dirty while a change has left its value
+ * uncomputed. A change is a cell write, a defined-name edit that a
+ * formula reads, a row / column insert or delete, a sheet removal, a file
+ * name change, or a profile change on a workbook with formulas; setting the
+ * current profile or file name to its current value is not. Volatile cells (`NOW()`, `RAND()`) do not count: they
  * re-evaluate on every recalc, and a workbook holding only them reads `0`
  * after a recalc. A freshly created workbook reads `0`. A loaded workbook
  * that holds formulas reads `1` until its first full recalc: its cells carry
  * the file's cached results, and that recalc re-evaluates every formula.
- * `fm_sheet_recalc_viewport` leaves the cells it skipped pending, so the
- * answer stays `1` after it; a failed full recalc keeps every pending change.
+ * `fm_sheet_recalc_viewport` leaves the cells it skipped dirty, so the
+ * answer stays `1` after it; a failed full recalc keeps every dirty cell.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -3206,7 +3223,7 @@ typedef struct {
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `thread_count > 8`;
  *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called recursively from a recalc
  *         callback (including a scheduler worker);
- *         a `kEval*` / `kGraph*` code on engine failure.
+ *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
                                                fm_parallel_recalc_stats_t* out_stats);
@@ -3255,7 +3272,7 @@ FM_API fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_t* o
  *
  * Mirrors Excel's "Calculation options" workbook setting and the
  * `calcMode` attribute on the `<calcPr>` element.
- *   * `FM_CALC_MODE_AUTO` (the default): pending cells are calculated before
+ *   * `FM_CALC_MODE_AUTO` (the default): dirty cells are calculated before
  *     a value is read and before the workbook is saved.
  *   * `FM_CALC_MODE_MANUAL`: nothing is calculated until `fm_workbook_recalc`.
  *   * `FM_CALC_MODE_AUTO_NO_TABLE`: as Auto, but data tables are skipped.
@@ -3283,7 +3300,7 @@ FM_API fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, int32_t* o
 /**
  * @brief Sets the workbook's calc mode.
  *
- * Decides whether value reads and saves calculate pending cells first (see
+ * Decides whether value reads and saves calculate dirty cells first (see
  * `fm_calc_mode_t`). The value is a raw signed
  * 32-bit enum ordinal so FFI callers can pass an arbitrary value without
  * first constructing an out-of-domain C enum. Unknown values (outside the
@@ -3409,9 +3426,10 @@ FM_API fm_status_t fm_workbook_get_pinned_now(const fm_workbook_t* wb, fm_civil_
  * instant to agree on.
  *
  * This is model state, not file state: nothing in the OOXML package records
- * it, so a save drops it and a reload comes back unpinned. Cached formula
- * values are not recomputed here — drive `fm_workbook_recalc` (or an
- * equivalent partial recalc) to see the pin take effect on existing cells.
+ * it, so a save drops it and a reload comes back unpinned. Setting or
+ * clearing the pin marks every formula cell dirty, as a profile or iterative
+ * change does; in Auto mode the next read recomputes, in Manual mode
+ * `fm_workbook_recalc` does.
  *
  * @param wb  Workbook handle. Must not be NULL.
  * @param now The reading to pin. Must not be NULL, and every field must be
@@ -3510,8 +3528,8 @@ FM_API fm_status_t fm_workbook_get_profile_id(const fm_workbook_t* wb, const cha
  * ids and `win-365-ja_JP` follow Excel; the other `win-*` ids
  * are estimated from the Mac values plus the Windows host rules.
  *
- * Existing cached formula values are not recomputed until the caller drives
- * `fm_workbook_recalc` or an equivalent partial recalc.
+ * The change marks every formula cell dirty: in Auto mode the next read
+ * recomputes, in Manual mode `fm_workbook_recalc` does.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `profile_id` is NULL`;
@@ -3544,6 +3562,7 @@ FM_API fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, const char
  * `'<name>'!Name` are stored as `[0]!Name`, and `[<name>]Sheet1!A1` as
  * `Sheet1!A1`. The book is matched under ASCII case folding. The stored form
  * and the saved files do not depend on the name.
+ * A changed name marks every formula cell dirty.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is NULL;
@@ -3676,8 +3695,8 @@ typedef int32_t (*fm_iterative_progress_cb)(uint32_t iteration, double max_resid
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `viewport` is NULL;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is past the last sheet;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `viewport` is inverted or outside the grid, or
- *         `sheet_index` exceeds the 16-bit range a sheet id is stored in;
- *         a `kEval*` / `kGraph*` code on engine failure.
+ *         `sheet_index` is above 65535;
+ *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
  */
 FM_API fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* viewport,
                                             uint32_t* out_recomputed_count);
@@ -6355,7 +6374,7 @@ FM_API fm_status_t fm_sheet_clear_pivot_field_subtotal_fns(fm_workbook_t* wb, si
                                                            size_t field_index);
 
 /**
- * @brief Groups the date field `field_index` (a database field, or one of its
+ * @brief Groups the date field `field_index` (a source field, or one of its
  *        group fields) by the `FM_PIVOT_PERIOD_*` bits of `periods_mask`, as
  *        Excel's Group command does, replacing any grouping it has.
  *
@@ -6382,7 +6401,7 @@ FM_API fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, size_t
                                                        uint32_t interval_days, double start_or_nan, double end_or_nan);
 
 /**
- * @brief Removes the date grouping of field `field_index` (a database field, or
+ * @brief Removes the date grouping of field `field_index` (a source field, or
  *        one of its group fields) from every pivot on its cache; the field
  *        returns to the axis position its group fields held. A field that is
  *        not grouped is left as it is.
@@ -6733,12 +6752,13 @@ FM_API fm_status_t fm_sheet_get_pivot_column_field_order(const fm_workbook_t* wb
 
 /*
  * Persistence contract shared by the whole pivot-filter family
- * (`fm_sheet_get_pivot_filter_count`, `_at`, `_add`, `_clear`,
- * `_remove_at`):
+ * (`fm_sheet_get_pivot_filter_count`, `fm_sheet_get_pivot_filter`,
+ * `fm_sheet_add_pivot_filter`, `fm_sheet_clear_pivot_filters`,
+ * `fm_sheet_remove_pivot_filter`):
  *
  * The list is the pivot's label / value / date filters and is saved as the
  * definition's `<filters>` block. Every entry of a loaded block whose type
- * this ABI enumerates appears here, and `_clear` / `_remove_at` remove it.
+ * this ABI enumerates appears here, and clear / remove take it away.
  * Only entries the model cannot express (an unknown type, a member-property
  * or OLAP measure filter, criteria that do not decode) are not listed; they
  * filter nothing and are re-emitted verbatim on save in their original
@@ -6957,7 +6977,7 @@ typedef enum {
  * `canonical_name` is always populated when the function is known.
  * `min_arity` / `max_arity` bound the written argument count Excel
  * accepts at entry, the bounds formula entry enforces; `max_arity` is
- * `0xFFFFFFFFu` (i.e. `eval::kVariadic`) for an open argument list.
+ * `0xFFFFFFFFu` for an open argument list.
  * `availability` reports whether the function is a real implementation,
  * host/environment-bound, or an intentionally unavailable fixed-error
  * stub (see `fm_function_availability_t`).
@@ -7308,7 +7328,7 @@ typedef struct {
 /**
  * @brief Per-column layout override surfaced over the C ABI.
  *
- * Mirrors `formulon::ColumnLayout`. Both endpoints are 0-based and
+ * Both endpoints are 0-based and
  * inclusive (matches the engine-side type; OOXML's `min`/`max`
  * 1-based conversion stays inside the writer). `has_width` is logical
  * presence: it is true for the raw presence bit or a legacy non-zero width,
@@ -8686,7 +8706,7 @@ FM_API const char* fm_get_error_display_name(fm_error_code_t error);
 /**
  * @brief Minimum severity for the engine's structured log stream.
  *
- * Ordinals match `formulon::StructuredLogLevel`. `FM_LOG_LEVEL_OFF`
+ * Ordinals ascend with severity. `FM_LOG_LEVEL_OFF`
  * discards every record and is the default: an embedded library must not
  * write to the host's stderr unless the host asks for it.
  */
@@ -8774,6 +8794,9 @@ typedef enum {
 
 /**
  * @brief Plain-data projection of a `formulon::io::CellXf` record.
+ *
+ * Frozen value type (an element of `fm_styles_batch_t`): its layout never
+ * changes, and extension goes through new functions.
  *
  * This record is a fixed 128-byte C ABI layout carrying every optional
  * alignment attribute represented by Formulon's style model, the six
@@ -8869,6 +8892,9 @@ typedef enum {
 /**
  * @brief Plain-data projection of a `formulon::io::FontRecord`.
  *
+ * Frozen value type (an element of `fm_styles_batch_t`): its layout never
+ * changes, and extension goes through new functions.
+ *
  * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
  * styles table; it is valid until the next mutation of the font list
  * (`fm_workbook_add_font`, `fm_workbook_set_font`) or until the handle is
@@ -8958,6 +8984,9 @@ typedef enum {
 /**
  * @brief Plain-data projection of a `formulon::io::FillRecord`.
  *
+ * Frozen value type (an element of `fm_styles_batch_t`): its layout never
+ * changes, and extension goes through new functions.
+ *
  * `pattern` is the OOXML pattern index: `0=none`, `1=solid`,
  * `2..18=standard pattern set`. `fg` and `bg` are the `<fgColor>` /
  * `<bgColor>` colours, `kFmColorNone` when the element is absent.
@@ -9020,6 +9049,9 @@ typedef struct {
 /**
  * @brief Plain-data projection of a `formulon::io::BorderRecord`.
  *
+ * Frozen value type (an element of `fm_styles_batch_t`): its layout never
+ * changes, and extension goes through new functions.
+ *
  * Each side mirrors the OOXML schema. `diagonal_up` / `diagonal_down`
  * carry the boolean flags as `0`/`1` int32_t to match the rest of the
  * binding surface.
@@ -9068,6 +9100,9 @@ typedef struct {
 /**
  * @brief Plain-data projection of one OOXML `<dxf>` differential format.
  *
+ * Frozen value type: its layout never
+ * changes, and extension goes through new functions.
+ *
  * Each `*_engaged` flag mirrors whether the corresponding child element
  * exists in the source `<dxf>`. `num_fmt_code`, `alignment_xml`, and
  * `protection_xml` are model-backed views, valid until the next styles-table
@@ -9098,6 +9133,9 @@ typedef struct {
 /**
  * @brief Plain-data projection of a `formulon::io::CellStyleRecord`
  *        (one OOXML `<cellStyle>` entry).
+ *
+ * Frozen value type: its layout never
+ * changes, and extension goes through new functions.
  *
  * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
  * styles table; it is valid until the next mutation of the cell-style
@@ -10993,8 +11031,8 @@ FM_API fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t she
  * Patch structs carry one `fm_chart_patch_op_t` per field: a zeroed struct
  * changes nothing, `FM_CHART_PATCH_CLEAR` removes the element, and
  * `FM_CHART_PATCH_SET` writes the value beside it. A field that cannot be
- * removed rejects `CLEAR` with `FM_STATUS_INVALID_ARGUMENT` (2). Colors are ARGB
- * (`0xAARRGGBB`); transparency is a percentage (0..100).
+ * removed rejects `CLEAR` with `FM_STATUS_INVALID_ARGUMENT` (2). Colors are
+ * `fm_color_spec_t`; transparency is a percentage (0..100).
  *
  * Edits patch the chart part and write nothing when the result is
  * unchanged. Common failures, besides those each entry lists:
@@ -12268,7 +12306,7 @@ FM_API fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t sheet_in
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         a `kEval*` / `kGraph*` code on engine failure.
+ *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_recalc_data_tables(fm_workbook_t* wb);
 

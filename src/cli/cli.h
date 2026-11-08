@@ -71,7 +71,7 @@ inline void print_profile_ids(std::ostream& out) {
 
 /// Writes the help lines of the value-taking shared options.
 inline void print_shared_options(std::ostream& out) {
-  out << "  --profile <id>        Excel profile for evaluation semantics; formula text stays en-US unless --local\n"
+  out << "  --profile <id>        Excel profile for evaluation semantics\n"
       << "                        (default: " << excel_profile_id(default_excel_profile()) << ").\n"
       << "                        Profiles: see 'formulon profiles'\n"
       << "  --now <date[Thh:mm:ss]>\n"

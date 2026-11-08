@@ -79,7 +79,12 @@ TEST(FormulonCli, EvalHelpStatesThatUnparsableFormulasExit65) {
 TEST(FormulonCli, ProfileHelpStatesThatFormulaTextStaysEnUsUnlessLocal) {
   const CliRun r = run_cli({"eval", "--help"});
   ASSERT_EQ(r.exit_code, 0);
-  EXPECT_NE(r.stdout_text.find("Excel profile for evaluation semantics; formula text stays en-US unless --local"),
-            std::string::npos)
-      << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("Excel profile for evaluation semantics"), std::string::npos) << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("(separators, function names); otherwise en-US"), std::string::npos) << r.stdout_text;
+}
+
+TEST(FormulonCli, DumpHelpDoesNotOfferTheEvalOnlyLocalOption) {
+  const CliRun r = run_cli({"dump", "--help"});
+  ASSERT_EQ(r.exit_code, 0);
+  EXPECT_EQ(r.stdout_text.find("unless --local"), std::string::npos) << r.stdout_text;
 }

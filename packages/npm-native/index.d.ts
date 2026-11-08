@@ -601,7 +601,7 @@ export interface TableInput {
 }
 
 /** Partial table metadata update (`Table.update`). An omitted key leaves the field unchanged; `styleName: null`
- * removes the table style (the only key that accepts `null`), and a new `name` keeps the four toggles.
+ * removes the table style (the only key that accepts `null`), and a new `styleName` keeps the four toggles.
  * `range` takes a {@link SheetRect} or an A1 string and resizes the table; its `sheet` must be the table's
  * own sheet, otherwise the call fails with `StatusCode.InvalidArgument`. `headerRow` and `totalsRow` update
  * their flags only when supplied; turning `totalsRow` on writes each column's totals cell on the last row
@@ -1262,10 +1262,11 @@ export interface PivotFilterInput {
 
 /** One element of `Pivot.listFilters()`: the stored filter. Field names and semantics match `PivotFilterInput`.
  *
- *  The filter list is saved as the definition's `<filters>` block. Loaded
- *  filters of every type appear here, naming their field by source name;
- *  only an entry the engine cannot interpret is not listed, still filters,
- *  survives `Pivot.clearFilters` / `Pivot.removeFilter`, and is saved verbatim. */
+ *  The filter list is saved as the definition's `<filters>` block. Every entry of a loaded block whose type
+ *  the engine enumerates appears here, naming its field by source name, and `Pivot.clearFilters` /
+ *  `Pivot.removeFilter` remove it. Only entries the model cannot express (an unknown type, a member-property or
+ *  OLAP measure filter, criteria that do not decode) are not listed; they filter nothing and are saved verbatim in
+ *  their original position. */
 export interface PivotFilter {
   readonly axis: PivotAxis;
   readonly fieldName: string;
@@ -1343,7 +1344,7 @@ export const ErrorDisplayName: Readonly<Record<ErrorCode, string>>;
 /**
  * Workbook-level calc mode (`<calcPr calcMode>`).
  *
- * - `Auto` (the default) — pending cells are computed before a value is read and before a save.
+ * - `Auto` (the default) — dirty cells are computed before a value is read and before a save.
  * - `Manual` — nothing is computed until `recalc()`.
  * - `AutoNoTable` — as `Auto`, but the data tables are skipped; `recalcDataTables()` computes them.
  *
@@ -1781,8 +1782,7 @@ export type SheetViewMode = 0 | 1 | 2;
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
  *  counts, tab visibility, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>` (gridlines, row/col headers, zero display,
- *  right-to-left, tab-selected, view mode). Booleans are encoded as
- *  `0`/`1`. */
+ *  right-to-left, tab-selected, view mode). */
 export interface SheetView {
   readonly zoomScale: number;
   readonly freezeRows: number;
@@ -1845,10 +1845,10 @@ export interface SheetSelection {
  *
  * Round-trip metadata only — the engine does not enforce locks at
  * evaluation time. The host UI inspects these flags to mirror Excel's
- * "Protect Sheet" dialog state. Booleans are encoded as `0`/`1`.
+ * "Protect Sheet" dialog state.
  *
  * `enabled` controls whether the `<sheetProtection>` element is
- * emitted at all; setting it to `0` clears the protection block on
+ * emitted at all; setting it to `false` clears the protection block on
  * save.
  */
 export interface SheetProtection {
@@ -1957,7 +1957,7 @@ export interface Comment {
   readonly text: string;
 }
 
-/** Workbook-level protection (`<workbookProtection>`). Booleans are stored as 0/1.
+/** Workbook-level protection (`<workbookProtection>`).
  *  Hash fields are stored exactly as given; the host computes them. A zero
  *  spin count and an empty string are absent. */
 export interface WorkbookProtection {
@@ -3571,7 +3571,8 @@ export interface ThemeScriptFont {
 export interface ThemeColors {
   /** Where the theme came from: the part, or the default theme when the part is absent or unparseable. */
   readonly source: ThemeSource;
-  /** 0xFFRRGGBB in `clrScheme` order: dk1, lt1, dk2, lt2, accent1..6, hlink, folHlink. */
+  /** 0xFFRRGGBB in `clrScheme` order: dk1, lt1, dk2, lt2, accent1..6, hlink, folHlink. This is not the order of a
+   *  colour's `Color.theme` index, which swaps the first two pairs (0 = lt1, 1 = dk1, 2 = lt2, 3 = dk2). */
   readonly colors: readonly number[];
 }
 
@@ -4274,7 +4275,7 @@ export interface ChartPlot {
   readonly series: readonly ChartSeries[];
 }
 
-/** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each empty otherwise. */
+/** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each `null` for another kind. */
 export interface ChartTitle {
   readonly kind: ChartTitleKind;
   /** The literal text of a `Text` title; `null` for another kind. */
@@ -4492,7 +4493,7 @@ export type ChartAxisPatch = Patch<{
 
 /** Patch for `Chart.setDisplay`. An omitted key keeps the element, `null` removes it, a value sets it.
  *  `naAsBlank: true` writes `c16r3:dispNaAsBlank`; `false` and `null` both remove it, as Excel does, so a
- *  read-back is `null`. `blanksAs` takes `Gap`, `Zero` or `Span`; `Absent` is not a value (use `null`). */
+ *  read-back is `null`. `blanksAs` takes `Gap`, `Zero` or `Span`; use `null` to remove it. */
 export type ChartDisplayPatch = Patch<{
   blanksAs: ChartBlanksAs;
   plotVisibleOnly: boolean;
@@ -4742,11 +4743,11 @@ export type ProtectedRangeRef = number | string;
  *  A `set<X>` method follows its argument type: `R` replaces the whole value, `<R>Patch` updates part of it, and
  *  `<R>Input` is an input with defaults.
  *
- *  Under `CalcMode.Auto` (the default) a value read or a save first computes the cells a change left pending,
+ *  Under `CalcMode.Auto` (the default) a value read or a save first computes the cells a change left dirty,
  *  so a read after a write sees the new value without a `recalc()`. Such a read may run the iterative-progress
  *  callback and fail with a recalculation status (4000-4006). Under `CalcMode.Manual` a read returns the
  *  values as of the last recalc; call `setCalcMode(CalcMode.Manual)` right after `load` to read the cached
- *  values a file carries. `hasDirtyCells()` tells whether a change is pending.
+ *  values a file carries. `hasDirtyCells()` tells whether any cell is dirty.
  *
  *  The XF-level style tables, named styles and XML passthrough parts are reached through `ooxml`.
  *
@@ -4764,9 +4765,9 @@ export interface Workbook {
   /** `true` once `dispose()` has run. The only member that still answers after disposal. */
   readonly disposed: boolean;
   /** Deterministically releases the native workbook handle. Idempotent; every later call, on the workbook or on
-   *  one of its `Sheet` handles, throws `FormulonError` with `StatusCode.BindingInvalidHandle`. Throws, and leaves
-   *  the handle intact, if called from inside this workbook's own iterative-progress callback or another active
-   *  method call. */
+   *  one of its `Sheet` handles, throws `FormulonError` with `StatusCode.BindingInvalidHandle`. Throws `FormulonError` with
+   *  `StatusCode.GraphRecalcReentrant`, and leaves the handle intact, if called from inside this workbook's own
+   *  iterative-progress callback or another active method call. */
   dispose(): void;
   /** Same as `dispose()`, so `using wb = ...` releases the handle. */
   [Symbol.dispose](): void;
@@ -4776,7 +4777,7 @@ export interface Workbook {
    *  the passthrough parts. Always the same object. */
   readonly ooxml: WorkbookOoxml;
 
-  /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`). Pending
+  /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`). Dirty
    *  cells are computed first unless the mode is `CalcMode.Manual` with `calcOnSave` off, which writes the
    *  cached values. An archive or writer failure throws with one of the `StatusCode.Io*` codes; an unknown `format`
    *  value with `StatusCode.InvalidArgument`.
@@ -4803,8 +4804,8 @@ export interface Workbook {
   /** Every sheet's handle, in sheet order; a new array on each call. */
   listSheets(): readonly Sheet[];
   /** Appends a sheet and returns its handle. Fails with `StatusCode.InvalidSheetName` when the name is empty, longer
-   *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, or collides case-insensitively (Unicode simple case
-   *  folding) with an existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
+   *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an apostrophe, is `History` in any
+   *  case, or collides case-insensitively (Unicode simple case folding) with an existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
   addSheet(name: string): Sheet;
   /** Removes `sheet`; its handle then throws `StatusCode.NotFound`, and the handles after it move down one place.
    *  References to it are rewritten to `#REF!` at the affected subexpression (cell formulas, defined names,
@@ -4833,7 +4834,7 @@ export interface Workbook {
   /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format `formatCode`; empty means General. */
   formatValue(value: Value, formatCode: string): DisplayText;
 
-  /** Computes every pending cell now, serially on the caller thread, whatever the calc mode. Under
+  /** Computes every dirty cell now, serially on the caller thread, whatever the calc mode. Under
    *  `CalcMode.Auto` a read does this on its own; call it to choose when the work happens, or under
    *  `CalcMode.Manual`.
    *
@@ -4866,9 +4867,11 @@ export interface Workbook {
    * serially with `workerThreadsStarted` at 0.
    */
   recalcParallel(threadCount?: number): ParallelRecalcStats;
-  /** `true` when a change (a cell, a defined name, the profile, a row or column insert / delete, a sheet removal)
-   *  is not yet computed, by a read under `CalcMode.Auto` or by `recalc` / `recalcParallel`. Volatile formulas and a fresh load do
-   *  not count, `recalcViewport` does not clear it, and a recalc that throws leaves it set. */
+  /** `true` while any cell is dirty: a change (a cell, a defined name, the profile, the file name, a row or column
+   *  insert / delete, a sheet removal) has left its value uncomputed, until a read under `CalcMode.Auto` or
+   *  `recalc` / `recalcParallel` computes it. Volatile formulas do not count, and neither does a freshly created
+   *  workbook; a loaded workbook with formulas reads `true` until its first full recalc. `recalcViewport` does not
+   *  clear it, and a recalc that throws leaves it set. */
   hasDirtyCells(): boolean;
 
   /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default)
@@ -4891,7 +4894,7 @@ export interface Workbook {
    *  `TypeError` and leaves the installed callback in place. */
   setIterativeProgress(callback: IterativeProgressCallback | null): void;
 
-  /** Workbook-level calc mode (`<calcPr calcMode>`): when pending cells are computed (see {@link CalcMode}). */
+  /** Workbook-level calc mode (`<calcPr calcMode>`): when dirty cells are computed (see {@link CalcMode}). */
   getCalcMode(): CalcMode;
   /** Sets the calc mode. Fails with `StatusCode.InvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): void;
@@ -4899,7 +4902,7 @@ export interface Workbook {
   getFullPrecision(): boolean;
   setFullPrecision(fullPrecision: boolean): void;
   /** `<calcPr calcOnSave>` (default `true`). Under `CalcMode.Manual`, `false` makes `save` write the cached
-   *  values without computing pending cells. */
+   *  values without computing dirty cells. */
   getCalcOnSave(): boolean;
   setCalcOnSave(calcOnSave: boolean): void;
   /** `<calcPr refMode>` as a `RefMode` code. */
@@ -4926,7 +4929,8 @@ export interface Workbook {
    * results in any zone. This is model state, not file state — `save()` does
    * not record it and a reloaded workbook comes back unpinned.
    *
-   * `setPinnedNow` does not mark existing formulas pending; `recalc()` recomputes them under the pin.
+   * Setting or clearing the pin marks every formula cell dirty, as a profile or iterative change does; in Auto
+   * mode the next read recomputes, in Manual mode `recalc()` does.
    *
    * `setPinnedNow` fails with `StatusCode.InvalidArgument` unless `year` is in
    * `[1900, 9999]`, `month` in `[1, 12]`, `day` within that month's real
@@ -4945,7 +4949,7 @@ export interface Workbook {
    */
   getProfileId(): ProfileId;
   /** Selects the Excel profile; `StatusCode.InvalidArgument` for an id that is not a {@link ProfileId}.
-   *  The change leaves the formulas pending, computed as {@link CalcMode} says. */
+   *  The change leaves the formulas dirty, computed as {@link CalcMode} says. */
   setProfileId(profileId: ProfileId): void;
   /** File name the workbook is shown under, extension included and without a directory; `null` when unset.
    *  While set, every formula getter spells a reference to the workbook's own defined name (stored `[0]!Name`)
@@ -4953,7 +4957,7 @@ export interface Workbook {
    *  Loading from bytes leaves it unset. */
   getFileName(): string | null;
   /** Sets `getFileName()`; `null` (or `""`) unsets it. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1`
-   *  as this workbook and create no external link. `StatusCode.InvalidArgument` when the name lacks a workbook extension,
+   *  as this workbook and create no external link. A changed name marks every formula dirty. `StatusCode.InvalidArgument` when the name lacks a workbook extension,
    *  holds one of `[ ] : / \ ? *`, is longer than 218 bytes, or equals an external link's book name. */
   setFileName(name: string | null): void;
 
@@ -4976,7 +4980,8 @@ export interface Workbook {
    *  table with `StatusCode.IndexOutOfRange`. */
   table(table: TableRef): Table;
   /** Creates a worksheet table and returns its handle.
-   *  `input.columns` must hold one unique, non-empty header per column of `input.range`.
+   *  `input.columns` is optional and defaults to the header row's cell texts; when given, it holds one unique,
+   *  non-empty name per column of `input.range`.
    *
    *  @example
    *  ```ts
@@ -4988,7 +4993,8 @@ export interface Workbook {
    *  });
    *  ``` */
   addTable(input: TableInput): Table;
-  /** Removes the table `table`; its handle then fails with `StatusCode.NotFound`. */
+  /** Removes the table `table`; its handle then fails with `StatusCode.NotFound`. Formulas that name the table keep
+   *  their structured references and evaluate to `#NAME?`. */
   removeTable(table: TableRef): void;
   /** Lists the workbook's persons. */
   listPeople(): readonly Person[];
@@ -5019,7 +5025,8 @@ export interface Workbook {
   /** The handle of the pivot cache `cacheId`; `StatusCode.NotFound` when the workbook has no such cache. */
   pivotCache(cacheId: number | PivotCache): PivotCache;
   /** Creates a new empty pivot cache and returns its handle; its id is `requestedId` when given, else one the
-   *  engine assigns. */
+   *  engine assigns. A new cache has no worksheet source, and a workbook containing one cannot be saved: call
+   *  `PivotCache.setWorksheetSource` before saving. */
   addPivotCache(requestedId?: number): PivotCache;
   /** Removes the pivot cache `cacheId`; its handle then fails with `StatusCode.NotFound` until a cache with the
    *  same id is added. Fails if any pivot table still references it. */
@@ -5121,7 +5128,9 @@ export interface Workbook {
  *  To read cells, pick by shape: `getValues` for a dense grid of values, `listCells` for the populated cells of a
  *  range, `getCellsInRange` to page through a large range with a cursor, and `iterRows` for the rows of the
  *  used range. A read returns native values ({@link NativeValue}); its `*Typed*` variant returns tagged
- *  {@link Value}s. A read computes pending cells first, as {@link CalcMode} says.
+ *  {@link Value}s. A read computes dirty cells first under `CalcMode.Auto` and returns the values as of the last
+ *  recalc under `CalcMode.Manual`; `evaluateFormula` computes every precedent it reads, even in Manual mode,
+ *  without storing the results.
  *
  *  The cell, row and column XF indices and the raw worksheet XML are reached through `ooxml`. */
 export interface Sheet {
@@ -5282,7 +5291,8 @@ export interface Sheet {
 
   /** The stored A1 formula (leading `=` included), or `null` for a cell that holds none. The text is
    *  re-spelled from the parsed formula, so literals read normalised (`=1.50` reads `=1.5`); a formula loaded
-   *  from a file shows book names, not `[N]` indexes. */
+   *  from a file shows book names, not `[N]` indexes. A data table's result cell reads the table's formula,
+   *  `=TABLE(row_input,col_input)`, with an absent input left empty (`=TABLE(,B3)`) and a deleted one as `#REF!`. */
   getFormula(row: number, col: number): string | null;
   /** `getFormula` at the A1 address `a1`. */
   getFormula(a1: string): string | null;
@@ -5318,6 +5328,8 @@ export interface Sheet {
    *  references, defined names, and `ROW()` / `COLUMN()` resolve relative to the anchor. A self-reference reads
    *  the target cell's value rather than raising `#REF!`, since the ad-hoc formula never joins the dependency
    *  graph. A formula that does not parse fails with its parser status and `FormulonError.parseError`.
+   *  It computes every precedent it reads, even under `CalcMode.Manual`, without storing the results; `getValue`
+   *  follows the calc mode.
    *
    *  @example
    *  ```ts
@@ -5461,7 +5473,8 @@ export interface Sheet {
   /** Lists the sheet's threaded comments in file order: each thread's opening comment followed by its replies. */
   listThreadedComments(): readonly ThreadedComment[];
   /** Adds a threaded comment. A `parentId` that is omitted or `null` opens a new thread at
-   *  `row` / `col`; otherwise it replies to that thread. */
+   *  `row` / `col`, which must hold neither a note nor a thread (else `StatusCode.ThreadedCommentInvalid`);
+   *  otherwise it replies to that thread. */
   addThreadedComment(comment: ThreadedCommentInput): void;
   /** Updates the text, mentions and resolved state of the comment with `id`; an omitted key keeps its value.
    *  `done` applies to a thread's opening comment only. */
@@ -5601,7 +5614,9 @@ export interface Sheet {
   listColumnBreaks(): readonly PageBreak[];
 
   /** Applies a partial `<pageSetup>` update. `fitToPage` sets or clears `<sheetPr><pageSetUpPr fitToPage>`
-   *  without disturbing anything else `<sheetPr>` carries; `false` removes the attribute. */
+   *  without disturbing anything else `<sheetPr>` carries; `false` removes the attribute. `orientation: null`
+   *  leaves a sheet that states no orientation as it is and fails with `StatusCode.InvalidArgument` on one that
+   *  states it, since a stated orientation cannot be removed. */
   setPageSetup(setup: PageSetupPatch): void;
   /** Applies a partial `<pageMargins>` update, in inches. */
   setPageMargins(margins: PageMarginsPatch): void;
@@ -5712,8 +5727,8 @@ export interface Sheet {
 
   /** Reads the sheet's default column / row metrics. */
   getFormatDefaults(): SheetFormatDefaults;
-  /** Replaces the sheet's default column / row metrics; an omitted key keeps its value. A `has*` flag left out
-   *  defaults to whether its value was supplied. */
+  /** Replaces the sheet's default column / row metrics; an omitted key keeps its value and `null` clears
+   *  `defaultColWidth` / `defaultRowHeight`. */
   setFormatDefaults(defaults: SheetFormatDefaultsPatch): void;
 
   /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
@@ -5759,7 +5774,8 @@ export interface Sheet {
   /** `getEffectiveStyle` at the A1 address `a1`. */
   getEffectiveStyle(a1: string): EffectiveStyle;
 
-  /** Adds a merge range to the sheet. */
+  /** Adds a merge range to the sheet. Covered cells keep their values and stay writable; clear them first to match
+   *  Excel's Merge. */
   addMerge(range: CellRect | string): void;
   /** Removes every merge that overlaps `range` (inclusive); `StatusCode.NotFound` when nothing overlaps. */
   removeMerge(range: CellRect | string): void;
@@ -5770,14 +5786,17 @@ export interface Sheet {
   /** Returns the merge ranges on the sheet that intersect `range`, in storage order. */
   getMergesInRange(range: CellRect | string): readonly CellRect[];
 
-  /** Returns the cell comment at `(row, col)`; `null` when none is anchored there. */
+  /** Returns the cell comment at `(row, col)`; `null` when none is anchored there. The `*Comment` family is Excel
+   *  365's Notes (legacy comments); Excel's comments are the `*ThreadedComment` family. */
   getComment(row: number, col: number): Comment | null;
   /** `getComment` at the A1 address `a1`. */
   getComment(a1: string): Comment | null;
-  /** Returns every comment on the sheet, including comments anchored on
+  /** Returns every comment on the sheet (notes), including comments anchored on
    *  cells that carry no value. */
   listComments(): readonly SheetComment[];
-  /** Sets / replaces the cell comment; an empty `text` writes an empty comment. */
+  /** Sets / replaces the cell comment (an Excel note); an empty `text` writes an empty comment. Fails with
+   *  `StatusCode.ThreadedCommentInvalid` when the cell holds a threaded comment: a cell carries a note or a thread,
+   *  never both. */
   setComment(row: number, col: number, comment: Comment): void;
   /** `setComment` at the A1 address `a1`. */
   setComment(a1: string, comment: Comment): void;
@@ -5804,7 +5823,8 @@ export interface Sheet {
   removeProtectedRange(protectedRange: ProtectedRangeRef): void;
 
   /** Appends a hyperlink at `(row, col)`. For an in-workbook link, pass a `null` `target` and the A1 destination as
-   *  `location`. */
+   *  `location`. `display` is the hyperlink's stored display attribute; the cell value is not written, so call
+   *  `setText(cell, display)` to show it. */
   addHyperlink(row: number, col: number, link: HyperlinkInput): void;
   /** `addHyperlink` at the A1 address `a1`. */
   addHyperlink(a1: string, link: HyperlinkInput): void;
@@ -6165,7 +6185,8 @@ export interface Pivot {
   rename(name: string): void;
   /** The handle of the cache the pivot draws from. */
   getCache(): PivotCache;
-  /** Evaluates and projects the pivot into concrete grid cells. */
+  /** Returns the pivot's layout, computed from its cache records; the sheet cells are not written (`project()`
+   *  writes them). */
   getLayout(): PivotLayout;
   /** Sets the rectangle the pivot reserves (`<location ref>`); its top-left cell is the anchor. */
   setAnchor(range: CellRect | string): void;
@@ -6191,7 +6212,8 @@ export interface Pivot {
   setOptions(options: PivotOptionsPatch): void;
   /** Reads whether a cache change left the pivot's sheet cells stale; see `project`. */
   isProjectionPending(): boolean;
-  /** Writes the pivot's report into its sheet cells now and clears the pending flag. */
+  /** Writes the pivot's report, computed from its cache records, into its sheet cells now and clears the pending
+   *  flag. It does not re-read the cache's source range. */
   project(): void;
   /** Writes the records behind data cell (`row`, `col`) onto a new sheet, inserted before the pivot's sheet, and
    *  activates it. Returns the new sheet's handle; the pivot's sheet and the ones after it move up one place. */
@@ -6528,7 +6550,7 @@ export interface WorkbookCtor {
    *  to route on). Empty input fails with `StatusCode.InvalidArgument`, a damaged archive with one of
    *  the `StatusCode.Io*` codes (`StatusCode.IoZipCorrupt` for bytes that are not a ZIP archive), and a
    *  value that is not an `ArrayBuffer` or an `ArrayBufferView` throws `TypeError`; read a `Blob` with
-   *  `await blob.arrayBuffer()`. The formulas load pending, so under `CalcMode.Auto` the first value read or
+   *  `await blob.arrayBuffer()`. The formulas load dirty, so under `CalcMode.Auto` the first value read or
    *  save recomputes the workbook; to read the cached values the file carries, call
    *  `setCalcMode(CalcMode.Manual)` first (and `setCalcOnSave(false)` to save them unchanged).
    *
@@ -6810,6 +6832,9 @@ export interface Formulon {
  * const formulon = await createFormulon();
  * console.log(formulon.evaluateFormula('=SUM(1,2,3)')); // 6
  * ```
+ *
+ * The result has no teardown: its memory and workers are released with the JS realm; dispose workbooks
+ * individually.
  */
 export function createFormulon(options?: FormulonOptions): Promise<Formulon>;
 export default createFormulon;

@@ -48,7 +48,7 @@ void print_eval_usage(std::ostream& out) {
       << "A formula that does not parse exits 65 and prints 'formulon: eval: <message> at <line>:<column>'\n"
       << "on stderr.\n"
       << "  --json       print {\"format\":1,\"rows\":[[{\"kind\":...,\"value\":...},...],...]}\n"
-      << "  --local      the formula is spelled in the --profile locale (separators, function names)\n"
+      << "  --local      the formula is spelled in the --profile locale (separators, function names); otherwise en-US\n"
       << "  --in <file>  evaluate at A1 of a sheet of this xlsx or xlsb workbook ('-' reads it from stdin);\n"
       << "               the workbook is not saved\n"
       << "  --sheet <s>  with --in: the sheet name or 0-based index (default: the first sheet)\n"
