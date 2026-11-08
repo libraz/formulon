@@ -1315,6 +1315,86 @@ TEST(ChartEdit, TypeChangeKeepsFormattingInAChartWithoutStyleParts) {
   }
 }
 
+// A type change between category and value axes converts the axes in place, as Excel does: identity, direction,
+// gridlines and bounds of a kept value axis survive, label intervals become units and come back as defaults.
+TEST(ChartEdit, TypeChangeConvertsAxesInPlace) {
+  const auto edit = [](Workbook& wb, const Located& c, const std::string& from, const std::string& to) {
+    std::string xml = PartText(wb, c.path);
+    const std::size_t at = xml.find(from);
+    ASSERT_NE(at, std::string::npos) << from;
+    xml.replace(at, from.size(), to);
+    MustOk(wb.replace_passthrough_part(c.path, std::vector<std::uint8_t>(xml.begin(), xml.end())));
+  };
+  const std::string grid =
+      "<c:minorGridlines><c:spPr><a:ln w=\"3175\"><a:solidFill><a:srgbClr val=\"FF0000\"/></a:solidFill></a:ln>"
+      "</c:spPr></c:minorGridlines>";
+  const auto has = [](const std::string& ax, const std::string& part) { return ax.find(part) != std::string::npos; };
+
+  for (const K kind : {K::kScatter, K::kBar}) {
+    Workbook wb = GridBook();
+    Insert(wb, K::kColumn);
+    const Located c = Find(wb);
+    edit(wb, c, "<c:orientation val=\"minMax\"/></c:scaling><c:delete val=\"0\"/><c:axPos val=\"b\"/>",
+         "<c:orientation val=\"maxMin\"/></c:scaling><c:delete val=\"0\"/><c:axPos val=\"b\"/>" + grid);
+    edit(wb, c, "<c:lblOffset val=\"100\"/>",
+         "<c:lblOffset val=\"200\"/><c:tickLblSkip val=\"3\"/><c:tickMarkSkip val=\"2\"/>");
+    edit(wb, c, "<c:orientation val=\"minMax\"/></c:scaling><c:delete val=\"0\"/><c:axPos val=\"l\"/>",
+         "<c:orientation val=\"minMax\"/><c:max val=\"30\"/><c:min val=\"5\"/></c:scaling><c:delete val=\"0\"/>"
+         "<c:axPos val=\"l\"/>");
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, kind, ChartGrouping::kClustered));
+    const std::string xml = PartText(wb, c.path);
+    if (kind == K::kBar) {
+      const std::string cat = Between(xml, "<c:catAx>", "</c:catAx>");
+      EXPECT_TRUE(has(cat, "<c:lblOffset val=\"200\"/><c:noMultiLvlLbl")) << cat;
+      EXPECT_FALSE(has(cat, "tickMarkSkip")) << cat;
+      continue;
+    }
+    EXPECT_EQ(xml.find("<c:catAx>"), std::string::npos);
+    const std::string x = Between(xml, "<c:valAx>", "</c:valAx>", 0);
+    const std::string y = Between(xml, "<c:valAx>", "</c:valAx>", 1);
+    EXPECT_TRUE(has(x, "<c:axId val=\"507100001\"/><c:scaling><c:orientation val=\"maxMin\"/>")) << x;
+    EXPECT_TRUE(has(x, grid)) << x;
+    EXPECT_TRUE(has(x, "<c:numFmt formatCode=\"General\" sourceLinked=\"1\"/>")) << x;
+    EXPECT_TRUE(has(x, "<c:crossBetween val=\"midCat\"/><c:majorUnit val=\"3\"/><c:minorUnit val=\"2\"/></c:valAx>"))
+        << x;
+    for (const char* gone : {"lblOffset", "lblAlgn", "noMultiLvlLbl", "tickLblSkip", "<c:auto "}) {
+      EXPECT_FALSE(has(x, gone)) << gone;
+    }
+    EXPECT_TRUE(has(y, "<c:max val=\"30\"/><c:min val=\"5\"/>")) << y;
+    EXPECT_TRUE(has(y, "<c:axPos val=\"r\"/>")) << y;
+    EXPECT_TRUE(has(y, "<c:crossBetween val=\"midCat\"/>")) << y;
+  }
+
+  for (const K kind : {K::kColumn, K::kLine}) {
+    Workbook wb = GridBook();
+    Insert(wb, K::kScatter);
+    const Located c = Find(wb);
+    edit(wb, c,
+         "<c:orientation val=\"minMax\"/></c:scaling><c:delete val=\"0\"/><c:axPos val=\"b\"/><c:majorGridlines>",
+         "<c:logBase val=\"10\"/><c:orientation val=\"minMax\"/><c:max val=\"100\"/><c:min val=\"1\"/></c:scaling>"
+         "<c:delete val=\"0\"/><c:axPos val=\"b\"/><c:majorGridlines>");
+    edit(wb, c, "<c:numFmt ", grid + "<c:numFmt ");
+    edit(wb, c, "<c:crossBetween val=\"midCat\"/>",
+         "<c:crossBetween val=\"midCat\"/><c:majorUnit val=\"2\"/><c:dispUnits><c:builtInUnit val=\"thousands\"/>"
+         "</c:dispUnits>");
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, kind, ChartGrouping::kClustered));
+    const std::string xml = PartText(wb, c.path);
+    const std::string cat = Between(xml, "<c:catAx>", "</c:catAx>");
+    EXPECT_TRUE(has(cat, "<c:axId val=\"507100001\"/>")) << cat;
+    EXPECT_EQ(has(cat, "<c:logBase val=\"10\"/>"), kind == K::kLine) << cat;
+    EXPECT_FALSE(has(cat, "<c:max ") || has(cat, "<c:min ")) << cat;
+    EXPECT_TRUE(has(cat, grid)) << cat;
+    EXPECT_TRUE(has(cat,
+                    "<c:auto val=\"1\"/><c:lblAlgn val=\"ctr\"/><c:lblOffset val=\"100\"/>"
+                    "<c:noMultiLvlLbl val=\"1\"/></c:catAx>"))
+        << cat;
+    for (const char* gone : {"majorUnit", "dispUnits", "crossBetween"}) {
+      EXPECT_FALSE(has(cat, gone)) << gone;
+    }
+    EXPECT_TRUE(has(Between(xml, "<c:valAx>", "</c:valAx>"), "<c:crossBetween val=\"between\"/>"));
+  }
+}
+
 // A chart's automatic colours, re-derived by a type change, come from its own colour style.
 TEST(ChartEdit, TypeChangeColoursFromTheChartsColourStyle) {
   Workbook wb = LoadFixture("chart_column.xlsx");

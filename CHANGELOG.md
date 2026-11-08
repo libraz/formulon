@@ -2234,6 +2234,15 @@ order.
   and shows no markers, and a scatter plot hides every line (2 pt wide when a
   visible line had a width, 3 pt otherwise) and keeps only shown markers.
   Previously such a chart was restyled as a chart with style parts is.
+- A chart type change between category and value axes (scatter to or from
+  column, bar, line or area) converts the existing axes in place, as Excel
+  does, instead of replacing them with new default axes: each axis keeps its
+  id, direction, gridlines, title, ticks and formatting, and a kept value axis
+  its bounds and units. A category axis's label and mark intervals become the
+  major and minor units of the value axis; an axis turned into a category
+  axis drops its bounds and units (its log base too on a bar plot) and is not
+  multi-level. Every type change drops a category axis's label and mark
+  intervals, as Excel does.
 - A shape fill or outline colour is no longer dropped silently: given without
   its kind it fails with a `TypeError` in JavaScript and Python, and given with
   a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.

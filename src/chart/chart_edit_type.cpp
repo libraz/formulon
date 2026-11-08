@@ -298,6 +298,50 @@ void carry_unstyled(const xml_node& from, xml_node to, Family after, bool bar) {
   }
 }
 
+/// Turns category axis `ax` into a value axis or back, as Excel changes type, keeping its identity, scaling
+/// direction, gridlines, title, ticks and formatting. Label and mark intervals become the major and minor units; a
+/// value axis loses its units, display units and bounds, and its log base too on a bar plot. The number format
+/// and the category settings are `tmpl`'s, except that the axis is not multi-level.
+void convert_axis(xml_node ax, const xml_node& tmpl, bool bar) {
+  const std::string name = ax.name();
+  const std::string prefix = name.substr(0, name.find(':') + 1);
+  if (local_name(tmpl) == "valAx") {
+    const std::string major = child_local(ax, "tickLblSkip").attribute("val").value();
+    const std::string minor = child_local(ax, "tickMarkSkip").attribute("val").value();
+    for (const char* e : {"auto", "lblAlgn", "lblOffset", "tickLblSkip", "tickMarkSkip", "noMultiLvlLbl"}) {
+      drop(ax, e);
+    }
+    ax.set_name((prefix + "valAx").c_str());
+    if (!major.empty()) {
+      put_val(ax, "c:majorUnit", kAxisOrder, major);
+    }
+    if (!minor.empty()) {
+      put_val(ax, "c:minorUnit", kAxisOrder, minor);
+    }
+  } else {
+    for (const char* e : {"crossBetween", "majorUnit", "minorUnit", "dispUnits"}) {
+      drop(ax, e);
+    }
+    xml_node scaling = child_local(ax, "scaling");
+    drop(scaling, "max");
+    drop(scaling, "min");
+    if (bar) {
+      drop(scaling, "logBase");
+    }
+    ax.set_name((prefix + "catAx").c_str());
+    for (const char* e : {"auto", "lblAlgn", "lblOffset"}) {
+      if (const xml_node v = child_local(tmpl, e)) {
+        put_val(ax, (std::string("c:") + e).c_str(), kAxisOrder, v.attribute("val").value());
+      }
+    }
+    put_val(ax, "c:noMultiLvlLbl", kAxisOrder, "1");
+  }
+  drop(ax, "numFmt");
+  if (const xml_node fmt = child_local(tmpl, "numFmt")) {
+    copy_at(ax, fmt, kAxisOrder);
+  }
+}
+
 }  // namespace
 
 std::vector<xml_node> axes_of(const Chart& c, const std::vector<std::uint32_t>& ids) {
@@ -442,7 +486,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     }
   }
 
-  // Axes: kept when the axis kinds match, else replaced by the template's.
+  // Axes: kept, converted in place between category and value kinds, else replaced by the template's.
   const std::vector<xml_node> old_axes = axes_of(c, ids);
   std::vector<xml_node> new_axes;
   for (xml_node n = child_local(template_chart(t), "plotArea").first_child(); n; n = n.next_sibling()) {
@@ -452,21 +496,28 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   }
   bool same = old_axes.size() == new_axes.size() && !old_axes.empty();
   for (std::size_t i = 0; same && i < old_axes.size(); ++i) {
-    same = local_name(old_axes[i]) == local_name(new_axes[i]);
+    same = local_name(old_axes[i]) == "catAx" || local_name(old_axes[i]) == "valAx";
   }
   xml_node area = c.area();
   std::vector<std::uint32_t> new_ids;
   if (same) {
     for (std::size_t i = 0; i < old_axes.size(); ++i) {
+      if (local_name(old_axes[i]) != local_name(new_axes[i])) {
+        convert_axis(old_axes[i], new_axes[i], is_bar(tplot));
+      } else {
+        // A linked value-axis format follows the grouping, as Excel re-derives it: 0% for percent-stacked.
+        xml_node fmt = child_local(old_axes[i], "numFmt");
+        if (local_name(old_axes[i]) == "valAx" && fmt && flag_attr(fmt, "sourceLinked") &&
+            (grouping_of(plot) == ChartGrouping::kPercentStacked) != (grouping == ChartGrouping::kPercentStacked)) {
+          io::set_attr(fmt, "formatCode", child_local(new_axes[i], "numFmt").attribute("formatCode").value());
+        }
+      }
+      // As Excel changes type: a category axis loses its label and mark intervals.
+      drop(old_axes[i], "tickLblSkip");
+      drop(old_axes[i], "tickMarkSkip");
       put_val(old_axes[i], "c:axPos", kAxisOrder, child_local(new_axes[i], "axPos").attribute("val").value());
       if (const xml_node between = child_local(new_axes[i], "crossBetween")) {
         put_val(old_axes[i], "c:crossBetween", kAxisOrder, between.attribute("val").value());
-      }
-      // A linked value-axis format follows the grouping, as Excel re-derives it: 0% for percent-stacked.
-      xml_node fmt = child_local(old_axes[i], "numFmt");
-      if (local_name(old_axes[i]) == "valAx" && fmt && flag_attr(fmt, "sourceLinked") &&
-          (grouping_of(plot) == ChartGrouping::kPercentStacked) != (grouping == ChartGrouping::kPercentStacked)) {
-        io::set_attr(fmt, "formatCode", child_local(new_axes[i], "numFmt").attribute("formatCode").value());
       }
       new_ids.push_back(val_u(old_axes[i], "axId"));
     }
