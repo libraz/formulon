@@ -284,10 +284,18 @@ bool is_three_d_reference(const parser::AstNode& node) noexcept {
          (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_sheet_end().empty());
 }
 
+bool is_grouped_ref3d(const parser::AstNode& node) noexcept {
+  return node.kind() == parser::NodeKind::Ref3D && node.paren_depth() != 0U;
+}
+
+ErrorCode three_d_reference_error(const parser::AstNode& node) noexcept {
+  return is_grouped_ref3d(node) ? ErrorCode::Name : ErrorCode::Value;
+}
+
 Value eval_selected_arm(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   if (is_three_d_reference(arm)) {
-    return Value::error(ErrorCode::Value);
+    return Value::error(three_d_reference_error(arm));
   }
   return eval_node(arm, arena, registry, ctx);
 }

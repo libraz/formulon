@@ -258,7 +258,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
   // a 3-D ref is a range shape. A span endpoint that names a missing sheet
   // surfaces the error `expand_ref3d_cells` reports. Errors short-circuit
   // per `propagate_errors`.
-  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D) {
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D && !is_grouped_ref3d(arg_node)) {
     std::vector<Value> ref3d_cells;
     ErrorCode ref3d_err = ErrorCode::Ref;
     if (!expand_ref3d_cells(arg_node, arena, registry, ctx, &ref3d_cells, &ref3d_err)) {

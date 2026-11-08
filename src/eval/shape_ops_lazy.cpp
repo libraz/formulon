@@ -214,7 +214,7 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   // (the scalar fallback already returns 1x1 for them).
   const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
   if (is_three_d_reference(arg_node)) {
-    *out_err = Value::error(ErrorCode::Value);
+    *out_err = Value::error(three_d_reference_error(arg_node));
     return false;
   }
   const parser::NodeKind k = arg_node.kind();

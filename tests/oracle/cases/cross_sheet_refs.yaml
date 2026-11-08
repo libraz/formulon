@@ -414,3 +414,219 @@ cases:
       'Sheet3!B2': 5
       'Sheet3!C1': 7
     formula: '=SUM(Sheet2:Sheet3!A1:B2,B2)'
+
+  - id: grouped_ref3d_sum
+    description: 'A parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM((Sheet2:Sheet3!A1:B2))'
+
+  - id: grouped_ref3d_nested
+    description: 'Nested parentheses around a 3-D reference stay #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM(((Sheet2:Sheet3!A1:B2)))'
+
+  - id: grouped_ref3d_single_sheet_span
+    description: 'A parenthesised one-sheet span is still #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM((Sheet2:Sheet2!A1:B2))'
+
+  - id: grouped_ref3d_top_level
+    description: 'A parenthesised 3-D reference at the top level is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=(Sheet2:Sheet3!B1)'
+
+  - id: grouped_ref3d_count
+    description: 'COUNT of a parenthesised 3-D reference counts no number'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=COUNT((Sheet2:Sheet3!A1:B2))'
+
+  - id: grouped_ref3d_counta
+    description: 'COUNTA counts the #NAME? value'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=COUNTA((Sheet2:Sheet3!B1))'
+
+  - id: grouped_ref3d_isref
+    description: 'A parenthesised 3-D reference is no reference'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ISREF((Sheet2:Sheet3!A1))'
+
+  - id: grouped_ref3d_iserror
+    description: 'A parenthesised 3-D reference reads as an error'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ISERROR((Sheet2:Sheet3!A1))'
+
+  - id: grouped_ref3d_isblank
+    description: 'A parenthesised 3-D reference is not blank'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ISBLANK((Sheet2:Sheet3!A1))'
+
+  - id: grouped_ref3d_areas
+    description: 'AREAS of a parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=AREAS((Sheet2:Sheet3!A1))'
+
+  - id: grouped_ref3d_rows
+    description: 'ROWS of a parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ROWS((Sheet2:Sheet3!A1:B2))'
+
+  - id: grouped_ref3d_index
+    description: 'INDEX over a parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=INDEX((Sheet2:Sheet3!A1:B2),1,1)'
+
+  - id: grouped_ref3d_countblank
+    description: 'COUNTBLANK of a parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=COUNTBLANK((Sheet2:Sheet3!A1))'
+
+  - id: grouped_ref3d_sumproduct
+    description: 'SUMPRODUCT of a parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUMPRODUCT((Sheet2:Sheet3!A1:B2))'
+
+  - id: grouped_ref3d_max
+    description: 'MAX of a parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=MAX((Sheet2:Sheet3!B1))'
+
+  - id: grouped_ref3d_arith
+    description: 'Arithmetic on a parenthesised 3-D reference is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=SUM((Sheet2:Sheet3!B1)*2)'
+
+  - id: grouped_ref3d_error_type
+    description: 'The error is #NAME?'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=ERROR.TYPE(SUM((Sheet2:Sheet3!A1:B2)))'
+
+  - id: ref3d_top_level
+    description: 'A bare 3-D reference at the top level is #REF!'
+    setup:
+      'Sheet1!B2': 3
+      'Sheet2!A5': 1
+      'Sheet2!B1': 10
+      'Sheet2!B3': 100
+      'Sheet3!A7': 1000
+      'Sheet3!B2': 5
+      'Sheet3!C1': 7
+    formula: '=Sheet2:Sheet3!B1'

@@ -17,6 +17,7 @@
 #include "eval/coerce.h"
 #include "eval/criteria.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -94,11 +95,12 @@ bool is_external_range_arg(const parser::AstNode& arg, const EvalContext& ctx) {
 }
 
 /// `resolve_range_arg` for the range-taking conditional aggregates, which
-/// reject a 3-D reference with `#VALUE!`.
+/// reject a 3-D reference with `#VALUE!` (`#NAME?` when grouped).
 Expected<RangeResult, ErrorCode> resolve_conditional_range(const parser::AstNode& arg, Arena& arena,
                                                            const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false).kind() == parser::NodeKind::Ref3D) {
-    return ErrorCode::Value;
+  const parser::AstNode& node = resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false);
+  if (node.kind() == parser::NodeKind::Ref3D) {
+    return three_d_reference_error(node);
   }
   return resolve_range_arg(arg, arena, registry, ctx);
 }

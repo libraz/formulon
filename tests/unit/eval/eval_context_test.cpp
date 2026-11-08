@@ -384,6 +384,44 @@ TEST(EvalContextRecursive, UnionWithThreeDReferenceIsNameAndAcrossSheetsIsValue)
   EXPECT_EQ(plain.as_number(), 18.0);
 }
 
+// A 3-D reference inside grouping parentheses is no reference: its value is #NAME? everywhere.
+TEST(EvalContextRecursive, GroupedThreeDReferenceIsName) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  wb.sheet(1).set_cell_value(0U, 1U, Value::number(10.0));
+  wb.sheet(2).set_cell_value(1U, 1U, Value::number(5.0));
+  Arena arena;
+  const auto run = [&](const char* formula) {
+    arena.reset();
+    return evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, formula, arena, default_registry());
+  };
+  for (const char* formula :
+       {"=SUM((Sheet2:Sheet3!A1:B2))", "=SUM(((Sheet2:Sheet3!A1:B2)))", "=SUM((Sheet2:Sheet2!A1:B2))",
+        "=(Sheet2:Sheet3!B1)", "=MAX((Sheet2:Sheet3!B1))", "=SUM((Sheet2:Sheet3!B1)*2)",
+        "=SUMPRODUCT((Sheet2:Sheet3!A1:B2))", "=AREAS((Sheet2:Sheet3!A1))", "=ROWS((Sheet2:Sheet3!A1:B2))",
+        "=INDEX((Sheet2:Sheet3!A1:B2),1,1)", "=COUNTBLANK((Sheet2:Sheet3!A1))", "=N((Sheet2:Sheet3!B1))"}) {
+    const Value v = run(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Name) << formula;
+  }
+  const Value count = run("=COUNT((Sheet2:Sheet3!A1:B2))");
+  ASSERT_TRUE(count.is_number());
+  EXPECT_EQ(count.as_number(), 0.0);
+  const Value counta = run("=COUNTA((Sheet2:Sheet3!B1))");
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_EQ(counta.as_number(), 1.0);
+  const Value isref = run("=ISREF((Sheet2:Sheet3!A1))");
+  ASSERT_TRUE(isref.is_boolean());
+  EXPECT_FALSE(isref.as_boolean());
+  const Value bare = run("=Sheet2:Sheet3!B1");
+  ASSERT_TRUE(bare.is_error());
+  EXPECT_EQ(bare.as_error(), ErrorCode::Ref);
+  const Value plain = run("=SUM(Sheet2:Sheet3!A1:B2)");
+  ASSERT_TRUE(plain.is_number());
+  EXPECT_EQ(plain.as_number(), 15.0);
+}
+
 TEST(EvalContextRecursive, MutableThreeDRangeUsesScalarFormulaAnchors) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

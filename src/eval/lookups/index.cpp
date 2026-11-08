@@ -812,7 +812,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   const parser::AstNode& source_node = *area.value();
   if (is_three_d_reference(source_node)) {
-    return Value::error(ErrorCode::Value);
+    return Value::error(three_d_reference_error(source_node));
   }
   // A single-cell pick reads one cell by its declared position, so the
   // whole-axis extent walk waits until a selection spans a line or more.

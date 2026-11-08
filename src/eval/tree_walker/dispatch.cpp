@@ -79,12 +79,13 @@ std::string_view strip_future_prefix(std::string_view name) noexcept {
 bool is_reference_shape(const parser::AstNode& node) noexcept {
   switch (node.kind()) {
     case parser::NodeKind::Ref:
-    case parser::NodeKind::Ref3D:
     case parser::NodeKind::RangeOp:
     case parser::NodeKind::UnionOp:
     case parser::NodeKind::IntersectOp:
     case parser::NodeKind::SpillRef:
       return true;
+    case parser::NodeKind::Ref3D:
+      return !is_grouped_ref3d(node);
     default:
       return false;
   }

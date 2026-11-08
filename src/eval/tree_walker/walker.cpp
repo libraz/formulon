@@ -123,7 +123,8 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
       // whether or not the endpoint sheets exist. Range-aware aggregators
       // intercept this node in `dispatch_call` before reaching here, and
       // `IF` / `CHOOSE` turn a selected 3-D arm into `#VALUE!` themselves.
-      return Value::error(ErrorCode::Ref);
+      // Inside grouping parentheses it is no reference, and reads `#NAME?`.
+      return Value::error(is_grouped_ref3d(node) ? ErrorCode::Name : ErrorCode::Ref);
 
     case parser::NodeKind::StructuredRef: {
       // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to

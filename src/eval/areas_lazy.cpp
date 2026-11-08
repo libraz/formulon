@@ -24,6 +24,7 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
@@ -74,6 +75,10 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
     if (&bound != &n) {
       return count_areas(bound, arena, registry, ctx, propagated);
     }
+  }
+  if (is_grouped_ref3d(n)) {
+    *propagated = ErrorCode::Name;
+    return kAreasPropagate;
   }
   if (k == parser::NodeKind::UnionOp) {
     if (const std::optional<ErrorCode> invalid = union_reference_error(n, ctx)) {

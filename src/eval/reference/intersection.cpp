@@ -21,6 +21,7 @@
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
@@ -429,7 +430,7 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
   }
   // A sheet-span reference cannot anchor a `:` chain, like a whole-axis reference.
   if (node.kind() == parser::NodeKind::Ref3D) {
-    *out_err = ErrorCode::Value;
+    *out_err = three_d_reference_error(node);
     return false;
   }
   // Anything else (BinaryOp, ArrayLiteral, etc.) is not a recognized range

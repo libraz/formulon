@@ -18,6 +18,7 @@
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
@@ -768,6 +769,9 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
     const parser::AstNode& node = resolve_range_binding(call.as_call_arg(i), ctx.name_env(), /*accept_ref=*/true);
     if (node.kind() == parser::NodeKind::ExternalRef) {
       return Value::error(ErrorCode::Value);
+    }
+    if (is_grouped_ref3d(node)) {
+      return Value::error(ErrorCode::Name);
     }
     if (node.kind() == parser::NodeKind::Ref || is_range_shaped_ast(node)) {
       auto resolved = resolve_range_arg(node, arena, registry, ctx);

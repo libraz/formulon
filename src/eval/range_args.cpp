@@ -17,6 +17,7 @@
 #include "eval/declared_rect.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -142,6 +143,10 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
   // 3-D reference: the cells of the span, flattened (no rectangle shape).
   if (arg_node.kind() == parser::NodeKind::Ref3D) {
+    if (is_grouped_ref3d(arg_node)) {
+      *out_err_code = ErrorCode::Name;
+      return false;
+    }
     out_cells->clear();
     if (!expand_ref3d_cells(arg_node, arena, registry, ctx, out_cells, out_err_code)) {
       return false;

@@ -106,6 +106,15 @@ Value resolve_external_book_name(const ExternalBook& book, std::uint32_t scope_s
 /// `#VALUE!`.
 bool is_three_d_reference(const parser::AstNode& node) noexcept;
 
+/// True for a local 3-D reference inside grouping parentheses
+/// (`(Sheet2:Sheet3!A1)`). Excel treats it as no reference at all: its value
+/// is `#NAME?` in every context, as for a union holding a 3-D reference.
+bool is_grouped_ref3d(const parser::AstNode& node) noexcept;
+
+/// The error a function rejecting a 3-D reference reports: `#VALUE!`, or
+/// `#NAME?` for a grouped one.
+ErrorCode three_d_reference_error(const parser::AstNode& node) noexcept;
+
 /// Evaluates `arm`, the argument `IF` or `CHOOSE` selected. A 3-D reference
 /// there is `#VALUE!` rather than the `#REF!` it reads as on its own, as in
 /// Excel's dynamic-array entry of `=IF(TRUE,Sa:Sb!A1)`.
