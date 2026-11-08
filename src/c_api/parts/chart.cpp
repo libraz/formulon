@@ -74,14 +74,9 @@ std::int32_t tri(formulon::Tri t) {
   return static_cast<std::int32_t>(t);
 }
 
-// Rgb colour of a chart fill, line or label; None when absent.
-fm_color_spec_t rgb_to_c(const std::optional<std::uint32_t>& rgb) {
-  formulon::ColorSpec spec;
-  if (rgb) {
-    spec.kind = formulon::ColorSpec::Kind::kRgb;
-    spec.rgb = *rgb;
-  }
-  return color_spec_to_c(spec);
+// Colour of a chart fill, line or label; None when absent.
+fm_color_spec_t chart_color_to_c(const std::optional<formulon::ColorSpec>& color) {
+  return color_spec_to_c(color ? *color : formulon::ColorSpec{});
 }
 
 // Validates the caller's `struct_size`, then zeroes `*out` keeping it.
@@ -109,12 +104,12 @@ fm_chart_title_t to_fm(const formulon::ChartTitle& t) {
 }
 
 fm_chart_fill_t to_fm(const formulon::ChartFill& f) {
-  return fm_chart_fill_t{rgb_to_c(f.color), transparency_of(f.alpha)};
+  return fm_chart_fill_t{chart_color_to_c(f.color), transparency_of(f.alpha)};
 }
 
 fm_chart_line_t to_fm(const formulon::ChartLine& l) {
   fm_chart_line_t out{};
-  out.color = rgb_to_c(l.color);
+  out.color = chart_color_to_c(l.color);
   out.transparency_pct = transparency_of(l.alpha);
   out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / 12700.0 : kNaN;
   out.has_dash = l.dash ? 1 : 0;
@@ -145,7 +140,7 @@ fm_chart_labels_t to_fm(const formulon::ChartLabels& l) {
   out.position = l.position ? static_cast<std::int32_t>(*l.position) : 0;
   out.number_format = l.num_fmt ? l.num_fmt->code.c_str() : nullptr;
   out.source_linked = l.num_fmt && l.num_fmt->source_linked ? 1 : 0;
-  out.font_color = rgb_to_c(l.font_color);
+  out.font_color = chart_color_to_c(l.font_color);
   out.font_size_pt = l.font_size_hundredths_pt ? static_cast<double>(*l.font_size_hundredths_pt) / 100.0 : kNaN;
   out.deleted = l.deleted ? 1 : 0;
   return out;

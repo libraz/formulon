@@ -3928,7 +3928,8 @@ export interface DrawingAnchor {
 
 /** Return type of `Shape.getProperties()`: a shape, connector or group of a sheet's drawing. The anchor fields
  *  read as in {@link DrawingProperties}. `fillKind` / `lineKind` are {@link ShapePaint}; `fillColor` /
- *  `lineColor` are the RGB colour when the kind is `Solid`, else `null`. `rotation` is in 60000ths of a degree,
+ *  `lineColor` are the colour when the kind is `Solid` (`Rgb` or `Theme`), else `null`; a colour with a
+ *  transform a theme reference cannot state reads as `Other`. `rotation` is in 60000ths of a degree,
  *  `lineWidthEmu` is 0 without a width. `presetGeometry` is the preset geometry, empty for custom
  *  geometry or a group; `text` joins paragraphs with `\n`. */
 export interface ShapeProperties {
@@ -3961,7 +3962,7 @@ export interface ShapeProperties {
 
 /** Fields `Sheet.addShape` applies and the keys {@link ShapePatch} takes; a key left out is not applied.
  *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`; a
- *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with an RGB
+ *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with an RGB or theme
  *  `fillColor` / `lineColor`) or `None`. An insert needs `anchorKind`, defaults `presetGeometry` to
  *  `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector geometry makes a
  *  connector, which holds no text. An update cannot change the anchor kind. */
@@ -4194,7 +4195,8 @@ export interface ChartDataSource {
   readonly literal: readonly (number | string)[];
 }
 
-/** Solid fill; `color` is an RGB colour (`ColorKind.Rgb`, resolved), `null` when the element states none;
+/** Solid fill; `color` is `ColorKind.Rgb`, or `ColorKind.Theme` for a theme reference (a colour with other
+ *  transforms reads as its rendered `Rgb`), `null` when the element states none;
  *  `transparency` is a percentage (0..100). */
 export interface ChartFill {
   readonly color: Color | null;
@@ -4403,8 +4405,9 @@ export interface ChartSourceInput {
   headerColumn?: boolean | null;
 }
 
-/** A patch leaves an omitted field unchanged; `null` removes the element. A colour must be RGB: `"#RRGGBB"`,
- *  `"#AARRGGBB"` or a `ColorKind.Rgb` {@link Color}. */
+/** A patch leaves an omitted field unchanged; `null` removes the element. A colour is `"#RRGGBB"`,
+ *  `"#AARRGGBB"`, a `ColorKind.Rgb` {@link Color} or a `ColorKind.Theme` {@link Color} (`theme` 0..11 as in a
+ *  cell colour, `tint` in -1..1 quantised to 1e-5); indexed and automatic colours are rejected. */
 export type ChartFillPatch = Patch<{
   color: ColorInput;
   transparency: number;

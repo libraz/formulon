@@ -450,6 +450,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/print/pagination_detail_test.cpp
   unit/print/pagination_test.cpp
   unit/print/sheet_geometry_test.cpp
+  unit/drawing/drawing_color_test.cpp
   unit/drawing/drawing_xml_test.cpp
   unit/drawing/image_header_test.cpp
   unit/drawing/drawing_clone_test.cpp

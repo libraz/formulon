@@ -32,6 +32,7 @@
 
 #include "chart/chart_edit.h"
 #include "chart/chart_model.h"
+#include "color_resolve.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
@@ -113,7 +114,7 @@ void put_number(std::string& out, double v) {
 /// Comma-separated object / array writer.
 class Json {
  public:
-  explicit Json(std::string& out) : out_(out) {}
+  Json(std::string& out, const Workbook& wb) : out_(out), wb_(wb) {}
   void open(char c) {
     sep();
     out_ += c;
@@ -151,13 +152,15 @@ class Json {
     v ? num(static_cast<double>(*v)) : null();
   }
   void tri(Tri t) { t == Tri::kAbsent ? null() : boolean(t == Tri::kTrue); }
-  void color(const std::optional<std::uint32_t>& c) {
-    if (!c) {
+  void color(const std::optional<ColorSpec>& c) {
+    if (!c || (c->kind != ColorSpec::Kind::kRgb && c->kind != ColorSpec::Kind::kTheme)) {
       null();
       return;
     }
+    const std::uint32_t argb =
+        c->kind == ColorSpec::Kind::kRgb ? c->rgb : resolve_color(wb_, *c, ColorContext::kFont).argb;
     char buf[12];
-    std::snprintf(buf, sizeof buf, "%08X", static_cast<unsigned>(*c));
+    std::snprintf(buf, sizeof buf, "%08X", static_cast<unsigned>(argb));
     str(buf);
   }
 
@@ -169,6 +172,7 @@ class Json {
     first_ = false;
   }
   std::string& out_;
+  const Workbook& wb_;
   bool first_ = true;
 };
 
@@ -953,11 +957,14 @@ Expected<void, Error> apply_op(Workbook& wb, const JsonValue& op) {
 
 // -- edits -------------------------------------------------------------------
 
-Expected<std::uint32_t, Error> argb(const JsonValue& v) {
+Expected<ColorSpec, Error> argb(const JsonValue& v) {
   if (!v.is_string() || v.as_string().size() != 6) {
     return invalid("colors are RRGGBB strings");
   }
-  return 0xFF000000U | static_cast<std::uint32_t>(std::stoul(v.as_string(), nullptr, 16));
+  ColorSpec spec;
+  spec.kind = ColorSpec::Kind::kRgb;
+  spec.rgb = 0xFF000000U | static_cast<std::uint32_t>(std::stoul(v.as_string(), nullptr, 16));
+  return spec;
 }
 
 template <typename T, typename F>
@@ -1360,7 +1367,7 @@ Expected<Workbook, Error> build_chart_case(const JsonValue& spec, const std::str
 Expected<std::string, Error> dump_charts_json(const Workbook& wb, const std::vector<std::string>& views) {
   ASSIGN_OR_RETURN(const std::vector<SheetChartPartRef> parts, all_chart_parts(wb));
   std::string out;
-  Json j(out);
+  Json j(out, wb);
   j.open('{');
   j.key("charts");
   j.open('[');

@@ -19,6 +19,25 @@ namespace formulon {
 namespace c_api {
 namespace parts {
 
+/// Why `value` cannot be a chart or shape colour (None, Rgb or Theme with a tint in [-1, 1] and an
+/// index below 12); NULL when it can.
+inline const char* color_spec_problem(const fm_color_spec_t& value) {
+  constexpr std::uint32_t kThemeCount = 12U;
+  if (value.kind == kFmColorTheme) {
+    if (value.theme >= kThemeCount) {
+      return "theme index must be below 12";
+    }
+    if (!(value.tint >= -1.0 && value.tint <= 1.0)) {
+      return "tint must be within [-1, 1]";
+    }
+    return nullptr;
+  }
+  if (value.kind != kFmColorNone && value.kind != kFmColorRgb) {
+    return "must be a None, Rgb or Theme colour";
+  }
+  return nullptr;
+}
+
 /// Translates patch fields, keeping the first validation failure.
 class PatchReader {
  public:
@@ -63,13 +82,16 @@ class PatchReader {
     field(op, value == 1, out, name);
   }
 
-  // A colour patch: a `SET` value must be kind Rgb.
-  void rgb_field(std::int32_t op, const fm_color_spec_t& value, ChartPatchField<std::uint32_t>& out, const char* name) {
-    if (op == FM_CHART_PATCH_SET && value.kind != kFmColorRgb) {
-      fail(name, "must be an Rgb colour");
-      return;
+  // A colour patch: a `SET` value must be None, Rgb or a valid Theme colour.
+  void color_field(std::int32_t op, const fm_color_spec_t& value, ChartPatchField<formulon::ColorSpec>& out,
+                   const char* name) {
+    if (op == FM_CHART_PATCH_SET) {
+      if (const char* why = color_spec_problem(value); why != nullptr) {
+        fail(name, why);
+        return;
+      }
     }
-    field(op, value.rgb, out, name);
+    field(op, color_spec_from_c(value), out, name);
   }
 
   void text_field(std::int32_t op, const char* value, ChartPatchField<std::string>& out, const char* name) {

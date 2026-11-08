@@ -108,7 +108,9 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(s0.categories.formula, 'Sheet1!$A$2:$A$5');
     assert.equal(s0.values.formula, 'Sheet1!$B$2:$B$5');
     assert.equal(s0.x.kind, mod.ChartSourceKind.None);
-    assert.equal(s0.fill.color.kind, mod.ColorKind.Rgb);
+    // A new chart's series take the palette colour as a theme reference (accent1 first).
+    assert.equal(s0.fill.color.kind, mod.ColorKind.Theme);
+    assert.equal(s0.fill.color.theme, 4);
     assert.equal(s0.marker, null);
     assert.equal(s0.labels, null);
     assert.deepEqual(s0.points, []);
@@ -560,6 +562,52 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
     assert.throws(() => wb.sheet(0).chart(id).setFilter([1, 'x'], []), TypeError);
     assert.throws(() => wb.sheet(0).chart(id).setFilter('x', []), TypeError);
     assert.throws(() => wb.sheet(0).chart(id).setTitle(5), TypeError);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('a theme colour round-trips through a series fill and is refused when indexed', async () => {
+  const mod = await load();
+  const wb = newBook(mod);
+  try {
+    const id = insert(wb, mod);
+    const theme = { kind: mod.ColorKind.Theme, rgb: 0, theme: 4, tint: 0.4, indexed: 0 };
+    wb.sheet(0)
+      .chart(id)
+      .setSeries(0, 0, { fill: { color: theme } });
+    const got = chartOf(wb, id).plots[0].series[0].fill.color;
+    assert.equal(got.kind, mod.ColorKind.Theme);
+    assert.equal(got.theme, 4);
+    assert.ok(Math.abs(got.tint - 0.4) < 1e-5);
+
+    const indexed = { kind: mod.ColorKind.Indexed, rgb: 0, theme: 0, tint: 0, indexed: 5 };
+    expectFailure(
+      () =>
+        wb
+          .sheet(0)
+          .chart(id)
+          .setSeries(0, 0, { fill: { color: indexed } }),
+      mod.StatusCode.InvalidArgument,
+    );
+
+    const shape = wb.sheet(0).addShape({
+      presetGeometry: 'rect',
+      anchorKind: 0,
+      fromRow: 2,
+      widthEmu: 9144,
+      heightEmu: 9144,
+      fillKind: mod.ShapePaint.Solid,
+      fillColor: theme,
+    });
+    const paint = shape.getProperties().fillColor;
+    assert.equal(paint.kind, mod.ColorKind.Theme);
+    assert.equal(paint.theme, 4);
+    assert.ok(Math.abs(paint.tint - 0.4) < 1e-5);
+    expectFailure(
+      () => shape.update({ fillKind: mod.ShapePaint.Solid, fillColor: indexed }),
+      mod.StatusCode.InvalidArgument,
+    );
   } finally {
     wb.dispose();
   }

@@ -60,7 +60,10 @@ std::optional<std::uint32_t> main_color(const xml_node& ser, Family f) {
 void set_main_color(xml_node ser, Family f, std::uint32_t argb) {
   ChartFillPatch fill;
   ChartLinePatch line;
-  fill.color = ChartPatchField<std::uint32_t>::Set(argb);
+  ColorSpec color;
+  color.kind = ColorSpec::Kind::kRgb;
+  color.rgb = argb;
+  fill.color = ChartPatchField<ColorSpec>::Set(color);
   line.color = fill.color;
   if (f == Family::kFill) {
     static_cast<void>(apply_shape(ser, kSerOrder, fill, ChartLinePatch{}));

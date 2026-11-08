@@ -4,10 +4,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "color_resolve.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "gtest/gtest.h"
@@ -72,6 +74,25 @@ std::string Hex(std::uint32_t argb) {
   char buf[16];
   std::snprintf(buf, sizeof(buf), "%08X", static_cast<unsigned>(argb));
   return buf;
+}
+
+/// Workbook whose theme renders Theme colours in the description helpers.
+const Workbook*& RenderWorkbook() {
+  static const Workbook* wb = nullptr;
+  return wb;
+}
+
+/// The colour as drawn: Rgb as is, Theme through the workbook theme.
+std::uint32_t Rendered(const ColorSpec& spec) {
+  if (spec.kind == ColorSpec::Kind::kRgb) {
+    return spec.rgb;
+  }
+  static const Workbook fallback = Workbook::create();
+  return resolve_color(RenderWorkbook() != nullptr ? *RenderWorkbook() : fallback, spec, ColorContext::kFont).argb;
+}
+
+std::string Hex(const ColorSpec& spec) {
+  return Hex(Rendered(spec));
 }
 
 /// Shortest decimal text that reads back as `value`.
@@ -383,6 +404,10 @@ std::vector<std::string> DescribeAll(const Workbook& wb) {
 void ExpectFixture(const std::string& file, const std::vector<std::string>& expected) {
   SCOPED_TRACE(file);
   const Workbook wb = LoadFixture(file);
+  struct RenderScope {
+    explicit RenderScope(const Workbook& wb) { RenderWorkbook() = &wb; }
+    ~RenderScope() { RenderWorkbook() = nullptr; }
+  } render_scope(wb);
   const std::vector<std::string> actual = DescribeAll(wb);
   ASSERT_EQ(actual.size(), expected.size());
   for (std::size_t i = 0; i < actual.size(); ++i) {
@@ -1049,9 +1074,14 @@ TEST(ChartXml, SeriesFormatForms) {
   ASSERT_EQ(m.plots.size(), 1U);
   ASSERT_EQ(m.plots[0].series.size(), 3U);
   const ChartSeries& s0 = m.plots[0].series[0];
-  EXPECT_EQ(FillStr(s0.fill), "FF196B24 alpha=25000");
+  EXPECT_EQ(FillStr(s0.fill), "FF196B24 alpha=25000");  // accent3 rendered
+  ASSERT_TRUE(s0.fill.color.has_value());
+  EXPECT_EQ(s0.fill.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s0.fill.color->theme, 6U);
+  EXPECT_EQ(s0.fill.alpha, std::optional<std::uint32_t>(25000U));
   EXPECT_EQ(s0.line.width_emu, 12700);
-  EXPECT_EQ(s0.line.color, 0xFF112233U);
+  ASSERT_TRUE(s0.line.color.has_value());
+  EXPECT_EQ(s0.line.color->rgb, 0xFF112233U);
   EXPECT_EQ(s0.line.dash_name, "sysDot");
   EXPECT_EQ(s0.line.dash, ChartLineDash::kOther);
   ASSERT_TRUE(s0.marker.has_value());
@@ -1061,7 +1091,8 @@ TEST(ChartXml, SeriesFormatForms) {
   EXPECT_EQ(s0.smooth, Tri::kTrue);
   ASSERT_EQ(s0.points.size(), 1U);
   EXPECT_EQ(s0.points[0].idx, 2U);
-  EXPECT_EQ(s0.points[0].fill.color, 0xFFAABBCCU);
+  ASSERT_TRUE(s0.points[0].fill.color.has_value());
+  EXPECT_EQ(s0.points[0].fill.color->rgb, 0xFFAABBCCU);
   EXPECT_TRUE(s0.points[0].line.none);
   EXPECT_FALSE(s0.points[0].marker.has_value());
   ASSERT_TRUE(s0.labels.has_value());
@@ -1076,7 +1107,8 @@ TEST(ChartXml, SeriesFormatForms) {
   ASSERT_TRUE(l.num_fmt.has_value());
   EXPECT_EQ(l.num_fmt->code, "0.0%");
   EXPECT_FALSE(l.num_fmt->source_linked);
-  EXPECT_EQ(l.font_color, 0xFFFF0000U);
+  ASSERT_TRUE(l.font_color.has_value());
+  EXPECT_EQ(l.font_color->rgb, 0xFFFF0000U);
   EXPECT_EQ(l.font_size_hundredths_pt, 1200U);
   EXPECT_FALSE(l.deleted);
 
@@ -1154,8 +1186,63 @@ TEST(ChartXml, ThemeColoursResolveThroughTheWorkbookTheme) {
            "</a:ln></c:spPr></c:ser></c:barChart></c:plotArea>"),
       wb);
   const ChartSeries& s = m.plots[0].series[0];
-  EXPECT_EQ(s.fill.color, 0xFF102030U);
-  EXPECT_EQ(s.line.color, wb.load_theme().theme.colors[1]);  // bg1 = lt1
+  ASSERT_TRUE(s.fill.color.has_value());
+  ASSERT_TRUE(s.line.color.has_value());
+  EXPECT_EQ(s.fill.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.fill.color->theme, 4U);
+  EXPECT_EQ(resolve_color(wb, *s.fill.color, ColorContext::kFont).argb, 0xFF102030U);
+  EXPECT_EQ(s.line.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.line.color->theme, 0U);  // bg1 = lt1, not tx1
+}
+
+/// The first series' fill and line colours of a bar chart whose `c:spPr` holds the given fills.
+ChartSeries ReadBarSeries(const std::string& sp_pr, const std::string& space_children = "") {
+  const Workbook wb = Workbook::create();
+  const ChartModel m = Read(Wrap("<c:plotArea><c:barChart><c:ser><c:idx val=\"0\"/><c:order val=\"0\"/><c:spPr>" +
+                                     sp_pr + "</c:spPr></c:ser></c:barChart></c:plotArea>",
+                                 space_children),
+                            wb);
+  return m.plots[0].series[0];
+}
+
+TEST(ChartXml, PaletteSchemeColourReadsAsThemeWithTint) {
+  const ChartSeries s = ReadBarSeries(
+      "<a:solidFill><a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/></a:schemeClr>"
+      "</a:solidFill><a:ln><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"75000\"/></a:schemeClr>"
+      "</a:solidFill></a:ln>");
+  ASSERT_TRUE(s.fill.color.has_value());
+  EXPECT_EQ(s.fill.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.fill.color->theme, 4U);
+  EXPECT_NEAR(s.fill.color->tint, 0.4, 1e-9);
+  ASSERT_TRUE(s.line.color.has_value());
+  EXPECT_EQ(s.line.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.line.color->theme, 1U);
+  EXPECT_NEAR(s.line.color->tint, -0.25, 1e-9);
+}
+
+TEST(ChartXml, UnrepresentableColourReadsAsRenderedRgb) {
+  const ChartSeries s = ReadBarSeries(
+      "<a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"50000\"/></a:schemeClr></a:solidFill>"
+      "<a:ln><a:solidFill><a:schemeClr val=\"accent2\"><a:lumOff val=\"40000\"/></a:schemeClr></a:solidFill></a:ln>");
+  ASSERT_TRUE(s.fill.color.has_value());
+  EXPECT_EQ(s.fill.color->kind, ColorSpec::Kind::kRgb);
+  ASSERT_TRUE(s.line.color.has_value());
+  EXPECT_EQ(s.line.color->kind, ColorSpec::Kind::kRgb);
+}
+
+TEST(ChartXml, RemappedColourMapKeepsBaseSchemeColoursAsRgb) {
+  const std::string fills =
+      "<a:solidFill><a:schemeClr val=\"tx1\"/></a:solidFill><a:ln><a:solidFill><a:schemeClr val=\"accent1\"/>"
+      "</a:solidFill></a:ln>";
+  const ChartSeries remapped =
+      ReadBarSeries(fills, "<c:clrMapOvr bg1=\"dk1\" tx1=\"lt1\" bg2=\"dk2\" tx2=\"lt2\" accent1=\"accent1\"/>");
+  ASSERT_TRUE(remapped.fill.color.has_value());
+  EXPECT_EQ(remapped.fill.color->kind, ColorSpec::Kind::kRgb);
+  ASSERT_TRUE(remapped.line.color.has_value());
+  EXPECT_EQ(remapped.line.color->kind, ColorSpec::Kind::kTheme);
+  const ChartSeries identity =
+      ReadBarSeries(fills, "<c:clrMapOvr bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\"/>");
+  EXPECT_EQ(identity.fill.color->kind, ColorSpec::Kind::kTheme);
 }
 
 }  // namespace

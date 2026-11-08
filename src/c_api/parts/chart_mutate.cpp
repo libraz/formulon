@@ -52,14 +52,14 @@ formulon::ChartTitle title_of(const fm_chart_title_t& t) {
 
 formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch_t& p) {
   formulon::ChartFillPatch out;
-  r.rgb_field(p.color_op, p.color, out.color, "fill.color_op");
+  r.color_field(p.color_op, p.color, out.color, "fill.color_op");
   r.field(p.transparency_op, p.transparency_pct, out.transparency_pct, "fill.transparency_op");
   return out;
 }
 
 formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch_t& p) {
   formulon::ChartLinePatch out;
-  r.rgb_field(p.color_op, p.color, out.color, "line.color_op");
+  r.color_field(p.color_op, p.color, out.color, "line.color_op");
   r.field(p.transparency_op, p.transparency_pct, out.transparency_pct, "line.transparency_op");
   r.field(p.width_op, p.width_pt, out.width_pt, "line.width_op");
   r.enum_field(p.dash_op, p.dash, formulon::ChartLineDash::kOther, out.dash, "line.dash");
@@ -86,7 +86,7 @@ formulon::ChartLabelsPatch read_labels(PatchReader& r, const fm_chart_labels_pat
   r.text_field(p.separator_op, p.separator, out.separator, "labels.separator_op");
   r.enum_field(p.position_op, p.position, formulon::ChartLabelPosition::kRight, out.position, "labels.position");
   r.text_field(p.number_format_op, p.number_format, out.number_format, "labels.number_format_op");
-  r.rgb_field(p.font_color_op, p.font_color, out.font_color, "labels.font_color_op");
+  r.color_field(p.font_color_op, p.font_color, out.font_color, "labels.font_color_op");
   r.field(p.font_size_op, p.font_size_pt, out.font_size_pt, "labels.font_size_op");
   return out;
 }

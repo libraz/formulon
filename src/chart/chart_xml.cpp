@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "color_resolve.h"
+#include "drawing/drawing_color.h"
 #include "drawing/drawing_xml.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -91,69 +92,25 @@ double double_of(const xml_node& node) {
 // Colours and line / fill / marker formatting
 // ---------------------------------------------------------------------------
 
-std::optional<std::uint32_t> scheme_index(std::string_view name) {
-  if (name == "bg1" || name == "lt1")
-    return 0U;
-  if (name == "tx1" || name == "dk1")
-    return 1U;
-  if (name == "bg2" || name == "lt2")
-    return 2U;
-  if (name == "tx2" || name == "dk2")
-    return 3U;
-  if (name == "hlink")
-    return 10U;
-  if (name == "folHlink")
-    return 11U;
-  if (name.size() == 7 && strings::starts_with(name, "accent") && name[6] >= '1' && name[6] <= '6') {
-    return 4U + static_cast<std::uint32_t>(name[6] - '1');
-  }
-  return std::nullopt;
-}
-
-/// Applies `a:lumMod` / `a:lumOff` as the equivalent spreadsheet tint; exact
-/// for the forms Excel writes (`lumMod + lumOff == 1`, or `lumOff` absent).
-std::uint32_t apply_luminance(std::uint32_t argb, const xml_node& clr) {
-  const xml_node mod = kid(clr, "lumMod");
-  const xml_node off = kid(clr, "lumOff");
-  if (!mod && !off) {
-    return argb;
-  }
-  const double m = mod ? mod.attribute("val").as_double() / 100000.0 : 1.0;
-  const double o = off ? off.attribute("val").as_double() / 100000.0 : 0.0;
-  const double tint = o > 0.0 ? o : m - 1.0;
-  return apply_tint(argb, std::clamp(tint, -1.0, 1.0));
-}
+/// Workbook and the part's colour map: a remapped `bg1` / `tx1` / `bg2` / `tx2` reads as Rgb.
+struct ColorEnv {
+  const Workbook& wb;
+  bool remapped = false;
+};
 
 struct Paint {
-  std::optional<std::uint32_t> color;
+  std::optional<ColorSpec> color;
   std::optional<std::uint32_t> alpha;
 };
 
 /// Colour of an `a:solidFill`; unresolvable colour kinds read as no colour.
-Paint read_solid(const Workbook& wb, const xml_node& solid_fill) {
+Paint read_solid(const ColorEnv& env, const xml_node& solid_fill) {
   Paint paint;
   const xml_node clr = kid(solid_fill, "");
   if (!clr) {
     return paint;
   }
-  const std::string_view kind = local_name(clr);
-  if (kind == "srgbClr") {
-    paint.color = apply_luminance(io::parse_rgb_hex(val_of(clr), 0U) | 0xFF000000U, clr);
-  } else if (kind == "schemeClr") {
-    if (const auto index = scheme_index(val_of(clr))) {
-      ColorSpec spec;
-      spec.kind = ColorSpec::Kind::kTheme;
-      spec.theme = *index;
-      paint.color = apply_luminance(resolve_color(wb, spec, ColorContext::kFont).argb, clr);
-    }
-  } else if (kind == "sysClr") {
-    const std::string_view last = clr.attribute("lastClr").value();
-    if (!last.empty()) {
-      paint.color = apply_luminance(io::parse_rgb_hex(last, 0U) | 0xFF000000U, clr);
-    } else {
-      paint.color = val_of(clr) == "window" ? 0xFFFFFFFFU : 0xFF000000U;
-    }
-  }
+  paint.color = drawing_color::read_color(env.wb, clr, env.remapped);
   if (paint.color.has_value()) {
     if (const xml_node alpha = kid(clr, "alpha")) {
       paint.alpha = static_cast<std::uint32_t>(alpha.attribute("val").as_uint());
@@ -162,8 +119,8 @@ Paint read_solid(const Workbook& wb, const xml_node& solid_fill) {
   return paint;
 }
 
-ChartFill read_fill(const Workbook& wb, const xml_node& sp_pr) {
-  const Paint paint = read_solid(wb, kid(sp_pr, "solidFill"));
+ChartFill read_fill(const ColorEnv& env, const xml_node& sp_pr) {
+  const Paint paint = read_solid(env, kid(sp_pr, "solidFill"));
   ChartFill fill;
   fill.color = paint.color;
   fill.alpha = paint.alpha;
@@ -175,7 +132,7 @@ ChartLineDash dash_of(std::string_view name) {
   return i < 0 ? ChartLineDash::kOther : static_cast<ChartLineDash>(i);
 }
 
-ChartLine read_line(const Workbook& wb, const xml_node& sp_pr) {
+ChartLine read_line(const ColorEnv& env, const xml_node& sp_pr) {
   ChartLine line;
   const xml_node ln = kid(sp_pr, "ln");
   if (!ln) {
@@ -185,7 +142,7 @@ ChartLine read_line(const Workbook& wb, const xml_node& sp_pr) {
     line.width_emu = static_cast<std::int64_t>(w.as_llong());
   }
   line.none = static_cast<bool>(kid(ln, "noFill"));
-  const Paint paint = read_solid(wb, kid(ln, "solidFill"));
+  const Paint paint = read_solid(env, kid(ln, "solidFill"));
   line.color = paint.color;
   line.alpha = paint.alpha;
   if (const xml_node dash = kid(ln, "prstDash")) {
@@ -201,7 +158,7 @@ ChartMarkerSymbol symbol_of(std::string_view name) {
                : static_cast<ChartMarkerSymbol>(i);
 }
 
-ChartMarker read_marker(const Workbook& wb, const xml_node& marker) {
+ChartMarker read_marker(const ColorEnv& env, const xml_node& marker) {
   ChartMarker out;
   if (const xml_node symbol = kid(marker, "symbol")) {
     out.symbol_name = val_of(symbol);
@@ -209,8 +166,8 @@ ChartMarker read_marker(const Workbook& wb, const xml_node& marker) {
   }
   out.size = uint_of(kid(marker, "size"));
   const xml_node sp_pr = kid(marker, "spPr");
-  out.fill = read_fill(wb, sp_pr);
-  out.line = read_line(wb, sp_pr);
+  out.fill = read_fill(env, sp_pr);
+  out.line = read_line(env, sp_pr);
   return out;
 }
 
@@ -230,7 +187,7 @@ ChartNumFmt read_num_fmt(const xml_node& node) {
 }
 
 /// `c:dLbls` of a series. Per-point `c:dLbl` children are not modelled.
-ChartLabels read_labels(const Workbook& wb, const xml_node& dlbls) {
+ChartLabels read_labels(const ColorEnv& env, const xml_node& dlbls) {
   ChartLabels labels;
   labels.deleted = flag_of(kid(dlbls, "delete"));
   labels.show_val = flag_of(kid(dlbls, "showVal"));
@@ -250,7 +207,7 @@ ChartLabels read_labels(const Workbook& wb, const xml_node& dlbls) {
     if (const pugi::xml_attribute sz = def_rpr.attribute("sz")) {
       labels.font_size_hundredths_pt = static_cast<std::uint32_t>(sz.as_uint());
     }
-    labels.font_color = read_solid(wb, kid(def_rpr, "solidFill")).color;
+    labels.font_color = read_solid(env, kid(def_rpr, "solidFill")).color;
   }
   return labels;
 }
@@ -517,7 +474,7 @@ void read_axis_ids(const xml_node& parent, std::string_view name, ChartPlot& plo
   }
 }
 
-ChartSeries read_series(const Workbook& wb, const xml_node& ser, bool filtered) {
+ChartSeries read_series(const ColorEnv& env, const xml_node& ser, bool filtered) {
   ChartSeries s;
   s.idx = uint_of(kid(ser, "idx")).value_or(0U);
   s.order = uint_of(kid(ser, "order")).value_or(0U);
@@ -529,30 +486,30 @@ ChartSeries read_series(const Workbook& wb, const xml_node& ser, bool filtered) 
   s.y = read_data_source(kid(ser, "yVal"));
   s.size = read_data_source(kid(ser, "bubbleSize"));
   const xml_node sp_pr = kid(ser, "spPr");
-  s.fill = read_fill(wb, sp_pr);
-  s.line = read_line(wb, sp_pr);
+  s.fill = read_fill(env, sp_pr);
+  s.line = read_line(env, sp_pr);
   if (const xml_node marker = kid(ser, "marker")) {
-    s.marker = read_marker(wb, marker);
+    s.marker = read_marker(env, marker);
   }
   s.smooth = tri_of(kid(ser, "smooth"));
   for (const xml_node& dpt : children_local(ser, "dPt")) {
     ChartPoint point;
     point.idx = uint_of(kid(dpt, "idx")).value_or(0U);
     const xml_node point_sp_pr = kid(dpt, "spPr");
-    point.fill = read_fill(wb, point_sp_pr);
-    point.line = read_line(wb, point_sp_pr);
+    point.fill = read_fill(env, point_sp_pr);
+    point.line = read_line(env, point_sp_pr);
     if (const xml_node marker = kid(dpt, "marker")) {
-      point.marker = read_marker(wb, marker);
+      point.marker = read_marker(env, marker);
     }
     s.points.push_back(std::move(point));
   }
   if (const xml_node dlbls = kid(ser, "dLbls")) {
-    s.labels = read_labels(wb, dlbls);
+    s.labels = read_labels(env, dlbls);
   }
   return s;
 }
 
-ChartPlot read_plot(const Workbook& wb, const xml_node& node, ChartPlotType type) {
+ChartPlot read_plot(const ColorEnv& env, const xml_node& node, ChartPlotType type) {
   ChartPlot plot;
   plot.type = type;
   const std::string_view bar_dir = val_of(kid(node, "barDir"));
@@ -568,18 +525,18 @@ ChartPlot read_plot(const Workbook& wb, const xml_node& node, ChartPlotType type
   plot.scatter_style = val_of(kid(node, "scatterStyle"));
   plot.radar_style = val_of(kid(node, "radarStyle"));
   if (const xml_node dlbls = kid(node, "dLbls")) {
-    plot.labels = read_labels(wb, dlbls);
+    plot.labels = read_labels(env, dlbls);
   }
   read_axis_ids(node, "axId", plot);
   for (const xml_node& ser : children_local(node, "ser")) {
-    plot.series.push_back(read_series(wb, ser, false));
+    plot.series.push_back(read_series(env, ser, false));
   }
   // Series hidden through the chart filter move to `c15:filtered*Series`.
   for (const xml_node& ext : children_local(kid(node, "extLst"), "ext")) {
     for (xml_node group = ext.first_child(); group; group = group.next_sibling()) {
       if (is_filtered_series_group(group)) {
         for (const xml_node& ser : children_local(group, "ser")) {
-          plot.series.push_back(read_series(wb, ser, true));
+          plot.series.push_back(read_series(env, ser, true));
         }
       }
     }
@@ -711,6 +668,7 @@ void read_drawingml_chart(const Workbook& wb, const xml_node& root, ChartModel& 
   const xml_node date1904 = kid(root, "date1904");
   model.date1904 = date1904 ? flag_of(date1904) : wb.date1904();
   model.style = read_style(root);
+  const ColorEnv env{wb, drawing_color::remaps_color_map(kid(root, "clrMapOvr"))};
 
   const xml_node chart = kid(root, "chart");
   model.title = read_title(kid(chart, "title"));
@@ -733,7 +691,7 @@ void read_drawingml_chart(const Workbook& wb, const xml_node& root, ChartModel& 
     }
     const std::string_view name = local_name(node);
     if (const auto type = plot_type_of(name)) {
-      model.plots.push_back(read_plot(wb, node, *type));
+      model.plots.push_back(read_plot(env, node, *type));
     } else if (name == "catAx") {
       model.axes.push_back(read_axis(node, ChartAxisKind::kCategory));
     } else if (name == "valAx") {

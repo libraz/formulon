@@ -6,6 +6,7 @@
 #include "chart/chart_edit_internal.h"
 #include "chart/chart_ns.h"
 #include "chart/chart_template.h"
+#include "drawing/drawing_color.h"
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
 #include "io/xml_utils.h"
@@ -40,19 +41,14 @@ xml_node ensure_shape_properties(xml_node owner, Order order) {
 }
 
 /// Colour and transparency of `holder`'s solid fill (`a:spPr`, `a:ln` or `a:defRPr`).
-Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<std::uint32_t>& color,
+Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<ColorSpec>& color,
                                   const ChartPatchField<double>& transparency) {
   if (color.is_clear()) {
     drop(holder, "solidFill");
   } else if (color.is_set()) {
-    const std::string alpha =
-        child_local(io::first_element_child(child_local(holder, "solidFill")), "alpha").attribute("val").value();
+    const std::string alpha = drawing_color::alpha_of(io::first_element_child(child_local(holder, "solidFill")));
     drop_fills(holder);
-    xml_node clr = ensure(holder, "a:solidFill", order).append_child("a:srgbClr");
-    io::set_attr(clr, "val", hex6(color.value));
-    if (!alpha.empty()) {
-      io::set_attr(clr.append_child("a:alpha"), "val", alpha);
-    }
+    drawing_color::write_color(ensure(holder, "a:solidFill", order), "a:", color.value, alpha);
   }
   if (transparency.is_keep()) {
     return ok();

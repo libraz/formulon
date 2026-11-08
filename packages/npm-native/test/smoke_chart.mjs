@@ -97,7 +97,9 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(s0.categories.formula, 'Sheet1!$A$2:$A$5');
     assert.equal(s0.values.formula, 'Sheet1!$B$2:$B$5');
     assert.equal(s0.x.kind, mod.ChartSourceKind.None);
-    assert.equal(s0.fill.color.kind, mod.ColorKind.Rgb);
+    // A new chart's series take the palette colour as a theme reference (accent1 first).
+    assert.equal(s0.fill.color.kind, mod.ColorKind.Theme);
+    assert.equal(s0.fill.color.theme, 4);
     assert.equal(s0.marker, null);
     assert.equal(s0.labels, null);
     assert.deepEqual(s0.points, []);

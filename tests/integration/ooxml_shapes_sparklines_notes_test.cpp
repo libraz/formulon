@@ -22,6 +22,26 @@
 namespace formulon {
 namespace {
 
+ColorSpec RgbColor(std::uint32_t rgb) {
+  ColorSpec spec;
+  spec.kind = ColorSpec::Kind::kRgb;
+  spec.rgb = 0xFF000000U | rgb;
+  return spec;
+}
+
+ColorSpec ThemeColor(std::uint32_t theme, double tint) {
+  ColorSpec spec;
+  spec.kind = ColorSpec::Kind::kTheme;
+  spec.theme = theme;
+  spec.tint = tint;
+  return spec;
+}
+
+std::uint32_t Rgb24(const ColorSpec& spec) {
+  EXPECT_EQ(spec.kind, ColorSpec::Kind::kRgb);
+  return spec.rgb & 0xFFFFFFU;
+}
+
 io::ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
   return io::ByteSpan{bytes.data(), bytes.size()};
 }
@@ -165,7 +185,7 @@ constexpr std::string_view kRect =
     "<a:p><a:pPr algn=\"ctr\"/><a:r><a:rPr lang=\"en-US\" sz=\"1100\" b=\"1\"/><a:t>Hello</a:t></a:r></a:p>"
     "<a:p><a:r><a:rPr lang=\"en-US\"/><a:t>World &amp; more</a:t></a:r></a:p></xdr:txBody></xdr:sp>";
 
-// A shape the API cannot represent: custom geometry, a gradient fill, a theme-coloured outline.
+// A shape the API cannot represent: custom geometry and a gradient fill; the outline is a palette theme colour.
 constexpr std::string_view kCustom =
     "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"3\" name=\"Custom\" hidden=\"1\"/><xdr:cNvSpPr "
     "txBox=\"1\"/>"
@@ -221,9 +241,9 @@ TEST(ShapeFidelity, ListReportsEveryModelledField) {
   EXPECT_EQ(rect.prst, "roundRect");
   EXPECT_EQ(rect.text, "Hello\nWorld & more");
   EXPECT_EQ(rect.fill, ShapePaint::kSolid);
-  EXPECT_EQ(rect.fill_rgb, 0xFF0000U);
+  EXPECT_EQ(Rgb24(rect.fill_color), 0xFF0000U);
   EXPECT_EQ(rect.line, ShapePaint::kSolid);
-  EXPECT_EQ(rect.line_rgb, 0x0000FFU);
+  EXPECT_EQ(Rgb24(rect.line_color), 0x0000FFU);
   EXPECT_EQ(rect.line_width_emu, 19050);
   EXPECT_EQ(rect.rotation, 900000);
   EXPECT_FALSE(rect.hidden);
@@ -234,12 +254,103 @@ TEST(ShapeFidelity, ListReportsEveryModelledField) {
   EXPECT_TRUE(custom.hidden);
   EXPECT_TRUE(custom.text_box);
   EXPECT_EQ(custom.fill, ShapePaint::kOther);
-  EXPECT_EQ(custom.line, ShapePaint::kOther);
+  EXPECT_EQ(custom.line, ShapePaint::kSolid);
+  EXPECT_EQ(custom.line_color.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(custom.line_color.theme, 4U);
+  EXPECT_DOUBLE_EQ(custom.line_color.tint, 0.0);
 
   EXPECT_EQ(shapes.value()[2].object.kind, DrawingObjectKind::kConnector);
   EXPECT_EQ(shapes.value()[2].prst, "straightConnector1");
   EXPECT_EQ(shapes.value()[3].object.kind, DrawingObjectKind::kGroup);
   EXPECT_EQ(shapes.value()[3].rotation, 60000);
+}
+
+std::vector<std::uint8_t> OneShapePackage(const std::string& paints) {
+  const std::string shape =
+      "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"2\" name=\"S\"/><xdr:cNvSpPr/></xdr:nvSpPr>"
+      "<xdr:spPr><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom>" +
+      paints + "</xdr:spPr></xdr:sp>";
+  const std::string drawing =
+      std::string(kXmlDecl) +
+      "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">" +
+      Anchored(shape, 1, 2, 3, 6) + "</xdr:wsDr>";
+  const std::string rels =
+      "<Relationship Id=\"rId1\" Type=\"" + std::string(kDrawingType) + "\" Target=\"../drawings/drawing1.xml\"/>";
+  return BuildPackage("<sheetData/><drawing r:id=\"rId1\"/>", rels,
+                      {{"xl/drawings/drawing1.xml", drawing, std::string(kDrawingCt)}});
+}
+
+TEST(ShapeColor, PaletteSchemeColoursReadAsTheme) {
+  const Workbook wb = LoadOrDie(OneShapePackage(
+      "<a:solidFill><a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/>"
+      "<a:alpha val=\"50000\"/></a:schemeClr></a:solidFill>"
+      "<a:ln><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"75000\"/></a:schemeClr></a:solidFill></a:ln>"));
+  const ShapeInfo shape = list_shapes(wb, 0).value()[0];
+  EXPECT_EQ(shape.fill, ShapePaint::kSolid);
+  EXPECT_EQ(shape.fill_color.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(shape.fill_color.theme, 4U);
+  EXPECT_NEAR(shape.fill_color.tint, 0.4, 1e-9);
+  EXPECT_EQ(shape.line, ShapePaint::kSolid);
+  EXPECT_EQ(shape.line_color.theme, 1U);
+  EXPECT_NEAR(shape.line_color.tint, -0.25, 1e-9);
+}
+
+TEST(ShapeColor, UnrepresentableColoursStayOther) {
+  // The default text-box outline: a white scheme colour darkened by `shade`.
+  const Workbook wb = LoadOrDie(OneShapePackage(
+      "<a:solidFill><a:prstClr val=\"red\"/></a:solidFill>"
+      "<a:ln><a:solidFill><a:schemeClr val=\"lt1\"><a:shade val=\"50000\"/></a:schemeClr></a:solidFill></a:ln>"));
+  const ShapeInfo shape = list_shapes(wb, 0).value()[0];
+  EXPECT_EQ(shape.fill, ShapePaint::kOther);
+  EXPECT_EQ(shape.line, ShapePaint::kOther);
+}
+
+TEST(ShapeColor, ThemeColourWritesPaletteFormAndKeepsAlpha) {
+  Workbook wb =
+      LoadOrDie(OneShapePackage("<a:solidFill><a:srgbClr val=\"FF0000\"><a:alpha val=\"40000\"/></a:srgbClr>"
+                                "</a:solidFill><a:ln><a:noFill/></a:ln>"));
+  ShapeSpec spec;
+  spec.fields = shape_field::kFill | shape_field::kLine;
+  spec.fill = ShapePaint::kSolid;
+  spec.fill_color = ThemeColor(4, 0.4);
+  spec.line = ShapePaint::kSolid;
+  spec.line_color = ThemeColor(1, -0.25);
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
+  const std::string xml = ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml");
+  EXPECT_TRUE(Has(xml,
+                  "<a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/>"
+                  "<a:alpha val=\"40000\"/></a:schemeClr>"))
+      << xml;
+  EXPECT_TRUE(Has(xml, "<a:schemeClr val=\"tx1\"><a:lumMod val=\"75000\"/></a:schemeClr>")) << xml;
+
+  const double tints[] = {0.4, -0.25, 0.123456, 0.123455};
+  for (const double tint : tints) {
+    spec.fill_color = ThemeColor(9, tint);
+    ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
+    Workbook again = LoadOrDie(SaveOrDie(wb));
+    const ShapeInfo shape = list_shapes(again, 0).value()[0];
+    EXPECT_EQ(shape.fill_color.kind, ColorSpec::Kind::kTheme);
+    EXPECT_EQ(shape.fill_color.theme, 9U);
+    EXPECT_NEAR(shape.fill_color.tint, tint, 1e-5);
+  }
+}
+
+TEST(ShapeColor, SameSchemeColourIsNotRewritten) {
+  const std::string paints =
+      "<a:solidFill><a:schemeClr val=\"lt1\"/></a:solidFill><a:ln><a:solidFill><a:schemeClr val=\"accent2\">"
+      "<a:lumMod val=\"75000\"/></a:schemeClr></a:solidFill></a:ln>";
+  Workbook wb = LoadOrDie(OneShapePackage(paints));
+  ShapeSpec spec;
+  spec.fields = shape_field::kFill | shape_field::kLine;
+  spec.fill = ShapePaint::kSolid;
+  spec.fill_color = ThemeColor(0, 0.0);
+  spec.line = ShapePaint::kSolid;
+  spec.line_color = ThemeColor(5, -0.25);
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
+  const std::string xml = ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml");
+  EXPECT_TRUE(Has(xml, "<a:schemeClr val=\"lt1\"/>")) << xml;
+  EXPECT_TRUE(Has(xml, "<a:schemeClr val=\"accent2\"><a:lumMod val=\"75000\"/>")) << xml;
 }
 
 TEST(ShapeFidelity, UntouchedDrawingSurvivesAResaveVerbatim) {
@@ -294,7 +405,7 @@ TEST(ShapeFidelity, UpdateChangesOnlyTheNamedFields) {
   spec.fields = shape_field::kName | shape_field::kFill | shape_field::kText | shape_field::kRotation;
   spec.name = "Renamed";
   spec.fill = ShapePaint::kSolid;
-  spec.fill_rgb = 0x00AA11;
+  spec.fill_color = RgbColor(0x00AA11);
   spec.text = "One\nTwo\nThree";
   spec.rotation = 0;
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
@@ -318,7 +429,7 @@ TEST(ShapeFidelity, UpdateChangesOnlyTheNamedFields) {
   EXPECT_EQ(shapes.value()[0].text, "One\nTwo\nThree");
   EXPECT_EQ(shapes.value()[0].object.name, "Renamed");
   EXPECT_EQ(shapes.value()[0].rotation, 0);
-  EXPECT_EQ(shapes.value()[0].line_rgb, 0x0000FFU);
+  EXPECT_EQ(Rgb24(shapes.value()[0].line_color), 0x0000FFU);
   EXPECT_EQ(shapes.value()[0].prst, "roundRect");
 }
 
@@ -364,9 +475,9 @@ TEST(ShapeFidelity, InsertAppendsOnTopAndRemoveDeletes) {
   spec.text = "a < b";
   spec.text_box = true;
   spec.fill = ShapePaint::kSolid;
-  spec.fill_rgb = 0xFFFF00;
+  spec.fill_color = RgbColor(0xFFFF00);
   spec.line = ShapePaint::kSolid;
-  spec.line_rgb = 0x123456;
+  spec.line_color = RgbColor(0x123456);
   spec.line_width_emu = 25400;
   spec.name = "Callout";
   auto id = insert_shape(wb, 0, spec);
@@ -386,8 +497,8 @@ TEST(ShapeFidelity, InsertAppendsOnTopAndRemoveDeletes) {
   EXPECT_EQ(added.prst, "wedgeRectCallout");
   EXPECT_EQ(added.text, "a < b");
   EXPECT_TRUE(added.text_box);
-  EXPECT_EQ(added.fill_rgb, 0xFFFF00U);
-  EXPECT_EQ(added.line_rgb, 0x123456U);
+  EXPECT_EQ(Rgb24(added.fill_color), 0xFFFF00U);
+  EXPECT_EQ(Rgb24(added.line_color), 0x123456U);
   EXPECT_EQ(added.line_width_emu, 25400);
 
   ASSERT_TRUE(static_cast<bool>(remove_shape(again, 0, 5)));
@@ -408,7 +519,7 @@ TEST(ShapeFidelity, InsertIntoASheetWithoutADrawingCreatesOne) {
   spec.cy = 0;
   spec.prst = "line";
   spec.line = ShapePaint::kSolid;
-  spec.line_rgb = 0xFF00FF;
+  spec.line_color = RgbColor(0xFF00FF);
   auto id = insert_shape(wb, 0, spec);
   ASSERT_TRUE(static_cast<bool>(id));
 

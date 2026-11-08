@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "chart/chart_ns.h"
+#include "drawing/drawing_color.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
@@ -18,7 +19,6 @@
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "sheet.h"
-#include "utils/number_text.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -91,15 +91,30 @@ pugi::xml_node props_of(pugi::xml_node content) {
   return child_local(content, local_name(content) == "grpSp" ? "grpSpPr" : "spPr");
 }
 
-void read_paint(pugi::xml_node parent, ShapePaint& kind, std::uint32_t& rgb) {
+// The Rgb or Theme colour of an `a:solidFill`; unset for any other colour element.
+std::optional<ColorSpec> solid_color(pugi::xml_node solid_fill) {
+  std::uint32_t rgb = 0;
+  if (parse_rgb(child_local(solid_fill, "srgbClr").attribute("val").value(), rgb)) {
+    ColorSpec spec;
+    spec.kind = ColorSpec::Kind::kRgb;
+    spec.rgb = 0xFF000000U | rgb;
+    return spec;
+  }
+  return drawing_color::read_theme(io::first_element_child(solid_fill), false);
+}
+
+void read_paint(pugi::xml_node parent, ShapePaint& kind, ColorSpec& color) {
   for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
     if (child.type() != pugi::node_element || !is_fill(child)) {
       continue;
     }
     const std::string_view name = local_name(child);
     kind = name == "noFill" ? ShapePaint::kNone : ShapePaint::kOther;
-    if (name == "solidFill" && parse_rgb(child_local(child, "srgbClr").attribute("val").value(), rgb)) {
-      kind = ShapePaint::kSolid;
+    if (name == "solidFill") {
+      if (const auto solid = solid_color(child)) {
+        kind = ShapePaint::kSolid;
+        color = *solid;
+      }
     }
     return;
   }
@@ -131,9 +146,9 @@ ShapeInfo read_shape(pugi::xml_node anchor, DrawingObject object) {
   info.prst = child_local(props, "prstGeom").attribute("prst").value();
   info.text = read_text(content);
   info.text_box = child_local(child_local(content, "nvSpPr"), "cNvSpPr").attribute("txBox").as_bool();
-  read_paint(props, info.fill, info.fill_rgb);
+  read_paint(props, info.fill, info.fill_color);
   pugi::xml_node ln = child_local(props, "ln");
-  read_paint(ln, info.line, info.line_rgb);
+  read_paint(ln, info.line, info.line_color);
   info.line_width_emu = ln.attribute("w").as_llong();
   info.rotation = child_local(props, "xfrm").attribute("rot").as_int();
   info.hidden = anchor_cnvpr(anchor).attribute("hidden").as_bool();
@@ -171,26 +186,31 @@ pugi::xml_node insert_after_or_first(pugi::xml_node parent, pugi::xml_node ref, 
 }
 
 // Sets the fill element of `parent` (a shape-properties or `a:ln` element).
-void set_paint(pugi::xml_node parent, bool is_line, bool none, std::uint32_t rgb) {
+void set_paint(pugi::xml_node parent, bool is_line, bool none, const ColorSpec& color) {
   const std::string ap = a_prefix(parent);
   pugi::xml_node cur;
   for (pugi::xml_node child = parent.first_child(); child && !cur; child = child.next_sibling()) {
     cur = child.type() == pugi::node_element && is_fill(child) ? child : pugi::xml_node();
   }
-  std::uint32_t current = 0;
-  if (cur && (none ? local_name(cur) == "noFill"
-                   : local_name(cur) == "solidFill" &&
-                         parse_rgb(child_local(cur, "srgbClr").attribute("val").value(), current) && current == rgb)) {
-    return;
+  const bool cur_solid = cur && local_name(cur) == "solidFill";
+  if (cur) {
+    if (none ? local_name(cur) == "noFill" : cur_solid) {
+      if (none) {
+        return;
+      }
+      const auto current = solid_color(cur);
+      if (current && drawing_color::same_color(*current, color)) {
+        return;
+      }
+    }
   }
+  const std::string alpha = cur_solid ? drawing_color::alpha_of(io::first_element_child(cur)) : std::string();
   const std::string name = ap + (none ? "noFill" : "solidFill");
   pugi::xml_node fresh =
       cur ? parent.insert_child_before(name.c_str(), cur)
           : insert_after_or_first(parent, is_line ? pugi::xml_node() : last_leading_child(parent, false), name);
   if (!none) {
-    char hex[8];
-    format_hex(hex, sizeof hex, rgb & 0xFFFFFFU, 6, true);
-    fresh.append_child((ap + "srgbClr").c_str()).append_attribute("val").set_value(hex);
+    drawing_color::write_color(fresh, ap, color, alpha);
   }
   if (cur) {
     parent.remove_child(cur);
@@ -388,10 +408,10 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
     }
   }
   if ((f & shape_field::kFill) != 0U) {
-    set_paint(props, false, spec.fill == ShapePaint::kNone, spec.fill_rgb);
+    set_paint(props, false, spec.fill == ShapePaint::kNone, spec.fill_color);
   }
   if ((f & shape_field::kLine) != 0U) {
-    set_paint(ensure_ln(props), true, spec.line == ShapePaint::kNone, spec.line_rgb);
+    set_paint(ensure_ln(props), true, spec.line == ShapePaint::kNone, spec.line_color);
   }
   if ((f & shape_field::kLineWidth) != 0U) {
     if (spec.line_width_emu < 0 || spec.line_width_emu >= kEmuLimit) {

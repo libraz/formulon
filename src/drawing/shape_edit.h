@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "drawing/drawing_xml.h"
+#include "styles.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -33,9 +34,9 @@ class Workbook;
 /// How a shape's fill or outline is specified.
 enum class ShapePaint : std::int32_t {
   kUnset = 0,  ///< No fill or outline element.
-  kSolid = 1,  ///< `a:solidFill` of an `a:srgbClr`.
+  kSolid = 1,  ///< `a:solidFill` of an `a:srgbClr`, or of a palette `a:schemeClr` (Theme colour).
   kNone = 2,   ///< `a:noFill`.
-  kOther = 3,  ///< Gradient, pattern, picture or theme colour.
+  kOther = 3,  ///< Gradient, pattern, picture, or a colour element that is not an Rgb or a palette Theme colour.
 };
 
 /// A listed shape. `object` carries id, kind (shape, connector or group),
@@ -46,9 +47,9 @@ struct ShapeInfo {
   std::string text;       ///< Paragraphs joined with `\n`; empty for connectors and groups.
   bool text_box = false;  ///< `cNvSpPr/@txBox`.
   ShapePaint fill = ShapePaint::kUnset;
-  std::uint32_t fill_rgb = 0;  ///< 0xRRGGBB when `fill` is `kSolid`.
+  ColorSpec fill_color;  ///< Rgb or Theme when `fill` is `kSolid`.
   ShapePaint line = ShapePaint::kUnset;
-  std::uint32_t line_rgb = 0;       ///< 0xRRGGBB when `line` is `kSolid`.
+  ColorSpec line_color;             ///< Rgb or Theme when `line` is `kSolid`.
   std::int64_t line_width_emu = 0;  ///< `a:ln/@w`; 0 when absent.
   std::int32_t rotation = 0;        ///< `a:xfrm/@rot` in 60000ths of a degree.
   bool hidden = false;
@@ -61,8 +62,8 @@ inline constexpr std::uint32_t kPrst = 1U << 1;
 inline constexpr std::uint32_t kAnchor = 1U << 2;
 inline constexpr std::uint32_t kText = 1U << 3;
 inline constexpr std::uint32_t kTextBox = 1U << 4;
-inline constexpr std::uint32_t kFill = 1U << 5;       ///< `fill`: `kSolid` with `fill_rgb`, or `kNone`.
-inline constexpr std::uint32_t kLine = 1U << 6;       ///< `line`: `kSolid` with `line_rgb`, or `kNone`.
+inline constexpr std::uint32_t kFill = 1U << 5;       ///< `fill`: `kSolid` with `fill_color`, or `kNone`.
+inline constexpr std::uint32_t kLine = 1U << 6;       ///< `line`: `kSolid` with `line_color`, or `kNone`.
 inline constexpr std::uint32_t kLineWidth = 1U << 7;  ///< `line_width_emu`.
 inline constexpr std::uint32_t kRotation = 1U << 8;
 inline constexpr std::uint32_t kHidden = 1U << 9;
@@ -87,9 +88,9 @@ struct ShapeSpec {
   std::int64_t cx = 0;
   std::int64_t cy = 0;
   ShapePaint fill = ShapePaint::kNone;
-  std::uint32_t fill_rgb = 0;
+  ColorSpec fill_color;
   ShapePaint line = ShapePaint::kNone;
-  std::uint32_t line_rgb = 0;
+  ColorSpec line_color;
   std::int64_t line_width_emu = 0;
   std::int32_t rotation = 0;
   bool hidden = false;

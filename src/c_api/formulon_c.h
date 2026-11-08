@@ -258,8 +258,10 @@ typedef enum {
  * Only the members `kind` names are meaningful. A theme,
  * indexed or auto colour is a selector, not a rendered colour: resolve it
  * with `fm_workbook_resolve_color`. A field documented as "None or Rgb"
- * (chart, shape and CF evaluation colours) never carries a selector, and
- * its `rgb` is the colour as drawn.
+ * (CF evaluation colours) never carries a selector, and its `rgb` is the
+ * colour as drawn. A chart or shape colour is "None, Rgb or Theme": Theme
+ * (tint quantised to 1e-5) reads for a palette scheme colour with only a
+ * luminance tint, Rgb as drawn for any other colour.
  */
 typedef struct {
   double tint;      /* theme tint (-1..1); meaningful when kind == kFmColorTheme */
@@ -10494,9 +10496,10 @@ FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_inde
 /** @brief How a shape's fill or outline is specified (`fm_shape_t::fill_kind`, `line_kind`). */
 typedef enum {
   FM_SHAPE_PAINT_UNSET = -1, /**< No fill or outline element. */
-  FM_SHAPE_PAINT_SOLID = 0,  /**< Solid `srgbClr`; the colour is `fill_color` / `line_color`. */
+  FM_SHAPE_PAINT_SOLID = 0,  /**< Solid `srgbClr` or palette `schemeClr`; the colour is `fill_color` / `line_color`. */
   FM_SHAPE_PAINT_NONE = 1,   /**< `noFill`. */
-  FM_SHAPE_PAINT_OTHER = 2,  /**< Gradient, pattern, picture or theme colour; read only. */
+  FM_SHAPE_PAINT_OTHER =
+      2, /**< Gradient, pattern, picture or a colour that is neither Rgb nor a palette Theme colour; read only. */
 } fm_shape_paint_t;
 
 /** @brief `fm_shape_t::fields` bits: the fields an insert or update applies. */
@@ -10520,10 +10523,10 @@ typedef enum {
  * reports its position as `from_col_offset_emu` = x and `from_row_offset_emu`
  * = y, and `width_emu`/`height_emu` are the size. `fill_kind` / `line_kind`
  * are `fm_shape_paint_t` (`-1` when the element is absent);
- * `fill_color` / `line_color` are None or Rgb: Rgb when the kind is solid,
- * None otherwise. `rotation` is in 60000ths of a degree and `line_width_emu` is `0`
- * without a width. `preset_geometry` is the `prst` name, empty for custom
- * geometry or a group; `text` joins paragraphs with `\n`.
+ * `fill_color` / `line_color` are None, Rgb or Theme: Rgb or Theme when the
+ * kind is solid (Indexed and Auto are rejected on write), None otherwise. `rotation` is in 60000ths of a degree and
+ * `line_width_emu` is `0` without a width. `preset_geometry` is the `prst` name, empty for custom geometry or a group;
+ * `text` joins paragraphs with `\n`.
  *
  * `fields` is zero on read. On insert and update it is a mask of
  * `FM_SHAPE_FIELD_*`: only the named fields are applied (an insert
@@ -11193,7 +11196,7 @@ typedef struct {
 } fm_chart_title_t;
 
 /**
- * @brief Solid fill. `color` is None or Rgb (`kFmColorNone` without a solid
+ * @brief Solid fill. `color` is None, Rgb or Theme (`kFmColorNone` without a solid
  *        colour); `transparency_pct` is NaN when the color has no alpha.
  */
 typedef struct {
@@ -11202,7 +11205,7 @@ typedef struct {
 } fm_chart_fill_t;
 
 /**
- * @brief Outline. `color` is None or Rgb (`kFmColorNone` without a solid
+ * @brief Outline. `color` is None, Rgb or Theme (`kFmColorNone` without a solid
  *        colour); `width_pt` and `transparency_pct` are NaN when absent;
  *        `dash` (an `fm_chart_line_dash_t`) is meaningful when `has_dash`;
  *        `none` is non-zero for an explicit no-line.
@@ -11228,7 +11231,7 @@ typedef struct {
 /**
  * @brief Data labels of a series. `separator` and `number_format` are
  *        `NULL` when absent; `position` (an `fm_chart_label_position_t`) is
- *        meaningful when `has_position`; `font_color` is None or Rgb
+ *        meaningful when `has_position`; `font_color` is None, Rgb or Theme
  *        (`kFmColorNone` when absent); `font_size_pt` is NaN when absent.
  */
 typedef struct {
@@ -11832,8 +11835,8 @@ typedef struct {
 } fm_chart_insert_t;
 
 /**
- * @brief Solid fill patch; a `SET` `color` is kind Rgb, and
- *        `transparency_pct` needs a solid color.
+ * @brief Solid fill patch; a `SET` `color` is kind None, Rgb or Theme
+ *        (`theme` below 12, `tint` within [-1, 1]), and `transparency_pct` needs a solid color.
  */
 typedef struct {
   int32_t color_op;
@@ -11843,7 +11846,8 @@ typedef struct {
 } fm_chart_fill_patch_t;
 
 /**
- * @brief Outline patch; a `SET` `color` is kind Rgb, `dash` is an
+ * @brief Outline patch; a `SET` `color` is kind None, Rgb or Theme
+ *        (`theme` below 12, `tint` within [-1, 1]), `dash` is an
  *        `fm_chart_line_dash_t`, `none` 0/1 (`CLEAR` rejected).
  */
 typedef struct {
@@ -11873,7 +11877,7 @@ typedef struct {
 /**
  * @brief Data-label patch. The `show_*` flags are 0/1 (`CLEAR` rejected);
  *        `position` is an `fm_chart_label_position_t`; a `SET` `font_color`
- *        is kind Rgb.
+ *        is kind None, Rgb or Theme.
  */
 typedef struct {
   int32_t show_value_op;

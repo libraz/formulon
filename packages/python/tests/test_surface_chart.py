@@ -35,7 +35,9 @@ from formulon import (
     DrawingAnchor,
     DrawingObjectKind,
     FormulonError,
+    InvalidArgumentError,
     NotFoundError,
+    ShapePaint,
     SheetRect,
     Workbook,
 )
@@ -348,6 +350,32 @@ class ChartEditTests(unittest.TestCase):
                 wb.sheet(0).chart(oid).set_axis(val_id, visible=None)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).chart(oid).set_axis(987654, min=1.0)
+
+    def test_theme_colour_round_trip_and_indexed_refused(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            theme = Color(ColorKind.THEME, theme=4, tint=0.4)
+            wb.sheet(0).chart(oid).set_series(0, 0, fill={"color": theme})
+            got = wb.sheet(0).chart(oid).get_properties().plots[0].series[0].fill.color
+            self.assertEqual((got.kind, got.theme), (ColorKind.THEME, 4))
+            self.assertAlmostEqual(got.tint, 0.4, delta=1e-5)
+            with self.assertRaises(InvalidArgumentError):
+                wb.sheet(0).chart(oid).set_series(0, 0, fill={"color": Color(ColorKind.INDEXED, indexed=5)})
+
+            shape = wb.sheet(0).add_shape(
+                anchor_kind=AnchorKind.ONE_CELL,
+                from_row=2,
+                width_emu=9144,
+                height_emu=9144,
+                preset_geometry="rect",
+                fill_kind=ShapePaint.SOLID,
+                fill_color=theme,
+            )
+            paint = shape.get_properties().fill_color
+            self.assertEqual((paint.kind, paint.theme), (ColorKind.THEME, 4))
+            self.assertAlmostEqual(paint.tint, 0.4, delta=1e-5)
+            with self.assertRaises(InvalidArgumentError):
+                shape.update(fill_kind=ShapePaint.SOLID, fill_color=Color(ColorKind.INDEXED, indexed=5))
 
     def test_series_patch(self) -> None:
         wb, oid = _chart()

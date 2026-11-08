@@ -190,12 +190,6 @@ inline bool in_range(double v, double lo, double hi) {
   return std::isfinite(v) && v >= lo && v <= hi;
 }
 
-inline std::string hex6(std::uint32_t argb) {
-  char buf[8];
-  format_hex(buf, sizeof(buf), argb & 0xFFFFFFU, 6, true);
-  return buf;
-}
-
 Expected<void, Error> open_chart(const Workbook& wb, std::size_t sheet, std::uint32_t object_id, Chart& c);
 
 Expected<void, Error> open_edit(const Workbook& wb, std::size_t sheet, std::uint32_t object_id, Chart& c,

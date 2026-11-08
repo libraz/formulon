@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "c_api/parts/chart_patch_reader.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
@@ -40,24 +41,33 @@ using formulon::c_api::parts::to_c;
 
 namespace {
 
-// A shape paint stores 0xRRGGBB; the C colour carries it as opaque ARGB.
+// A shape's Rgb colour is opaque; the alpha byte of the C colour is not kept.
 constexpr std::uint32_t kOpaque = 0xFF000000U;
 constexpr std::uint32_t kRgbMask = 0x00FFFFFFU;
 
-// The colour of a shape paint: Rgb for a solid paint, None otherwise.
-fm_color_spec_t paint_color_to_c(formulon::ShapePaint paint, std::uint32_t rgb) {
-  formulon::ColorSpec spec;
-  if (paint == formulon::ShapePaint::kSolid) {
-    spec.kind = formulon::ColorSpec::Kind::kRgb;
-    spec.rgb = kOpaque | (rgb & kRgbMask);
-  }
-  return color_spec_to_c(spec);
+// The colour of a shape paint: Rgb or Theme for a solid paint, None otherwise.
+fm_color_spec_t paint_color_to_c(formulon::ShapePaint paint, const formulon::ColorSpec& color) {
+  return color_spec_to_c(paint == formulon::ShapePaint::kSolid ? color : formulon::ColorSpec{});
 }
 
-std::uint32_t paint_rgb_from_c(const fm_color_spec_t& color) {
-  std::uint32_t rgb = 0U;
-  color_spec_from_c(color, &rgb);
-  return rgb & kRgbMask;
+// The colour of a solid paint; a None colour is black. A non-solid paint carries no colour.
+fm_status_t paint_color_from_c(formulon::ShapePaint paint, const fm_color_spec_t& color, const char* field,
+                               formulon::ColorSpec& out) {
+  out = formulon::ColorSpec{};
+  if (paint != formulon::ShapePaint::kSolid) {
+    return 0;
+  }
+  if (const char* why = formulon::c_api::parts::color_spec_problem(color); why != nullptr) {
+    return invalid_argument(why, std::string("field=") + field);
+  }
+  out = color_spec_from_c(color);
+  if (out.kind == formulon::ColorSpec::Kind::kNone) {
+    out.kind = formulon::ColorSpec::Kind::kRgb;
+  }
+  if (out.kind == formulon::ColorSpec::Kind::kRgb) {
+    out.rgb = kOpaque | (out.rgb & kRgbMask);
+  }
+  return 0;
 }
 
 // Converts `shape` to the model spec; a non-zero return is the status to report.
@@ -92,9 +102,13 @@ fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
   spec.cx = shape.width_emu;
   spec.cy = shape.height_emu;
   spec.fill = shape_paint_from_c(shape.fill_kind);
-  spec.fill_rgb = paint_rgb_from_c(shape.fill_color);
+  if (auto rc = paint_color_from_c(spec.fill, shape.fill_color, "fill_color", spec.fill_color); rc != 0) {
+    return rc;
+  }
   spec.line = shape_paint_from_c(shape.line_kind);
-  spec.line_rgb = paint_rgb_from_c(shape.line_color);
+  if (auto rc = paint_color_from_c(spec.line, shape.line_color, "line_color", spec.line_color); rc != 0) {
+    return rc;
+  }
   spec.line_width_emu = shape.line_width_emu;
   spec.rotation = shape.rotation;
   spec.hidden = shape.hidden != 0;
@@ -151,9 +165,9 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
   out->width_emu = obj.cx;
   out->height_emu = obj.cy;
   out->fill_kind = to_c(info.fill);
-  out->fill_color = paint_color_to_c(info.fill, info.fill_rgb);
+  out->fill_color = paint_color_to_c(info.fill, info.fill_color);
   out->line_kind = to_c(info.line);
-  out->line_color = paint_color_to_c(info.line, info.line_rgb);
+  out->line_color = paint_color_to_c(info.line, info.line_color);
   out->line_width_emu = info.line_width_emu;
   out->rotation = info.rotation;
   out->hidden = info.hidden ? 1 : 0;

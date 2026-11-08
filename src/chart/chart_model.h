@@ -9,8 +9,8 @@
 // and no schema default is guessed here; the effect of an absent element is
 // the resolver's or the renderer's business.
 //
-// Colors are ARGB (`0xAARRGGBB`) resolved from explicit `a:srgbClr` / theme
-// references; no explicit color reads as `std::nullopt`.
+// Colors are a `ColorSpec`: Theme for a palette scheme colour (theme index and tint), otherwise
+// the rendered Rgb (`0xAARRGGBB`); no explicit color reads as `std::nullopt`.
 //
 // Patches follow one rule: an unset field leaves the chart alone, `clear()`
 // removes the element, `set(v)` writes it.
@@ -30,6 +30,7 @@
 
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
+#include "styles.h"
 
 namespace formulon {
 
@@ -179,13 +180,13 @@ enum class ChartHeaderMode : std::uint8_t { kAuto = 0, kYes = 1, kNo = 2 };
 
 /// `c:spPr` solid fill. `color` unset means no explicit fill color.
 struct ChartFill {
-  std::optional<std::uint32_t> color;
+  std::optional<ColorSpec> color;
   std::optional<std::uint32_t> alpha;  ///< 0..100000 (`a:alpha/@val`).
 };
 
 /// `a:ln` of a series, point or marker.
 struct ChartLine {
-  std::optional<std::uint32_t> color;
+  std::optional<ColorSpec> color;
   std::optional<std::uint32_t> alpha;  ///< 0..100000.
   std::optional<std::int64_t> width_emu;
   std::optional<ChartLineDash> dash;
@@ -224,7 +225,7 @@ struct ChartLabels {
   std::optional<std::string> separator;
   std::optional<ChartLabelPosition> position;
   std::optional<ChartNumFmt> num_fmt;
-  std::optional<std::uint32_t> font_color;
+  std::optional<ColorSpec> font_color;
   std::optional<std::uint32_t> font_size_hundredths_pt;
   bool deleted = false;  ///< `<c:delete val="1"/>`.
 };
@@ -493,12 +494,12 @@ struct ChartDisplayPatch {
 };
 
 struct ChartFillPatch {
-  ChartPatchField<std::uint32_t> color;
+  ChartPatchField<ColorSpec> color;
   ChartPatchField<double> transparency_pct;  ///< 0..100.
 };
 
 struct ChartLinePatch {
-  ChartPatchField<std::uint32_t> color;
+  ChartPatchField<ColorSpec> color;
   ChartPatchField<double> transparency_pct;
   ChartPatchField<double> width_pt;
   ChartPatchField<ChartLineDash> dash;
@@ -521,7 +522,7 @@ struct ChartLabelsPatch {
   ChartPatchField<std::string> separator;
   ChartPatchField<ChartLabelPosition> position;
   ChartPatchField<std::string> number_format;
-  ChartPatchField<std::uint32_t> font_color;
+  ChartPatchField<ColorSpec> font_color;
   ChartPatchField<double> font_size_pt;
 };
 

@@ -2018,7 +2018,7 @@ class ShapeProperties:
     """A shape, connector or group of a sheet's drawing; sizes and offsets are in EMU.
 
     The anchor fields read as in :class:`DrawingProperties`. ``fill_color`` and
-    ``line_color`` are RGB colours when the matching kind is ``ShapePaint.SOLID``
+    ``line_color`` are RGB or theme colours when the matching kind is ``ShapePaint.SOLID``
     and ``None`` otherwise; a kind is ``None`` when the shape states no fill or
     outline element.
     ``rotation`` is in 60000ths of a degree; ``preset_geometry`` is empty for custom
@@ -2345,7 +2345,7 @@ class ChartTitle:
 
 @dataclass(frozen=True)
 class ChartFill:
-    """Solid fill; ``color`` is an RGB :class:`Color` and ``transparency`` a percentage, each ``None`` when absent."""
+    """Solid fill; ``color`` is an RGB or theme :class:`Color` and ``transparency`` a percentage, each ``None`` when absent."""
 
     color: Optional[Color] = None
     transparency: Optional[float] = None
@@ -2353,7 +2353,7 @@ class ChartFill:
 
 @dataclass(frozen=True)
 class ChartLine:
-    """Outline; ``color`` is an RGB :class:`Color` (``None`` when absent) and ``none`` an explicit no-line."""
+    """Outline; ``color`` is an RGB or theme :class:`Color` (``None`` when absent) and ``none`` an explicit no-line."""
 
     color: Optional[Color] = None
     transparency: Optional[float] = None
@@ -2591,14 +2591,14 @@ class ChartData:
 
 
 class ChartFillPatch(TypedDict, total=False):
-    """Fill patch: an omitted key is kept, ``None`` removes the element; a colour is an RGB ``ColorInput``."""
+    """Fill patch: an omitted key is kept, ``None`` removes the element; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
 
     color: Optional[ColorInput]
     transparency: Optional[float]
 
 
 class ChartLinePatch(TypedDict, total=False):
-    """Outline patch; ``none`` is a bool and rejects ``None``; a colour is an RGB ``ColorInput``."""
+    """Outline patch; ``none`` is a bool and rejects ``None``; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
 
     color: Optional[ColorInput]
     transparency: Optional[float]

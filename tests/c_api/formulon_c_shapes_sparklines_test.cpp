@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -134,6 +135,51 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   ASSERT_EQ(fm_sheet_get_shape_count(again.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
   EXPECT_EQ(fm_sheet_remove_shape(again.handle, 0, id), FM_STATUS_NOT_FOUND);
+}
+
+TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_shape_t spec = Callout();
+  spec.fill_color = fm_color_spec_t{};
+  spec.fill_color.kind = kFmColorTheme;
+  spec.fill_color.theme = 4;
+  spec.fill_color.tint = 0.4;
+  spec.line_kind = FM_SHAPE_PAINT_SOLID;
+  spec.line_color.kind = kFmColorTheme;
+  spec.line_color.theme = 1;
+  spec.line_color.tint = -0.25;
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+
+  fm_shape_t out = FM_STRUCT_INIT(fm_shape_t);
+  ASSERT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_SOLID);
+  EXPECT_EQ(out.fill_color.kind, kFmColorTheme);
+  EXPECT_EQ(out.fill_color.theme, 4U);
+  EXPECT_DOUBLE_EQ(out.fill_color.tint, 0.4);
+  EXPECT_EQ(out.line_color.kind, kFmColorTheme);
+  EXPECT_EQ(out.line_color.theme, 1U);
+  EXPECT_DOUBLE_EQ(out.line_color.tint, -0.25);
+
+  struct Bad {
+    uint8_t kind;
+    uint32_t theme;
+    double tint;
+  };
+  const Bad bad[] = {
+      {kFmColorIndexed, 0, 0.0}, {kFmColorAuto, 0, 0.0},   {kFmColorTheme, 12, 0.0},
+      {kFmColorTheme, 4, 1.5},   {kFmColorTheme, 4, -1.5}, {kFmColorTheme, 4, std::numeric_limits<double>::quiet_NaN()},
+  };
+  for (const Bad& b : bad) {
+    fm_shape_t s = Callout();
+    s.fill_color = fm_color_spec_t{};
+    s.fill_color.kind = b.kind;
+    s.fill_color.theme = b.theme;
+    s.fill_color.tint = b.tint;
+    EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &s, &id), kInvalidArgument)
+        << "kind=" << int(b.kind) << " theme=" << b.theme << " tint=" << b.tint;
+  }
 }
 
 TEST(FormulonCApiShapes, Validation) {

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -866,6 +867,63 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
       fm_sheet_set_chart_source(wb.handle, 0, id, "Sheet1!$A$1:$C$5", 3, FM_CHART_HEADER_AUTO, FM_CHART_HEADER_AUTO),
       kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_chart_source(wb.handle, 0, id, nullptr, 0, 0, 0), kBindingNullPointer);
+}
+
+TEST(FormulonCApiChart, ThemeColorsRoundTripAndAreValidated) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_LINE);
+
+  fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
+  patch.line.color_op = FM_CHART_PATCH_SET;
+  patch.line.color.kind = kFmColorTheme;
+  patch.line.color.theme = 4;
+  patch.line.color.tint = 0.4;
+  patch.labels_op = FM_CHART_PATCH_SET;
+  patch.labels.font_color_op = FM_CHART_PATCH_SET;
+  patch.labels.font_color.kind = kFmColorTheme;
+  patch.labels.font_color.theme = 1;
+  patch.labels.font_color.tint = -0.25;
+  ASSERT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ChartGuard chart;
+  Open(reloaded.handle, id, &chart);
+  const fm_chart_series_t s = Series(chart, 0, 0);
+  EXPECT_EQ(s.line.color.kind, kFmColorTheme);
+  EXPECT_EQ(s.line.color.theme, 4U);
+  EXPECT_DOUBLE_EQ(s.line.color.tint, 0.4);
+  EXPECT_EQ(s.labels.font_color.kind, kFmColorTheme);
+  EXPECT_EQ(s.labels.font_color.theme, 1U);
+  EXPECT_DOUBLE_EQ(s.labels.font_color.tint, -0.25);
+
+  struct Bad {
+    uint8_t kind;
+    uint32_t theme;
+    double tint;
+  };
+  const Bad bad[] = {
+      {kFmColorIndexed, 0, 0.0},
+      {kFmColorAuto, 0, 0.0},
+      {kFmColorTheme, 12, 0.0},
+      {kFmColorTheme, 4, 1.5},
+      {kFmColorTheme, 4, -1.5},
+      {kFmColorTheme, 4, std::numeric_limits<double>::quiet_NaN()},
+      {kFmColorTheme, 4, std::numeric_limits<double>::infinity()},
+  };
+  for (const Bad& b : bad) {
+    fm_chart_series_patch_t p = FM_STRUCT_INIT(fm_chart_series_patch_t);
+    p.line.color_op = FM_CHART_PATCH_SET;
+    p.line.color.kind = b.kind;
+    p.line.color.theme = b.theme;
+    p.line.color.tint = b.tint;
+    EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &p), kInvalidArgument)
+        << "kind=" << int(b.kind) << " theme=" << b.theme << " tint=" << b.tint;
+  }
 }
 
 TEST(FormulonCApiChart, PreviewLeavesWorkbookUnchanged) {
