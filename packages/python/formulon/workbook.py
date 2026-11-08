@@ -747,7 +747,7 @@ class TableStyle:
 
 @dataclass(frozen=True)
 class PassthroughPart:
-    """One row of ``Workbook.list_passthroughs()``."""
+    """One row of ``WorkbookOoxml.list_passthroughs()``."""
 
     path: str
 
@@ -898,7 +898,7 @@ class ValidationErrorStyle(IntEnum):
 
 
 class ValidationType(IntEnum):
-    """What a data-validation rule checks (``fm_validation_type_t``)."""
+    """What a data-validation rule checks."""
 
     NONE = 0
     WHOLE = 1
@@ -911,7 +911,7 @@ class ValidationType(IntEnum):
 
 
 class ValidationOperator(IntEnum):
-    """How a data-validation rule compares the value with its formulas (``fm_validation_operator_t``)."""
+    """How a data-validation rule compares the value with its formulas."""
 
     BETWEEN = 0
     NOT_BETWEEN = 1
@@ -924,7 +924,7 @@ class ValidationOperator(IntEnum):
 
 
 class CfRuleType(IntEnum):
-    """The kind of a conditional-format rule (``fm_cf_rule_type_t``)."""
+    """The kind of a conditional-format rule."""
 
     EXPRESSION = 0
     CELL_IS = 1
@@ -947,7 +947,7 @@ class CfRuleType(IntEnum):
 
 
 class CfOperator(IntEnum):
-    """The comparison of a ``CELL_IS`` conditional-format rule (``fm_cf_operator_t``)."""
+    """The comparison of a ``CELL_IS`` conditional-format rule."""
 
     LESS_THAN = 0
     LESS_THAN_OR_EQUAL = 1
@@ -960,7 +960,7 @@ class CfOperator(IntEnum):
 
 
 class CfTimePeriod(IntEnum):
-    """The period of a ``TIME_PERIOD`` conditional-format rule (``fm_cf_time_period_t``)."""
+    """The period of a ``TIME_PERIOD`` conditional-format rule."""
 
     TODAY = 0
     YESTERDAY = 1
@@ -975,7 +975,7 @@ class CfTimePeriod(IntEnum):
 
 
 class CfValueObjectType(IntEnum):
-    """How a conditional-format threshold reads its value (``fm_cf_value_object_type_t``)."""
+    """How a conditional-format threshold reads its value."""
 
     NUMBER = 0
     PERCENT = 1
@@ -988,7 +988,7 @@ class CfValueObjectType(IntEnum):
 
 
 class IconSetName(IntEnum):
-    """A built-in icon set (``fm_icon_set_t``); the digit is the level count."""
+    """A built-in icon set; the digit is the level count."""
 
     THREE_ARROWS = 0
     THREE_ARROWS_GRAY = 1
@@ -3430,7 +3430,7 @@ class CellXf:
 
 @dataclass
 class CellXfInput:
-    """An ``<xf>`` record :meth:`Workbook.add_cell_xf` and :meth:`Workbook.add_cell_style_xf` write.
+    """An ``<xf>`` record :meth:`WorkbookOoxml.add_cell_xf` and :meth:`WorkbookOoxml.add_cell_style_xf` write.
 
     A ``has_*`` flag left ``None`` is inferred: ``has_horizontal_align``,
     ``has_vertical_align``, ``has_wrap_text`` and ``has_alignment`` read true
@@ -3769,7 +3769,7 @@ def _decode_color(ptr: int) -> Color:
 
 
 def _color_fields(spec: Color) -> Dict[str, object]:
-    """The ``fm_color_spec_t`` fields of ``spec``."""
+    """The colour-spec record fields of ``spec``."""
     return {
         "kind": _uint(spec.kind, "kind", 8),
         "rgb": _uint(spec.rgb, "rgb"),
@@ -3780,7 +3780,7 @@ def _color_fields(spec: Color) -> Dict[str, object]:
 
 
 def _color_from(d: Mapping[str, Any]) -> Color:
-    """A :class:`Color` from decoded ``fm_color_spec_t`` fields."""
+    """A :class:`Color` from decoded colour-spec record fields."""
     return Color(kind=_enum(ColorKind, d["kind"]), rgb=d["rgb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"])
 
 
@@ -3790,7 +3790,7 @@ def _optional_color_from(d: Mapping[str, Any]) -> Optional[Color]:
 
 
 def _pack_color(ptr: int, spec: ColorInput, label: str = "color") -> None:
-    """Write the ``ColorInput`` ``spec`` as the ``fm_color_spec_t`` at ``ptr``."""
+    """Write the ``ColorInput`` ``spec`` as the colour-spec record at ``ptr``."""
     S.COLOR_SPEC.pack(LIB, ptr, _color_fields(color_input(spec, label)))
 
 
