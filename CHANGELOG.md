@@ -2223,6 +2223,11 @@ order.
   `lumMod` / `lumOff` and quantised to 1e-5. Indexed and automatic colours are
   rejected with `FM_STATUS_INVALID_ARGUMENT`. A colour with any other
   transform reads as before: its rendered RGB on a chart, `Other` on a shape.
+- Changing a chart between bar, column and area types keeps each series' fill
+  as it is, theme colours with their transforms, gradients and patterns
+  included, instead of only an RGB colour. A change to or from a line or
+  scatter type re-derives the series colour, an RGB one included, as Excel
+  does; previously an RGB colour was carried to the scatter markers.
 - A shape fill or outline colour is no longer dropped silently: given without
   its kind it fails with a `TypeError` in JavaScript and Python, and given with
   a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.

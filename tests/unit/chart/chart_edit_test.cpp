@@ -1157,6 +1157,57 @@ TEST(ChartEdit, TypeChangeTradesExplicitLinesAndOutlines) {
       << ser(xml, 1);
 }
 
+// Between bar and area types the series fill carries as it is, theme transforms and non-solid fills included;
+// every change to or from a line or scatter type re-derives the series colour.
+TEST(ChartEdit, TypeChangeCarriesSeriesFillBetweenBarAndAreaOnly) {
+  const auto ser = [](const std::string& xml, std::size_t n) {
+    std::size_t at = 0;
+    for (std::size_t i = 0; i <= n; ++i) {
+      at = xml.find("<c:ser>", at + 1);
+    }
+    return xml.substr(at, xml.find("</c:ser>", at) - at);
+  };
+  ColorSpec theme;
+  theme.kind = ColorSpec::Kind::kTheme;
+  theme.theme = 7;
+  theme.tint = 0.4;
+  ChartSeriesPatch tinted;
+  tinted.fill.color = ChartPatchField<ColorSpec>::Set(theme);
+  ChartSeriesPatch red;
+  red.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF0000U));
+  const std::string accent4 =
+      "<a:solidFill><a:schemeClr val=\"accent4\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/></a:schemeClr>"
+      "</a:solidFill>";
+
+  for (const K kind : {K::kBar, K::kArea, K::kScatter}) {
+    Workbook wb = LoadFixture("chart_column.xlsx");
+    const Located c = Find(wb, "xl/charts/chart1.xml");
+    MustOk(set_chart_series(wb, c.sheet, c.id, 0, 0, tinted));
+    MustOk(set_chart_series(wb, c.sheet, c.id, 0, 1, red));
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, kind, ChartGrouping::kClustered));
+    const std::string xml = PartText(wb, c.path);
+    if (kind == K::kScatter) {
+      EXPECT_EQ(ser(xml, 0).find("accent4"), std::string::npos) << ser(xml, 0);
+      EXPECT_NE(ser(xml, 0).find("<a:schemeClr val=\"accent1\"/>"), std::string::npos) << ser(xml, 0);
+      EXPECT_EQ(xml.find("FF0000"), std::string::npos) << ser(xml, 1);
+      EXPECT_NE(ser(xml, 1).find("<a:schemeClr val=\"accent2\"/>"), std::string::npos) << ser(xml, 1);
+    } else {
+      EXPECT_NE(ser(xml, 0).find("<c:spPr>" + accent4 + "<a:ln>"), std::string::npos) << ser(xml, 0);
+      EXPECT_NE(ser(xml, 1).find("<c:spPr><a:solidFill><a:srgbClr val=\"FF0000\"/></a:solidFill><a:ln>"),
+                std::string::npos)
+          << ser(xml, 1);
+    }
+  }
+
+  Workbook lw = LoadFixture("chart_line.xlsx");
+  const Located line = Find(lw, "xl/charts/chart1.xml");
+  ChartSeriesPatch red_line;
+  red_line.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF0000U));
+  MustOk(set_chart_series(lw, line.sheet, line.id, 0, 1, red_line));
+  MustOk(set_chart_type(lw, line.sheet, line.id, 0, K::kScatter, ChartGrouping::kStandard));
+  EXPECT_EQ(PartText(lw, line.path).find("FF0000"), std::string::npos);
+}
+
 // A chart's automatic colours, re-derived by a type change, come from its own colour style.
 TEST(ChartEdit, TypeChangeColoursFromTheChartsColourStyle) {
   Workbook wb = LoadFixture("chart_column.xlsx");

@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <initializer_list>
-#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -45,36 +44,26 @@ Family family_of(int kind) {
   }
 }
 
-/// The explicit RGB colour a series is drawn in, by family.
-std::optional<std::uint32_t> main_color(const xml_node& ser, Family f) {
-  const xml_node sp = f == Family::kMarker ? child_local(child_local(ser, "marker"), "spPr") : child_local(ser, "spPr");
-  const xml_node fill =
-      f == Family::kLine ? child_local(child_local(sp, "ln"), "solidFill") : child_local(sp, "solidFill");
-  const xml_node clr = child_local(fill, "srgbClr");
-  if (f == Family::kNone || !clr) {
-    return std::nullopt;
+/// Gives bar / area series `to` the fill of bar / area series `from` as it is, as Excel changes between those types;
+/// `to` keeps its automatic fill when `from` states none.
+void carry_series_fill(const xml_node& from, xml_node to) {
+  const auto fill_of = [](const xml_node& sp) {
+    for (xml_node e = sp.first_child(); e; e = e.next_sibling()) {
+      if (rank(kFills, local_name(e)) >= 0) {
+        return e;
+      }
+    }
+    return xml_node();
+  };
+  const xml_node src = fill_of(child_local(from, "spPr"));
+  xml_node sp = child_local(to, "spPr");
+  if (!src || !sp) {
+    return;
   }
-  return io::parse_rgb_hex(clr.attribute("val").value(), 0U) | 0xFF000000U;
-}
-
-void set_main_color(xml_node ser, Family f, std::uint32_t argb) {
-  ChartFillPatch fill;
-  ChartLinePatch line;
-  ColorSpec color;
-  color.kind = ColorSpec::Kind::kRgb;
-  color.rgb = argb;
-  fill.color = ChartPatchField<ColorSpec>::Set(color);
-  line.color = fill.color;
-  if (f == Family::kFill) {
-    static_cast<void>(apply_shape(ser, kSerOrder, fill, ChartLinePatch{}));
-  } else if (f == Family::kLine) {
-    static_cast<void>(apply_shape(ser, kSerOrder, ChartFillPatch{}, line));
-  } else if (f == Family::kMarker) {
-    ChartMarkerPatch m;
-    m.fill = fill;
-    m.line = line;
-    static_cast<void>(apply_marker(ser, kSerOrder, ChartPatchField<ChartMarkerPatch>::Set(m)));
+  while (const xml_node old = fill_of(sp)) {
+    sp.remove_child(old);
   }
+  copy_at(sp, src, kShapeOrder);
 }
 
 /// Replaces the `a:ln` of shape properties `sp` with a copy of `ln`.
@@ -350,11 +339,10 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     if (const xml_node ext = child_local(from, "extLst")) {
       copy_at(to, ext, kSerOrder);
     }
-    // Between line and bar / area types Excel re-derives the series colour.
-    const bool line_fill_swap = (family_of(old) == Family::kLine && family_of(k) == Family::kFill) ||
-                                (family_of(old) == Family::kFill && family_of(k) == Family::kLine);
-    if (const auto color = main_color(from, family_of(old)); color && !line_fill_swap) {
-      set_main_color(to, family_of(k), *color);
+    // As Excel changes type: the series fill carries only between bar and area types; every other change
+    // re-derives the series colour.
+    if (family_of(old) == Family::kFill && family_of(k) == Family::kFill) {
+      carry_series_fill(from, to);
     }
     if (!old_ring) {
       carry_series_line(from, to, old, k);
