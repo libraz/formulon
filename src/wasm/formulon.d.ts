@@ -5086,11 +5086,12 @@ export interface Workbook {
 
   /** Parses `text` as `INDIRECT` reads a reference under the workbook's Excel profile: A1, or R1C1 with the
    *  Excel profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
-   *  range in either order and whole columns / rows. Returns `null` for anything else
-   *  (3D, external, named, structured or multi-area references, surrounding whitespace, a sheet name over 31
-   *  characters, an R1C1 relative axis without a base). Throws `TypeError` when only one of `baseRow` /
-   *  `baseCol` is given; a base outside the grid fails with `StatusCode.InvalidArgument`. */
-  parseReference(text: string, options?: ParseReferenceOptions): ParsedReference | null;
+   *  range in either order and whole columns / rows. Anything else (3D, external, named, structured or
+   *  multi-area references, surrounding whitespace, a sheet name over 31 characters, an R1C1 relative axis
+   *  without a base) fails with `StatusCode.ParserInvalidReference`, its `parseError` covering the whole text.
+   *  Throws `TypeError` when only one of `baseRow` / `baseCol` is given; a base outside the grid fails with
+   *  `StatusCode.InvalidArgument`. */
+  parseReference(text: string, options?: ParseReferenceOptions): ParsedReference;
   /** Writes the inclusive rectangle as A1 reference text: `A1`, `$A$1:$B$2`, `B:D` (every row), `2:11`
    *  (every column), with the sheet name quoted as a stored formula quotes it. A coordinate outside the
    *  grid or an unordered rectangle fails with `StatusCode.InvalidArgument`. */
@@ -5108,12 +5109,13 @@ export interface Workbook {
  *
  *  A method taking a cell takes it as a `(row, col)` pair or as one A1 address, every cell of a call in the same
  *  form; mixing them throws `TypeError`. An A1 address is one cell without a sheet name (`B3`, `$B$3`, `b3`), read
- *  as `Workbook.parseReference` reads it: an address that does not parse, names a sheet or spans more than one
- *  cell fails with `StatusCode.InvalidArgument`. A rectangle argument takes a `CellRect` or an A1 range (`A1:B2`,
+ *  as `Workbook.parseReference` reads it: an address that does not parse fails with
+ *  `StatusCode.ParserInvalidReference`, and one that names a sheet or spans more than one cell with
+ *  `StatusCode.InvalidArgument`. A rectangle argument takes a `CellRect` or an A1 range (`A1:B2`,
  *  or one cell as 1 x 1) read the same way. A row or column span (`first, last`, or a start and a `count`) also
  *  takes one A1 span string read the same way: columns as `B` or `B:D`, rows as `3` or `3:5`, `$` allowed. A
- *  string that does not parse, names a sheet, or is not whole columns (for a column method) or whole rows (for
- *  a row method) fails with `StatusCode.InvalidArgument`; the whole sheet (`A:XFD`, `1:1048576`) is both.
+ *  string that does not parse fails with `StatusCode.ParserInvalidReference`; one that names a sheet, or is not
+ *  whole columns (for a column method) or whole rows (for a row method), fails with `StatusCode.InvalidArgument`; the whole sheet (`A:XFD`, `1:1048576`) is both.
  *
  *  Spans come in two forms. A method that inserts or deletes rows or columns takes `(start, count)`; every other
  *  row or column span is the closed interval `(first, last)`. The parameter names say which form a method uses.
