@@ -1942,12 +1942,13 @@ export interface Hyperlink {
 }
 
 /** Argument of `Sheet.addHyperlink` / `addHyperlinkRange`. A `null` `target` is an in-workbook link and needs
- *  `location`, its A1 destination. */
+ *  `location`, its A1 destination. A `null` `display` or `tooltip` is the same as omitting it, so a read
+ *  `Hyperlink` can be passed back. */
 export interface HyperlinkInput {
   target: string | null;
   location?: string | null;
-  display?: string;
-  tooltip?: string;
+  display?: string | null;
+  tooltip?: string | null;
 }
 
 /** Cell comment entry returned by `Sheet.getComment(row, col)`. */

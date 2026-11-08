@@ -170,6 +170,74 @@ class OoxmlNamespaceTest(unittest.TestCase):
         self.assertNotIn("OOXML_", gen.py_region(_ledger(plain)))
 
 
+SIGNATURE_DTS = (
+    DTS
+    + """
+export interface Workbook { listSheets(): Sheet[]; addFilter(input: FilterInput): void; }
+export interface WorkbookOoxml { getFont(index: number): number; }
+export interface Sheet {
+  setNumber(row: number, col: number, value: number): void;
+  setNumber(a1: string, value: number): void;
+  setWidth(first: number, last: number, width: number): void;
+  setWidth(span: string, width: number): void;
+  setPrintArea(ranges: readonly (CellRect | string)[] | string | null): void;
+  getValues(range: CellRect | string): number[][];
+  sort(input: SortInput, options?: number): void;
+}
+export interface SheetOoxml { setXf(range: CellRect | string, xf: number): void; }
+"""
+)
+
+SIGNATURE_OPS = {
+    **RECORDS,
+    "value.set": _op("setNumber", "sheet", cell_args=[[0, 1]]),
+    "width.set": _op("setWidth", "sheet", span_args=[[0, "col", "span"]]),
+}
+
+
+class MethodSignaturesTest(unittest.TestCase):
+    def test_arity_is_the_longest_overload_keyed_by_the_owning_class(self) -> None:
+        arity, _typed = gen.method_signatures(_ledger(SIGNATURE_OPS), SIGNATURE_DTS)
+        self.assertEqual(
+            arity,
+            {
+                "Sheet.getValues": 1,
+                "Sheet.setNumber": 3,
+                "Sheet.setPrintArea": 1,
+                "Sheet.setWidth": 3,
+                "Sheet.setXf": 2,
+                "Sheet.sort": 2,
+                "Workbook.addFilter": 1,
+                "Workbook.getFont": 1,
+                "Workbook.listSheets": 0,
+            },
+        )
+
+    def test_typed_args_name_records_and_range_arrays_but_not_a_plain_rect(self) -> None:
+        _arity, typed = gen.method_signatures(_ledger(SIGNATURE_OPS), SIGNATURE_DTS)
+        self.assertEqual(
+            typed,
+            {
+                "Sheet.setPrintArea": [[0, "CellRect[]"]],
+                "Sheet.sort": [[0, "SortInput"]],
+                "Workbook.addFilter": [[0, "FilterInput"]],
+            },
+        )
+
+    def test_a_cell_or_span_method_must_declare_its_string_form(self) -> None:
+        dts = SIGNATURE_DTS.replace("  setNumber(a1: string, value: number): void;\n", "")
+        with self.assertRaisesRegex(
+            gen.GenError, r"Sheet\.setNumber: overloads take \[3\] arguments, expected \[2, 3\]"
+        ):
+            gen.method_signatures(_ledger(SIGNATURE_OPS), dts)
+
+    def test_js_region(self) -> None:
+        text = gen.signatures_region(_ledger(SIGNATURE_OPS), SIGNATURE_DTS)
+        self.assertIn("const METHOD_ARITY = Object.freeze({\n  'Sheet.getValues': 1,\n", text)
+        self.assertIn("  'Workbook.listSheets': 0,\n});\n", text)
+        self.assertIn("const TYPED_ARGS = Object.freeze({\n  'Sheet.setPrintArea': [[0, 'CellRect[]']],\n", text)
+
+
 class RegionGateTest(unittest.TestCase):
     PATTERN = gen._RANGE_REGION["js"]
 

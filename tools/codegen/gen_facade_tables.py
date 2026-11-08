@@ -37,6 +37,12 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   union type alias of interfaces) has the fields of every alternative. Python keys and nested record
   names are the ledger's Python names, fields snake_case. Both files follow the
   ``sheet.py`` rule for an absent or empty region.
+* ``METHOD_ARITY`` (``{Class.method: count}``) and ``TYPED_ARGS``
+  (``{Class.method: [[position, type], ...]}``) in the ``<method-signatures>``
+  region of ``common.mjs``, read from the facade interfaces of
+  src/wasm/formulon.d.ts: the most positional parameters any overload
+  declares, and the parameters typed by an address record or a range type
+  other than a plain ``CellRect``. Same rule for an absent or empty region.
 * ``packages/python/formulon/_handle_tables.py``: the same tables for the handle
   classes, the whole file generated.
 * ``src/node_addon/generated/facade_scope.inc``: ``kSheetMethods``, the sorted
@@ -70,7 +76,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import facade_scope  # noqa: E402
 
 from tools.dev.binding_drift.api_conventions_arguments import _js_fields  # noqa: E402
-from tools.dev.binding_drift.api_conventions_bindings import JsSurface, _top_union  # noqa: E402
+from tools.dev.binding_drift.api_conventions_bindings import (  # noqa: E402
+    OOXML_CLASSES,
+    SHEET_CLASS,
+    WORKBOOK_CLASS,
+    JsSurface,
+    _top_union,
+)
 from tools.dev.binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
 
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
@@ -88,6 +100,7 @@ def _region_re(comment: str, tag: str) -> "re.Pattern[str]":
 
 _REGION = {"js": _region_re("//", "facade-tables"), "py": _region_re("#", "facade-tables")}
 _RANGE_REGION = {"js": _region_re("//", "record-range-fields"), "py": _region_re("#", "record-range-fields")}
+_SIGNATURE_REGION = _region_re("//", "method-signatures")
 OOXML_NAMESPACE = "ooxml"
 # The d.ts types a record field holds an address in; the facade also takes an A1 string for each.
 RANGE_TYPES = ("CellRect", "SheetRect", "CellAddress")
@@ -512,6 +525,71 @@ def _py_mapping_row(name: str, cells: Sequence[str]) -> str:
     return f'    "{name}": {{\n{body}    }},\n'
 
 
+def _facade_interfaces(ledger: facade_scope.Ledger) -> Dict[str, str]:
+    """d.ts interface -> the `Class` its methods are keyed under: `Workbook` / `Sheet` and their `ooxml` layers,
+    and every handle class the ledger forwards to."""
+    out = {WORKBOOK_CLASS: WORKBOOK_CLASS, SHEET_CLASS: SHEET_CLASS}
+    out.update({layer: owner for owner, layer in OOXML_CLASSES.items()})
+    handles = {*facade_scope.handle_forwarders(ledger, "js"), *facade_scope.handle_properties(ledger, "js")}
+    for key in handles:
+        owner = key.split(".", 1)[0]
+        out.setdefault(owner, owner)
+    return out
+
+
+def method_signatures(
+    ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
+) -> Tuple[Dict[str, int], Dict[str, List[List[object]]]]:
+    """`(METHOD_ARITY, TYPED_ARGS)` of the facade classes, keyed `Class.method`, sorted.
+
+    The arity is the most positional parameters any overload declares (the coordinate form). A method with
+    `CELL_ARGS` or `SPAN_ARGS` must also declare exactly the string form, one parameter fewer per pair or span,
+    which the facade derives at run time. `TYPED_ARGS` lists `[position, type]` per parameter typed by an input
+    record of `RECORD_RANGE_FIELDS` or by another range type; a plain `CellRect` parameter is `RECT_ARGS`'.
+    """
+    ledger = ledger or facade_scope.load()
+    text = WASM_DTS.read_text(encoding="utf-8") if dts is None else dts
+    surface = JsSurface(text)
+    records = record_range_fields(ledger, text)
+    known = (*RANGE_TYPES, *records)
+    arities: Dict[str, set] = {}
+    typed: Dict[str, Dict[int, str]] = {}
+    for interface, owner in _facade_interfaces(ledger).items():
+        decl = surface.decls.get(interface)
+        for member in decl.members if decl is not None and decl.kind == "interface" else ():
+            if not member.is_method:
+                continue
+            key = f"{owner}.{member.name}"
+            arities.setdefault(key, set()).add(len(member.params))
+            for position, (_name, ptype) in enumerate(member.params):
+                kind = _range_type(ptype, known)
+                if kind is None or kind == "CellRect":
+                    continue
+                slots = typed.setdefault(key, {})
+                if slots.setdefault(position, kind) != kind:
+                    raise GenError(f"{key} argument {position + 1} is typed {slots[position]} and {kind}")
+    collapsed = facade_scope.cell_args(ledger, "js")
+    spans = facade_scope.span_args(ledger, "js")
+    for key in sorted({*collapsed, *spans}):
+        if key not in arities:
+            continue
+        most = max(arities[key])
+        want = {most, most - len(collapsed.get(key, ())) - len(spans.get(key, ()))}
+        if arities[key] != want:
+            raise GenError(f"{key}: overloads take {sorted(arities[key])} arguments, expected {sorted(want)}")
+    arity = {key: max(counts) for key, counts in sorted(arities.items())}
+    args = {key: [[p, k] for p, k in sorted(slots.items())] for key, slots in sorted(typed.items())}
+    return arity, args
+
+
+def signatures_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """The JS `METHOD_ARITY` and `TYPED_ARGS` tables."""
+    arity, typed = method_signatures(ledger, dts)
+    out = _js_frozen("METHOD_ARITY", "".join(f"{_INDENT}{_js_key(k)}: {n},\n" for k, n in arity.items()))
+    body = "".join(f"{_INDENT}{_js_key(k)}: {_js_positions(v)},\n" for k, v in typed.items())
+    return out + _js_frozen("TYPED_ARGS", body)
+
+
 def _splice(text: str, pattern: "re.Pattern[str]", region: str, path: Path) -> str:
     match = pattern.search(text)
     if match is None:
@@ -541,6 +619,8 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
     common = _splice(common, _REGION["js"], js_region(), NPM_COMMON)
     if _RANGE_REGION["js"].search(common):
         common = _splice(common, _RANGE_REGION["js"], range_fields_region("js"), NPM_COMMON)
+    if _SIGNATURE_REGION.search(common):
+        common = _splice(common, _SIGNATURE_REGION, signatures_region(), NPM_COMMON)
     result.append((NPM_COMMON, common))
     result.append(_region_output(PYTHON_SHEET, _REGION["py"], py_region))
     result.append(_region_output(PYTHON_INPUTS, _RANGE_REGION["py"], lambda: range_fields_region("py")))
@@ -551,7 +631,11 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
 
 
 # Outputs whose region `--check` skips while it is empty; `--write` fills it.
-_FILLABLE = {PYTHON_SHEET: (_REGION["py"],), PYTHON_INPUTS: (_RANGE_REGION["py"],), NPM_COMMON: (_RANGE_REGION["js"],)}
+_FILLABLE = {
+    PYTHON_SHEET: (_REGION["py"],),
+    PYTHON_INPUTS: (_RANGE_REGION["py"],),
+    NPM_COMMON: (_RANGE_REGION["js"], _SIGNATURE_REGION),
+}
 
 
 def _skippable(path: Path, current: Optional[str], text: str) -> bool:
