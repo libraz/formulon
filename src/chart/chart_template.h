@@ -77,6 +77,10 @@ std::string chart_rect_ref(const std::string& sheet_name, std::uint32_t top, std
 /// True when number format code `code` carries date or time tokens, as Excel judges date categories.
 bool chart_is_date_format(std::string_view code);
 
+/// The base unit Excel gives a date axis over category serials `dates`: from the smallest gap between neighbouring
+/// dates once sorted, days under 28, months under 365, years otherwise; days for fewer than two dates.
+const char* chart_base_time_unit(const std::vector<double>& dates);
+
 /// Appends the `a:ln` in the tx1 tint `lum` percent (e.g. 15 for gridlines, 35 for leader lines).
 void append_grey_ln(std::string& x, int lum);
 

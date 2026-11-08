@@ -995,5 +995,84 @@ TEST(ChartTemplateDerive, RecoversForcedHeaders) {
   EXPECT_TRUE(derived->header_column);
 }
 
+/// The category (or x) axis and the value (or y) axis of a chart inserted over `grid`.
+std::pair<std::string, std::string> inserted_axes(const std::string& grid, ChartInsertKind kind,
+                                                  ChartGrouping grouping = ChartGrouping::kClustered) {
+  Workbook wb = excel_workbook();
+  const std::string rect = fill_grid(wb, 0, grid);
+  const auto sp = split(wb, rect, kind);
+  EXPECT_TRUE(static_cast<bool>(sp));
+  ChartInsertOptions options;
+  options.kind = kind;
+  options.grouping = grouping;
+  const auto xml = build_chart_xml(wb, options, sp.value());
+  EXPECT_TRUE(static_cast<bool>(xml));
+  const std::string& x = xml.value();
+  std::vector<std::string> axes;
+  for (std::size_t at = 0; (at = x.find("Ax><c:axId", at)) != std::string::npos; ++at) {
+    const std::size_t open = x.rfind("<c:", at);
+    const std::string tag = x.substr(open + 3U, at + 2U - open - 3U);
+    const std::size_t close = x.find("</c:" + tag + ">", at);
+    axes.push_back(x.substr(open, close - open));
+  }
+  EXPECT_EQ(axes.size(), 2U) << x;
+  return axes.size() == 2U ? std::make_pair(axes[0], axes[1]) : std::make_pair(std::string(), std::string());
+}
+
+std::string axis_tail(const std::string& axis) {
+  return axis.substr(axis.find("<c:crossAx"));
+}
+
+// Dates in every category cell make a date axis whose base unit follows the smallest gap between sorted dates;
+// each axis links to the number format of its data's first cell.
+TEST(ChartTemplateXml, DateCategoriesMakeADateAxis) {
+  const auto months =
+      inserted_axes("\xC2\xB7,S1/2024-03-15,1/2024-01-15,2/2024-02-15,3/2024-05-15,4", ChartInsertKind::kColumn);
+  EXPECT_EQ(months.first.rfind("<c:dateAx>", 0), 0U) << months.first;
+  EXPECT_NE(months.first.find("<c:numFmt formatCode=\"m/d/yy\" sourceLinked=\"1\"/>"), std::string::npos);
+  EXPECT_EQ(axis_tail(months.first),
+            "<c:crossAx val=\"507100002\"/><c:crosses val=\"autoZero\"/><c:auto val=\"1\"/>"
+            "<c:lblOffset val=\"100\"/><c:baseTimeUnit val=\"months\"/>");
+  EXPECT_NE(months.second.find("<c:numFmt formatCode=\"General\" sourceLinked=\"1\"/>"), std::string::npos);
+
+  const auto unit = [](const char* grid) {
+    const std::string axis = inserted_axes(grid, ChartInsertKind::kLine, ChartGrouping::kStandard).first;
+    const std::size_t at = axis.find("<c:baseTimeUnit val=\"");
+    return at == std::string::npos ? std::string("none") : axis.substr(at + 21U, axis.find('"', at + 21U) - at - 21U);
+  };
+  EXPECT_EQ(unit("\xC2\xB7,S1/2024-01-01,1/2024-01-28,2/2024-06-01,3"), "days");    // 27-day gap
+  EXPECT_EQ(unit("\xC2\xB7,S1/2024-01-01,1/2024-01-29,2/2024-06-01,3"), "months");  // 28-day gap
+  EXPECT_EQ(unit("\xC2\xB7,S1/2021-01-01,1/2021-12-31,2/2024-06-01,3"), "months");  // 364-day gap
+  EXPECT_EQ(unit("\xC2\xB7,S1/2021-06-15,1/2022-06-15,2/2023-06-15,3"), "years");
+  EXPECT_EQ(unit("\xC2\xB7,S1/2024-01-01,1/\xC2\xB7,2/2024-03-01,3"), "months");  // a blank is skipped
+
+  // One plain number among the dates keeps a category axis, linked to the first cell's format.
+  const auto mixed = inserted_axes("\xC2\xB7,S1/2024-01-01,1/45300,2/2024-03-01,3", ChartInsertKind::kColumn);
+  EXPECT_EQ(mixed.first.rfind("<c:catAx>", 0), 0U) << mixed.first;
+  EXPECT_NE(mixed.first.find("formatCode=\"m/d/yy\""), std::string::npos) << mixed.first;
+  EXPECT_NE(mixed.first.find("<c:lblAlgn val=\"ctr\"/>"), std::string::npos);
+
+  // Scatter x values of dates stay on a value axis, linked to their format; a percent plot keeps 0%.
+  const auto scatter = inserted_axes("S1,S2/2024-01-01,1/2024-02-01,2", ChartInsertKind::kScatter);
+  EXPECT_EQ(scatter.first.rfind("<c:valAx>", 0), 0U) << scatter.first;
+  EXPECT_NE(scatter.first.find("formatCode=\"m/d/yy\""), std::string::npos) << scatter.first;
+  const auto percent =
+      inserted_axes("\xC2\xB7,S1/a,2024-01-01/b,2024-02-01", ChartInsertKind::kColumn, ChartGrouping::kPercentStacked);
+  EXPECT_NE(percent.first.find("formatCode=\"General\""), std::string::npos) << percent.first;
+  EXPECT_NE(percent.second.find("formatCode=\"0%\""), std::string::npos) << percent.second;
+  const auto linked = inserted_axes("\xC2\xB7,S1/a,2024-01-01/b,2024-02-01", ChartInsertKind::kColumn);
+  EXPECT_NE(linked.second.find("formatCode=\"m/d/yy\""), std::string::npos) << linked.second;
+}
+
+TEST(ChartTemplateXml, BaseTimeUnitFromTheSmallestGap) {
+  EXPECT_STREQ(chart_base_time_unit({}), "days");
+  EXPECT_STREQ(chart_base_time_unit({45000.0}), "days");
+  EXPECT_STREQ(chart_base_time_unit({45060.0, 45000.0, 45000.0}), "days");  // a repeated date
+  EXPECT_STREQ(chart_base_time_unit({45000.75, 45028.25}), "days");         // 27.5 days apart
+  EXPECT_STREQ(chart_base_time_unit({45000.25, 45028.75}), "months");       // 28.5
+  EXPECT_STREQ(chart_base_time_unit({45000.75, 45365.25}), "months");       // 364.5
+  EXPECT_STREQ(chart_base_time_unit({46000.0, 45000.0, 45365.0}), "years");
+}
+
 }  // namespace
 }  // namespace formulon

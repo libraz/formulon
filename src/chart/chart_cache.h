@@ -6,6 +6,8 @@
 #define FORMULON_CHART_CHART_CACHE_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <string>
 #include <vector>
 
 #include "passthrough_part.h"
@@ -29,6 +31,12 @@ Expected<std::vector<PassthroughPart>, Error> refreshed_chart_parts(const Workbo
 /// or `kChartNoHostSheet` for a chartsheet. Returns whether `doc` changed;
 /// a pivot chart or chartex `doc` is never changed.
 bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_document& doc);
+
+/// The number format code of cell (`row`, `col`) on sheet `sheet` as a chart
+/// cache or a linked axis carries it: built-in ids in their en-US codes, the
+/// locale's own short date taken for id 14. Empty when the workbook has no
+/// cell formats.
+std::string chart_cell_format_code(const Workbook& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col);
 
 }  // namespace formulon
 

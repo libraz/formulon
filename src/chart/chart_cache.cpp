@@ -316,22 +316,7 @@ class Gatherer {
     return Pos{a.sheet, a.top, a.left};
   }
 
-  /// Built-in ids are cached with their en-US codes whatever the UI locale, and
-  /// a custom code spelling the locale's own short date (id 14) is taken for
-  /// that built-in.
-  std::string format_code_at(const Pos& p) const {
-    const std::vector<CellXf>& xfs = wb_.styles().cell_xfs;
-    if (xfs.empty()) {
-      return {};
-    }
-    const EffectiveXf choice = select_effective_xf(wb_.sheet(p.sheet), p.row, p.col);
-    const CellXf& xf = xfs[choice.xf_index < xfs.size() ? choice.xf_index : 0U];
-    const std::string_view code = text_format::number_format_code_for_xf(wb_.styles(), &xf, mac_365_en_us_profile());
-    if (code == localized_builtin_num_fmt(14, wb_.excel_profile())) {
-      return std::string(localized_builtin_num_fmt(14, mac_365_en_us_profile()));
-    }
-    return std::string(code);
-  }
+  std::string format_code_at(const Pos& p) const { return chart_cell_format_code(wb_, p.sheet, p.row, p.col); }
 
   const Workbook& wb_;
   bool vis_only_;
@@ -486,6 +471,20 @@ void write_cache(pugi::xml_node ref, const std::string& prefix, ChartRefKind kin
 }
 
 }  // namespace
+
+std::string chart_cell_format_code(const Workbook& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {
+  const std::vector<CellXf>& xfs = wb.styles().cell_xfs;
+  if (xfs.empty()) {
+    return {};
+  }
+  const EffectiveXf choice = select_effective_xf(wb.sheet(sheet), row, col);
+  const CellXf& xf = xfs[choice.xf_index < xfs.size() ? choice.xf_index : 0U];
+  const std::string_view code = text_format::number_format_code_for_xf(wb.styles(), &xf, mac_365_en_us_profile());
+  if (code == localized_builtin_num_fmt(14, wb.excel_profile())) {
+    return std::string(localized_builtin_num_fmt(14, mac_365_en_us_profile()));
+  }
+  return std::string(code);
+}
 
 bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_document& doc) {
   const pugi::xml_node root = doc.document_element();

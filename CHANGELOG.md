@@ -2773,8 +2773,7 @@ order.
   (General for text). A date axis stays as it is over a column, bar, line or
   area plot and becomes a value axis, keeping its units and dropping its time
   units and bounds, over a scatter plot; a scatter plot whose X values are
-  dates becomes a plot over a date axis whose base unit is years, months or
-  days as the dates fall. Every type change drops a category axis's label and
+  dates becomes a plot over a date axis. Every type change drops a category axis's label and
   mark intervals, as Excel does.
 - A chart type change to or from pie or doughnut follows Excel's: pie points
   become points in the series colour that keep their outline; a series line
@@ -2783,6 +2782,14 @@ order.
   its value axis first, and a scatter chart's axes have no outline and its
   horizontal axis no gridlines or number format); and a new bar plot takes a
   gap width of 100.
+- A chart added over categories that are all dates (blanks aside) gets a
+  date axis, as Excel makes one; a single plain number or text among them
+  keeps a category axis. A date axis's base unit, whether made by adding a
+  chart or by a type change, follows the smallest gap between the sorted
+  dates: days under 28 days, months under 365, years otherwise. Each axis of
+  a new chart links to the number format of its data's first cell (the
+  category axis is General when a category is text, and a percent-stacked
+  value axis stays 0%) instead of always General.
 - A shape fill or outline colour is no longer dropped silently: given without
   its kind it fails with a `TypeError` in JavaScript and Python, and given with
   a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.

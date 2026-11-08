@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cmath>
 #include <initializer_list>
 #include <set>
 #include <string>
@@ -20,7 +19,6 @@
 #include "io/ooxml/part_dom.h"
 #include "io/xml_utils.h"
 #include "sheet.h"
-#include "utils/date_time.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -357,20 +355,14 @@ std::string category_format(const xml_node& ser) {
   return text.empty() ? "General" : text;
 }
 
-/// The base unit Excel gives a date axis over `ser`'s categories: years when every date is a 1 January, months when
-/// every date is a first of the month, days otherwise.
-const char* base_time_unit(const xml_node& ser, bool date1904) {
-  bool months = true;
-  bool years = true;
-  bool any = false;
+/// The base unit Excel gives a date axis over `ser`'s categories.
+const char* base_time_unit(const xml_node& ser) {
+  std::vector<double> dates;
   const xml_node cache = child_local(child_local(category_input(ser), "numRef"), "numCache");
   for (const xml_node& pt : children_local(cache, "pt")) {
-    const date_time::YMD d = date_time::ymd_from_serial(std::floor(child_local(pt, "v").text().as_double()), date1904);
-    months = months && d.d == 1U;
-    years = years && d.d == 1U && d.m == 1U;
-    any = true;
+    dates.push_back(child_local(pt, "v").text().as_double());
   }
-  return !any ? "days" : years ? "years" : months ? "months" : "days";
+  return chart_base_time_unit(dates);
 }
 
 /// Turns category or date axis `ax` into a value axis or back, as Excel changes type, keeping its identity, scaling
@@ -577,7 +569,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   const std::vector<xml_node> old_axes = axes_of(c, ids);
   std::vector<xml_node> new_axes;
   for (xml_node n = child_local(template_chart(t), "plotArea").first_child(); n; n = n.next_sibling()) {
-    if (local_name(n) == "catAx" || local_name(n) == "valAx") {
+    if (local_name(n) == "catAx" || local_name(n) == "valAx" || local_name(n) == "dateAx") {
       new_axes.push_back(n);
     }
   }
@@ -591,8 +583,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   if (same) {
     const std::string format = sers.empty() ? std::string("General") : category_format(sers[0]);
     // A value axis over dates becomes a date axis, as Excel judges the category data.
-    const char* time_unit =
-        chart_is_date_format(format) ? base_time_unit(sers[0], flag(child_local(c.root(), "date1904"))) : nullptr;
+    const char* time_unit = chart_is_date_format(format) ? base_time_unit(sers[0]) : nullptr;
     for (std::size_t i = 0; i < old_axes.size(); ++i) {
       if ((local_name(old_axes[i]) == "valAx") != (local_name(new_axes[i]) == "valAx")) {
         convert_axis(old_axes[i], new_axes[i], is_bar(tplot), format, time_unit);

@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "chart/chart_cache.h"
 #include "chart/chart_ns.h"
 #include "eval/a1_parse.h"
 #include "excel_profile.h"
@@ -297,15 +298,19 @@ void append_accent(std::string& x, const pugi::xml_node& colors, std::size_t idx
   x += chart_cycle_color(colors, idx);
 }
 
+// A category axis with a `time_unit` is a date axis.
 void append_axis(std::string& x, bool category, std::uint32_t id, std::uint32_t cross, char pos, const char* tick,
-                 int line_lum, const char* num_fmt, const char* cross_between, bool grid, const std::string& lang) {
-  const char* tag = category ? "catAx" : "valAx";
+                 int line_lum, std::string_view num_fmt, const char* cross_between, bool grid, const std::string& lang,
+                 const char* time_unit) {
+  const char* tag = !category ? "valAx" : time_unit != nullptr ? "dateAx" : "catAx";
   x += std::string("<c:") + tag + "><c:axId val=\"" + std::to_string(id) +
        "\"/><c:scaling><c:orientation val=\"minMax\"/></c:scaling><c:delete val=\"0\"/><c:axPos val=\"" + pos + "\"/>";
   if (grid) {
     x += gridlines_xml();
   }
-  x += std::string("<c:numFmt formatCode=\"") + num_fmt + "\" sourceLinked=\"1\"/><c:majorTickMark val=\"" + tick +
+  x += "<c:numFmt formatCode=\"";
+  io::AppendXmlAttrEscaped(x, num_fmt);
+  x += std::string("\" sourceLinked=\"1\"/><c:majorTickMark val=\"") + tick +
        "\"/><c:minorTickMark val=\"none\"/><c:tickLblPos val=\"nextTo\"/><c:spPr><a:noFill/>";
   if (line_lum != 0) {
     append_grey_ln(x, line_lum);
@@ -315,7 +320,9 @@ void append_axis(std::string& x, bool category, std::uint32_t id, std::uint32_t 
   x += "<a:effectLst/></c:spPr>";
   append_tx_pr(x, "-60000000", "900", false, lang);
   x += "<c:crossAx val=\"" + std::to_string(cross) + "\"/><c:crosses val=\"autoZero\"/>";
-  if (category) {
+  if (time_unit != nullptr) {
+    x += std::string("<c:auto val=\"1\"/><c:lblOffset val=\"100\"/><c:baseTimeUnit val=\"") + time_unit + "\"/>";
+  } else if (category) {
     x += "<c:auto val=\"1\"/><c:lblAlgn val=\"ctr\"/><c:lblOffset val=\"100\"/><c:noMultiLvlLbl val=\"0\"/>";
   } else {
     x += std::string("<c:crossBetween val=\"") + cross_between + "\"/>";
@@ -342,6 +349,53 @@ Cls first_cell_class(const Workbook& wb, const std::string& formula) {
   g.wb = &wb;
   g.sheet = &wb.sheet(si);
   return g.cls(r.top, r.left);
+}
+
+/// Whether category range `cat` holds more than one level for series laid out in `direction`.
+bool multi_level(const std::string& cat, ChartSeriesDirection direction) {
+  RectRef r;
+  return parse_rect(cat, &r) && (direction == ChartSeriesDirection::kRows ? r.bottom > r.top : r.right > r.left);
+}
+
+/// What an axis linked to the cells of `formula` takes from them.
+struct LinkedCells {
+  std::string format = "General";  ///< The first cell's number format; General when any cell holds text.
+  std::vector<double> dates;       ///< The serials when every cell that is not blank holds a date; else empty.
+};
+
+LinkedCells linked_cells(const Workbook& wb, const std::string& formula) {
+  LinkedCells out;
+  RectRef r;
+  if (!parse_rect(formula, &r) || r.full_col || r.full_row) {
+    return out;
+  }
+  const std::size_t si = rect_sheet(wb, 0, r);
+  if (si == static_cast<std::size_t>(-1)) {
+    return out;
+  }
+  Grid g;
+  g.wb = &wb;
+  g.sheet = &wb.sheet(si);
+  bool text = false;
+  bool dated = true;
+  for (std::uint32_t row = r.top; row <= r.bottom; ++row) {
+    for (std::uint32_t col = r.left; col <= r.right; ++col) {
+      const Cls c = g.cls(row, col);
+      text = text || c == Cls::kText;
+      dated = dated && (c == Cls::kDate || c == Cls::kBlank);
+      if (dated && c == Cls::kDate) {
+        out.dates.push_back(g.sheet->resolve_cell_value(row, col).as_number());
+      }
+    }
+  }
+  if (!dated) {
+    out.dates.clear();
+  }
+  const std::string code = text ? std::string() : chart_cell_format_code(wb, si, r.top, r.left);
+  if (!code.empty()) {
+    out.format = code;
+  }
+  return out;
 }
 
 std::uint64_t point_count(const std::string& formula) {
@@ -388,6 +442,16 @@ bool chart_is_date_format(std::string_view code) {
     }
   }
   return false;
+}
+
+const char* chart_base_time_unit(const std::vector<double>& dates) {
+  std::vector<std::uint32_t> order;
+  sorted_index_order_ascending(order, dates);
+  double gap = 365.0;
+  for (std::size_t i = 1; i < order.size(); ++i) {
+    gap = std::min(gap, dates[order[i]] - dates[order[i - 1U]]);
+  }
+  return order.size() < 2U || gap < 28.0 ? "days" : gap < 365.0 ? "months" : "years";
 }
 
 void append_grey_ln(std::string& x, int lum) {
@@ -615,13 +679,11 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
       append_source(x, "yVal", s.y, ChartRefKind::kNum);
     } else {
       if (!s.cat.empty()) {
-        RectRef r;
-        const bool multi = parse_rect(s.cat, &r) &&
-                           (split.direction == ChartSeriesDirection::kRows ? r.bottom > r.top : r.right > r.left);
         const Cls first = first_cell_class(wb, s.cat);
         append_source(x, "cat", s.cat,
-                      multi ? ChartRefKind::kMulti
-                            : (first == Cls::kNumber || first == Cls::kDate ? ChartRefKind::kNum : ChartRefKind::kStr));
+                      multi_level(s.cat, split.direction)
+                          ? ChartRefKind::kMulti
+                          : (first == Cls::kNumber || first == Cls::kDate ? ChartRefKind::kNum : ChartRefKind::kStr));
       }
       append_source(x, "val", s.val, ChartRefKind::kNum);
     }
@@ -649,15 +711,24 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
   }
   x += std::string("</c:") + plot + ">";
 
+  // Each axis links to the first cells of the first series; a single-level category range of dates makes a date axis.
+  const ChartSeriesRefs& first = split.series[0];
+  const LinkedCells values = linked_cells(wb, is_scatter ? first.y : first.val);
   if (is_scatter) {
-    append_axis(x, false, kAxisId1, kAxisId2, 'b', "none", 25, "General", "midCat", true, lang);
-    append_axis(x, false, kAxisId2, kAxisId1, 'l', "none", 25, "General", "midCat", true, lang);
+    append_axis(x, false, kAxisId1, kAxisId2, 'b', "none", 25, linked_cells(wb, first.x).format, "midCat", true, lang,
+                nullptr);
+    append_axis(x, false, kAxisId2, kAxisId1, 'l', "none", 25, values.format, "midCat", true, lang, nullptr);
   } else if (!is_pie) {
     const bool horizontal = kind == ChartInsertKind::kBar;
-    append_axis(x, true, kAxisId1, kAxisId2, horizontal ? 'l' : 'b', is_area ? "out" : "none", 15, "General", "", false,
-                lang);
-    append_axis(x, false, kAxisId2, kAxisId1, horizontal ? 'b' : 'l', "none", 0, percent ? "0%" : "General",
-                is_area ? "midCat" : "between", true, lang);
+    LinkedCells cats;
+    if (!first.cat.empty() && !multi_level(first.cat, split.direction)) {
+      cats = linked_cells(wb, first.cat);
+    }
+    append_axis(x, true, kAxisId1, kAxisId2, horizontal ? 'l' : 'b', is_area ? "out" : "none", 15, cats.format, "",
+                false, lang, cats.dates.empty() ? nullptr : chart_base_time_unit(cats.dates));
+    append_axis(x, false, kAxisId2, kAxisId1, horizontal ? 'b' : 'l', "none", 0,
+                percent ? std::string_view("0%") : std::string_view(values.format), is_area ? "midCat" : "between",
+                true, lang, nullptr);
   }
   x += kNoFillSpPr;
   x += "</c:plotArea>";

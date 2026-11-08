@@ -1480,7 +1480,10 @@ TEST(ChartEdit, TypeChangeKeepsOrConvertsDateAxes) {
   EXPECT_NE(axis.find("<c:auto val=\"1\"/><c:lblOffset val=\"100\"/><c:baseTimeUnit val=\"months\"/>"),
             std::string::npos)
       << axis;
-  EXPECT_NE(Between(from_scatter("m/d/yy", "45295"), "<c:dateAx>", "</c:dateAx>").find("\"days\""), std::string::npos);
+  // The smallest gap between sorted dates sets the unit: 27 days stays days, 28 is months.
+  EXPECT_NE(Between(from_scatter("m/d/yy", "45296"), "<c:dateAx>", "</c:dateAx>").find("\"days\""), std::string::npos);
+  EXPECT_NE(Between(from_scatter("m/d/yy", "45295"), "<c:dateAx>", "</c:dateAx>").find("\"months\""),
+            std::string::npos);
   const std::string numbers = from_scatter("0.00", "45292");
   EXPECT_EQ(CountOf(numbers, "<c:dateAx>"), 0U) << numbers;
   EXPECT_NE(Between(numbers, "<c:catAx>", "</c:catAx>").find("<c:numFmt formatCode=\"0.00\" sourceLinked=\"1\"/>"),
