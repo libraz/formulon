@@ -4,6 +4,9 @@ A block is a program: its stdout must equal the expectations written in it,
 either as a trailing ``# value`` comment on a ``print(...)`` line or as a run of
 comment lines closing the block. A block with no expectation only has to exit
 0. Each block runs in a scratch copy of ``fixtures/readme/``.
+
+With ``FORMULON_DOCS_DIR`` set, every ``.md`` under it is walked as well and its
+``python run`` fences run the same way. ``python no-run`` fences are not executed.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ FIXTURE_DIR = HERE / "fixtures" / "readme"
 READMES = ("README.md", "README_ja.md", "packages/python/README.md")
 
 _FENCE = re.compile(r"^```python run\s*$")
+_DOCS_ENV = "FORMULON_DOCS_DIR"
 _INLINE = re.compile(r"print\(.*\)\s*# (.+)$")
 
 
@@ -61,14 +65,22 @@ def expectations(lines: List[str]) -> List[str]:
 
 class ReadmeSnippetsTest(unittest.TestCase):
     def test_blocks_run_and_print_what_their_comments_say(self) -> None:
-        found = 0
-        for readme in READMES:
-            text = (REPO_ROOT / readme).read_text(encoding="utf-8")
+        sources = [(readme, REPO_ROOT / readme) for readme in READMES]
+        docs = os.environ.get(_DOCS_ENV)
+        if docs:
+            root = Path(docs).resolve()
+            sources.extend(
+                (str(p.relative_to(root)), p) for p in sorted(root.rglob("*.md")) if "node_modules" not in p.parts
+            )
+        readme_blocks = 0
+        for label, path in sources:
+            text = path.read_text(encoding="utf-8")
             for line_no, lines in run_blocks(text):
-                found += 1
-                with self.subTest(block=f"{readme}:{line_no}"):
+                if label in READMES:
+                    readme_blocks += 1
+                with self.subTest(block=f"{label}:{line_no}"):
                     self._run(lines)
-        self.assertGreaterEqual(found, 3, f"found {found} `python run` blocks")
+        self.assertGreaterEqual(readme_blocks, 3, f"found {readme_blocks} `python run` blocks")
 
     def _run(self, lines: List[str]) -> None:
         with tempfile.TemporaryDirectory(prefix="formulon-readme-") as work:

@@ -58,7 +58,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         wasm wasm-threads wasm-debug wasm-capi test-wasm test-python size-check \
         npm-package npm-test npm-pack npm-check-dts npm-typecheck \
         node-native node-package node-test \
-        python-package python-test python-wheel \
+        python-package python-test python-wheel docs-snippets \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
         oracle-gen oracle-gen-cf oracle-gen-chart oracle-gen-workbook oracle-promote \
@@ -487,6 +487,22 @@ node-package: node-native
 
 node-test: node-package
 	(cd $(NODE_NATIVE_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')
+
+# -- Documentation snippets -----------------------------------------------
+# `make docs-snippets FORMULON_DOCS_DIR=../formulon-homepage/src` -> run the
+#   `run` / `run:node-server` / `no-run` fences of every .md under the directory
+#   (plus the READMEs) against the staged npm, native and Python packages.
+FORMULON_DOCS_DIR ?=
+
+docs-snippets: npm-package node-package python-package
+	@if [ -z "$(FORMULON_DOCS_DIR)" ]; then \
+	  echo "docs-snippets: set FORMULON_DOCS_DIR to a directory of .md files"; exit 1; \
+	fi
+	@rc=0; \
+	(cd $(NPM_PKG_DIR) && FORMULON_DOCS_DIR="$(abspath $(FORMULON_DOCS_DIR))" $(NODE) --test test/readme_snippets.test.mjs) || rc=1; \
+	(cd $(NODE_NATIVE_PKG_DIR) && FORMULON_DOCS_DIR="$(abspath $(FORMULON_DOCS_DIR))" $(NODE) --test test/readme_snippets.test.mjs) || rc=1; \
+	(cd $(PY_PKG_DIR) && FORMULON_DOCS_DIR="$(abspath $(FORMULON_DOCS_DIR))" $(PYTHON) -m unittest tests.test_readme_snippets) || rc=1; \
+	exit $$rc
 
 # -- Cross-channel parity gate ------------------------------------------------
 # `make parity-test` -> evaluate fixtures.json on every available channel

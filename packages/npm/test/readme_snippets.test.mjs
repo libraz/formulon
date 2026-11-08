@@ -1,12 +1,18 @@
 // Runs the ```js run blocks of the READMEs against the staged package.
+// With FORMULON_DOCS_DIR set, every .md under that directory is walked as well and its fences are
+// interpreted by marker: `js run` as above; `js run:node-server` starts the script with PORT set,
+// POSTs fixtures/readme/input.xlsx to `/` once, requires a 2xx response containing every
+// expectation line, then stops it; `js no-run` is type-checked by tools/typecheck/typecheck.mjs.
+// A block importing @libraz/formulon-native belongs to the native runner and is skipped here.
 // A block is a program: its stdout must equal the expectations written in it,
 // either as a trailing `// value` comment on a `console.log(...)` line or as
 // a run of comment lines closing the block. A block with no expectation only
 // has to exit 0. Each block runs in a scratch copy of fixtures/readme/.
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawn, spawnSync } from 'node:child_process';
+import { cp, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -23,18 +29,83 @@ const entry = process.env.FORMULON_NPM_ENTRY ?? '.';
 const pkg = JSON.parse(await readFile(path.join(pkgRoot, 'package.json'), 'utf8'));
 const stagedEntry = pathToFileURL(path.resolve(pkgRoot, pkg.exports[entry].import)).href;
 
-/** Returns the `js run` fenced blocks of a Markdown text with their first line. */
-function runBlocks(markdown) {
+const docsDir = process.env.FORMULON_DOCS_DIR ? path.resolve(process.env.FORMULON_DOCS_DIR) : null;
+
+/** Returns the fenced `js <marker>` blocks of a Markdown text with their first line and marker. */
+function runBlocks(markdown, markers = ['run']) {
   const blocks = [];
   const lines = markdown.split('\n');
   for (let i = 0; i < lines.length; i += 1) {
-    if (!/^```js run\s*$/.test(lines[i])) continue;
+    const open = /^```js (\S+)\s*$/.exec(lines[i]);
+    if (!open || !markers.includes(open[1])) continue;
     const start = i + 1;
     const body = [];
     for (i += 1; i < lines.length && !lines[i].startsWith('```'); i += 1) body.push(lines[i]);
-    blocks.push({ line: start, code: body.join('\n'), lines: body });
+    blocks.push({ line: start, marker: open[1], code: body.join('\n'), lines: body });
   }
   return blocks;
+}
+
+/** Every .md file under a directory, recursively and in a stable order. */
+async function markdownFiles(dir) {
+  const out = [];
+  for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...(await markdownFiles(full)));
+    else if (entry.name.endsWith('.md')) out.push(full);
+  }
+  return out;
+}
+
+/** An unused TCP port on the loopback interface. */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+/** Starts a `run:node-server` script, sends one request, returns the response and stops the server. */
+async function exerciseServer(script, work) {
+  const port = await freePort();
+  const child = spawn(process.execPath, [script], {
+    cwd: work,
+    env: { ...process.env, PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  const body = await readFile(path.join(work, 'input.xlsx'));
+  try {
+    const deadline = Date.now() + 15000;
+    for (;;) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/octet-stream' },
+          body,
+          signal: AbortSignal.timeout(10000),
+        });
+        return { status: res.status, text: await res.text() };
+      } catch (err) {
+        if (child.exitCode !== null || Date.now() > deadline) {
+          throw new Error(`server did not answer: ${err.message}\n${stderr}`, { cause: err });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+  } finally {
+    child.kill('SIGKILL');
+    await exited;
+  }
 }
 
 /** Expected stdout lines: inline `console.log(...) // x` comments, then the closing comment run. */
@@ -52,12 +123,21 @@ function expectations(lines) {
   return expected;
 }
 
+const sources = readmes.map((readme) => ({ label: readme, file: path.join(repoRoot, readme), markers: ['run'] }));
+if (docsDir) {
+  for (const file of await markdownFiles(docsDir)) {
+    sources.push({ label: path.relative(docsDir, file), file, markers: ['run', 'run:node-server'] });
+  }
+}
+
 let found = 0;
-for (const readme of readmes) {
-  const text = await readFile(path.join(repoRoot, readme), 'utf8');
-  for (const block of runBlocks(text)) {
+let noRun = 0;
+for (const source of sources) {
+  const text = await readFile(source.file, 'utf8');
+  for (const block of runBlocks(text, source.markers)) {
+    if (/@libraz\/formulon-native/.test(block.code)) continue;
     found += 1;
-    test(`${readme}:${block.line} runs and prints what its comments say`, async () => {
+    test(`${source.label}:${block.line} ${block.marker} runs and prints what its comments say`, async () => {
       const work = await mkdtemp(path.join(os.tmpdir(), 'formulon-readme-'));
       try {
         await cp(fixtureDir, work, { recursive: true });
@@ -66,9 +146,15 @@ for (const readme of readmes) {
           .replace(/from '@libraz\/formulon'/g, `from '${stagedEntry}'`);
         const script = path.join(work, 'snippet.mjs');
         await writeFile(script, code);
+        const expected = expectations(block.lines);
+        if (block.marker === 'run:node-server') {
+          const res = await exerciseServer(script, work);
+          assert.ok(res.status >= 200 && res.status < 300, `status ${res.status}: ${res.text}`);
+          for (const line of expected) assert.ok(res.text.includes(line), `response lacks "${line}": ${res.text}`);
+          return;
+        }
         const run = spawnSync(process.execPath, [script], { cwd: work, encoding: 'utf8' });
         assert.equal(run.status, 0, `${run.stderr}`);
-        const expected = expectations(block.lines);
         if (expected.length > 0) {
           assert.deepEqual(run.stdout.trimEnd().split('\n'), expected);
         }
@@ -77,6 +163,25 @@ for (const readme of readmes) {
       }
     });
   }
+  if (source.markers.includes('run:node-server')) noRun += runBlocks(text, ['no-run']).length;
+}
+
+if (docsDir && noRun > 0) {
+  test(`${noRun} no-run block(s) under FORMULON_DOCS_DIR type-check`, () => {
+    const run = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'tools', 'typecheck', 'typecheck.mjs'),
+        '--types-only',
+        '--docs',
+        docsDir,
+        '--marker',
+        'no-run',
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+  });
 }
 
 test('the READMEs carry runnable examples', () => {

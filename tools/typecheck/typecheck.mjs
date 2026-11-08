@@ -4,6 +4,7 @@
 //   node typecheck.mjs                 README blocks + packages/npm/test/types/api.typecheck.ts
 //   node typecheck.mjs --types-only    api.typecheck.ts only
 //   node typecheck.mjs --docs <dir>    also the `js` blocks of every .md under <dir>
+//   node typecheck.mjs --docs <dir> --marker no-run   only the doc blocks fenced as `js no-run`
 //
 // Each block is written to a temp directory as .mjs and checked with checkJs; a diagnostic is reported
 // at the block's file:line in the markdown source.
@@ -20,10 +21,11 @@ const typeTest = join(repo, 'packages/npm/test/types/api.typecheck.ts');
 const tsc = join(here, 'node_modules/typescript/bin/tsc');
 
 function parseArgs(argv) {
-  const out = { typesOnly: false, docs: null };
+  const out = { typesOnly: false, docs: null, marker: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--types-only') out.typesOnly = true;
     else if (argv[i] === '--docs' && i + 1 < argv.length) out.docs = resolve(argv[++i]);
+    else if (argv[i] === '--marker' && i + 1 < argv.length) out.marker = argv[++i];
     else {
       console.error(`typecheck: unknown or incomplete argument '${argv[i]}'`);
       process.exit(2);
@@ -42,17 +44,18 @@ function* markdownFiles(dir) {
 }
 
 /** Fenced blocks whose info string starts with `js`; `line` is the 1-based line of the opening fence. */
-function jsBlocks(file) {
+function jsBlocks(file, marker = null) {
   const lines = readFileSync(file, 'utf8').split('\n');
   const blocks = [];
   for (let i = 0; i < lines.length; i++) {
     const open = /^(\s*)(`{3,}|~{3,})js(?:\s.*)?$/.exec(lines[i]);
     if (!open) continue;
+    const wanted = marker === null || (open[0].trim().split(/\s+/)[1] ?? '') === marker;
     const close = new RegExp(`^\\s*${open[2][0]}{${open[2].length},}\\s*$`);
     const body = [];
     let j = i + 1;
     for (; j < lines.length && !close.test(lines[j]); j++) body.push(lines[j].replace(new RegExp(`^\\s{0,${open[1].length}}`), ''));
-    blocks.push({ file, line: i + 1, code: body.join('\n') + '\n' });
+    if (wanted) blocks.push({ file, line: i + 1, code: body.join('\n') + '\n' });
     i = j;
   }
   return blocks;
@@ -62,6 +65,7 @@ const args = parseArgs(process.argv.slice(2));
 const sources = [];
 if (!args.typesOnly) sources.push(...readmes.map((r) => join(repo, r)));
 if (args.docs) sources.push(...markdownFiles(args.docs));
+const docFiles = new Set(args.docs ? markdownFiles(args.docs) : []);
 
 const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'formulon-typecheck-')));
 const origins = new Map();
@@ -69,14 +73,14 @@ const files = [typeTest];
 let blockCount = 0;
 try {
   for (const source of sources) {
-    for (const block of jsBlocks(source)) {
+    for (const block of jsBlocks(source, docFiles.has(source) ? args.marker : null)) {
       const name = join(tmp, `block${String(blockCount++).padStart(4, '0')}.mjs`);
       writeFileSync(name, block.code);
       origins.set(name, block);
       files.push(name);
     }
   }
-  if (!args.typesOnly && blockCount === 0) {
+  if ((!args.typesOnly || args.marker) && blockCount === 0) {
     console.error('typecheck: no js blocks found');
     process.exit(1);
   }
