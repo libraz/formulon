@@ -98,7 +98,7 @@ try {
 }
 ```
 
-Reads return the value as of the last full `recalc()`; `wb.hasDirtyCells()` tells whether edits are still waiting for one. `ErrorDisplayName[ErrorCode.Div0]` gives `'#DIV/0!'` without a workbook. New workbooks use `win-365-en_US`; `wb.setProfileId(id)` takes any of `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Switching profiles is covered in the [root README](https://github.com/libraz/formulon#switching-excel-profiles).
+In the default automatic calculation mode a read calculates pending cells first; in manual mode it returns the value as of the last `recalc()`, and `wb.hasDirtyCells()` tells whether edits are still waiting for one. `ErrorDisplayName[ErrorCode.Div0]` gives `'#DIV/0!'` without a workbook. New workbooks use `win-365-en_US`; `wb.setProfileId(id)` takes any of `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Switching profiles is covered in the [root README](https://github.com/libraz/formulon#switching-excel-profiles).
 
 ## Tables, pivot tables and charts
 

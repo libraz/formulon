@@ -80,7 +80,7 @@ try {
 }
 ```
 
-Cell methods take `(row, col)` or an A1 string, and rectangle arguments take `'A1:B2'`. Reads return the value as of the last full `recalc()`; `wb.hasDirtyCells()` reports edits that are still waiting for one.
+Cell methods take `(row, col)` or an A1 string, and rectangle arguments take `'A1:B2'`. In the default automatic calculation mode a read calculates pending cells first; in manual mode it returns the value as of the last `recalc()`, and `wb.hasDirtyCells()` reports edits still waiting for one.
 
 On Node 24+, `using wb = formulon.Workbook.createDefault()` releases the workbook at the end of the scope instead.
 
