@@ -404,7 +404,7 @@ argument is a keyword-only argument list there (see
 | `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ major, script, typeface })` |
 | `updateThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
 | `addThreadedComment(sheet, partial)` | `ws.addThreadedComment(input)` with `ThreadedCommentInput` |
-| `setDefinedName`, `setDefinedNameScoped`, `setDefinedNameAttrs` | `setDefinedName({ name, formula, localSheetId, comment?, hidden? })`; `localSheetId: null` is workbook scope. `removeDefinedName(name, localSheetId)` takes `number \| null`. Setting an existing name replaces every attribute |
+| `setDefinedName`, `setDefinedNameScoped`, `setDefinedNameAttrs` | `setDefinedName({ name, formula, scope?, comment?, hidden? })`; `scope` is a sheet index or name, and `null` or omitted is workbook scope. `removeDefinedName(name, scope?)` takes the same. Setting an existing name replaces every attribute |
 | `getThemeFonts(): Theme` (fonts and colors) | `getThemeFonts(): ThemeFonts` and `getThemeColors(): ThemeColors`; the `Theme` type is gone |
 | `setViewMode(sheet, mode: string)` | `ws.setViewMode(mode: SheetViewMode)` |
 | `setTabHidden(sheet, hidden)` | removed; `setVisibility` covers every tab state, very hidden included. `SheetView.tabHidden` is gone, `SheetView.viewMode` is a `SheetViewMode` and `SheetView.visibility` a `SheetVisibility` |
@@ -2007,6 +2007,13 @@ order.
 
 ### Added
 
+- A trailing argument with an obvious default can be left out:
+  `getPrecedents(cell)` / `getDependents(cell)` follow one level,
+  `recalcParallel()` uses every hardware thread, `copySheet(index)` appends
+  the copy, and `evaluateCfRange(range)` evaluates time-period rules against
+  today (the pinned date when the workbook has one). Python takes the same
+  defaults. An argument beyond the ones a method declares throws `TypeError`
+  naming the method and how many arguments it takes.
 - `fm_get_last_parse_error` (`FormulonError.parseError`,
   `FormulaSyntaxError.parse_error`) reports where a formula failed to parse:
   a `ParseErrorCode` (eight codes added for formula entry: argument count,
@@ -2209,6 +2216,10 @@ order.
 
 ### Changed
 
+- `evaluate_cf_range` with `today_serial` omitted evaluates time-period rules
+  against today instead of disabling them, and the JavaScript
+  `evaluateCfRange` no longer requires `todaySerial`. Passing `NaN` still
+  disables those rules.
 - `fm_get_function_metadata` (`getFunctionMetadata`, `function_metadata`) reports the
   argument counts formula entry accepts for every built-in, including the
   functions it used to report as `0` with no upper bound (`IF` 2 to 3,
