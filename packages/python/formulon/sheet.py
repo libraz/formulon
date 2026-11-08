@@ -5240,20 +5240,26 @@ class Sheet:
     def evaluate_cf_range(
         self,
         range: Union[CellRect, str],
-        today_serial: float = float("nan"),
+        today_serial: Optional[float] = None,
     ) -> List[CfCell]:
         """Evaluate every CF block on the sheet against the cells of ``range``.
 
         Args:
           range: the cells to evaluate.
-          today_serial: date basis pinned for ``timePeriod`` rules, as an
-            Excel serial date. The default ``float("nan")`` disables them:
-            no ``timePeriod`` rule can match, so pass a serial date to use
-            them. ``0.0`` is *not* a disabling value -- it is the valid
-            serial for 1899-12-30 and would evaluate those rules against
-            that date.
+          today_serial: date basis for ``timePeriod`` rules, as an Excel
+            serial date. Omitted, it is today: the pinned date when the
+            workbook has one, else the host's local date. ``float("nan")``
+            disables those rules. ``0.0`` is *not* a disabling value -- it is
+            the valid serial for 1899-12-30.
         """
+        if today_serial is None:
+            today_serial = self._today_serial()
         return self._evaluate_cf_rect(self._rect(range), today_serial)
+
+    def _today_serial(self) -> float:
+        pinned = self._workbook.get_pinned_now()
+        today = pinned.date() if pinned is not None else datetime.date.today()
+        return date_serial(today, date1904=self._workbook.get_date1904())[0]
 
     def _evaluate_cf_rect(self, rect: CellRect, today_serial: float) -> List[CfCell]:
         sheet = self._index()

@@ -9,6 +9,7 @@ allocation discipline of the collection readers.
 from __future__ import annotations
 
 import ast
+import datetime
 import inspect
 import io
 import os
@@ -1266,6 +1267,26 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
         self.assertEqual([c for c in omitted if c.matches], [])
         self.assertEqual(len(omitted), len(explicit_nan))
         self.assertEqual(len([c for c in zero_basis if c.matches]), 1)
+
+    def test_omitted_today_serial_reads_the_pinned_date(self) -> None:
+        """Omitting ``today_serial`` evaluates ``timePeriod`` rules against the pinned date."""
+        with Workbook.create_default() as wb:
+            wb.set_pinned_now(datetime.datetime(2024, 3, 15, 9, 30))
+            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
+            wb.sheet(0).set_number(0, 0, 45366.0)  # 2024-03-15
+            wb.sheet(0).add_cf_rule(
+                ConditionalFormatInput(
+                    ranges=[CellRect(0, 0, 0, 0)],
+                    type=15,
+                    time_period=0,
+                    dxf_id=dxf_index,
+                ),
+            )
+            wb.recalc()
+            omitted = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0))
+            explicit_nan = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), float("nan"))
+        self.assertEqual(len([c for c in omitted if c.matches]), 1)
+        self.assertEqual([c for c in explicit_nan if c.matches], [])
 
 
 class ArgumentScopeTests(unittest.TestCase):
