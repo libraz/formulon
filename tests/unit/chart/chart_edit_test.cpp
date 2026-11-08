@@ -26,6 +26,7 @@
 #include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "styles.h"
 #include "unknown_relationship.h"
 #include "value.h"
 #include "workbook.h"
@@ -1489,6 +1490,79 @@ TEST(ChartEdit, TypeChangeKeepsOrConvertsDateAxes) {
   EXPECT_NE(Between(numbers, "<c:catAx>", "</c:catAx>").find("<c:numFmt formatCode=\"0.00\" sourceLinked=\"1\"/>"),
             std::string::npos)
       << numbers;
+}
+
+// A new data range re-links the axes as Excel does on a chart opened from a file: an automatic category axis
+// becomes a date axis over dates and back, a date axis keeps its base unit, linked formats follow the first cells,
+// and a manual axis keeps its kind.
+TEST(ChartEdit, SourceChangeRelinksAxes) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  const auto xf = [&](std::uint16_t fmt) {
+    CellXf x;
+    x.num_fmt_id = fmt;
+    x.apply_number_format = true;
+    wb.mutable_styles().cell_xfs.push_back(x);
+    return static_cast<std::uint32_t>(wb.mutable_styles().cell_xfs.size() - 1U);
+  };
+  const std::uint32_t date = xf(14);
+  const std::uint32_t fixed = xf(2);
+  Sheet& s = wb.sheet(0);
+  const double months[] = {45292, 45323, 45352, 45383};
+  for (std::uint32_t r = 1; r <= 4; ++r) {
+    s.set_cell_text(r, 0, std::string(1, static_cast<char>('a' + r - 1U)));
+    s.set_cell_value(r, 1, Value::number(r));
+    s.set_cell_value(r, 3, Value::number(months[r - 1U]));
+    s.set_cell_value(r, 4, Value::number(r));
+    s.set_cell_value(r, 6, Value::number(45291.0 + r));
+    s.set_cell_value(r, 7, Value::number(r));
+    for (const std::uint32_t c : {3U, 6U}) {
+      MustOk(wb.set_cell_xf_index(0, r, c, date));
+    }
+    MustOk(wb.set_cell_xf_index(0, r, 4, fixed));
+  }
+  for (const std::uint32_t c : {1U, 4U, 7U}) {
+    s.set_cell_text(0, c, "S1");
+  }
+  ChartInsertOptions o;
+  o.kind = K::kColumn;
+  o.source = "Sheet1!$A$1:$B$5";
+  const std::uint32_t id = Must(insert_chart(wb, 0, o));
+  const std::string path = Must(all_chart_parts(wb))[0].ref.part_path;
+  const auto edit = [&](const char* source) {
+    MustOk(set_chart_source(wb, 0, id, source, D::kAuto, H::kAuto, H::kAuto));
+    return PartText(wb, path);
+  };
+
+  const std::string dates = edit("Sheet1!$D$1:$E$5");
+  const std::string date_axis = Between(dates, "<c:dateAx>", "</c:dateAx>");
+  EXPECT_EQ(date_axis.substr(date_axis.find("<c:crossAx")),
+            "<c:crossAx val=\"507100002\"/><c:crosses val=\"autoZero\"/><c:auto val=\"1\"/>"
+            "<c:lblOffset val=\"100\"/><c:baseTimeUnit val=\"months\"/></c:dateAx>")
+      << dates;
+  EXPECT_NE(date_axis.find("<c:numFmt formatCode=\"m/d/yy\" sourceLinked=\"1\"/>"), std::string::npos);
+  EXPECT_NE(Between(dates, "<c:valAx>", "</c:valAx>").find("<c:numFmt formatCode=\"0.00\" sourceLinked=\"1\"/>"),
+            std::string::npos)
+      << dates;
+
+  const std::string daily = edit("Sheet1!$G$1:$H$5");
+  EXPECT_NE(daily.find("<c:baseTimeUnit val=\"months\"/>"), std::string::npos) << daily;
+  EXPECT_NE(Between(daily, "<c:valAx>", "</c:valAx>").find("formatCode=\"General\""), std::string::npos) << daily;
+
+  const std::string text = edit("Sheet1!$A$1:$B$5");
+  const std::string cat_axis = Between(text, "<c:catAx>", "</c:catAx>");
+  EXPECT_EQ(cat_axis.substr(cat_axis.find("<c:crossAx")),
+            "<c:crossAx val=\"507100002\"/><c:crosses val=\"autoZero\"/><c:auto val=\"1\"/>"
+            "<c:lblAlgn val=\"ctr\"/><c:lblOffset val=\"100\"/><c:noMultiLvlLbl val=\"1\"/></c:catAx>")
+      << text;
+  EXPECT_NE(cat_axis.find("<c:numFmt formatCode=\"General\" sourceLinked=\"1\"/>"), std::string::npos);
+
+  std::string manual = text;
+  manual.replace(manual.find("<c:auto val=\"1\"/>"), 17, "<c:auto val=\"0\"/>");
+  MustOk(wb.replace_passthrough_part(path, std::vector<std::uint8_t>(manual.begin(), manual.end())));
+  const std::string kept = edit("Sheet1!$D$1:$E$5");
+  EXPECT_EQ(CountOf(kept, "<c:dateAx>"), 0U) << kept;
+  EXPECT_NE(Between(kept, "<c:catAx>", "</c:catAx>").find("formatCode=\"m/d/yy\""), std::string::npos) << kept;
 }
 
 // A chart's automatic colours, re-derived by a type change, come from its own colour style.

@@ -2790,6 +2790,10 @@ order.
   a new chart links to the number format of its data's first cell (the
   category axis is General when a category is text, and a percent-stacked
   value axis stays 0%) instead of always General.
+- Changing a chart's data range re-links its axes as Excel does: an automatic
+  category axis becomes a date axis over date categories and turns back over
+  text, a date axis already in place keeps its base unit, a manual axis keeps
+  its kind, and linked axis number formats follow the new first cells.
 - A shape fill or outline colour is no longer dropped silently: given without
   its kind it fails with a `TypeError` in JavaScript and Python, and given with
   a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.

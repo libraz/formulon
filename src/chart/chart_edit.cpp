@@ -38,7 +38,36 @@ namespace {
 constexpr std::int64_t kFrameCx = 4572000;
 constexpr std::int64_t kFrameCy = 2743200;
 
-/// Rebuilds every series from `source`; series keep their elements by idx.
+/// Re-links axis `ax` to a new source as Excel does, from `fresh`, the insert template's axis in its place. An
+/// automatic category axis becomes a date axis over date categories and back; one already a date axis keeps its
+/// base unit. A linked number format takes the template's.
+void relink_axis(xml_node ax, const xml_node& fresh) {
+  const std::string_view from = local_name(ax);
+  const std::string_view to = local_name(fresh);
+  const auto category = [](std::string_view n) { return n == "catAx" || n == "dateAx"; };
+  if (from != to && category(from) && category(to) && flag(child_local(ax, "auto"))) {
+    const std::string name = ax.name();
+    ax.set_name((name.substr(0, name.find(':') + 1U) + std::string(to)).c_str());
+    if (to == "dateAx") {
+      for (const char* e : {"lblAlgn", "tickLblSkip", "tickMarkSkip", "noMultiLvlLbl"}) {
+        drop(ax, e);
+      }
+      put_val(ax, "c:baseTimeUnit", kAxisOrder, child_local(fresh, "baseTimeUnit").attribute("val").value());
+    } else {
+      for (const char* e : {"baseTimeUnit", "majorUnit", "majorTimeUnit", "minorUnit", "minorTimeUnit"}) {
+        drop(ax, e);
+      }
+      put_val(ax, "c:lblAlgn", kAxisOrder, child_local(fresh, "lblAlgn").attribute("val").value());
+      put_val(ax, "c:noMultiLvlLbl", kAxisOrder, "1");
+    }
+  }
+  const xml_node fmt = child_local(ax, "numFmt");
+  if (fmt && flag_attr(fmt, "sourceLinked")) {
+    io::set_attr(fmt, "formatCode", std::string_view(child_local(fresh, "numFmt").attribute("formatCode").value()));
+  }
+}
+
+/// Rebuilds every series from `source`; series keep their elements by idx, and the axes re-link to it.
 Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_view source,
                                    ChartSeriesDirection direction, ChartHeaderMode header_row,
                                    ChartHeaderMode header_column) {
@@ -85,6 +114,20 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
         insert_point(ser, d, val_u(d, "idx"));
       }
     }
+  }
+  std::vector<std::uint32_t> ids;
+  for (const xml_node& id : children_local(plot, "axId")) {
+    ids.push_back(id.attribute("val").as_uint());
+  }
+  std::vector<xml_node> fresh_axes;
+  for (xml_node n = child_local(template_chart(t), "plotArea").first_child(); n; n = n.next_sibling()) {
+    if (strings::ends_with(local_name(n), "Ax")) {
+      fresh_axes.push_back(n);
+    }
+  }
+  const std::vector<xml_node> axes = axes_of(c, ids);
+  for (std::size_t i = 0; i < axes.size() && i < fresh_axes.size(); ++i) {
+    relink_axis(axes[i], fresh_axes[i]);
   }
   return ok();
 }
