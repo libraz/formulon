@@ -1,0 +1,150 @@
+c	record.chart_axis_patch	op-type:crosses_op	`crosses_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:log_base_op	`log_base_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:major_gridlines_op	`major_gridlines_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:major_unit_op	`major_unit_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:max_op	`max_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:min_op	`min_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:number_format_op	`number_format_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:reversed_op	`reversed_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:tick_label_pos_op	`tick_label_pos_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:title_op	`title_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:visible_op	`visible_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op:crosses_at	`crosses_at` has no `crosses_at_op`
+c	record.chart_display_patch	op-type:blanks_as_op	`blanks_as_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_display_patch	op-type:na_as_blank_op	`na_as_blank_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_display_patch	op-type:plot_vis_only_op	`plot_vis_only_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_fill_patch	op-type:color_op	`color_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_fill_patch	op-type:transparency_op	`transparency_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_fill_patch	op:transparency_pct	`transparency_pct` has no `transparency_pct_op`
+c	record.chart_labels_patch	op-type:font_color_op	`font_color_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:font_size_op	`font_size_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:number_format_op	`number_format_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:position_op	`position_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:separator_op	`separator_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:show_category_op	`show_category_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:show_legend_key_op	`show_legend_key_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:show_percent_op	`show_percent_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:show_series_op	`show_series_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:show_value_op	`show_value_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op:font_size_pt	`font_size_pt` has no `font_size_pt_op`
+c	record.chart_legend_patch	op-type:hidden_series_op	`hidden_series_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_legend_patch	op:overlay	`overlay` has no `overlay_op`
+c	record.chart_legend_patch	op:position	`position` has no `position_op`
+c	record.chart_line_patch	op-type:color_op	`color_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_line_patch	op-type:dash_op	`dash_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_line_patch	op-type:none_op	`none_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_line_patch	op-type:transparency_op	`transparency_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_line_patch	op-type:width_op	`width_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_line_patch	op:transparency_pct	`transparency_pct` has no `transparency_pct_op`
+c	record.chart_line_patch	op:width_pt	`width_pt` has no `width_pt_op`
+c	record.chart_marker_patch	op-type:size_op	`size_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_marker_patch	op-type:symbol_op	`symbol_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_plot_patch	op-type:first_slice_angle_op	`first_slice_angle_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_plot_patch	op-type:gap_width_op	`gap_width_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_plot_patch	op-type:hole_size_op	`hole_size_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_plot_patch	op-type:overlap_op	`overlap_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_plot_patch	op-type:vary_colors_op	`vary_colors_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_point_patch	op-type:marker_op	`marker_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:labels_op	`labels_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:marker_op	`marker_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:smooth_op	`smooth_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op:categories	`categories` has no `categories_op`
+c	record.chart_series_patch	op:name	`name` has no `name_op`
+c	record.chart_series_patch	op:size	`size` has no `size_op`
+c	record.chart_series_patch	op:values	`values` has no `values_op`
+c	record.chart_series_patch	op:x	`x` has no `x_op`
+c	record.chart_series_patch	op:y	`y` has no `y_op`
+c	record.iterative_settings_patch	negative-keep	a negative value keeps a setting
+c	record.iterative_settings_patch	op:enabled	`enabled` has no `enabled_op`
+c	record.iterative_settings_patch	op:max_change	`max_change` has no `max_change_op`
+c	record.iterative_settings_patch	op:max_iterations	`max_iterations` has no `max_iterations_op`
+c	record.protected_range	op:algorithm_name	`algorithm_name` has no `algorithm_name_op`
+c	record.protected_range	op:hash_value	`hash_value` has no `hash_value_op`
+c	record.protected_range	op:name	`name` has no `name_op`
+c	record.protected_range	op:password	`password` has no `password_op`
+c	record.protected_range	op:range_count	`range_count` has no `range_count_op`
+c	record.protected_range	op:ranges	`ranges` has no `ranges_op`
+c	record.protected_range	op:salt_value	`salt_value` has no `salt_value_op`
+c	record.protected_range	op:security_descriptor	`security_descriptor` has no `security_descriptor_op`
+c	record.protected_range	op:spin_count	`spin_count` has no `spin_count_op`
+c	record.shape	op:anchor_kind	`anchor_kind` has no `anchor_kind_op`
+c	record.shape	op:edit_as	`edit_as` has no `edit_as_op`
+c	record.shape	op:fields	`fields` has no `fields_op`
+c	record.shape	op:fill_color	`fill_color` has no `fill_color_op`
+c	record.shape	op:fill_kind	`fill_kind` has no `fill_kind_op`
+c	record.shape	op:from_col	`from_col` has no `from_col_op`
+c	record.shape	op:from_col_offset_emu	`from_col_offset_emu` has no `from_col_offset_emu_op`
+c	record.shape	op:from_row	`from_row` has no `from_row_op`
+c	record.shape	op:from_row_offset_emu	`from_row_offset_emu` has no `from_row_offset_emu_op`
+c	record.shape	op:height_emu	`height_emu` has no `height_emu_op`
+c	record.shape	op:hidden	`hidden` has no `hidden_op`
+c	record.shape	op:kind	`kind` has no `kind_op`
+c	record.shape	op:line_color	`line_color` has no `line_color_op`
+c	record.shape	op:line_kind	`line_kind` has no `line_kind_op`
+c	record.shape	op:line_width_emu	`line_width_emu` has no `line_width_emu_op`
+c	record.shape	op:name	`name` has no `name_op`
+c	record.shape	op:object_id	`object_id` has no `object_id_op`
+c	record.shape	op:preset_geometry	`preset_geometry` has no `preset_geometry_op`
+c	record.shape	op:rotation	`rotation` has no `rotation_op`
+c	record.shape	op:text	`text` has no `text_op`
+c	record.shape	op:text_box	`text_box` has no `text_box_op`
+c	record.shape	op:to_col	`to_col` has no `to_col_op`
+c	record.shape	op:to_col_offset_emu	`to_col_offset_emu` has no `to_col_offset_emu_op`
+c	record.shape	op:to_row	`to_row` has no `to_row_op`
+c	record.shape	op:to_row_offset_emu	`to_row_offset_emu` has no `to_row_offset_emu_op`
+c	record.shape	op:width_emu	`width_emu` has no `width_emu_op`
+c	record.slicer	op:anchor_kind	`anchor_kind` has no `anchor_kind_op`
+c	record.slicer	op:cache_name	`cache_name` has no `cache_name_op`
+c	record.slicer	op:caption	`caption` has no `caption_op`
+c	record.slicer	op:column_count	`column_count` has no `column_count_op`
+c	record.slicer	op:column_name	`column_name` has no `column_name_op`
+c	record.slicer	op:cross_filter	`cross_filter` has no `cross_filter_op`
+c	record.slicer	op:fields	`fields` has no `fields_op`
+c	record.slicer	op:from_col	`from_col` has no `from_col_op`
+c	record.slicer	op:from_col_offset_emu	`from_col_offset_emu` has no `from_col_offset_emu_op`
+c	record.slicer	op:from_row	`from_row` has no `from_row_op`
+c	record.slicer	op:from_row_offset_emu	`from_row_offset_emu` has no `from_row_offset_emu_op`
+c	record.slicer	op:name	`name` has no `name_op`
+c	record.slicer	op:object_id	`object_id` has no `object_id_op`
+c	record.slicer	op:row_height_emu	`row_height_emu` has no `row_height_emu_op`
+c	record.slicer	op:sort_order	`sort_order` has no `sort_order_op`
+c	record.slicer	op:style	`style` has no `style_op`
+c	record.slicer	op:table_name	`table_name` has no `table_name_op`
+c	record.slicer	op:to_col	`to_col` has no `to_col_op`
+c	record.slicer	op:to_col_offset_emu	`to_col_offset_emu` has no `to_col_offset_emu_op`
+c	record.slicer	op:to_row	`to_row` has no `to_row_op`
+c	record.slicer	op:to_row_offset_emu	`to_row_offset_emu` has no `to_row_offset_emu_op`
+c	record.sparkline_group	has:has_manual_max	`has_manual_max` keeps a field; give it a `<field>_op`
+c	record.sparkline_group	has:has_manual_min	`has_manual_min` keeps a field; give it a `<field>_op`
+c	record.sparkline_group	op:color_axis	`color_axis` has no `color_axis_op`
+c	record.sparkline_group	op:color_first	`color_first` has no `color_first_op`
+c	record.sparkline_group	op:color_high	`color_high` has no `color_high_op`
+c	record.sparkline_group	op:color_last	`color_last` has no `color_last_op`
+c	record.sparkline_group	op:color_low	`color_low` has no `color_low_op`
+c	record.sparkline_group	op:color_markers	`color_markers` has no `color_markers_op`
+c	record.sparkline_group	op:color_negative	`color_negative` has no `color_negative_op`
+c	record.sparkline_group	op:color_series	`color_series` has no `color_series_op`
+c	record.sparkline_group	op:date_axis	`date_axis` has no `date_axis_op`
+c	record.sparkline_group	op:date_axis_ref	`date_axis_ref` has no `date_axis_ref_op`
+c	record.sparkline_group	op:display_hidden	`display_hidden` has no `display_hidden_op`
+c	record.sparkline_group	op:display_x_axis	`display_x_axis` has no `display_x_axis_op`
+c	record.sparkline_group	op:empty_cells_as	`empty_cells_as` has no `empty_cells_as_op`
+c	record.sparkline_group	op:first	`first` has no `first_op`
+c	record.sparkline_group	op:high	`high` has no `high_op`
+c	record.sparkline_group	op:last	`last` has no `last_op`
+c	record.sparkline_group	op:line_weight	`line_weight` has no `line_weight_op`
+c	record.sparkline_group	op:low	`low` has no `low_op`
+c	record.sparkline_group	op:manual_max	`manual_max` has no `manual_max_op`
+c	record.sparkline_group	op:manual_min	`manual_min` has no `manual_min_op`
+c	record.sparkline_group	op:markers	`markers` has no `markers_op`
+c	record.sparkline_group	op:max_axis_type	`max_axis_type` has no `max_axis_type_op`
+c	record.sparkline_group	op:min_axis_type	`min_axis_type` has no `min_axis_type_op`
+c	record.sparkline_group	op:negative	`negative` has no `negative_op`
+c	record.sparkline_group	op:sparkline_count	`sparkline_count` has no `sparkline_count_op`
+c	record.sparkline_group	op:type	`type` has no `type_op`
+c	record.threaded_comment_patch	engaged:mentions_engaged	`mentions_engaged` keeps a field; give it a `<field>_op`
+c	record.threaded_comment_patch	negative-keep	a negative value keeps a setting
+c	record.threaded_comment_patch	op:done	`done` has no `done_op`
+c	record.threaded_comment_patch	op:mention_count	`mention_count` has no `mention_count_op`
+c	record.threaded_comment_patch	op:mentions	`mentions` has no `mentions_op`
+c	record.threaded_comment_patch	op:text	`text` has no `text_op`

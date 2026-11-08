@@ -1,0 +1,12 @@
+native	record.chart_axis_info	tickLabelPosition	`ChartAxis.tickLabelPosition` is the string union `'nextTo' | 'low' | 'high' | 'none' | null`; make it a numeric table
+native	record.chart_axis_patch	tickLabelPosition	`ChartAxisPatch.tickLabelPosition` is the string union `'nextTo' | 'low' | 'high' | 'none'`; make it a numeric table
+native	record.table_column	totalsRowFunction	`TableColumn.totalsRowFunction` is the string union `TableTotalsRowFunction`; make it a numeric table
+native	record.table_column_totals_input	function	`TableColumnTotalsInput.function` is the string union `TableTotalsRowFunction`; make it a numeric table
+native	record.table_style_element	type	`TableStyleElement.type` is the string union `TableStyleElementType`; make it a numeric table
+native	type.chart_data	domain	`ChartData.domain` is the string union `'category' | 'xy'`; make it a numeric table
+wasm	record.chart_axis_info	tickLabelPosition	`ChartAxis.tickLabelPosition` is the string union `'nextTo' | 'low' | 'high' | 'none' | null`; make it a numeric table
+wasm	record.chart_axis_patch	tickLabelPosition	`ChartAxisPatch.tickLabelPosition` is the string union `'nextTo' | 'low' | 'high' | 'none'`; make it a numeric table
+wasm	record.table_column	totalsRowFunction	`TableColumn.totalsRowFunction` is the string union `TableTotalsRowFunction`; make it a numeric table
+wasm	record.table_column_totals_input	function	`TableColumnTotalsInput.function` is the string union `TableTotalsRowFunction`; make it a numeric table
+wasm	record.table_style_element	type	`TableStyleElement.type` is the string union `TableStyleElementType`; make it a numeric table
+wasm	type.chart_data	domain	`ChartData.domain` is the string union `'category' | 'xy'`; make it a numeric table
