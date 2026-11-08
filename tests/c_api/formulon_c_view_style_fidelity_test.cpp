@@ -501,7 +501,7 @@ TEST(FormulonCApiCalcOptions, NullArgumentsAreRejected) {
 TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_defined_name_input_t rate = FM_STRUCT_INIT(fm_defined_name_input_t);
+  fm_defined_name_t rate = FM_STRUCT_INIT(fm_defined_name_t);
   rate.name = "Rate";
   rate.formula = "Sheet1!$A$1";
   rate.local_sheet_id = -1;
@@ -523,7 +523,7 @@ TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndRoundTrip) {
   EXPECT_EQ(dn.hidden, 1);
 
   // An empty comment clears it.
-  fm_defined_name_input_t cleared = FM_STRUCT_INIT(fm_defined_name_input_t);
+  fm_defined_name_t cleared = FM_STRUCT_INIT(fm_defined_name_t);
   cleared.name = "Rate";
   cleared.formula = "Sheet1!$A$1";
   cleared.local_sheet_id = -1;

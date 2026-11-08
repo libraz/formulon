@@ -19,11 +19,14 @@ from ._workbook import (
     PivotCacheSharedItem,
     PivotCalculatedItem,
     PivotWorksheetSource,
+    PivotWorksheetSourceInput,
     Unchanged,
     Value,
     _ArgScope,
     _check,
+    _pack_pivot_worksheet_source,
     _pivot_cache_value_kind,
+    _pivot_worksheet_source_from,
     _PivotCacheValue,
     _read_count,
     _read_cstr_out,
@@ -54,9 +57,15 @@ class PivotCache:
 
     __slots__ = ("_workbook", "_cache_id")
 
-    def __init__(self, workbook: Workbook, cache_id: int) -> None:
-        self._workbook = workbook
-        self._cache_id = cache_id
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("obtain a PivotCache from Workbook.pivot_cache() or Workbook.add_pivot_cache()")
+
+    @classmethod
+    def _new(cls, workbook: Workbook, cache_id: int) -> "PivotCache":
+        handle = object.__new__(cls)
+        handle._workbook = workbook
+        handle._cache_id = cache_id
+        return handle
 
     @property
     def workbook(self) -> Workbook:
@@ -87,51 +96,30 @@ class PivotCache:
 
     # -- Source and options ------------------------------------------------
     def get_worksheet_source(self) -> Optional[PivotWorksheetSource]:
-        """Return the cache's worksheet-source metadata, or ``None`` when absent."""
+        """Return the cache's worksheet-source record, or ``None`` when absent."""
         h, cache_id = self._call()
         with _ArgScope() as scope:
             present = scope.out_ptr()
-            out_ref = scope.out_ptr()
-            out_sheet = scope.out_ptr()
-            out_name = scope.out_ptr()
-            _check(LIB.fm_workbook_get_pivot_cache_worksheet_source(h, cache_id, present, out_ref, out_sheet, out_name))
+            ptr = scope.struct(S.PIVOT_WORKSHEET_SOURCE)
+            _check(LIB.fm_workbook_get_pivot_cache_worksheet_source(h, cache_id, present, ptr))
             if not LIB.read_i32(present):
                 return None
-            return PivotWorksheetSource(
-                LIB.read_cstr(LIB.read_u32(out_ref)) if LIB.read_u32(out_ref) else None,
-                LIB.read_cstr(LIB.read_u32(out_sheet)) if LIB.read_u32(out_sheet) else None,
-                LIB.read_cstr(LIB.read_u32(out_name)) if LIB.read_u32(out_name) else None,
-            )
+            return _pivot_worksheet_source_from(self._workbook, S.PIVOT_WORKSHEET_SOURCE.unpack(LIB, ptr))
 
-    def set_worksheet_source(
-        self,
-        source: None = UNCHANGED,
-        /,
-        *,
-        ref: Optional[str] = None,
-        sheet: Optional[str] = None,
-        name: Optional[str] = None,
-    ) -> None:
-        """Set the cache's worksheet-source metadata, or clear it.
+    def set_worksheet_source(self, source: Optional[Union[PivotWorksheetSourceInput, PivotWorksheetSource]]) -> None:
+        """Set the cache's worksheet source from a record, or clear it with ``None``.
 
-        ``set_worksheet_source(None)`` clears it. Otherwise the keywords set
-        it: an attribute not given is left out of the source, so a call
-        without arguments writes a source that has no attributes.
+        A :class:`PivotWorksheetSource` read back is accepted in place of a
+        :class:`PivotWorksheetSourceInput`.
 
         Raises:
-          TypeError: when the first argument is not ``None``, or is ``None``
-            together with a keyword argument.
+          TypeError: when ``source`` is neither a source record nor ``None``.
+          InvalidArgumentError: when the range's sheet disagrees with ``sheet``.
         """
-        clearing = source is not UNCHANGED
-        if clearing:
-            if source is not None:
-                raise TypeError(f"formulon: the source argument clears the source and must be None, got {source!r}")
-            if ref is not None or sheet is not None or name is not None:
-                raise TypeError("formulon: clearing the worksheet source takes no keyword arguments")
         h, cache_id = self._call()
         with _ArgScope() as scope:
-            pointers = [0, 0, 0] if clearing else [scope.opt_cstr(value) for value in (ref, sheet, name)]
-            _check(LIB.fm_workbook_set_pivot_cache_worksheet_source(h, cache_id, 0 if clearing else 1, *pointers))
+            ptr = 0 if source is None else _pack_pivot_worksheet_source(scope, self._workbook, source)
+            _check(LIB.fm_workbook_set_pivot_cache_worksheet_source(h, cache_id, ptr))
 
     def get_options(self) -> PivotCacheOptions:
         """Read the options of the cache; see :class:`PivotCacheOptions`."""

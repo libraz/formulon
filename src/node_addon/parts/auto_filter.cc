@@ -73,11 +73,14 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {
   }
   o.Set("dateGroups", groups);
   o.Set("customAnd", JsBool(env, c.custom_and));
-  o.Set("customCount", JsNumber(env, c.custom_count));
-  o.Set("operator1", JsNumber(env, c.op1));
-  o.Set("value1", JsString(env, c.val1));
-  o.Set("operator2", JsNumber(env, c.op2));
-  o.Set("value2", JsString(env, c.val2));
+  Napi::Array conditions = Napi::Array::New(env, c.condition_count);
+  for (uint32_t i = 0; i < c.condition_count; ++i) {
+    Napi::Object condition = Napi::Object::New(env);
+    condition.Set("operator", JsNumber(env, c.conditions[i].op));
+    condition.Set("value", JsString(env, c.conditions[i].value));
+    conditions.Set(i, condition);
+  }
+  o.Set("conditions", conditions);
   o.Set("top", JsBool(env, c.top));
   o.Set("percent", JsBool(env, c.percent));
   o.Set("topValue", JsNumber(env, c.top_val));
@@ -138,6 +141,7 @@ struct AutoFilterInput {
   std::deque<std::string> strings;
   std::vector<std::vector<const char*>> value_ptrs;
   std::vector<std::vector<fm_date_group_item_t>> groups;
+  std::vector<std::vector<fm_filter_condition_t>> condition_lists;
 
   const char* Keep(std::string s) {
     strings.push_back(std::move(s));
@@ -201,15 +205,32 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.date_groups = groups.empty() ? nullptr : groups.data();
   c.date_group_count = static_cast<uint32_t>(groups.size());
   c.custom_and = reader.Bool(spec, "customAnd", false) ? 1 : 0;
-  c.custom_count = reader.I32(spec, "customCount", 0);
-  c.op1 = reader.I32(spec, "operator1", 0);
-  std::string val1;
-  reader.String(spec, "value1", &val1);
-  c.val1 = in.Keep(std::move(val1));
-  c.op2 = reader.I32(spec, "operator2", 0);
-  std::string val2;
-  reader.String(spec, "value2", &val2);
-  c.val2 = in.Keep(std::move(val2));
+  in.condition_lists.emplace_back();
+  std::vector<fm_filter_condition_t>& conditions = in.condition_lists.back();
+  Napi::Array condition_array;
+  if (reader.Array(spec, "conditions", &condition_array)) {
+    for (uint32_t i = 0; i < condition_array.Length(); ++i) {
+      Napi::Value condition_value;
+      if (!reader.ArrayElement(condition_array, i, &condition_value)) {
+        continue;
+      }
+      Napi::Object condition;
+      if (!reader.Object(condition_value, "conditions[]", &condition)) {
+        break;
+      }
+      fm_filter_condition_t item{};
+      item.op = reader.I32(condition, "operator", 0);
+      std::string text;
+      reader.String(condition, "value", &text);
+      item.value = in.Keep(std::move(text));
+      if (!reader.ok()) {
+        break;
+      }
+      conditions.push_back(item);
+    }
+  }
+  c.conditions = conditions.empty() ? nullptr : conditions.data();
+  c.condition_count = static_cast<uint32_t>(conditions.size());
   c.top = reader.Bool(spec, "top", true) ? 1 : 0;
   c.percent = reader.Bool(spec, "percent", false) ? 1 : 0;
   // A nullable member is absent when omitted or `null`.

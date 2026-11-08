@@ -754,10 +754,10 @@ test('E1: a positional guard names the facade method and counts its arguments', 
       name: 'TypeError',
       message: 'Sheet.setNumber argument 3 must be a primitive number',
     });
-    assert.throws(() => ws.setPrintTitles(), {
-      name: 'TypeError',
-      message: 'Sheet.setPrintTitles argument 1 is required',
-    });
+    assert.throws(
+      () => ws.setPrintTitles(),
+      (e) => e instanceof TypeError && /^Sheet\.setPrintTitles argument 1 /.test(e.message),
+    );
     assert.throws(() => wb.addSheet(5), {
       name: 'TypeError',
       message: 'Workbook.addSheet argument 1 must be a primitive string',
@@ -834,7 +834,7 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       colors: colors.colors.map((value) => `#${(value >>> 0).toString(16).toUpperCase().padStart(8, '0')}`),
     });
     assert.deepEqual(wb.getThemeColors().colors, colors.colors);
-    wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1', localSheetId: 0, comment: 'c', hidden: true });
+    wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1', scope: 0, comment: 'c', hidden: true });
     same(
       () => wb.getDefinedName('Rate', 0),
       (v) => wb.setDefinedName(v),
@@ -892,8 +892,8 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     assert.deepEqual(ws.getPrintTitles(), { rows: { first: 2, last: 3 }, columns: null });
 
     wb.setDefinedName({ name: 'N', formula: '1' });
-    assert.deepEqual((({ localSheetId, comment }) => ({ localSheetId, comment }))(wb.getDefinedName('N', null)), {
-      localSheetId: null,
+    assert.deepEqual((({ scope, comment }) => ({ scope, comment }))(wb.getDefinedName('N', null)), {
+      scope: null,
       comment: null,
     });
     ws.setHyperlink(9, 1, { target: 'https://example.com/' });
@@ -918,8 +918,8 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     assert.equal(cache.listFields()[0].formula, null);
     assert.equal(wb.pivotCache(wb.addPivotCache()).getWorksheetSource(), null);
 
-    ws.addSparklineGroup({ sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1' }] });
-    assert.equal(ws.listSparklineGroups()[0].dateAxisRef, null);
+    ws.addSparklineGroup({ sparklines: [{ source: 'Sheet1!A1:D1', location: 'F1' }] });
+    assert.equal(ws.listSparklineGroups()[0].dateAxisRange, null);
 
     const font = wb.ooxml.getFont(wb.ooxml.addFont({ name: 'Arial', sizePt: 10 }));
     assert.deepEqual([font.bold, font.italic, font.family, font.charset], [null, null, null, null]);
@@ -947,9 +947,9 @@ test('A2: setPinnedNow(null) releases the pin', async () => {
 
 test('A3 / A9: setDefinedName with a null scope is workbook-wide and replaces the whole name', async () => {
   await withWorkbook((wb) => {
-    wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1', localSheetId: null, comment: 'c', hidden: true });
+    wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1', scope: null, comment: 'c', hidden: true });
     let name = wb.getDefinedName('Rate', null);
-    assert.deepEqual([name.localSheetId, name.comment, name.hidden], [null, 'c', true]);
+    assert.deepEqual([name.scope, name.comment, name.hidden], [null, 'c', true]);
     wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$1' });
     name = wb.getDefinedName('Rate', null);
     assert.deepEqual([name.formula, name.comment, name.hidden], ['=Sheet1!$B$1', null, false]);
@@ -1070,13 +1070,13 @@ test('A11: an absent chart title or legend is null, and null in a patch removes 
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     for (let r = 0; r < 4; r += 1) ws.setNumber(r, 1, r + 1);
-    const id = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$B$1:$B$4', legend: null });
+    const id = ws.addChart({ type: formulon.ChartPlotType.Bar, range: 'Sheet1!$B$1:$B$4', legend: null });
     assert.equal(ws.chart(id).getProperties().legend, null);
     ws.chart(id).setTitle('T');
     assert.equal(ws.chart(id).getProperties().title.text, 'T');
     ws.chart(id).setTitle(null);
     assert.equal(ws.chart(id).getProperties().title, null);
-    ws.chart(id).setLegend({ position: formulon.ChartLegendPosition.Top, overlay: false, hiddenSeries: [] });
+    ws.chart(id).setLegend({ position: formulon.ChartLegendPosition.Top, overlay: false, hiddenEntries: [] });
     assert.equal(ws.chart(id).getProperties().legend.position, formulon.ChartLegendPosition.Top);
     ws.chart(id).setLegend(null);
     assert.equal(ws.chart(id).getProperties().legend, null);
@@ -1117,9 +1117,14 @@ test('P3: a fractional or NaN iteration cap is a TypeError; a non-finite thresho
   });
 });
 
-test('P4: a localSheetId past int32 is a RangeError', async () => {
-  await withWorkbook((wb) => {
-    assert.throws(() => wb.setDefinedName({ name: 'N', formula: '1', localSheetId: 2 ** 31 }), RangeError);
+test('P4: a scope that is no sheet index is a RangeError, one past the sheets is SheetIndexOutOfRange', async () => {
+  await withWorkbook((wb, formulon) => {
+    assert.throws(() => wb.setDefinedName({ name: 'N', formula: '1', scope: 1.5 }), RangeError);
+    assert.throws(() => wb.setDefinedName({ name: 'N', formula: '1', scope: -1 }), RangeError);
+    expectFormulonError(
+      () => wb.setDefinedName({ name: 'N', formula: '1', scope: 2 ** 31 }),
+      formulon.StatusCode.SheetIndexOutOfRange,
+    );
     assert.equal(wb.listDefinedNames().length, 0);
   });
 });
@@ -1189,7 +1194,7 @@ test('N3: the old ordinal of a removed member reads with its new meaning', async
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     for (let r = 0; r < 4; r += 1) ws.setNumber(r, 1, r + 1);
-    const id = ws.addChart({ kind: formulon.ChartInsertKind.Line, source: 'Sheet1!$B$1:$B$4' });
+    const id = ws.addChart({ type: formulon.ChartPlotType.Line, range: 'Sheet1!$B$1:$B$4' });
     ws.chart(id).updateDisplay({ blanksAs: 0 });
     assert.equal(ws.chart(id).getProperties().blanksAs, formulon.BlanksAs.Zero);
   });
@@ -1197,14 +1202,16 @@ test('N3: the old ordinal of a removed member reads with its new meaning', async
 
 // ---- Options objects (O1-O3) -----------------------------------------------
 
-test('O1 / O2: an input object ignores unknown keys and undefined is omitted; a patch refuses unknown keys', async () => {
+test('O1 / O2: an input or a patch refuses unknown keys and undefined is omitted', async () => {
   await withWorkbook((wb) => {
     wb.updateIterative({ enabled: true, maxIterations: 9 });
     assert.deepEqual([wb.getIterative().enabled, wb.getIterative().maxIterations], [true, 9]);
     wb.updateIterative({ maxIterations: undefined, maxChange: undefined });
     assert.equal(wb.getIterative().maxIterations, 9);
     const ws = wb.sheet(0);
-    ws.setHyperlink(0, 0, { target: 'https://example.com/', display: undefined, unknown: 1 });
+    assert.throws(() => ws.setHyperlink(0, 0, { target: 'https://example.com/', unknown: 1 }), TypeError);
+    assert.equal(ws.getHyperlink(0, 0), null);
+    ws.setHyperlink(0, 0, { target: 'https://example.com/', display: undefined });
     assert.equal(ws.getHyperlink(0, 0).display, null);
     assert.throws(() => wb.updateIterative({ extra: 1 }), TypeError);
   });
@@ -1245,7 +1252,7 @@ function pivotWorkbook(formulon) {
   ws.setText(0, 0, 'Region');
   ws.setText(0, 1, 'Amount');
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [

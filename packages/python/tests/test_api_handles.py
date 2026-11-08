@@ -12,11 +12,12 @@ import unittest
 import zipfile
 from typing import Any, Tuple
 
+import _chart_input
+
 import formulon
 from formulon import (
     CellAddress,
     CellRect,
-    ChartInsertKind,
     ChartLegendPosition,
     DrawingObjectKind,
     FormulonError,
@@ -33,9 +34,11 @@ from formulon import (
     PivotInput,
     ShapeInput,
     Sheet,
+    SheetRect,
     SlicerInput,
     Sparkline,
-    SparklineGroup,
+    SparklineGroupInput,
+    SparklineInput,
     StatusCode,
     Table,
     TableInput,
@@ -59,7 +62,7 @@ def fill_source(sheet: Sheet) -> None:
 def add_cache(wb: Workbook, source_sheet: str) -> PivotCache:
     """A cache over ``source_sheet``'s A1:B3 with the two records filled in."""
     cache = wb.add_pivot_cache()
-    cache.set_worksheet_source(ref="A1:B3", sheet=source_sheet)
+    cache.set_worksheet_source(formulon.PivotWorksheetSourceInput(range="A1:B3", sheet=source_sheet))
     cache.add_field("Region")
     cache.add_field("Amount")
     for region, amount in (("East", 10), ("West", 30)):
@@ -90,7 +93,7 @@ def add_table(wb: Workbook, sheet: Sheet, name: str, rect: CellRect = CellRect(0
 
 def add_chart(sheet: Sheet) -> formulon.Chart:
     """A column chart over Sheet1!A1:B3."""
-    return sheet.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3", legend=ChartLegendPosition.RIGHT)
+    return _chart_input.add_chart(sheet, _chart_input.COLUMN, "Sheet1!$A$1:$B$3", legend=ChartLegendPosition.RIGHT)
 
 
 def add_shape(sheet: Sheet) -> formulon.Shape:
@@ -267,7 +270,7 @@ class IdentityTests(HandleTestCase):
             self.assertCode(NotFoundError, cache_a.get_options, StatusCode.NOT_FOUND)
             self.assertEqual(pb.get_properties().name, "PB")
             self.assertIs(pb.get_cache(), cache_b)
-            self.assertEqual(cache_b.get_worksheet_source().sheet, "DataB")
+            self.assertEqual(cache_b.get_worksheet_source().range.sheet, data_b.index)
             self.assertEqual(len(out.list_pivots()), 1)
             self.assertIs(out.list_pivots()[0], pb)
 
@@ -422,8 +425,8 @@ class IdentityTests(HandleTestCase):
             self.assertIs(ws.pivot("P1"), first)
             self.assertIs(ws.list_pivots()[0], first)
             self.assertIs(ws.list_pivots()[1], second)
-            self.assertEqual(first.get_layout().rect.first_row, 0)
-            self.assertEqual(second.get_layout().rect.first_row, 7)
+            self.assertEqual(first.get_layout().range.first_row, 0)
+            self.assertEqual(second.get_layout().range.first_row, 7)
 
             # Tables survive growth of the list, row deletion and sheet removal elsewhere, and removal of an earlier one.
             home = wb.add_sheet("Home")
@@ -664,8 +667,7 @@ class ThreadedDoneTests(HandleTestCase):
             ws.add_threaded_comment(
                 ThreadedCommentInput(
                     id=THREAD,
-                    row=1,
-                    col=1,
+                    cell=CellAddress(1, 1),
                     person_id=PERSON,
                     created=datetime.datetime(2026, 1, 2, 3, 4, 5),
                     text="Check",
@@ -674,8 +676,7 @@ class ThreadedDoneTests(HandleTestCase):
             ws.add_threaded_comment(
                 ThreadedCommentInput(
                     id=REPLY,
-                    row=1,
-                    col=1,
+                    cell=CellAddress(1, 1),
                     person_id=PERSON,
                     created=datetime.datetime(2026, 1, 2, 3, 5, 5),
                     text="Done?",
@@ -716,7 +717,9 @@ class SparklineUpdateTests(HandleTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             ws.add_sparkline_group(
-                SparklineGroup(sparklines=[Sparkline("Sheet1!A1:D1", "F1"), Sparkline("Sheet1!A2:D2", "F2")])
+                SparklineGroupInput(
+                    sparklines=[SparklineInput("Sheet1!A1:D1", "F1"), SparklineInput("Sheet1!A2:D2", "F2")]
+                )
             )
             original = list(ws.list_sparkline_groups()[0].sparklines)
             self.assertEqual(len(original), 2)
@@ -727,9 +730,12 @@ class SparklineUpdateTests(HandleTestCase):
             self.assertEqual(ws.list_sparkline_groups()[0].sparklines, original)
 
             # A new list replaces them.
-            replacement = [Sparkline("Sheet1!B1:B5", "H1")]
+            replacement = [SparklineInput("Sheet1!B1:B5", "H1")]
             ws.update_sparkline_group(0, sparklines=replacement)
-            self.assertEqual(ws.list_sparkline_groups()[0].sparklines, [Sparkline("=Sheet1!B1:B5", "H1")])
+            self.assertEqual(
+                ws.list_sparkline_groups()[0].sparklines,
+                [Sparkline(SheetRect(0, CellRect(0, 1, 4, 1)), CellAddress(0, 7))],
+            )
             self.assertTrue(ws.list_sparkline_groups()[0].markers)
 
             # An empty list is refused and the group is untouched.
@@ -738,7 +744,10 @@ class SparklineUpdateTests(HandleTestCase):
                 lambda: ws.update_sparkline_group(0, sparklines=[]),
                 StatusCode.INVALID_ARGUMENT,
             )
-            self.assertEqual(ws.list_sparkline_groups()[0].sparklines, [Sparkline("=Sheet1!B1:B5", "H1")])
+            self.assertEqual(
+                ws.list_sparkline_groups()[0].sparklines,
+                [Sparkline(SheetRect(0, CellRect(0, 1, 4, 1)), CellAddress(0, 7))],
+            )
             self.assertFalse(hasattr(Sheet, "set_sparkline_group_sparklines"))
 
 

@@ -81,7 +81,8 @@ enum class ChartPlotType : std::int32_t {
   kChartex = 16,
 };
 
-/// The six kinds `insert_chart` / `set_chart_type` can produce.
+/// The six insert templates `insert_chart` / `set_chart_type` draw from; `chart_insert_kind` maps a plot type and
+/// bar direction to one.
 enum class ChartInsertKind : std::int32_t {
   kColumn = 0,
   kBar = 1,
@@ -159,6 +160,7 @@ inline constexpr const char* kChartLabelPositionTokens[] = {"bestFit", "ctr", "i
 inline constexpr const char* kChartLegendTokens[] = {"", "b", "t", "l", "r", "tr"};
 inline constexpr const char* kChartCrossesTokens[] = {"", "autoZero", "min", "max"};
 inline constexpr const char* kChartBlanksTokens[] = {"", "gap", "zero", "span"};
+inline constexpr const char* kChartAxisPositionTokens[] = {"b", "t", "l", "r"};
 
 /// Index of `token` in `table[first, count)`, or -1.
 inline int chart_token_index(const char* const* table, std::size_t count, std::string_view token,
@@ -360,7 +362,7 @@ struct ChartModel {
   Tri plot_vis_only = Tri::kAbsent;
   Tri disp_na_as_blank = Tri::kAbsent;  ///< `c16r3:dataDisplayOptions16/c16r3:dispNaAsBlank`.
   bool date1904 = false;
-  std::optional<std::int32_t> style;  ///< `c14:style` first, else `c:style`.
+  std::optional<std::int32_t> style;  ///< `ST_Style` 1..48: `c:style`, else a `c14:style` 100 + n read as n.
 
   std::vector<ChartPlot> plots;
   std::vector<std::uint32_t> category_filter;  ///< Hidden category indices; empty when absent.
@@ -491,6 +493,9 @@ struct ChartDisplayPatch {
   ChartPatchField<ChartBlanksAs> blanks_as;  ///< Clear (or a `kAbsent` value) removes `c:dispBlanksAs`.
   ChartPatchField<bool> plot_vis_only;
   ChartPatchField<bool> na_as_blank;
+  /// `ST_Style` 1..48. A `c14:style` pair is kept with the Choice at 100 + n and the Fallback at n; without one a
+  /// plain `c:style` is written. Clear removes both.
+  ChartPatchField<std::int32_t> style;
 };
 
 struct ChartFillPatch {
@@ -524,17 +529,44 @@ struct ChartLabelsPatch {
   ChartPatchField<std::string> number_format;
   ChartPatchField<ColorSpec> font_color;
   ChartPatchField<double> font_size_pt;
+  /// `c:numFmt/@sourceLinked`; true on labels without a number format writes `General` linked to the source.
+  std::optional<bool> source_linked;
+  /// True writes the bare `<c:delete val="1"/>` block, which stores none of the other keys. While the labels are
+  /// deleted, a patch that leaves `deleted` unset changes nothing and any other key is `kInvalidArgument`.
+  std::optional<bool> deleted;
 };
 
-/// Reference strings: unset keeps, empty removes (name / cat / x), and an
-/// empty val / y / size is `kInvalidArgument`.
+/// A series input a patch writes: a reference, literal points, or none (removes the input).
+struct ChartSeriesSource {
+  ChartDataSource::Kind kind = ChartDataSource::Kind::kNone;
+  std::string formula;              ///< kRef: the reference text; empty is `kInvalidArgument`.
+  std::vector<ChartValue> literal;  ///< kLiteral: points by `idx` (unique); empty is `kInvalidArgument`.
+
+  static ChartSeriesSource None() { return ChartSeriesSource{}; }
+  static ChartSeriesSource Ref(std::string formula) {
+    ChartSeriesSource s;
+    s.kind = ChartDataSource::Kind::kRef;
+    s.formula = std::move(formula);
+    return s;
+  }
+  static ChartSeriesSource Literal(std::vector<ChartValue> points) {
+    ChartSeriesSource s;
+    s.kind = ChartDataSource::Kind::kLiteral;
+    s.literal = std::move(points);
+    return s;
+  }
+};
+
+/// Series inputs: unset keeps; kNone removes name / cat / x and is `kInvalidArgument` on val / y / size. A literal
+/// name is one point (`c:v`); val / y / size literals hold numbers (`c:numLit`); a cat / x literal is `c:numLit`
+/// when every point is a number, else `c:strLit`.
 struct ChartSeriesPatch {
-  std::optional<std::string> name;
-  std::optional<std::string> cat;
-  std::optional<std::string> val;
-  std::optional<std::string> x;
-  std::optional<std::string> y;
-  std::optional<std::string> size;
+  std::optional<ChartSeriesSource> name;
+  std::optional<ChartSeriesSource> cat;
+  std::optional<ChartSeriesSource> val;
+  std::optional<ChartSeriesSource> x;
+  std::optional<ChartSeriesSource> y;
+  std::optional<ChartSeriesSource> size;
   ChartFillPatch fill;
   ChartLinePatch line;
   ChartPatchField<ChartMarkerPatch> marker;  ///< Clear removes `c:marker`.
@@ -542,7 +574,8 @@ struct ChartSeriesPatch {
   ChartPatchField<ChartLabelsPatch> labels;  ///< Clear removes the series' data labels.
 };
 
-/// An all-keep patch removes the `c:dPt`.
+/// An all-keep patch changes nothing. A patch that clears every member (each fill and line field Clear, `line.none`
+/// unset or false, `marker` Clear) removes the point's `c:dPt`; on a point without one it does nothing.
 struct ChartPointPatch {
   ChartFillPatch fill;
   ChartLinePatch line;
@@ -563,11 +596,16 @@ struct ChartAxisPatch {
   ChartPatchField<double> min;
   ChartPatchField<double> max;
   ChartPatchField<double> major_unit;
+  ChartPatchField<double> minor_unit;  ///< Clear makes it automatic; a category axis has none.
   ChartPatchField<std::string> number_format;
+  /// `c:numFmt/@sourceLinked`; true on an axis without a number format writes `General` linked to the source.
+  std::optional<bool> source_linked;
   std::optional<bool> major_gridlines;
-  std::optional<bool> reversed;             ///< `c:scaling/c:orientation` maxMin when true.
-  ChartPatchField<double> log_base;         ///< Clear makes the axis linear.
-  std::optional<ChartAxisCrosses> crosses;  ///< Crossing point on the cross axis; kAt uses `crosses_at`.
+  std::optional<bool> minor_gridlines;
+  std::optional<ChartAxisPosition> position;  ///< `c:axPos`, written after the side `reversed` / `crosses` derive.
+  std::optional<bool> reversed;               ///< `c:scaling/c:orientation` maxMin when true.
+  ChartPatchField<double> log_base;           ///< Clear makes the axis linear.
+  std::optional<ChartAxisCrosses> crosses;    ///< Crossing point on the cross axis; kAt uses `crosses_at`.
   double crosses_at = 0.0;
   ChartPatchField<std::string> tick_label_pos;  ///< `nextTo` / `low` / `high` / `none`; Clear restores the default.
 };

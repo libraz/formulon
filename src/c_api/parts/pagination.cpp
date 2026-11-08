@@ -15,6 +15,7 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "print/page_setup.h"
+#include "sheet_layout.h"
 #include "utils/error.h"
 
 using formulon::c_api::parts::check_index;
@@ -27,6 +28,9 @@ using formulon::c_api::parts::set_last_error;
 
 struct fm_pagination {
   formulon::print::PaginationResult result;
+  // The breaks the sheet declares, kept so a break read back carries its span.
+  std::vector<formulon::ManualBreak> declared_row_breaks;
+  std::vector<formulon::ManualBreak> declared_col_breaks;
 };
 
 extern "C" fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
@@ -47,6 +51,9 @@ extern "C" fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t s
   }
   auto handle = std::unique_ptr<fm_pagination_t>(new fm_pagination_t{});
   handle->result = std::move(paginated.value());
+  const auto& print = wb->workbook().sheet(sheet_index).print_settings();
+  handle->declared_row_breaks = print.manual_row_breaks;
+  handle->declared_col_breaks = print.manual_col_breaks;
   *out = handle.release();
   return 0;
 }
@@ -101,22 +108,36 @@ fm_status_t reset_record(T* out) {
   return 0;
 }
 
-// Shared body of the break getters. `manual` reads the manual-flag list
-// instead of the position list; the value is returned through `value`.
-fm_status_t break_entry(const fm_pagination_t* pagination, size_t index, const void* out, bool horizontal, bool manual,
-                        uint32_t* value) {
+// Shared body of the break getters: writes position, span and manual flag.
+// A break the sheet declares reports its declared span; a computed one
+// covers the whole sheet (0..0).
+template <typename Record>
+fm_status_t break_entry(const fm_pagination_t* pagination, size_t index, Record* out, bool horizontal,
+                        std::uint32_t Record::*position) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
   }
   const auto& result = pagination->result;
-  const std::size_t size = manual ? (horizontal ? result.h_break_manual.size() : result.v_break_manual.size())
-                                  : (horizontal ? result.h_breaks.size() : result.v_breaks.size());
-  if (auto rc = check_index(index, size, "index"); rc != 0) {
+  const std::vector<std::uint32_t>& positions = horizontal ? result.h_breaks : result.v_breaks;
+  if (auto rc = check_index(index, positions.size(), "index"); rc != 0) {
     return rc;
   }
-  *value = manual ? static_cast<uint32_t>((horizontal ? result.h_break_manual : result.v_break_manual)[index])
-                  : (horizontal ? result.h_breaks : result.v_breaks)[index];
+  if (auto rc = reset_record(out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t at = positions[index];
+  const std::vector<bool>& manual = horizontal ? result.h_break_manual : result.v_break_manual;
+  out->*position = at;
+  out->manual = index < manual.size() && manual[index] ? 1 : 0;
+  const auto& declared = horizontal ? pagination->declared_row_breaks : pagination->declared_col_breaks;
+  for (const formulon::ManualBreak& entry : declared) {
+    if (entry.id == at) {
+      out->first = entry.min;
+      out->last = entry.max;
+      break;
+    }
+  }
   return 0;
 }
 
@@ -132,13 +153,8 @@ extern "C" fm_status_t fm_pagination_get_row_break_count(const fm_pagination_t* 
 }
 
 extern "C" fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pagination, size_t index,
-                                                      uint32_t* out_row) {
-  uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_row, true, false, &value); rc != 0) {
-    return rc;
-  }
-  *out_row = value;
-  return 0;
+                                                      fm_row_break_t* out) {
+  return break_entry(pagination, index, out, true, &fm_row_break_t::row);
 }
 
 extern "C" fm_status_t fm_pagination_get_column_break_count(const fm_pagination_t* pagination, size_t* out_count) {
@@ -151,13 +167,8 @@ extern "C" fm_status_t fm_pagination_get_column_break_count(const fm_pagination_
 }
 
 extern "C" fm_status_t fm_pagination_get_column_break_at(const fm_pagination_t* pagination, size_t index,
-                                                         uint32_t* out_col) {
-  uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_col, false, false, &value); rc != 0) {
-    return rc;
-  }
-  *out_col = value;
-  return 0;
+                                                         fm_column_break_t* out) {
+  return break_entry(pagination, index, out, false, &fm_column_break_t::col);
 }
 
 extern "C" fm_status_t fm_pagination_get_paper(const fm_pagination_t* pagination, fm_paper_info_t* out) {
@@ -268,25 +279,5 @@ extern "C" fm_status_t fm_pagination_get_page_at(const fm_pagination_t* paginati
   out->origin_y_pt = page.origin_y_pt;
   out->width_pt = page.width_pt;
   out->height_pt = page.height_pt;
-  return 0;
-}
-
-extern "C" fm_status_t fm_pagination_is_row_break_manual(const fm_pagination_t* pagination, size_t index,
-                                                         int32_t* out_manual) {
-  uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_manual, true, true, &value); rc != 0) {
-    return rc;
-  }
-  *out_manual = static_cast<int32_t>(value);
-  return 0;
-}
-
-extern "C" fm_status_t fm_pagination_is_column_break_manual(const fm_pagination_t* pagination, size_t index,
-                                                            int32_t* out_manual) {
-  uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_manual, false, true, &value); rc != 0) {
-    return rc;
-  }
-  *out_manual = static_cast<int32_t>(value);
   return 0;
 }

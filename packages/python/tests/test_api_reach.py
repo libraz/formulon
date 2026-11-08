@@ -310,13 +310,9 @@ def _xf_of(ws: Sheet) -> int:
             fill_index=0,
             border_index=0,
             num_fmt_id=2,
-            horizontal=formulon.HorizontalAlign.GENERAL,
-            vertical=formulon.VerticalAlign.BOTTOM,
-            wrap_text=False,
-            has_alignment=False,
-            has_horizontal=False,
-            has_vertical=False,
-            has_wrap_text=False,
+            horizontal=None,
+            vertical=None,
+            wrap_text=None,
         )
     )
 

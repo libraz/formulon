@@ -50,7 +50,7 @@ const squaresWorkbook = (mod) => {
   return wb;
 };
 
-const squares = { rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 }, columnInput: { row: 0, col: 1 } };
+const squares = { range: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 }, columnInput: { row: 0, col: 1 } };
 
 test('a one-variable data table computes, reads back and refuses writes', async () => {
   const mod = await load();
@@ -63,7 +63,7 @@ test('a one-variable data table computes, reads back and refuses writes', async 
 
   const found = wb.sheet(0).getDataTable(3, 1);
   assert.deepEqual(found, {
-    rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 },
+    range: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 },
     twoDimensional: false,
     rowOriented: false,
     rowInput: null,
@@ -93,7 +93,7 @@ test('a two-variable data table fills a multiplication table', async () => {
     wb.sheet(0).setNumber(3 + k, 2, 10 * (k + 1));
   }
   wb.sheet(0).addDataTable({
-    rect: { firstRow: 3, firstCol: 3, lastRow: 5, lastCol: 5 },
+    range: { firstRow: 3, firstCol: 3, lastRow: 5, lastCol: 5 },
     rowInput: { row: 0, col: 5 },
     columnInput: { row: 1, col: 5 },
   });
@@ -124,7 +124,7 @@ test('a data table survives save and load as a dataTable formula and follows row
   assert.throws(() => loaded.sheet(0).setNumber(4, 1, 1), isFormulonError);
   loaded.sheet(0).insertRows(0, 2);
   const moved = loaded.sheet(0).getDataTable(6, 1);
-  assert.deepEqual([moved.rect.firstRow, moved.rect.lastRow], [4, 6]);
+  assert.deepEqual([moved.range.firstRow, moved.range.lastRow], [4, 6]);
   assert.deepEqual(moved.columnInput, { row: 2, col: 1, deleted: false });
   // Deleting the input's row marks it deleted and the table turns into errors.
   loaded.sheet(0).deleteRows(2, 1);
@@ -157,9 +157,9 @@ test('autoNoTable leaves tables to recalcDataTables and removal blanks them', as
 test('data table arguments are validated', async () => {
   const mod = await load();
   const wb = squaresWorkbook(mod);
-  assert.throws(() => wb.sheet(0).addDataTable({ rect: squares.rect }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addDataTable({ range: squares.range }), isFormulonError);
   assert.throws(
-    () => wb.sheet(0).addDataTable({ ...squares, rect: { ...squares.rect, firstRow: 0 } }),
+    () => wb.sheet(0).addDataTable({ ...squares, range: { ...squares.range, firstRow: 0 } }),
     isFormulonError,
   );
   assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: 3, col: 1 } }), isFormulonError);

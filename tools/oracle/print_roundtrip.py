@@ -213,7 +213,7 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any], module: Any
             parsed = wb.parse_reference(token)
             if parsed is None:
                 raise RoundtripSpecError(f"print_area token is not an A1 range: {token!r}")
-            rects.append(parsed.rect)
+            rects.append(parsed.range)
         wb.sheet(sheet).set_print_area(rects)
 
     titles = spec.get("print_titles")

@@ -568,6 +568,7 @@ struct fm_workbook {
   formulon::c_api::BorrowedArrayArena<fm_filter_column_t> filter_column_scratch;
   formulon::c_api::BorrowedArrayArena<const char*> filter_value_scratch;
   formulon::c_api::BorrowedArrayArena<fm_date_group_item_t> date_group_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_filter_condition_t> filter_condition_scratch;
   formulon::c_api::BorrowedArrayArena<fm_sort_condition_t> sort_condition_scratch;
   formulon::c_api::BorrowedArrayArena<fm_mention_t> mention_scratch;
   formulon::c_api::BorrowedArrayArena<fm_table_style_element_t> table_style_element_scratch;

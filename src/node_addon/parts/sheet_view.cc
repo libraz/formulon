@@ -352,8 +352,10 @@ Napi::Value Workbook::GetSheetSelection(const Napi::CallbackInfo& info) {
     ranges.Set(static_cast<uint32_t>(i), RangeToJs(env, found[i]));
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("activeRow", Napi::Number::New(env, row));
-  out.Set("activeCol", Napi::Number::New(env, col));
+  Napi::Object active = Napi::Object::New(env);
+  active.Set("row", Napi::Number::New(env, row));
+  active.Set("col", Napi::Number::New(env, col));
+  out.Set("active", active);
   out.Set("ranges", ranges);
   return out;
 }
@@ -366,8 +368,13 @@ Napi::Value Workbook::SetSheetSelection(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const Napi::Object selection = ArgObject(info, 1);
   CheckedSpecReader reader(env);
-  const uint32_t row = reader.U32(selection, "activeRow", 0U);
-  const uint32_t col = reader.U32(selection, "activeCol", 0U);
+  uint32_t row = 0;
+  uint32_t col = 0;
+  Napi::Object active;
+  if (reader.RequiredObject(selection, "active", &active)) {
+    row = reader.RequiredU32(active, "row");
+    col = reader.RequiredU32(active, "col");
+  }
   std::vector<fm_cell_rect_t> ranges;
   Napi::Array array;
   if (reader.Array(selection, "ranges", &array)) {

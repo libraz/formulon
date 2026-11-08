@@ -21,6 +21,7 @@ from ._status import StatusCode
 from ._workbook import (
     _CHART_TITLE_NONE,
     _DISPLAY_PATCH_SPEC,
+    _PATCH_SET,
     _PLOT_PATCH_SPEC,
     _PREVIEW_OVERRIDE_SPEC,
     UNCHANGED,
@@ -29,13 +30,15 @@ from ._workbook import (
     BlanksAs,
     ChartAxisCrosses,
     ChartAxisPatch,
+    ChartAxisPosition,
+    ChartBarDirection,
     ChartData,
     ChartDataSource,
     ChartDisplayPatch,
     ChartFill,
     ChartFillPatch,
+    ChartFilter,
     ChartGrouping,
-    ChartInsertKind,
     ChartLabelsPatch,
     ChartLegend,
     ChartLegendPosition,
@@ -43,11 +46,14 @@ from ._workbook import (
     ChartLinePatch,
     ChartMarkerPatch,
     ChartPlotPatch,
+    ChartPlotType,
     ChartPoint,
     ChartPointPatch,
     ChartSeriesDirection,
     ChartSeriesInput,
     ChartSeriesPatch,
+    ChartSource,
+    ChartSourceInput,
     ChartTickLabelPosition,
     ChartTitle,
     ColorInput,
@@ -55,17 +61,19 @@ from ._workbook import (
     DrawingObjectKind,
     ImageFormat,
     ShapePaint,
+    SheetRect,
     SlicerCrossFilter,
     SlicerSortOrder,
     Unchanged,
     _ArgScope,
+    _chart_range_text,
+    _chart_source_fields,
     _check,
     _encode_axis_patch,
     _encode_patch,
     _encode_point_patch,
     _encode_series_patch,
     _enum,
-    _header_mode,
     _id_array,
     _image_anchor_fields,
     _install_workbook_locks,
@@ -88,7 +96,7 @@ if TYPE_CHECKING:
     )
 
 _PREVIEW_OVERRIDE_NAMES = (
-    "source",
+    "range",
     "direction",
     "header_row",
     "header_column",
@@ -222,7 +230,7 @@ def _drawing_for(sheet: Sheet, object_id: int) -> Drawing:
             cls = Slicer
         else:
             cls = Drawing
-        handle = cls(sheet, object_id, kind)
+        handle = cls._new(sheet, object_id, kind)
         handles[object_id] = handle
     return handle
 
@@ -264,10 +272,16 @@ class Drawing:
 
     __slots__ = ("_sheet", "_object_id", "_kind")
 
-    def __init__(self, sheet: Sheet, object_id: int, kind: DrawingObjectKind) -> None:
-        self._sheet = sheet
-        self._object_id = object_id
-        self._kind = kind
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("obtain a drawing object from Sheet.drawing(), Sheet.list_drawings() or an add_* method")
+
+    @classmethod
+    def _new(cls, sheet: Sheet, object_id: int, kind: DrawingObjectKind) -> "Drawing":
+        handle = object.__new__(cls)
+        handle._sheet = sheet
+        handle._object_id = object_id
+        handle._kind = kind
+        return handle
 
     @property
     def sheet(self) -> Sheet:
@@ -461,7 +475,7 @@ class Chart(Drawing):
                 raise _removed()
             chart = LIB.read_u32(out)
         try:
-            return cast("ChartProperties", _read_chart(chart))
+            return cast("ChartProperties", _read_chart(chart, self._sheet._workbook, sheet))
         finally:
             LIB.fm_chart_destroy(chart)
 
@@ -511,7 +525,7 @@ class Chart(Drawing):
     def get_preview(
         self,
         *,
-        source: Union[str, Unchanged] = UNCHANGED,
+        range: Union[SheetRect, str, Unchanged] = UNCHANGED,
         direction: Union[ChartSeriesDirection, Unchanged] = UNCHANGED,
         header_row: Union[bool, Unchanged] = UNCHANGED,
         header_column: Union[bool, Unchanged] = UNCHANGED,
@@ -523,8 +537,8 @@ class Chart(Drawing):
 
         An argument left at :data:`UNCHANGED` does not override: the chart's
         stored value is used. Series are rebuilt as :meth:`set_source` does:
-        over the overridden ``source`` (an unset direction or header is
-        auto), else over the chart's derived range.
+        over the overridden ``range`` (a :class:`SheetRect` or an A1 range; an
+        unset direction or header is auto), else over the chart's derived range.
 
         Raises:
           TypeError: when an argument is ``None``.
@@ -533,9 +547,9 @@ class Chart(Drawing):
         given = _present(dict(locals()), _PREVIEW_OVERRIDE_NAMES)
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
-            fields = _encode_patch(_PREVIEW_OVERRIDE_SPEC, given, ("source",), "preview override", scope)
-            if "source" in given:
-                fields["source"] = scope.cstr(given["source"])
+            fields = _encode_patch(_PREVIEW_OVERRIDE_SPEC, given, ("range",), "preview override", scope)
+            if "range" in given:
+                fields["source"] = scope.cstr(_chart_range_text(self._sheet._workbook, given["range"], sheet, "range"))
             ptr = scope.struct(S.CHART_PREVIEW_OVERRIDES)
             S.CHART_PREVIEW_OVERRIDES.pack(LIB, ptr, fields)
             data = _read_count(LIB.fm_sheet_get_chart_preview, h, sheet, object_id, ptr)
@@ -545,15 +559,35 @@ class Chart(Drawing):
             if data:
                 LIB.fm_chart_data_destroy(data)
 
-    def set_type(self, plot: int, kind: ChartInsertKind, grouping: ChartGrouping = ChartGrouping.CLUSTERED) -> None:
-        """Replace plot group ``plot`` with ``kind``, keeping each series' references, idx, order and explicit colors.
+    def set_type(
+        self,
+        plot: int,
+        type: ChartPlotType,
+        *,
+        bar_direction: Optional[ChartBarDirection] = None,
+        grouping: ChartGrouping = ChartGrouping.CLUSTERED,
+    ) -> None:
+        """Replace plot group ``plot`` with a plot of ``type``, keeping each series' references, idx, order and explicit colors.
 
-        ``grouping`` applies to column, bar, line and area plots.
+        ``bar_direction`` (default ``COLUMN``) applies to ``BAR`` only; ``grouping``
+        applies to bar, line and area plots.
+
+        Raises:
+          TypeError: for a ``bar_direction`` on a type other than ``BAR``.
+          InvalidArgumentError: for a ``type`` that cannot be written.
         """
+        if bar_direction is not None and _enum(ChartPlotType, type) != ChartPlotType.BAR:
+            raise TypeError("formulon: bar_direction applies to a BAR chart only")
         h, sheet, object_id = self._at()
         _check(
             LIB.fm_sheet_set_chart_type(
-                h, sheet, object_id, _uint(plot, "plot"), _sint(kind, "kind"), _sint(grouping, "grouping")
+                h,
+                sheet,
+                object_id,
+                _uint(plot, "plot"),
+                _sint(type, "type"),
+                _sint(ChartBarDirection.COLUMN if bar_direction is None else bar_direction, "bar_direction"),
+                _sint(grouping, "grouping"),
             )
         )
 
@@ -575,7 +609,7 @@ class Chart(Drawing):
         """Replace the legend with ``legend`` (the record :meth:`get_properties` returns), or remove it with ``None``.
 
         Removing the legend of a chart that has none does nothing.
-        ``legend.hidden_series`` holds series ``c:idx`` values.
+        ``legend.hidden_entries`` holds series ``c:idx`` values.
 
         Raises:
           TypeError: when ``legend`` is neither a :class:`ChartLegend` nor ``None``.
@@ -594,8 +628,8 @@ class Chart(Drawing):
                     {
                         "position": _sint(legend.position, "position"),
                         "overlay": 1 if legend.overlay else 0,
-                        "hidden_series": _id_array(legend.hidden_series, "hidden_series", scope),
-                        "hidden_series_count": _uint(len(legend.hidden_series), "hidden_series_count"),
+                        "hidden_entries": _id_array(legend.hidden_entries, "hidden_entries", scope),
+                        "hidden_entry_count": _uint(len(legend.hidden_entries), "hidden_entry_count"),
                     },
                 )
             _check(LIB.fm_sheet_set_chart_legend(h, sheet, object_id, ptr))
@@ -605,14 +639,14 @@ class Chart(Drawing):
         *,
         position: Union[ChartLegendPosition, Unchanged] = UNCHANGED,
         overlay: Union[bool, Unchanged] = UNCHANGED,
-        hidden_series: Union[Sequence[int], Unchanged] = UNCHANGED,
+        hidden_entries: Union[Sequence[int], Unchanged] = UNCHANGED,
     ) -> None:
         """Update the chart legend with the arguments given, creating it when the chart has none.
 
         An omitted argument keeps the legend's value, or takes Excel's default
         (:attr:`ChartLegendPosition.RIGHT`, no overlay, no hidden entries) when
         the chart has no legend. No argument has a cleared form;
-        ``hidden_series`` replaces the hidden legend entries (series ``c:idx``
+        ``hidden_entries`` replaces the hidden legend entries (series ``c:idx``
         values) and ``[]`` shows them all.
 
         Raises:
@@ -620,7 +654,7 @@ class Chart(Drawing):
         """
         given = {
             key: value
-            for key, value in (("position", position), ("overlay", overlay), ("hidden_series", hidden_series))
+            for key, value in (("position", position), ("overlay", overlay), ("hidden_entries", hidden_entries))
             if value is not UNCHANGED
         }
         for key, value in given.items():
@@ -639,10 +673,10 @@ class Chart(Drawing):
         fields: Dict[str, object] = {"position": _sint(position, "position"), "overlay": 1 if overlay else 0}
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_LEGEND_PATCH, 1)
-            if hidden_series is not UNCHANGED:
-                fields["hidden_series_op"] = 2
-                fields["hidden_series"] = _id_array(hidden_series, "hidden_series", scope)
-                fields["hidden_series_count"] = _uint(len(hidden_series), "hidden_series_count")
+            if hidden_entries is not UNCHANGED:
+                fields["hidden_entries_op"] = _PATCH_SET
+                fields["hidden_entries"] = _id_array(hidden_entries, "hidden_entries", scope)
+                fields["hidden_entry_count"] = _uint(len(hidden_entries), "hidden_entry_count")
             S.CHART_LEGEND_PATCH.pack(LIB, ptr, fields)
             _check(LIB.fm_sheet_update_chart_legend(h, sheet, object_id, ptr))
 
@@ -662,15 +696,26 @@ class Chart(Drawing):
         crosses: Union[ChartAxisCrosses, None, Unchanged] = UNCHANGED,
         crosses_at: Union[float, None, Unchanged] = UNCHANGED,
         tick_label_position: Union[ChartTickLabelPosition, None, Unchanged] = UNCHANGED,
+        minor_unit: Union[float, None, Unchanged] = UNCHANGED,
+        minor_gridlines: Union[bool, Unchanged] = UNCHANGED,
+        position: Union[ChartAxisPosition, Unchanged] = UNCHANGED,
+        source_linked: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update axis ``axis_id``; an omitted argument keeps its value, ``None`` removes the element.
 
         ``title`` takes the forms of :meth:`set_title`. ``None`` on ``title``
-        removes the axis title, on ``log_base`` makes the axis linear and on
-        ``tick_label_position`` restores the default. ``crosses_at`` is read when ``crosses`` is
-        ``AT``.
+        removes the axis title, on ``log_base`` makes the axis linear, on
+        ``minor_unit`` makes the unit automatic and on ``tick_label_position``
+        restores the default. ``crosses_at`` is read when ``crosses`` is
+        ``AT``. ``minor_gridlines``, ``position`` and ``source_linked`` reject ``None``.
+
+        Raises:
+          TypeError: when ``minor_gridlines``, ``position`` or ``source_linked`` is ``None``.
         """
         patch = _given(dict(locals()), ChartAxisPatch)
+        for key in ("minor_gridlines", "position", "source_linked"):
+            if key in patch and patch[key] is None:
+                raise TypeError(f"formulon: {key} cannot be None")
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_AXIS_PATCH, 1)
@@ -684,10 +729,11 @@ class Chart(Drawing):
         blanks_as: Union[BlanksAs, None, Unchanged] = UNCHANGED,
         plot_visible_only: Union[bool, None, Unchanged] = UNCHANGED,
         na_as_blank: Union[bool, None, Unchanged] = UNCHANGED,
+        style: Union[int, None, Unchanged] = UNCHANGED,
     ) -> None:
-        """Update how blanks plot, whether hidden cells are skipped and whether ``#N/A`` plots as blank.
+        """Update how blanks plot, whether hidden cells are skipped, whether ``#N/A`` plots as blank and the chart style.
 
-        An omitted argument keeps its value, ``None`` removes the element.
+        ``style`` is 1..48. An omitted argument keeps its value, ``None`` removes the element.
         """
         patch = _given(dict(locals()), ChartDisplayPatch)
         h, sheet, object_id = self._at()
@@ -743,7 +789,7 @@ class Chart(Drawing):
           TypeError: when ``value`` is neither a :class:`ChartPoint` nor ``None``.
         """
         if value is None:
-            self.update_point(plot, series_index, point_index)
+            self._patch_point(plot, series_index, point_index, None)
             return
         if not isinstance(value, ChartPoint):
             raise TypeError(f"formulon: value must be a ChartPoint or None, got {type(value).__name__}")
@@ -785,9 +831,13 @@ class Chart(Drawing):
     ) -> None:
         """Update point ``point_index`` of a series; an omitted argument keeps its value.
 
-        A call with no keyword argument removes the point's formatting.
+        A call with no keyword argument changes nothing; ``None`` on a keyword removes that member. Remove the
+        point's formatting with :meth:`set_point` and ``None``.
         """
-        patch = _given(dict(locals()), ChartPointPatch)
+        self._patch_point(plot, series_index, point_index, _given(dict(locals()), ChartPointPatch))
+
+    def _patch_point(self, plot: int, series_index: int, point_index: int, patch: Optional[Dict[str, Any]]) -> None:
+        """Apply a point patch; ``None`` clears every member."""
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_POINT_PATCH, 1)
@@ -828,8 +878,16 @@ class Chart(Drawing):
             S.CHART_PLOT_PATCH.pack(LIB, ptr, fields)
             _check(LIB.fm_sheet_update_chart_plot(h, sheet, object_id, _uint(plot, "plot"), ptr))
 
-    def set_filter(self, hidden_series: Sequence[int], hidden_categories: Sequence[int]) -> None:
-        """Replace the chart filter: the listed series (by ``c:idx``) and category positions are hidden."""
+    def set_filter(self, filter: ChartFilter) -> None:
+        """Replace the chart filter: the series (by ``c:idx``) and category positions ``filter`` lists are hidden.
+
+        The :class:`ChartFilter` :meth:`get_properties` returns passes back as is.
+
+        Raises:
+          TypeError: when ``filter`` is not a :class:`ChartFilter`.
+        """
+        if not isinstance(filter, ChartFilter):
+            raise TypeError(f"formulon: filter must be a ChartFilter, got {type(filter).__name__}")
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             _check(
@@ -837,10 +895,10 @@ class Chart(Drawing):
                     h,
                     sheet,
                     object_id,
-                    _id_array(hidden_series, "hidden_series", scope),
-                    _uint(len(hidden_series), "hidden_series_count"),
-                    _id_array(hidden_categories, "hidden_categories", scope),
-                    _uint(len(hidden_categories), "hidden_category_count"),
+                    _id_array(filter.hidden_series, "hidden_series", scope),
+                    _uint(len(filter.hidden_series), "hidden_series_count"),
+                    _id_array(filter.hidden_categories, "hidden_categories", scope),
+                    _uint(len(filter.hidden_categories), "hidden_category_count"),
                 )
             )
 
@@ -873,31 +931,30 @@ class Chart(Drawing):
             )
         )
 
-    def set_source(
-        self,
-        source: str,
-        *,
-        direction: ChartSeriesDirection = ChartSeriesDirection.AUTO,
-        header_row: Optional[bool] = None,
-        header_column: Optional[bool] = None,
-    ) -> None:
+    def set_source(self, source: Union[ChartSourceInput, ChartSource]) -> None:
         """Rebuild every series from ``source`` by the insert splitting rules.
 
         The chart kind and each series' formatting (by idx) are kept and the
-        filter is cleared. ``header_row`` / ``header_column`` ``None`` follow
-        Excel's detection.
+        filter is cleared. ``source.range`` is a :class:`SheetRect` or an A1
+        range (on the chart's sheet when unqualified); ``header_row`` /
+        ``header_column`` ``None`` follow Excel's detection. The
+        :class:`ChartSource` :meth:`get_properties` returns passes back as is.
+
+        Raises:
+          TypeError: when ``source`` is not one of the two record types.
         """
         h, sheet, object_id = self._at()
+        text, direction, header_row, header_column = _chart_source_fields(self._sheet._workbook, sheet, source)
         with _ArgScope() as scope:
             _check(
                 LIB.fm_sheet_set_chart_source(
                     h,
                     sheet,
                     object_id,
-                    scope.cstr(source),
+                    scope.cstr(text),
                     _sint(direction, "direction"),
-                    _sint(_header_mode(header_row), "header_row"),
-                    _sint(_header_mode(header_column), "header_column"),
+                    _sint(header_row, "header_row"),
+                    _sint(header_column, "header_column"),
                 )
             )
 

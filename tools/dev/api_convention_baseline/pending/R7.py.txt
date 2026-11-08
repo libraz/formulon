@@ -2,5 +2,4 @@ py	record.cell_xf_input	record:add_cell_style_xf	`add_cell_style_xf` takes `Cell
 py	record.cell_xf_input	record:add_cell_xf	`add_cell_xf` takes `CellXfInput`; accept `CellXf` too
 py	record.conditional_format_input	record:add_cf_rule	`add_cf_rule` takes `ConditionalFormatInput`; accept `ConditionalFormat` too
 py	record.data_validation_input	record:add_validation	`add_validation` takes `DataValidationInput`; accept `DataValidation` too
-py	record.defined_name_input	record:set_defined_name	`set_defined_name` takes `DefinedNameInput`; accept `DefinedName` too
 py	record.threaded_comment_input	record:add_threaded_comment	`add_threaded_comment` takes `ThreadedCommentInput`; accept `ThreadedComment` too

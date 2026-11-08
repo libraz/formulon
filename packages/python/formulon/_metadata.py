@@ -228,9 +228,9 @@ FunctionMetadataProvider = Dict[str, FunctionMetadataEntry]
 class MergedFunctionMetadata:
     """:class:`FunctionMetadata` with a resolved localized display name.
 
-    Returned by :func:`merge_function_metadata` when a provider entry is
-    supplied; carries the engine's structural fields plus the merged
-    ``signature`` / ``description`` and the ``localized_name``.
+    Returned by :func:`merge_function_metadata`; carries the engine's
+    structural fields plus the merged ``signature`` / ``description`` and the
+    ``localized_name``.
     """
 
     name: str
@@ -255,7 +255,7 @@ def merge_function_metadata(
     base: FunctionMetadata,
     entry: Optional[Mapping[str, object]],
     locale: str,
-) -> Union[FunctionMetadata, MergedFunctionMetadata]:
+) -> MergedFunctionMetadata:
     """Merge a host-supplied ``entry`` over the engine result ``base``.
 
     Field precedence (first non-``None`` wins):
@@ -269,19 +269,17 @@ def merge_function_metadata(
     Args:
       base: a :class:`FunctionMetadata` from
         :func:`get_function_metadata`.
-      entry: the provider's ``functions[NAME]`` mapping, or ``None`` to
-        leave ``base`` unchanged (``signature`` / ``description``
-        stay ``None``).
+      entry: the provider's ``functions[NAME]`` mapping, or ``None`` for the
+        engine result alone (``signature`` / ``description`` as in ``base``,
+        ``localized_name`` the canonical name).
       locale: a BCP-47 display locale tag (e.g. ``"fr-FR"``) matching the
         keys in ``aliases`` / ``localized``.
 
     Returns:
-      ``base`` verbatim when ``entry`` is ``None``; otherwise a
-      :class:`MergedFunctionMetadata`.
+      A :class:`MergedFunctionMetadata`; with no ``entry`` it is ``base`` with
+      ``localized_name`` equal to ``base.name``.
     """
-    if entry is None:
-        return base
-
+    entry = entry or {}
     localized_map = entry.get("localized") or {}
     localized = localized_map.get(locale) or {}
     signature = _first(

@@ -32,10 +32,10 @@ void store(void* base, size_t off, T v) {
 
 // ---- Patch input ----------------------------------------------------
 
-enum class Wr : uint8_t { kU32, kI32, kF64, kBool, kStr, kTitle, kColor, kRef, kPlainF64, kObj, kObjOp };
+enum class Wr : uint8_t { kU32, kI32, kF64, kBool, kStr, kTitle, kColor, kSource, kPlainF64, kObj, kObjOp };
 
 /// One input property: the `_op` and value slots in the C patch struct. A `kObj` nests without an op,
-/// a `kObjOp` carries one.
+/// a `kObjOp` carries one, a `kSource` value is an `fm_chart_data_source_spec_t`.
 struct WrField {
   const char* key;
   uint16_t op;
@@ -46,7 +46,7 @@ struct WrField {
 
 // clang-format off
 #define WR(key, T, kind, op, value) {key, offsetof(T, op), offsetof(T, value), Wr::kind, nullptr}
-#define WR_REF(key, T, member) {key, 0, offsetof(T, member), Wr::kRef, nullptr}
+#define WR_SRC(key, T, op, member) {key, offsetof(T, op), offsetof(T, member), Wr::kSource, nullptr}
 #define WR_PLAIN(key, T, member) {key, 0, offsetof(T, member), Wr::kPlainF64, nullptr}
 #define WR_OBJ(key, T, member, table) {key, 0, offsetof(T, member), Wr::kObj, table}
 #define WR_OBJ_OP(key, T, op, member, table) {key, offsetof(T, op), offsetof(T, member), Wr::kObjOp, table}
@@ -87,16 +87,18 @@ constexpr WrField kLabelsWr[] = {
     WR("numberFormat", fm_chart_labels_patch_t, kStr, number_format_op, number_format),
     WR("fontColor", fm_chart_labels_patch_t, kColor, font_color_op, font_color),
     WR("fontSizePt", fm_chart_labels_patch_t, kF64, font_size_op, font_size_pt),
+    WR("sourceLinked", fm_chart_labels_patch_t, kBool, source_linked_op, source_linked),
+    WR("deleted", fm_chart_labels_patch_t, kBool, deleted_op, deleted),
     WR_END,
 };
 
 constexpr WrField kSeriesWr[] = {
-    WR_REF("name", fm_chart_series_patch_t, name),
-    WR_REF("categories", fm_chart_series_patch_t, categories),
-    WR_REF("values", fm_chart_series_patch_t, values),
-    WR_REF("x", fm_chart_series_patch_t, x),
-    WR_REF("y", fm_chart_series_patch_t, y),
-    WR_REF("size", fm_chart_series_patch_t, size),
+    WR_SRC("name", fm_chart_series_patch_t, name_op, name),
+    WR_SRC("categories", fm_chart_series_patch_t, categories_op, categories),
+    WR_SRC("values", fm_chart_series_patch_t, values_op, values),
+    WR_SRC("x", fm_chart_series_patch_t, x_op, x),
+    WR_SRC("y", fm_chart_series_patch_t, y_op, y),
+    WR_SRC("size", fm_chart_series_patch_t, size_op, size),
     WR_OBJ("fill", fm_chart_series_patch_t, fill, kFillWr),
     WR_OBJ("line", fm_chart_series_patch_t, line, kLineWr),
     WR_OBJ_OP("marker", fm_chart_series_patch_t, marker_op, marker, kMarkerWr),
@@ -134,6 +136,10 @@ constexpr WrField kAxisWr[] = {
     WR("crosses", fm_chart_axis_patch_t, kI32, crosses_op, crosses),
     WR_PLAIN("crossesAt", fm_chart_axis_patch_t, crosses_at),
     WR("tickLabelPosition", fm_chart_axis_patch_t, kI32, tick_label_position_op, tick_label_position),
+    WR("minorUnit", fm_chart_axis_patch_t, kF64, minor_unit_op, minor_unit),
+    WR("minorGridlines", fm_chart_axis_patch_t, kBool, minor_gridlines_op, minor_gridlines),
+    WR("position", fm_chart_axis_patch_t, kI32, position_op, position),
+    WR("sourceLinked", fm_chart_axis_patch_t, kBool, source_linked_op, source_linked),
     WR_END,
 };
 
@@ -141,11 +147,53 @@ constexpr WrField kDisplayWr[] = {
     WR("blanksAs", fm_chart_display_patch_t, kI32, blanks_as_op, blanks_as),
     WR("plotVisibleOnly", fm_chart_display_patch_t, kBool, plot_visible_only_op, plot_visible_only),
     WR("naAsBlank", fm_chart_display_patch_t, kBool, na_as_blank_op, na_as_blank),
+    WR("style", fm_chart_display_patch_t, kI32, style_op, style),
     WR_END,
 };
 
-/// Keeps the bytes behind the `const char*` fields of a patch alive.
-using Arena = std::deque<std::string>;
+/// Keeps the bytes behind the `const char*` fields of a patch, and the literal points of its sources, alive.
+struct Arena : std::deque<std::string> {
+  std::deque<std::vector<fm_chart_literal_t>> literals;
+};
+
+/// A series input: reference text (empty is no input), or the read-back shape `{ kind, formula, literal }`.
+fm_chart_data_source_spec_t read_source(JsNarrowNumericReader& r, Arena& arena, const val& v, const char* field) {
+  fm_chart_data_source_spec_t spec{};
+  if (!v.typeOf().strictlyEquals(val("object"))) {
+    arena.push_back(r.string_value(v, field));
+    spec.kind = arena.back().empty() ? FM_CHART_SOURCE_KIND_NONE : FM_CHART_SOURCE_KIND_REF;
+    spec.formula = arena.back().c_str();
+    return spec;
+  }
+  spec.kind = r.i32(v, "kind", FM_CHART_SOURCE_KIND_NONE, "kind");
+  if (spec.kind == FM_CHART_SOURCE_KIND_REF) {
+    arena.push_back(r.string(v, "formula", "formula"));
+    spec.formula = arena.back().c_str();
+  } else if (spec.kind == FM_CHART_SOURCE_KIND_LITERAL) {
+    const val literal = r.value(v, "literal", "literal");
+    std::vector<fm_chart_literal_t> points;
+    if (r.ok() && js_value_present(literal) && r.require_array(literal, "literal")) {
+      const uint32_t n = r.length(literal, "literal.length");
+      for (uint32_t i = 0; i < n && r.ok(); ++i) {
+        const val point = r.array_element(literal, i, "literal[]");
+        fm_chart_literal_t lit = FM_STRUCT_INIT(fm_chart_literal_t);
+        lit.idx = i;
+        if (point.isString()) {
+          arena.push_back(r.string_value(point, "literal[]"));
+          lit.is_text = 1;
+          lit.text = arena.back().c_str();
+        } else {
+          lit.number = r.number_value(point, 0.0, "literal[]");
+        }
+        points.push_back(lit);
+      }
+    }
+    arena.literals.push_back(std::move(points));
+    spec.literal = arena.literals.back().data();
+    spec.literal_count = static_cast<uint32_t>(arena.literals.back().size());
+  }
+  return spec;
+}
 
 /// A title given as its text, or in the read-back shape `{ kind, text, formula }`. An out-of-domain (absent)
 /// kind is left for the C ABI to reject.
@@ -175,10 +223,11 @@ void read_patch(JsNarrowNumericReader& r, Arena& arena, const val& owner, void* 
     const bool clear = v.isNull();
     const int32_t op = clear ? FM_CHART_PATCH_OP_CLEAR : FM_CHART_PATCH_OP_SET;
     switch (f->kind) {
-      case Wr::kRef:
-        // A reference is kept as NULL, removed as "" and replaced by a string.
-        arena.push_back(clear ? std::string() : r.string_value(v, f->key));
-        store(base, f->value, arena.back().c_str());
+      case Wr::kSource:
+        store(base, f->op, op);
+        if (!clear) {
+          store(base, f->value, read_source(r, arena, v, f->key));
+        }
         break;
       case Wr::kPlainF64:
         if (!clear) {
@@ -244,6 +293,38 @@ std::vector<uint32_t> read_indices(JsNarrowNumericReader& r, const val& list, co
   return out;
 }
 
+/// Turns every `KEEP` member of a patch read from a whole record into `CLEAR`, so the record replaces the
+/// stored value instead of merging into it.
+void clear_unset(void* base, const WrField* f) {
+  for (; f->key != nullptr; ++f) {
+    switch (f->kind) {
+      case Wr::kPlainF64:
+        break;
+      case Wr::kObj:
+        clear_unset(static_cast<char*>(base) + f->value, f->sub);
+        break;
+      case Wr::kObjOp: {
+        int32_t op = 0;
+        std::memcpy(&op, static_cast<char*>(base) + f->op, sizeof(op));
+        if (op == FM_CHART_PATCH_OP_KEEP) {
+          store(base, f->op, static_cast<int32_t>(FM_CHART_PATCH_OP_CLEAR));
+        } else if (op == FM_CHART_PATCH_OP_SET) {
+          clear_unset(static_cast<char*>(base) + f->value, f->sub);
+        }
+        break;
+      }
+      default: {
+        int32_t op = 0;
+        std::memcpy(&op, static_cast<char*>(base) + f->op, sizeof(op));
+        if (op == FM_CHART_PATCH_OP_KEEP) {
+          store(base, f->op, static_cast<int32_t>(FM_CHART_PATCH_OP_CLEAR));
+        }
+        break;
+      }
+    }
+  }
+}
+
 /// A `boolean | null | undefined` header flag as an `fm_tristate_t`.
 int32_t header_mode(JsNarrowNumericReader& r, const val& v, const char* field) {
   if (!js_value_present(v)) {
@@ -280,7 +361,8 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   std::string descr_store;
   std::string title_store;
   fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
-  opts.kind = reader.i32(options, "kind", FM_CHART_INSERT_KIND_COLUMN, "kind");
+  opts.type = reader.i32(options, "type", FM_CHART_PLOT_TYPE_BAR, "type");
+  opts.bar_direction = reader.i32(options, "barDirection", FM_CHART_BAR_DIRECTION_COLUMN, "barDirection");
   opts.grouping = reader.i32(options, "grouping", FM_CHART_GROUPING_CLUSTERED, "grouping");
   const std::string source = reader.string(options, "source", "source");
   opts.source = source.c_str();
@@ -304,17 +386,22 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   return object_id;
 }
 
-void JsWorkbook::setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t kind, val grouping) {
+void JsWorkbook::setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t type, val options) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
   JsNarrowNumericReader reader("setChartType");
-  const int32_t group = reader.i32_value(grouping, FM_CHART_GROUPING_CLUSTERED, "grouping");
+  int32_t bar_direction = FM_CHART_BAR_DIRECTION_COLUMN;
+  int32_t grouping = FM_CHART_GROUPING_CLUSTERED;
+  if (js_value_present(options)) {
+    bar_direction = reader.i32(options, "barDirection", FM_CHART_BAR_DIRECTION_COLUMN, "barDirection");
+    grouping = reader.i32(options, "grouping", FM_CHART_GROUPING_CLUSTERED, "grouping");
+  }
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_set_chart_type(handle_, sheet, objectId, plot, kind, group));
+  succeeded(fm_sheet_set_chart_type(handle_, sheet, objectId, plot, type, bar_direction, grouping));
 }
 
 void JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title) {
@@ -349,15 +436,15 @@ void JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, val legend) {
   const int32_t position = reader.i32(legend, "position", FM_CHART_LEGEND_POSITION_RIGHT, "position");
   const bool overlay = reader.boolean(legend, "overlay", false, "overlay");
   const std::vector<uint32_t> hidden =
-      read_indices(reader, reader.value(legend, "hiddenSeries", "hiddenSeries"), "hiddenSeries");
+      read_indices(reader, reader.value(legend, "hiddenEntries", "hiddenEntries"), "hiddenEntries");
   if (!reader.ok()) {
     return;
   }
   fm_chart_legend_t record = FM_STRUCT_INIT(fm_chart_legend_t);
   record.position = position;
   record.overlay = overlay ? 1 : 0;
-  record.hidden_series = data_or_null(hidden);
-  record.hidden_series_count = static_cast<uint32_t>(hidden.size());
+  record.hidden_entries = data_or_null(hidden);
+  record.hidden_entry_count = static_cast<uint32_t>(hidden.size());
   succeeded(fm_sheet_set_chart_legend(handle_, sheet, objectId, &record));
 }
 
@@ -370,8 +457,8 @@ void JsWorkbook::updateChartLegend(uint32_t sheet, uint32_t objectId, val patch)
   const val spec = js_object_or_empty(patch);
   const val position_value = reader.value(spec, "position", "position");
   const val overlay_value = reader.value(spec, "overlay", "overlay");
-  const val hidden_value = reader.value(spec, "hiddenSeries", "hiddenSeries");
-  const std::vector<uint32_t> hidden = read_indices(reader, hidden_value, "hiddenSeries");
+  const val hidden_value = reader.value(spec, "hiddenEntries", "hiddenEntries");
+  const std::vector<uint32_t> hidden = read_indices(reader, hidden_value, "hiddenEntries");
   if (!reader.ok()) {
     return;
   }
@@ -409,9 +496,9 @@ void JsWorkbook::updateChartLegend(uint32_t sheet, uint32_t objectId, val patch)
   p.position = position;
   p.overlay = overlay;
   if (js_value_present(hidden_value)) {
-    p.hidden_series_op = FM_CHART_PATCH_OP_SET;
-    p.hidden_series = data_or_null(hidden);
-    p.hidden_series_count = static_cast<uint32_t>(hidden.size());
+    p.hidden_entries_op = FM_CHART_PATCH_OP_SET;
+    p.hidden_entries = data_or_null(hidden);
+    p.hidden_entry_count = static_cast<uint32_t>(hidden.size());
   }
   succeeded(fm_sheet_update_chart_legend(handle_, sheet, objectId, &p));
 }
@@ -482,18 +569,13 @@ void JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot,
   JsNarrowNumericReader reader("setChartPoint");
   Arena arena;
   fm_chart_point_patch_t p = FM_STRUCT_INIT(fm_chart_point_patch_t);
-  // `null` removes the point's formatting; a record replaces it.
+  // A record replaces the point's formatting: members it carries are set, the rest cleared. `null` clears
+  // every member, which removes the override.
   if (!point.isNull() && !read_patch_arg(reader, point, &p, kPointWr, arena)) {
     return;
   }
-  // A patch that changes nothing removes the point's formatting, so the record is merged into a bare point.
-  fm_chart_point_patch_t bare = FM_STRUCT_INIT(fm_chart_point_patch_t);
-  if (!succeeded(fm_sheet_update_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &bare))) {
-    return;
-  }
-  if (!point.isNull()) {
-    succeeded(fm_sheet_update_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &p));
-  }
+  clear_unset(&p, kPointWr);
+  succeeded(fm_sheet_update_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &p));
 }
 
 void JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {

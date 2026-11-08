@@ -39,14 +39,23 @@ fm_slicer_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, Slic
   s.fields |= present ? FM_SLICER_FIELD_COLUMN_COUNT : 0U;
   s.row_height_emu = reader.I64(spec, "rowHeightEmu", 0, &present);
   s.fields |= present ? FM_SLICER_FIELD_ROW_HEIGHT : 0U;
-  s.from_row = reader.U32(spec, "fromRow", 0U, &present);
-  if (present) {
+  // The two-cell anchor is all or nothing: any of its four cells makes the other three required.
+  bool has_from_row = false;
+  bool has_from_col = false;
+  bool has_to_row = false;
+  bool has_to_col = false;
+  (void)reader.U32(spec, "fromRow", 0U, &has_from_row);
+  (void)reader.U32(spec, "fromCol", 0U, &has_from_col);
+  (void)reader.U32(spec, "toRow", 0U, &has_to_row);
+  (void)reader.U32(spec, "toCol", 0U, &has_to_col);
+  if (has_from_row || has_from_col || has_to_row || has_to_col) {
     s.fields |= FM_SLICER_FIELD_ANCHOR;
-    s.from_col = reader.U32(spec, "fromCol", 0U);
+    s.from_row = reader.RequiredU32(spec, "fromRow");
+    s.from_col = reader.RequiredU32(spec, "fromCol");
     s.from_row_offset_emu = reader.I64(spec, "fromRowOffsetEmu", 0);
     s.from_col_offset_emu = reader.I64(spec, "fromColOffsetEmu", 0);
-    s.to_row = reader.U32(spec, "toRow", 0U);
-    s.to_col = reader.U32(spec, "toCol", 0U);
+    s.to_row = reader.RequiredU32(spec, "toRow");
+    s.to_col = reader.RequiredU32(spec, "toCol");
     s.to_row_offset_emu = reader.I64(spec, "toRowOffsetEmu", 0);
     s.to_col_offset_emu = reader.I64(spec, "toColOffsetEmu", 0);
   }

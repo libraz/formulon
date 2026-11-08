@@ -52,24 +52,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("skippedFeatureCount", &JsReadDiagnostics::skippedFeatureCount)
       .field("unknownContentTypeCount", &JsReadDiagnostics::unknownContentTypeCount);
 
-  // ---- Conditional-format value-objects ------------------------------------
-  value_object<JsCfMatch>("CfMatch")
-      .field("kind", &JsCfMatch::kind)
-      .field("priority", &JsCfMatch::priority)
-      .field("dxfIndexEngaged", &JsCfMatch::dxfIndexEngaged)
-      .field("dxfIndex", &JsCfMatch::dxfIndex)
-      .field("color", &JsCfMatch::color)
-      .field("barLengthPct", &JsCfMatch::barLengthPct)
-      .field("barAxisPositionPct", &JsCfMatch::barAxisPositionPct)
-      .field("barIsNegative", &JsCfMatch::barIsNegative)
-      .field("barFill", &JsCfMatch::barFill)
-      .field("barBorderEngaged", &JsCfMatch::barBorderEngaged)
-      .field("barBorder", &JsCfMatch::barBorder)
-      .field("barGradient", &JsCfMatch::barGradient)
-      .field("barDirection", &JsCfMatch::barDirection)
-      .field("iconSetName", &JsCfMatch::iconSetName)
-      .field("iconIndex", &JsCfMatch::iconIndex);
-
   // ---- Sheet view / layout value-objects -----------------------------------
   value_object<JsSheetView>("SheetView")
       .field("zoomPct", &JsSheetView::zoomPct)
@@ -232,8 +214,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addChart", &JsWorkbook::insertChart)
       .function("setChartType", &JsWorkbook::setChartType)
       .function("setChartType", emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t objectId,
-                                                                 uint32_t plot, int32_t kind) {
-                  return self.setChartType(sheet, objectId, plot, kind, emscripten::val::undefined());
+                                                                 uint32_t plot, int32_t type) {
+                  return self.setChartType(sheet, objectId, plot, type, emscripten::val::undefined());
                 }))
       .function("setChartTitle", &JsWorkbook::setChartTitle)
       .function("setChartLegend", &JsWorkbook::setChartLegend)
@@ -377,6 +359,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPivotFieldItemCount", &JsWorkbook::pivotFieldItemCount)
       .function("getPivotFieldItem", &JsWorkbook::pivotFieldItemAt)
       .function("setPivotFieldAxis", &JsWorkbook::pivotFieldSetAxis)
+      .function("updatePivotField", &JsWorkbook::pivotFieldUpdate)
+      .function("updatePivotFieldItem", &JsWorkbook::pivotFieldItemUpdate)
       .function("setPivotFieldDateGroup", &JsWorkbook::pivotFieldSetDateGroup)
       // The trailing three default as on the Node surface: one-day intervals
       // and the field's own first and last date (NaN).
@@ -402,18 +386,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
                                                      std::numeric_limits<double>::quiet_NaN(),
                                                      std::numeric_limits<double>::quiet_NaN());
                 }))
-      .function("setPivotFieldItemVisible", &JsWorkbook::pivotFieldSetItemVisible)
-      .function("setPivotFieldNumberFormat", &JsWorkbook::pivotFieldSetNumberFormat)
-      .function("setPivotFieldSort", &JsWorkbook::pivotFieldSetSort)
-      .function("setPivotFieldSubtotalTop", &JsWorkbook::pivotFieldSetSubtotalTop)
-      .function("setPivotFieldDefaultSubtotal", &JsWorkbook::pivotFieldSetDefaultSubtotal)
-      .function("setPivotFieldInsertBlankRow", &JsWorkbook::pivotFieldSetInsertBlankRow)
-      .function("setPivotFieldFillDownLabels", &JsWorkbook::pivotFieldSetFillDownLabels)
-      .function("setPivotFieldShowDetail", &JsWorkbook::pivotFieldSetShowDetail)
-      .function("setPivotFieldItemShowDetail", &JsWorkbook::pivotFieldSetItemShowDetail)
-      .function("setPivotFieldItemCaption", &JsWorkbook::pivotFieldSetItemCaption)
-      .function("setPivotFieldCustomName", &JsWorkbook::pivotFieldSetCustomName)
-      .function("setPivotFieldShowAll", &JsWorkbook::pivotFieldSetShowAll)
       .function("getPivotOptions", &JsWorkbook::pivotGetOptions)
       .function("updatePivotOptions", &JsWorkbook::pivotSetOptions)
       .function("getPivotCacheOptions", &JsWorkbook::pivotCacheGetOptions)

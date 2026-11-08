@@ -190,19 +190,10 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf_t* xf, JsNarrowNu
   xf->wrap_text = reader.boolean_value(wrap_text, false) ? 1 : 0;
   xf->justify_last_line = reader.boolean_value(justify_last_line, false) ? 1 : 0;
   xf->style_xf_index = reader.u32(record, "styleXfIndex", 0U, "xf.styleXfIndex");
-  const emscripten::val has_horizontal_align = reader.value(record, "hasHorizontal", "xf.hasHorizontal");
-  const emscripten::val has_vertical_align = reader.value(record, "hasVertical", "xf.hasVertical");
-  const emscripten::val has_wrap_text = reader.value(record, "hasWrapText", "xf.hasWrapText");
-  const emscripten::val has_justify_last_line = reader.value(record, "hasJustifyLastLine", "xf.hasJustifyLastLine");
-  const bool has_horizontal_align_present = js_value_present(has_horizontal_align);
-  const bool has_vertical_align_present = js_value_present(has_vertical_align);
-  const bool has_wrap_text_present = js_value_present(has_wrap_text);
-  const bool has_justify_last_line_present = js_value_present(has_justify_last_line);
-  xf->has_horizontal = reader.boolean_value(has_horizontal_align, horizontal_align_present) ? 1 : 0;
-  xf->has_vertical = reader.boolean_value(has_vertical_align, vertical_align_present) ? 1 : 0;
-  xf->has_wrap_text = reader.boolean_value(has_wrap_text, wrap_text_present) ? 1 : 0;
-  xf->has_justify_last_line = reader.boolean_value(has_justify_last_line, justify_last_line_present) ? 1 : 0;
-  const emscripten::val has_alignment = reader.value(record, "hasAlignment", "xf.hasAlignment");
+  xf->has_horizontal = horizontal_align_present ? 1 : 0;
+  xf->has_vertical = vertical_align_present ? 1 : 0;
+  xf->has_wrap_text = wrap_text_present ? 1 : 0;
+  xf->has_justify_last_line = justify_last_line_present ? 1 : 0;
   const emscripten::val text_rotation = reader.value(record, "textRotation", "xf.textRotation");
   const emscripten::val indent = reader.value(record, "indent", "xf.indent");
   const emscripten::val relative_indent = reader.value(record, "relativeIndent", "xf.relativeIndent");
@@ -225,10 +216,8 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf_t* xf, JsNarrowNu
   xf->has_reading_order = reading_order_present ? 1 : 0;
   const bool has_supplied_alignment = horizontal_align_present || vertical_align_present || wrap_text_present ||
                                       justify_last_line_present || text_rotation_present || indent_present ||
-                                      relative_indent_present || shrink_to_fit_present || reading_order_present ||
-                                      has_horizontal_align_present || has_vertical_align_present ||
-                                      has_wrap_text_present || has_justify_last_line_present;
-  xf->has_alignment = reader.boolean_value(has_alignment, has_supplied_alignment) ? 1 : 0;
+                                      relative_indent_present || shrink_to_fit_present || reading_order_present;
+  xf->has_alignment = has_supplied_alignment ? 1 : 0;
 
   xf->apply_number_format = reader.boolean(record, "applyNumberFormat", false, "xf.applyNumberFormat") ? 1 : 0;
   xf->apply_font = reader.boolean(record, "applyFont", false, "xf.applyFont") ? 1 : 0;
@@ -237,12 +226,11 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf_t* xf, JsNarrowNu
   xf->apply_alignment = reader.boolean(record, "applyAlignment", false, "xf.applyAlignment") ? 1 : 0;
   xf->apply_protection = reader.boolean(record, "applyProtection", false, "xf.applyProtection") ? 1 : 0;
   xf->quote_prefix = reader.boolean(record, "quotePrefix", false, "xf.quotePrefix") ? 1 : 0;
-  const emscripten::val has_protection = reader.value(record, "hasProtection", "xf.hasProtection");
   const emscripten::val locked = reader.value(record, "locked", "xf.locked");
   const emscripten::val hidden = reader.value(record, "hidden", "xf.hidden");
   const bool locked_present = js_value_present(locked);
   const bool hidden_present = js_value_present(hidden);
-  xf->has_protection = reader.boolean_value(has_protection, locked_present || hidden_present) ? 1 : 0;
+  xf->has_protection = (locked_present || hidden_present) ? 1 : 0;
   xf->locked = reader.boolean_value(locked, true) ? 1 : 0;
   xf->hidden = reader.boolean_value(hidden, false) ? 1 : 0;
 }

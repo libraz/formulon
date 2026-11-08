@@ -41,6 +41,11 @@ Expected<ChartData, Error> preview_chart_data(const Workbook& wb, std::size_t sh
 /// width or height takes Excel's default 360 x 216 pt frame.
 Expected<std::uint32_t, Error> insert_chart(Workbook& wb, std::size_t sheet, const ChartInsertOptions& options);
 
+/// The insert template that draws plot type `type`: Bar is the column template, or the bar template when
+/// `bar_direction` is kBar (kAbsent means kCol); Line, Area, Pie, Doughnut and Scatter map one to one. Any other
+/// type, or a direction on a type other than Bar, is `kInvalidArgument`.
+Expected<ChartInsertKind, Error> chart_insert_kind(ChartPlotType type, ChartBarDirection bar_direction);
+
 /// Replaces plot `plot` with `kind` / `grouping` from the insert template,
 /// keeping each series' idx, order, name, references, unique id and explicit
 /// RGB colour. Axes stay when the new kind uses the same axis types.

@@ -87,10 +87,10 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
   std::string major_ea;
   std::string minor_latin;
   std::string minor_ea;
-  reader.String(record, "majorLatin", &major_latin);
-  reader.String(record, "majorEastAsian", &major_ea);
-  reader.String(record, "minorLatin", &minor_latin);
-  reader.String(record, "minorEastAsian", &minor_ea);
+  major_latin = reader.RequiredString(record, "majorLatin");
+  major_ea = reader.RequiredString(record, "majorEastAsian");
+  minor_latin = reader.RequiredString(record, "minorLatin");
+  minor_ea = reader.RequiredString(record, "minorEastAsian");
   if (!reader.ok()) {
     return env.Undefined();
   }

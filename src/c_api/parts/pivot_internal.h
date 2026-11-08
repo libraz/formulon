@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "pivot/field_patch.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
@@ -36,9 +37,9 @@ const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std:
 
 // Longest pivot caption, item caption, field name or calculated name, in
 // UTF-16 code units.
-constexpr std::uint32_t kMaxPivotNameUnits = 255U;
+using formulon::pivot::kMaxPivotNameUnits;
 
-// kInvalidArgument binding error "cache_id not found" for `cache_id`.
+// kNotFound binding error for an unknown `cache_id`.
 fm_status_t cache_not_found(std::uint32_t cache_id);
 
 // Resolves `cache_id` to its cache, writing the binding error and returning

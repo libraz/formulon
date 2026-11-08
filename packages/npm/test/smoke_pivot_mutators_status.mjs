@@ -28,7 +28,7 @@ function buildPivot(mod) {
   wb.setProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
   const cacheId = cache.cacheId;
-  wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:D5', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).setWorksheetSource({ range: 'A1:D5', sheet: 'Sheet1' });
   for (const name of ['Region', 'Product', 'Amount', 'Date']) wb.pivotCache(cacheId).addField(name);
   for (const item of ['East', 'West']) wb.pivotCache(cacheId).addFieldSharedItem(0, item);
   for (const item of ['Apple', 'Pear']) wb.pivotCache(cacheId).addFieldSharedItem(1, item);
@@ -70,8 +70,8 @@ function pivotGrid(wb, pivot = 0) {
           : v !== null && typeof v === 'object'
             ? `#${v.code}`
             : '';
-    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.rect.lastCol - layout.rect.firstCol + 1).fill(''));
-    rows.get(cell.row)[cell.col - layout.rect.firstCol] = text;
+    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.range.lastCol - layout.range.firstCol + 1).fill(''));
+    rows.get(cell.row)[cell.col - layout.range.firstCol] = text;
   }
   return [...rows.keys()].sort((a, b) => a - b).map((row) => rows.get(row).join('|'));
 }
@@ -244,11 +244,12 @@ const PIVOT_MUTATORS = [
   [
     'PivotCache.setWorksheetSource',
     {
-      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ ref: 'B2:E6', sheet: 'Data' }),
+      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ range: 'B2:E6', sheet: 'Sheet1' }),
       expect: (b) => {
         const source = b.wb.pivotCache(b.cacheId).getWorksheetSource();
-        assert.equal(source.ref, 'B2:E6');
-        assert.equal(source.sheet, 'Data');
+        assert.equal(source.range.sheet, 0);
+        assert.deepEqual({ ...source.range.rect }, { firstRow: 1, firstCol: 1, lastRow: 5, lastCol: 4 });
+        assert.equal(source.name, null);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
       },
     },
@@ -322,8 +323,8 @@ const PIVOT_MUTATORS = [
         assert.equal(r.index, 1);
         assert.equal(b.wb.sheet(0).pivot(1), r);
         const layout = b.wb.sheet(0).pivot(1).getLayout();
-        assert.equal(layout.rect.firstRow, 20);
-        assert.equal(layout.rect.firstCol, 1);
+        assert.equal(layout.range.firstRow, 20);
+        assert.equal(layout.range.firstCol, 1);
         assert.deepEqual(pivotGrid(b.wb, 0), BASE_GRID);
       },
     },
@@ -355,8 +356,8 @@ const PIVOT_MUTATORS = [
       act: (b) => b.wb.sheet(0).pivot(b.pivot).setAnchor({ row: 10, col: 2 }),
       expect: (b) => {
         const layout = b.wb.sheet(0).pivot(b.pivot).getLayout();
-        assert.equal(layout.rect.firstRow, 10);
-        assert.equal(layout.rect.firstCol, 2);
+        assert.equal(layout.range.firstRow, 10);
+        assert.equal(layout.range.firstCol, 2);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
       },
     },
@@ -448,12 +449,12 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.setFieldSort',
+    'Pivot.updateField',
     {
       // East now outsums West, so sorting ascending by the data field
       // differs from both label orders.
       setup: (b) => b.wb.pivotCache(b.cacheId).setRecordValue(0, 2, 40),
-      act: (b) => b.wb.sheet(0).pivot(b.pivot).setFieldSort(b.region, 1, { byField: 'Sum of Amount' }),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).updateField(b.region, { sortOrder: 1, sortByField: 'Sum of Amount' }),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|45', '総計|82']),
     },
   ],
@@ -479,10 +480,10 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.setFieldShowDetail',
+    'Pivot.updateField',
     {
       setup: twoLevels,
-      act: (b) => b.wb.sheet(0).pivot(b.pivot).setFieldShowDetail(b.region, false),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).updateField(b.region, { showDetail: false }),
       expect: (b) => assert.equal(b.wb.sheet(0).pivot(b.pivot).getFieldItem(b.region, 0).showDetail, false),
     },
   ],
@@ -999,13 +1000,16 @@ test('manual pivot sort order keeps item order and rejects bad arguments', async
     b.wb.sheet(0).pivot(b.pivot).clearFieldItems(b.region);
     b.wb.sheet(0).pivot(b.pivot).addFieldItem(b.region, 'West', { visible: true });
     b.wb.sheet(0).pivot(b.pivot).addFieldItem(b.region, 'East', { visible: true });
-    b.wb.sheet(0).pivot(b.pivot).setFieldSort(b.region, PivotSortOrder.Manual);
+    b.wb.sheet(0).pivot(b.pivot).updateField(b.region, { sortOrder: PivotSortOrder.Manual });
     assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|15', '総計|52']);
-    expectFailure(() => b.wb.sheet(0).pivot(b.pivot).setFieldSort(b.region, 3));
+    expectFailure(() => b.wb.sheet(0).pivot(b.pivot).updateField(b.region, { sortOrder: 3 }));
     expectFailure(() =>
-      b.wb.sheet(0).pivot(b.pivot).setFieldSort(b.region, PivotSortOrder.Manual, { byField: 'Sum of Amount' }),
+      b.wb
+        .sheet(0)
+        .pivot(b.pivot)
+        .updateField(b.region, { sortOrder: PivotSortOrder.Manual, sortByField: 'Sum of Amount' }),
     );
-    b.wb.sheet(0).pivot(b.pivot).setFieldSort(b.region, PivotSortOrder.Ascending);
+    b.wb.sheet(0).pivot(b.pivot).updateField(b.region, { sortOrder: PivotSortOrder.Ascending });
     assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
   } finally {
     b.wb.dispose();
@@ -1315,7 +1319,7 @@ test('new pivot calls reject bad arguments and map the Values level', async () =
       () => wb.sheet(0).pivot(pivot).updateField(99, { defaultSubtotal: true }),
       () => wb.sheet(0).pivot(pivot).updateField(99, { insertBlankRow: true }),
       () => wb.sheet(0).pivot(pivot).updateField(99, { fillDownLabels: true }),
-      () => wb.sheet(0).pivot(pivot).setFieldShowDetail(99, true),
+      () => wb.sheet(0).pivot(pivot).updateField(99, { showDetail: true }),
       () => wb.sheet(0).pivot(pivot).updateFieldItem(region, 99, { showDetail: true }),
       () => wb.sheet(0).pivot(pivot).updateFieldItem(region, 99, { caption: 'x' }),
       () => wb.sheet(0).pivot(9).updateOptions({ indent: 1 }),
@@ -1635,14 +1639,15 @@ test('setWorksheetSource(null) clears the source and an empty source is still a 
   const wb = mod.Workbook.createDefault();
   try {
     const cache = wb.addPivotCache(0);
-    cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
-    assert.equal(cache.getWorksheetSource().present, true);
-    assert.equal(cache.getWorksheetSource().ref, 'A1:B3');
+    cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
+    assert.deepEqual(JSON.parse(JSON.stringify(cache.getWorksheetSource())), {
+      range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
+      name: null,
+    });
     cache.setWorksheetSource(null);
     assert.equal(cache.getWorksheetSource(), null);
     cache.setWorksheetSource({});
-    assert.equal(cache.getWorksheetSource().present, true);
-    assert.equal(cache.getWorksheetSource().ref, null);
+    assert.deepEqual(JSON.parse(JSON.stringify(cache.getWorksheetSource())), { range: null, name: null });
   } finally {
     wb.dispose();
   }

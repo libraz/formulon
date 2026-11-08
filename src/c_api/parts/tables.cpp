@@ -439,25 +439,31 @@ extern "C" fm_status_t fm_workbook_resolve_table_runtime_id(const fm_workbook_t*
   return not_found("no table has that runtime id", "id=" + std::to_string(id));
 }
 
-extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* rect,
-                                          const char* name, const char* const* column_names, size_t column_count,
-                                          const char* style_name, int32_t header_row, int32_t totals_row,
+extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_table_spec_t* spec,
                                           size_t* out_table_index) {
   clear_last_error();
-  if (wb == nullptr || rect == nullptr || name == nullptr || out_table_index == nullptr) {
+  if (wb == nullptr || spec == nullptr || out_table_index == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (spec->name == nullptr) {
+    return null_argument("name");
+  }
+  const fm_cell_rect_t& rect = spec->range;
   std::string ref;
-  if (auto rc = table_ref_text(*rect, &ref); rc != 0) {
+  if (auto rc = table_ref_text(rect, &ref); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({name, style_name}); rc != 0) {
+  if (auto rc = check_utf8({spec->name, spec->style_name}); rc != 0) {
     return rc;
   }
-  for (size_t i = 0; column_names != nullptr && i < column_count; ++i) {
+  const char* const* column_names = spec->column_names;
+  for (size_t i = 0; column_names != nullptr && i < spec->column_count; ++i) {
     if (column_names[i] == nullptr) {
       continue;
     }
@@ -465,32 +471,60 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
       return rc;
     }
   }
+  for (const auto& [value, field] : {std::pair<int32_t, const char*>{spec->header_row, "header_row"},
+                                     {spec->totals_row, "totals_row"},
+                                     {spec->show_first_column, "show_first_column"},
+                                     {spec->show_last_column, "show_last_column"},
+                                     {spec->show_row_stripes, "show_row_stripes"},
+                                     {spec->show_column_stripes, "show_column_stripes"}}) {
+    if (auto rc = check_enum_domain(value, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, field); rc != 0) {
+      return rc;
+    }
+  }
+  const bool header_row = spec->header_row != FM_TRISTATE_FALSE;
   formulon::Workbook& book = wb->workbook();
   std::vector<std::string> names;
   std::vector<bool> blank_headers;
-  if (auto rc = table_column_names(book, sheet_index, *rect, header_row != 0, column_names, column_count, &names,
+  if (auto rc = table_column_names(book, sheet_index, rect, header_row, column_names, spec->column_count, &names,
                                    &blank_headers);
       rc != 0) {
     return rc;
   }
-  if (table_name_taken(book, name, std::nullopt)) {
-    return already_exists(name);
+  if (table_name_taken(book, spec->name, std::nullopt)) {
+    return already_exists(spec->name);
   }
   formulon::TableMetadata table;
   table.sheet_index = sheet_index;
-  table.name = name;
-  table.display_name = name;
+  table.name = spec->name;
+  table.display_name = spec->name;
   table.ref = ref;
-  table.header_row = header_row != 0;
-  table.totals_row = totals_row != 0;
+  table.header_row = header_row;
+  table.totals_row = spec->totals_row == FM_TRISTATE_TRUE;
   table.columns.reserve(names.size());
   for (const std::string& column_name : names) {
     formulon::TableColumn column;
     column.name = column_name;
     table.columns.push_back(std::move(column));
   }
-  table.style_info = default_style_info(style_name != nullptr ? std::string_view(style_name)
-                                                              : formulon::c_api::parts::default_table_style_name(book));
+  table.style_info =
+      default_style_info(spec->style_name != nullptr ? std::string_view(spec->style_name)
+                                                     : formulon::c_api::parts::default_table_style_name(book));
+  const std::pair<int32_t, bool formulon::TableStyleInfo::*> toggles[] = {
+      {spec->show_first_column, &formulon::TableStyleInfo::show_first_column},
+      {spec->show_last_column, &formulon::TableStyleInfo::show_last_column},
+      {spec->show_row_stripes, &formulon::TableStyleInfo::show_row_stripes},
+      {spec->show_column_stripes, &formulon::TableStyleInfo::show_column_stripes}};
+  for (const auto& [value, member] : toggles) {
+    if (value == FM_TRISTATE_DEFAULT) {
+      continue;
+    }
+    // A stated toggle on an unstyled table creates the element, as the style-options patch does.
+    if (!table.style_info.present) {
+      table.style_info.present = true;
+      table.style_info.show_row_stripes = true;
+    }
+    table.style_info.*member = value == FM_TRISTATE_TRUE;
+  }
   auto added = book.add_table(std::move(table));
   if (!added) {
     return formulon::c_api::parts::set_last_error(added.error());
@@ -499,8 +533,8 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
     if (!blank_headers[i]) {
       continue;
     }
-    if (auto rc = finish_status(book.set_cell_text(sheet_index, rect->first_row,
-                                                   rect->first_col + static_cast<std::uint32_t>(i), names[i]));
+    if (auto rc = finish_status(
+            book.set_cell_text(sheet_index, rect.first_row, rect.first_col + static_cast<std::uint32_t>(i), names[i]));
         rc != 0) {
       return rc;
     }

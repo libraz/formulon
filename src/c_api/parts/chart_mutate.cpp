@@ -18,6 +18,7 @@
 #include "c_api/parts/struct_v1_sizes.h"
 #include "chart/chart_edit.h"
 #include "utils/error.h"
+#include "utils/expected.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::anchor_kind_from_c;
@@ -64,7 +65,12 @@ formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch_t& 
   r.field(p.transparency_pct_op, p.transparency_pct, out.transparency_pct, "line.transparency_pct_op");
   r.field(p.width_pt_op, p.width_pt, out.width_pt, "line.width_pt_op");
   r.enum_field(p.dash_op, p.dash, formulon::ChartLineDash::kOther, out.dash, "line.dash");
-  r.flag(p.none_op, p.none, out.none, "line.none_op");
+  // CLEAR drops an explicit no-line as SET 0 does, so a patch clearing every member stays valid.
+  if (p.none_op == FM_CHART_PATCH_OP_CLEAR) {
+    out.none = false;
+  } else {
+    r.flag(p.none_op, p.none, out.none, "line.none_op");
+  }
   return out;
 }
 
@@ -89,23 +95,64 @@ formulon::ChartLabelsPatch read_labels(PatchReader& r, const fm_chart_labels_pat
   r.text_field(p.number_format_op, p.number_format, out.number_format, "labels.number_format_op");
   r.color_field(p.font_color_op, p.font_color, out.font_color, "labels.font_color_op");
   r.field(p.font_size_op, p.font_size_pt, out.font_size_pt, "labels.font_size_op");
+  r.flag(p.source_linked_op, p.source_linked, out.source_linked, "labels.source_linked_op");
+  r.flag(p.deleted_op, p.deleted, out.deleted, "labels.deleted_op");
   return out;
 }
 
-void read_ref(PatchReader& r, const char* text, std::optional<std::string>& out, const char* name) {
-  if (text != nullptr && r.text_ok(text, name)) {
-    out = std::string(text);
+/// Reads one series input: `KEEP` leaves `out` unset, `CLEAR` and a `NONE` source remove the input.
+void read_source(PatchReader& r, std::int32_t op, const fm_chart_data_source_spec_t& spec,
+                 std::optional<formulon::ChartSeriesSource>& out, const char* op_name, const char* kind_name) {
+  if (!r.enum_ok(op, FM_CHART_PATCH_OP_SET, op_name) || op == FM_CHART_PATCH_OP_KEEP) {
+    return;
   }
+  if (op == FM_CHART_PATCH_OP_CLEAR) {
+    out = formulon::ChartSeriesSource::None();
+    return;
+  }
+  if (!r.enum_ok(spec.kind, FM_CHART_SOURCE_KIND_LITERAL, kind_name)) {
+    return;
+  }
+  if (spec.kind == FM_CHART_SOURCE_KIND_NONE) {
+    out = formulon::ChartSeriesSource::None();
+    return;
+  }
+  if (spec.kind == FM_CHART_SOURCE_KIND_REF) {
+    if (r.text_ok(spec.formula, kind_name)) {
+      out = formulon::ChartSeriesSource::Ref(text_or_empty(spec.formula));
+    }
+    return;
+  }
+  if (spec.literal == nullptr && spec.literal_count != 0 && !r.check(null_argument())) {
+    return;
+  }
+  std::vector<formulon::ChartValue> points(spec.literal_count);
+  for (std::size_t i = 0; i < spec.literal_count; ++i) {
+    const fm_chart_literal_t& e = spec.literal[i];
+    if (!r.check(check_record_size(e)) || !r.enum_ok(e.is_text, 1, kind_name) || !r.text_ok(e.text, kind_name)) {
+      return;
+    }
+    formulon::ChartValue& v = points[i];
+    v.idx = e.idx;
+    if (e.is_text != 0) {
+      v.kind = formulon::ChartValue::Kind::kText;
+      v.text = text_or_empty(e.text);
+    } else {
+      v.kind = formulon::ChartValue::Kind::kNumber;
+      v.number = e.number;
+    }
+  }
+  out = formulon::ChartSeriesSource::Literal(std::move(points));
 }
 
 formulon::ChartSeriesPatch read_series(PatchReader& r, const fm_chart_series_patch_t& p) {
   formulon::ChartSeriesPatch out;
-  read_ref(r, p.name, out.name, "name");
-  read_ref(r, p.categories, out.cat, "categories");
-  read_ref(r, p.values, out.val, "values");
-  read_ref(r, p.x, out.x, "x");
-  read_ref(r, p.y, out.y, "y");
-  read_ref(r, p.size, out.size, "size");
+  read_source(r, p.name_op, p.name, out.name, "name_op", "name.kind");
+  read_source(r, p.categories_op, p.categories, out.cat, "categories_op", "categories.kind");
+  read_source(r, p.values_op, p.values, out.val, "values_op", "values.kind");
+  read_source(r, p.x_op, p.x, out.x, "x_op", "x.kind");
+  read_source(r, p.y_op, p.y, out.y, "y_op", "y.kind");
+  read_source(r, p.size_op, p.size, out.size, "size_op", "size.kind");
   out.fill = read_fill(r, p.fill);
   out.line = read_line(r, p.line);
   r.field(p.marker_op, p.marker_op == FM_CHART_PATCH_OP_SET ? read_marker(r, p.marker) : formulon::ChartMarkerPatch{},
@@ -118,9 +165,11 @@ formulon::ChartSeriesPatch read_series(PatchReader& r, const fm_chart_series_pat
 
 /// Stores the formulas a patch enters, once its checks passed (see `ingest_entered_formula`).
 void ingest_series_refs(fm_workbook_t* wb, formulon::ChartSeriesPatch& patch) {
-  for (std::optional<std::string>* ref : {&patch.name, &patch.cat, &patch.val, &patch.x, &patch.y, &patch.size}) {
-    if (ref->has_value() && !(*ref)->empty()) {
-      **ref = ingest_entered_formula(wb, **ref);
+  for (std::optional<formulon::ChartSeriesSource>* source :
+       {&patch.name, &patch.cat, &patch.val, &patch.x, &patch.y, &patch.size}) {
+    if (source->has_value() && (*source)->kind == formulon::ChartDataSource::Kind::kRef &&
+        !(*source)->formula.empty()) {
+      (*source)->formula = ingest_entered_formula(wb, (*source)->formula);
     }
   }
 }
@@ -141,6 +190,16 @@ formulon::ChartHeaderMode header_mode_from_c(std::int32_t value) {
     default:
       return formulon::ChartHeaderMode::kAuto;
   }
+}
+
+/// The insert template of a domain-checked C plot type and bar direction. Only `BAR` is an explicit direction:
+/// `COLUMN` (zero) and `ABSENT` leave it to the type, so a zeroed `bar_direction` stays valid on a non-bar type.
+formulon::Expected<formulon::ChartInsertKind, formulon::Error> insert_kind_of(std::int32_t type,
+                                                                              std::int32_t bar_direction) {
+  return formulon::chart_insert_kind(static_cast<formulon::ChartPlotType>(type),
+                                     bar_direction == FM_CHART_BAR_DIRECTION_BAR
+                                         ? formulon::ChartBarDirection::kBar
+                                         : formulon::ChartBarDirection::kAbsent);
 }
 
 /// Shared entry checks of the edit functions.
@@ -176,7 +235,8 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
     return rc;
   }
   PatchReader r;
-  r.enum_ok(opts->kind, formulon::ChartInsertKind::kDoughnut, "kind");
+  r.enum_ok(opts->type, FM_CHART_PLOT_TYPE_EXTENDED, "type");
+  r.enum_ok(opts->bar_direction, FM_CHART_BAR_DIRECTION_ABSENT, FM_CHART_BAR_DIRECTION_BAR, "bar_direction");
   r.enum_ok(opts->grouping, formulon::ChartGrouping::kStandard, "grouping");
   r.enum_ok(opts->direction, formulon::ChartSeriesDirection::kRows, "direction");
   r.enum_ok(opts->header_row, FM_TRISTATE_TRUE, "header_row");
@@ -187,8 +247,12 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   if (r.status() != 0) {
     return r.status();
   }
+  auto kind = insert_kind_of(opts->type, opts->bar_direction);
+  if (!kind) {
+    return set_last_error(kind.error());
+  }
   formulon::ChartInsertOptions model;
-  model.kind = static_cast<formulon::ChartInsertKind>(opts->kind);
+  model.kind = kind.value();
   model.grouping = static_cast<formulon::ChartGrouping>(opts->grouping);
   model.source = opts->source;
   model.direction = static_cast<formulon::ChartSeriesDirection>(opts->direction);
@@ -218,18 +282,22 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                               int32_t kind, int32_t grouping) {
+                                               int32_t type, int32_t bar_direction, int32_t grouping) {
   if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
     return rc;
   }
   PatchReader r;
-  r.enum_ok(kind, formulon::ChartInsertKind::kDoughnut, "kind");
+  r.enum_ok(type, FM_CHART_PLOT_TYPE_EXTENDED, "type");
+  r.enum_ok(bar_direction, FM_CHART_BAR_DIRECTION_ABSENT, FM_CHART_BAR_DIRECTION_BAR, "bar_direction");
   r.enum_ok(grouping, formulon::ChartGrouping::kStandard, "grouping");
   if (r.status() != 0) {
     return r.status();
   }
-  return finish_status(formulon::set_chart_type(wb->workbook(), sheet_index, object_id, plot,
-                                                static_cast<formulon::ChartInsertKind>(kind),
+  auto kind = insert_kind_of(type, bar_direction);
+  if (!kind) {
+    return set_last_error(kind.error());
+  }
+  return finish_status(formulon::set_chart_type(wb->workbook(), sheet_index, object_id, plot, kind.value(),
                                                 static_cast<formulon::ChartGrouping>(grouping)));
 }
 
@@ -262,7 +330,7 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
   if (auto rc = check_record_size(*legend); rc != 0) {
     return rc;
   }
-  if (legend->hidden_series == nullptr && legend->hidden_series_count != 0) {
+  if (legend->hidden_entries == nullptr && legend->hidden_entry_count != 0) {
     return null_argument();
   }
   PatchReader r;
@@ -274,8 +342,8 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
   model.position = chart_legend_position_from_c(legend->position);
   model.overlay = legend->overlay != 0;
   model.hidden_series_idx = std::vector<std::uint32_t>();
-  if (legend->hidden_series_count != 0) {
-    model.hidden_series_idx->assign(legend->hidden_series, legend->hidden_series + legend->hidden_series_count);
+  if (legend->hidden_entry_count != 0) {
+    model.hidden_series_idx->assign(legend->hidden_entries, legend->hidden_entries + legend->hidden_entry_count);
   }
   return finish_status(formulon::set_chart_legend(wb->workbook(), sheet_index, object_id, model));
 }
@@ -288,7 +356,7 @@ extern "C" fm_status_t fm_sheet_update_chart_legend(fm_workbook_t* wb, size_t sh
   if (auto rc = check_record_size(*legend); rc != 0) {
     return rc;
   }
-  if (legend->hidden_series == nullptr && legend->hidden_series_count != 0) {
+  if (legend->hidden_entries == nullptr && legend->hidden_entry_count != 0) {
     return null_argument();
   }
   PatchReader r;
@@ -298,10 +366,10 @@ extern "C" fm_status_t fm_sheet_update_chart_legend(fm_workbook_t* wb, size_t sh
   model.position = chart_legend_position_from_c(legend->position);
   model.overlay = legend->overlay != 0;
   std::vector<std::uint32_t> hidden;
-  if (legend->hidden_series_count != 0) {
-    hidden.assign(legend->hidden_series, legend->hidden_series + legend->hidden_series_count);
+  if (legend->hidden_entry_count != 0) {
+    hidden.assign(legend->hidden_entries, legend->hidden_entries + legend->hidden_entry_count);
   }
-  r.optional(legend->hidden_series_op, std::move(hidden), model.hidden_series_idx, "hidden_series_op");
+  r.optional(legend->hidden_entries_op, std::move(hidden), model.hidden_series_idx, "hidden_entries_op");
   if (r.status() != 0) {
     return r.status();
   }
@@ -337,6 +405,10 @@ extern "C" fm_status_t fm_sheet_update_chart_axis(fm_workbook_t* wb, size_t shee
   model.crosses_at = patch->crosses_at;
   r.token_field(patch->tick_label_position_op, patch->tick_label_position, kTickLabelPositionTokens,
                 model.tick_label_pos, "tick_label_position");
+  r.field(patch->minor_unit_op, patch->minor_unit, model.minor_unit, "minor_unit_op");
+  r.flag(patch->minor_gridlines_op, patch->minor_gridlines, model.minor_gridlines, "minor_gridlines_op");
+  r.enum_optional(patch->position_op, patch->position, formulon::ChartAxisPosition::kRight, model.position, "position");
+  r.flag(patch->source_linked_op, patch->source_linked, model.source_linked, "source_linked_op");
   if (r.status() != 0) {
     return r.status();
   }
@@ -363,6 +435,7 @@ extern "C" fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t s
                model.blanks_as, "blanks_as");
   r.bool_field(patch->plot_visible_only_op, patch->plot_visible_only, model.plot_vis_only, "plot_visible_only");
   r.bool_field(patch->na_as_blank_op, patch->na_as_blank, model.na_as_blank, "na_as_blank");
+  r.field(patch->style_op, patch->style, model.style, "style_op");
   if (r.status() != 0) {
     return r.status();
   }

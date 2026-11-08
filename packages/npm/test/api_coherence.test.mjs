@@ -127,8 +127,8 @@ function sparklineGroup(f) {
     lineWeight: 1.25,
     emptyCellsAs: f.BlanksAs.Zero,
     sparklines: [
-      { formula: 'Sheet1!A1:D1', location: 'F1' },
-      { formula: 'Sheet1!A2:D2', location: 'F2' },
+      { source: 'Sheet1!A1:D1', location: 'F1' },
+      { source: 'Sheet1!A2:D2', location: 'F2' },
     ],
   };
 }
@@ -153,7 +153,7 @@ function addPivotOver(wb, f) {
   ws.setText(2, 0, 'West');
   ws.setNumber(2, 1, 30);
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   cache.addFieldSharedItem(0, 'East');
@@ -458,12 +458,12 @@ test('patch: updateSparklineGroup is read-modify-write and every omitted field s
       { high: true, low: true },
       { manualMin: null },
       { manualMax: 9 },
-      { dateAxis: true, dateAxisRef: '=Sheet1!A1:D1' },
-      { dateAxisRef: null },
+      { dateAxis: true, dateAxisRange: { sheet: 0, rect: rect(0, 0, 0, 3) } },
+      { dateAxisRange: null },
       { colorSeries: colorGreen },
       { lineWeight: 2.25 },
       { emptyCellsAs: f.BlanksAs.Gap },
-      { sparklines: [{ formula: '=Sheet1!B1:B5', location: 'H1' }] },
+      { sparklines: [{ source: { sheet: 0, rect: rect(0, 1, 4, 1) }, location: { row: 0, col: 7 } }] },
     ];
     for (const patch of patches) {
       ws.updateSparklineGroup(0, patch);
@@ -589,18 +589,17 @@ test('patch: Table.update takes an A1 range and boolean headerRow / totalsRow', 
 test('patch: PivotCache.setWorksheetSource takes null to clear and {} for an attribute-less source', async () => {
   await withWorkbook((wb) => {
     const cache = wb.addPivotCache();
-    cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
-    assert.deepEqual(plain(cache.getWorksheetSource()), { present: true, ref: 'A1:B3', sheet: 'Sheet1', name: null });
+    cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
+    assert.deepEqual(plain(cache.getWorksheetSource()), { range: { sheet: 0, rect: rect(0, 0, 2, 1) }, name: null });
 
     cache.setWorksheetSource({});
-    assert.deepEqual(plain(cache.getWorksheetSource()), { present: true, ref: null, sheet: null, name: null });
+    assert.deepEqual(plain(cache.getWorksheetSource()), { range: null, name: null });
 
     cache.setWorksheetSource({ name: 'Tbl' });
-    assert.deepEqual(plain(cache.getWorksheetSource()), { present: true, ref: null, sheet: null, name: 'Tbl' });
+    assert.deepEqual(plain(cache.getWorksheetSource()), { range: null, name: 'Tbl' });
 
     cache.setWorksheetSource(null);
-    const cleared = cache.getWorksheetSource();
-    assert.ok(cleared === null || cleared.present === false, `cleared source: ${JSON.stringify(cleared)}`);
+    assert.equal(cache.getWorksheetSource(), null);
     assertMisuse(() => cache.setWorksheetSource(), TypeError, 'no argument');
     assertMisuse(() => cache.setWorksheetSource({ bogus: 1 }), TypeError, 'unknown key');
   });
@@ -631,12 +630,12 @@ test('addDataTable takes A1 strings for its rectangle and input cells', async ()
     ws.setNumber(0, 0, 1);
     ws.setNumber(1, 0, 2);
     ws.setNumber(2, 0, 3);
-    ws.addDataTable({ rect: 'B2:B3', columnInput: 'A1' });
+    ws.addDataTable({ range: 'B2:B3', columnInput: 'A1' });
     const table = ws.getDataTable(1, 1);
     assert.notEqual(table, null);
     assert.equal(table.columnInput.row, 0);
     assert.equal(table.columnInput.col, 0);
-    ws.addDataTable({ rect: rect(1, 3, 2, 3), columnInput: { row: 0, col: 0 } });
+    ws.addDataTable({ range: rect(1, 3, 2, 3), columnInput: { row: 0, col: 0 } });
     assert.notEqual(ws.getDataTable(1, 3), null);
   });
 });
@@ -703,10 +702,12 @@ for (const row of jsCases) {
     const run = () => {
       if (row.direction === 'civil_to_serial') {
         const civil = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, numeric(v)]));
-        return f.convertCivilToSerial(civil, row.date1904);
+        return f.convertCivilToSerial(civil, { date1904: row.date1904 });
       }
-      if (input.serial_string !== undefined) return f.convertSerialToCivil(input.serial_string, row.date1904);
-      return f.convertSerialToCivil(numeric(input.serial), row.date1904);
+      if (input.serial_string !== undefined) {
+        return f.convertSerialToCivil(input.serial_string, { date1904: row.date1904 });
+      }
+      return f.convertSerialToCivil(numeric(input.serial), { date1904: row.date1904 });
     };
     const expected = row.expect.js;
     if (expected.error === undefined) {
@@ -734,9 +735,13 @@ test('date functions: members of the Formulon object, date1904 defaults to false
   assert.equal(typeof f.convertSerialToCivil, 'function');
   assert.ok(Object.isFrozen(f));
   const civil = { year: 2026, month: 11, day: 8, hour: 6, minute: 7, second: 8 };
-  assert.equal(f.convertCivilToSerial(civil), f.convertCivilToSerial(civil, false));
-  assert.deepEqual(plain(f.convertSerialToCivil(46334.5)), plain(f.convertSerialToCivil(46334.5, false)));
-  assert.notEqual(f.convertCivilToSerial(civil, true), f.convertCivilToSerial(civil, false));
+  assert.equal(f.convertCivilToSerial(civil), f.convertCivilToSerial(civil, { date1904: false }));
+  assert.equal(f.convertCivilToSerial(civil), f.convertCivilToSerial(civil, {}));
+  assert.deepEqual(plain(f.convertSerialToCivil(46334.5)), plain(f.convertSerialToCivil(46334.5, { date1904: false })));
+  assert.notEqual(
+    f.convertCivilToSerial(civil, { date1904: true }),
+    f.convertCivilToSerial(civil, { date1904: false }),
+  );
 });
 
 test('date functions: round trip civil -> serial -> civil on both epochs', async () => {
@@ -748,7 +753,8 @@ test('date functions: round trip civil -> serial -> civil on both epochs', async
       { year: 2026, month: 11, day: 8, hour: 6, minute: 7, second: 8 },
       { year: 9999, month: 12, day: 31, hour: 23, minute: 59, second: 59 },
     ]) {
-      assert.deepEqual(plain(f.convertSerialToCivil(f.convertCivilToSerial(civil, date1904), date1904)), civil);
+      const options = { date1904 };
+      assert.deepEqual(plain(f.convertSerialToCivil(f.convertCivilToSerial(civil, options), options)), civil);
     }
   }
 });
@@ -757,8 +763,13 @@ test('date functions: argument misuse is a TypeError before the engine', async (
   const f = await getFormulon();
   const civil = { year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0 };
   for (const flag of [1, 0, 'true', {}, []]) {
-    assertMisuse(() => f.convertCivilToSerial(civil, flag), TypeError, `civil date1904=${String(flag)}`);
-    assertMisuse(() => f.convertSerialToCivil(46000, flag), TypeError, `serial date1904=${String(flag)}`);
+    const options = { date1904: flag };
+    assertMisuse(() => f.convertCivilToSerial(civil, options), TypeError, `civil date1904=${String(flag)}`);
+    assertMisuse(() => f.convertSerialToCivil(46000, options), TypeError, `serial date1904=${String(flag)}`);
+  }
+  for (const bare of [true, false, 1, 'x']) {
+    assertMisuse(() => f.convertCivilToSerial(civil, bare), TypeError, `civil bare ${String(bare)}`);
+    assertMisuse(() => f.convertSerialToCivil(46000, bare), TypeError, `serial bare ${String(bare)}`);
   }
   assertMisuse(() => f.convertCivilToSerial(null), TypeError, 'null civil');
   assertMisuse(() => f.convertCivilToSerial(), TypeError, 'no civil');
@@ -901,8 +912,8 @@ test('ChartSourceKind is a numeric table and ChartDataSource.kind uses it', asyn
       ws.setNumber(r + 1, 1, r + 1);
     });
     const chart = ws.addChart({
-      kind: f.ChartInsertKind.Column,
-      source: 'Sheet1!$A$1:$B$4',
+      type: f.ChartPlotType.Bar,
+      range: 'Sheet1!$A$1:$B$4',
       legend: f.ChartLegendPosition.Right,
     });
     const series = chart.getProperties().plots[0].series[0];

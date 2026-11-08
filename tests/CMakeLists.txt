@@ -416,6 +416,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/structured_ref_test.cpp
   unit/eval/structured_ref_eval_test.cpp
   unit/pivot/pivot_evaluator_aggregation_test.cpp
+  unit/pivot/pivot_field_patch_test.cpp
   unit/pivot/pivot_evaluator_filter_test.cpp
   unit/pivot/pivot_evaluator_grouping_test.cpp
   unit/pivot/pivot_evaluator_ordering_test.cpp
@@ -468,6 +469,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/chart/chart_structural_test.cpp
   unit/chart/chart_cache_test.cpp
   unit/chart/chart_edit_test.cpp
+  unit/chart/chart_patch_keys_test.cpp
   unit/chart/chart_save_test.cpp
   unit/registry_catalog_test.cpp
 )

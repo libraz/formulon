@@ -77,11 +77,8 @@ Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& inf
     return ThrowInvalidHandle(env);
   }
   int32_t present = 0;
-  const char* ref = nullptr;
-  const char* sheet = nullptr;
-  const char* name = nullptr;
-  const fm_status_t rc =
-      fm_workbook_get_pivot_cache_worksheet_source(handle_, ArgU32(info, 0), &present, &ref, &sheet, &name);
+  fm_pivot_worksheet_source_t source = FM_STRUCT_INIT(fm_pivot_worksheet_source_t);
+  const fm_status_t rc = fm_workbook_get_pivot_cache_worksheet_source(handle_, ArgU32(info, 0), &present, &source);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -90,9 +87,9 @@ Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& inf
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("present", Napi::Boolean::New(env, true));
-  out.Set("ref", JsStringOrNull(env, ref));
-  out.Set("sheet", JsStringOrNull(env, sheet));
-  out.Set("name", JsStringOrNull(env, name));
+  out.Set("ref", JsStringOrNull(env, source.ref));
+  out.Set("sheet", JsStringOrNull(env, source.sheet));
+  out.Set("name", JsStringOrNull(env, source.name));
   return out;
 }
 
@@ -114,9 +111,13 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const fm_status_t rc = fm_workbook_set_pivot_cache_worksheet_source(
-      handle_, cache_id, present ? 1 : 0, has_ref ? ref.c_str() : nullptr, has_sheet ? sheet.c_str() : nullptr,
-      has_name ? name.c_str() : nullptr);
+  fm_pivot_worksheet_source_t c_source = FM_STRUCT_INIT(fm_pivot_worksheet_source_t);
+  c_source.ref = has_ref ? ref.c_str() : nullptr;
+  c_source.sheet = has_sheet ? sheet.c_str() : nullptr;
+  c_source.name = has_name ? name.c_str() : nullptr;
+  // `present: false` clears the element.
+  const fm_status_t rc =
+      fm_workbook_set_pivot_cache_worksheet_source(handle_, cache_id, present ? &c_source : nullptr);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

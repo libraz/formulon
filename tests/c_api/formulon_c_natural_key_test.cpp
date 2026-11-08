@@ -29,36 +29,36 @@ void CreateDefault(WorkbookGuard& wb) {
 TEST(FormulonCApiNaturalKey, DefinedNameByNameAndScope) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  const fm_defined_name_input_t rate{sizeof(fm_defined_name_input_t), "Rate", "Sheet1!$A$1", -1, "the rate", 1};
+  const fm_defined_name_t rate{sizeof(fm_defined_name_t), "Rate", "Sheet1!$A$1", -1, "the rate", 1};
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &rate), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "Sheet1!$B$1", 0), 0);
 
   int32_t present = 0;
-  const char* stored = nullptr;
-  const char* formula = nullptr;
-  const char* comment = nullptr;
-  int32_t hidden = 0;
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "rate", -1, &present, &stored, &formula, &comment, &hidden), 0);
+  fm_defined_name_t found = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "rate", -1, &present, &found), 0);
   ASSERT_EQ(present, 1);
-  EXPECT_STREQ(stored, "Rate");
-  EXPECT_STREQ(formula, "=Sheet1!$A$1");
-  EXPECT_STREQ(comment, "the rate");
-  EXPECT_EQ(hidden, 1);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &stored, &formula, &comment, &hidden), 0);
+  EXPECT_STREQ(found.name, "Rate");
+  EXPECT_STREQ(found.formula, "=Sheet1!$A$1");
+  EXPECT_EQ(found.local_sheet_id, -1);
+  EXPECT_STREQ(found.comment, "the rate");
+  EXPECT_EQ(found.hidden, 1);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &found), 0);
   ASSERT_EQ(present, 1);
-  EXPECT_STREQ(formula, "=Sheet1!$B$1");
-  EXPECT_EQ(hidden, 0);
+  EXPECT_STREQ(found.formula, "=Sheet1!$B$1");
+  EXPECT_EQ(found.local_sheet_id, 0);
+  EXPECT_EQ(found.hidden, 0);
 
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Missing", -1, &present, &stored, &formula, &comment, &hidden), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Missing", -1, &present, &found), 0);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(formula, nullptr);
-  EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, nullptr, &stored, &formula, &comment, &hidden),
-            kBindingNullPointer);
+  EXPECT_EQ(found.name, nullptr);
+  EXPECT_EQ(found.formula, nullptr);
+  EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, nullptr, &found), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, &present, nullptr), kBindingNullPointer);
 
   ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "RATE", -1), 0);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, &present, &stored, &formula, &comment, &hidden), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, &present, &found), 0);
   EXPECT_EQ(present, 0);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &stored, &formula, &comment, &hidden), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &found), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "Rate", -1), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, nullptr, -1), kBindingNullPointer);

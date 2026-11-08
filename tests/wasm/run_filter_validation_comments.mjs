@@ -43,9 +43,7 @@ const hiddenRows = (wb) =>
 const customGreaterThanThree = {
   columnOffset: 0,
   kind: FilterKind.Custom,
-  customCount: 1,
-  operator1: ComparisonOperator.GreaterThan,
-  value1: '3',
+  conditions: [{ operator: ComparisonOperator.GreaterThan, value: '3' }],
 };
 
 export function registerFilterValidationComments(Module, test) {
@@ -90,11 +88,10 @@ export function registerFilterValidationComments(Module, test) {
             columnOffset: 2,
             kind: FilterKind.Custom,
             customAnd: true,
-            customCount: 2,
-            operator1: ComparisonOperator.GreaterThan,
-            value1: '1',
-            operator2: ComparisonOperator.LessThan,
-            value2: '9',
+            conditions: [
+              { operator: ComparisonOperator.GreaterThan, value: '1' },
+              { operator: ComparisonOperator.LessThan, value: '9' },
+            ],
           },
         ],
         sort: {
@@ -121,7 +118,7 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(af.columns[0].iconIndex, null);
       assert.equal(af.sort.conditions[0].dxfIndex, null);
       assert.equal(af.columns[2].customAnd, true);
-      assert.equal(af.columns[2].value2, '9');
+      assert.deepEqual(af.columns[2].conditions, filter.columns[2].conditions);
       assert.equal(af.sort.caseSensitive, true);
       assert.equal(af.sort.conditions.length, 1);
       assert.equal(af.sort.conditions[0].descending, true);

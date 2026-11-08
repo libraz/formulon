@@ -71,7 +71,6 @@ export {
   ChartDomain,
   ChartExtendedLayout,
   ChartGrouping,
-  ChartInsertKind,
   ChartLabelPosition,
   ChartLegendPosition,
   ChartLineDash,

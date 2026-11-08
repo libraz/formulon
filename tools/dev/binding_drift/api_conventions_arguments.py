@@ -59,7 +59,7 @@ PATCH_RECORD_NONE = "none"
 _A1_NAMES = ("a1", "anchor")
 _PY_RECT = frozenset({"CellRect", "str"})
 _JS_RECT = frozenset({"CellRect", "string"})
-_RECT_RECORDS = frozenset({"CellRect", "SheetRect"})
+_RECT_RECORDS = frozenset({"CellRect", "SheetRect", "CellAddress"})
 _JS_UPDATE_RE = re.compile(r"update(?:[A-Z]\w*)?")
 _PY_UPDATE_RE = re.compile(r"update(?:_\w+)?")
 
@@ -309,12 +309,26 @@ def _rule_count_at(ctx: Context) -> Iterable[Violation]:
 # ---------------------------------------------------------------------------
 
 
+def _array_element(text: str) -> Optional[str]:
+    """`X` of `readonly X[]` / `X[]` / `readonly (X | Y)[]`, else None."""
+    match = re.fullmatch(r"(?:readonly\s+)?(?:\((.*)\)|([\w$.]+))\[\]", text.strip(), re.S)
+    return None if match is None else (match.group(1) or match.group(2)).strip()
+
+
 def _same_type(patch_type: str, record_type: str, decls: Optional[Dict[str, TsDecl]] = None) -> bool:
     """The patch key's type is the record field's, `null` aside, the patch of a nested record, a rectangle
-    field that also takes its A1 string (a `SheetRect` also a sheet-local `CellRect`), or the record type's
-    declared input alias (`ColorInput = string | Color` for a `Color` field)."""
+    field that also takes its A1 string (a `SheetRect` also a sheet-local `CellRect`), the record type's
+    declared input alias or `<X>Input` interface, or a list whose elements compare so."""
     patch = sorted(_strip_null(patch_type, True))
     record = sorted(_strip_null(record_type, True))
+    if len(record) == 1 and _array_element(record[0]) is not None:
+        # A list compares element-wise; a rectangle list also takes one A1 string of its ranges.
+        element = _array_element(record[0])
+        lists = [_array_element(p) for p in patch]
+        extra = [p for p, e in zip(patch, lists) if e is None]
+        if any(e is None for e in lists) and not (element in _RECT_RECORDS and extra == ["string"]):
+            return False
+        return all(_same_type(e, element, decls) for e in lists if e is not None)
     if len(record) == 1 and record[0] in _RECT_RECORDS:
         allowed = {record[0], "string"} | ({"CellRect"} if record[0] == "SheetRect" else set())
         if record[0] in patch and set(patch) <= allowed:
@@ -322,6 +336,8 @@ def _same_type(patch_type: str, record_type: str, decls: Optional[Dict[str, TsDe
     if len(record) == 1 and patch == [f"{record[0]}Input"]:
         alias = (decls or {}).get(patch[0])
         if alias is not None and alias.kind == "type" and record[0] in _top_union(alias.text):
+            return True
+        if alias is not None and alias.kind == "interface":
             return True
     return patch == record or (len(record) == 1 and patch == [f"{record[0]}Patch"])
 

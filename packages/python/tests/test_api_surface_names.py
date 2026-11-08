@@ -12,15 +12,17 @@ import datetime
 import unittest
 from typing import Any, Iterable, Set
 
+import _chart_input
+
 import formulon
 from formulon import (
     CellRect,
-    ChartInsertKind,
     ChartLegend,
     ChartLegendPosition,
     NotFoundError,
     PivotAxis,
     SheetProtection,
+    ThemeColorsInput,
     ThemeSource,
     Workbook,
 )
@@ -42,7 +44,7 @@ def fill_source(sheet: formulon.Sheet) -> None:
 
 def add_cache(wb: Workbook, source_sheet: str) -> formulon.PivotCache:
     cache = wb.add_pivot_cache()
-    cache.set_worksheet_source(ref="A1:B3", sheet=source_sheet)
+    cache.set_worksheet_source(formulon.PivotWorksheetSourceInput(range="A1:B3", sheet=source_sheet))
     cache.add_field("Region")
     cache.add_field("Amount")
     for region, amount in (("East", 10), ("West", 30)):
@@ -172,7 +174,7 @@ class RenamedMemberTests(SurfaceTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            chart = ws.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3")
+            chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3")
             self.assertHasMembers(
                 chart,
                 (
@@ -425,7 +427,7 @@ class UpdateMergeTests(SurfaceTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            chart = ws.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3")
+            chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3")
             axes = chart.get_properties().axes
             axis_id = axes[0].id
             chart.update_axis(axis_id, visible=False)
@@ -439,7 +441,7 @@ class UpdateMergeTests(SurfaceTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            chart = ws.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3")
+            chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3")
             chart.update_plot(0, gap_width_pct=80)
             chart.update_plot(0, overlap=10)
             plot = chart.get_properties().plots[0]
@@ -452,7 +454,9 @@ class UpdateMergeTests(SurfaceTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            chart = ws.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3", legend=ChartLegendPosition.RIGHT)
+            chart = _chart_input.add_chart(
+                ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3", legend=ChartLegendPosition.RIGHT
+            )
             chart.update_legend(overlay=True)
             legend = chart.get_properties().legend
             assert legend is not None
@@ -474,7 +478,7 @@ class UpdateMergeTests(SurfaceTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            chart = ws.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3")
+            chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3")
             chart.set_point(0, 0, 0, None)
 
     def test_update_cell_format_merges_groups_into_the_existing_format(self) -> None:
@@ -594,7 +598,7 @@ class SingletonRemovalTests(SurfaceTestCase):
 
     def test_reset_theme_restores_the_default_theme(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_theme_colors(colors=[0xFF000000 | i for i in range(12)])
+            wb.set_theme_colors(ThemeColorsInput(colors=[0xFF000000 | i for i in range(12)]))
             self.assertEqual(wb.get_theme_colors().source, ThemeSource.PART)
             wb.reset_theme()
             self.assertEqual(wb.get_theme_colors().source, ThemeSource.DEFAULT)
@@ -606,13 +610,13 @@ class SingletonRemovalTests(SurfaceTestCase):
             ws.set_hyperlink(
                 "A1",
                 formulon.Hyperlink(
-                    rect=cell, target="https://example.com/a", location=None, display=None, tooltip=None
+                    range=cell, target="https://example.com/a", location=None, display=None, tooltip=None
                 ),
             )
             ws.set_hyperlink(
                 "A1",
                 formulon.Hyperlink(
-                    rect=cell, target="https://example.com/b", location=None, display=None, tooltip=None
+                    range=cell, target="https://example.com/b", location=None, display=None, tooltip=None
                 ),
             )
             link = ws.get_hyperlink("A1")
@@ -902,10 +906,6 @@ class RenamedFieldTests(SurfaceTestCase):
             formulon.AutoFilterColumn,
             (
                 "column_offset",
-                "operator1",
-                "value1",
-                "operator2",
-                "value2",
                 "top_value",
                 "filter_value",
                 "dynamic_value",
@@ -936,7 +936,7 @@ class RenamedFieldTests(SurfaceTestCase):
         self.assertFieldsRenamed(formulon.CellXf, ("horizontal", "vertical"), ("horizontal_align", "vertical_align"))
         self.assertFieldsRenamed(
             formulon.CellXfInput,
-            ("horizontal", "vertical", "has_horizontal", "has_vertical"),
+            ("horizontal", "vertical"),
             ("horizontal_align", "vertical_align", "has_horizontal_align", "has_vertical_align"),
         )
 
@@ -1192,10 +1192,10 @@ class PivotFieldItemTests(SurfaceTestCase):
         with Workbook.create_default() as wb:
             pivot = self._pivot(wb)
             pivot.set_anchor("H10")
-            rect = pivot.get_layout().rect
+            rect = pivot.get_layout().range
             self.assertEqual((rect.first_row, rect.first_col), (9, 7))
             pivot.set_anchor(formulon.CellAddress(2, 3))
-            rect = pivot.get_layout().rect
+            rect = pivot.get_layout().range
             self.assertEqual((rect.first_row, rect.first_col), (2, 3))
 
 

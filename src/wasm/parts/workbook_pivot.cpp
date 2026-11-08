@@ -33,13 +33,14 @@ bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscript
   // rejects a numeric value, no further access to the caller's object is
   // allowed before returning the binding error.
   out.name = reader.optional_string(spec, "name", name_buf, "pivotDataField.name");
+  // `null` is an absent format, as the `listDataFields()` read gives it.
   out.number_format = reader.optional_string(spec, "numberFormat", nfmt_buf, "pivotDataField.numberFormat");
   if (!reader.ok()) {
     return false;
   }
-  out.field_index = reader.u32(spec, "fieldIndex", 0U, "pivotDataField.fieldIndex");
-  out.aggregation =
-      static_cast<fm_pivot_aggregation_t>(reader.u32(spec, "aggregation", 0U, "pivotDataField.aggregation"));
+  out.field_index = reader.required_u32(spec, "fieldIndex", "pivotDataField.fieldIndex");
+  out.aggregation = static_cast<fm_pivot_aggregation_t>(
+      reader.u32(spec, "aggregation", FM_PIVOT_AGGREGATION_SUM, "pivotDataField.aggregation"));
   out.show_as = static_cast<fm_pivot_show_values_as_t>(reader.u32(spec, "showAs", 0U, "pivotDataField.showAs"));
   out.show_as_base_field = reader.i32(spec, "showAsBaseField", -1, "pivotDataField.showAsBaseField");
   out.show_as_base_item = reader.i32(spec, "showAsBaseItem", -1, "pivotDataField.showAsBaseItem");
@@ -110,8 +111,13 @@ uint32_t JsWorkbook::pivotCreate(uint32_t sheet, const std::string& name, uint32
     record_invalid_handle();
     return 0U;
   }
+  fm_pivot_spec_t spec = FM_STRUCT_INIT(fm_pivot_spec_t);
+  spec.name = name.c_str();
+  spec.cache_id = cacheId;
+  spec.anchor_row = anchorRow;
+  spec.anchor_col = anchorCol;
   std::size_t out = 0;
-  fm_status_t rc = fm_sheet_add_pivot(handle_, sheet, name.c_str(), cacheId, anchorRow, anchorCol, &out);
+  fm_status_t rc = fm_sheet_add_pivot(handle_, sheet, &spec, &out);
   if (!succeeded(rc)) {
     return 0U;
   }
@@ -151,25 +157,38 @@ void JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIndex, bool r
   succeeded(rc);
 }
 
-void JsWorkbook::pivotUpdateStyleOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val info) {
+void JsWorkbook::pivotUpdateStyleOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
-  std::string name;
   JsNarrowNumericReader reader("updatePivotStyleOptions");
-  const char* name_ptr = reader.optional_string(info, "styleName", name, "info.styleName");
-  const bool row_headers = reader.boolean(info, "showRowHeaders", false, "info.showRowHeaders");
-  const bool col_headers = reader.boolean(info, "showColumnHeaders", false, "info.showColumnHeaders");
-  const bool row_stripes = reader.boolean(info, "showRowStripes", false, "info.showRowStripes");
-  const bool col_stripes = reader.boolean(info, "showColumnStripes", false, "info.showColumnStripes");
-  const bool last_column = reader.boolean(info, "showLastColumn", false, "info.showLastColumn");
+  fm_pivot_style_options_patch_t p = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
+  std::string style_name;
+  // `null` writes the element without a style name; a string replaces it; an omitted key keeps it.
+  const emscripten::val name_value = reader.value(patch, "styleName", "patch.styleName");
+  switch (js_patch_key(reader, name_value, "patch.styleName", true)) {
+    case JsPatchKey::kClear:
+      p.style_name_op = FM_CHART_PATCH_OP_CLEAR;
+      break;
+    case JsPatchKey::kSet:
+      p.style_name_op = FM_CHART_PATCH_OP_SET;
+      p.style_name = reader.optional_string_value(name_value, style_name, "patch.styleName");
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
+  js_patch_flag(reader, patch, "showRowHeaders", "patch.showRowHeaders", &p.show_row_headers_op, &p.show_row_headers);
+  js_patch_flag(reader, patch, "showColumnHeaders", "patch.showColumnHeaders", &p.show_column_headers_op,
+                &p.show_column_headers);
+  js_patch_flag(reader, patch, "showRowStripes", "patch.showRowStripes", &p.show_row_stripes_op, &p.show_row_stripes);
+  js_patch_flag(reader, patch, "showColumnStripes", "patch.showColumnStripes", &p.show_column_stripes_op,
+                &p.show_column_stripes);
+  js_patch_flag(reader, patch, "showLastColumn", "patch.showLastColumn", &p.show_last_column_op, &p.show_last_column);
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_pivot_style_options(handle_, sheet, pivotIndex, name_ptr, row_headers ? 1 : 0,
-                                                col_headers ? 1 : 0, row_stripes ? 1 : 0, col_stripes ? 1 : 0,
-                                                last_column ? 1 : 0));
+  succeeded(fm_sheet_update_pivot_style_options(handle_, sheet, pivotIndex, &p));
 }
 
 double JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIndex) const {
@@ -291,7 +310,7 @@ uint32_t JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscript
   // required-field check does not treat the same as a missing argument.
   c_spec.source_name = source_name_ptr;
   c_spec.custom_name = custom_name_ptr;
-  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.u32(spec, "axis", 0U, "pivotField.axis"));
+  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.required_u32(spec, "axis", "pivotField.axis"));
   // An omitted `subtotalTop` takes the engine default (the group head).
   c_spec.subtotal_top = !js_value_present(subtotal_top)
                             ? FM_TRISTATE_DEFAULT
@@ -325,7 +344,8 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, ui
   js_set_cstr_or_null(o, "numberFormat", info.number_format);
   js_set_index_or_null(o, "cacheFieldIndex", info.cache_field_index);
   o.set("sortOrder", info.sort_order);
-  js_set_cstr(o, "sortByField", info.sort_by_field);
+  js_set_cstr_or_null(o, "sortByField",
+                      info.sort_by_field != nullptr && info.sort_by_field[0] != '\0' ? info.sort_by_field : nullptr);
   o.set("datePeriods", info.date_periods);
   o.set("dateCalendar", info.date_calendar);
   js_set_index_or_null(o, "groupBaseIndex", info.group_base_index);
@@ -333,6 +353,7 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, ui
   o.set("insertBlankRow", info.insert_blank_row != 0);
   o.set("fillDownLabels", info.fill_down_labels != 0);
   o.set("showAll", info.show_all != 0);
+  o.set("showDetail", info.show_detail != 0);
   emscripten::val fns = emscripten::val::array();
   for (std::uint32_t agg = 0; agg < 32U; ++agg) {
     if ((info.subtotal_functions & (1U << agg)) != 0U) {
@@ -376,6 +397,53 @@ emscripten::val JsWorkbook::pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex
   return o;
 }
 
+void JsWorkbook::pivotFieldUpdate(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("updatePivotField");
+  fm_pivot_field_patch_t p = FM_STRUCT_INIT(fm_pivot_field_patch_t);
+  std::string custom_name;
+  std::string number_format;
+  std::string sort_by_field;
+  js_patch_string(reader, patch, "customName", "patch.customName", true, custom_name, &p.custom_name_op,
+                  &p.custom_name);
+  js_patch_string(reader, patch, "numberFormat", "patch.numberFormat", true, number_format, &p.number_format_op,
+                  &p.number_format);
+  js_patch_flag(reader, patch, "defaultSubtotal", "patch.defaultSubtotal", &p.default_subtotal_op, &p.default_subtotal);
+  js_patch_flag(reader, patch, "insertBlankRow", "patch.insertBlankRow", &p.insert_blank_row_op, &p.insert_blank_row);
+  js_patch_flag(reader, patch, "fillDownLabels", "patch.fillDownLabels", &p.fill_down_labels_op, &p.fill_down_labels);
+  js_patch_flag(reader, patch, "showAll", "patch.showAll", &p.show_all_op, &p.show_all);
+  js_patch_flag(reader, patch, "subtotalTop", "patch.subtotalTop", &p.subtotal_top_op, &p.subtotal_top);
+  js_patch_int(reader, patch, "sortOrder", "patch.sortOrder", false, &p.sort_order_op, &p.sort_order);
+  js_patch_string(reader, patch, "sortByField", "patch.sortByField", true, sort_by_field, &p.sort_by_field_op,
+                  &p.sort_by_field);
+  js_patch_flag(reader, patch, "showDetail", "patch.showDetail", &p.show_detail_op, &p.show_detail);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_pivot_field(handle_, sheet, pivotIndex, fieldIndex, &p));
+}
+
+void JsWorkbook::pivotFieldItemUpdate(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
+                                      emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("updatePivotFieldItem");
+  fm_pivot_item_patch_t p = FM_STRUCT_INIT(fm_pivot_item_patch_t);
+  std::string caption;
+  js_patch_flag(reader, patch, "visible", "patch.visible", &p.visible_op, &p.visible);
+  js_patch_flag(reader, patch, "showDetail", "patch.showDetail", &p.show_detail_op, &p.show_detail);
+  js_patch_string(reader, patch, "caption", "patch.caption", true, caption, &p.caption_op, &p.caption);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_pivot_field_item(handle_, sheet, pivotIndex, fieldIndex, itemIndex, &p));
+}
+
 void JsWorkbook::pivotFieldClear(uint32_t sheet, uint32_t pivotIndex) {
   succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_fields(handle_, sheet, pivotIndex) : kBindingInvalidHandle);
 }
@@ -388,75 +456,6 @@ void JsWorkbook::pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIndex, uint32_t
   fm_status_t rc =
       fm_sheet_set_pivot_field_axis(handle_, sheet, pivotIndex, fieldIndex, static_cast<std::int32_t>(axis));
   succeeded(rc);
-}
-
-void JsWorkbook::pivotFieldSetSort(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t order,
-                                   const std::string& byField) {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return;
-  }
-  const char* by = byField.empty() ? nullptr : byField.c_str();
-  fm_status_t rc =
-      fm_sheet_set_pivot_field_sort(handle_, sheet, pivotIndex, fieldIndex, static_cast<std::int32_t>(order), by);
-  succeeded(rc);
-}
-
-void JsWorkbook::pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool top) {
-  succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_subtotal_top(handle_, sheet, pivotIndex, fieldIndex, top ? 1 : 0)
-                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_default_subtotal(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_insert_blank_row(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_fill_down_labels(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_show_detail(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                             uint32_t itemIndex, bool on) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_pivot_field_item_show_detail(handle_, sheet, pivotIndex, fieldIndex,
-                                                                           itemIndex, on ? 1 : 0)
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
-                                          const std::string& caption) {
-  const char* text = caption.empty() ? nullptr : caption.c_str();
-  succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_item_caption(handle_, sheet, pivotIndex, fieldIndex, itemIndex, text)
-                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                         const std::string& name) {
-  const char* text = name.empty() ? nullptr : name.c_str();
-  succeeded(handle_ != nullptr ? fm_sheet_set_pivot_field_custom_name(handle_, sheet, pivotIndex, fieldIndex, text)
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_pivot_field_show_all(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                               : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::pivotGetOptions(uint32_t sheet, uint32_t pivotIndex) const {
@@ -643,17 +642,6 @@ void JsWorkbook::pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint3
                                : kBindingInvalidHandle);
 }
 
-void JsWorkbook::pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
-                                          bool visible) {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return;
-  }
-  fm_status_t rc =
-      fm_sheet_set_pivot_field_item_visible(handle_, sheet, pivotIndex, fieldIndex, itemIndex, visible ? 1 : 0);
-  succeeded(rc);
-}
-
 void JsWorkbook::pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t agg) {
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -675,21 +663,21 @@ void JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uin
     record_invalid_handle();
     return;
   }
-  fm_status_t rc = fm_sheet_set_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, periods,
-                                                       static_cast<std::int32_t>(calendar), intervalDays, start, end);
-  succeeded(rc);
+  // A NaN bound is an absent one: the group takes the field's first / last value.
+  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  group.periods = periods;
+  group.calendar = static_cast<std::int32_t>(calendar);
+  group.interval_days = intervalDays;
+  group.has_start = std::isnan(start) ? 0 : 1;
+  group.start = std::isnan(start) ? 0.0 : start;
+  group.has_end = std::isnan(end) ? 0 : 1;
+  group.end = std::isnan(end) ? 0.0 : end;
+  succeeded(fm_sheet_set_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, &group));
 }
 
 void JsWorkbook::pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
   succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex)
                                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                           const std::string& formatCode) {
-  succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_number_format(handle_, sheet, pivotIndex, fieldIndex, formatCode.c_str())
-                : kBindingInvalidHandle);
 }
 
 namespace {
@@ -865,9 +853,9 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
   const char* field_name_ptr = reader.optional_string(spec, "fieldName", field_name, "pivotFilter.fieldName");
 
   fm_pivot_filter_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
-  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.u32(spec, "axis", 0U, "pivotFilter.axis"));
+  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.required_u32(spec, "axis", "pivotFilter.axis"));
   c_spec.field_name = field_name_ptr;
-  c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.u32(spec, "type", 0U, "pivotFilter.type"));
+  c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.required_u32(spec, "type", "pivotFilter.type"));
   // A count filter takes a whole number; every other numeric operand is a double.
   const bool count_type =
       c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_TOP_10 || c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT;

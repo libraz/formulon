@@ -502,7 +502,7 @@ test('listFunctionNames + getFunctionMetadata expose the catalog', async () => {
   assert.equal(miss, null);
 });
 
-test('mergeFunctionMetadata overlays provider metadata; is identity without a provider', async () => {
+test('mergeFunctionMetadata overlays provider metadata; without a provider it adds only the canonical name', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.mergeFunctionMetadata, 'function');
   const base = mod.getFunctionMetadata('XLOOKUP');
@@ -536,9 +536,9 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
   assert.equal(de.description, 'Searches a range or an array.');
   assert.equal(de.localizedName, 'XLOOKUP');
 
-  // No provider entry -> base returned verbatim, display metadata stays NULL.
+  // No provider entry -> the base fields plus localizedName = name; display metadata stays absent.
   const none = mod.mergeFunctionMetadata(base, undefined, 'fr-FR');
-  assert.equal(none, base);
+  assert.deepEqual({ ...none }, { ...base, localizedName: 'XLOOKUP' });
   assert.equal(none.signature, undefined);
   assert.equal(none.description, undefined);
 });
@@ -718,7 +718,7 @@ test('spillInfo reports a dynamic-array region', async () => {
   wb.recalc();
   const info = wb.sheet(0).getSpillInfo(0, 0);
   assert.equal(info.engaged, true);
-  assert.deepEqual(info.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 });
+  assert.deepEqual(info.range, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 });
 });
 
 test('array formulas can be authored, read from every cell and cleared', async () => {
@@ -727,17 +727,17 @@ test('array formulas can be authored, read from every cell and cleared', async (
   for (let r = 0; r < 3; r += 1) wb.sheet(0).setNumber(r, 0, r + 1);
   const none = wb.sheet(0).getArrayFormula(0, 2);
   assert.equal(none, null);
-  wb.sheet(0).setArrayFormula({ rect: { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 }, formula: '=A1:A3*2' });
+  wb.sheet(0).setArrayFormula({ range: { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 }, formula: '=A1:A3*2' });
   wb.recalc();
   for (let r = 0; r < 3; r += 1) {
     const found = wb.sheet(0).getArrayFormula(r, 2);
-    assert.deepEqual(found.rect, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 });
+    assert.deepEqual(found.range, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 });
     assert.ok(found.formula.includes('A1:A3'));
   }
   assert.equal(wb.sheet(0).getTypedValue(2, 2).number, 6);
   // A partial overlap and a write into a non-anchor cell are refused.
   assert.throws(
-    () => wb.sheet(0).setArrayFormula({ rect: { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, formula: '=1' }),
+    () => wb.sheet(0).setArrayFormula({ range: { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, formula: '=1' }),
     isFormulonError,
   );
   assert.throws(() => wb.sheet(0).setNumber(1, 2, 1), isFormulonError);

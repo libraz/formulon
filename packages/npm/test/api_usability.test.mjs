@@ -74,7 +74,7 @@ function pivotWorkbook(wb, formulon) {
   ws.setText(0, 0, 'Region');
   ws.setText(0, 1, 'Amount');
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -618,7 +618,7 @@ test('criterion 4: setValues over a data-table body throws and keeps the cells w
     ws.setNumber(0, 0, 1);
     ws.setNumber(1, 0, 2);
     ws.setNumber(2, 0, 3);
-    ws.addDataTable({ rect: rect(1, 1, 2, 1), columnInput: { row: 0, col: 0 } });
+    ws.addDataTable({ range: rect(1, 1, 2, 1), columnInput: { row: 0, col: 0 } });
     assert.notEqual(ws.getDataTable(1, 1), null);
     assert.throws(
       () => ws.setValues('A2', [[7, 8]]),
@@ -851,10 +851,10 @@ test('criterion 7: updateView rejects a freeze together with a split', async () 
 test('criterion 7: updateView checks paneTopLeft against the merged state', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    ws.updateView({ freezeRows: 1, paneTopLeftRow: 3 });
+    ws.updateView({ freezeRows: 1, paneTopLeft: { row: 3, col: 0 } });
     const view = ws.getView();
     assert.equal(view.freezeRows, 1);
-    assert.equal(view.paneTopLeftRow, 3);
+    assert.equal(view.paneTopLeft.row, 3);
   });
 });
 
@@ -909,8 +909,8 @@ function chartWorkbook(wb, f) {
     ws.setNumber(r + 1, 2, r + 3);
   });
   const id = ws.addChart({
-    kind: f.ChartInsertKind.Column,
-    source: 'Sheet1!$A$1:$C$3',
+    type: f.ChartPlotType.Bar,
+    range: 'Sheet1!$A$1:$C$3',
     legend: f.ChartLegendPosition.Right,
   });
   return { ws, id };
@@ -919,15 +919,15 @@ function chartWorkbook(wb, f) {
 test('criterion 7: updateLegend keeps the keys it omits and setLegend replaces the whole legend', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
-    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Bottom, overlay: true, hiddenSeries: [1] });
+    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Bottom, overlay: true, hiddenEntries: [1] });
     ws.chart(id).updateLegend({ position: f.ChartLegendPosition.Right });
     const legend = plain(ws.chart(id).getProperties().legend);
-    assert.deepEqual(legend, { position: f.ChartLegendPosition.Right, overlay: true, hiddenSeries: [1] });
-    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Top, overlay: false, hiddenSeries: [] });
+    assert.deepEqual(legend, { position: f.ChartLegendPosition.Right, overlay: true, hiddenEntries: [1] });
+    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Top, overlay: false, hiddenEntries: [] });
     assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
       position: f.ChartLegendPosition.Top,
       overlay: false,
-      hiddenSeries: [],
+      hiddenEntries: [],
     });
   });
 });
@@ -941,14 +941,14 @@ test('criterion 7: setLegend with null removes the legend; updateLegend on no le
     assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
       position: f.ChartLegendPosition.Right,
       overlay: true,
-      hiddenSeries: [],
+      hiddenEntries: [],
     });
     ws.chart(id).setLegend(null);
     ws.chart(id).updateLegend({});
     assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
       position: f.ChartLegendPosition.Right,
       overlay: false,
-      hiddenSeries: [],
+      hiddenEntries: [],
     });
   });
 });
@@ -957,7 +957,7 @@ test('criterion 7: updateLegend rejects null for keys that cannot be cleared', a
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
     assert.throws(() => ws.chart(id).updateLegend({ position: null }), TYPE_ERROR);
-    assert.throws(() => ws.chart(id).updateLegend({ hiddenSeries: null }), TYPE_ERROR);
+    assert.throws(() => ws.chart(id).updateLegend({ hiddenEntries: null }), TYPE_ERROR);
   });
 });
 
@@ -1008,7 +1008,7 @@ test('criterion 7: every patch setter rejects a key that is neither in its patch
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
     const bogus = { bogus: 1 };
-    const chart = ws.addChart({ kind: f.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
+    const chart = ws.addChart({ type: f.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
     const calls = {
       updateIterative: () => wb.updateIterative(bogus),
       updatePivotCacheOptions: () => wb.pivotCache(cacheId).updateOptions(bogus),
@@ -1157,7 +1157,7 @@ test('criterion 8: removePivot resolves a name and takes the first of two equal 
     ws.removePivot('Pivot1');
     const left = ws.listPivots();
     assert.equal(left.length, 1);
-    assert.equal(ws.pivot(0).getLayout().rect.firstCol, 10);
+    assert.equal(ws.pivot(0).getLayout().range.firstCol, 10);
     expectCode(() => ws.removePivot('Nope'), f.StatusCode.NotFound);
   });
 });
@@ -1323,11 +1323,11 @@ test('criterion 13: removeMergeAt and removeHyperlinkAt are gone', async () => {
 test('criterion 13: defined names take an optional scope', async () => {
   await withWorkbook((wb, f) => {
     wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1' });
-    wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$1', localSheetId: 0 });
-    assert.equal(wb.getDefinedName('Rate').localSheetId, null);
-    assert.equal(wb.getDefinedName('Rate', null).localSheetId, null);
-    assert.equal(wb.getDefinedName('Rate', 0).localSheetId, 0);
-    assert.equal(wb.getDefinedName('Rate', 'Sheet1').localSheetId, 0);
+    wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$1', scope: 0 });
+    assert.equal(wb.getDefinedName('Rate').scope, null);
+    assert.equal(wb.getDefinedName('Rate', null).scope, null);
+    assert.equal(wb.getDefinedName('Rate', 0).scope, 0);
+    assert.equal(wb.getDefinedName('Rate', 'Sheet1').scope, 0);
     assert.equal(wb.getDefinedName('Nope'), null);
     wb.removeDefinedName('Rate', 'Sheet1');
     assert.equal(wb.getDefinedName('Rate', 0), null);
@@ -1348,10 +1348,10 @@ test('criterion 13: theme script fonts are read by a key record and written by a
 test('criterion 13: setChartType defaults the grouping to Clustered', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
-    ws.chart(id).setType(0, f.ChartInsertKind.Line);
+    ws.chart(id).setType(0, f.ChartPlotType.Line);
     const explicit = plain(ws.chart(id).getProperties());
-    ws.chart(id).setType(0, f.ChartInsertKind.Column, f.ChartGrouping.Stacked);
-    ws.chart(id).setType(0, f.ChartInsertKind.Line, f.ChartGrouping.Clustered);
+    ws.chart(id).setType(0, f.ChartPlotType.Bar, { grouping: f.ChartGrouping.Stacked });
+    ws.chart(id).setType(0, f.ChartPlotType.Line, { grouping: f.ChartGrouping.Clustered });
     assert.deepEqual(plain(ws.chart(id).getProperties()), explicit);
   });
 });
@@ -1365,8 +1365,8 @@ test('criterion 13: setPivotFieldSort and addPivotFieldItem take an options obje
     assert.equal(ws.pivot(pivot).getFieldItem(0, 0).visible, false);
     ws.pivot(pivot).addFieldItem(0, 'West');
     assert.equal(ws.pivot(pivot).getFieldItem(0, 1).visible, true);
-    ws.pivot(pivot).setFieldSort(0, f.PivotSortOrder.Ascending);
-    ws.pivot(pivot).setFieldSort(0, f.PivotSortOrder.Descending, { byField: 'Sum of Amount' });
+    ws.pivot(pivot).updateField(0, { sortOrder: f.PivotSortOrder.Ascending });
+    ws.pivot(pivot).updateField(0, { sortOrder: f.PivotSortOrder.Descending, sortByField: 'Sum of Amount' });
     assert.equal(ws.pivot(pivot).listFields()[0].sortByField, 'Sum of Amount');
   });
 });

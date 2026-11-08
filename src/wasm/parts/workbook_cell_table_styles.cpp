@@ -41,9 +41,7 @@ emscripten::val table_style_to_val(const fm_table_style_t& style) {
     emscripten::val e = emscripten::val::object();
     e.set("type", element.type);
     e.set("size", element.size);
-    if (element.has_dxf_index != 0) {
-      e.set("dxfIndex", element.dxf_index);
-    }
+    e.set("dxfIndex", element.has_dxf_index != 0 ? emscripten::val(element.dxf_index) : emscripten::val::null());
     elements.call<void>("push", e);
   }
   o.set("elements", elements);

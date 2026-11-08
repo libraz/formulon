@@ -9,6 +9,7 @@
 
 #include "c_api/parts/common.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
@@ -72,9 +73,7 @@ void ExpectOpaqueAutoFilterRefUpdate(std::string raw_xml, std::string expected_x
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* columns[] = {"Product", "Amount"};
   std::size_t index = 99U;
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2U, "", 1, 0, &index),
-      0);
+  ASSERT_EQ(AddTable(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2U, "", 1, 0, &index), 0);
 
   auto& table = wb.handle->wb->mutable_tables()[index];
   table.auto_filter_xml.set(formulon::io::auto_filter_from_xml(raw_xml));
@@ -118,8 +117,8 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* columns[] = {"Product", "Amount"};
   size_t index = 99;
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2,
-                               "TableStyleMedium2", 1, 0, &index),
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "TableStyleMedium2", 1,
+                     0, &index),
             0);
   EXPECT_EQ(index, 0U);
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, 0), 1U);
@@ -168,9 +167,7 @@ TEST(FormulonCApi, TableMutationsReindexStructuredRefDependents) {
 
   const char* columns[] = {"Product", "Amount"};
   size_t index = 99;
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index),
-      0);
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 3, &v), 0);
@@ -203,30 +200,23 @@ TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
 
   // Two headers cannot describe a three-column range, and a table covers an
   // ordered, in-grid rectangle.
-  EXPECT_NE(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 2}), "Sales", columns, 2, "", 1, 0, &index),
-      0);
-  EXPECT_EQ(fm_sheet_add_table(wb.handle, 0, nullptr, "Sales", columns, 2, "", 1, 0, &index),
-            FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1048576, 1}), "Sales", columns, 2, "", 1,
-                               0, &index),
+  EXPECT_NE(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 2}), "Sales", columns, 2, "", 1, 0, &index), 0);
+  EXPECT_EQ(AddTable(wb.handle, 0, nullptr, "Sales", columns, 2, "", 1, 0, &index), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1048576, 1}), "Sales", columns, 2, "", 1, 0, &index),
             FM_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{2, 0, 0, 1}), "Sales", columns, 2, "", 1, 0, &index),
-      FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{2, 0, 0, 1}), "Sales", columns, 2, "", 1, 0, &index),
+            FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, 0), 0U);
 
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index),
-      0);
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index), 0);
   // Growing rows is fine; growing columns would orphan the column list.
   EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 8, 1}), "", 1, 0), 0);
   EXPECT_NE(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 8, 2}), "", 1, 0), 0);
 
   const char* duplicate_columns[] = {"Product", "product"};
-  EXPECT_NE(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 2, 4}), "Other", duplicate_columns, 2, "",
-                               1, 0, &index),
-            0);
+  EXPECT_NE(
+      AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 2, 4}), "Other", duplicate_columns, 2, "", 1, 0, &index),
+      0);
 }
 
 TEST(FormulonCApi, GetTableRejectsARefThatIsNotARange) {
@@ -234,9 +224,7 @@ TEST(FormulonCApi, GetTableRejectsARefThatIsNotARange) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* columns[] = {"Product", "Amount"};
   size_t index = 99;
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index),
-      0);
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index), 0);
   wb.handle->workbook().mutable_tables()[index].ref = "Sheet1!A1:B3";
   const char* name = nullptr;
   fm_cell_rect_t rect{};
@@ -248,13 +236,12 @@ TEST(FormulonCApi, TableNamesShareOneCaseInsensitiveNamespace) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* columns[] = {"Product"};
   size_t index = 99;
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), "SalesInternal", columns, 1, "", 1,
-                               0, &index),
-            0);
+  ASSERT_EQ(
+      AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), "SalesInternal", columns, 1, "", 1, 0, &index), 0);
   index = 99;
-  EXPECT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 2, 2, 2}), "sALESinternal", columns, 1, "", 1,
-                               0, &index),
-            FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(
+      AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 2, 2, 2}), "sALESinternal", columns, 1, "", 1, 0, &index),
+      FM_STATUS_ALREADY_EXISTS);
   EXPECT_EQ(index, 99U);
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, 0), 1U);
 }
@@ -265,17 +252,17 @@ TEST(FormulonCApi, TableDuplicateColumnAtEndRejectsAtomicallyAndUniqueNamesRound
 
   const char* duplicate_columns[] = {"Product", "Amount", "Region", "Year", "Status", "pRODUCT"};
   std::size_t index = 99U;
-  EXPECT_EQ(fm_sheet_add_table(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 5}), "Invalid", duplicate_columns, 6U,
-                               "", 1, 0, &index),
+  EXPECT_EQ(AddTable(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 5}), "Invalid", duplicate_columns, 6U, "", 1, 0,
+                     &index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_STREQ(fm_get_last_error_message(), "column name is duplicated");
   EXPECT_EQ(index, 99U);
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, 0), 0U);
 
   const char* unique_columns[] = {"Product", "Area", "商品"};
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 2}), "Valid", unique_columns, 3U, "",
-                               1, 0, &index),
-            0);
+  ASSERT_EQ(
+      AddTable(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 2}), "Valid", unique_columns, 3U, "", 1, 0, &index),
+      0);
   EXPECT_EQ(index, 0U);
 
   BufferGuard saved;
@@ -315,9 +302,9 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* columns[] = {"Product", "Amount"};
   size_t index = 99;
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "CustomStyle",
-                               1, 1, &index),
-            0);
+  ASSERT_EQ(
+      AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "CustomStyle", 1, 1, &index),
+      0);
 
   // Seed payload that the C ABI deliberately does not model. The update must
   // rewrite only the opening autoFilter ref and retain every raw payload.
@@ -408,13 +395,13 @@ TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
   // No explicit _xlnm.Print_Area is reported even though pagination falls
   // back to the used range internally.
   EXPECT_EQ(count_of(fm_pagination_get_print_area_count, pagination), 0U);
-  std::uint32_t row = 0;
+  fm_row_break_t row = FM_STRUCT_INIT(fm_row_break_t);
   std::uint32_t previous = 0;
   for (std::uint32_t i = 0; i < breaks; ++i) {
     ASSERT_EQ(fm_pagination_get_row_break_at(pagination, i, &row), 0);
-    EXPECT_GT(row, previous);
-    EXPECT_LE(row, 199U);
-    previous = row;
+    EXPECT_GT(row.row, previous);
+    EXPECT_LE(row.row, 199U);
+    previous = row.row;
   }
   EXPECT_EQ(count_of(fm_pagination_get_column_break_count, pagination), 0U);
   EXPECT_NE(fm_pagination_get_row_break_at(pagination, breaks, &row), 0);

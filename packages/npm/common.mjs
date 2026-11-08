@@ -585,7 +585,6 @@ export const ChartRole = Object.freeze({
   Title: 6,
   AxisTitle: 7,
 });
-export const ChartInsertKind = Object.freeze({ Column: 0, Bar: 1, Line: 2, Area: 3, Pie: 4, Scatter: 5, Doughnut: 6 });
 export const ChartGrouping = Object.freeze({ Clustered: 0, Stacked: 1, PercentStacked: 2, Standard: 3 });
 export const BlanksAs = Object.freeze({
   Zero: 0,
@@ -775,17 +774,16 @@ export const StatusCode = Object.freeze({
  *
  * @param {object} base A `FunctionMetadata`, as `getFunctionMetadata()` returns it.
  * @param {object|undefined} entry The provider's `functions[NAME]` entry, or
- *   `undefined`/`null` to leave `base` unchanged (signature/description
- *   stay `undefined`).
+ *   `undefined`/`null` for none (signature/description stay `undefined`, and
+ *   `localizedName` is `base.name`).
  * @param {string} locale A BCP-47 display locale tag (e.g. `"fr-FR"`),
  *   matching the keys in `aliases` / `localized`. Independent of the profile id
  *   passed to the engine locale calls.
- * @returns {object} The merged metadata (a new object), or `base` verbatim
- *   when `entry` is absent.
+ * @returns {object} The merged metadata (a new object).
  */
 export function mergeFunctionMetadata(base, entry, locale) {
   if (entry === undefined || entry === null) {
-    return base;
+    return { ...base, localizedName: base.name };
   }
   const localized = (entry.localized && entry.localized[locale]) || {};
   const signature = localized.signature ?? entry.signature ?? base.signature;
@@ -939,7 +937,6 @@ export const FORMULON_MEMBERS = Object.freeze([
   'ChartPlotType',
   'ChartExtendedLayout',
   'ChartRole',
-  'ChartInsertKind',
   'ChartGrouping',
   'BlanksAs',
   'PhoneticType',
@@ -1039,8 +1036,13 @@ function int32Field(value, where) {
   return value;
 }
 
-function dateSystem(date1904, where) {
-  return date1904 === undefined ? false : requireBoolean(date1904, `${where} argument 2`);
+function dateSystem(options, where) {
+  if (options === undefined) return false;
+  requireObject(options, `${where} argument 2`);
+  for (const key of Object.keys(options)) {
+    if (key !== 'date1904') throw new TypeError(`${where} argument 2 has an unknown key ${JSON.stringify(key)}`);
+  }
+  return options.date1904 === undefined ? false : requireBoolean(options.date1904, `${where} date1904`);
 }
 
 const CIVIL_FIELDS = Object.freeze(['year', 'month', 'day', 'hour', 'minute', 'second']);
@@ -1065,7 +1067,7 @@ const RUNTIME_WRAPPERS = Object.freeze({
   convertCivilToSerial: [
     'convertCivilToSerial',
     (convert) =>
-      function convertCivilToSerial(civil, date1904) {
+      function convertCivilToSerial(civil, options) {
         const where = 'Formulon.convertCivilToSerial';
         requireObject(civil, `${where} argument 1`);
         const fields = {};
@@ -1074,17 +1076,17 @@ const RUNTIME_WRAPPERS = Object.freeze({
           fields[field] =
             value === undefined && !CIVIL_DATE_FIELDS.includes(field) ? 0 : int32Field(value, `${where} ${field}`);
         }
-        return convert(fields, dateSystem(date1904, where));
+        return convert(fields, dateSystem(options, where));
       },
   ],
   convertSerialToCivil: [
     'convertSerialToCivil',
     (convert) =>
-      function convertSerialToCivil(serial, date1904) {
+      function convertSerialToCivil(serial, options) {
         const where = 'Formulon.convertSerialToCivil';
         requireNumber(serial, `${where} argument 1`);
         if (!Number.isFinite(serial)) throw new RangeError(`${where} argument 1 must be finite`);
-        return convert(serial, dateSystem(date1904, where));
+        return convert(serial, dateSystem(options, where));
       },
   ],
   evaluateFormula: [
@@ -1531,6 +1533,7 @@ const HANDWRITTEN = Object.freeze([
   'getDate',
   'getDefaultFont',
   'getFormula',
+  'getRangeXfBasesExcluding',
   'getRowXfIndex',
   'getThemeColors',
   'getThemeFonts',
@@ -1549,9 +1552,11 @@ const HANDWRITTEN = Object.freeze([
   'listSheets',
   'listSlicers',
   'listTables',
+  'listThreadedComments',
   'picture',
   'pivot',
   'pivotCache',
+  'remapRangeXfs',
   'removeDrawing',
   'removeSheet',
   'setActiveSheet',
@@ -1637,8 +1642,6 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.setDataField': 'setPivotDataField',
   'Pivot.setFieldAxis': 'setPivotFieldAxis',
   'Pivot.setFieldDateGroup': null,
-  'Pivot.setFieldShowDetail': 'setPivotFieldShowDetail',
-  'Pivot.setFieldSort': 'setPivotFieldSort',
   'Pivot.setReportLayout': 'setPivotReportLayout',
   'Pivot.setRowFieldOrder': 'setPivotRowFieldOrder',
   'Pivot.showDetails': null,
@@ -1833,7 +1836,7 @@ const PATCH_KEYS = Object.freeze({
       'blanksAs',
       'date1904',
       'description',
-      'hiddenCategories',
+      'filter',
       'isExtended',
       'isPivotChart',
       'legend',
@@ -1848,7 +1851,7 @@ const PATCH_KEYS = Object.freeze({
       'title',
     ],
   ],
-  'Chart.updateLegend': [0, ['hiddenSeries', 'overlay', 'position']],
+  'Chart.updateLegend': [0, ['hiddenEntries', 'overlay', 'position']],
   'Chart.updatePlot': [
     1,
     [
@@ -1900,6 +1903,7 @@ const PATCH_KEYS = Object.freeze({
       'insertBlankRow',
       'numberFormat',
       'showAll',
+      'showDetail',
       'sortByField',
       'sortOrder',
       'sourceName',
@@ -2104,7 +2108,7 @@ const PATCH_KEYS = Object.freeze({
       'colorNegative',
       'colorSeries',
       'dateAxis',
-      'dateAxisRef',
+      'dateAxisRange',
       'displayHidden',
       'displayXAxis',
       'emptyCellsAs',
@@ -2123,17 +2127,13 @@ const PATCH_KEYS = Object.freeze({
       'type',
     ],
   ],
-  'Sheet.updateThreadedComment': [
-    1,
-    ['col', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'row', 'text'],
-  ],
+  'Sheet.updateThreadedComment': [1, ['cell', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'text']],
   'Sheet.updateView': [
     0,
     [
       'freezeCols',
       'freezeRows',
-      'paneTopLeftCol',
-      'paneTopLeftRow',
+      'paneTopLeft',
       'rightToLeft',
       'showFormulas',
       'showGridLines',
@@ -2143,8 +2143,7 @@ const PATCH_KEYS = Object.freeze({
       'splitXTwips',
       'splitYTwips',
       'tabSelected',
-      'topLeftCol',
-      'topLeftRow',
+      'topLeft',
       'viewMode',
       'visibility',
       'zoomPct',
@@ -2226,20 +2225,701 @@ const PATCH_NESTED_KEYS = Object.freeze({
 // </facade-tables>
 // <record-range-fields> generated by tools/codegen/gen_facade_tables.py; do not edit
 const RECORD_RANGE_FIELDS = Object.freeze({
+  ArrayFormulaInput: { range: 'CellRect' },
   AutoFilterInput: { range: 'CellRect', sort: 'AutoFilterSortStateInput' },
-  AutoFilterSortCondition: { ref: 'CellRect' },
-  AutoFilterSortConditionInput: { ref: 'CellRect' },
-  AutoFilterSortState: { ref: 'CellRect', conditions: 'AutoFilterSortCondition[]' },
-  AutoFilterSortStateInput: { ref: 'CellRect', conditions: 'AutoFilterSortConditionInput[]' },
+  AutoFilterSortCondition: { range: 'CellRect' },
+  AutoFilterSortConditionInput: { range: 'CellRect' },
+  AutoFilterSortState: { range: 'CellRect', conditions: 'AutoFilterSortCondition[]' },
+  AutoFilterSortStateInput: { range: 'CellRect', conditions: 'AutoFilterSortConditionInput[]' },
+  ChartInsertInput: { range: 'SheetRect' },
+  ChartPreviewOverridesInput: { range: 'SheetRect' },
+  ChartSourceInput: { range: 'SheetRect' },
   ConditionalFormatInput: { ranges: 'CellRect[]' },
-  DataTableInput: { rect: 'CellRect' },
+  DataTableInput: { range: 'CellRect', rowInput: 'CellAddress', columnInput: 'CellAddress' },
   DataValidationInput: { ranges: 'CellRect[]' },
   PivotInput: { anchor: 'CellAddress' },
-  ReferenceRangeInput: { rect: 'CellRect' },
+  PivotWorksheetSourceInput: { range: 'SheetRect' },
+  ProtectedRangeInput: { ranges: 'CellRect[]' },
+  ReferenceRangeInput: { range: 'CellRect' },
   SheetSelectionInput: { active: 'CellAddress', ranges: 'CellRect[]' },
+  SparklineGroupInput: { dateAxisRange: 'SheetRect', sparklines: 'SparklineInput[]' },
+  SparklineInput: { source: 'SheetRect', location: 'CellAddress' },
   TableInput: { range: 'CellRect' },
+  ThreadedCommentInput: { cell: 'CellAddress' },
 });
 // </record-range-fields>
+// <input-keys> generated by tools/codegen/gen_facade_tables.py; do not edit
+const INPUT_KEYS = Object.freeze({
+  'Chart.addSeries': [
+    1,
+    [
+      'categories',
+      'fill',
+      'filtered',
+      'index',
+      'labels',
+      'line',
+      'marker',
+      'name',
+      'order',
+      'points',
+      'size',
+      'smooth',
+      'values',
+      'x',
+      'y',
+    ],
+  ],
+  'Chart.getPreview': [
+    0,
+    ['blanksAs', 'direction', 'headerColumn', 'headerRow', 'naAsBlank', 'plotVisibleOnly', 'range'],
+  ],
+  'Chart.setAnchor': [
+    0,
+    ['anchorKind', 'col', 'colOffsetEmu', 'editAs', 'heightEmu', 'row', 'rowOffsetEmu', 'widthEmu'],
+  ],
+  'Chart.setFilter': [0, ['hiddenCategories', 'hiddenSeries']],
+  'Chart.setLegend': [0, ['hiddenEntries', 'overlay', 'position']],
+  'Chart.setPoint': [3, ['fill', 'index', 'line', 'marker']],
+  'Chart.setSource': [0, ['direction', 'headerColumn', 'headerRow', 'range']],
+  'Chart.setTitle': [0, ['formula', 'kind', 'text']],
+  'Picture.setAnchor': [
+    0,
+    ['anchorKind', 'col', 'colOffsetEmu', 'editAs', 'heightEmu', 'row', 'rowOffsetEmu', 'widthEmu'],
+  ],
+  'Pivot.addDataField': [
+    0,
+    ['aggregation', 'fieldIndex', 'name', 'numberFormat', 'showAs', 'showAsBaseField', 'showAsBaseItem'],
+  ],
+  'Pivot.addField': [
+    0,
+    [
+      'axis',
+      'cacheFieldIndex',
+      'customName',
+      'dateCalendar',
+      'datePeriods',
+      'defaultSubtotal',
+      'fillDownLabels',
+      'groupBaseIndex',
+      'insertBlankRow',
+      'numberFormat',
+      'showAll',
+      'showDetail',
+      'sortByField',
+      'sortOrder',
+      'sourceName',
+      'subtotalFunctions',
+      'subtotalTop',
+    ],
+  ],
+  'Pivot.addFilter': [0, ['axis', 'dataFieldIndex', 'fieldName', 'type', 'value', 'valueHigh']],
+  'Pivot.setDataField': [
+    1,
+    ['aggregation', 'fieldIndex', 'name', 'numberFormat', 'showAs', 'showAsBaseField', 'showAsBaseItem'],
+  ],
+  'Pivot.setFieldDateGroup': [1, ['calendar', 'end', 'intervalDays', 'periods', 'start']],
+  'PivotCache.setWorksheetSource': [0, ['name', 'range', 'sheet']],
+  'Sheet.addCfRule': [
+    0,
+    [
+      'aboveAverage',
+      'bottom',
+      'colorScale',
+      'dataBar',
+      'dxfIndex',
+      'equalAverage',
+      'format',
+      'formula1',
+      'formula2',
+      'iconSet',
+      'id',
+      'operator',
+      'percent',
+      'priority',
+      'ranges',
+      'rank',
+      'stdDev',
+      'stopIfTrue',
+      'text',
+      'timePeriod',
+      'type',
+    ],
+  ],
+  'Sheet.addChart': [
+    0,
+    [
+      'barDirection',
+      'direction',
+      'grouping',
+      'headerColumn',
+      'headerRow',
+      'legend',
+      'placement',
+      'range',
+      'title',
+      'type',
+    ],
+  ],
+  'Sheet.addDataTable': [0, ['columnInput', 'range', 'rowInput', 'rowOriented', 'twoDimensional']],
+  'Sheet.addPicture': [1, ['anchor', 'description', 'kind', 'name', 'objectId', 'sheet']],
+  'Sheet.addPivot': [0, ['anchor', 'cacheId', 'index', 'name', 'sheet']],
+  'Sheet.addProtectedRange': [
+    0,
+    [
+      'algorithmName',
+      'hashValue',
+      'legacyPasswordHash',
+      'name',
+      'ranges',
+      'saltValue',
+      'securityDescriptor',
+      'spinCount',
+    ],
+  ],
+  'Sheet.addShape': [
+    0,
+    [
+      'anchorKind',
+      'editAs',
+      'fillColor',
+      'fillKind',
+      'fromCol',
+      'fromColOffsetEmu',
+      'fromRow',
+      'fromRowOffsetEmu',
+      'heightEmu',
+      'hidden',
+      'kind',
+      'lineColor',
+      'lineKind',
+      'lineWidthPt',
+      'name',
+      'objectId',
+      'presetGeometry',
+      'rotationDeg',
+      'sheet',
+      'text',
+      'textBox',
+      'toCol',
+      'toColOffsetEmu',
+      'toRow',
+      'toRowOffsetEmu',
+      'widthEmu',
+    ],
+  ],
+  'Sheet.addSlicer': [
+    2,
+    [
+      'caption',
+      'columnCount',
+      'crossFilter',
+      'fromCol',
+      'fromColOffsetEmu',
+      'fromRow',
+      'fromRowOffsetEmu',
+      'kind',
+      'name',
+      'objectId',
+      'rowHeightEmu',
+      'sheet',
+      'sortOrder',
+      'style',
+      'toCol',
+      'toColOffsetEmu',
+      'toRow',
+      'toRowOffsetEmu',
+    ],
+  ],
+  'Sheet.addSparklineGroup': [
+    0,
+    [
+      'colorAxis',
+      'colorFirst',
+      'colorHigh',
+      'colorLast',
+      'colorLow',
+      'colorMarkers',
+      'colorNegative',
+      'colorSeries',
+      'dateAxis',
+      'dateAxisRange',
+      'displayHidden',
+      'displayXAxis',
+      'emptyCellsAs',
+      'first',
+      'high',
+      'last',
+      'lineWeight',
+      'low',
+      'manualMax',
+      'manualMin',
+      'markers',
+      'maxAxisType',
+      'minAxisType',
+      'negative',
+      'sparklines',
+      'type',
+    ],
+  ],
+  'Sheet.addTable': [
+    0,
+    [
+      'columns',
+      'headerRow',
+      'index',
+      'name',
+      'range',
+      'sheet',
+      'showColumnStripes',
+      'showFirstColumn',
+      'showLastColumn',
+      'showRowStripes',
+      'styleName',
+      'totalsRow',
+      'workbook',
+    ],
+  ],
+  'Sheet.addThreadedComment': [0, ['cell', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'text']],
+  'Sheet.addValidation': [
+    0,
+    [
+      'allowBlank',
+      'errorMessage',
+      'errorStyle',
+      'errorTitle',
+      'formula1',
+      'formula2',
+      'operator',
+      'promptMessage',
+      'promptTitle',
+      'ranges',
+      'showErrorMessage',
+      'showInCellDropdown',
+      'showInputMessage',
+      'type',
+    ],
+  ],
+  'Sheet.restoreDrawing': [1, ['assignNewId']],
+  'Sheet.setArrayFormula': [0, ['formula', 'range']],
+  'Sheet.setAutoFilter': [0, ['columns', 'range', 'sort']],
+  'Sheet.setCellPhoneticProperties': [2, ['alignment', 'fontIndex', 'present', 'type']],
+  'Sheet.setColumnBreak': [1, ['first', 'last', 'manual']],
+  'Sheet.setComment': [2, ['author', 'text']],
+  'Sheet.setHyperlink': [2, ['display', 'location', 'range', 'target', 'tooltip']],
+  'Sheet.setHyperlinkRange': [1, ['display', 'location', 'range', 'target', 'tooltip']],
+  'Sheet.setPrintTitles': [0, ['columns', 'rows']],
+  'Sheet.setRowBreak': [1, ['first', 'last', 'manual']],
+  'Sheet.setSelection': [0, ['active', 'ranges']],
+  'Sheet.setSheetProtection': [
+    0,
+    [
+      'algorithmName',
+      'allowAutoFilter',
+      'allowDeleteColumns',
+      'allowDeleteRows',
+      'allowEditObjects',
+      'allowEditScenarios',
+      'allowFormatCells',
+      'allowFormatColumns',
+      'allowFormatRows',
+      'allowInsertColumns',
+      'allowInsertHyperlinks',
+      'allowInsertRows',
+      'allowPivotTables',
+      'allowSelectLockedCells',
+      'allowSelectUnlockedCells',
+      'allowSort',
+      'hashValue',
+      'legacyPasswordHash',
+      'saltValue',
+      'spinCount',
+    ],
+  ],
+  'Table.setAutoFilter': [0, ['columns', 'range', 'sort']],
+  'Table.setColumnTotals': [1, ['name', 'totalsRowFormula', 'totalsRowFunction', 'totalsRowLabel']],
+  'Workbook.addBorder': [0, ['bottom', 'diagonal', 'diagonalDown', 'diagonalUp', 'left', 'right', 'top']],
+  'Workbook.addCellStyleXf': [
+    0,
+    [
+      'applyAlignment',
+      'applyBorder',
+      'applyFill',
+      'applyFont',
+      'applyNumberFormat',
+      'applyProtection',
+      'borderIndex',
+      'fillIndex',
+      'fontIndex',
+      'hidden',
+      'horizontal',
+      'indent',
+      'justifyLastLine',
+      'locked',
+      'numFmtId',
+      'quotePrefix',
+      'readingOrder',
+      'relativeIndent',
+      'shrinkToFit',
+      'styleXfIndex',
+      'textRotation',
+      'vertical',
+      'wrapText',
+    ],
+  ],
+  'Workbook.addCellXf': [
+    0,
+    [
+      'applyAlignment',
+      'applyBorder',
+      'applyFill',
+      'applyFont',
+      'applyNumberFormat',
+      'applyProtection',
+      'borderIndex',
+      'fillIndex',
+      'fontIndex',
+      'hidden',
+      'horizontal',
+      'indent',
+      'justifyLastLine',
+      'locked',
+      'numFmtId',
+      'quotePrefix',
+      'readingOrder',
+      'relativeIndent',
+      'shrinkToFit',
+      'styleXfIndex',
+      'textRotation',
+      'vertical',
+      'wrapText',
+    ],
+  ],
+  'Workbook.addDxf': [0, ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection']],
+  'Workbook.addFill': [0, ['background', 'foreground', 'gradient', 'pattern']],
+  'Workbook.addFont': [
+    0,
+    [
+      'bold',
+      'charset',
+      'color',
+      'condense',
+      'extend',
+      'family',
+      'italic',
+      'name',
+      'outline',
+      'scheme',
+      'shadow',
+      'sizePt',
+      'strike',
+      'underline',
+      'vertAlign',
+    ],
+  ],
+  'Workbook.addPerson': [0, ['displayName', 'id', 'providerId', 'userId']],
+  'Workbook.formatReference': [0, ['range', 'sheetName']],
+  'Workbook.formatValue': [0, ['boolean', 'cells', 'cols', 'errorCode', 'kind', 'number', 'rows', 'text']],
+  'Workbook.parseReference': [1, ['baseCol', 'baseRow', 'r1c1']],
+  'Workbook.resolveColor': [0, ['argb', 'indexed', 'kind', 'theme', 'tint']],
+  'Workbook.setCellStyle': [0, ['builtinId', 'customBuiltin', 'hidden', 'iLevel', 'name', 'styleXfIndex']],
+  'Workbook.setDefaultFont': [
+    0,
+    [
+      'bold',
+      'charset',
+      'color',
+      'condense',
+      'extend',
+      'family',
+      'italic',
+      'name',
+      'outline',
+      'scheme',
+      'shadow',
+      'sizePt',
+      'strike',
+      'underline',
+      'vertAlign',
+    ],
+  ],
+  'Workbook.setDefinedName': [0, ['comment', 'formula', 'hidden', 'name', 'scope']],
+  'Workbook.setFont': [
+    1,
+    [
+      'bold',
+      'charset',
+      'color',
+      'condense',
+      'extend',
+      'family',
+      'italic',
+      'name',
+      'outline',
+      'scheme',
+      'shadow',
+      'sizePt',
+      'strike',
+      'underline',
+      'vertAlign',
+    ],
+  ],
+  'Workbook.setTableStyle': [0, ['elements', 'name', 'pivot', 'table']],
+  'Workbook.setThemeColors': [0, ['colors', 'source']],
+  'Workbook.setThemeFonts': [0, ['majorEastAsian', 'majorLatin', 'minorEastAsian', 'minorLatin']],
+  'Workbook.setThemeScriptFont': [0, ['scheme', 'script', 'typeface']],
+  'Workbook.setWorkbookProtection': [
+    0,
+    [
+      'lockRevision',
+      'lockStructure',
+      'lockWindows',
+      'revisionsAlgorithmName',
+      'revisionsHashValue',
+      'revisionsLegacyPasswordHash',
+      'revisionsSaltValue',
+      'revisionsSpinCount',
+      'workbookAlgorithmName',
+      'workbookHashValue',
+      'workbookLegacyPasswordHash',
+      'workbookSaltValue',
+      'workbookSpinCount',
+    ],
+  ],
+});
+const INPUT_NESTED_KEYS = Object.freeze({
+  'Chart.setPoint': {
+    fill: ['color', 'transparencyPct'],
+    'fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    line: ['color', 'dash', 'none', 'transparencyPct', 'widthPt'],
+    'line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    marker: ['fill', 'line', 'sizePt', 'symbol'],
+    'marker.fill': ['color', 'transparencyPct'],
+    'marker.fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    'marker.line': ['color', 'dash', 'none', 'transparencyPct', 'widthPt'],
+    'marker.line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+  },
+  'Sheet.addCfRule': {
+    format: ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection'],
+    'format.alignment': [
+      'horizontal',
+      'indent',
+      'justifyLastLine',
+      'readingOrder',
+      'relativeIndent',
+      'shrinkToFit',
+      'textRotation',
+      'vertical',
+      'wrapText',
+    ],
+    'format.border': ['bottom', 'diagonal', 'diagonalDown', 'diagonalUp', 'left', 'right', 'top'],
+    'format.border.bottom': ['color', 'style'],
+    'format.border.diagonal': ['color', 'style'],
+    'format.border.left': ['color', 'style'],
+    'format.border.right': ['color', 'style'],
+    'format.border.top': ['color', 'style'],
+    'format.fill': ['background', 'foreground', 'gradient', 'pattern'],
+    'format.fill.gradient': ['bottom', 'degree', 'left', 'right', 'stops', 'top', 'type'],
+    'format.fill.gradient.stops[]': ['color', 'position'],
+    'format.font': [
+      'bold',
+      'charset',
+      'color',
+      'condense',
+      'extend',
+      'family',
+      'italic',
+      'name',
+      'outline',
+      'scheme',
+      'shadow',
+      'sizePt',
+      'strike',
+      'underline',
+      'vertAlign',
+    ],
+    'format.protection': ['hidden', 'locked'],
+  },
+  'Sheet.addChart': {
+    placement: ['anchor', 'description', 'name'],
+    'placement.anchor': ['anchorKind', 'col', 'colOffsetEmu', 'editAs', 'heightEmu', 'row', 'rowOffsetEmu', 'widthEmu'],
+  },
+  'Sheet.addPicture': {
+    anchor: ['anchorKind', 'col', 'colOffsetEmu', 'editAs', 'heightEmu', 'row', 'rowOffsetEmu', 'widthEmu'],
+  },
+  'Sheet.addSparklineGroup': {
+    'sparklines[]': ['location', 'source'],
+  },
+  'Sheet.addThreadedComment': {
+    'mentions[]': ['length', 'mentionId', 'personId', 'start'],
+  },
+  'Sheet.setAutoFilter': {
+    'columns[]': [
+      'cellColor',
+      'columnOffset',
+      'conditions',
+      'customAnd',
+      'dateGroups',
+      'dxfIndex',
+      'dynamicMaxValue',
+      'dynamicType',
+      'dynamicValue',
+      'filterBlank',
+      'filterValue',
+      'hiddenButton',
+      'iconIndex',
+      'iconSet',
+      'kind',
+      'maxValueIso',
+      'percent',
+      'showButton',
+      'top',
+      'topValue',
+      'valueIso',
+      'values',
+    ],
+    'columns[].conditions[]': ['operator', 'value'],
+    'columns[].dateGroups[]': ['day', 'grouping', 'hour', 'minute', 'month', 'second', 'year'],
+    sort: ['caseSensitive', 'columnSort', 'conditions', 'range', 'sortMethod'],
+    'sort.conditions[]': ['customList', 'descending', 'dxfIndex', 'iconIndex', 'iconSet', 'range', 'sortBy'],
+  },
+  'Table.setAutoFilter': {
+    'columns[]': [
+      'cellColor',
+      'columnOffset',
+      'conditions',
+      'customAnd',
+      'dateGroups',
+      'dxfIndex',
+      'dynamicMaxValue',
+      'dynamicType',
+      'dynamicValue',
+      'filterBlank',
+      'filterValue',
+      'hiddenButton',
+      'iconIndex',
+      'iconSet',
+      'kind',
+      'maxValueIso',
+      'percent',
+      'showButton',
+      'top',
+      'topValue',
+      'valueIso',
+      'values',
+    ],
+    'columns[].conditions[]': ['operator', 'value'],
+    'columns[].dateGroups[]': ['day', 'grouping', 'hour', 'minute', 'month', 'second', 'year'],
+    sort: ['caseSensitive', 'columnSort', 'conditions', 'range', 'sortMethod'],
+    'sort.conditions[]': ['customList', 'descending', 'dxfIndex', 'iconIndex', 'iconSet', 'range', 'sortBy'],
+  },
+  'Workbook.addBorder': {
+    bottom: ['color', 'style'],
+    diagonal: ['color', 'style'],
+    left: ['color', 'style'],
+    right: ['color', 'style'],
+    top: ['color', 'style'],
+  },
+  'Workbook.addDxf': {
+    alignment: [
+      'horizontal',
+      'indent',
+      'justifyLastLine',
+      'readingOrder',
+      'relativeIndent',
+      'shrinkToFit',
+      'textRotation',
+      'vertical',
+      'wrapText',
+    ],
+    border: ['bottom', 'diagonal', 'diagonalDown', 'diagonalUp', 'left', 'right', 'top'],
+    'border.bottom': ['color', 'style'],
+    'border.diagonal': ['color', 'style'],
+    'border.left': ['color', 'style'],
+    'border.right': ['color', 'style'],
+    'border.top': ['color', 'style'],
+    fill: ['background', 'foreground', 'gradient', 'pattern'],
+    'fill.gradient': ['bottom', 'degree', 'left', 'right', 'stops', 'top', 'type'],
+    'fill.gradient.stops[]': ['color', 'position'],
+    font: [
+      'bold',
+      'charset',
+      'color',
+      'condense',
+      'extend',
+      'family',
+      'italic',
+      'name',
+      'outline',
+      'scheme',
+      'shadow',
+      'sizePt',
+      'strike',
+      'underline',
+      'vertAlign',
+    ],
+    protection: ['hidden', 'locked'],
+  },
+  'Workbook.addFill': {
+    gradient: ['bottom', 'degree', 'left', 'right', 'stops', 'top', 'type'],
+    'gradient.stops[]': ['color', 'position'],
+  },
+  'Workbook.setTableStyle': {
+    'elements[]': ['dxfIndex', 'size', 'type'],
+  },
+});
+// </input-keys>
+// <patch-nullable> generated by tools/codegen/gen_facade_tables.py; do not edit
+const PATCH_NULLABLE = Object.freeze({
+  'Chart.updateAxis': {
+    logBase: 'number',
+    majorUnit: 'number',
+    max: 'number',
+    min: 'number',
+    minorUnit: 'number',
+    numberFormat: 'string',
+    tickLabelPosition: 'number',
+    title: 'object',
+  },
+  'Chart.updateDisplay': { blanksAs: 'number', naAsBlank: 'boolean', plotVisibleOnly: 'boolean', style: 'number' },
+  'Chart.updatePoint': { marker: 'object' },
+  'Chart.updateSeries': { categories: 'object', labels: 'object', marker: 'object', name: 'object', x: 'object' },
+  'Pivot.updateField': { customName: 'string', numberFormat: 'string', sortByField: 'string' },
+  'Pivot.updateFieldItem': { caption: 'string' },
+  'Pivot.updateOptions': {
+    altText: 'string',
+    altTextSummary: 'string',
+    errorCaption: 'string',
+    grandTotalCaption: 'string',
+    missingCaption: 'string',
+  },
+  'Pivot.updateStyleOptions': { styleName: 'string' },
+  'PivotCache.updateOptions': { missingItemsLimit: 'number' },
+  'Shape.update': { fillColor: 'object', fillKind: 'number', lineColor: 'object', lineKind: 'number' },
+  'Sheet.updateFormatDefaults': { defaultColWidthChars: 'number', defaultRowHeightPt: 'number' },
+  'Sheet.updateHeaderFooter': {
+    evenFooter: 'string',
+    evenHeader: 'string',
+    firstFooter: 'string',
+    firstHeader: 'string',
+    oddFooter: 'string',
+    oddHeader: 'string',
+  },
+  'Sheet.updatePageSetup': { orientation: 'number' },
+  'Sheet.updateProtectedRange': { legacyPasswordHash: 'string' },
+  'Sheet.updateSheetProtection': {
+    algorithmName: 'string',
+    hashValue: 'string',
+    legacyPasswordHash: 'string',
+    saltValue: 'string',
+    spinCount: 'number',
+  },
+  'Sheet.updateSparklineGroup': { dateAxisRange: 'object', manualMax: 'number', manualMin: 'number' },
+  'Slicer.update': { style: 'string' },
+  'Table.updateStyleOptions': { styleName: 'string' },
+  'Workbook.updateTableStyleDefaults': { pivotStyle: 'string', tableStyle: 'string' },
+});
+// </patch-nullable>
 // <method-signatures> generated by tools/codegen/gen_facade_tables.py; do not edit
 const METHOD_ARITY = Object.freeze({
   'Chart.addSeries': 2,
@@ -2249,7 +2929,7 @@ const METHOD_ARITY = Object.freeze({
   'Chart.removeSeries': 2,
   'Chart.rename': 1,
   'Chart.setAnchor': 1,
-  'Chart.setFilter': 2,
+  'Chart.setFilter': 1,
   'Chart.setLegend': 1,
   'Chart.setPoint': 4,
   'Chart.setSource': 1,
@@ -2304,8 +2984,6 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.setDataField': 2,
   'Pivot.setFieldAxis': 2,
   'Pivot.setFieldDateGroup': 2,
-  'Pivot.setFieldShowDetail': 2,
-  'Pivot.setFieldSort': 3,
   'Pivot.setReportLayout': 1,
   'Pivot.setRowFieldOrder': 1,
   'Pivot.showDetails': 2,
@@ -2414,7 +3092,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getPrintOptionsXml': 0,
   'Sheet.getPrintTitles': 0,
   'Sheet.getRangeXfBases': 1,
-  'Sheet.getRangeXfBasesExcluding': 3,
+  'Sheet.getRangeXfBasesExcluding': 2,
   'Sheet.getRowHeightPt': 1,
   'Sheet.getRowXfIndex': 1,
   'Sheet.getSelection': 0,
@@ -2451,13 +3129,13 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.listSlicers': 0,
   'Sheet.listSparklineGroups': 0,
   'Sheet.listTables': 0,
-  'Sheet.listThreadedComments': 0,
+  'Sheet.listThreadedComments': 2,
   'Sheet.listValidations': 0,
   'Sheet.move': 1,
   'Sheet.picture': 1,
   'Sheet.pivot': 1,
   'Sheet.recalcViewport': 1,
-  'Sheet.remapRangeXfs': 3,
+  'Sheet.remapRangeXfs': 2,
   'Sheet.removeCfRule': 1,
   'Sheet.removeComment': 2,
   'Sheet.removeDataTable': 2,
@@ -2654,12 +3332,21 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.updateTableStyleDefaults': 1,
 });
 const TYPED_ARGS = Object.freeze({
+  'Chart.getPreview': [[0, 'ChartPreviewOverridesInput']],
+  'Chart.setSource': [[0, 'ChartSourceInput']],
   'Pivot.setAnchor': [[0, 'CellAddress']],
+  'PivotCache.setWorksheetSource': [[0, 'PivotWorksheetSourceInput']],
   'Sheet.addCfRule': [[0, 'ConditionalFormatInput']],
+  'Sheet.addChart': [[0, 'ChartInsertInput']],
   'Sheet.addDataTable': [[0, 'DataTableInput']],
   'Sheet.addPivot': [[0, 'PivotInput']],
+  'Sheet.addProtectedRange': [[0, 'ProtectedRangeInput']],
+  'Sheet.addSparklineGroup': [[0, 'SparklineGroupInput']],
   'Sheet.addTable': [[0, 'TableInput']],
+  'Sheet.addThreadedComment': [[0, 'ThreadedCommentInput']],
   'Sheet.addValidation': [[0, 'DataValidationInput']],
+  'Sheet.getRangeXfBasesExcluding': [[1, 'CellAddress[]']],
+  'Sheet.setArrayFormula': [[0, 'ArrayFormulaInput']],
   'Sheet.setAutoFilter': [[0, 'AutoFilterInput']],
   'Sheet.setPrintArea': [[0, 'CellRect[]']],
   'Sheet.setSelection': [[0, 'SheetSelectionInput']],
@@ -2667,8 +3354,13 @@ const TYPED_ARGS = Object.freeze({
   'Workbook.formatReference': [[0, 'ReferenceRangeInput']],
 });
 const DEFAULT_ARGS = Object.freeze({
+  'Sheet.getCellsInRange': [[0, null]],
   'Sheet.getDependents': [[2, 1]],
   'Sheet.getPrecedents': [[2, 1]],
+  'Sheet.getTypedValues': [[0, null]],
+  'Sheet.getValues': [[0, null]],
+  'Sheet.iterRows': [[0, null]],
+  'Sheet.listCells': [[0, null]],
   'Workbook.copySheet': [[1, null]],
   'Workbook.recalcParallel': [[0, 0]],
 });
@@ -2699,24 +3391,12 @@ const bools = (...fields) => Object.fromEntries(fields.map((f) => [f, 'boolean']
 const numbers = (...fields) => Object.fromEntries(fields.map((f) => [f, 'number']));
 const strings = (...fields) => Object.fromEntries(fields.map((f) => [f, 'string']));
 const objects = (...fields) => Object.fromEntries(fields.map((f) => [f, 'object']));
-const LEGEND_FIELDS = Object.freeze({ position: 'number', overlay: 'boolean', hiddenSeries: 'array' });
+const LEGEND_FIELDS = Object.freeze({ position: 'number', overlay: 'boolean', hiddenEntries: 'array' });
 const PATCH_FIELDS = Object.freeze({
   'Workbook.updateIterative': { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') },
   'PivotCache.updateOptions': bools('saveData', 'refreshOnLoad'),
   'Sheet.updateView': {
-    ...numbers(
-      'zoomPct',
-      'freezeRows',
-      'freezeCols',
-      'splitXTwips',
-      'splitYTwips',
-      'topLeftRow',
-      'topLeftCol',
-      'paneTopLeftRow',
-      'paneTopLeftCol',
-      'visibility',
-      'viewMode',
-    ),
+    ...numbers('zoomPct', 'freezeRows', 'freezeCols', 'splitXTwips', 'splitYTwips', 'visibility', 'viewMode'),
     ...bools(
       'showGridLines',
       'showRowColHeaders',
@@ -2749,7 +3429,10 @@ const PATCH_FIELDS = Object.freeze({
     'allowAutoFilter',
     'allowPivotTables',
   ),
-  'Pivot.updateField': bools('defaultSubtotal', 'insertBlankRow', 'fillDownLabels', 'showAll', 'subtotalTop'),
+  'Pivot.updateField': {
+    ...bools('defaultSubtotal', 'insertBlankRow', 'fillDownLabels', 'showAll', 'subtotalTop', 'showDetail'),
+    sortOrder: 'number',
+  },
   'Pivot.updateFieldItem': bools('visible', 'showDetail'),
   'Pivot.updateStyleOptions': bools(
     'showRowHeaders',
@@ -2784,6 +3467,9 @@ const PATCH_FIELDS = Object.freeze({
   },
   'Chart.setLegend': LEGEND_FIELDS,
   'Chart.updateLegend': LEGEND_FIELDS,
+  'Chart.updateAxis': { ...bools('minorGridlines', 'sourceLinked'), position: 'number' },
+  // A nested key is named by its path; `labels` itself takes `null`, its flags do not.
+  'Chart.updateSeries': bools('labels.sourceLinked', 'labels.deleted'),
   // `range` takes a `CellRect`, a `SheetRect` or an A1 string, checked by `tableRange`.
   'Table.update': bools('headerRow', 'totalsRow'),
   'Table.updateStyleOptions': bools('showFirstColumn', 'showLastColumn', 'showRowStripes', 'showColumnStripes'),
@@ -2847,16 +3533,6 @@ const PATCH_FIELDS = Object.freeze({
   },
 });
 
-// The nullable keys of the hand-written patches the read-modify-write and drawing setters take. A `ShapePatch`
-// `fillKind` / `lineKind` of `null` is the value the getter returns for a paint the engine cannot write, and
-// leaves the paint unchanged.
-const PATCH_NULLABLE = Object.freeze({
-  'Shape.update': { ...numbers('fillKind', 'lineKind'), ...objects('fillColor', 'lineColor') },
-  'Slicer.update': strings('style'),
-  'Sheet.updateSparklineGroup': { ...numbers('manualMin', 'manualMax'), ...strings('dateAxisRef') },
-  'Sheet.updateProtectedRange': strings('legacyPasswordHash'),
-});
-
 // The anchor keys of a drawing patch, which apply only together with the trigger key that carries the anchor.
 const ANCHOR_PATCH_KEYS = Object.freeze({
   'Shape.update': [
@@ -2881,6 +3557,70 @@ const ANCHOR_PATCH_KEYS = Object.freeze({
   ],
 });
 
+// Where a sparkline whose source text does not parse keeps that text, so the group it is read in writes it back.
+const STORED_SOURCE = Symbol('formulon.sparklineSource');
+
+/** The public `ThreadedComment` of a raw record: its anchor as `cell`, its stamp as a civil time. */
+function threadedCommentRead({ row, col, created, ...comment }) {
+  return { ...comment, cell: { row, col }, created: stampCivil(created) };
+}
+
+// A1 text of the one cell `{ row, col }`.
+function cellText(raw, { row, col }) {
+  return raw.formatReference({ rect: { firstRow: row, firstCol: col, lastRow: row, lastCol: col } });
+}
+
+/**
+ * The raw record of a sparkline group (or of the keys of a patch) given as a public `SparklineGroupInput`:
+ * each sparkline's `source` and `location`, and `dateAxisRange`, become the reference text the raw layer takes.
+ * `sheet` resolves an unqualified source.
+ */
+function encodeSparklineGroup(raw, sheet, group, where) {
+  const { sparklines, dateAxisRange, ...rest } = group;
+  const out = { ...rest };
+  if (sparklines !== undefined) {
+    out.sparklines = requireArray(sparklines, `${where} sparklines`).map((item, i) => {
+      const label = `${where} sparklines[${i}]`;
+      requireObject(item, label);
+      for (const key of Object.keys(item)) {
+        if (item[key] !== undefined && !SPARKLINE_KEYS.includes(key)) {
+          throw new TypeError(`${where} has no field sparklines[${i}].${key}`);
+        }
+      }
+      const formula = present(item.source)
+        ? sheetRectText(raw, item.source, sheet, `${label}.source`)
+        : (item[STORED_SOURCE] ?? '');
+      return { formula, location: cellText(raw, addressOf(raw, item.location, `${label}.location`)) };
+    });
+  }
+  if (dateAxisRange !== undefined) {
+    out.dateAxisRef =
+      dateAxisRange === null ? null : sheetRectText(raw, dateAxisRange, sheet, `${where} dateAxisRange`);
+  }
+  return out;
+}
+
+/** The public `SparklineGroup` of a raw group record: sources and the date range as `SheetRect`, locations as cells. */
+function decodeSparklineGroup(raw, group) {
+  const { dateAxisRef, sparklines, ...rest } = group;
+  const withoutEquals = (text) => (typeof text === 'string' && text.startsWith('=') ? text.slice(1) : text);
+  return {
+    ...rest,
+    dateAxisRange: parseSheetRect(raw, withoutEquals(dateAxisRef)),
+    sparklines: sparklines.map(({ formula, location }) => {
+      const text = withoutEquals(formula);
+      const source = parseSheetRect(raw, text);
+      const cell = parseReferenceOrNull(raw, location);
+      const sparkline = {
+        source,
+        location: cell === null ? { row: 0, col: 0 } : { row: cell.rect.firstRow, col: cell.rect.firstCol },
+      };
+      if (source === null && text !== '') Object.defineProperty(sparkline, STORED_SOURCE, { value: formula });
+      return sparkline;
+    }),
+  };
+}
+
 /** Checks a drawing patch of `where`: its types and nulls, and no anchor key without the trigger key. */
 function checkDrawingPatch(where, patch) {
   checkPatch(where, patch, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
@@ -2902,7 +3642,7 @@ function checkShapePaint(where, spec) {
 }
 
 const COLOR_KEYS = Object.freeze(['argb', 'indexed', 'kind', 'theme', 'tint']);
-const SPARKLINE_KEYS = Object.freeze(['formula', 'location']);
+const SPARKLINE_KEYS = Object.freeze(['source', 'location']);
 
 /**
  * Refuses an unknown key inside the records a `SparklineGroupPatch` nests: each `Color` and each element of
@@ -3000,7 +3740,7 @@ const GRID_COLS = 16384;
 // 2^22 cells: the largest range `getValues` reads.
 const MAX_VALUES_CELLS = 4194304;
 const BLANK = Object.freeze({ kind: ValueKind.Blank });
-const DEFAULT_LEGEND = Object.freeze({ position: ChartLegendPosition.Right, overlay: false, hiddenSeries: [] });
+const DEFAULT_LEGEND = Object.freeze({ position: ChartLegendPosition.Right, overlay: false, hiddenEntries: [] });
 const GEOMETRY_MODES = new Set(Object.values(GeometryMode));
 
 function isObject(value) {
@@ -3214,7 +3954,8 @@ function normalizeAddress(raw, kind, value, sheet, label) {
   if (value === null || value === undefined) return value;
   if (kind.endsWith('[]')) {
     const element = kind.slice(0, -2);
-    const range = RANGE_KINDS.has(element);
+    // Only a list of rectangles also takes one A1 string (`'A1:B2'`); a list of cells is always an array.
+    const range = element === 'CellRect';
     if (range && typeof value === 'string') return [normalizeAddress(raw, element, value, sheet, `${label}[0]`)];
     if (!Array.isArray(value)) {
       throw new TypeError(`${label} must be an array${range ? ' or one A1 string' : ''}`);
@@ -3226,7 +3967,17 @@ function normalizeAddress(raw, kind, value, sheet, label) {
   if (kind === 'CellRect') return unqualifiedRect(raw, value, label);
   if (kind === 'SheetRect') {
     const [sheetName, rect] = parsedRange(raw, value, label, kind);
-    if (sheetName !== null) return { sheet: raw.getSheetIndex(sheetName), rect };
+    if (sheetName !== null) {
+      const index = raw.getSheetIndex(sheetName);
+      if (index === null || index === undefined) {
+        throw new FormulonError(
+          StatusCode.NotFound,
+          `${label} ${JSON.stringify(value)}: no sheet is named ${JSON.stringify(sheetName)}`,
+          `sheet_name=${sheetName}`,
+        );
+      }
+      return { sheet: index, rect };
+    }
     if (sheet === undefined) {
       throw new FormulonError(
         StatusCode.InvalidArgument,
@@ -3241,6 +3992,50 @@ function normalizeAddress(raw, kind, value, sheet, label) {
     throw new FormulonError(StatusCode.InvalidArgument, `${label} ${JSON.stringify(value)} is not one cell`, '');
   }
   return { row: rect.firstRow, col: rect.firstCol };
+}
+
+/** The `{ row, col }` of a `CellAddress` or a one-cell A1 string. */
+function addressOf(raw, value, label) {
+  if (typeof value === 'string') return normalizeAddress(raw, 'CellAddress', value, undefined, label);
+  requireObject(value, label);
+  return value;
+}
+
+/** `record` with its key `from` named `to`; anything but an object (a `null` read) passes as it is. */
+function renamed(record, from, to) {
+  if (!isObject(record) || !(from in record)) return record;
+  const { [from]: value, ...rest } = record;
+  return { ...rest, [to]: value };
+}
+
+/** `record` with each `[from, to]` of `pairs` renamed. */
+function renamedAll(record, pairs) {
+  return pairs.reduce((out, [from, to]) => renamed(out, from, to), record);
+}
+
+/** The text `value` (a `SheetRect`, or an A1 string resolved on `sheet`) is as a sheet-qualified reference. */
+function sheetRectText(raw, value, sheet, label) {
+  const { sheet: at, rect } = normalizeAddress(raw, 'SheetRect', value, sheet, label);
+  return raw.formatReference({ sheetName: raw.getSheetName(at), rect });
+}
+
+/** The raw `{ sheetName, rect }` of a stored reference text; `null` when it is empty or does not parse. */
+function parseReferenceOrNull(raw, text) {
+  if (typeof text !== 'string' || text === '') return null;
+  try {
+    return raw.parseReference(text);
+  } catch (e) {
+    if (e?.name === 'FormulonError' && e.parseError !== undefined) return null;
+    throw e;
+  }
+}
+
+/** The `SheetRect` a stored qualified reference text names; `null` when it is empty, unqualified or unparseable. */
+function parseSheetRect(raw, text) {
+  const ref = parseReferenceOrNull(raw, text);
+  if (ref === null || ref.sheetName === null) return null;
+  const sheet = raw.getSheetIndex(ref.sheetName);
+  return sheet === null || sheet === undefined ? null : { sheet, rect: ref.rect };
 }
 
 /**
@@ -3260,8 +4055,8 @@ function readableCopy(record) {
 /**
  * `record` (of input record `type`) in raw form, by `RECORD_RANGE_FIELDS`: a `CellRect` field takes an
  * unqualified A1 range, a `CellRect[]` field an array of them or one string, a `SheetRect` field a qualified
- * range (an unqualified one resolves on `sheet`) and a nested record its own fields. A `CellAddress` field `x`
- * takes one A1 cell and reaches the raw method as `xRow` / `xCol`. Anything but an object passes as it is.
+ * range (an unqualified one resolves on `sheet`), a `CellAddress` field one A1 cell (read as `{ row, col }`) and a
+ * nested record its own fields. Anything but an object passes as it is.
  * `label` words the errors: a field `f` is `<label>f` when it ends in a space, `<label>.f` otherwise.
  */
 function normalizeRecordRanges(raw, record, type, sheet, label) {
@@ -3270,18 +4065,8 @@ function normalizeRecordRanges(raw, record, type, sheet, label) {
   let out = record;
   for (const [field, kind] of Object.entries(schema)) {
     const value = record[field];
-    if (kind === 'CellAddress') {
-      for (const key of [`${field}Row`, `${field}Col`]) {
-        if (record[key] !== undefined) throw new TypeError(`${label.trimEnd()} has no field ${key}`);
-      }
-    }
     const next = normalizeAddress(raw, kind, value, sheet, label.endsWith(' ') ? label + field : `${label}.${field}`);
-    if (kind === 'CellAddress' && isObject(next)) {
-      if (out === record) out = readableCopy(record);
-      delete out[field];
-      out[`${field}Row`] = next.row;
-      out[`${field}Col`] = next.col;
-    } else if (next !== value) {
+    if (next !== value) {
       if (out === record) out = readableCopy(record);
       out[field] = next;
     }
@@ -3409,25 +4194,39 @@ function withoutUnstated(patch, read) {
   return out;
 }
 
+// The key tables of a patch argument and of an input record argument.
+const PATCH_TABLES = Object.freeze({ keys: PATCH_KEYS, nested: PATCH_NESTED_KEYS });
+const INPUT_TABLES = Object.freeze({ keys: INPUT_KEYS, nested: INPUT_NESTED_KEYS });
+
 /**
  * Throws `TypeError: <where> argument <n> has no field <path>` for a key that
- * neither the patch type of `where` (`Class.method`) nor its getter's record
- * declares (`PATCH_KEYS`), and, at each path `PATCH_NESTED_KEYS` lists, for a
- * key of the object there outside its list; `undefined` is ignored. `source` names the table entry when
+ * neither the type of `where` (`Class.method`) nor its getter's record
+ * declares (`tables.keys`), and, at each path `tables.nested` lists, for a
+ * key of the object there outside its list (a path segment ending in `[]`
+ * names each element of an array); `undefined` is ignored. `source` names the table entry when
  * `where` words the error for a method whose record is the entry's twin.
  */
-function refuseUnknownKeys(where, patch, source = where) {
-  const [position, keys] = PATCH_KEYS[source];
-  const nested = PATCH_NESTED_KEYS[source] ?? {};
+function refuseUnknownKeys(where, patch, source = where, tables = PATCH_TABLES) {
+  const [position, keys] = tables.keys[source];
+  const nested = tables.nested[source] ?? {};
   const visit = (value, accepted, prefix) => {
     for (const [key, item] of Object.entries(value)) {
       if (item === undefined) continue;
       const path = `${prefix}${key}`;
       if (!accepted.includes(key)) throw new TypeError(`${where} argument ${position + 1} has no field ${path}`);
       if (Object.hasOwn(nested, path) && isObject(item)) visit(item, nested[path], `${path}.`);
+      const each = `${path}[]`;
+      if (Object.hasOwn(nested, each) && Array.isArray(item)) {
+        for (const [i, element] of item.entries()) if (isObject(element)) visit(element, nested[each], `${each}.`);
+      }
     }
   };
   visit(patch, keys, '');
+}
+
+/** Refuses a key outside the input record of `where` (`INPUT_KEYS`) that `value` is; anything but an object passes. */
+function refuseUnknownInputKeys(where, value) {
+  if (isObject(value)) refuseUnknownKeys(where, value, where, INPUT_TABLES);
 }
 
 /**
@@ -3470,7 +4269,9 @@ function checkForwardedPatch(where, patch, fields = {}) {
   if (!isObject(patch)) return;
   refuseUnknownKeys(where, patch);
   for (const [field, type] of Object.entries(fields)) {
-    if (patch[field] === null) throw new TypeError(`${where} ${field} must be a ${type}`);
+    const [head, tail] = field.split('.');
+    const value = tail === undefined ? patch[head] : isObject(patch[head]) ? patch[head][tail] : undefined;
+    if (value === null) throw new TypeError(`${where} ${field} must be a ${type}`);
   }
 }
 
@@ -3654,12 +4455,26 @@ function serialDate(runtime, serial, date1904) {
 // Record keys whose value is a `ColorInput`; a colour string there becomes a `Color`.
 const CHART_SOURCE_KEYS = new Set(['name', 'categories', 'values', 'x', 'y', 'size']);
 
-/** The reference text of a `ChartDataSource` record (a series reference key); a literal source has no text form. */
-function chartSourceText(source, path) {
-  if (source.kind === ChartSourceKind.Literal) {
-    throw new FormulonError(StatusCode.InvalidArgument, `${path} cannot be set from a literal source`, `path=${path}`);
-  }
+/** A `ChartDataSource` record as the raw layer reads it: reference text, or the record itself for a literal one. */
+function chartSourceInput(source) {
+  if (source.kind === ChartSourceKind.Literal) return source;
   return source.kind === ChartSourceKind.Ref ? source.formula : '';
+}
+
+/**
+ * The raw options `{ barDirection?, grouping? }` of a chart type write, `null` entries as omitted; a bar direction
+ * on a type other than `Bar` is a `TypeError`.
+ */
+function chartTypeOptions(where, position, type, options) {
+  const out = {};
+  if (options === undefined || options === null) return out;
+  requireObject(options, `${where} argument ${position}`);
+  refuseOtherKeys(where, position, options, ['barDirection', 'grouping']);
+  for (const key of ['barDirection', 'grouping']) if (present(options[key])) out[key] = options[key];
+  if (out.barDirection !== undefined && type !== ChartPlotType.Bar) {
+    throw new TypeError(`${where} barDirection applies to the Bar type only`);
+  }
+  return out;
 }
 
 const COLOR_INPUT_KEYS = new Set([
@@ -3708,7 +4523,7 @@ function colorInputs(value, label) {
     if (COLOR_INPUT_KEYS.has(key) && typeof item === 'string') next = formatColor(item, path);
     else if (key === 'colors' && Array.isArray(item)) next = item.map((c, i) => asColor(c, `${path}[${i}]`));
     else if (CHART_SOURCE_KEYS.has(key) && isObject(item) && typeof item.kind === 'number' && 'formula' in item)
-      next = chartSourceText(item, path);
+      next = chartSourceInput(item);
     else next = colorInputs(item, path);
     if (next !== item && !(Array.isArray(next) && next.every((c, i) => c === item[i]))) {
       if (out === value) out = { ...value };
@@ -3784,7 +4599,7 @@ const FORMAT_FIELDS = Object.freeze({
     pattern: enumField(FillPattern),
     foreground: FORMAT_COLOR,
     background: FORMAT_COLOR,
-    gradient: { kind: 'object' },
+    gradient: { kind: 'object', nullable: true },
   },
   border: {
     left: FORMAT_SIDE,
@@ -3810,18 +4625,6 @@ const FORMAT_FIELDS = Object.freeze({
   protection: { locked: FORMAT_BOOLEAN, hidden: FORMAT_BOOLEAN },
 });
 
-// The `CellXfInput` field each alignment key writes, and the presence flag it sets when it has one.
-const ALIGNMENT_XF = Object.freeze({
-  horizontal: ['horizontal', 'hasHorizontal'],
-  vertical: ['vertical', 'hasVertical'],
-  wrapText: ['wrapText', 'hasWrapText'],
-  justifyLastLine: ['justifyLastLine', 'hasJustifyLastLine'],
-  shrinkToFit: ['shrinkToFit'],
-  indent: ['indent'],
-  textRotation: ['textRotation'],
-  readingOrder: ['readingOrder'],
-  relativeIndent: ['relativeIndent'],
-});
 const OPTIONAL_XF_FIELDS = Object.freeze(['textRotation', 'indent', 'shrinkToFit', 'readingOrder', 'relativeIndent']);
 const APPLY_FLAGS = Object.freeze({
   numberFormat: 'applyNumberFormat',
@@ -3932,10 +4735,10 @@ function mergeFont(current, patch) {
 }
 
 // Setting a colour on a fill without a pattern makes it solid, Excel's "fill
-// colour"; any fill key drops a gradient unless the patch names one.
+// colour"; any fill key drops a gradient unless the patch names one, and a `null` gradient drops it.
 function mergeFill(current, patch) {
   const out = { ...current };
-  if (patch.gradient === undefined) delete out.gradient;
+  if (patch.gradient == null) delete out.gradient;
   else out.gradient = patch.gradient;
   for (const key of ['pattern', 'foreground', 'background']) if (patch[key] !== undefined) out[key] = patch[key];
   const colored = patch.foreground !== undefined || patch.background !== undefined;
@@ -3954,9 +4757,8 @@ function mergeBorder(current, patch) {
 const present = (value) => value !== null && value !== undefined;
 
 /**
- * The `CellXfInput` that rebuilds `xf` as `addCellXf` reads it: an absent
- * attribute (`null`) keeps its input default with its presence flag false, and
- * an optional alignment attribute is copied only when the record has it.
+ * The `CellXfInput` that rebuilds `xf` as `addCellXf` reads it: an absent attribute is `null` or omitted, so the
+ * record copies, and an optional attribute is copied only when the record has it.
  */
 function cellXfInput(xf) {
   const input = {
@@ -3964,14 +4766,6 @@ function cellXfInput(xf) {
     fillIndex: xf.fillIndex,
     borderIndex: xf.borderIndex,
     numFmtId: xf.numFmtId,
-    horizontal: xf.horizontal ?? HorizontalAlign.General,
-    hasHorizontal: present(xf.horizontal),
-    vertical: xf.vertical ?? VerticalAlign.Bottom,
-    hasVertical: present(xf.vertical),
-    wrapText: xf.wrapText ?? false,
-    hasWrapText: present(xf.wrapText),
-    justifyLastLine: xf.justifyLastLine ?? false,
-    hasJustifyLastLine: present(xf.justifyLastLine),
     applyNumberFormat: xf.applyNumberFormat,
     applyFont: xf.applyFont,
     applyFill: xf.applyFill,
@@ -3979,18 +4773,12 @@ function cellXfInput(xf) {
     applyAlignment: xf.applyAlignment,
     applyProtection: xf.applyProtection,
     quotePrefix: xf.quotePrefix,
-    hasProtection: present(xf.locked) || present(xf.hidden),
-    locked: xf.locked ?? true,
-    hidden: xf.hidden ?? false,
   };
+  for (const key of ['horizontal', 'vertical', 'wrapText', 'justifyLastLine', 'locked', 'hidden']) {
+    if (present(xf[key])) input[key] = xf[key];
+  }
   for (const key of OPTIONAL_XF_FIELDS) if (present(xf[key])) input[key] = xf[key];
   if (present(xf.styleXfIndex)) input.styleXfIndex = xf.styleXfIndex;
-  input.hasAlignment =
-    input.hasHorizontal ||
-    input.hasVertical ||
-    input.hasWrapText ||
-    input.hasJustifyLastLine ||
-    OPTIONAL_XF_FIELDS.some((key) => key in input);
   return input;
 }
 
@@ -4004,18 +4792,10 @@ function patchedXf(raw, xf, patch, numFmtId) {
   if (patch.border !== undefined) {
     input.borderIndex = raw.addBorder(mergeBorder(raw.getBorder(xf.borderIndex), patch.border));
   }
-  if (patch.alignment !== undefined) {
-    for (const [key, value] of Object.entries(patch.alignment)) {
-      const [field, flag] = ALIGNMENT_XF[key];
-      input[field] = value;
-      if (flag !== undefined) input[flag] = true;
-    }
-    input.hasAlignment = true;
-  }
+  if (patch.alignment !== undefined) Object.assign(input, patch.alignment);
   if (patch.protection !== undefined) {
-    input.locked = patch.protection.locked ?? input.locked;
-    input.hidden = patch.protection.hidden ?? input.hidden;
-    input.hasProtection = true;
+    input.locked = patch.protection.locked ?? input.locked ?? true;
+    input.hidden = patch.protection.hidden ?? input.hidden ?? false;
   }
   return input;
 }
@@ -4229,7 +5009,7 @@ function makeFacade(Raw, registry, runtime) {
         fieldName,
         numberFormat,
       }));
-      return { rect: layout.rect, cells };
+      return { range: layout.rect, cells };
     }
 
     // `value` / `valueHigh` reach the raw method as they are; it maps them onto the C operand union.
@@ -4246,60 +5026,32 @@ function makeFacade(Raw, registry, runtime) {
       return insertSheet(this.#sheet.workbook, raw.showPivotDetails(sheet, pivot, row, col));
     }
 
+    // The whole patch is checked here and applied by one raw call; the record keys it cannot write are dropped.
     updateField(field, patch) {
       const where = 'Pivot.updateField';
-      checkPatch(where, patch, PATCH_FIELDS[where], { customName: 'string', numberFormat: 'string' });
+      const fields = PATCH_FIELDS[where];
+      const nullable = PATCH_NULLABLE[where];
+      checkPatch(where, patch, fields, nullable);
       const [raw, sheet, pivot] = this.#locate();
-      const setters = [
-        ['customName', 'setPivotFieldCustomName'],
-        ['numberFormat', 'setPivotFieldNumberFormat'],
-        ['defaultSubtotal', 'setPivotFieldDefaultSubtotal'],
-        ['insertBlankRow', 'setPivotFieldInsertBlankRow'],
-        ['fillDownLabels', 'setPivotFieldFillDownLabels'],
-        ['showAll', 'setPivotFieldShowAll'],
-        ['subtotalTop', 'setPivotFieldSubtotalTop'],
-      ];
-      for (const [key, setter] of setters) {
-        if (patch[key] !== undefined) raw[setter](sheet, pivot, field, patch[key] ?? '');
-      }
+      raw.updatePivotField(sheet, pivot, field, appliedFields(patch, fields, nullable));
     }
 
     updateFieldItem(field, item, patch) {
       const where = 'Pivot.updateFieldItem';
-      checkPatch(where, patch, PATCH_FIELDS[where], { caption: 'string' });
+      const fields = PATCH_FIELDS[where];
+      const nullable = PATCH_NULLABLE[where];
+      checkPatch(where, patch, fields, nullable);
       const [raw, sheet, pivot] = this.#locate();
-      const setters = [
-        ['visible', 'setPivotFieldItemVisible'],
-        ['showDetail', 'setPivotFieldItemShowDetail'],
-        ['caption', 'setPivotFieldItemCaption'],
-      ];
-      for (const [key, setter] of setters) {
-        if (patch[key] !== undefined) raw[setter](sheet, pivot, field, item, patch[key] ?? '');
-      }
+      raw.updatePivotFieldItem(sheet, pivot, field, item, appliedFields(patch, fields, nullable));
     }
 
     updateStyleOptions(patch) {
       const where = 'Pivot.updateStyleOptions';
       const fields = PATCH_FIELDS[where];
-      checkPatch(where, patch, fields, { styleName: 'string' });
+      const nullable = PATCH_NULLABLE[where];
+      checkPatch(where, patch, fields, nullable);
       const [raw, sheet, pivot] = this.#locate();
-      const current = raw.getPivotStyleOptions(sheet, pivot) ?? {};
-      const info = {};
-      const styleName = patch.styleName === undefined ? current.styleName || undefined : (patch.styleName ?? undefined);
-      if (styleName !== undefined) info.styleName = styleName;
-      for (const key of Object.keys(fields)) info[key] = patch[key] ?? current[key] ?? false;
-      raw.updatePivotStyleOptions(sheet, pivot, info);
-    }
-
-    setFieldSort(field, order, options) {
-      const where = 'Pivot.setFieldSort';
-      let byField = '';
-      if (options !== undefined && options !== null) {
-        requireObject(options, `${where} argument 3`);
-        if (options.byField !== undefined) byField = requireString(options.byField, `${where} byField`);
-      }
-      const [raw, sheet, pivot] = this.#locate();
-      raw.setPivotFieldSort(sheet, pivot, field, order, byField);
+      raw.updatePivotStyleOptions(sheet, pivot, appliedFields(patch, fields, nullable));
     }
 
     // `item` is a new item's name, or `{ cacheIndex }` to bring in the cache's shared item at that position.
@@ -4433,20 +5185,60 @@ function makeFacade(Raw, registry, runtime) {
       raw[`setPivotCacheRecord${kind}`](this.#cacheId, record, field, ...args);
     }
 
+    // The read record folds the source's sheet and reference into one `SheetRect`; it is `null` for a source
+    // without a reference or one on a sheet the workbook does not have.
+    getWorksheetSource() {
+      const raw = this.#raw();
+      const source = raw.getPivotCacheWorksheetSource(this.#cacheId);
+      if (source === null || source === undefined || source.present === false) return null;
+      let range = null;
+      if (typeof source.sheet === 'string') {
+        const sheet = raw.getSheetIndex(source.sheet);
+        const ref = typeof source.ref === 'string' ? parseReferenceOrNull(raw, source.ref) : null;
+        if (ref !== null && ref.sheetName === null && sheet !== null && sheet !== undefined) {
+          range = { sheet, rect: ref.rect };
+        }
+      }
+      return { range, name: source.name ?? null };
+    }
+
     // `null` removes the source; an object writes one with the attributes it gives (`null` is one left off).
+    // `sheet` qualifies an unqualified `range`, and may not disagree with a qualified one.
     setWorksheetSource(source) {
       const where = 'PivotCache.setWorksheetSource';
-      if (source === null) return this.#raw().setPivotCacheWorksheetSource(this.#cacheId, { present: false });
+      const raw = this.#raw();
+      if (source === null) return raw.setPivotCacheWorksheetSource(this.#cacheId, { present: false });
       requireObject(source, `${where} argument 1`);
-      const keys = ['ref', 'sheet', 'name'];
+      refuseOtherKeys(where, 1, source, ['range', 'sheet', 'name']);
       const input = { present: true };
-      // Each value is read once.
-      for (const [key, value] of Object.entries(source)) {
-        if (value === undefined) continue;
-        if (!keys.includes(key)) throw new TypeError(`${where} argument 1 has no field ${key}`);
-        if (value !== null) input[key] = requireString(value, `${where} ${key}`);
+      let sheet = present(source.sheet) ? sheetRefIndex(this.#workbook, source.sheet, `${where} sheet`) : undefined;
+      if (present(source.range)) {
+        let rect;
+        let qualified;
+        if (typeof source.range === 'string') {
+          const [sheetName, parsed] = parsedRange(raw, source.range, `${where} range`, 'SheetRect');
+          rect = parsed;
+          qualified = sheetName === null ? undefined : sheetRefIndex(this.#workbook, sheetName, `${where} range`);
+        } else {
+          requireObject(source.range, `${where} range`);
+          ({ rect, sheet: qualified } = source.range);
+        }
+        if (qualified !== undefined && sheet !== undefined && qualified !== sheet) {
+          throw new FormulonError(
+            StatusCode.InvalidArgument,
+            `${where} sheet disagrees with the sheet of range`,
+            `sheet=${sheet}`,
+          );
+        }
+        sheet ??= qualified;
+        if (sheet === undefined) {
+          throw new FormulonError(StatusCode.InvalidArgument, `${where} range has no sheet`, '');
+        }
+        input.ref = raw.formatReference({ rect });
       }
-      this.#raw().setPivotCacheWorksheetSource(this.#cacheId, input);
+      if (sheet !== undefined) input.sheet = raw.getSheetName(sheet);
+      if (present(source.name)) input.name = requireString(source.name, `${where} name`);
+      raw.setPivotCacheWorksheetSource(this.#cacheId, input);
     }
   }
 
@@ -4505,7 +5297,7 @@ function makeFacade(Raw, registry, runtime) {
       raw.setChartLegend(sheet, id, {
         position: legend.position ?? DEFAULT_LEGEND.position,
         overlay: legend.overlay ?? DEFAULT_LEGEND.overlay,
-        hiddenSeries: legend.hiddenSeries ?? DEFAULT_LEGEND.hiddenSeries,
+        hiddenEntries: legend.hiddenEntries ?? DEFAULT_LEGEND.hiddenEntries,
       });
     }
 
@@ -4523,15 +5315,19 @@ function makeFacade(Raw, registry, runtime) {
       raw.setChartPoint(sheet, id, plot, seriesIndex, pointIndex, colorInputs(point, `${where} argument 4`));
     }
 
+    // `range` is a `SheetRect` or an A1 string (an unqualified one is on the chart's sheet); the raw call takes
+    // the qualified text.
     setSource(source) {
       const where = 'Chart.setSource';
       requireObject(source, `${where} argument 1`);
+      refuseOtherKeys(where, 1, source, ['range', 'direction', 'headerRow', 'headerColumn']);
+      const [raw, sheet, id] = drawingState.locate(this);
       const flag = (field) =>
         source[field] === undefined || source[field] === null
           ? undefined
           : requireBoolean(source[field], `${where} ${field}`);
       const args = [
-        requireString(source.source, `${where} source`),
+        sheetRectText(raw, source.range, sheet, `${where} range`),
         source.direction === undefined
           ? ChartSeriesDirection.Auto
           : requireInteger(source.direction, `${where} direction`),
@@ -4539,8 +5335,50 @@ function makeFacade(Raw, registry, runtime) {
       const headerRow = flag('headerRow');
       const headerColumn = flag('headerColumn');
       if (headerRow !== undefined || headerColumn !== undefined) args.push(headerRow, headerColumn);
-      const [raw, sheet, id] = drawingState.locate(this);
       raw.setChartSource(sheet, id, ...args);
+    }
+
+    // A bar direction belongs to the `Bar` type alone, and only an explicit one is refused elsewhere.
+    setType(plot, type, options) {
+      const where = 'Chart.setType';
+      const checked = chartTypeOptions(where, 3, type, options);
+      const [raw, sheet, id] = drawingState.locate(this);
+      raw.setChartType(sheet, id, plot, type, checked);
+    }
+
+    // The record names the series and categories the filter hides; a key it leaves out hides none.
+    setFilter(filter) {
+      const where = 'Chart.setFilter';
+      requireObject(filter, `${where} argument 1`);
+      refuseOtherKeys(where, 1, filter, ['hiddenSeries', 'hiddenCategories']);
+      const indices = (key) => requireArray(filter[key] ?? [], `${where} ${key}`);
+      const [raw, sheet, id] = drawingState.locate(this);
+      raw.setChartFilter(sheet, id, indices('hiddenSeries'), indices('hiddenCategories'));
+    }
+
+    // The raw source carries qualified reference text, which reads as a `SheetRect` here.
+    getProperties() {
+      const [raw, sheet, id] = drawingState.locate(this);
+      const properties = raw.getChart(sheet, id);
+      if (properties === null) {
+        throw new FormulonError(StatusCode.NotFound, 'the drawing object has no such part', `object_id=${id}`);
+      }
+      const { source } = properties;
+      if (source === null || source === undefined) return properties;
+      const range = parseSheetRect(raw, source.range);
+      return { ...properties, source: range === null ? null : { ...source, range } };
+    }
+
+    // `overrides.range` is `source` text on the raw call.
+    getPreview(overrides) {
+      const where = 'Chart.getPreview';
+      requireObject(overrides, `${where} argument 1`);
+      if (overrides.source !== undefined) throw new TypeError(`${where} argument 1 has no field source`);
+      const [raw, sheet, id] = drawingState.locate(this);
+      const { range, ...rest } = colorInputs(overrides, `${where} argument 1`);
+      const source = range === undefined ? undefined : sheetRectText(raw, range, sheet, `${where} range`);
+      const input = source === undefined ? rest : { ...rest, source };
+      return raw.getChartPreview(sheet, id, input);
     }
   }
 
@@ -4581,6 +5419,23 @@ function makeFacade(Raw, registry, runtime) {
         return Shape;
     }
     return raw.getSlicer(sheet, record.objectId) === null ? Drawing : Slicer;
+  }
+
+  // The index a `SheetRef` of `workbook` names; `label` words the errors.
+  function sheetRefIndex(workbook, ref, label) {
+    if (ref instanceof Sheet) {
+      if (ref.workbook !== workbook) throw new TypeError(`${label} is a Sheet of another workbook`);
+      return sheetIndex(ref);
+    }
+    if (typeof ref === 'string') {
+      const index = rawOf(workbook).getSheetIndex(ref);
+      if (index === null || index === undefined) {
+        throw new FormulonError(StatusCode.NotFound, `no sheet is named ${JSON.stringify(ref)}`, `sheet_name=${ref}`);
+      }
+      return index;
+    }
+    if (typeof ref === 'number') return requireIndex(ref, label);
+    throw new TypeError(`${label} must be a sheet name, a sheet index or a Sheet`);
   }
 
   // The current index of a `TableRef` / `PivotRef` handle `value` passed to a method of the sheet `self`;
@@ -4692,8 +5547,10 @@ function makeFacade(Raw, registry, runtime) {
       return this.#typedGrid(range, 'Sheet.getTypedValues');
     }
 
-    // The tagged values of `range` as rows, a blank cell `BLANK`.
+    // The tagged values of `range` (the used range when it is omitted or `null`) as rows, a blank cell `BLANK`.
     #typedGrid(range, where) {
+      if (range === undefined || range === null) range = this.getUsedRange();
+      if (range === null) return [];
       requireObject(range, `${where} argument 1`);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
@@ -4717,14 +5574,17 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     getCellsInRange(range, ...rest) {
-      const page = rawOf(this.#workbook).getCellsInRange(this.#current(), range, ...rest);
+      const rect = range ?? this.getUsedRange();
+      if (rect === null) return { cells: [], nextCursor: null };
+      const page = rawOf(this.#workbook).getCellsInRange(this.#current(), rect, ...rest);
       return { cells: page.cells.map(rangeCell), nextCursor: page.nextCursor };
     }
 
     listCells(range) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      const rect = range ?? { firstRow: 0, firstCol: 0, lastRow: GRID_ROWS - 1, lastCol: GRID_COLS - 1 };
+      const rect = range ?? this.getUsedRange();
+      if (rect === null) return [];
       const cells = [];
       forEachCellIn(raw, sheet, rect, (cell) => cells.push(rangeCell(cell)));
       return cells;
@@ -4986,12 +5846,13 @@ function makeFacade(Raw, registry, runtime) {
       requireObject(input, `${where} argument 1`);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
+      const anchor = addressOf(raw, input.anchor, `${where} anchor`);
       const index = raw.addPivot(
         sheet,
         requireString(input.name, `${where} name`),
         requireNumber(input.cacheId, `${where} cacheId`),
-        requireNumber(input.anchorRow, `${where} anchor`),
-        requireNumber(input.anchorCol, `${where} anchor`),
+        requireNumber(anchor.row, `${where} anchor`),
+        requireNumber(anchor.col, `${where} anchor`),
       );
       return this.#pivotAt(raw, sheet, index);
     }
@@ -5113,10 +5974,19 @@ function makeFacade(Raw, registry, runtime) {
       return this.#added(raw, sheet, id);
     }
 
+    // `range` is a `SheetRect` or an A1 string (an unqualified one is on this sheet); the raw call takes the
+    // qualified text as `source`.
     addChart(options) {
+      const where = 'Sheet.addChart';
+      requireObject(options, `${where} argument 1`);
+      if (options.source !== undefined) throw new TypeError(`${where} argument 1 has no field source`);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      return this.#added(raw, sheet, raw.addChart(sheet, colorInputs(options, 'Sheet.addChart argument 1')));
+      const { range, ...rest } = colorInputs(options, `${where} argument 1`);
+      if (present(rest.barDirection)) chartTypeOptions(where, 1, rest.type, { barDirection: rest.barDirection });
+      const source = range === undefined ? undefined : sheetRectText(raw, range, sheet, `${where} range`);
+      const input = source === undefined ? rest : { ...rest, source };
+      return this.#added(raw, sheet, raw.addChart(sheet, input));
     }
 
     addShape(spec) {
@@ -5178,6 +6048,18 @@ function makeFacade(Raw, registry, runtime) {
       );
     }
 
+    // The scroll origin and the pane origin read as cell addresses.
+    getView() {
+      const { topLeftRow, topLeftCol, paneTopLeftRow, paneTopLeftCol, ...view } = rawOf(this.#workbook).getView(
+        this.#current(),
+      );
+      return {
+        ...view,
+        topLeft: { row: topLeftRow, col: topLeftCol },
+        paneTopLeft: { row: paneTopLeftRow, col: paneTopLeftCol },
+      };
+    }
+
     // Freeze or split, pane origin, scroll origin, display flags, zoom, view
     // mode, direction, tab selection, then visibility. Only the two refusals
     // checked up front leave the view untouched.
@@ -5185,17 +6067,32 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Sheet.updateView';
       const fields = PATCH_FIELDS[where];
       checkPatch(where, patch, fields);
+      const raw = rawOf(this.#workbook);
+      // `topLeft` and `paneTopLeft` reach the raw layer as their row / column pairs.
+      patch = { ...patch };
+      for (const [key, rowKey, colKey] of [
+        ['topLeft', 'topLeftRow', 'topLeftCol'],
+        ['paneTopLeft', 'paneTopLeftRow', 'paneTopLeftCol'],
+      ]) {
+        const value = patch[key];
+        delete patch[key];
+        if (value === null) throw new TypeError(`${where} ${key} must be a CellAddress or an A1 string`);
+        if (value === undefined) continue;
+        const cell = addressOf(raw, value, `${where} ${key}`);
+        patch[rowKey] = requireIndex(cell.row, `${where} ${key}.row`);
+        patch[colKey] = requireIndex(cell.col, `${where} ${key}.col`);
+      }
+      const keys = [...Object.keys(fields), 'topLeftRow', 'topLeftCol', 'paneTopLeftRow', 'paneTopLeftCol'];
       const given = (key) => patch[key] !== undefined;
       const nonZero = (...keys) => keys.some((key) => given(key) && patch[key] !== 0);
       if (nonZero('freezeRows', 'freezeCols') && nonZero('splitXTwips', 'splitYTwips')) {
         throw new TypeError(`${where} cannot freeze and split the view at once`);
       }
-      if (!Object.keys(fields).some(given)) return;
-      const raw = rawOf(this.#workbook);
+      if (!keys.some(given)) return;
       const sheet = this.#current();
       const view = raw.getView(sheet);
       const merged = { ...view };
-      for (const key of Object.keys(fields)) if (given(key)) merged[key] = patch[key];
+      for (const key of keys) if (given(key)) merged[key] = patch[key];
       const freeze = merged.freezeRows !== view.freezeRows || merged.freezeCols !== view.freezeCols;
       const split = merged.splitXTwips !== view.splitXTwips || merged.splitYTwips !== view.splitYTwips;
       // The panes once applied: a freeze replaces a split and a split a freeze.
@@ -5310,24 +6207,54 @@ function makeFacade(Raw, registry, runtime) {
       return rawOf(this.#workbook).getWidthModel(this.#current(), mode);
     }
 
+    addSparklineGroup(spec) {
+      const where = 'Sheet.addSparklineGroup';
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      spec = colorInputs(spec, `${where} argument 1`);
+      requireObject(spec, `${where} argument 1`);
+      return raw.addSparklineGroup(sheet, encodeSparklineGroup(raw, sheet, spec, where));
+    }
+
+    listSparklineGroups() {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const n = raw.getSparklineGroupCount(sheet);
+      const groups = [];
+      for (let i = 0; i < n; i++) groups.push(decodeSparklineGroup(raw, raw.getSparklineGroup(sheet, i)));
+      return groups;
+    }
+
     // The raw update writes every field, so the patch lands on the group read back; without `sparklines` the
     // raw call keeps the group's own.
     updateSparklineGroup(groupIndex, patch) {
       const where = 'Sheet.updateSparklineGroup';
       patch = colorInputs(patch, `${where} argument 2`);
       checkSparklinePatch(where, patch);
+      // `dateAxisRange` takes a record or text, which the one type word of the table cannot say.
+      const range = isObject(patch) ? patch.dateAxisRange : undefined;
+      if (range !== undefined && range !== null && typeof range !== 'string' && !isObject(range)) {
+        throw new TypeError(`${where} dateAxisRange must be a SheetRect, an A1 string or null`);
+      }
       this.#patchOver(
         where,
         patch,
         'sparklines',
         (raw, sheet) => raw.getSparklineGroup(sheet, groupIndex),
         (raw, sheet, group) => raw.updateSparklineGroup(sheet, groupIndex, group),
+        (raw, sheet, given) => encodeSparklineGroup(raw, sheet, given, where),
+        ['dateAxisRange'],
       );
     }
 
     // As `updateSparklineGroup`; without `ranges` the raw call keeps the stored ranges, unparsed ones included.
+    // `ranges` is an array of `CellRect` / A1 text, or one A1 string.
     updateProtectedRange(protectedRange, patch) {
       const where = 'Sheet.updateProtectedRange';
+      const raw = rawOf(this.#workbook);
+      if (isObject(patch) && present(patch.ranges)) {
+        patch = { ...patch, ranges: normalizeAddress(raw, 'CellRect[]', patch.ranges, undefined, `${where} ranges`) };
+      }
       this.#patchOver(
         where,
         patch,
@@ -5338,33 +6265,36 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     // Lays the checked patch of `where` over the record `read` returns and hands it to `write`; the record's
-    // `list` key reaches `write` only when the patch gives it. An empty patch writes nothing.
-    #patchOver(where, patch, list, read, write) {
+    // `list` key reaches `write` only when the patch gives it. An empty patch writes nothing. `encode` turns the
+    // given keys into the raw record's; `loose` names keys the caller has typed, which `checkPatch` leaves alone.
+    #patchOver(where, patch, list, read, write, encode = (_raw, _sheet, given) => given, loose = []) {
       const fields = PATCH_FIELDS[where];
       const nullable = PATCH_NULLABLE[where];
-      checkPatch(where, patch, fields, nullable);
-      const given = appliedFields(patch, fields, nullable);
+      const untyped = Object.fromEntries(loose.map((key) => [key, undefined]));
+      checkPatch(where, isObject(patch) ? { ...patch, ...untyped } : patch, fields, nullable);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      const record = { ...read(raw, sheet), ...given };
+      const typed = { ...nullable, ...Object.fromEntries(loose.map((key) => [key, 'object'])) };
+      const given = appliedFields(patch, fields, typed);
+      // The read runs first so that an empty patch still fails on a missing target.
+      const current = read(raw, sheet);
       if (Object.keys(given).length === 0) return;
+      const record = { ...current, ...encode(raw, sheet, given) };
       if (given[list] === undefined) delete record[list];
       write(raw, sheet, record);
     }
 
+    // `range` and an input cell are `CellRect` / `CellAddress` or A1 text; the raw call takes `rect`.
     addDataTable(input) {
       const where = 'Sheet.addDataTable';
       requireObject(input, `${where} argument 1`);
       const raw = rawOf(this.#workbook);
-      const spec = { rect: typeof input.rect === 'string' ? rangeAddress(raw, input.rect) : input.rect };
+      const range = typeof input.range === 'string' ? rangeAddress(raw, input.range) : input.range;
+      const spec = { rect: requireObject(range, `${where} range`) };
       for (const key of ['rowInput', 'columnInput']) {
-        const cell = input[key];
-        if (typeof cell === 'string') {
-          const { firstRow, firstCol } = cellAddress(raw, cell);
-          spec[key] = { row: firstRow, col: firstCol };
-        } else if (present(cell)) {
-          spec[key] = cell;
-        }
+        if (!present(input[key])) continue;
+        const { row, col } = addressOf(raw, input[key], `${where} ${key}`);
+        spec[key] = { row, col };
       }
       raw.addDataTable(this.#current(), spec);
     }
@@ -5418,10 +6348,11 @@ function makeFacade(Raw, registry, runtime) {
       raw.remapRangeXfs(sheet, rect, bases, xfs);
     }
 
+    // An omitted `author` is empty text.
     setComment(row, col, comment) {
       const where = 'Sheet.setComment';
       requireObject(comment, `${where} argument 3`);
-      const author = requireString(comment.author, `${where} author`);
+      const author = comment.author === undefined ? '' : requireString(comment.author, `${where} author`);
       const text = requireString(comment.text, `${where} text`);
       rawOf(this.#workbook).setComment(this.#current(), row, col, author, text);
     }
@@ -5479,26 +6410,49 @@ function makeFacade(Raw, registry, runtime) {
       rawOf(this.#workbook).setSheetProtection(this.#current(), protection);
     }
 
-    // `created` is a `DateInput`; the raw record carries the C stamp.
+    // `cell` is a `CellAddress` or A1 text, `created` a `DateInput` or `null`; the raw record carries the row and
+    // column and the C stamp.
     addThreadedComment(comment) {
       const where = 'Sheet.addThreadedComment';
       requireObject(comment, `${where} argument 1`);
-      const input =
-        comment.created === undefined || comment.created === null
-          ? comment
-          : { ...comment, created: civilStamp(toCivil(comment.created, where, 'created')) };
+      const { cell, created, ...rest } = comment;
+      const input = { ...rest };
+      if (present(cell)) {
+        const { row, col } = addressOf(rawOf(this.#workbook), cell, `${where} cell`);
+        input.row = row;
+        input.col = col;
+      }
+      if (present(created)) input.created = civilStamp(toCivil(created, where, 'created'));
       rawOf(this.#workbook).addThreadedComment(this.#current(), input);
     }
 
-    listThreadedComments() {
-      return rawOf(this.#workbook)
-        .listThreadedComments(this.#current())
-        .map((comment) => ({ ...comment, created: stampCivil(comment.created) }));
+    // With a cell (A1 text, or `row` and `col`) only the threads anchored there: the opener and its replies.
+    listThreadedComments(...cell) {
+      const where = 'Sheet.listThreadedComments';
+      const raw = rawOf(this.#workbook);
+      const comments = raw.listThreadedComments(this.#current()).map(threadedCommentRead);
+      if (cell.length === 0 || cell[0] === undefined) return comments;
+      const at =
+        typeof cell[0] === 'string'
+          ? cellAddress(raw, cell[0], where)
+          : {
+              firstRow: requireIndex(cell[0], `${where} argument 1`),
+              firstCol: requireIndex(cell[1], `${where} argument 2`),
+            };
+      const ids = new Set();
+      return comments.filter((comment) => {
+        const reply = present(comment.parentId) && comment.parentId !== '';
+        const kept = reply
+          ? ids.has(comment.parentId)
+          : comment.cell.row === at.firstRow && comment.cell.col === at.firstCol;
+        if (kept) ids.add(comment.id);
+        return kept;
+      });
     }
 
     getThreadedComment(id) {
       const comment = rawOf(this.#workbook).getThreadedComment(this.#current(), id);
-      return comment === null ? null : { ...comment, created: stampCivil(comment.created) };
+      return comment === null ? null : threadedCommentRead(comment);
     }
 
     // `today` is a `DateInput`, else the pinned clock, else the host's local date.
@@ -5557,12 +6511,37 @@ function makeFacade(Raw, registry, runtime) {
       rawOf(this.#workbook).updateThreadedComment(this.#current(), id, input);
     }
 
+    // `range` is a `CellRect` or an A1 range of this sheet.
     setArrayFormula(arrayFormula) {
       const where = 'Sheet.setArrayFormula';
       requireObject(arrayFormula, `${where} argument 1`);
-      const rect = requireObject(arrayFormula.rect, `${where} rect`);
+      const raw = rawOf(this.#workbook);
+      const { range } = arrayFormula;
+      const rect = typeof range === 'string' ? rangeAddress(raw, range) : requireObject(range, `${where} range`);
       const formula = requireString(arrayFormula.formula, `${where} formula`);
-      rawOf(this.#workbook).setArrayFormula(this.#current(), rect, formula);
+      raw.setArrayFormula(this.#current(), rect, formula);
+    }
+
+    // Each axis is a `Span` or an A1 span (`'1:2'`, `'$3'`, `'B'`, `'A:B'`), or `null` for none.
+    setPrintTitles(titles) {
+      const where = 'Sheet.setPrintTitles';
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      if (titles === null) return raw.setPrintTitles(sheet, null);
+      requireObject(titles, `${where} argument 1`);
+      const span = (axis, key) => {
+        const value = titles[key];
+        if (typeof value !== 'string') return value;
+        try {
+          const [first, last] = spanAddress(raw, value, axis);
+          return { first, last };
+        } catch (e) {
+          if (e?.name !== 'FormulonError' || e.parseError === undefined) throw e;
+          const text = `${where} ${key} ${JSON.stringify(value)} is not a span`;
+          throw new FormulonError(StatusCode.InvalidArgument, text, '');
+        }
+      };
+      raw.setPrintTitles(sheet, { ...titles, rows: span('row', 'rows'), columns: span('col', 'columns') });
     }
 
     updatePageSetup(setup) {
@@ -5930,7 +6909,7 @@ function makeFacade(Raw, registry, runtime) {
       requireObject(definedName, 'Workbook.setDefinedName argument 1');
       const { scope, ...fields } = definedName;
       if (scope === undefined || scope === null) return this.#raw.setDefinedName(fields);
-      return this.#raw.setDefinedName({ ...fields, localSheetId: this.#resolve(scope, 'setDefinedName', 'scope') });
+      return this.#raw.setDefinedName({ ...fields, scope: this.#resolve(scope, 'setDefinedName', 'scope') });
     }
 
     updateIterative(patch) {
@@ -5999,6 +6978,38 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#sheet.workbook);
       const override = raw.listRowOverrides(sheetIndex(this.#sheet)).find((r) => r.row === row);
       return override?.xfIndex ?? null;
+    }
+
+    // The raw call takes the excluded cells as parallel row and column arrays.
+    getRangeXfBasesExcluding(range, excluded) {
+      const where = 'Sheet.getRangeXfBasesExcluding';
+      const raw = rawOf(this.#sheet.workbook);
+      requireArray(excluded, `${where} argument 2`);
+      const rows = [];
+      const cols = [];
+      for (const [i, cell] of excluded.entries()) {
+        const { row, col } = addressOf(raw, cell, `${where} argument 2[${i}]`);
+        rows.push(requireIndex(row, `${where} argument 2[${i}].row`));
+        cols.push(requireIndex(col, `${where} argument 2[${i}].col`));
+      }
+      return raw.getRangeXfBasesExcluding(sheetIndex(this.#sheet), range, rows, cols);
+    }
+
+    // The raw call takes the mapping as parallel base and target arrays.
+    remapRangeXfs(range, mapping) {
+      const where = 'Sheet.remapRangeXfs';
+      if (!(mapping instanceof Map)) throw new TypeError(`${where} argument 2 must be a Map`);
+      const from = [];
+      const to = [];
+      const isIndex = (value) => Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
+      for (const [base, target] of mapping) {
+        if (!isIndex(base) || !isIndex(target)) {
+          throw new TypeError(`${where} argument 2 maps an XF index to an XF index`);
+        }
+        from.push(base);
+        to.push(target);
+      }
+      rawOf(this.#sheet.workbook).remapRangeXfs(sheetIndex(this.#sheet), range, from, to);
     }
   }
 
@@ -6115,8 +7126,9 @@ function makeFacade(Raw, registry, runtime) {
     [WorkbookOoxml, (self) => ooxmlState.workbookOf(self)],
     [SheetOoxml, (self) => ooxmlState.sheetOf(self).workbook],
   ];
-  for (const [cls, workbookOf] of guardedClasses) installCallGuards(cls.prototype, workbookOf, liveRaw, activeCalls);
   const guarded = [['Workbook', Workbook], ['Workbook', WorkbookOoxml], ['Sheet', SheetOoxml], ...handleClasses];
+  for (const [owner, cls] of guarded) installInputGuards(cls.prototype, owner);
+  for (const [cls, workbookOf] of guardedClasses) installCallGuards(cls.prototype, workbookOf, liveRaw, activeCalls);
   for (const [owner, cls] of guarded) installArityGuards(cls.prototype, owner);
   // `using` calls the same function as `dispose()`.
   Object.defineProperty(Workbook.prototype, Symbol.dispose, {
@@ -6207,6 +7219,48 @@ function installArityGuards(proto, owner) {
 }
 
 /**
+ * Wraps every defined method of `owner` listed in `INPUT_KEYS` so that a key of its input record argument
+ * outside the record (and the getter record it passes back) is a `TypeError` before the call reads anything
+ * else. The table position is that of the A1-free form: a call in the string form of a cell pair
+ * (`CELL_ARGS`) or a span (`SPAN_ARGS`) has the record that many arguments earlier.
+ */
+function installInputGuards(proto, owner) {
+  const prefix = `${owner}.`;
+  for (const [where, [at]] of Object.entries(INPUT_KEYS)) {
+    if (!where.startsWith(prefix)) continue;
+    const name = where.slice(prefix.length);
+    if (!Object.hasOwn(proto, name)) continue;
+    const inner = proto[name];
+    const pairs = CELL_ARGS[where];
+    const spans = SPAN_ARGS[where];
+    defineMethod(
+      proto,
+      name,
+      namedFunction(name, function (args) {
+        let position = at;
+        if (pairs !== undefined && typeof args[pairs[0][0]] === 'string') position -= pairs.length;
+        for (const [span] of spans ?? []) if (typeof args[span] === 'string') position -= 1;
+        // A plain record with getters is copied once, so the check and the call read each getter a single time.
+        const record = args[position];
+        if (
+          isObject(record) &&
+          Object.getPrototypeOf(record) === Object.prototype &&
+          Object.values(Object.getOwnPropertyDescriptors(record)).some((d) => d.get !== undefined)
+        ) {
+          args = [...args];
+          // Own properties, enumerable or not, each read once; a spread would drop a non-enumerable getter.
+          const copy = {};
+          for (const key of Object.getOwnPropertyNames(record)) copy[key] = record[key];
+          args[position] = copy;
+        }
+        refuseUnknownInputKeys(where, args[position]);
+        return inner.apply(this, args);
+      }),
+    );
+  }
+}
+
+/**
  * Wraps every method `proto` defines itself (not `dispose`) so that the workbook's handle is checked before the
  * call reads or validates its arguments, and so that the workbook counts the call as active until it returns.
  */
@@ -6233,6 +7287,47 @@ function installCallGuards(proto, workbookOf, liveRaw, activeCalls) {
   }
 }
 
+const rangeKey = (record) => renamed(record, 'rect', 'range');
+const sortRead = (sort) =>
+  sort === null || sort === undefined
+    ? sort
+    : { ...renamed(sort, 'ref', 'range'), conditions: sort.conditions.map((c) => renamed(c, 'ref', 'range')) };
+const autoFilterRead = (filter) => (isObject(filter) ? { ...filter, sort: sortRead(filter.sort) } : filter);
+
+// Reads whose raw record names a key other than the public one, by `Class.method`: the result as the public record.
+const READ_ADAPTERS = Object.freeze({
+  'Sheet.getArrayFormula': rangeKey,
+  'Sheet.getAutoFilter': autoFilterRead,
+  'Sheet.getDataTable': rangeKey,
+  'Sheet.getHyperlink': rangeKey,
+  'Sheet.getPagination': (pagination) => ({ ...pagination, pages: pagination.pages.map(rangeKey) }),
+  'Sheet.getSpillInfo': rangeKey,
+  'Sheet.listHyperlinks': (links) => links.map(rangeKey),
+  'Table.getAutoFilter': autoFilterRead,
+  'Workbook.parseReference': rangeKey,
+});
+
+const autoFilterInput = (filter) =>
+  isObject(filter) && isObject(filter.sort)
+    ? {
+        ...filter,
+        sort: {
+          ...renamed(filter.sort, 'range', 'ref'),
+          ...(Array.isArray(filter.sort.conditions)
+            ? { conditions: filter.sort.conditions.map((c) => renamed(c, 'range', 'ref')) }
+            : {}),
+        },
+      }
+    : filter;
+
+// Inputs whose raw record names a key other than the public one, by `Class.method`: the arguments as the raw
+// method takes them.
+const ARG_ADAPTERS = Object.freeze({
+  'Sheet.setAutoFilter': (args) => [autoFilterInput(args[0]), ...args.slice(1)],
+  'Table.setAutoFilter': (args) => [autoFilterInput(args[0]), ...args.slice(1)],
+  'Workbook.formatReference': (args) => [renamed(args[0], 'range', 'rect'), ...args.slice(1)],
+});
+
 /**
  * Defines the generated forwarders on a facade prototype: each `[name, rawName]`
  * of `entries` the prototype does not define by hand calls `call(this, rawName,
@@ -6252,6 +7347,8 @@ function installForwarders(proto, owner, entries, Raw, call) {
     if (Object.hasOwn(proto, name === '[Symbol.iterator]' ? Symbol.iterator : name)) continue;
     const where = `${owner}.${name}`;
     const family = LIST_FAMILIES[where];
+    const adaptRead = READ_ADAPTERS[where] ?? ((result) => result);
+    const adaptArgs = ARG_ADAPTERS[where] ?? ((args) => args);
     if (family !== undefined) {
       const [count, element] = family;
       defineMethod(
@@ -6262,7 +7359,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
           const n = call(this, count, args);
           const out = [];
           for (let i = 0; i < n; i++) out.push(call(this, element, [...args, i]));
-          return out;
+          return adaptRead(out);
         }),
       );
       continue;
@@ -6287,7 +7384,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
             args = [...args];
             args[position] = withoutUnstated(args[position], () => call(this, reader, args.slice(0, position)));
           }
-          return call(this, rawName, args);
+          return adaptRead(call(this, rawName, adaptArgs(args)));
         }),
       );
       continue;
@@ -6298,7 +7395,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
       name,
       absent === undefined
         ? namedFunction(name, function (args) {
-            return call(this, rawName, colorArgs(args, where));
+            return adaptRead(call(this, rawName, adaptArgs(colorArgs(args, where))));
           })
         : namedFunction(name, function (args) {
             args = colorArgs(args, where);
@@ -6311,7 +7408,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
               // The C sentinel is not a public value; absence is spelled `null`.
               throw new RangeError(`${where} argument ${position + 1} is outside uint32 range`);
             }
-            return call(this, rawName, args);
+            return adaptRead(call(this, rawName, adaptArgs(args)));
           }),
     );
   }

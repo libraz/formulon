@@ -99,7 +99,10 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.deepEqual([s.fromRow, s.fromCol, s.toRow, s.toCol], [4, 3, 14, 5]);
 
   // An update changes the named fields only; the frame follows row edits.
-  loaded.sheet(0).slicer(addedId).update({ caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 });
+  loaded
+    .sheet(0)
+    .slicer(addedId)
+    .update({ caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, fromCol: 3, toRow: 8, toCol: 5 });
   const found = loaded.sheet(0).slicer(addedId).getProperties();
   assert.equal(found.caption, 'Renamed');
   loaded.sheet(0).insertRows(0, 3);
@@ -108,7 +111,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(moved.style, null);
   assert.equal(moved.columnCount, 1);
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
-  assert.deepEqual([moved.fromRow, moved.toRow], [3, 11]);
+  assert.deepEqual([moved.fromRow, moved.fromCol, moved.toRow, moved.toCol], [3, 3, 11, 5]);
 
   const handle = loaded.sheet(0).slicer(addedId);
   loaded.sheet(0).removeDrawing(addedId);

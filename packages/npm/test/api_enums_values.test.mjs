@@ -66,9 +66,9 @@ function fillColumns(ws) {
   }
 }
 
-function addColumnChart(ws, kind = f.ChartInsertKind.Column) {
+function addColumnChart(ws, kind = f.ChartPlotType.Bar) {
   fillColumns(ws);
-  return ws.addChart({ kind, source: 'Sheet1!$A$1:$B$4', legend: f.ChartLegendPosition.Right });
+  return ws.addChart({ type: kind, range: 'Sheet1!$A$1:$B$4', legend: f.ChartLegendPosition.Right });
 }
 
 /** A cache and a pivot over Region / Amount / Date; the date column is shared-item index 2. */
@@ -88,7 +88,7 @@ function buildPivot(wb) {
     ws.setNumber(i + 1, 2, date);
   });
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:C4', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:C4', sheet: 'Sheet1' });
   for (const name of ['Region', 'Amount', 'Date']) cache.addField(name);
   for (const item of ['East', 'West']) cache.addFieldSharedItem(0, item);
   rows.forEach(([region, amount, date]) => {
@@ -295,12 +295,12 @@ describe('the merged comparison operator is accepted by every feature that compa
       fillColumns(ws);
       const single = ['Equal', 'NotEqual', 'LessThan', 'LessThanOrEqual', 'GreaterThan', 'GreaterThanOrEqual'];
       for (const name of single) {
-        const operator1 = f.ComparisonOperator[name];
+        const operator = f.ComparisonOperator[name];
         ws.setAutoFilter({
           range: 'A1:B4',
-          columns: [{ columnOffset: 0, kind: f.FilterKind.Custom, customCount: 1, operator1, value1: '2' }],
+          columns: [{ columnOffset: 0, kind: f.FilterKind.Custom, conditions: [{ operator, value: '2' }] }],
         });
-        assert.equal(ws.getAutoFilter().columns[0].operator1, operator1, name);
+        assert.equal(ws.getAutoFilter().columns[0].conditions[0].operator, operator, name);
       }
     });
   });
@@ -316,9 +316,7 @@ describe('the merged comparison operator is accepted by every feature that compa
               {
                 columnOffset: 0,
                 kind: f.FilterKind.Custom,
-                customCount: 1,
-                operator1: f.ComparisonOperator[name],
-                value1: '2',
+                conditions: [{ operator: f.ComparisonOperator[name], value: '2' }],
               },
             ],
           }),
@@ -350,11 +348,14 @@ describe('the merged comparison operator is accepted by every feature that compa
   it('auto filter sorting keeps a boolean descending flag and no direction enum', () => {
     withSheet((ws) => {
       fillColumns(ws);
-      ws.setAutoFilter({ range: 'A1:B4', sort: { ref: 'A2:B4', conditions: [{ ref: 'B2:B4', descending: true }] } });
+      ws.setAutoFilter({
+        range: 'A1:B4',
+        sort: { range: 'A2:B4', conditions: [{ range: 'B2:B4', descending: true }] },
+      });
       const condition = ws.getAutoFilter().sort.conditions[0];
       assert.equal(condition.descending, true);
       assert.equal(typeof condition.descending, 'boolean');
-      ws.setAutoFilter({ range: 'A1:B4', sort: { ref: 'A2:B4', conditions: [{ ref: 'B2:B4' }] } });
+      ws.setAutoFilter({ range: 'A1:B4', sort: { range: 'A2:B4', conditions: [{ range: 'B2:B4' }] } });
       assert.equal(ws.getAutoFilter().sort.conditions[0].descending, false);
     });
   });
@@ -406,7 +407,7 @@ describe('reordered tables round-trip by member through save and load', () => {
     for (const [name, position] of Object.entries(f.ChartLegendPosition)) {
       withSheet((ws, wb) => {
         const id = addColumnChart(ws);
-        ws.chart(id).setLegend({ position, overlay: false, hiddenSeries: [] });
+        ws.chart(id).setLegend({ position, overlay: false, hiddenEntries: [] });
         assert.equal(ws.chart(id).getProperties().legend.position, position, `${name} in session`);
         const loaded = reload(wb);
         try {
@@ -429,7 +430,7 @@ describe('reordered tables round-trip by member through save and load', () => {
   it('a chart without a legend reads null rather than a position member', () => {
     withSheet((ws) => {
       fillColumns(ws);
-      const id = ws.addChart({ kind: f.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$4', legend: null });
+      const id = ws.addChart({ type: f.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$4', legend: null });
       assert.equal(ws.chart(id).getProperties().legend, null);
     });
   });
@@ -438,7 +439,7 @@ describe('reordered tables round-trip by member through save and load', () => {
     for (const [name, order] of Object.entries(f.PivotSortOrder)) {
       withSheet((_ws, wb) => {
         const { pivot, region } = buildPivot(wb);
-        pivot.setFieldSort(region, order);
+        pivot.updateField(region, { sortOrder: order });
         assert.equal(pivot.listFields()[region].sortOrder, order, `${name} in session`);
         const loaded = reload(wb);
         try {
@@ -479,7 +480,7 @@ describe('blanks handling is one table for charts and sparklines', () => {
     withSheet((ws) => {
       fillColumns(ws);
       for (const [name, emptyCellsAs] of Object.entries(f.BlanksAs)) {
-        ws.addSparklineGroup({ emptyCellsAs, sparklines: [{ formula: 'Sheet1!A2:A4', location: 'F1' }] });
+        ws.addSparklineGroup({ emptyCellsAs, sparklines: [{ source: 'Sheet1!A2:A4', location: 'F1' }] });
         assert.equal(ws.listSparklineGroups().at(-1).emptyCellsAs, emptyCellsAs, name);
       }
     });
@@ -497,7 +498,9 @@ describe('closed string sets are numeric tables on input and output', () => {
       const table = totalsTable(ws);
       for (const [name, fn] of Object.entries(f.TableTotalsRowFunction)) {
         const totals =
-          fn === f.TableTotalsRowFunction.Custom ? { function: fn, formula: '=SUM(Sales[Amount])' } : { function: fn };
+          fn === f.TableTotalsRowFunction.Custom
+            ? { totalsRowFunction: fn, totalsRowFormula: '=SUM(Sales[Amount])' }
+            : { totalsRowFunction: fn };
         table.setColumnTotals(1, totals);
         const column = table.getProperties().columns[1];
         assert.equal(column.totalsRowFunction, fn, name);
@@ -509,8 +512,8 @@ describe('closed string sets are numeric tables on input and output', () => {
   it('a totals-row function given as a name or out of range is rejected', () => {
     withSheet((ws) => {
       const table = totalsTable(ws);
-      assert.throws(() => table.setColumnTotals(1, { function: 'sum' }), TypeError);
-      expectInvalid(() => table.setColumnTotals(1, { function: 10 }));
+      assert.throws(() => table.setColumnTotals(1, { totalsRowFunction: 'sum' }), TypeError);
+      expectInvalid(() => table.setColumnTotals(1, { totalsRowFunction: 10 }));
     });
   });
 
@@ -571,7 +574,7 @@ describe('closed string sets are numeric tables on input and output', () => {
     withSheet((ws) => {
       const category = addColumnChart(ws);
       assert.equal(ws.chart(category).getData().domain, f.ChartDomain.Category);
-      const xy = ws.addChart({ kind: f.ChartInsertKind.Scatter, source: 'Sheet1!$A$1:$B$4' });
+      const xy = ws.addChart({ type: f.ChartPlotType.Scatter, range: 'Sheet1!$A$1:$B$4' });
       assert.equal(ws.chart(xy).getData().domain, f.ChartDomain.Xy);
     });
   });
@@ -733,7 +736,7 @@ describe('records return native booleans', () => {
     });
   });
 
-  it('a data bar match reports barIsNegative, barBorderEngaged and barGradient as booleans', () => {
+  it('a data bar match carries its bar with isNegative and gradient as booleans and border as a colour or null', () => {
     withSheet((ws) => {
       ws.setNumber('A1', -5);
       ws.setNumber('A2', 10);
@@ -750,18 +753,18 @@ describe('records return native booleans', () => {
       const cells = ws.evaluateCfRange('A1:A2');
       const bars = cells.map((c) => c.matches.find((m) => m.kind === f.CfMatchKind.DataBar));
       assert.equal(bars.length, 2);
-      for (const bar of bars) {
-        for (const key of ['barIsNegative', 'barBorderEngaged', 'barGradient']) {
-          assert.equal(typeof bar[key], 'boolean', key);
-        }
+      for (const match of bars) {
+        for (const key of ['isNegative', 'gradient']) assert.equal(typeof match.bar[key], 'boolean', key);
+        for (const key of ['barIsNegative', 'barBorderEngaged', 'barGradient'])
+          assert.equal(match[key], undefined, key);
       }
-      assert.equal(bars[0].barIsNegative, true);
-      assert.equal(bars[1].barIsNegative, false);
-      assert.equal(bars[1].barBorderEngaged, true);
+      assert.equal(bars[0].bar.isNegative, true);
+      assert.equal(bars[1].bar.isNegative, false);
+      assert.equal(bars[1].bar.border.argb >>> 0, 0xff000000);
     });
   });
 
-  it('a differential-format match reports dxfIndexEngaged as a boolean', () => {
+  it('a differential-format match reports its dxfIndex', () => {
     withSheet((ws, wb) => {
       ws.setNumber('A1', 5);
       const dxf = wb.ooxml.addDxf({ numberFormat: '0.00' });
@@ -773,7 +776,9 @@ describe('records return native booleans', () => {
         dxfIndex: dxf,
       });
       const match = ws.evaluateCfRange('A1')[0].matches[0];
-      assert.strictEqual(match.dxfIndexEngaged, true);
+      assert.strictEqual(match.kind, f.CfMatchKind.DifferentialFormat);
+      assert.strictEqual(match.dxfIndex, dxf);
+      assert.equal(match.dxfIndexEngaged, undefined);
     });
   });
 });
@@ -806,8 +811,7 @@ describe('date inputs accept a Date wherever a civil time goes', () => {
           ws.addThreadedComment({
             id: '{00000000-0000-4000-8000-000000000001}',
             text: 'x',
-            row: 0,
-            col: 0,
+            cell: { row: 0, col: 0 },
             personId: PERSON,
             created: bad,
           }),
@@ -821,8 +825,8 @@ describe('date inputs accept a Date wherever a civil time goes', () => {
       wb.addPerson({ id: PERSON, displayName: 'A', userId: 'a', providerId: 'None' });
       const a = '{00000000-0000-4000-8000-000000000001}';
       const b = '{00000000-0000-4000-8000-000000000002}';
-      ws.addThreadedComment({ id: a, text: 'one', row: 0, col: 0, personId: PERSON, created: local });
-      ws.addThreadedComment({ id: b, text: 'two', row: 1, col: 0, personId: PERSON, created: civil });
+      ws.addThreadedComment({ id: a, text: 'one', cell: { row: 0, col: 0 }, personId: PERSON, created: local });
+      ws.addThreadedComment({ id: b, text: 'two', cell: { row: 1, col: 0 }, personId: PERSON, created: civil });
       assert.deepEqual({ ...ws.getThreadedComment(a).created }, civil);
       assert.deepEqual({ ...ws.getThreadedComment(b).created }, civil);
     });
@@ -924,24 +928,26 @@ describe('formula reads carry the leading equals sign and inputs take it either 
     });
   });
 
-  it('sparkline formulas and the date axis range read with = and store the same either way', () => {
+  it('sparkline sources and the date axis range read as the same record from A1 text or a SheetRect', () => {
     withSheet((ws) => {
       fillColumns(ws);
+      const source = { sheet: 0, rect: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 } };
+      const dates = { sheet: 0, rect: { firstRow: 1, firstCol: 1, lastRow: 3, lastCol: 1 } };
       ws.addSparklineGroup({
         dateAxis: true,
-        dateAxisRef: 'Sheet1!B2:B4',
-        sparklines: [{ formula: 'Sheet1!A2:A4', location: 'F1' }],
+        dateAxisRange: 'Sheet1!B2:B4',
+        sparklines: [{ source: 'Sheet1!A2:A4', location: 'F1' }],
       });
       ws.addSparklineGroup({
         dateAxis: true,
-        dateAxisRef: '=Sheet1!B2:B4',
-        sparklines: [{ formula: '=Sheet1!A2:A4', location: 'F2' }],
+        dateAxisRange: dates,
+        sparklines: [{ source, location: { row: 1, col: 5 } }],
       });
       const [a, b] = ws.listSparklineGroups();
-      assert.equal(a.sparklines[0].formula, '=Sheet1!A2:A4');
-      assert.equal(b.sparklines[0].formula, '=Sheet1!A2:A4');
-      assert.equal(a.dateAxisRef, '=Sheet1!B2:B4');
-      assert.equal(b.dateAxisRef, '=Sheet1!B2:B4');
+      for (const group of [a, b]) {
+        assert.deepEqual(JSON.parse(JSON.stringify(group.sparklines[0].source)), source);
+        assert.deepEqual(JSON.parse(JSON.stringify(group.dateAxisRange)), dates);
+      }
     });
   });
 
@@ -949,9 +955,15 @@ describe('formula reads carry the leading equals sign and inputs take it either 
     withSheet((ws) => {
       fillColumns(ws);
       const table = ws.addTable({ range: 'A1:B4', name: 'Sales', totalsRow: true });
-      table.setColumnTotals(1, { function: f.TableTotalsRowFunction.Custom, formula: 'SUM(Sales[Amount])' });
+      table.setColumnTotals(1, {
+        totalsRowFunction: f.TableTotalsRowFunction.Custom,
+        totalsRowFormula: 'SUM(Sales[Amount])',
+      });
       const bare = table.getProperties().columns[1].totalsRowFormula;
-      table.setColumnTotals(1, { function: f.TableTotalsRowFunction.Custom, formula: '=SUM(Sales[Amount])' });
+      table.setColumnTotals(1, {
+        totalsRowFunction: f.TableTotalsRowFunction.Custom,
+        totalsRowFormula: '=SUM(Sales[Amount])',
+      });
       const prefixed = table.getProperties().columns[1].totalsRowFormula;
       assert.equal(bare, '=SUM([Amount])');
       assert.equal(prefixed, bare);

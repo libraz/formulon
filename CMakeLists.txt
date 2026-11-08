@@ -300,6 +300,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/structured_ref_payload.cpp
   src/parser/structured_ref_spelling.cpp
   src/pivot/aggregator.cpp
+  src/pivot/field_patch.cpp
   src/pivot/filter_engine.cpp
   src/pivot/hierarchy_builder.cpp
   src/pivot/show_values_as.cpp

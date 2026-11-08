@@ -37,9 +37,8 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::store_cstr;
 
-extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
-                                                   int32_t has_base, uint32_t base_row, uint32_t base_col,
-                                                   fm_parsed_reference_t* out) {
+extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text,
+                                                   const fm_parse_reference_spec_t* spec, fm_parsed_reference_t* out) {
   clear_last_error();
   if (wb == nullptr || text == nullptr || out == nullptr) {
     return null_argument();
@@ -50,12 +49,22 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   if (auto rc = check_utf8({text}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(r1c1, 0, 1, "r1c1"); rc != 0) {
+  fm_parse_reference_spec_t plain = FM_STRUCT_INIT(fm_parse_reference_spec_t);
+  if (spec == nullptr) {
+    spec = &plain;
+  } else if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(has_base, 0, 1, "has_base"); rc != 0) {
+  if (auto rc = check_enum_domain(spec->r1c1, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "r1c1"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_enum_domain(spec->has_base, 0, 1, "has_base"); rc != 0) {
+    return rc;
+  }
+  const bool r1c1 = spec->r1c1 == FM_TRISTATE_TRUE;
+  const std::int32_t has_base = spec->has_base;
+  const std::uint32_t base_row = spec->base_row;
+  const std::uint32_t base_col = spec->base_col;
   if (has_base == 1) {
     if (auto rc = check_cell_coord(base_row, base_col); rc != 0) {
       return rc;
@@ -68,7 +77,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   refs::A1Parse parsed;
   {
     const formulon::eval::ScopedEvalProfile profile_scope(wb->workbook().excel_profile());
-    if (r1c1 == 1) {
+    if (r1c1) {
       refs::R1C1Base base;
       base.present = has_base == 1;
       base.row = base_row;

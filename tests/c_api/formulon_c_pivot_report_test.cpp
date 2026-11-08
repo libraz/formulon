@@ -138,7 +138,7 @@ TEST(FormulonCApiPivotReport, FieldSpecSubtotalTopDefaultsToTheGroupHead) {
     std::size_t cache_field = 99;
     ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "F", &cache_field), 0);
     std::size_t pivot_index = 99;
-    ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
+    ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
 
     fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
     spec.source_name = "F";
@@ -162,7 +162,7 @@ TEST(FormulonCApiPivotReport, FieldSpecSubtotalTopOutsideTheTristateIsRejected) 
   std::size_t cache_field = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "F", &cache_field), 0);
   std::size_t pivot_index = 99;
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
 
   fm_pivot_field_spec_t bad = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   bad.source_name = "F";

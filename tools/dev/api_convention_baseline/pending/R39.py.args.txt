@@ -1,9 +1,0 @@
-py	cell_phonetic_properties.set	input	`set_cell_phonetic_properties` takes `PhoneticPropertiesInput` in JS; take one positional dataclass argument
-py	chart.add	input	`add_chart` takes `ChartInsertInput` in JS; take one positional dataclass argument
-py	chart_source.set	input	`Chart.set_source` takes `ChartSourceInput` in JS; take one positional dataclass argument
-py	pivot_cache_worksheet_source.set	input	`PivotCache.set_worksheet_source` takes `PivotWorksheetSourceInput` in JS; take one positional dataclass argument
-py	pivot_field_date_group.set	input	`Pivot.set_field_date_group` takes `PivotDateGroupInput` in JS; take one positional dataclass argument
-py	selection.set	input	`set_selection` takes `SheetSelectionInput` in JS; take one positional dataclass argument
-py	table_column_totals.set	input	`Table.set_column_totals` takes `TableColumnTotalsInput` in JS; take one positional dataclass argument
-py	theme_colors.set	input	`set_theme_colors` takes `ThemeColorsInput` in JS; take one positional dataclass argument
-py	theme_script_font.set	input	`set_theme_script_font` takes `ThemeScriptFontInput` in JS; take one positional dataclass argument

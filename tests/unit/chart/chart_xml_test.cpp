@@ -842,7 +842,7 @@ TEST(ChartXml, FixtureAxesLegendAndStyleAreRead) {
   ASSERT_TRUE(static_cast<bool>(model));
   const ChartModel& m = model.value();
   EXPECT_FALSE(m.date1904);
-  EXPECT_EQ(m.style, 102);
+  EXPECT_EQ(m.style, 2);
   EXPECT_EQ(m.disp_na_as_blank, Tri::kTrue);
   ASSERT_TRUE(m.plots[0].labels.has_value());
   EXPECT_EQ(LabelsStr(m.plots[0].labels), "show=");
@@ -978,7 +978,7 @@ TEST(ChartXml, ChartLevelFlagsTitleLegendAndStyle) {
            space),
       wb);
   EXPECT_TRUE(m.date1904);
-  EXPECT_EQ(m.style, 104);
+  EXPECT_EQ(m.style, 4);
   EXPECT_EQ(m.title.kind, ChartTitleKind::kText);
   EXPECT_EQ(m.title.text, "Sales 2024\nsecond");
   EXPECT_EQ(m.auto_title_deleted, Tri::kTrue);

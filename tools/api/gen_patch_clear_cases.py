@@ -6,8 +6,10 @@ of ``tools/api/patch_clear_cases.json``, keyed by the record's JS type name:
 
     {"<Record>": {"clearable": [...], "non_clearable": [...]}}
 
-``clearable`` is the ledger's list; ``non_clearable`` every other field of the
-record's interface in ``src/wasm/formulon.d.ts``. Field names are snake_case
+``clearable`` is the ledger's list (an empty or absent list is no clearable
+field, and an empty YAML value counts as empty); ``non_clearable`` every other
+field of the record's patch type in ``src/wasm/formulon.d.ts``, an interface or
+a ``Patch<T, Clearable>`` alias. Field names are snake_case
 (the C and Python spelling; JS takes the camelCase of each). The binding tests
 read the table to check that clearing a ``non_clearable`` field (``null``,
 ``None``, ``*_op = CLEAR``) is refused and clearing a ``clearable`` one is not.
@@ -30,6 +32,7 @@ from typing import Dict, List, Optional, Sequence
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "dev"))
 
+from binding_drift.api_conventions_arguments import _patch_keys  # noqa: E402
 from binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
 
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
@@ -52,17 +55,19 @@ def snake_case(name: str) -> str:
 
 def cases(data: dict, dts_text: str) -> Dict[str, Dict[str, List[str]]]:
     """`{record: {clearable, non_clearable}}` for every entry with `clearable`."""
-    decls = JsSurface(dts_text).decls
+    surface = JsSurface(dts_text)
     out: Dict[str, Dict[str, List[str]]] = {}
     for key, entry in sorted(data["entries"].items()):
         if not isinstance(entry, dict) or "clearable" not in entry:
             continue
         name = entry.get("js")
-        decl = decls.get(name) if isinstance(name, str) else None
-        if decl is None or decl.kind != "interface":
-            raise SystemExit(f"gen_patch_clear_cases: `{key}` has no `js` interface in {WASM_DTS.name}")
-        fields = [snake_case(m.name) for m in decl.members if not m.is_method]
-        clearable = list(entry["clearable"])
+        declared = _patch_keys(surface.decls, surface.raw, name) if isinstance(name, str) else None
+        if not declared:
+            raise SystemExit(f"gen_patch_clear_cases: `{key}` has no `js` patch type in {WASM_DTS.name}")
+        fields = [snake_case(f) for f in declared]
+        clearable = entry["clearable"] or []
+        if not isinstance(clearable, list) or not all(isinstance(f, str) for f in clearable):
+            raise SystemExit(f"gen_patch_clear_cases: `{key}` has a `clearable` that is not a list of field names")
         unknown = sorted(set(clearable) - set(fields))
         if unknown:
             raise SystemExit(f"gen_patch_clear_cases: `{key}` lists fields {name} lacks: {', '.join(unknown)}")

@@ -27,9 +27,7 @@ Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("type", Napi::Number::New(env, static_cast<uint32_t>(cfvo.type)));
   out.Set("gte", Napi::Boolean::New(env, cfvo.gte != 0));
-  if (cfvo.value != nullptr) {
-    out.Set("value", Napi::String::New(env, cfvo.value));
-  }
+  out.Set("value", cfvo.value != nullptr ? Napi::Value(Napi::String::New(env, cfvo.value)) : env.Null());
   return out;
 }
 

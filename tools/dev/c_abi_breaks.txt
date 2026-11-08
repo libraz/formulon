@@ -34,7 +34,7 @@ removed fm_sheet_set_image_anchor :: renamed fm_sheet_set_drawing_anchor, taking
 removed fm_sheet_set_image_z_order :: renamed fm_sheet_set_drawing_z_order; it reorders charts as well as pictures
 removed fm_sheet_snapshot_image :: renamed fm_sheet_snapshot_drawing; it captures charts as well as pictures
 removed fm_sheet_restore_image :: renamed fm_sheet_restore_drawing, with flag FM_DRAWING_RESTORE_NEW_ID (was FM_IMAGE_RESTORE_NEW_ID)
-removed fm_workbook_pivot_field_set_date_group :: renamed to fm_sheet_set_pivot_field_date_group, which groups by a FM_PIVOT_PERIOD_* mask into cache group fields with locale labels; the granularity, year and -1 serial arguments are gone, NaN bounds mean auto
+removed fm_workbook_pivot_field_set_date_group :: renamed to fm_sheet_set_pivot_field_date_group, which groups by a FM_PIVOT_PERIOD_* mask into cache group fields with locale labels; it takes const fm_pivot_date_group_spec_t* (the granularity, year and -1 serial arguments are gone; has_start / has_end False take the field's first / last value)
 removed fm_buffer_free :: renamed to fm_buffer_destroy
 removed fm_cell_clear_xf_index :: renamed to fm_sheet_reset_cell_xf_index; it resets the cell to the default XF
 removed fm_cell_get_xf_index :: renamed to fm_sheet_get_cell_xf_index
@@ -60,9 +60,9 @@ removed fm_last_error_message :: renamed to fm_get_last_error_message
 removed fm_locale_error_name :: renamed to fm_get_locale_error_name_at
 removed fm_locale_error_name_count :: renamed to fm_get_locale_error_name_count
 removed fm_locale_facts :: renamed to fm_get_locale_facts
-removed fm_pagination_horizontal_break_at :: renamed to fm_pagination_get_row_break_at
+removed fm_pagination_horizontal_break_at :: renamed to fm_pagination_get_row_break_at, which writes an fm_row_break_t (row, span, manual) instead of a row
 removed fm_pagination_horizontal_break_count :: renamed to fm_pagination_get_row_break_count
-removed fm_pagination_horizontal_break_is_manual :: renamed to fm_pagination_is_row_break_manual
+removed fm_pagination_horizontal_break_is_manual :: read manual from the fm_row_break_t that fm_pagination_get_row_break_at writes
 removed fm_pagination_margins :: renamed to fm_pagination_get_margins
 removed fm_pagination_page_at :: renamed to fm_pagination_get_page_at
 removed fm_pagination_page_count :: renamed to fm_pagination_get_page_count
@@ -73,9 +73,9 @@ removed fm_pagination_print_area_count :: renamed to fm_pagination_get_print_are
 removed fm_pagination_print_titles :: renamed to fm_pagination_get_print_titles
 removed fm_pagination_printable :: renamed to fm_pagination_get_printable
 removed fm_pagination_scale :: renamed to fm_pagination_get_scale
-removed fm_pagination_vertical_break_at :: renamed to fm_pagination_get_column_break_at
+removed fm_pagination_vertical_break_at :: renamed to fm_pagination_get_column_break_at, which writes an fm_column_break_t (column, span, manual) instead of a column
 removed fm_pagination_vertical_break_count :: renamed to fm_pagination_get_column_break_count
-removed fm_pagination_vertical_break_is_manual :: renamed to fm_pagination_is_column_break_manual
+removed fm_pagination_vertical_break_is_manual :: read manual from the fm_column_break_t that fm_pagination_get_column_break_at writes
 removed fm_pivot_cells_at :: renamed to fm_pivot_report_get_cell_at, on the fm_pivot_report_t handle
 removed fm_pivot_cells_bounds :: renamed to fm_pivot_report_get_bounds, on the fm_pivot_report_t handle
 removed fm_pivot_cells_count :: renamed to fm_pivot_report_get_cell_count, on the fm_pivot_report_t handle
@@ -212,7 +212,7 @@ removed fm_workbook_pivot_cache_field_clear_shared_items :: renamed to fm_workbo
 removed fm_workbook_pivot_cache_field_count :: renamed to fm_workbook_get_pivot_cache_field_count
 removed fm_workbook_pivot_cache_field_name :: renamed to fm_workbook_get_pivot_cache_field_name
 removed fm_workbook_pivot_cache_field_shared_item_count :: renamed to fm_workbook_get_pivot_cache_field_shared_item_count
-removed fm_workbook_pivot_cache_get_worksheet_source :: renamed to fm_workbook_get_pivot_cache_worksheet_source
+removed fm_workbook_pivot_cache_get_worksheet_source :: renamed to fm_workbook_get_pivot_cache_worksheet_source, which writes an fm_pivot_worksheet_source_t after out_present in place of three string outs
 removed fm_workbook_pivot_cache_id_at :: renamed to fm_workbook_get_pivot_cache_id_at
 removed fm_workbook_pivot_cache_record_add :: renamed to fm_workbook_add_pivot_cache_record
 removed fm_workbook_pivot_cache_record_clear :: renamed to fm_workbook_clear_pivot_cache_records
@@ -223,9 +223,9 @@ removed fm_workbook_pivot_cache_record_set_error :: renamed to fm_workbook_set_p
 removed fm_workbook_pivot_cache_record_set_number :: renamed to fm_workbook_set_pivot_cache_record_number
 removed fm_workbook_pivot_cache_record_set_text :: renamed to fm_workbook_set_pivot_cache_record_text
 removed fm_workbook_pivot_cache_remove :: renamed to fm_workbook_remove_pivot_cache
-removed fm_workbook_pivot_cache_set_worksheet_source :: renamed to fm_workbook_set_pivot_cache_worksheet_source
+removed fm_workbook_pivot_cache_set_worksheet_source :: renamed to fm_workbook_set_pivot_cache_worksheet_source, which takes const fm_pivot_worksheet_source_t* (NULL clears) in place of present, ref, sheet and name
 removed fm_workbook_pivot_count :: renamed to fm_sheet_get_pivot_count
-removed fm_workbook_pivot_create :: renamed to fm_sheet_add_pivot
+removed fm_workbook_pivot_create :: renamed to fm_sheet_add_pivot, which takes const fm_pivot_spec_t* (name, cache id, anchor)
 removed fm_workbook_pivot_data_field_add :: renamed to fm_sheet_add_pivot_data_field
 removed fm_workbook_pivot_data_field_clear :: renamed to fm_sheet_clear_pivot_data_fields
 removed fm_workbook_pivot_data_field_count :: renamed to fm_sheet_get_pivot_data_field_count
@@ -240,10 +240,10 @@ removed fm_workbook_pivot_field_clear_items :: renamed to fm_sheet_clear_pivot_f
 removed fm_workbook_pivot_field_clear_subtotal_fns :: renamed to fm_sheet_clear_pivot_field_subtotal_functions
 removed fm_workbook_pivot_field_count :: renamed to fm_sheet_get_pivot_field_count
 removed fm_workbook_pivot_field_set_axis :: renamed to fm_sheet_set_pivot_field_axis
-removed fm_workbook_pivot_field_set_item_visible :: renamed to fm_sheet_set_pivot_field_item_visible
-removed fm_workbook_pivot_field_set_number_format :: renamed to fm_sheet_set_pivot_field_number_format
-removed fm_workbook_pivot_field_set_sort :: renamed to fm_sheet_set_pivot_field_sort
-removed fm_workbook_pivot_field_set_subtotal_top :: renamed to fm_sheet_set_pivot_field_subtotal_top
+removed fm_workbook_pivot_field_set_item_visible :: folded into fm_sheet_update_pivot_field_item (fm_pivot_item_patch_t.visible)
+removed fm_workbook_pivot_field_set_number_format :: folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.number_format)
+removed fm_workbook_pivot_field_set_sort :: folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.sort_order and sort_by_field)
+removed fm_workbook_pivot_field_set_subtotal_top :: folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.subtotal_top)
 removed fm_workbook_pivot_filter_add :: renamed to fm_sheet_add_pivot_filter
 removed fm_workbook_pivot_filter_at :: renamed to fm_sheet_get_pivot_filter
 removed fm_workbook_pivot_filter_clear :: renamed to fm_sheet_clear_pivot_filters
@@ -281,7 +281,7 @@ removed fm_workbook_sheet_name :: renamed to fm_workbook_get_sheet_name
 removed fm_workbook_spill_info :: renamed to fm_sheet_get_spill_info
 removed fm_workbook_table_at :: moved to fm_sheet_get_table(wb, sheet_index, table_index, out_name, out_rect); a table has one name, and fm_workbook_find_table finds it by name
 removed fm_workbook_table_count :: moved to fm_sheet_get_table_count, counting the tables of one sheet
-removed fm_workbook_table_create :: moved to fm_sheet_add_table, which takes one table name and writes a sheet-local table index
+removed fm_workbook_table_create :: moved to fm_sheet_add_table, which takes const fm_table_spec_t* (range, one table name, columns, style, header / totals rows and the four style toggles) and writes a sheet-local table index
 removed fm_workbook_table_remove :: moved to fm_sheet_remove_table, addressing the table by sheet_index and a sheet-local table_index
 removed fm_workbook_table_update :: moved to fm_sheet_update_table, addressing the table by sheet_index and a sheet-local table_index
 removed fm_workbook_theme_script_font_at :: renamed to fm_workbook_get_theme_script_font_at; the font set is an fm_font_scheme_t (MAJOR or MINOR) instead of a nonzero-means-major flag
@@ -317,12 +317,12 @@ signature fm_sheet_set_print_area :: takes the print area as const fm_cell_rect_
 signature fm_workbook_add_sheet :: returns the new sheet's index through size_t* out_sheet_index
 removed fm_workbook_evaluate_formula_array_cell :: fm_sheet_evaluate_formula_array returns an owned fm_value_array_t read with fm_value_array_get_value_at
 removed fm_sheet_set_tab_hidden :: fm_sheet_set_visibility states every tab state, very hidden included
-removed fm_workbook_set_defined_name_scoped :: fm_workbook_set_defined_name takes the scope in fm_defined_name_input_t.local_sheet_id
+removed fm_workbook_set_defined_name_scoped :: fm_workbook_set_defined_name takes the scope in fm_defined_name_t.local_sheet_id
 removed fm_workbook_set_iterative_enabled :: fm_workbook_update_iterative takes an fm_iterative_settings_patch_t whose negative fields keep the stored value
 signature fm_sheet_get_print_titles :: fills an fm_print_titles_t (per-axis has_* flags and 0-based spans) instead of A1 text
 signature fm_sheet_set_print_titles :: takes const fm_print_titles_t* (NULL clears) instead of A1 text
 signature fm_sheet_set_view_mode :: takes an int32_t fm_sheet_view_mode_t instead of the `view` attribute text
-signature fm_workbook_set_defined_name :: takes const fm_defined_name_input_t* (name, formula, scope, comment, hidden); an empty formula is INVALID_ARGUMENT instead of a removal
+signature fm_workbook_set_defined_name :: takes const fm_defined_name_t* (the record fm_workbook_get_defined_name_at returns: name, formula, scope, comment, hidden); an empty formula is INVALID_ARGUMENT instead of a removal
 removed fm_workbook_set_iterative :: renamed to fm_workbook_update_iterative, taking const fm_iterative_settings_patch_t* instead of three scalars
 removed fm_sheet_set_fit_to_page :: fm_sheet_update_page_setup sets and clears fitToPage through fm_page_setup_t.fit_to_page_engaged / fit_to_page
 removed fm_sheet_set_thread_resolved :: fm_sheet_update_threaded_comment sets the resolved state through fm_threaded_comment_patch_t.done

@@ -118,7 +118,7 @@ class DeclarationParserTest(BindingRuleTestBase):
             "}\n"
             "export interface WorkbookCtor {\n  load(bytes: Uint8Array): OptionalResult<Workbook>;\n}\n"
             "export interface Cell { readonly row: number; col?: number }\n"
-            "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+            "export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] };\n"
             "export const StatusCode: Readonly<{ Ok: 0; Err: 1 }>;\n"
             "export function evalFormula(formula: string): EvalResult;\n"
         )
@@ -132,7 +132,7 @@ class DeclarationParserTest(BindingRuleTestBase):
             set(js.callables()), {"setLogSink", "getRange", "[Symbol.dispose]", "Workbook.load", "evalFormula"}
         )
         self.assertEqual([(m.name, m.readonly) for m in js.decls["Cell"].members], [("row", True), ("col", False)])
-        self.assertEqual(js.decls["Patch"].text, "{ [K in keyof T]?: T[K] | null }")
+        self.assertEqual(js.decls["Patch"].text, "{ [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] }")
         self.assertEqual(api_conventions_bindings._constant_tables(js), ["StatusCode"])
 
     def test_python_workbook_methods_and_exports(self) -> None:
@@ -617,7 +617,7 @@ class FieldRenameTest(BindingRuleTestBase):
 
         def dts(width: str, transparency: str, dxf: str) -> str:
             return (
-                "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+                "export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] };\n"
                 f"export interface DefaultsInput {{\n  readonly {width}: number;\n}}\n"
                 "export interface Defaults extends DefaultsInput {\n  readonly effective: number;\n}\n"
                 f"export type FillPatch = Patch<{{\n  {transparency}: number;\n}}>;\n"
@@ -926,9 +926,9 @@ class RecordRoleTest(BindingRuleTestBase):
             self.LEDGER,
             wasm="export interface Hyperlink { readonly target: string; readonly display: string }\n"
             "export interface HyperlinkInput { target: string }\n"
-            "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+            "export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] };\n"
             "export type IterativePatch = Patch<Iterative>;\n",
-            native="export type Patch<T> = {\n  [K in keyof T]?: T[K] | null\n};\n",
+            native="export type Patch<T, Clearable extends keyof T = never> = {\n  [K in keyof T]?: K extends Clearable ? T[K] | null : T[K]\n};\n",
         )
         self.assert_rule(
             "R7.js",
@@ -2502,7 +2502,7 @@ class CountAtTest(BindingRuleTestBase):
 
 class PatchShapeTest(BindingRuleTestBase):
     RECORDS = (
-        "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+        "export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] };\n"
         "export interface ChartLegend {\n  readonly position: ChartLegendPosition;\n  readonly overlay: boolean;\n"
         "  readonly hiddenSeries: readonly number[];\n}\n"
         "export interface PivotStyle {\n  readonly name: string | null;\n  readonly showRowHeaders: boolean;\n}\n"
@@ -2649,7 +2649,7 @@ class PatchShapeTest(BindingRuleTestBase):
 
     def test_r18_all_accepts_the_a1_and_sheet_local_alternatives_of_a_rectangle_field(self) -> None:
         records = (
-            "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+            "export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] };\n"
             "export interface TableProperties {\n  readonly range: SheetRect;\n  readonly area: CellRect;\n"
             "  readonly name: string;\n}\n"
         )
@@ -2774,7 +2774,7 @@ class HandleRuleTest(BindingRuleTestBase):
 
     def test_r7_js_a_patch_may_be_an_interface_of_optional_fields(self) -> None:
         ledger = {"entries": {"record.font_patch": {"kind": "record", "role": "patch", "js": "FontPatch"}}}
-        alias = "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+        alias = "export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] };\n"
         good = (
             alias
             + "export interface FontPatch {\n  readonly bold?: boolean | null;\n  readonly color?: ColorInput;\n}\n"

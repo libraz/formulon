@@ -104,10 +104,10 @@ void JsWorkbook::setThemeFonts(emscripten::val fonts) {
     return;
   }
   JsNarrowNumericReader reader("setThemeFonts");
-  const std::string major_latin = reader.string(fonts, "majorLatin", "theme.majorLatin");
-  const std::string major_ea = reader.string(fonts, "majorEastAsian", "theme.majorEastAsian");
-  const std::string minor_latin = reader.string(fonts, "minorLatin", "theme.minorLatin");
-  const std::string minor_ea = reader.string(fonts, "minorEastAsian", "theme.minorEastAsian");
+  const std::string major_latin = reader.required_string(fonts, "majorLatin", "theme.majorLatin");
+  const std::string major_ea = reader.required_string(fonts, "majorEastAsian", "theme.majorEastAsian");
+  const std::string minor_latin = reader.required_string(fonts, "minorLatin", "theme.minorLatin");
+  const std::string minor_ea = reader.required_string(fonts, "minorEastAsian", "theme.minorEastAsian");
   if (!reader.ok()) {
     return;
   }

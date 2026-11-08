@@ -176,6 +176,14 @@ class PatchReader {
     }
   }
 
+  /// Records `rc` (a status another check produced) as the failure when it is the first.
+  bool check(fm_status_t rc) {
+    if (rc_ == 0) {
+      rc_ = rc;
+    }
+    return rc_ == 0;
+  }
+
  private:
   bool op_ok(std::int32_t op, const char* name) {
     return enum_ok(op, static_cast<std::int64_t>(FM_CHART_PATCH_OP_SET), name);

@@ -2,39 +2,20 @@
 
 from __future__ import annotations
 
-from formulon import CellXf, CellXfInput, HorizontalAlign, VerticalAlign
+from formulon import CellXf, CellXfInput
 
 
 def input_of(xf: CellXf) -> CellXfInput:
-    """Copy a read-back record into an input; an unstated attribute is a default with its ``has_*`` off."""
+    """Copy a read-back record into an input; an unstated attribute stays ``None``."""
     return CellXfInput(
         font_index=xf.font_index,
         fill_index=xf.fill_index,
         border_index=xf.border_index,
         num_fmt_id=xf.num_fmt_id,
-        horizontal=HorizontalAlign.GENERAL if xf.horizontal is None else xf.horizontal,
-        vertical=VerticalAlign.BOTTOM if xf.vertical is None else xf.vertical,
-        wrap_text=bool(xf.wrap_text),
+        horizontal=xf.horizontal,
+        vertical=xf.vertical,
+        wrap_text=xf.wrap_text,
         justify_last_line=xf.justify_last_line,
-        has_horizontal=xf.horizontal is not None,
-        has_vertical=xf.vertical is not None,
-        has_wrap_text=xf.wrap_text is not None,
-        has_justify_last_line=xf.justify_last_line is not None,
-        has_alignment=any(
-            v is not None
-            for v in (
-                xf.horizontal,
-                xf.vertical,
-                xf.wrap_text,
-                xf.justify_last_line,
-                xf.text_rotation,
-                xf.indent,
-                xf.shrink_to_fit,
-                xf.reading_order,
-                xf.relative_indent,
-            )
-        ),
-        has_protection=xf.locked is not None or xf.hidden is not None,
         locked=xf.locked,
         hidden=xf.hidden,
         text_rotation=xf.text_rotation,

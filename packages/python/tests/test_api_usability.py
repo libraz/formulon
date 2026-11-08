@@ -22,6 +22,8 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import _chart_input
+
 import formulon
 from formulon import (
     UNCHANGED,
@@ -33,6 +35,7 @@ from formulon import (
     IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
+    PhoneticProperties,
     PivotInput,
     Sheet,
     Value,
@@ -76,7 +79,7 @@ def _pivot_report_book(wb: Workbook, ws: Sheet) -> None:
     ws.set_text(0, 0, "Region")
     ws.set_text(0, 1, "Amount")
     cache = wb.add_pivot_cache().cache_id
-    wb.pivot_cache(cache).set_worksheet_source(ref="A1:B3", sheet="Sheet1")
+    wb.pivot_cache(cache).set_worksheet_source(formulon.PivotWorksheetSourceInput(range="A1:B3", sheet="Sheet1"))
     wb.pivot_cache(cache).add_field("Region")
     wb.pivot_cache(cache).add_field("Amount")
     for row, (region, amount) in enumerate((("East", 10.0), ("West", 30.0)), start=1):
@@ -168,11 +171,13 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.set_blank": Case(),
     "Sheet.set_bool": Case(tail=lambda: (True,)),
     "Sheet.set_cell_phonetic": Case(tail=lambda: ("kana",)),
-    "Sheet.set_cell_phonetic_properties": Case(kw=lambda: {"font_index": 0, "type": 1, "alignment": 1}),
+    "Sheet.set_cell_phonetic_properties": Case(
+        tail=lambda: (formulon.PhoneticProperties(font_index=0, type=1, alignment=1),)
+    ),
     "Sheet.set_cell_phonetic_runs": Case(tail=_runs),
     "Sheet.set_cell_show_phonetic": Case(tail=lambda: (True,)),
     "Sheet.set_cell_xf_index": Case(tail=lambda: (0,)),
-    "Sheet.set_comment": Case(tail=lambda: (formulon.Comment("Ada", "note"),)),
+    "Sheet.set_comment": Case(tail=lambda: (formulon.Comment("note", author="Ada"),)),
     "Sheet.set_comment_visible": Case(tail=lambda: (True,)),
     "Sheet.set_error": Case(tail=lambda: (ErrorCode.NA,)),
     "Sheet.set_formula": Case(tail=lambda: ("=1+1",)),
@@ -571,7 +576,7 @@ class BulkValuesTests(unittest.TestCase):
             ws.set_number(2, 0, 3.0)
             ws.set_number(3, 0, 4.0)
             # B3:B4 is the data table's result range, which refuses writes.
-            ws.add_data_table(formulon.DataTableInput(CellRect(2, 1, 3, 1), column_input=(0, 0)))
+            ws.add_data_table(formulon.DataTableInput(CellRect(2, 1, 3, 1), column_input=formulon.CellAddress(0, 0)))
             with self.assertRaises(FormulonError):
                 ws.set_values("A3", [[7, 8]])
             self.assertEqual(ws.get_typed_value(2, 0), _number(7))
@@ -765,9 +770,9 @@ class NoCountNamesTests(unittest.TestCase):
         self.assertIn("scheme", {f.name for f in dataclasses.fields(formulon.ThemeScriptFont)})
         self.assertIn("scope", inspect.signature(Workbook.get_defined_name).parameters)
         self.assertIn("scope", inspect.signature(Workbook.remove_defined_name).parameters)
-        by_field = inspect.signature(formulon.Pivot.set_field_sort).parameters["by_field"]
-        self.assertIs(by_field.kind, inspect.Parameter.KEYWORD_ONLY)
-        self.assertIsNone(by_field.default)
+        sort_by_field = inspect.signature(formulon.Pivot.update_field).parameters["sort_by_field"]
+        self.assertIs(sort_by_field.kind, inspect.Parameter.KEYWORD_ONLY)
+        self.assertIs(sort_by_field.default, formulon.UNCHANGED)
         visible = inspect.signature(formulon.Pivot.add_field_item).parameters["visible"]
         self.assertIs(visible.kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertIs(visible.default, True)
@@ -921,9 +926,11 @@ class SetViewTests(unittest.TestCase):
     def test_pane_corner_is_checked_after_the_merge(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.update_view(freeze_rows=1, pane_top_left_row=3)
+            ws.update_view(freeze_rows=1, pane_top_left="A4")
             view = ws.get_view()
-            self.assertEqual((view.freeze_rows, view.pane_top_left_row), (1, 3))
+            self.assertEqual((view.freeze_rows, view.pane_top_left), (1, CellAddress(3, 0)))
+            with self.assertRaises(FormulonError):
+                wb.sheet(0).update_view(freeze_rows=0, pane_top_left="A4")
 
     def test_hiding_the_only_visible_sheet_fails_and_changes_nothing(self) -> None:
         with _open() as wb:
@@ -941,8 +948,8 @@ class ChartLegendPatchTests(unittest.TestCase):
             ws.set_text(r + 1, 0, "abc"[r])
             ws.set_number(r + 1, 1, float(r + 1))
         ws.set_text(0, 1, "S")
-        return ws.add_chart(
-            formulon.ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$4", anchor=formulon.DrawingAnchor(row=6), **options
+        return _chart_input.add_chart(
+            ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$4", anchor=formulon.DrawingAnchor(row=6), **options
         )
 
     def test_position_keeps_overlay(self) -> None:
@@ -954,13 +961,13 @@ class ChartLegendPatchTests(unittest.TestCase):
             self.assertEqual(legend.position, formulon.ChartLegendPosition.RIGHT)
             self.assertTrue(legend.overlay)
 
-    def test_null_position_and_hidden_series_are_type_errors(self) -> None:
+    def test_null_position_and_hidden_entries_are_type_errors(self) -> None:
         with _open() as wb:
             oid = self._chart(wb)
             with self.assertRaises(TypeError):
                 wb.sheet(0).chart(oid).update_legend(position=None)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                wb.sheet(0).chart(oid).update_legend(hidden_series=None)  # type: ignore[arg-type]
+                wb.sheet(0).chart(oid).update_legend(hidden_entries=None)  # type: ignore[arg-type]
 
     def test_overlay_alone_creates_a_right_legend(self) -> None:
         with _open() as wb:
@@ -971,7 +978,7 @@ class ChartLegendPatchTests(unittest.TestCase):
             legend = ws.chart(oid).get_properties().legend  # type: ignore[union-attr]
             self.assertEqual(legend.position, formulon.ChartLegendPosition.RIGHT)
             self.assertTrue(legend.overlay)
-            self.assertEqual(list(legend.hidden_series), [])
+            self.assertEqual(list(legend.hidden_entries), [])
 
 
 class PrintPatchTests(unittest.TestCase):
@@ -1412,7 +1419,7 @@ class PlatformOnlyRemovalTests(unittest.TestCase):
             ws = wb.sheet(0)
             ws.set_text(0, 0, "x")
             self.assertFalse(ws.get_cell_phonetic_properties(0, 0).present)
-            ws.set_cell_phonetic_properties(0, 0, font_index=0, type=1, alignment=1)
+            ws.set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=1, alignment=1))
             self.assertTrue(ws.get_cell_phonetic_properties(0, 0).present)
 
     def test_unset_pivot_option_strings_read_none(self) -> None:

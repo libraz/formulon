@@ -132,7 +132,7 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
   std::size_t pivot_index = 99;
-  EXPECT_EQ(fm_sheet_add_pivot(wb.handle, 0, nullptr, cache_id, 0, 0, &pivot_index),
+  EXPECT_EQ(AddPivot(wb.handle, 0, nullptr, cache_id, 0, 0, &pivot_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
   // spec arguments
@@ -199,7 +199,7 @@ TEST(FormulonCApiPivot, MissingCacheIdIsNotFound) {
   EXPECT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, 9999U, "F", &field_index), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_clear_pivot_cache_records(wb.handle, 9999U), FM_STATUS_NOT_FOUND);
   std::size_t pivot_index = 0;
-  EXPECT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", 9999U, 0U, 0U, &pivot_index), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(AddPivot(wb.handle, 0, "PT", 9999U, 0U, 0U, &pivot_index), FM_STATUS_NOT_FOUND);
 }
 
 TEST(FormulonCApiPivot, ShowDetailsRejectsAnOutOfGridCell) {
@@ -229,13 +229,13 @@ TEST(FormulonCApiPivot, OutOfGridAnchorRejected) {
 
   // create() with an anchor past the grid must be rejected, not stored.
   std::size_t pivot_index = 99;
-  EXPECT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, kMaxRows, 0U, &pivot_index),
+  EXPECT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, kMaxRows, 0U, &pivot_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, 0U, kMaxCols, &pivot_index),
+  EXPECT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0U, kMaxCols, &pivot_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // A valid create succeeds, then set_anchor must reject a cell outside the grid.
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
   EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_index, kMaxRows, 0U),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_index, 0U, kMaxCols),
@@ -291,20 +291,19 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(field_count, 2U);
 
   ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, 0, FM_PIVOT_AXIS_ROW), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_ASCENDING, "Amount"), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_subtotal_top(wb.handle, 0, pivot_index, 0, 1), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_index, 0, 0, 0), 0);
+  ASSERT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_ASCENDING, "Amount"), 0);
+  ASSERT_EQ(SetPivotFieldSubtotalTop(wb.handle, 0, pivot_index, 0, 1), 0);
+  ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, 0, 0), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_function(wb.handle, 0, pivot_index, 0, FM_PIVOT_AGGREGATION_COUNT), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0), 0);
   // Region holds text: grouping it by date is refused, and clearing a
   // grouping it does not have changes nothing.
-  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(
-                wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_YEARS, FM_PIVOT_CALENDAR_GREGORIAN, 1,
-                std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()),
+  ASSERT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_YEARS, FM_PIVOT_CALENDAR_GREGORIAN, 1,
+                                   std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_index, 0), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_index, 1, "#,##0.00"), 0);
+  ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, "#,##0.00"), 0);
   const std::uint32_t col_order[] = {1U};
   ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0, pivot_index, col_order, 1U), 0);
 
@@ -384,9 +383,8 @@ TEST(FormulonCApiPivot, NumberFormatCodeRoundTripsThroughEveryInput) {
   EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, 1), "");
   EXPECT_EQ(DataFieldNumberFormat(wb.handle, pivot_index, 0), "");
 
-  // fm_sheet_set_pivot_field_number_format.
-  ASSERT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_index, 1, "0.0%"), 0)
-      << fm_get_last_error_message();
+  // fm_sheet_update_pivot_field.
+  ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, "0.0%"), 0) << fm_get_last_error_message();
   EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, 1), "0.0%");
 
   // fm_sheet_add_pivot_field, configuring a cache field in place.
@@ -425,9 +423,9 @@ TEST(FormulonCApiPivot, NumberFormatCodeRoundTripsThroughEveryInput) {
   EXPECT_NE(saved.find("numFmtId=\"3\""), std::string::npos) << saved;
 
   // A string of digits is a code, not an id; NULL and "" clear.
-  ASSERT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_index, 1, "10"), 0);
+  ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, "10"), 0);
   EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, 1), "10");
-  ASSERT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_index, 1, ""), 0);
+  ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, ""), 0);
   EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, 1), "");
   const fm_pivot_data_field_spec_t cleared = SumOfAmount(nullptr);
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &cleared), 0) << fm_get_last_error_message();
@@ -442,8 +440,7 @@ TEST(FormulonCApiPivot, NumberFormatRejectsMalformedUtf8OnEveryInput) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   const char* bad = "0.0\xC3";
 
-  EXPECT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_index, 1, bad),
-            FM_STATUS_BINDING_UTF8ENCODING_ERROR);
+  EXPECT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, bad), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
   fm_pivot_field_spec_t field_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   field_spec.source_name = "Amount";
   field_spec.axis = FM_PIVOT_AXIS_VALUE;
@@ -477,8 +474,7 @@ TEST(FormulonCApiPivot, ProfileRenderedBuiltinCodeKeepsItsId) {
   ASSERT_EQ(fm_workbook_get_number_format(wb.handle, 27U, &present, &code27), 0);
   ASSERT_EQ(present, 1);
   const std::string code(code27);
-  ASSERT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_index, 1, code.c_str()), 0)
-      << fm_get_last_error_message();
+  ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, code.c_str()), 0) << fm_get_last_error_message();
   EXPECT_NE(SavedPivotXml(wb.handle).find("numFmtId=\"27\""), std::string::npos);
 
   // Reload (the profile is not saved), read the code back and write it unchanged: still 27.
@@ -489,8 +485,7 @@ TEST(FormulonCApiPivot, ProfileRenderedBuiltinCodeKeepsItsId) {
   ASSERT_EQ(fm_workbook_set_profile_id(reloaded.handle, "mac-365-ja_JP"), 0);
   const std::string read_back = FieldNumberFormat(reloaded.handle, 0, 1);
   EXPECT_EQ(read_back, code);
-  ASSERT_EQ(fm_sheet_set_pivot_field_number_format(reloaded.handle, 0, 0, 1, read_back.c_str()), 0)
-      << fm_get_last_error_message();
+  ASSERT_EQ(SetPivotFieldNumberFormat(reloaded.handle, 0, 0, 1, read_back.c_str()), 0) << fm_get_last_error_message();
   const std::string resaved = SavedPivotXml(reloaded.handle);
   EXPECT_NE(resaved.find("numFmtId=\"27\""), std::string::npos) << resaved;
   // No custom format was registered for it: the first custom id is still free.
@@ -531,7 +526,7 @@ TEST(FormulonCApiPivot, RuntimeIdFollowsThePivotAcrossEditsAndIsNeverReused) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   std::size_t second = 99;
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT2", cache_id, 0U, 7U, &second), 0) << fm_get_last_error_message();
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT2", cache_id, 0U, 7U, &second), 0) << fm_get_last_error_message();
   ASSERT_EQ(second, 1U);
 
   const std::uint32_t first_id = PivotRuntimeId(wb.handle, 0, 0);
@@ -586,7 +581,7 @@ TEST(FormulonCApiPivot, RuntimeIdFollowsThePivotAcrossEditsAndIsNeverReused) {
 
   // A pivot added after a removal gets an id never handed out before.
   std::size_t added = 99;
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT3", cache_id, 20U, 0U, &added), 0) << fm_get_last_error_message();
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT3", cache_id, 20U, 0U, &added), 0) << fm_get_last_error_message();
   const std::uint32_t added_id = PivotRuntimeId(wb.handle, 0, added);
   for (const std::uint32_t id : {first_id, second_id, copy_first, copy_second}) {
     EXPECT_NE(added_id, id);

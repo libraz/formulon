@@ -62,6 +62,8 @@ from formulon import (
     Sheet,
     SheetRect,
     SheetSelection,
+    SheetSelectionInput,
+    TableColumnTotalsInput,
     TableInput,
     TableStyle,
     TableStyleDefaults,
@@ -532,7 +534,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             # written with no <phoneticPr> element at all.
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0))
 
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=3, type=2, alignment=2)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=3, type=2, alignment=2))
             # Setting the readings must not reset the rendering.
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "おおさか")])
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2, present=True))
@@ -545,22 +547,24 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_phonetic_properties_reject_values_the_container_cannot_hold(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "大阪")
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=1, type=3, alignment=3)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=1, type=3, alignment=3))
             # Two bits each on the binary side, so a wider ordinal is
             # refused rather than truncated into a valid-looking one.
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0, type=4, alignment=0)
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=4, alignment=0))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0, type=0, alignment=4)
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=0, alignment=4))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0x10000, type=0, alignment=0)
+                wb.sheet(0).set_cell_phonetic_properties(
+                    0, 0, PhoneticProperties(font_index=0x10000, type=0, alignment=0)
+                )
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(1, 3, 3, present=True))
 
     def test_a_value_write_discards_the_guide_and_its_rendering(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "大阪")
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "おおさか")])
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=3, type=2, alignment=2)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=3, type=2, alignment=2))
             wb.sheet(0).set_text(0, 0, "京都")
             self.assertEqual(wb.sheet(0).get_cell_phonetic_runs(0, 0), [])
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0))
@@ -665,15 +669,15 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                     totals_row=True,
                 )
             )
-            table.set_column_totals(0, label="Total")
-            table.set_column_totals(1, function=TableTotalsRowFunction.SUM)
+            table.set_column_totals(0, TableColumnTotalsInput(totals_row_label="Total"))
+            table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.SUM))
             self.assertEqual(wb.sheet(0).get_formula(3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
             self.assertEqual(wb.sheet(0).get_value(3, 1), 30.0)
             with self.assertRaises(FormulonError):
-                table.set_column_totals(1, function=99)  # type: ignore[arg-type]
+                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=99))  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                table.set_column_totals(1, function="sum")  # type: ignore[arg-type]
+                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function="sum"))  # type: ignore[arg-type]
             with Workbook.load(wb.save()) as reloaded:
                 columns = reloaded.sheet(0).list_tables()[0].get_properties().columns
                 self.assertEqual(columns[0].totals_row_label, "Total")
@@ -842,7 +846,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
         cache_id = wb.add_pivot_cache().cache_id
         # A cache with no declared source cannot be saved: Excel offers to
         # repair any package containing one, so the writer refuses instead.
-        wb.pivot_cache(cache_id).set_worksheet_source(ref="A1:B3", sheet="Sheet1")
+        wb.pivot_cache(cache_id).set_worksheet_source(formulon.PivotWorksheetSourceInput(range="A1:B3", sheet="Sheet1"))
         wb.pivot_cache(cache_id).add_field("Region")
         wb.pivot_cache(cache_id).add_field("Amount")
         for region, amount in (("East", 10.0), ("West", 30.0)):
@@ -980,7 +984,7 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
             wb.sheet(0).set_text(0, 0, "漢字")
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "かんじ")])
             self.assertFalse(wb.sheet(0).get_cell_phonetic_properties(0, 0).present)
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0, type=0, alignment=0)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=0, alignment=0))
             self.assertTrue(wb.sheet(0).get_cell_phonetic_properties(0, 0).present)
             data = wb.save()
         with Workbook.load(data) as reloaded:
@@ -997,24 +1001,24 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).update_view(freeze_rows=2, freeze_cols=1)
             view = wb.sheet(0).get_view()
-            self.assertEqual((view.pane_top_left_row, view.pane_top_left_col), (2, 1))
-            wb.sheet(0).update_view(top_left_row=5, top_left_col=0)
-            wb.sheet(0).update_view(pane_top_left_row=40, pane_top_left_col=6)
+            self.assertEqual(view.pane_top_left, CellAddress(2, 1))
+            wb.sheet(0).update_view(top_left=CellAddress(5, 0))
+            wb.sheet(0).update_view(pane_top_left=CellAddress(40, 6))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_view(pane_top_left_row=1, pane_top_left_col=6)
+                wb.sheet(0).update_view(pane_top_left=CellAddress(1, 6))
             ranges = [CellRect(41, 7, 43, 8), CellRect(50, 9, 50, 9)]
-            wb.sheet(0).set_selection(active_row=41, active_col=7, ranges=list(ranges))
+            wb.sheet(0).set_selection(SheetSelectionInput(CellAddress(41, 7), ranges=list(ranges)))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_selection(active_row=0, active_col=0, ranges=[CellRect(3, 0, 1, 0)])
+                wb.sheet(0).set_selection(SheetSelectionInput(CellAddress(0, 0), ranges=[CellRect(3, 0, 1, 0)]))
             data = wb.save()
         with Workbook.load(data) as reloaded:
             view = reloaded.sheet(0).get_view()
             self.assertEqual(
-                (view.top_left_row, view.top_left_col, view.pane_top_left_row, view.pane_top_left_col),
-                (5, 0, 40, 6),
+                (view.top_left, view.pane_top_left),
+                (CellAddress(5, 0), CellAddress(40, 6)),
             )
             self.assertEqual(
-                reloaded.sheet(0).get_selection(), SheetSelection(active_row=41, active_col=7, ranges=ranges)
+                reloaded.sheet(0).get_selection(), SheetSelection(active=CellAddress(41, 7), ranges=ranges)
             )
 
     def test_split_reads_back_round_trips_and_exchanges_with_freeze(self) -> None:
@@ -1048,22 +1052,22 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
     def test_unset_selection_reads_as_a1(self) -> None:
         with Workbook.create_default() as wb:
             self.assertEqual(
-                wb.sheet(0).get_selection(), SheetSelection(active_row=0, active_col=0, ranges=[CellRect(0, 0, 0, 0)])
+                wb.sheet(0).get_selection(), SheetSelection(active=CellAddress(0, 0), ranges=[CellRect(0, 0, 0, 0)])
             )
             with self.assertRaises(FormulonError):
                 wb.sheet(9).get_selection()
 
     def test_selection_without_ranges_is_the_active_cell(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_selection(active_row=4, active_col=2)
+            wb.sheet(0).set_selection(SheetSelectionInput(CellAddress(4, 2)))
             self.assertEqual(
-                wb.sheet(0).get_selection(), SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)])
+                wb.sheet(0).get_selection(), SheetSelection(active=CellAddress(4, 2), ranges=[CellRect(4, 2, 4, 2)])
             )
             data = wb.save()
         with Workbook.load(data) as reloaded:
             self.assertEqual(
                 reloaded.sheet(0).get_selection(),
-                SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)]),
+                SheetSelection(active=CellAddress(4, 2), ranges=[CellRect(4, 2, 4, 2)]),
             )
 
 
@@ -1121,7 +1125,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
 
     def test_get_comments_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.sheet(0).set_comment(r, 10, Comment("author", "text")) for r in range(n)],
+            lambda wb, n: [wb.sheet(0).set_comment(r, 10, Comment("text", author="author")) for r in range(n)],
             lambda wb: wb.sheet(0).list_comments(),
         )
 
@@ -1373,7 +1377,10 @@ class ArgumentScopeTests(unittest.TestCase):
         with wb:
             for name, call in (
                 ("set_cell_phonetic_runs", lambda: wb.sheet(0).set_cell_phonetic_runs(0, 0, runs)),
-                ("set_selection", lambda: wb.sheet(0).set_selection(active_row=0, active_col=0, ranges=list(ranges))),
+                (
+                    "set_selection",
+                    lambda: wb.sheet(0).set_selection(SheetSelectionInput(CellAddress(0, 0), ranges=list(ranges))),
+                ),
                 ("add_pivot_data_field", lambda: wb.sheet(0).pivot(pivot).add_data_field(bad_spec)),
                 ("set_pivot_data_field", lambda: wb.sheet(0).pivot(pivot).set_data_field(0, bad_spec)),
             ):
@@ -1384,11 +1391,11 @@ class ArgumentScopeTests(unittest.TestCase):
         ranges = [CellRect(0, 0, 0, 0)] * 20000 + [CellRect(-1, 0, 0, 0)]
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError):
-                wb.sheet(0).set_selection(active_row=0, active_col=0, ranges=list(ranges))
+                wb.sheet(0).set_selection(SheetSelectionInput(CellAddress(0, 0), ranges=list(ranges)))
             before = _c.LIB.memory.data_len(_c.LIB.store)
             for _ in range(20):
                 with self.assertRaises(ValueError):
-                    wb.sheet(0).set_selection(active_row=0, active_col=0, ranges=list(ranges))
+                    wb.sheet(0).set_selection(SheetSelectionInput(CellAddress(0, 0), ranges=list(ranges)))
             self.assertEqual(_c.LIB.memory.data_len(_c.LIB.store), before)
 
     def test_a_value_of_the_wrong_type_is_rejected_before_any_allocation(self) -> None:

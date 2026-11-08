@@ -42,7 +42,7 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   );
   const list = wb.sheet(0).listHyperlinks();
   assert.equal(list.length, 4);
-  assert.deepEqual(list[0].rect, { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 });
+  assert.deepEqual(list[0].range, { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 });
   assert.equal(list[0].target, 'https://example.com/');
   assert.equal(list[0].display, null);
   assert.equal(list[0].tooltip, null);
@@ -53,13 +53,13 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   assert.equal(list[2].location, 'Sheet1!A1');
   assert.deepEqual(
     {
-      rect: list[3].rect,
+      range: list[3].range,
       target: list[3].target,
       display: list[3].display,
       tooltip: list[3].tooltip,
     },
     {
-      rect: { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
+      range: { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
       target: 'https://example.com/range',
       display: 'Range',
       tooltip: 'Range tip',
@@ -339,14 +339,17 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   const omittedRead = wb.ooxml.getCellXf(omitted);
   assert.deepEqual([omittedRead.horizontal, omittedRead.wrapText, omittedRead.justifyLastLine], [null, null, null]);
 
-  const explicitEmpty = wb.ooxml.addCellXf({
-    fontIndex: fontResult,
-    fillIndex: fill,
-    borderIndex: border,
-    numFmtId: custom,
-    hasAlignment: true,
-  });
-  assert.notEqual(explicitEmpty, omitted);
+  assert.throws(
+    () =>
+      wb.ooxml.addCellXf({
+        fontIndex: fontResult,
+        fillIndex: fill,
+        borderIndex: border,
+        numFmtId: custom,
+        hasAlignment: true,
+      }),
+    TypeError,
+  );
 
   const rfont = wb.ooxml.getFont(fontResult);
   assert.equal(rfont.name, 'Arial');
@@ -736,11 +739,11 @@ test('scroll origin, pane origin and selection round-trip through save', async (
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).updateView({ freezeRows: 2, freezeCols: 1 });
   const view = wb.sheet(0).getView();
-  assert.equal(view.paneTopLeftRow, 2);
-  assert.equal(view.paneTopLeftCol, 1);
-  wb.sheet(0).updateView({ topLeftRow: 5, topLeftCol: 0 });
-  wb.sheet(0).updateView({ paneTopLeftRow: 40, paneTopLeftCol: 6 });
-  assert.throws(() => wb.sheet(0).updateView({ paneTopLeftRow: 1, paneTopLeftCol: 6 }), isFormulonError);
+  assert.equal(view.paneTopLeft.row, 2);
+  assert.equal(view.paneTopLeft.col, 1);
+  wb.sheet(0).updateView({ topLeft: { row: 5, col: 0 } });
+  wb.sheet(0).updateView({ paneTopLeft: { row: 40, col: 6 } });
+  assert.throws(() => wb.sheet(0).updateView({ paneTopLeft: { row: 1, col: 6 } }), isFormulonError);
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
@@ -758,10 +761,10 @@ test('scroll origin, pane origin and selection round-trip through save', async (
   const loaded = mod.Workbook.load(saved);
   try {
     const got = loaded.sheet(0).getView();
-    assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
+    assert.deepEqual([got.topLeft.row, got.topLeft.col, got.paneTopLeft.row, got.paneTopLeft.col], [5, 0, 40, 6]);
     const selection = loaded.sheet(0).getSelection();
-    assert.equal(selection.activeRow, 41);
-    assert.equal(selection.activeCol, 7);
+    assert.equal(selection.active.row, 41);
+    assert.equal(selection.active.col, 7);
     assert.deepEqual(
       selection.ranges.map((r) => [r.firstRow, r.firstCol, r.lastRow, r.lastCol]),
       [

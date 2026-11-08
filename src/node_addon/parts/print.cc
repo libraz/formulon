@@ -540,15 +540,6 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
 
 }  // namespace
 
-namespace {
-
-// The span a break covers on the perpendicular axis when it is computed rather than stored:
-// the whole sheet.
-constexpr uint32_t kLastColumnIndex = 16383U;
-constexpr uint32_t kLastRowIndex = 1048575U;
-
-}  // namespace
-
 Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -567,7 +558,6 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
   Napi::Array print_area = Napi::Array::New(env);
   Napi::Array row_breaks = Napi::Array::New(env);
   Napi::Array column_breaks = Napi::Array::New(env);
-  const uint32_t sheet = ArgU32(info, 0);
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_print_area_count); ++i) {
     fm_cell_rect_t range{};
     if (fm_pagination_get_print_area_at(pagination, i, &range) != 0) {
@@ -575,57 +565,29 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     }
     print_area.Set(i, RangeToJs(env, range));
   }
-  // A stored break reports its own span; a break the page walk computed covers the whole sheet.
-  std::size_t stored_rows = 0;
-  std::size_t stored_columns = 0;
-  (void)fm_sheet_get_row_break_count(handle_, sheet, &stored_rows);
-  (void)fm_sheet_get_column_break_count(handle_, sheet, &stored_columns);
+  // A break the page walk computed covers the whole sheet (`first` / `last` of `0`).
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_row_break_count); ++i) {
-    uint32_t row = 0;
-    int32_t manual = 0;
-    if (fm_pagination_get_row_break_at(pagination, i, &row) != 0 ||
-        fm_pagination_is_row_break_manual(pagination, i, &manual) != 0) {
+    fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+    if (fm_pagination_get_row_break_at(pagination, i, &brk) != 0) {
       continue;
     }
-    uint32_t first = 0;
-    uint32_t last = kLastColumnIndex;
-    for (std::size_t k = 0; k < stored_rows; ++k) {
-      fm_row_break_t stored = FM_STRUCT_INIT(fm_row_break_t);
-      if (fm_sheet_get_row_break_at(handle_, sheet, k, &stored) == 0 && stored.row == row) {
-        first = stored.first;
-        last = stored.last;
-        break;
-      }
-    }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("row", Napi::Number::New(env, row));
-    item.Set("first", Napi::Number::New(env, first));
-    item.Set("last", Napi::Number::New(env, last));
-    item.Set("manual", Napi::Boolean::New(env, manual != 0));
+    item.Set("row", Napi::Number::New(env, brk.row));
+    item.Set("first", Napi::Number::New(env, brk.first));
+    item.Set("last", Napi::Number::New(env, brk.last));
+    item.Set("manual", Napi::Boolean::New(env, brk.manual != 0));
     row_breaks.Set(row_breaks.Length(), item);
   }
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_column_break_count); ++i) {
-    uint32_t col = 0;
-    int32_t manual = 0;
-    if (fm_pagination_get_column_break_at(pagination, i, &col) != 0 ||
-        fm_pagination_is_column_break_manual(pagination, i, &manual) != 0) {
+    fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+    if (fm_pagination_get_column_break_at(pagination, i, &brk) != 0) {
       continue;
     }
-    uint32_t first = 0;
-    uint32_t last = kLastRowIndex;
-    for (std::size_t k = 0; k < stored_columns; ++k) {
-      fm_column_break_t stored = FM_STRUCT_INIT(fm_column_break_t);
-      if (fm_sheet_get_column_break_at(handle_, sheet, k, &stored) == 0 && stored.col == col) {
-        first = stored.first;
-        last = stored.last;
-        break;
-      }
-    }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("col", Napi::Number::New(env, col));
-    item.Set("first", Napi::Number::New(env, first));
-    item.Set("last", Napi::Number::New(env, last));
-    item.Set("manual", Napi::Boolean::New(env, manual != 0));
+    item.Set("col", Napi::Number::New(env, brk.col));
+    item.Set("first", Napi::Number::New(env, brk.first));
+    item.Set("last", Napi::Number::New(env, brk.last));
+    item.Set("manual", Napi::Boolean::New(env, brk.manual != 0));
     column_breaks.Set(column_breaks.Length(), item);
   }
   result.Set("printArea", print_area);

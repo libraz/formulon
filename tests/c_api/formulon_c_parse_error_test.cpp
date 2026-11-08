@@ -108,14 +108,14 @@ bool CallEntry(fm_workbook_t* wb, const std::string& entry, const std::string& f
     fm_value_t v{};
     *status = fm_sheet_evaluate_cf_formula(wb, 0, 0, 0, 0, 0, text, &v);
   } else if (entry == "defined_name") {
-    fm_defined_name_input_t input = FM_STRUCT_INIT(fm_defined_name_input_t);
+    fm_defined_name_t input = FM_STRUCT_INIT(fm_defined_name_t);
     input.name = "Rate";
     input.formula = text;
     input.local_sheet_id = -1;
     *status = fm_workbook_set_defined_name(wb, &input);
   } else if (entry == "parse_reference") {
     fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
-    *status = fm_workbook_parse_reference(wb, text, 0, 0, 0, 0, &out);
+    *status = fm_workbook_parse_reference(wb, text, nullptr, &out);
   } else {
     return false;
   }

@@ -222,6 +222,20 @@ TEST(ThreadedComments, RoundTripRepliesMentions) {
   EXPECT_EQ(reloaded.sheet(0).comments()[0].text, "Plain note");
 }
 
+TEST(ThreadedComments, CommentWithNoTimeOmitsDtAndRoundTrips) {
+  Workbook wb = WorkbookWithPersons();
+  ThreadedComment c = Comment(kThread, 0, 0, kAlice, "undated");
+  c.created.clear();
+  ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, c)));
+  const std::vector<std::uint8_t> saved = Save(wb);
+  const std::string part = Part(saved, "xl/threadedComments/threadedComment1.xml");
+  ASSERT_FALSE(part.empty());
+  EXPECT_EQ(part.find("dT="), std::string::npos);
+  Workbook reloaded = Load(saved);
+  ASSERT_EQ(reloaded.sheet(0).threaded_comments().size(), 1U);
+  EXPECT_TRUE(reloaded.sheet(0).threaded_comments()[0].created.empty());
+}
+
 TEST(ThreadedComments, TextSurvivesTwoOoxmlCycles) {
   const std::string payload = "literal _x0041_ & <猫> \rcontrol \x01 🙂";
   std::vector<ThreadedComment> current = {Comment(kThread, 0, 0, kAlice, payload)};

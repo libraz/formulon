@@ -94,7 +94,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   loaded
     .sheet(0)
     .slicer(added.objectId)
-    .update({ caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 });
+    .update({ caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, fromCol: 3, toRow: 8, toCol: 5 });
   const found = loaded.sheet(0).slicer(added.objectId).getProperties();
   assert.equal(found.caption, 'Renamed');
   loaded.sheet(0).insertRows(0, 3);
@@ -103,7 +103,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(moved.style, null);
   assert.equal(moved.columnCount, 1);
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
-  assert.deepEqual([moved.fromRow, moved.toRow], [3, 11]);
+  assert.deepEqual([moved.fromRow, moved.fromCol, moved.toRow, moved.toCol], [3, 3, 11, 5]);
 
   loaded.sheet(0).removeDrawing(added.objectId);
   assert.equal(loaded.sheet(0).listSlicers().length, 0);

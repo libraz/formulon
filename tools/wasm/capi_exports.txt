@@ -402,23 +402,15 @@ fm_sheet_get_pivot_field_item_count
 fm_sheet_get_pivot_field_item
 fm_sheet_clear_pivot_fields
 fm_sheet_set_pivot_field_axis
-fm_sheet_set_pivot_field_sort
-fm_sheet_set_pivot_field_subtotal_top
-fm_sheet_set_pivot_field_default_subtotal
-fm_sheet_set_pivot_field_insert_blank_row
-fm_sheet_set_pivot_field_fill_down_labels
-fm_sheet_set_pivot_field_show_detail
-fm_sheet_set_pivot_field_item_show_detail
-fm_sheet_set_pivot_field_item_caption
+fm_sheet_update_pivot_field
+fm_sheet_update_pivot_field_item
 fm_sheet_add_pivot_field_item
 fm_sheet_add_pivot_field_item_by_cache_index
 fm_sheet_clear_pivot_field_items
-fm_sheet_set_pivot_field_item_visible
 fm_sheet_add_pivot_field_subtotal_function
 fm_sheet_clear_pivot_field_subtotal_functions
 fm_sheet_set_pivot_field_date_group
 fm_sheet_clear_pivot_field_date_group
-fm_sheet_set_pivot_field_number_format
 fm_sheet_set_pivot_row_field_order
 fm_sheet_set_pivot_column_field_order
 fm_sheet_get_pivot_data_field_count
@@ -447,8 +439,6 @@ fm_sheet_get_pivot_options
 fm_sheet_update_pivot_options
 fm_sheet_project_pivot
 fm_sheet_is_pivot_projection_pending
-fm_sheet_set_pivot_field_custom_name
-fm_sheet_set_pivot_field_show_all
 fm_sheet_get_pivot_data_field_default_name
 
 # -- Function catalog ------------------------------------------------------------
@@ -498,8 +488,6 @@ fm_pagination_get_scale
 fm_pagination_get_page_order
 fm_pagination_get_print_titles
 fm_pagination_get_page_at
-fm_pagination_is_row_break_manual
-fm_pagination_is_column_break_manual
 fm_sheet_get_page_setup_xml
 fm_sheet_set_page_setup_xml
 fm_sheet_get_page_margins_xml

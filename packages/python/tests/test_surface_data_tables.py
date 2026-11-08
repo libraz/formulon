@@ -8,6 +8,7 @@ import zipfile
 
 from formulon import (
     CalcMode,
+    CellAddress,
     CellRect,
     DataTable,
     DataTableInput,
@@ -41,7 +42,7 @@ def _number(wb: Workbook, row: int, col: int) -> float:
 class DataTableTests(unittest.TestCase):
     def test_one_variable_table_computes_reads_back_and_refuses_writes(self) -> None:
         with _squares() as wb:
-            wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=(0, 1)))
+            wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=CellAddress(0, 1)))
             wb.recalc()
             self.assertEqual([_number(wb, r, 1) for r in (2, 3, 4)], [1.0, 4.0, 9.0])
             self.assertEqual(_number(wb, 0, 1), 3.0)
@@ -51,7 +52,7 @@ class DataTableTests(unittest.TestCase):
             self.assertEqual(
                 table,
                 DataTable(
-                    rect=CellRect(2, 1, 4, 1),
+                    range=CellRect(2, 1, 4, 1),
                     two_dimensional=False,
                     row_oriented=False,
                     row_input=None,
@@ -79,7 +80,9 @@ class DataTableTests(unittest.TestCase):
             for k in range(3):
                 wb.sheet(0).set_number(2, 3 + k, float(k + 1))
                 wb.sheet(0).set_number(3 + k, 2, float(10 * (k + 1)))
-            wb.sheet(0).add_data_table(DataTableInput(CellRect(3, 3, 5, 5), row_input=(0, 5), column_input=(1, 5)))
+            wb.sheet(0).add_data_table(
+                DataTableInput(CellRect(3, 3, 5, 5), row_input=CellAddress(0, 5), column_input=CellAddress(1, 5))
+            )
             wb.recalc()
             self.assertEqual([_number(wb, 3 + k, 3 + k) for k in range(3)], [10.0, 40.0, 90.0])
             table = wb.sheet(0).get_data_table(4, 4)
@@ -91,13 +94,13 @@ class DataTableTests(unittest.TestCase):
             table = wb.sheet(0).get_data_table(4, 3)
             self.assertTrue(table.row_input.deleted)
             self.assertFalse(table.column_input.deleted)
-            self.assertEqual(table.rect.first_row, 2)
+            self.assertEqual(table.range.first_row, 2)
             wb.recalc()
             self.assertIs(wb.sheet(0).get_typed_value(2, 3).kind, ValueKind.ERROR)
 
     def test_save_load_remove_and_auto_no_table(self) -> None:
         with _squares() as wb:
-            wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=(0, 1)))
+            wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=CellAddress(0, 1)))
             wb.recalc()
             data = wb.save()
             self.assertIn('t="dataTable" ref="B3:B5"', _sheet_xml(data))
@@ -126,20 +129,20 @@ class DataTableTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1)))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_data_table(DataTableInput(CellRect(0, 1, 4, 1), column_input=(0, 1)))
+                wb.sheet(0).add_data_table(DataTableInput(CellRect(0, 1, 4, 1), column_input=CellAddress(0, 1)))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=(3, 1)))
+                wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=CellAddress(3, 1)))
             with self.assertRaises(FormulonError):
-                wb.sheet(5).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=(0, 1)))
+                wb.sheet(5).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=CellAddress(0, 1)))
             with self.assertRaises(FormulonError):
                 wb.sheet(5).get_data_table(0, 0)
             with self.assertRaises(FormulonError):
                 wb.sheet(5).remove_data_table(0, 0)
             with self.assertRaises((TypeError, ValueError, OverflowError)):
-                wb.sheet(0).add_data_table(DataTableInput(CellRect(-1, 1, 4, 1), column_input=(0, 1)))
-            wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=(0, 1)))
+                wb.sheet(0).add_data_table(DataTableInput(CellRect(-1, 1, 4, 1), column_input=CellAddress(0, 1)))
+            wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=CellAddress(0, 1)))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=(0, 1)))
+                wb.sheet(0).add_data_table(DataTableInput(CellRect(2, 1, 4, 1), column_input=CellAddress(0, 1)))
 
 
 if __name__ == "__main__":

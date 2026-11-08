@@ -417,7 +417,7 @@ export function registerCellsIo(Module, test) {
     }
   });
 
-  test('a CF match reports its flags as booleans and a CF predicate evaluates to a boolean', () => {
+  test('a CF match carries the fields of its kind and a CF predicate evaluates to a boolean', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const dxf = wb.addDxf({ font: { bold: true } });
@@ -432,10 +432,7 @@ export function registerCellsIo(Module, test) {
       });
       const cells = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
       const match = cells[0].matches[0];
-      assert.equal(match.dxfIndexEngaged, true);
-      assert.equal(match.barIsNegative, false);
-      assert.equal(match.barBorderEngaged, false);
-      assert.equal(match.barGradient, false);
+      assert.deepEqual({ ...match }, { kind: 0, priority: 1, dxfIndex: dxf });
       assert.strictEqual(wb.evaluateCfFormula(0, 0, 0, 0, 0, '=A1>10'), true);
       assert.strictEqual(wb.evaluateCfFormula(0, 0, 0, 0, 0, '=A1>100'), false);
     } finally {

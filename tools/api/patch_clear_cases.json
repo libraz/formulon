@@ -1,0 +1,392 @@
+{
+  "ChartAxisPatch": {
+    "clearable": [
+      "log_base",
+      "major_unit",
+      "max",
+      "min",
+      "minor_unit",
+      "number_format",
+      "tick_label_position",
+      "title"
+    ],
+    "non_clearable": [
+      "crosses",
+      "crosses_at",
+      "major_gridlines",
+      "minor_gridlines",
+      "position",
+      "reversed",
+      "source_linked",
+      "visible"
+    ]
+  },
+  "ChartDisplayPatch": {
+    "clearable": [
+      "blanks_as",
+      "na_as_blank",
+      "plot_visible_only",
+      "style"
+    ],
+    "non_clearable": []
+  },
+  "ChartFillPatch": {
+    "clearable": [
+      "color",
+      "transparency_pct"
+    ],
+    "non_clearable": []
+  },
+  "ChartLabelsPatch": {
+    "clearable": [
+      "font_color",
+      "font_size_pt",
+      "number_format",
+      "position",
+      "separator"
+    ],
+    "non_clearable": [
+      "deleted",
+      "show_category",
+      "show_legend_key",
+      "show_percent",
+      "show_series",
+      "show_value",
+      "source_linked"
+    ]
+  },
+  "ChartLinePatch": {
+    "clearable": [
+      "color",
+      "dash",
+      "transparency_pct",
+      "width_pt"
+    ],
+    "non_clearable": [
+      "none"
+    ]
+  },
+  "ChartMarkerPatch": {
+    "clearable": [
+      "size_pt"
+    ],
+    "non_clearable": [
+      "fill",
+      "line",
+      "symbol"
+    ]
+  },
+  "ChartPointPatch": {
+    "clearable": [
+      "marker"
+    ],
+    "non_clearable": [
+      "fill",
+      "line"
+    ]
+  },
+  "ChartSeriesPatch": {
+    "clearable": [
+      "categories",
+      "labels",
+      "marker",
+      "name",
+      "x"
+    ],
+    "non_clearable": [
+      "fill",
+      "line",
+      "size",
+      "smooth",
+      "values",
+      "y"
+    ]
+  },
+  "FillPatch": {
+    "clearable": [
+      "gradient"
+    ],
+    "non_clearable": [
+      "background",
+      "foreground",
+      "pattern"
+    ]
+  },
+  "FontPatch": {
+    "clearable": [
+      "bold",
+      "charset",
+      "condense",
+      "extend",
+      "family",
+      "italic",
+      "outline",
+      "shadow",
+      "size_pt",
+      "strike"
+    ],
+    "non_clearable": [
+      "color",
+      "name",
+      "scheme",
+      "underline",
+      "vert_align"
+    ]
+  },
+  "HeaderFooterPatch": {
+    "clearable": [
+      "even_footer",
+      "even_header",
+      "first_footer",
+      "first_header",
+      "odd_footer",
+      "odd_header"
+    ],
+    "non_clearable": [
+      "align_with_margins",
+      "different_first",
+      "different_odd_even",
+      "scale_with_doc"
+    ]
+  },
+  "PageSetupPatch": {
+    "clearable": [
+      "orientation"
+    ],
+    "non_clearable": [
+      "fit_to_height",
+      "fit_to_page",
+      "fit_to_width",
+      "paper_size",
+      "scale_pct"
+    ]
+  },
+  "PivotCacheOptionsPatch": {
+    "clearable": [
+      "missing_items_limit"
+    ],
+    "non_clearable": [
+      "refresh_on_load",
+      "save_data"
+    ]
+  },
+  "PivotFieldPatch": {
+    "clearable": [
+      "custom_name",
+      "number_format",
+      "sort_by_field"
+    ],
+    "non_clearable": [
+      "default_subtotal",
+      "fill_down_labels",
+      "insert_blank_row",
+      "show_all",
+      "show_detail",
+      "sort_order",
+      "subtotal_top"
+    ]
+  },
+  "PivotItemPatch": {
+    "clearable": [
+      "caption"
+    ],
+    "non_clearable": [
+      "show_detail",
+      "visible"
+    ]
+  },
+  "PivotOptionsPatch": {
+    "clearable": [
+      "alt_text",
+      "alt_text_summary",
+      "error_caption",
+      "grand_total_caption",
+      "missing_caption"
+    ],
+    "non_clearable": [
+      "auto_formatting",
+      "custom_list_sort",
+      "enable_drill",
+      "field_print_titles",
+      "grid_drop_zones",
+      "indent",
+      "item_print_titles",
+      "merge_item",
+      "multiple_field_filters",
+      "page_over_then_down",
+      "page_wrap",
+      "preserve_formatting",
+      "print_drill",
+      "show_data_drop_down",
+      "show_data_tips",
+      "show_drill",
+      "show_empty_column",
+      "show_empty_row",
+      "show_error",
+      "show_headers",
+      "show_missing"
+    ]
+  },
+  "PivotStyleOptionsPatch": {
+    "clearable": [
+      "style_name"
+    ],
+    "non_clearable": [
+      "show_column_headers",
+      "show_column_stripes",
+      "show_last_column",
+      "show_row_headers",
+      "show_row_stripes"
+    ]
+  },
+  "ProtectedRangePatch": {
+    "clearable": [
+      "legacy_password_hash"
+    ],
+    "non_clearable": [
+      "algorithm_name",
+      "hash_value",
+      "name",
+      "ranges",
+      "salt_value",
+      "security_descriptor",
+      "spin_count"
+    ]
+  },
+  "ShapePatch": {
+    "clearable": [
+      "fill_color",
+      "fill_kind",
+      "line_color",
+      "line_kind"
+    ],
+    "non_clearable": [
+      "anchor_kind",
+      "edit_as",
+      "from_col",
+      "from_col_offset_emu",
+      "from_row",
+      "from_row_offset_emu",
+      "height_emu",
+      "hidden",
+      "line_width_pt",
+      "name",
+      "preset_geometry",
+      "rotation_deg",
+      "text",
+      "text_box",
+      "to_col",
+      "to_col_offset_emu",
+      "to_row",
+      "to_row_offset_emu",
+      "width_emu"
+    ]
+  },
+  "SheetFormatDefaultsPatch": {
+    "clearable": [
+      "default_col_width_chars",
+      "default_row_height_pt"
+    ],
+    "non_clearable": [
+      "base_col_width_chars",
+      "custom_height",
+      "zero_height"
+    ]
+  },
+  "SheetProtectionPatch": {
+    "clearable": [
+      "algorithm_name",
+      "hash_value",
+      "legacy_password_hash",
+      "salt_value",
+      "spin_count"
+    ],
+    "non_clearable": [
+      "allow_auto_filter",
+      "allow_delete_columns",
+      "allow_delete_rows",
+      "allow_edit_objects",
+      "allow_edit_scenarios",
+      "allow_format_cells",
+      "allow_format_columns",
+      "allow_format_rows",
+      "allow_insert_columns",
+      "allow_insert_hyperlinks",
+      "allow_insert_rows",
+      "allow_pivot_tables",
+      "allow_select_locked_cells",
+      "allow_select_unlocked_cells",
+      "allow_sort"
+    ]
+  },
+  "SlicerPatch": {
+    "clearable": [
+      "style"
+    ],
+    "non_clearable": [
+      "caption",
+      "column_count",
+      "cross_filter",
+      "from_col",
+      "from_col_offset_emu",
+      "from_row",
+      "from_row_offset_emu",
+      "row_height_emu",
+      "sort_order",
+      "to_col",
+      "to_col_offset_emu",
+      "to_row",
+      "to_row_offset_emu"
+    ]
+  },
+  "SparklineGroupPatch": {
+    "clearable": [
+      "date_axis_range",
+      "manual_max",
+      "manual_min"
+    ],
+    "non_clearable": [
+      "color_axis",
+      "color_first",
+      "color_high",
+      "color_last",
+      "color_low",
+      "color_markers",
+      "color_negative",
+      "color_series",
+      "date_axis",
+      "display_hidden",
+      "display_xaxis",
+      "empty_cells_as",
+      "first",
+      "high",
+      "last",
+      "line_weight",
+      "low",
+      "markers",
+      "max_axis_type",
+      "min_axis_type",
+      "negative",
+      "sparklines",
+      "type"
+    ]
+  },
+  "TableStyleDefaultsPatch": {
+    "clearable": [
+      "pivot_style",
+      "table_style"
+    ],
+    "non_clearable": []
+  },
+  "TableStyleOptionsPatch": {
+    "clearable": [
+      "style_name"
+    ],
+    "non_clearable": [
+      "show_column_stripes",
+      "show_first_column",
+      "show_last_column",
+      "show_row_stripes"
+    ]
+  }
+}

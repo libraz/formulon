@@ -299,7 +299,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameRejectsEmptyFormulaAndKeepsTheName) {
 TEST(WorkbookSheetOpsCApi, SetDefinedNameReplacesCommentAndHidden) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_defined_name_input_t full{sizeof(fm_defined_name_input_t), "Rate", "=0.1", -1, "Tax rate", 1};
+  const fm_defined_name_t full{sizeof(fm_defined_name_t), "Rate", "=0.1", -1, "Tax rate", 1};
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &full), 0);
   fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);

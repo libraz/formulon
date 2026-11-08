@@ -433,7 +433,7 @@ TEST(FormulonCApiUsability, TableTotalsFormulaCarriesTheEqualsWhicheverWayItWasE
   const fm_cell_rect_t ref{0, 0, 3, 1};
   const char* columns[] = {"Product", "Amount"};
   std::size_t table = 99;
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &ref, "Sales", columns, 2, "TableStyleMedium2", 1, 1, &table), 0)
+  ASSERT_EQ(AddTable(wb.handle, 0, &ref, "Sales", columns, 2, "TableStyleMedium2", 1, 1, &table), 0)
       << fm_get_last_error_message();
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);

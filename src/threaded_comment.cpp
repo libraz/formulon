@@ -196,7 +196,8 @@ Expected<void, Error> Workbook::add_threaded_comment(std::size_t sheet_index, Th
   if (!HasPerson(persons_, comment.person_id)) {
     return Invalid("add_threaded_comment: author is not in the person list", comment.person_id);
   }
-  if (!is_threaded_comment_timestamp(comment.created)) {
+  // `dT` is optional: an empty stamp stores a comment with no time.
+  if (!comment.created.empty() && !is_threaded_comment_timestamp(comment.created)) {
     return Invalid("add_threaded_comment: created is not YYYY-MM-DDTHH:MM:SS.ss", comment.created);
   }
   RETURN_IF_ERROR(ValidateText(comment.text, comment.mentions, persons_));

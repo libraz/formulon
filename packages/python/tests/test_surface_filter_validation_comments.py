@@ -8,10 +8,12 @@ import unittest
 from formulon import (
     AutoFilter,
     AutoFilterColumn,
+    AutoFilterCondition,
     AutoFilterDateGroup,
     AutoFilterEval,
     AutoFilterSortCondition,
     AutoFilterSortState,
+    CellAddress,
     CellRect,
     ComparisonOperator,
     DataValidationInput,
@@ -70,12 +72,12 @@ class AutoFilterTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _seed_numbers(wb)
             sort = AutoFilterSortState(
-                ref=CellRect(1, 0, 5, 1),
+                range=CellRect(1, 0, 5, 1),
                 column_sort=False,
                 case_sensitive=True,
                 sort_method=SortMethod.PIN_YIN,
                 conditions=[
-                    AutoFilterSortCondition(ref=CellRect(1, 0, 5, 0), descending=True, custom_list="a,b"),
+                    AutoFilterSortCondition(range=CellRect(1, 0, 5, 0), descending=True, custom_list="a,b"),
                 ],
             )
             af = AutoFilter(
@@ -93,11 +95,10 @@ class AutoFilterTests(unittest.TestCase):
                         column_offset=1,
                         kind=FilterKind.CUSTOM,
                         custom_and=True,
-                        custom_count=2,
-                        operator1=ComparisonOperator.GREATER_THAN,
-                        value1="1",
-                        operator2=ComparisonOperator.LESS_THAN,
-                        value2="9",
+                        conditions=[
+                            AutoFilterCondition(ComparisonOperator.GREATER_THAN, "1"),
+                            AutoFilterCondition(ComparisonOperator.LESS_THAN, "9"),
+                        ],
                     ),
                 ],
                 sort=sort,
@@ -114,12 +115,18 @@ class AutoFilterTests(unittest.TestCase):
             self.assertEqual(c0.values, ["1", "3"])
             self.assertEqual(c0.date_groups, [AutoFilterDateGroup(year=2024, month=5, grouping=DateTimeGrouping.MONTH)])
             self.assertEqual(
-                (c1.kind, c1.custom_count, c1.operator1, c1.value1, c1.operator2, c1.value2),
-                (FilterKind.CUSTOM, 2, ComparisonOperator.GREATER_THAN, "1", ComparisonOperator.LESS_THAN, "9"),
+                (c1.kind, c1.conditions),
+                (
+                    FilterKind.CUSTOM,
+                    [
+                        AutoFilterCondition(ComparisonOperator.GREATER_THAN, "1"),
+                        AutoFilterCondition(ComparisonOperator.LESS_THAN, "9"),
+                    ],
+                ),
             )
             self.assertTrue(c1.custom_and)
             assert got.sort is not None
-            self.assertEqual(got.sort.ref, sort.ref)
+            self.assertEqual(got.sort.range, sort.range)
             self.assertTrue(got.sort.case_sensitive)
             self.assertEqual(got.sort.sort_method, SortMethod.PIN_YIN)
             self.assertEqual(got.sort.conditions[0].custom_list, "a,b")
@@ -165,9 +172,7 @@ class AutoFilterTests(unittest.TestCase):
                         AutoFilterColumn(
                             column_offset=0,
                             kind=FilterKind.CUSTOM,
-                            custom_count=1,
-                            operator1=ComparisonOperator.GREATER_THAN,
-                            value1="2",
+                            conditions=[AutoFilterCondition(ComparisonOperator.GREATER_THAN, "2")],
                         )
                     ],
                 ),
@@ -218,16 +223,14 @@ class AutoFilterTests(unittest.TestCase):
                         AutoFilterColumn(
                             column_offset=0,
                             kind=FilterKind.CUSTOM,
-                            custom_count=1,
-                            operator1=ComparisonOperator.GREATER_THAN_OR_EQUAL,
-                            value1="2",
+                            conditions=[AutoFilterCondition(ComparisonOperator.GREATER_THAN_OR_EQUAL, "2")],
                         )
                     ],
                 )
             )
             got = table.get_auto_filter()
             assert got is not None
-            self.assertEqual(got.columns[0].value1, "2")
+            self.assertEqual(got.columns[0].conditions[0].value, "2")
             self.assertEqual(table.evaluate_auto_filter(), AutoFilterEval(1, [False, True, True]))
             table.apply_auto_filter()
             table.clear_auto_filter_criteria()
@@ -307,7 +310,9 @@ class ThreadedCommentTests(unittest.TestCase):
     def test_thread_with_reply_and_mention(self) -> None:
         with self._wb() as wb:
             self.assertEqual(wb.sheet(0).list_threaded_comments(), [])
-            opener = ThreadedCommentInput(id=THREAD, row=2, col=1, person_id=ALICE, created=STAMP, text="Check this")
+            opener = ThreadedCommentInput(
+                id=THREAD, cell=CellAddress(2, 1), person_id=ALICE, created=STAMP, text="Check this"
+            )
             wb.sheet(0).add_threaded_comment(opener)
             reply = ThreadedCommentInput(
                 id=REPLY,
@@ -322,8 +327,8 @@ class ThreadedCommentTests(unittest.TestCase):
             wb.sheet(0).add_threaded_comment(reply)
             got = wb.sheet(0).list_threaded_comments()
             self.assertEqual([c.id for c in got], [THREAD, REPLY])
-            self.assertEqual((got[0].row, got[0].col, got[0].text), (2, 1, "Check this"))
-            self.assertEqual((got[1].row, got[1].col, got[1].parent_id), (2, 1, THREAD))
+            self.assertEqual((got[0].cell, got[0].text), (CellAddress(2, 1), "Check this"))
+            self.assertEqual((got[1].cell, got[1].parent_id), (CellAddress(2, 1), THREAD))
             self.assertEqual(got[1].mentions, reply.mentions)
 
             with self.assertRaises(FormulonError):

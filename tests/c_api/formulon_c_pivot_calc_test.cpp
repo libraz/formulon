@@ -81,7 +81,7 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
   ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache), 0);
-  ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb.handle, cache, 1, "A1:D6", "Sheet1", nullptr), 0);
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache, 1, "A1:D6", "Sheet1", nullptr), 0);
   for (const char* name : {"Region", "Product", "Amt", "Qty"}) {
     std::size_t index = 99;
     ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache, name, &index), 0) << fm_get_last_error_message();
@@ -101,11 +101,11 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
     ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache, record, kQty, row.qty), 0);
   }
   std::size_t pivot = 99;
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0U, "PivotTable1", cache, 2U, 0U, &pivot), 0) << fm_get_last_error_message();
+  ASSERT_EQ(AddPivot(wb.handle, 0U, "PivotTable1", cache, 2U, 0U, &pivot), 0) << fm_get_last_error_message();
   AddField(wb.handle, "Region", FM_PIVOT_AXIS_ROW);
   AddField(wb.handle, "Amt", FM_PIVOT_AXIS_VALUE);
   // As Excel creates the field: manual order, its items listed sorted.
-  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kRegion, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0)
+  ASSERT_EQ(SetPivotFieldSort(wb.handle, 0U, kPivot, kRegion, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0)
       << fm_get_last_error_message();
   std::size_t expected_item = 0;
   for (const char* item : {"East", "North", "South"}) {
@@ -118,7 +118,7 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0U, kPivot, rows, 1U), 0) << fm_get_last_error_message();
   if (product_on_cols) {
     AddField(wb.handle, "Product", FM_PIVOT_AXIS_COL);
-    ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kProduct, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0);
+    ASSERT_EQ(SetPivotFieldSort(wb.handle, 0U, kPivot, kProduct, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0);
     for (const char* item : {"A", "B"}) {
       ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kProduct, item, 1, ignored_index()), 0);
     }
@@ -726,12 +726,12 @@ TEST(FormulonCApiPivotCalc, CalculatedItemPlacementPreconditions) {
     ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(dated.handle, dated_cache, record, 1U, 1.0), 0);
   }
   std::size_t pivot = 99;
-  ASSERT_EQ(fm_sheet_add_pivot(dated.handle, 0U, "PT", dated_cache, 0U, 3U, &pivot), 0);
+  ASSERT_EQ(AddPivot(dated.handle, 0U, "PT", dated_cache, 0U, 3U, &pivot), 0);
   AddField(dated.handle, "Date", FM_PIVOT_AXIS_ROW);
   const std::uint32_t rows[] = {0U};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(dated.handle, 0U, kPivot, rows, 1U), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(dated.handle, 0U, kPivot, 0U, FM_PIVOT_PERIOD_MONTHS,
-                                                FM_PIVOT_CALENDAR_GREGORIAN, 1U, std::nan(""), std::nan("")),
+  ASSERT_EQ(SetPivotFieldDateGroup(dated.handle, 0U, kPivot, 0U, FM_PIVOT_PERIOD_MONTHS, FM_PIVOT_CALENDAR_GREGORIAN,
+                                   1U, std::nan(""), std::nan("")),
             0)
       << fm_get_last_error_message();
   EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(dated.handle, dated_cache, 0U, "X", "1", ignored_index()),

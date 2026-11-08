@@ -49,7 +49,7 @@ class StructLayoutTests(unittest.TestCase):
         "PIVOT_FIELD_SPEC": 24,
         "PIVOT_DATA_FIELD_SPEC": 32,
         "PIVOT_FILTER_SPEC": 64,
-        "PIVOT_FIELD_INFO": 68,
+        "PIVOT_FIELD_INFO": 72,
         "PIVOT_ITEM_INFO": 24,
         "PIVOT_STYLE_OPTIONS": 32,
         "PIVOT_OPTIONS": 108,
@@ -105,7 +105,7 @@ class StructLayoutTests(unittest.TestCase):
         "THEME_FONTS": 20,
         "EFFECTIVE_STYLE": 100,
         "DATE_GROUP_ITEM": 8,
-        "FILTER_COLUMN": 152,
+        "FILTER_COLUMN": 144,
         # An inline `fm_cell_rect_t` (16 bytes) leads the record.
         "SORT_CONDITION": 48,
         "AUTO_FILTER": 68,
@@ -145,18 +145,27 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_FILL_PATCH": 48,
         "CHART_LINE_PATCH": 80,
         "CHART_MARKER_PATCH": 152,
-        "CHART_LABELS_PATCH": 112,
-        "CHART_SERIES_PATCH": 448,
+        "CHART_LABELS_PATCH": 128,
+        "CHART_SERIES_PATCH": 560,
         "CHART_POINT_PATCH": 296,
         "CHART_PLOT_PATCH": 44,
-        "CHART_AXIS_PATCH": 136,
+        "CHART_AXIS_PATCH": 176,
         "CHART_LEGEND": 20,
         "CHART_LEGEND_PATCH": 24,
-        "CHART_DISPLAY_PATCH": 28,
+        "CHART_DISPLAY_PATCH": 36,
         "REFERENCE": 32,
         "ITERATIVE_SETTINGS_PATCH": 24,
-        "DEFINED_NAME_INPUT": 24,
         "DEFINED_NAME": 24,
+        "TABLE_SPEC": 60,
+        "PIVOT_WORKSHEET_SOURCE": 16,
+        "PIVOT_STYLE_OPTIONS_PATCH": 52,
+        "PIVOT_SPEC": 20,
+        "PIVOT_ITEM_PATCH": 28,
+        "PIVOT_FIELD_PATCH": 84,
+        "PIVOT_DATE_GROUP_SPEC": 48,
+        "PARSE_REFERENCE_SPEC": 20,
+        "FILTER_CONDITION": 8,
+        "CHART_DATA_SOURCE_SPEC": 16,
         "THREADED_COMMENT_PATCH": 24,
         "PARSE_ERROR": 24,
     }
@@ -260,7 +269,7 @@ class DefinedNameTests(unittest.TestCase):
             wb.add_sheet("Sheet2")
             wb.set_defined_name(DefinedNameInput("Rate", "=1"))
             wb.set_defined_name(DefinedNameInput("Rate", "=2", 1))
-            names = {(dn.name, dn.local_sheet_id): dn.formula for dn in wb.list_defined_names()}
+            names = {(dn.name, dn.scope): dn.formula for dn in wb.list_defined_names()}
             # The reader returns the formula with one leading "=", whatever the input had.
             self.assertEqual(names[("Rate", None)], "=1")
             self.assertEqual(names[("Rate", 1)], "=2")
@@ -268,7 +277,7 @@ class DefinedNameTests(unittest.TestCase):
             wb.remove_defined_name("Rate", 1)
             self.assertNotIn(
                 ("Rate", 1),
-                {(dn.name, dn.local_sheet_id) for dn in wb.list_defined_names()},
+                {(dn.name, dn.scope) for dn in wb.list_defined_names()},
             )
 
 
@@ -387,7 +396,7 @@ class SpillTests(unittest.TestCase):
             wb.recalc()
             info = wb.sheet(0).get_spill_info(0, 0)
             self.assertTrue(info.engaged)
-            self.assertEqual(info.rect, CellRect(0, 0, 2, 0))
+            self.assertEqual(info.range, CellRect(0, 0, 2, 0))
             self.assertFalse(info.blocked)
 
     def test_blocked_spill_reports_the_attempted_footprint(self) -> None:
@@ -398,9 +407,9 @@ class SpillTests(unittest.TestCase):
             info = wb.sheet(0).get_spill_info(0, 0)
             self.assertTrue(info.blocked)
             self.assertFalse(info.engaged)
-            self.assertEqual(info.rect, CellRect(0, 0, 4, 0))
+            self.assertEqual(info.range, CellRect(0, 0, 4, 0))
             self.assertFalse(wb.sheet(0).get_spill_info(1, 0).blocked)
-            self.assertIsNone(wb.sheet(0).get_spill_info(9, 9).rect)
+            self.assertIsNone(wb.sheet(0).get_spill_info(9, 9).range)
 
 
 class ArrayFormulaTests(unittest.TestCase):
@@ -415,7 +424,7 @@ class ArrayFormulaTests(unittest.TestCase):
                 found = wb.sheet(0).get_array_formula(r, 2)
                 self.assertIsNotNone(found)
                 assert found is not None
-                self.assertEqual(found.rect, CellRect(0, 2, 2, 2))
+                self.assertEqual(found.range, CellRect(0, 2, 2, 2))
                 self.assertIn("A1:A3", found.formula)
             self.assertEqual(to_native(wb.sheet(0).get_typed_value(2, 2)), 6.0)
             with self.assertRaises(FormulonError):

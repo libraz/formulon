@@ -11,6 +11,7 @@
 #include "c_api/parts/common.h"
 #include "formulon_c_count_of.h"
 #include "formulon_c_out_index.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "miniz.h"
 #include "pivot/pivot_table.h"
@@ -171,7 +172,7 @@ template <typename Enum>
   // that is going to be saved needs one. The range only has to describe
   // where the records came from; it is not required to hold data, since
   // the records themselves carry the values.
-  st = fm_workbook_set_pivot_cache_worksheet_source(wb, cache_id, /*present=*/1, "A1:B5", "Sheet1", nullptr);
+  st = SetPivotCacheWorksheetSource(wb, cache_id, /*present=*/1, "A1:B5", "Sheet1", nullptr);
   if (st != 0) {
     return st;
   }
@@ -216,7 +217,7 @@ template <typename Enum>
   }
   // Pivot table.
   std::size_t pivot_index = 99;
-  st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_index);
+  st = AddPivot(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_index);
   if (st != 0) {
     return st;
   }

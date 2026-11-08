@@ -418,9 +418,7 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   const char* names[] = {"a", "b"};
   std::size_t table = 99;
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", names, 2, nullptr, 1, 1, &table),
-      0)
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", names, 2, nullptr, 1, 1, &table), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 0, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
                                              "M5.xlsx!LN+1"),
@@ -448,7 +446,8 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
   }
   ASSERT_EQ(SetDefinedName(wb.handle, "LR", "Sheet1!$C$2:$C$5"), 0) << fm_get_last_error_message();
   fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
-  opts.kind = FM_CHART_INSERT_KIND_COLUMN;
+  opts.type = FM_CHART_PLOT_TYPE_BAR;
+  opts.bar_direction = FM_CHART_BAR_DIRECTION_COLUMN;
   opts.source = "Sheet1!$A$1:$B$5";
   opts.legend = FM_CHART_LEGEND_POSITION_RIGHT;
   opts.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
@@ -458,7 +457,8 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
-  patch.values = "M5.xlsx!LR";
+  patch.values_op = FM_CHART_PATCH_OP_SET;
+  patch.values = fm_chart_data_source_spec_t{FM_CHART_SOURCE_KIND_REF, "M5.xlsx!LR", nullptr, 0};
   ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {

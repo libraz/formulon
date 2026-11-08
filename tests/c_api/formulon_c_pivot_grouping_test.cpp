@@ -14,7 +14,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   if (st != 0) {
     return st;
   }
-  st = fm_workbook_set_pivot_cache_worksheet_source(wb, cache_id, /*present=*/1, "A1:B71", "Sheet1", nullptr);
+  st = SetPivotCacheWorksheetSource(wb, cache_id, /*present=*/1, "A1:B71", "Sheet1", nullptr);
   if (st != 0) {
     return st;
   }
@@ -44,7 +44,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
     }
   }
   std::size_t pivot_index = 99;
-  st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_index);
+  st = AddPivot(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_index);
   if (st != 0) {
     return st;
   }
@@ -89,9 +89,9 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
     return st;
   }
   // Grouped last: the group field is appended after every source field.
-  st = fm_sheet_set_pivot_field_date_group(wb, 0, pivot_index, date_field, FM_PIVOT_PERIOD_DAYS,
-                                           FM_PIVOT_CALENDAR_GREGORIAN, /*interval_days=*/7, start_serial,
-                                           /*end_or_nan=*/std::numeric_limits<double>::quiet_NaN());
+  st = SetPivotFieldDateGroup(wb, 0, pivot_index, date_field, FM_PIVOT_PERIOD_DAYS, FM_PIVOT_CALENDAR_GREGORIAN,
+                              /*interval_days=*/7, start_serial,
+                              /*end_or_nan=*/std::numeric_limits<double>::quiet_NaN());
   if (st != 0) {
     return st;
   }
@@ -168,7 +168,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   }
 
   std::size_t pivot_index = 99;
-  if (fm_status_t st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, 0U, 0U, &pivot_index); st != 0) {
+  if (fm_status_t st = AddPivot(wb, 0, "PT", cache_id, 0U, 0U, &pivot_index); st != 0) {
     return st;
   }
   fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
@@ -307,10 +307,9 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   const double kAuto = std::numeric_limits<double>::quiet_NaN();
 
   // Regrouping through the days group field (2) replaces it on the base.
-  ASSERT_EQ(
-      fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 2, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS,
-                                          FM_PIVOT_CALENDAR_GREGORIAN, 1, kAuto, kAuto),
-      0)
+  ASSERT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 2, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS,
+                                   FM_PIVOT_CALENDAR_GREGORIAN, 1, kAuto, kAuto),
+            0)
       << fm_get_last_error_message();
   std::size_t field_count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_index, &field_count), 0);

@@ -551,25 +551,58 @@ TEST(FormulonCApiPaginationDetail, ManualBreaksAreFlagged) {
   ASSERT_GT(h_count, 1U);
   std::size_t manual_breaks = 0;
   for (size_t i = 0; i < h_count; ++i) {
-    std::uint32_t row = 0;
-    int32_t manual = -1;
-    ASSERT_EQ(fm_pagination_get_row_break_at(p.handle, i, &row), 0);
-    ASSERT_EQ(fm_pagination_is_row_break_manual(p.handle, i, &manual), 0);
-    EXPECT_EQ(manual, row == 10U ? 1 : 0) << "break before row " << row;
-    manual_breaks += static_cast<std::size_t>(manual);
+    fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+    ASSERT_EQ(fm_pagination_get_row_break_at(p.handle, i, &brk), 0);
+    EXPECT_EQ(brk.manual, brk.row == 10U ? 1 : 0) << "break before row " << brk.row;
+    manual_breaks += static_cast<std::size_t>(brk.manual);
   }
   EXPECT_EQ(manual_breaks, 1U);
 
   const size_t v_count = count_of(fm_pagination_get_column_break_count, p.handle);
   for (size_t i = 0; i < v_count; ++i) {
-    int32_t manual = -1;
-    ASSERT_EQ(fm_pagination_is_column_break_manual(p.handle, i, &manual), 0);
-    EXPECT_EQ(manual, 0);
+    fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+    ASSERT_EQ(fm_pagination_get_column_break_at(p.handle, i, &brk), 0);
+    EXPECT_EQ(brk.manual, 0);
   }
-  int32_t manual = 0;
-  EXPECT_EQ(fm_pagination_is_row_break_manual(p.handle, h_count, &manual), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_pagination_is_column_break_manual(p.handle, v_count, &manual), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_NE(fm_pagination_is_column_break_manual(nullptr, 0, &manual), 0);
+  fm_row_break_t row_out = FM_STRUCT_INIT(fm_row_break_t);
+  fm_column_break_t column_out = FM_STRUCT_INIT(fm_column_break_t);
+  EXPECT_EQ(fm_pagination_get_row_break_at(p.handle, h_count, &row_out), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_pagination_get_column_break_at(p.handle, v_count, &column_out), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_NE(fm_pagination_get_column_break_at(nullptr, 0, &column_out), 0);
+  EXPECT_EQ(fm_pagination_get_row_break_at(p.handle, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+}
+
+TEST(FormulonCApiPaginationDetail, ManualBreakReadsItsDeclaredSpanAndAutomaticOnesTheWholeSheet) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  fm_row_break_t declared = FM_STRUCT_INIT(fm_row_break_t);
+  declared.first = 2U;
+  declared.last = 5U;
+  declared.manual = 1;
+  ASSERT_EQ(fm_sheet_set_row_break(wb.handle, 0, 10U, &declared), 0);
+
+  PaginationGuard p;
+  ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &p.handle), 0);
+  const size_t count = count_of(fm_pagination_get_row_break_count, p.handle);
+  std::size_t manual_seen = 0;
+  std::size_t automatic_seen = 0;
+  for (size_t i = 0; i < count; ++i) {
+    fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+    ASSERT_EQ(fm_pagination_get_row_break_at(p.handle, i, &brk), 0);
+    if (brk.manual == 1) {
+      EXPECT_EQ(brk.row, 10U);
+      EXPECT_EQ(brk.first, 2U);
+      EXPECT_EQ(brk.last, 5U);
+      ++manual_seen;
+    } else {
+      EXPECT_EQ(brk.first, 0U) << "automatic break before row " << brk.row;
+      EXPECT_EQ(brk.last, 0U) << "automatic break before row " << brk.row;
+      ++automatic_seen;
+    }
+  }
+  EXPECT_EQ(manual_seen, 1U);
+  EXPECT_GT(automatic_seen, 0U);
 }
 
 TEST(FormulonCApiPaginationDetail, ScaleIsAPercentageAndMarginsAreInches) {

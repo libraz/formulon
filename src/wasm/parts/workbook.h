@@ -566,11 +566,11 @@ class JsWorkbook {
   emscripten::val getChartData(uint32_t sheet, uint32_t objectId) const;
   emscripten::val previewChartData(uint32_t sheet, uint32_t objectId, emscripten::val overrides) const;
   uint32_t insertChart(uint32_t sheet, emscripten::val options);
-  void setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t kind, emscripten::val grouping);
+  void setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t type, emscripten::val options);
   void setChartTitle(uint32_t sheet, uint32_t objectId, emscripten::val title);
-  /// Replaces the legend with `{ position, overlay, hiddenSeries }`; `null` removes it.
+  /// Replaces the legend with `{ position, overlay, hiddenEntries }`; `null` removes it.
   void setChartLegend(uint32_t sheet, uint32_t objectId, emscripten::val legend);
-  /// Merges `{ position?, overlay?, hiddenSeries? }` into the legend.
+  /// Merges `{ position?, overlay?, hiddenEntries? }` into the legend.
   void updateChartLegend(uint32_t sheet, uint32_t objectId, emscripten::val patch);
   void setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, emscripten::val patch);
   void setChartDisplay(uint32_t sheet, uint32_t objectId, emscripten::val patch);
@@ -676,20 +676,10 @@ class JsWorkbook {
   double pivotFieldItemCount(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
   emscripten::val pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex) const;
   void pivotFieldClear(uint32_t sheet, uint32_t pivotIndex);
+  void pivotFieldUpdate(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val patch);
+  void pivotFieldItemUpdate(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
+                            emscripten::val patch);
   void pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, int32_t axis);
-  void pivotFieldSetSort(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t order,
-                         const std::string& byField);
-  void pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool top);
-  void pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
-  void pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
-  void pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
-  void pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
-  void pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
-                                   bool on);
-  void pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
-                                const std::string& caption);
-  void pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, const std::string& name);
-  void pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
   emscripten::val pivotGetOptions(uint32_t sheet, uint32_t pivotIndex) const;
   /// Members the object omits keep the pivot's current value.
   void pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val options);
@@ -719,8 +709,6 @@ class JsWorkbook {
   uint32_t pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val item,
                              bool visible);
   void pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
-  void pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
-                                bool visible);
   void pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t agg);
   void pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
   /// Groups a date field by the `PivotDatePeriod` bits of `periods`; NaN
@@ -728,8 +716,6 @@ class JsWorkbook {
   void pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
                               uint32_t calendar, uint32_t intervalDays, double start, double end);
   void pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
-  void pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                 const std::string& formatCode);
 
   void pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
   void pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);

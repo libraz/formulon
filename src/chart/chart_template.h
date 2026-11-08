@@ -91,8 +91,8 @@ inline const char* chart_cache_tag(ChartRefKind kind) {
   return kind == ChartRefKind::kNum ? "numCache" : kind == ChartRefKind::kStr ? "strCache" : "multiLvlStrCache";
 }
 
-/// `c:majorGridlines` as Excel writes it.
-std::string gridlines_xml();
+/// `c:majorGridlines` (tx1 15%), or `c:minorGridlines` (tx1 5%), as Excel writes it.
+std::string gridlines_xml(bool minor = false);
 
 /// The six `c:show*` flags of a data-label block, all off.
 inline constexpr const char* kChartShowFlags =

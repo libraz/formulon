@@ -100,11 +100,8 @@ class _JsSurface:
         self.sheet = _members(text, "Sheet", dts) if has_sheet else set()
         self.ctor = _members(text, "WorkbookCtor", dts)
         self.module = _members(text, ENTRY_INTERFACE, dts)
-        self.interfaces = {
-            name: _members(text, name, dts)
-            for name in self.exports
-            if re.search(r"^export (?:interface|class) %s\b" % re.escape(name), text, re.M)
-        }
+        declared = set(re.findall(r"^export (?:interface|class) ([A-Za-z_$][\w$]*)\b", text, re.M))
+        self.interfaces = {name: _members(text, name, dts) for name in self.exports & declared}
 
 
 def _js_surfaces() -> Dict[str, _JsSurface]:
@@ -354,15 +351,25 @@ def _declared_names(dts_text: str) -> Set[str]:
     return set(_TS_EXPORT_RE.findall(code)) | set(_DTS_NAME_RE.findall(code))
 
 
-def _members_of_declaration(dts_text: str, head: str) -> Optional[Set[str]]:
-    code = _DTS_COMMENT_RE.sub(" ", dts_text)
+_DECLARATION_HEAD_RE = re.compile(
+    r"^export\s+(?:declare\s+)?(?:interface|class|const|enum)\s+([A-Za-z_$][\w$]*)\b[^{;]*\{", re.M
+)
+
+
+def _declaration_bodies(code: str) -> Dict[str, int]:
+    """Where each exported interface, class, const or enum body opens, by name; the first declaration wins."""
+    heads: Dict[str, int] = {}
+    for match in _DECLARATION_HEAD_RE.finditer(code):
+        heads.setdefault(match.group(1), match.end())
+    return heads
+
+
+def _members_of_declaration(code: str, heads: Dict[str, int], head: str) -> Optional[Set[str]]:
     out: Optional[Set[str]] = None
     for name in (head, head + "Ctor"):
-        pattern = r"^export\s+(?:declare\s+)?(?:interface|class|const|enum)\s+%s\b[^{;]*\{" % re.escape(name)
-        match = re.search(pattern, code, re.M)
-        if match is None:
+        if name not in heads:
             continue
-        body = _extract_braced_block(code, match.end())
+        body = _extract_braced_block(code, heads[name])
         found = set(_DTS_NAME_RE.findall("{" + body))
         found |= set(re.findall(r"(?:^|[{,])\s*([A-Za-z_$][\w$]*)\s*=", body, re.M))
         out = (out or set()) | found
@@ -374,7 +381,9 @@ def check_dts_doc_tokens(label: object, dts_text: str, problems: List[str]) -> N
     a declaration of the same file, and no comment spells a C name.
     """
     declared = _declared_names(dts_text) | _external_names()
-    exports = set(_TS_EXPORT_RE.findall(_DTS_COMMENT_RE.sub(" ", dts_text)))
+    code = _DTS_COMMENT_RE.sub(" ", dts_text)
+    heads = _declaration_bodies(code)
+    exports = set(_TS_EXPORT_RE.findall(code))
     prose = _comment_text(dts_text)
     seen: Set[str] = set()
     for span in _INLINE_CODE_RE.findall(prose):
@@ -390,7 +399,7 @@ def check_dts_doc_tokens(label: object, dts_text: str, problems: List[str]) -> N
             head, name = member.groups()
             if head in _JS_GLOBALS:
                 continue
-            members = _members_of_declaration(dts_text, head) if head in exports else None
+            members = _members_of_declaration(code, heads, head) if head in exports else None
             if head not in exports:
                 problems.append(f"readme-identifiers: {label}: `{token}` names `{head}`, which is not declared")
             elif members is not None and name not in members:

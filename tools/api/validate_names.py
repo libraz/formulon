@@ -81,6 +81,7 @@ from binding_drift.api_conventions import (  # noqa: E402
     handle_name,
     split_c_name,
 )
+from binding_drift.api_conventions_arguments import _patch_keys  # noqa: E402
 from binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
 
 KINDS = frozenset({"op", "list", "free", "factory", "record", "field", "typedef", "enum", "constant"})
@@ -624,17 +625,18 @@ def check_ledger_index(data: dict, surfaces: Optional[extract_names.Surfaces] = 
 
 
 def check_clearable(entries: Dict[str, dict], dts_text: str) -> List[str]:
-    """Each `clearable` field is a field of the record's interface in src/wasm/formulon.d.ts."""
+    """Each `clearable` field is a field of the record's type (an interface or a `Patch<...>` alias) in the d.ts."""
     problems: List[str] = []
-    decls = JsSurface(dts_text).decls
+    surface = JsSurface(dts_text)
     for key, entry in sorted(entries.items()):
         if not isinstance(entry, dict) or not _names_list(entry.get("clearable")):
             continue
-        decl = decls.get(str(entry.get("js")))
-        if decl is None or decl.kind != "interface":
-            problems.append(f"entries.{key}: clearable needs the record's `js` interface in the d.ts")
+        name = entry.get("js")
+        keys = _patch_keys(surface.decls, surface.raw, name) if isinstance(name, str) else None
+        if keys is None:
+            problems.append(f"entries.{key}: clearable needs the record's `js` type in the d.ts")
             continue
-        fields = {_snake_case(m.name) for m in decl.members if not m.is_method}
+        fields = {_snake_case(k) for k in keys}
         for field in entry["clearable"]:
             if field not in fields:
                 problems.append(f"entries.{key}: clearable field {field} is not a field of {entry['js']}")

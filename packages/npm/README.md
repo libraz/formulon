@@ -113,12 +113,12 @@ try {
   const ws = wb.sheet(0);
   ws.setValues('A1', [['Region', 'Amount'], ['East', 10], ['West', 30]]);
 
-  const chart = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
+  const chart = ws.addChart({ type: formulon.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
   chart.setTitle('Sales');
   console.log(chart.getProperties().title?.text); // Sales
 
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [['East', 10], ['West', 30]]) {

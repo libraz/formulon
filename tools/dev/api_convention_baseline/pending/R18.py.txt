@@ -1,4 +1,0 @@
-py	cell_phonetic_properties.set	shape	`get_cell_phonetic_properties` returns `PhoneticProperties` but `set_cell_phonetic_properties` takes (type, alignment)
-py	selection.set	shape	`get_selection` returns `SheetSelection` but `set_selection` takes (active_row, active_col, ranges)
-py	theme_colors.set	shape	`get_theme_colors` returns `ThemeColors` but `set_theme_colors` takes (colors)
-py	theme_script_font.set	shape	`get_theme_script_font` returns `ThemeScriptFont` but `set_theme_script_font` takes (typeface)

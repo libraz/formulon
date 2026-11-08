@@ -7,7 +7,6 @@ see :class:`Pivot`.
 
 from __future__ import annotations
 
-import datetime
 import inspect
 import struct
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union, overload
@@ -15,7 +14,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Un
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
 from ._handle_tables import CELL_ARGS
-from ._inputs import civil_datetime, date_serial
 from ._status import StatusCode
 from ._workbook import (
     _PIVOT_NO_DATA_FIELD,
@@ -31,6 +29,7 @@ from ._workbook import (
     PivotCellKind,
     PivotDataField,
     PivotDataFieldInput,
+    PivotDateGroupInput,
     PivotDatePeriod,
     PivotField,
     PivotFieldInput,
@@ -54,6 +53,10 @@ from ._workbook import (
     _encode_pivot_filter_operands,
     _install_workbook_locks,
     _nullable_enum,
+    _pack_pivot_date_group,
+    _pack_pivot_field_patch,
+    _pack_pivot_item_patch,
+    _pack_pivot_style_options_patch,
     _read_count,
     _read_cstr_out,
     _tristate_default,
@@ -117,9 +120,15 @@ class Pivot:
 
     __slots__ = ("_sheet", "_runtime_id")
 
-    def __init__(self, sheet: Sheet, runtime_id: int) -> None:
-        self._sheet = sheet
-        self._runtime_id = runtime_id
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("obtain a Pivot from Sheet.pivot() or Sheet.add_pivot()")
+
+    @classmethod
+    def _new(cls, sheet: Sheet, runtime_id: int) -> "Pivot":
+        handle = object.__new__(cls)
+        handle._sheet = sheet
+        handle._runtime_id = runtime_id
+        return handle
 
     def _locate(self) -> Tuple[int, int, int]:
         """The workbook handle, the sheet index and the pivot's current index.
@@ -232,7 +241,7 @@ class Pivot:
                             number_format=LIB.read_cstr(d["number_format"]),
                         )
                     )
-                return PivotLayout(rect=rect, cells=cells)
+                return PivotLayout(range=rect, cells=cells)
             finally:
                 if handle:
                     LIB.fm_pivot_report_destroy(handle)
@@ -336,49 +345,40 @@ class Pivot:
     ) -> None:
         """Update the pivot's table style, making the style element present; an omitted argument keeps its value.
 
-        ``style_name=None`` (or ``""``) writes the element without a style
-        name. A pivot without a style element starts from no name and every
-        toggle off. New pivots start with the workbook's PivotTable style
-        default (else ``PivotStyleLight16``) and row / column headers and
-        last column on.
+        ``style_name=None`` writes the element without a style name. On a
+        pivot without a style element the arguments left out take the creation
+        defaults: the workbook's PivotTable style default (else
+        ``PivotStyleLight16``) and row / column headers and last column on.
+        The whole update is checked before anything changes.
 
         Raises:
           TypeError: when a toggle is not a ``bool`` (``None`` included) or
             ``style_name`` is neither a ``str`` nor ``None``.
         """
-        toggles = {
-            "show_row_headers": show_row_headers,
-            "show_column_headers": show_column_headers,
-            "show_row_stripes": show_row_stripes,
-            "show_column_stripes": show_column_stripes,
-            "show_last_column": show_last_column,
+        patch = {
+            key: value
+            for key, value in (
+                ("style_name", style_name),
+                ("show_row_headers", show_row_headers),
+                ("show_column_headers", show_column_headers),
+                ("show_row_stripes", show_row_stripes),
+                ("show_column_stripes", show_column_stripes),
+                ("show_last_column", show_last_column),
+            )
+            if value is not UNCHANGED
         }
-        for key, value in toggles.items():
-            if value is not UNCHANGED:
+        for key, value in patch.items():
+            if key == "style_name":
+                if value is not None and not isinstance(value, str):
+                    raise TypeError(f"formulon: style_name must be a str or None, got {type(value).__name__}")
+            else:
                 _flag(value, key)
-        if style_name is not UNCHANGED and style_name is not None and not isinstance(style_name, str):
-            raise TypeError(f"formulon: style_name must be a str or None, got {type(style_name).__name__}")
-        current = self.get_style_options()
-        if style_name is UNCHANGED:
-            style_name = current.style_name if current is not None else None
-        flags = {
-            key: (getattr(current, key) if current is not None else False) if value is UNCHANGED else value
-            for key, value in toggles.items()
-        }
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
-            name_ptr = scope.nonempty_cstr(style_name)
+            ptr = _pack_pivot_style_options_patch(patch, scope)
             _check(
                 LIB.fm_sheet_update_pivot_style_options(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    name_ptr,
-                    1 if flags["show_row_headers"] else 0,
-                    1 if flags["show_column_headers"] else 0,
-                    1 if flags["show_row_stripes"] else 0,
-                    1 if flags["show_column_stripes"] else 0,
-                    1 if flags["show_last_column"] else 0,
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
                 )
             )
 
@@ -617,6 +617,7 @@ class Pivot:
                 insert_blank_row=d["insert_blank_row"] != 0,
                 fill_down_labels=d["fill_down_labels"] != 0,
                 show_all=d["show_all"] != 0,
+                show_detail=d["show_detail"] != 0,
             )
 
     def add_field(self, spec: PivotFieldInput) -> int:
@@ -670,6 +671,9 @@ class Pivot:
         fill_down_labels: Union[bool, Unchanged] = UNCHANGED,
         show_all: Union[bool, Unchanged] = UNCHANGED,
         subtotal_top: Union[bool, Unchanged] = UNCHANGED,
+        sort_order: Union[PivotSortOrder, Unchanged] = UNCHANGED,
+        sort_by_field: Union[str, None, Unchanged] = UNCHANGED,
+        show_detail: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update pivot field ``field_index``; an omitted argument keeps its value.
 
@@ -681,39 +685,54 @@ class Pivot:
         on or off (custom subtotal functions replace it either way);
         ``insert_blank_row`` adds a blank row after each item block;
         ``fill_down_labels`` repeats item labels on every row of a block;
-        ``show_all`` lists items without data. Fields apply in signature order,
-        so a failure leaves the fields before it applied.
+        ``show_all`` lists items without data. ``sort_order`` is the sibling
+        order of the items; ``PivotSortOrder.MANUAL`` keeps them in
+        :meth:`add_field_item` order and rejects a ``sort_by_field``, the data
+        field the items sort by (``None`` sorts by the item labels).
+        ``show_detail`` expands or collapses every item of the field together
+        with its subtotal row.
+
+        The whole update is checked first and applied at once: a rejected
+        argument leaves every field as it was.
 
         Raises:
           TypeError: when a flag is not a ``bool`` (``None`` included) or a
             string argument is neither a ``str`` nor ``None``.
         """
-        texts = (
-            ("custom_name", custom_name, LIB.fm_sheet_set_pivot_field_custom_name),
-            ("number_format", number_format, LIB.fm_sheet_set_pivot_field_number_format),
-        )
-        flags = (
-            ("default_subtotal", default_subtotal, LIB.fm_sheet_set_pivot_field_default_subtotal),
-            ("insert_blank_row", insert_blank_row, LIB.fm_sheet_set_pivot_field_insert_blank_row),
-            ("fill_down_labels", fill_down_labels, LIB.fm_sheet_set_pivot_field_fill_down_labels),
-            ("show_all", show_all, LIB.fm_sheet_set_pivot_field_show_all),
-            ("subtotal_top", subtotal_top, LIB.fm_sheet_set_pivot_field_subtotal_top),
-        )
-        for key, value, _ in texts:
-            if value is not UNCHANGED and value is not None and not isinstance(value, str):
-                raise TypeError(f"formulon: {key} must be a str or None, got {type(value).__name__}")
-        for key, value, _ in flags:
-            if value is not UNCHANGED:
+        patch = {
+            key: value
+            for key, value in (
+                ("custom_name", custom_name),
+                ("number_format", number_format),
+                ("default_subtotal", default_subtotal),
+                ("insert_blank_row", insert_blank_row),
+                ("fill_down_labels", fill_down_labels),
+                ("show_all", show_all),
+                ("subtotal_top", subtotal_top),
+                ("sort_order", sort_order),
+                ("sort_by_field", sort_by_field),
+                ("show_detail", show_detail),
+            )
+            if value is not UNCHANGED
+        }
+        for key, value in patch.items():
+            if key in ("custom_name", "number_format", "sort_by_field"):
+                if value is not None and not isinstance(value, str):
+                    raise TypeError(f"formulon: {key} must be a str or None, got {type(value).__name__}")
+            elif key != "sort_order":
                 _flag(value, key)
         h, sheet, pivot_index = self._locate()
-        lead = (_uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_index, "field_index"))
-        for _, value, setter in texts:
-            if value is not UNCHANGED:
-                with _ArgScope() as scope:
-                    _check(setter(h, *lead, scope.cstr(value or "")))
-        for key, value, setter in flags:
-            if value is not UNCHANGED:
-                _check(setter(h, *lead, _flag(value, key)))
+        with _ArgScope() as scope:
+            ptr = _pack_pivot_field_patch(patch, scope)
+            _check(
+                LIB.fm_sheet_update_pivot_field(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_index, "field_index"),
+                    ptr,
+                )
+            )
 
     def clear_fields(self) -> None:
         """Drop every field from the pivot, emptying the row and column orders."""
@@ -741,51 +760,8 @@ class Pivot:
             )
         )
 
-    def set_field_sort(self, field_index: int, order: PivotSortOrder, *, by_field: Optional[str] = None) -> None:
-        """Set the sibling order of pivot field ``field_index``.
-
-        ``by_field`` names the data field the items sort by; ``None`` sorts by
-        the item labels. ``PivotSortOrder.MANUAL`` keeps items in
-        :meth:`add_field_item` order and rejects a ``by_field``.
-        """
-        h, sheet, pivot_index = self._locate()
-        with _ArgScope() as scope:
-            by_ptr = scope.nonempty_cstr(by_field)
-            _check(
-                LIB.fm_sheet_set_pivot_field_sort(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    _sint(order, "order"),
-                    by_ptr,
-                )
-            )
-
-    def set_field_show_detail(self, field_index: int, *, on: bool) -> None:
-        """Expand (``on=True``) or collapse (``on=False``) every item of field ``field_index`` and its subtotal row."""
-        h, sheet, pivot_index = self._locate()
-        _check(
-            LIB.fm_sheet_set_pivot_field_show_detail(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
-                1 if on else 0,
-            )
-        )
-
-    def set_field_date_group(
-        self,
-        field_index: int,
-        *,
-        periods: PivotDatePeriod,
-        calendar: PivotCalendar = PivotCalendar.GREGORIAN,
-        interval_days: int = 1,
-        start: Optional[Union[datetime.datetime, datetime.date]] = None,
-        end: Optional[Union[datetime.datetime, datetime.date]] = None,
-    ) -> None:
-        """Group the date field ``field_index`` by the periods of ``periods``.
+    def set_field_date_group(self, field_index: int, group: PivotDateGroupInput) -> None:
+        """Group the date field ``field_index`` by the periods of ``group.periods``.
 
         ``field_index`` is a source field or one of its group fields; any grouping
         it has is replaced. Each period becomes a group field appended to the
@@ -793,33 +769,31 @@ class Pivot:
         this pivot shows them in the field's place, coarsest outermost, and
         another pivot showing the field shows them before it.
         ``PivotCalendar.JAPANESE`` groups the years by era year.
-        ``interval_days`` above 1 groups by runs of days and needs ``periods``
-        to be ``PivotDatePeriod.DAYS`` alone. ``start`` / ``end`` are a
-        ``date`` or ``datetime`` (a naive local wall clock; an aware one
+        ``group.interval_days`` above 1 groups by runs of days and needs
+        ``periods`` to be ``PivotDatePeriod.DAYS`` alone. ``start`` / ``end`` are
+        a ``date`` or ``datetime`` (a naive local wall clock; an aware one
         is a ValueError); ``None`` takes the field's first value and its last
         (the midnight after it for a date without a time). An empty or unknown mask, a zero
         interval, an invalid bound, a start after the end, or a field holding
         anything but dates raises ``FormulonError``.
+
+        Raises:
+          TypeError: when ``group`` is not a :class:`PivotDateGroupInput`.
         """
+        if not isinstance(group, PivotDateGroupInput):
+            raise TypeError(f"formulon: group must be a PivotDateGroupInput, got {type(group).__name__}")
         h, sheet, pivot_index = self._locate()
-        date1904 = self._sheet._workbook.get_date1904()
-        bounds = [
-            float("nan") if bound is None else date_serial(civil_datetime(bound, label), date1904=date1904)[0]
-            for bound, label in ((start, "start"), (end, "end"))
-        ]
-        _check(
-            LIB.fm_sheet_set_pivot_field_date_group(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
-                _uint(periods, "periods_mask"),
-                _sint(calendar, "calendar"),
-                _uint(interval_days, "interval_days"),
-                bounds[0],
-                bounds[1],
+        with _ArgScope() as scope:
+            ptr = _pack_pivot_date_group(scope, group, date1904=self._sheet._workbook.get_date1904())
+            _check(
+                LIB.fm_sheet_set_pivot_field_date_group(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_index, "field_index"),
+                    ptr,
+                )
             )
-        )
 
     def clear_field_date_group(self, field_index: int) -> None:
         """Remove the date grouping of pivot field ``field_index``.
@@ -894,35 +868,38 @@ class Pivot:
         ``show_detail`` expands (``True``) or collapses (``False``) the item.
         ``caption`` is shown instead of the item's value; ``None`` clears it.
         A caption longer than 255 UTF-16 code units, or one matching the label
-        another item of the field shows, is rejected. Fields apply in
-        signature order, so a failure leaves the fields before it applied.
+        another item of the field shows, is rejected. The whole update is
+        checked first and applied at once: a rejected argument leaves the
+        item as it was.
 
         Raises:
           TypeError: when a flag is not a ``bool`` (``None`` included) or
             ``caption`` is neither a ``str`` nor ``None``.
         """
-        flags = (
-            ("visible", visible, LIB.fm_sheet_set_pivot_field_item_visible),
-            ("show_detail", show_detail, LIB.fm_sheet_set_pivot_field_item_show_detail),
-        )
-        for key, value, _ in flags:
-            if value is not UNCHANGED:
+        patch = {
+            key: value
+            for key, value in (("visible", visible), ("show_detail", show_detail), ("caption", caption))
+            if value is not UNCHANGED
+        }
+        for key, value in patch.items():
+            if key == "caption":
+                if value is not None and not isinstance(value, str):
+                    raise TypeError(f"formulon: caption must be a str or None, got {type(value).__name__}")
+            else:
                 _flag(value, key)
-        if caption is not UNCHANGED and caption is not None and not isinstance(caption, str):
-            raise TypeError(f"formulon: caption must be a str or None, got {type(caption).__name__}")
         h, sheet, pivot_index = self._locate()
-        lead = (
-            _uint(sheet, "sheet_index"),
-            _uint(pivot_index, "pivot_index"),
-            _uint(field_index, "field_index"),
-            _uint(item_index, "item_index"),
-        )
-        for key, value, setter in flags:
-            if value is not UNCHANGED:
-                _check(setter(h, *lead, _flag(value, key)))
-        if caption is not UNCHANGED:
-            with _ArgScope() as scope:
-                _check(LIB.fm_sheet_set_pivot_field_item_caption(h, *lead, scope.nonempty_cstr(caption)))
+        with _ArgScope() as scope:
+            ptr = _pack_pivot_item_patch(patch, scope)
+            _check(
+                LIB.fm_sheet_update_pivot_field_item(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_index, "field_index"),
+                    _uint(item_index, "item_index"),
+                    ptr,
+                )
+            )
 
     def add_field_item(
         self,

@@ -54,11 +54,10 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(grand_cols, 1);
 
   // Field 0 is "Region" (row), field 1 is "Amount" (value).
-  ASSERT_EQ(
-      fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_DESCENDING, "Sum of Amount"), 0);
+  ASSERT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_DESCENDING, "Sum of Amount"), 0);
   // Region holds text, which no date group takes.
-  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_DAYS,
-                                                FM_PIVOT_CALENDAR_GREGORIAN, 7U, 45000.0, 45100.0),
+  EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_DAYS, FM_PIVOT_CALENDAR_GREGORIAN, 7U,
+                                   45000.0, 45100.0),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   fm_pivot_field_info_t region = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &region), 0) << fm_get_last_error_message();
@@ -74,7 +73,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(region.insert_blank_row, 0);
   EXPECT_EQ(region.fill_down_labels, 0);
 
-  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0);
+  ASSERT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_index, 0), 0);
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &region), 0);
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_ORDER_MANUAL);
@@ -84,7 +83,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   std::size_t item_count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_index, 0, &item_count), 0);
   ASSERT_EQ(item_count, 2U);
-  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
+  ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
   fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 0, &item), 0);
   EXPECT_STREQ(item.name, "North");
@@ -158,7 +157,7 @@ TEST(FormulonCApiPivot, ReadBackSurvivesSaveAndReload) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_update_pivot_grand_totals(wb.handle, 0, pivot_index, 1, 0), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
+  ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
@@ -286,7 +285,7 @@ namespace {
 // A cache [Region, Product, Sales, Qty] over three records, and a pivot on it with no fields yet.
 void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t* pivot_index) {
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb, 0, cache_id), 0);
-  ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb, *cache_id, 1, "A1:D4", "Sheet1", nullptr), 0);
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb, *cache_id, 1, "A1:D4", "Sheet1", nullptr), 0);
   for (const char* name : {"Region", "Product", "Sales", "Qty"}) {
     std::size_t idx = 0;
     ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb, *cache_id, name, &idx), 0);
@@ -302,7 +301,7 @@ void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t
       ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb, *cache_id, rec, col, row[col]), 0);
     }
   }
-  ASSERT_EQ(fm_sheet_add_pivot(wb, 0, "PT", *cache_id, 0, 6, pivot_index), 0);
+  ASSERT_EQ(AddPivot(wb, 0, "PT", *cache_id, 0, 6, pivot_index), 0);
 }
 
 fm_pivot_field_spec_t FieldSpec(const char* name, fm_pivot_axis_t axis) {
@@ -465,7 +464,7 @@ TEST(FormulonCApiPivot, SaveDropsPivotCachesNoPivotUses) {
   // ... but nothing draws from it, so a save leaves it out.
   EXPECT_FALSE(saved_with_cache());
   std::size_t again = 0;
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT2", cache_id, 0, 6, &again), 0);
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT2", cache_id, 0, 6, &again), 0);
   EXPECT_TRUE(saved_with_cache());
 }
 
@@ -559,7 +558,7 @@ TEST(FormulonCApiPivot, StyleOptionsRoundTripsThroughSetSaveAndLoad) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, pivot_index, "PivotStyleMedium9", 0, 1, 1, 1, 0), 0)
+  ASSERT_EQ(UpdatePivotStyleOptions(wb.handle, 0, pivot_index, "PivotStyleMedium9", 0, 1, 1, 1, 0), 0)
       << fm_get_last_error_message();
   fm_pivot_style_options_t style = ReadStyleOptions(wb.handle);
   EXPECT_STREQ(style.style_name, "PivotStyleMedium9");
@@ -583,7 +582,7 @@ TEST(FormulonCApiPivot, StyleOptionsRoundTripsThroughSetSaveAndLoad) {
   EXPECT_EQ(style.show_last_column, 0);
 
   // A NULL name keeps the element but drops the style name.
-  ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, pivot_index, nullptr, 1, 1, 0, 0, 0), 0);
+  ASSERT_EQ(UpdatePivotStyleOptions(wb.handle, 0, pivot_index, nullptr, 1, 1, 0, 0, 0), 0);
   style = ReadStyleOptions(wb.handle);
   EXPECT_EQ(style.present, 1);
   EXPECT_STREQ(style.style_name, "");
@@ -605,8 +604,8 @@ TEST(FormulonCApiPivot, StyleOptionsRejectsBadArguments) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_get_pivot_style_options(wb.handle, 0, pivot_index + 1U, &style),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
-  EXPECT_NE(fm_sheet_update_pivot_style_options(wb.handle, 0, pivot_index + 1U, "X", 1, 1, 0, 0, 0), 0);
-  EXPECT_NE(fm_sheet_update_pivot_style_options(nullptr, 0, pivot_index, "X", 1, 1, 0, 0, 0), 0);
+  EXPECT_NE(UpdatePivotStyleOptions(wb.handle, 0, pivot_index + 1U, "X", 1, 1, 0, 0, 0), 0);
+  EXPECT_NE(UpdatePivotStyleOptions(nullptr, 0, pivot_index, "X", 1, 1, 0, 0, 0), 0);
 }
 
 TEST(FormulonCApiPivot, LoadedStyleInfoKeepsSchemaOrderBetweenFormatsAndExtLst) {
@@ -684,7 +683,7 @@ TEST(FormulonCApiPivot, SettingAWorksheetSourceDropsTheCapturedSourceKind) {
   cache->mutable_cache_source_attrs() = {{"type", "consolidation"}};
   cache->mutable_cache_source_children_xml() = "<consolidation><rangeSets count=\"0\"/></consolidation>";
 
-  ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb.handle, cache_id, 1, "A1:B5", "Sheet1", nullptr), 0)
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, 1, "A1:B5", "Sheet1", nullptr), 0)
       << fm_get_last_error_message();
   EXPECT_TRUE(cache->cache_source_attrs().empty());
   EXPECT_TRUE(cache->cache_source_children_xml().empty());

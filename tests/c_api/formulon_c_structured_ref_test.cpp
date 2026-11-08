@@ -59,9 +59,7 @@ void BuildSales(WorkbookGuard& wb, const char* profile = nullptr) {
     }
   }
   std::size_t index = 0;
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 4, 4}), "tblSales", columns, 5, "", 1, 1,
-                               &index),
-            0)
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 4, 4}), "tblSales", columns, 5, "", 1, 1, &index), 0)
       << fm_get_last_error_message();
 }
 

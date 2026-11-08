@@ -18,9 +18,11 @@ from ._workbook import (
     UNCHANGED,
     AutoFilter,
     AutoFilterEval,
+    AutoFilterInput,
     CellRect,
     SheetRect,
     TableColumn,
+    TableColumnTotalsInput,
     TableStyleOptions,
     TableTotalsRowFunction,
     Unchanged,
@@ -55,9 +57,15 @@ class Table:
 
     __slots__ = ("_workbook", "_runtime_id")
 
-    def __init__(self, workbook: Workbook, runtime_id: int) -> None:
-        self._workbook = workbook
-        self._runtime_id = runtime_id
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("obtain a Table from Sheet.table(), Sheet.add_table() or Workbook.table()")
+
+    @classmethod
+    def _new(cls, workbook: Workbook, runtime_id: int) -> "Table":
+        handle = object.__new__(cls)
+        handle._workbook = workbook
+        handle._runtime_id = runtime_id
+        return handle
 
     @property
     def workbook(self) -> Workbook:
@@ -227,7 +235,7 @@ class Table:
                 raise FormulonError(
                     StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{range!r} is not an A1 range", "")
                 )
-            rect = ref.rect
+            rect = ref.range
             target = sheet if ref.sheet_name is None else self._workbook.sheet(ref.sheet_name).index
         if target != sheet:
             raise FormulonError(
@@ -344,22 +352,23 @@ class Table:
             )
             return LIB.read_cstr(LIB.read_u32(out))
 
-    def set_column_totals(
-        self,
-        column: int,
-        *,
-        function: Optional[TableTotalsRowFunction] = None,
-        label: Optional[str] = None,
-        formula: Optional[str] = None,
-    ) -> None:
-        """Set column ``column``'s totals-row function and label.
+    def set_column_totals(self, column: int, totals: Union[TableColumnTotalsInput, TableColumn]) -> None:
+        """Set column ``column``'s totals-row function, label and formula from a record.
 
-        ``function`` is a :class:`TableTotalsRowFunction` (``None`` means
-        ``NONE``); ``formula`` is required for ``CUSTOM``. While the
-        totals row is shown its cell follows: ``SUBTOTAL(109,Table[Column])``
-        and the other 1xx codes for a built-in function, the formula for
-        ``CUSTOM``, else the label as text, else nothing.
+        ``totals.totals_row_function`` is a :class:`TableTotalsRowFunction`;
+        ``totals_row_formula`` is required for ``CUSTOM``. An empty or ``None``
+        label or formula means none. A :class:`TableColumn` read back is
+        accepted in place of a :class:`TableColumnTotalsInput`; its ``name`` is
+        ignored. While the totals row is shown its cell follows:
+        ``SUBTOTAL(109,Table[Column])`` and the other 1xx codes for a built-in
+        function, the formula for ``CUSTOM``, else the label as text, else
+        nothing.
+
+        Raises:
+          TypeError: when ``totals`` is not one of the two record types.
         """
+        if not isinstance(totals, (TableColumnTotalsInput, TableColumn)):
+            raise TypeError(f"formulon: totals must be a TableColumnTotalsInput, got {type(totals).__name__}")
         h, sheet, index = self._locate()
         with _ArgScope() as scope:
             _check(
@@ -368,9 +377,9 @@ class Table:
                     _uint(sheet, "sheet_index"),
                     _uint(index, "table_index"),
                     _uint(column, "column"),
-                    _sint(TableTotalsRowFunction.NONE if function is None else function, "function"),
-                    scope.nonempty_cstr(label),
-                    scope.nonempty_cstr(formula),
+                    _sint(totals.totals_row_function, "totals_row_function"),
+                    scope.nonempty_cstr(totals.totals_row_label),
+                    scope.nonempty_cstr(totals.totals_row_formula),
                 )
             )
 
@@ -380,14 +389,14 @@ class Table:
         _, sheet, index = self._locate()
         return self._workbook._read_auto_filter(LIB.fm_sheet_get_table_auto_filter, sheet, index)
 
-    def set_auto_filter(self, auto_filter: Optional[AutoFilter]) -> None:
+    def set_auto_filter(self, auto_filter: Optional[Union[AutoFilterInput, AutoFilter]]) -> None:
         """Replace the table's AutoFilter, or remove it with ``None`` (no-op without one). Row visibility is unchanged.
 
-        The ``ref`` of the sort state and of its conditions takes an A1 range too.
+        ``range`` of the filter, of its sort state and of its sort conditions takes an A1 range too.
         """
         _, sheet, index = self._locate()
         if auto_filter is not None:
-            auto_filter = _normalize_auto_filter(auto_filter, self._workbook, None)
+            auto_filter = _normalize_auto_filter(auto_filter, self._workbook)
         self._workbook._write_auto_filter(LIB.fm_sheet_set_table_auto_filter, auto_filter, sheet, index)
 
     def apply_auto_filter(self) -> None:

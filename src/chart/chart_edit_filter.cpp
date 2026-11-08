@@ -1,3 +1,5 @@
+#include <cmath>
+#include <cstdint>
 #include <initializer_list>
 #include <iterator>
 #include <optional>
@@ -21,6 +23,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "sheet.h"
+#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -51,6 +54,66 @@ void put_ref(xml_node ser, const char* tag, const std::string& formula, bool mul
   x += std::string("</c:") + ref + "></" + tag + ">";
   pugi::xml_document frag;
   copy_at(ser, fragment(frag, x), kSerOrder);
+}
+
+/// Replaces `ser`'s `tag` input with literal `points`, in the forms Excel writes a typed-in array: the name as one
+/// `c:v`; a value input as `c:numLit` (General); a category input as `c:numLit` when every point is a number,
+/// else `c:strLit`. `c:ptCount` is one past the highest idx; blank points are left out.
+Expected<void, Error> put_literal(xml_node ser, const char* tag, std::vector<ChartValue> points, bool numeric) {
+  if (points.empty()) {
+    return bad_arg("chart: a literal source needs points");
+  }
+  sort_by_index(points, [](const ChartValue& l, const ChartValue& r) { return l.idx < r.idx; });
+  bool all_numbers = true;
+  for (std::size_t i = 0; i < points.size(); ++i) {
+    if (i > 0 && points[i].idx == points[i - 1].idx) {
+      return bad_arg("chart: literal points need distinct indices");
+    }
+    if (points[i].kind == ChartValue::Kind::kNumber && !std::isfinite(points[i].number)) {
+      return bad_arg("chart: literal numbers must be finite");
+    }
+    all_numbers = all_numbers && points[i].kind != ChartValue::Kind::kText;
+  }
+  const auto text_of = [](const ChartValue& v) {
+    std::string out;
+    if (v.kind == ChartValue::Kind::kNumber) {
+      io::append_xml_number(out, v.number);
+    } else {
+      io::AppendOoxmlTextEscaped(out, v.text);
+    }
+    return out;
+  };
+  const bool name = local_name(tag) == "tx";
+  if (name && (points.size() != 1 || points[0].kind == ChartValue::Kind::kBlank)) {
+    return bad_arg("chart: a literal series name is one point");
+  }
+  if (numeric && !all_numbers) {
+    return bad_arg("chart: a literal value input holds numbers");
+  }
+  drop(ser, local_name(tag));
+  xml_node holder = ensure(ser, tag, kSerOrder);
+  if (name) {
+    holder.append_child("c:v").text().set(text_of(points[0]).c_str());
+    return ok();
+  }
+  xml_node lit = holder.append_child(all_numbers ? "c:numLit" : "c:strLit");
+  if (all_numbers) {
+    lit.append_child("c:formatCode").text().set("General");
+  }
+  const std::uint64_t count = static_cast<std::uint64_t>(points.back().idx) + 1U;
+  lit.append_child("c:ptCount").append_attribute("val").set_value(std::to_string(count).c_str());
+  for (const ChartValue& v : points) {
+    if (v.kind == ChartValue::Kind::kBlank) {
+      continue;
+    }
+    xml_node pt = lit.append_child("c:pt");
+    pt.append_attribute("idx").set_value(std::to_string(v.idx).c_str());
+    if (all_numbers && !v.format_code.empty()) {
+      pt.append_attribute("formatCode").set_value(v.format_code.c_str());
+    }
+    pt.append_child("c:v").text().set(text_of(v).c_str());
+  }
+  return ok();
 }
 
 /// Moves a ref's `c:f` into `c15:formulaRef` (a series entering the filtered group).
@@ -248,16 +311,16 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
   const std::string_view pl = local_name(plot);
   const bool xy = pl == "scatterChart" || pl == "bubbleChart";
   struct Field {
-    const std::optional<std::string>* text;
+    const std::optional<ChartSeriesSource>* source;
     const char* tag;
-    bool required;
+    bool required;  // A value input: it cannot be removed, and a literal holds numbers.
     bool allowed;
   };
   const Field fields[] = {{&p.name, "c:tx", false, true}, {&p.cat, "c:cat", false, !xy},
                           {&p.val, "c:val", true, !xy},   {&p.x, "c:xVal", false, xy},
                           {&p.y, "c:yVal", true, xy},     {&p.size, "c:bubbleSize", true, pl == "bubbleChart"}};
   for (const Field& f : fields) {
-    if (!f.text->has_value()) {
+    if (!f.source->has_value()) {
       continue;
     }
     if (c.pivot()) {
@@ -267,18 +330,29 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
       return bad_arg("chart: the plot has no such series input");
     }
     *refs = true;
-    const std::string& text = **f.text;
-    if (text.empty()) {
-      if (f.required) {
-        return bad_arg("chart: a series needs its values");
+    const ChartSeriesSource& source = **f.source;
+    switch (source.kind) {
+      case ChartDataSource::Kind::kNone:
+        if (f.required) {
+          return bad_arg("chart: a series needs its values");
+        }
+        drop(ser, local_name(f.tag));
+        break;
+      case ChartDataSource::Kind::kLiteral:
+        RETURN_IF_ERROR(put_literal(ser, f.tag, source.literal, f.required));
+        break;
+      case ChartDataSource::Kind::kRef: {
+        if (source.formula.empty()) {
+          return bad_arg("chart: a reference source needs a formula");
+        }
+        ASSIGN_OR_RETURN(ResolvedSource src,
+                         resolve_chart_source(wb, c.host, source.formula, eval::default_registry()));
+        const bool multi = (f.tag == fields[1].tag || f.tag == fields[3].tag) && src.areas.size() == 1 &&
+                           src.areas[0].top != src.areas[0].bottom && src.areas[0].left != src.areas[0].right;
+        put_ref(ser, f.tag, source.formula, multi, ser.parent() != plot);
+        break;
       }
-      drop(ser, local_name(f.tag));
-      continue;
     }
-    ASSIGN_OR_RETURN(ResolvedSource src, resolve_chart_source(wb, c.host, text, eval::default_registry()));
-    const bool multi = (f.tag == fields[1].tag || f.tag == fields[3].tag) && src.areas.size() == 1 &&
-                       src.areas[0].top != src.areas[0].bottom && src.areas[0].left != src.areas[0].right;
-    put_ref(ser, f.tag, text, multi, ser.parent() != plot);
   }
   if ((!p.marker.is_keep() || p.smooth.has_value()) && !has_markers(plot)) {
     return bad_arg("chart: markers and smoothing need a line, scatter or radar plot");
@@ -423,6 +497,32 @@ void patch_display(const Chart& c, const ChartDisplayPatch& patch) {
     }
   }
   patch_na_as_blank(chart, patch.na_as_blank);
+  if (!patch.style.is_keep()) {
+    xml_node root = c.root();
+    bool kept_pair = false;
+    for (xml_node alt : children_local(root, "AlternateContent")) {
+      xml_node choice = child_local(child_local(alt, "Choice"), "style");
+      if (!choice) {
+        continue;
+      }
+      if (!patch.style.is_set()) {
+        root.remove_child(alt);
+        continue;
+      }
+      // Keep the 2010 style pair: the Choice holds 100 + n, the Fallback n.
+      choice.attribute("val").set_value(std::to_string(100 + patch.style.value).c_str());
+      if (xml_node fallback = child_local(child_local(alt, "Fallback"), "style")) {
+        fallback.attribute("val").set_value(std::to_string(patch.style.value).c_str());
+      }
+      kept_pair = true;
+    }
+    if (!kept_pair) {
+      drop(root, "style");
+      if (patch.style.is_set()) {
+        put_val(root, "c:style", kSpaceOrder, std::to_string(patch.style.value));
+      }
+    }
+  }
 }
 
 }  // namespace chart_edit

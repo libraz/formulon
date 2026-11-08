@@ -19,7 +19,7 @@ function buildPivot(mod) {
   wb.setProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
   const { cacheId } = cache;
-  wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:D5', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).setWorksheetSource({ range: 'A1:D5', sheet: 'Sheet1' });
   for (const name of ['Region', 'Product', 'Amount', 'Date']) wb.pivotCache(cacheId).addField(name);
   for (const item of ['East', 'West']) wb.pivotCache(cacheId).addFieldSharedItem(0, item);
   for (const item of ['Apple', 'Pear']) wb.pivotCache(cacheId).addFieldSharedItem(1, item);
@@ -61,8 +61,8 @@ function pivotGrid(wb, pivot = 0) {
           : v !== null && typeof v === 'object'
             ? `#${v.code}`
             : '';
-    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.rect.lastCol - layout.rect.firstCol + 1).fill(''));
-    rows.get(cell.row)[cell.col - layout.rect.firstCol] = text;
+    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.range.lastCol - layout.range.firstCol + 1).fill(''));
+    rows.get(cell.row)[cell.col - layout.range.firstCol] = text;
   }
   return [...rows.keys()].sort((a, b) => a - b).map((row) => rows.get(row).join('|'));
 }
@@ -155,11 +155,12 @@ const PIVOT_MUTATORS = [
   [
     'PivotCache.setWorksheetSource',
     {
-      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ ref: 'B2:E6', sheet: 'Data' }),
+      act: (b) => b.wb.pivotCache(b.cacheId).setWorksheetSource({ range: 'B2:E6', sheet: 'Sheet1' }),
       expect: (b) => {
         const source = b.wb.pivotCache(b.cacheId).getWorksheetSource();
-        assert.equal(source.ref, 'B2:E6');
-        assert.equal(source.sheet, 'Data');
+        assert.equal(source.range.sheet, 0);
+        assert.deepEqual({ ...source.range.rect }, { firstRow: 1, firstCol: 1, lastRow: 5, lastCol: 4 });
+        assert.equal(source.name, null);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
       },
     },
@@ -312,8 +313,8 @@ const PIVOT_MUTATORS = [
         assert.equal(r.index, 1);
         assert.equal(r.name, 'Pivot2');
         const layout = r.getLayout();
-        assert.equal(layout.rect.firstRow, 20);
-        assert.equal(layout.rect.firstCol, 1);
+        assert.equal(layout.range.firstRow, 20);
+        assert.equal(layout.range.firstCol, 1);
         assert.deepEqual(pivotGrid(b.wb, 0), BASE_GRID);
       },
     },
@@ -349,8 +350,8 @@ const PIVOT_MUTATORS = [
       act: (b) => b.pivot.setAnchor({ row: 10, col: 2 }),
       expect: (b) => {
         const layout = b.pivot.getLayout();
-        assert.equal(layout.rect.firstRow, 10);
-        assert.equal(layout.rect.firstCol, 2);
+        assert.equal(layout.range.firstRow, 10);
+        assert.equal(layout.range.firstCol, 2);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
       },
     },
@@ -442,12 +443,12 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.setFieldSort',
+    'Pivot.updateField',
     {
       // East now outsums West, so sorting ascending by the data field
       // differs from both label orders.
       setup: (b) => b.wb.pivotCache(b.cacheId).setRecordValue(0, 2, 40),
-      act: (b) => b.pivot.setFieldSort(b.region, 1, { byField: 'Sum of Amount' }),
+      act: (b) => b.pivot.updateField(b.region, { sortOrder: 1, sortByField: 'Sum of Amount' }),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|45', '総計|82']),
     },
   ],
@@ -688,9 +689,9 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.setFieldShowDetail',
+    'Pivot.updateField',
     {
-      act: (b) => b.pivot.setFieldShowDetail(b.region, false),
+      act: (b) => b.pivot.updateField(b.region, { showDetail: false }),
       expect: (b) => assert.equal(b.pivot.getFieldItem(b.region, 0).showDetail, false),
     },
   ],
@@ -920,14 +921,14 @@ test('manual pivot sort order keeps item order and rejects bad arguments', async
     b.pivot.clearFieldItems(b.region);
     b.pivot.addFieldItem(b.region, 'West');
     b.pivot.addFieldItem(b.region, 'East');
-    b.pivot.setFieldSort(b.region, mod.PivotSortOrder.Manual);
+    b.pivot.updateField(b.region, { sortOrder: mod.PivotSortOrder.Manual });
     assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|15', '総計|52']);
-    assert.throws(() => b.pivot.setFieldSort(b.region, 3), isFormulonError);
+    assert.throws(() => b.pivot.updateField(b.region, { sortOrder: 3 }), isFormulonError);
     assert.throws(
-      () => b.pivot.setFieldSort(b.region, mod.PivotSortOrder.Manual, { byField: 'Sum of Amount' }),
+      () => b.pivot.updateField(b.region, { sortOrder: mod.PivotSortOrder.Manual, sortByField: 'Sum of Amount' }),
       isFormulonError,
     );
-    b.pivot.setFieldSort(b.region, mod.PivotSortOrder.Ascending);
+    b.pivot.updateField(b.region, { sortOrder: mod.PivotSortOrder.Ascending });
     assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
   } finally {
     b.wb.dispose();
@@ -1231,7 +1232,7 @@ test('pivot report options and the Values field order report bad arguments', asy
     assert.throws(() => b.pivot.updateField(99, { defaultSubtotal: true }), isFormulonError);
     assert.throws(() => b.pivot.updateField(99, { insertBlankRow: true }), isFormulonError);
     assert.throws(() => b.pivot.updateField(99, { fillDownLabels: true }), isFormulonError);
-    assert.throws(() => b.pivot.setFieldShowDetail(99, true), isFormulonError);
+    assert.throws(() => b.pivot.updateField(99, { showDetail: true }), isFormulonError);
     assert.throws(() => b.pivot.updateFieldItem(b.region, 99, { showDetail: true }), isFormulonError);
     assert.throws(() => b.pivot.updateFieldItem(b.region, 99, { caption: 'x' }), isFormulonError);
     // Captions collide with another item's label.

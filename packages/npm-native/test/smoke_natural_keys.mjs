@@ -21,10 +21,10 @@ test('defined names are read and removed by name and scope', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1' });
-  wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$1', localSheetId: 0 });
+  wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$1', scope: 0 });
   const name = found(wb.getDefinedName('rate', null));
   assert.deepEqual(
-    [name.name, name.formula, name.localSheetId, name.comment, name.hidden],
+    [name.name, name.formula, name.scope, name.comment, name.hidden],
     ['Rate', '=Sheet1!$A$1', null, null, false],
   );
   assert.equal(found(wb.getDefinedName('Rate', 0)).formula, '=Sheet1!$B$1');
@@ -54,15 +54,14 @@ test('hyperlinks, people and threaded comments are read by key', async () => {
   missing(wb.getPerson(THREAD));
   wb.sheet(0).addThreadedComment({
     id: THREAD,
-    row: 4,
-    col: 2,
+    cell: { row: 4, col: 2 },
     personId: ALICE,
     created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
     text: 'Check this',
     parentId: '',
   });
   const thread = found(wb.sheet(0).getThreadedComment(THREAD));
-  assert.deepEqual([thread.row, thread.col, thread.text], [4, 2, 'Check this']);
+  assert.deepEqual([thread.cell.row, thread.cell.col, thread.text], [4, 2, 'Check this']);
   missing(wb.sheet(0).getThreadedComment(ALICE));
   release(wb);
 });

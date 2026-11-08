@@ -60,7 +60,7 @@ function newBook(mod) {
 
 function addCache(wb, sheetName = 'Sheet1', ref = 'A1:B3') {
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref, sheet: sheetName });
+  cache.setWorksheetSource({ range: ref, sheet: sheetName });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -124,7 +124,7 @@ test(
     assert.equal(pivot.getCache(), cache);
 
     const picture = ws.addPicture(makePng(4), { name: 'logo' });
-    const chart = ws.addChart({ kind: mod.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
+    const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
     assert.equal(ws.drawing(picture.objectId), picture);
     assert.equal(ws.picture(picture.objectId), picture);
     assert.equal(ws.drawing(chart.objectId), chart);
@@ -213,7 +213,7 @@ test(
     const cache = addCache(wb);
     const doomed = addPivot(ws, cache, 'Pivot1', 0, 4);
     const kept = addPivot(ws, cache, 'Pivot2', 20, 4);
-    const rect = doomed.getLayout().rect;
+    const rect = doomed.getLayout().range;
     ws.deleteRows(0, rect.lastRow + 1);
     assert.throws(() => doomed.getLayout(), notFound(mod));
     assert.equal(ws.listPivots().length, 1);
@@ -221,7 +221,7 @@ test(
     assert.equal(ws.pivot('Pivot2'), kept);
     assert.equal(kept.name, 'Pivot2');
     assert.equal(kept.index, 0);
-    assert.equal(kept.getLayout().rect.firstRow, 20 - (rect.lastRow + 1));
+    assert.equal(kept.getLayout().range.firstRow, 20 - (rect.lastRow + 1));
   }),
 );
 
@@ -255,7 +255,7 @@ test(
     const ws = wb.sheet(0);
     const cache = addCache(wb);
     const pivot = addPivot(ws, cache, 'Pivot1', 0, 4);
-    const chart = ws.addChart({ kind: mod.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
+    const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
     const copied = wb.copySheet(ws, 1, 'Copy');
     assert.notEqual(copied, ws);
     assert.equal(ws.listPivots()[0], pivot);
@@ -322,7 +322,7 @@ test(
     assert.equal(picture.getDrawingProperties().name, 'logo');
     assert.equal(ws.picture(id), picture);
 
-    const chart = ws.addChart({ kind: mod.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
+    const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
     const chartSnapshot = chart.snapshot();
     ws.removeDrawing(chart);
     assert.equal(ws.restoreDrawing(chartSnapshot), chart);
@@ -342,7 +342,7 @@ test(
       widthEmu: 914400,
       heightEmu: 457200,
     });
-    const chart = ws.addChart({ kind: mod.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
+    const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
     const picture = ws.addPicture(makePng(2));
     assert.throws(() => ws.chart(shape.objectId), invalidArgument(mod));
     assert.throws(() => ws.picture(shape.objectId), invalidArgument(mod));

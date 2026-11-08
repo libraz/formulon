@@ -107,6 +107,7 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
   fresh_arena(wb, &fm_workbook_t::filter_column_scratch);
   fresh_arena(wb, &fm_workbook_t::filter_value_scratch);
   fresh_arena(wb, &fm_workbook_t::date_group_scratch);
+  fresh_arena(wb, &fm_workbook_t::filter_condition_scratch);
   fresh_arena(wb, &fm_workbook_t::sort_condition_scratch);
   auto keep = [scratch](const std::string& text) { return store_cstr(scratch->read_scratch, text); };
 
@@ -140,14 +141,14 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
       }
       case formulon::FilterKind::kCustom:
         c.custom_and = in.custom.and_join ? 1 : 0;
-        c.custom_count = static_cast<int32_t>(in.custom.filters.size());
-        if (!in.custom.filters.empty()) {
-          c.op1 = to_c(in.custom.filters[0].op);
-          c.val1 = keep(in.custom.filters[0].val);
-        }
-        if (in.custom.filters.size() > 1U) {
-          c.op2 = to_c(in.custom.filters[1].op);
-          c.val2 = keep(in.custom.filters[1].val);
+        {
+          std::vector<fm_filter_condition_t> conditions;
+          conditions.reserve(in.custom.filters.size());
+          for (const formulon::CustomFilter& f : in.custom.filters) {
+            conditions.push_back(fm_filter_condition_t{to_c(f.op), keep(f.val)});
+          }
+          c.condition_count = static_cast<uint32_t>(conditions.size());
+          c.conditions = scratch->filter_condition_scratch.adopt(std::move(conditions));
         }
         break;
       case formulon::FilterKind::kTop10:
@@ -264,26 +265,24 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       return 0;
     }
     case formulon::FilterKind::kCustom: {
-      if (in.custom_count < 0 || in.custom_count > 2) {
+      if (auto rc = check_array(in.conditions, in.condition_count, "conditions"); rc != 0) {
+        return rc;
+      }
+      if (in.condition_count < 1U || in.condition_count > 2U) {
         return set_binding_error(formulon::FormulonErrorCode::kAutoFilterInvalid,
                                  "custom filter needs one or two conditions",
-                                 "custom_count=" + std::to_string(in.custom_count));
+                                 "condition_count=" + std::to_string(in.condition_count));
       }
       // A condition always states a relational operator; the range members are not one.
       constexpr int64_t kFirstOp = FM_COMPARISON_OPERATOR_EQUAL;
       constexpr int64_t kLastOp = FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL;
       out->custom.and_join = in.custom_and != 0;
-      if (in.custom_count >= 1) {
-        if (auto rc = check_enum_domain(in.op1, kFirstOp, kLastOp, "op1"); rc != 0) {
+      for (uint32_t i = 0; i < in.condition_count; ++i) {
+        if (auto rc = check_enum_domain(in.conditions[i].op, kFirstOp, kLastOp, "conditions.op"); rc != 0) {
           return rc;
         }
-        out->custom.filters.push_back(formulon::CustomFilter{filter_operator_from_c(in.op1), text_or_empty(in.val1)});
-      }
-      if (in.custom_count == 2) {
-        if (auto rc = check_enum_domain(in.op2, kFirstOp, kLastOp, "op2"); rc != 0) {
-          return rc;
-        }
-        out->custom.filters.push_back(formulon::CustomFilter{filter_operator_from_c(in.op2), text_or_empty(in.val2)});
+        out->custom.filters.push_back(
+            formulon::CustomFilter{filter_operator_from_c(in.conditions[i].op), text_or_empty(in.conditions[i].value)});
       }
       return 0;
     }

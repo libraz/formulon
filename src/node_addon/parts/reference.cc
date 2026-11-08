@@ -53,8 +53,12 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   }
   const std::string text = ArgString(info, 0);
   fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
-  const fm_status_t rc =
-      fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
+  fm_parse_reference_spec_t spec = FM_STRUCT_INIT(fm_parse_reference_spec_t);
+  spec.r1c1 = r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  spec.has_base = has_row ? 1 : 0;
+  spec.base_row = base_row;
+  spec.base_col = base_col;
+  const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), &spec, &ref);
   if (rc != 0 || ref.valid == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
   }

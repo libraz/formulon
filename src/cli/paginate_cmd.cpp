@@ -132,7 +132,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     out << format_a1(range.first_row, range.first_col) << ':' << format_a1(range.last_row, range.last_col);
   }
   out << '\n';
-  const auto emit_breaks = [&](std::string_view label, auto count_fn, auto at_fn) -> bool {
+  const auto emit_breaks = [&](std::string_view label, auto record, auto position, auto count_fn, auto at_fn) -> bool {
     std::size_t count = 0;
     if (const auto status = count_fn(pagination.handle, &count); status != 0) {
       emit_last_error(err, "paginate");
@@ -140,21 +140,25 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
     out << label << '=';
     for (std::size_t i = 0; i < count; ++i) {
-      uint32_t value = 0;
-      if (const auto status = at_fn(pagination.handle, i, &value); status != 0) {
+      auto entry = record;
+      if (const auto status = at_fn(pagination.handle, i, &entry); status != 0) {
         emit_last_error(err, "paginate");
         return false;
       }
       if (i != 0) {
         out << ',';
       }
-      out << value;
+      out << position(entry);
     }
     out << '\n';
     return true;
   };
-  if (!emit_breaks("horizontal_breaks", fm_pagination_get_row_break_count, fm_pagination_get_row_break_at) ||
-      !emit_breaks("vertical_breaks", fm_pagination_get_column_break_count, fm_pagination_get_column_break_at)) {
+  if (!emit_breaks(
+          "horizontal_breaks", FM_STRUCT_INIT(fm_row_break_t), [](const fm_row_break_t& b) { return b.row; },
+          fm_pagination_get_row_break_count, fm_pagination_get_row_break_at) ||
+      !emit_breaks(
+          "vertical_breaks", FM_STRUCT_INIT(fm_column_break_t), [](const fm_column_break_t& b) { return b.col; },
+          fm_pagination_get_column_break_count, fm_pagination_get_column_break_at)) {
     return kExitFailure;
   }
   return flush_output(out, err, "paginate");

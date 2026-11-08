@@ -95,7 +95,6 @@ RECORD_NAMES = frozenset(
         "fm_comment_t",
         "fm_data_table_t",
         "fm_data_validation_t",
-        "fm_defined_name_input_t",
         "fm_defined_name_t",
         "fm_drawing_object_t",
         "fm_effective_style_t",
@@ -114,18 +113,25 @@ RECORD_NAMES = frozenset(
         "fm_paper_info_t",
         "fm_parallel_recalc_stats_t",
         "fm_parse_error_t",
+        "fm_parse_reference_spec_t",
         "fm_parsed_reference_t",
         "fm_person_t",
         "fm_pivot_cache_options_t",
         "fm_pivot_calculated_item_t",
         "fm_pivot_cell_t",
         "fm_pivot_data_field_spec_t",
+        "fm_pivot_date_group_spec_t",
         "fm_pivot_field_info_t",
+        "fm_pivot_field_patch_t",
         "fm_pivot_field_spec_t",
         "fm_pivot_filter_spec_t",
         "fm_pivot_item_info_t",
+        "fm_pivot_item_patch_t",
         "fm_pivot_options_t",
+        "fm_pivot_spec_t",
+        "fm_pivot_style_options_patch_t",
         "fm_pivot_style_options_t",
+        "fm_pivot_worksheet_source_t",
         "fm_print_options_t",
         "fm_print_titles_t",
         "fm_protected_range_t",
@@ -144,6 +150,7 @@ RECORD_NAMES = frozenset(
         "fm_styles_batch_t",
         "fm_table_column_info_t",
         "fm_table_info_t",
+        "fm_table_spec_t",
         "fm_table_style_options_patch_t",
         "fm_table_style_options_t",
         "fm_table_style_t",
@@ -575,6 +582,7 @@ PIVOT_FIELD_INFO = Struct(
         ("insert_blank_row", I32),
         ("fill_down_labels", I32),
         ("show_all", I32),
+        ("show_detail", I32),
     ],
 )
 
@@ -595,6 +603,23 @@ TABLE_INFO = Struct(
         ("header_row_count", U32),
         ("totals_row_count", U32),
         ("column_count", U32),
+    ],
+)
+
+TABLE_SPEC = Struct(
+    "fm_table_spec_t",
+    [
+        ("range", nested(CELL_RECT)),
+        ("name", PTR),
+        ("column_names", PTR),
+        ("column_count", U32),
+        ("style_name", PTR),
+        ("header_row", I32),
+        ("totals_row", I32),
+        ("show_first_column", I32),
+        ("show_last_column", I32),
+        ("show_row_stripes", I32),
+        ("show_column_stripes", I32),
     ],
 )
 
@@ -656,6 +681,85 @@ PIVOT_STYLE_OPTIONS = Struct(
         ("show_row_stripes", I32),
         ("show_column_stripes", I32),
         ("show_last_column", I32),
+    ],
+)
+
+PIVOT_SPEC = Struct(
+    "fm_pivot_spec_t",
+    [("name", PTR), ("cache_id", U32), ("anchor_row", U32), ("anchor_col", U32)],
+)
+
+PIVOT_WORKSHEET_SOURCE = Struct(
+    "fm_pivot_worksheet_source_t",
+    [("ref", PTR), ("sheet", PTR), ("name", PTR)],
+)
+
+PIVOT_STYLE_OPTIONS_PATCH = Struct(
+    "fm_pivot_style_options_patch_t",
+    [
+        ("style_name_op", I32),
+        ("style_name", PTR),
+        ("show_row_headers_op", I32),
+        ("show_row_headers", I32),
+        ("show_column_headers_op", I32),
+        ("show_column_headers", I32),
+        ("show_row_stripes_op", I32),
+        ("show_row_stripes", I32),
+        ("show_column_stripes_op", I32),
+        ("show_column_stripes", I32),
+        ("show_last_column_op", I32),
+        ("show_last_column", I32),
+    ],
+)
+
+PIVOT_FIELD_PATCH = Struct(
+    "fm_pivot_field_patch_t",
+    [
+        ("custom_name_op", I32),
+        ("custom_name", PTR),
+        ("number_format_op", I32),
+        ("number_format", PTR),
+        ("default_subtotal_op", I32),
+        ("default_subtotal", I32),
+        ("insert_blank_row_op", I32),
+        ("insert_blank_row", I32),
+        ("fill_down_labels_op", I32),
+        ("fill_down_labels", I32),
+        ("show_all_op", I32),
+        ("show_all", I32),
+        ("subtotal_top_op", I32),
+        ("subtotal_top", I32),
+        ("sort_order_op", I32),
+        ("sort_order", I32),
+        ("sort_by_field_op", I32),
+        ("sort_by_field", PTR),
+        ("show_detail_op", I32),
+        ("show_detail", I32),
+    ],
+)
+
+PIVOT_ITEM_PATCH = Struct(
+    "fm_pivot_item_patch_t",
+    [
+        ("visible_op", I32),
+        ("visible", I32),
+        ("show_detail_op", I32),
+        ("show_detail", I32),
+        ("caption_op", I32),
+        ("caption", PTR),
+    ],
+)
+
+PIVOT_DATE_GROUP_SPEC = Struct(
+    "fm_pivot_date_group_spec_t",
+    [
+        ("periods", U32),
+        ("calendar", I32),
+        ("interval_days", U32),
+        ("has_start", I32),
+        ("start", F64),
+        ("has_end", I32),
+        ("end", F64),
     ],
 )
 
@@ -750,6 +854,11 @@ SPILL_INFO = Struct(
     ],
 )
 
+PARSE_REFERENCE_SPEC = Struct(
+    "fm_parse_reference_spec_t",
+    [("r1c1", I32), ("has_base", I32), ("base_row", U32), ("base_col", U32)],
+)
+
 REFERENCE = Struct(
     "fm_parsed_reference_t",
     [
@@ -819,17 +928,6 @@ ITERATIVE_SETTINGS_PATCH = Struct(
         ("enabled", I32),
         ("max_iterations", I32),
         ("max_change", F64),
-    ],
-)
-
-DEFINED_NAME_INPUT = Struct(
-    "fm_defined_name_input_t",
-    [
-        ("name", PTR),
-        ("formula", PTR),
-        ("local_sheet_id", I32),
-        ("comment", PTR),
-        ("hidden", I32),
     ],
 )
 
@@ -1315,6 +1413,9 @@ DATE_GROUP_ITEM = Struct(
     ],
 )
 
+# One custom condition of a filter column; an array element, not a record.
+FILTER_CONDITION = Struct("fm_filter_condition_t", [("op", I32), ("value", PTR)])
+
 FILTER_COLUMN = Struct(
     "fm_filter_column_t",
     [
@@ -1328,11 +1429,8 @@ FILTER_COLUMN = Struct(
         ("date_groups", PTR),
         ("date_group_count", U32),
         ("custom_and", I32),
-        ("custom_count", I32),
-        ("op1", I32),
-        ("val1", PTR),
-        ("op2", I32),
-        ("val2", PTR),
+        ("conditions", PTR),
+        ("condition_count", U32),
         ("top", I32),
         ("percent", I32),
         ("has_filter_val", I32),
@@ -1860,7 +1958,8 @@ CHART_UNRESOLVED = Struct(
 CHART_INSERT = Struct(
     "fm_chart_insert_t",
     [
-        ("kind", I32),
+        ("type", I32),
+        ("bar_direction", I32),
         ("grouping", I32),
         ("source", PTR),
         ("direction", I32),
@@ -1933,18 +2032,35 @@ CHART_LABELS_PATCH = Struct(
         ("font_color", COLOR_SPEC_BLOB),
         ("font_size_op", I32),
         ("font_size_pt", F64),
+        ("source_linked_op", I32),
+        ("source_linked", I32),
+        ("deleted_op", I32),
+        ("deleted", I32),
     ],
+)
+
+# ``fm_chart_data_source_spec_t``: one series input to write. Embedded by value
+# in the series patch; not a record.
+CHART_DATA_SOURCE_SPEC = Struct(
+    "fm_chart_data_source_spec_t",
+    [("kind", I32), ("formula", PTR), ("literal", PTR), ("literal_count", U32)],
 )
 
 CHART_SERIES_PATCH = Struct(
     "fm_chart_series_patch_t",
     [
-        ("name", PTR),
-        ("categories", PTR),
-        ("values", PTR),
-        ("x", PTR),
-        ("y", PTR),
-        ("size", PTR),
+        ("name_op", I32),
+        ("name", nested(CHART_DATA_SOURCE_SPEC)),
+        ("categories_op", I32),
+        ("categories", nested(CHART_DATA_SOURCE_SPEC)),
+        ("values_op", I32),
+        ("values", nested(CHART_DATA_SOURCE_SPEC)),
+        ("x_op", I32),
+        ("x", nested(CHART_DATA_SOURCE_SPEC)),
+        ("y_op", I32),
+        ("y", nested(CHART_DATA_SOURCE_SPEC)),
+        ("size_op", I32),
+        ("size", nested(CHART_DATA_SOURCE_SPEC)),
         ("fill", nested(CHART_FILL_PATCH)),
         ("line", nested(CHART_LINE_PATCH)),
         ("marker_op", I32),
@@ -2008,6 +2124,14 @@ CHART_AXIS_PATCH = Struct(
         ("crosses_at", F64),
         ("tick_label_position_op", I32),
         ("tick_label_position", I32),
+        ("minor_unit_op", I32),
+        ("minor_unit", F64),
+        ("minor_gridlines_op", I32),
+        ("minor_gridlines", I32),
+        ("position_op", I32),
+        ("position", I32),
+        ("source_linked_op", I32),
+        ("source_linked", I32),
     ],
 )
 
@@ -2016,8 +2140,8 @@ CHART_LEGEND = Struct(
     [
         ("position", I32),
         ("overlay", I32),
-        ("hidden_series", PTR),
-        ("hidden_series_count", U32),
+        ("hidden_entries", PTR),
+        ("hidden_entry_count", U32),
     ],
 )
 
@@ -2026,9 +2150,9 @@ CHART_LEGEND_PATCH = Struct(
     [
         ("position", I32),
         ("overlay", I32),
-        ("hidden_series_op", I32),
-        ("hidden_series", PTR),
-        ("hidden_series_count", U32),
+        ("hidden_entries_op", I32),
+        ("hidden_entries", PTR),
+        ("hidden_entry_count", U32),
     ],
 )
 
@@ -2041,5 +2165,7 @@ CHART_DISPLAY_PATCH = Struct(
         ("plot_visible_only", I32),
         ("na_as_blank_op", I32),
         ("na_as_blank", I32),
+        ("style_op", I32),
+        ("style", I32),
     ],
 )

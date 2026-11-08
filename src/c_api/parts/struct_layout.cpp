@@ -117,6 +117,12 @@ static_assert(offsetof(fm_page_layout_t, origin_y_pt) == 32U);
 static_assert(offsetof(fm_page_layout_t, width_pt) == 40U);
 static_assert(offsetof(fm_page_layout_t, height_pt) == 48U);
 
+static_assert(sizeof(fm_parse_reference_spec_t) == 20U);
+static_assert(offsetof(fm_parse_reference_spec_t, r1c1) == 4U);
+static_assert(offsetof(fm_parse_reference_spec_t, has_base) == 8U);
+static_assert(offsetof(fm_parse_reference_spec_t, base_row) == 12U);
+static_assert(offsetof(fm_parse_reference_spec_t, base_col) == 16U);
+
 static_assert(sizeof(fm_row_break_t) == 20U);
 static_assert(offsetof(fm_row_break_t, row) == 4U);
 static_assert(offsetof(fm_row_break_t, first) == 8U);
@@ -404,13 +410,15 @@ static_assert(offsetof(fm_chart_plot_patch_t, vary_colors) == 32U);
 static_assert(offsetof(fm_chart_plot_patch_t, hole_size_op) == 36U);
 static_assert(offsetof(fm_chart_plot_patch_t, hole_size) == 40U);
 
-static_assert(sizeof(fm_chart_display_patch_t) == 28U);
+static_assert(sizeof(fm_chart_display_patch_t) == 36U);
 static_assert(offsetof(fm_chart_display_patch_t, blanks_as_op) == 4U);
 static_assert(offsetof(fm_chart_display_patch_t, blanks_as) == 8U);
 static_assert(offsetof(fm_chart_display_patch_t, plot_visible_only_op) == 12U);
 static_assert(offsetof(fm_chart_display_patch_t, plot_visible_only) == 16U);
 static_assert(offsetof(fm_chart_display_patch_t, na_as_blank_op) == 20U);
 static_assert(offsetof(fm_chart_display_patch_t, na_as_blank) == 24U);
+static_assert(offsetof(fm_chart_display_patch_t, style_op) == 28U);
+static_assert(offsetof(fm_chart_display_patch_t, style) == 32U);
 
 static_assert(sizeof(fm_data_table_t) == 60U);
 static_assert(offsetof(fm_data_table_t, rect) == 4U);

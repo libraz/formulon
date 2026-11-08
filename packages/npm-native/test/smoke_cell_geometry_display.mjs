@@ -295,8 +295,8 @@ test('paginate reports paper, margins, printable area, pages and break provenanc
   assert.equal(p.printTitles, null);
   assert.equal(p.pages.length, p.pageCount);
   assert.ok(p.pages.length >= 1);
-  assert.equal(p.pages[0].rect.firstRow, 0);
-  assert.equal(p.pages[0].rect.firstCol, 0);
+  assert.equal(p.pages[0].range.firstRow, 0);
+  assert.equal(p.pages[0].range.firstCol, 0);
   assert.ok(p.pages[0].widthPt > 0 && p.pages[0].heightPt > 0);
   // Break provenance travels on each break; the parallel manual arrays are gone.
   assert.ok(p.rowBreaks.every((b) => typeof b.manual === 'boolean'));

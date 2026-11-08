@@ -56,8 +56,8 @@ void CreateSalesTable(WorkbookGuard& wb) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 10.0), 0);
   const char* columns[] = {"Product", "Amount"};
   std::size_t index = 99U;
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", columns, 2,
-                               "TableStyleMedium2", 1, 0, &index),
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", columns, 2, "TableStyleMedium2", 1,
+                     0, &index),
             0);
 }
 

@@ -129,8 +129,8 @@ function makeHandles(formulon, wb) {
     anchor: { row: 10, col: 4 },
   });
   const chart = ws.addChart({
-    kind: formulon.ChartInsertKind.Column,
-    source: 'Sheet1!$A$1:$B$2',
+    type: formulon.ChartPlotType.Bar,
+    range: 'Sheet1!$A$1:$B$2',
     legend: formulon.ChartLegendPosition.Right,
   });
   const shape = ws.addShape({

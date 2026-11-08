@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -42,9 +43,7 @@ void CreateNumbersTable(WorkbookGuard& wb) {
   }
   const char* names[] = {"N"};
   std::size_t table = 99;
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 5, 0}), "Nums", names, 1, nullptr, 1, 0, &table),
-      0)
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 5, 0}), "Nums", names, 1, nullptr, 1, 0, &table), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(table, 0U);
 }
@@ -54,9 +53,9 @@ fm_auto_filter_t GreaterThanThree(fm_filter_column_t* column) {
   *column = fm_filter_column_t{};
   column->kind = 2;
   column->show_button = 1;
-  column->custom_count = 1;
-  column->op1 = FM_COMPARISON_OPERATOR_GREATER_THAN;
-  column->val1 = "3";
+  static const fm_filter_condition_t kGreaterThanThree{FM_COMPARISON_OPERATOR_GREATER_THAN, "3"};
+  column->conditions = &kGreaterThanThree;
+  column->condition_count = 1;
   fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = column;
@@ -171,9 +170,9 @@ TEST(FormulonCApiTableAutoFilter, FilterOfATableOnASecondSheetHidesThatSheetsRow
   }
   const char* names[] = {"N"};
   std::size_t table = 99;
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, second, record_arg(fm_cell_rect_t{0, 0, 5, 0}), "OnSecond", names, 1, nullptr,
-                               1, 0, &table),
-            0)
+  ASSERT_EQ(
+      AddTable(wb.handle, second, record_arg(fm_cell_rect_t{0, 0, 5, 0}), "OnSecond", names, 1, nullptr, 1, 0, &table),
+      0)
       << fm_get_last_error_message();
   ASSERT_EQ(table, 0U);
 

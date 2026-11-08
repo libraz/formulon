@@ -256,7 +256,7 @@ emscripten::val defined_name_to_val(const char* name, const char* formula, int32
   emscripten::val item = emscripten::val::object();
   js_set_cstr_fields(item, {{"name", name}, {"formula", formula}});
   js_set_cstr_or_null(item, "comment", comment);
-  js_set_index_or_null(item, "localSheetId", local_sheet_id);
+  js_set_index_or_null(item, "scope", local_sheet_id);
   item.set("hidden", hidden != 0);
   return item;
 }
@@ -475,18 +475,14 @@ uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
   // An omitted `styleName` applies the workbook default; `""` creates the table without a style element.
   std::string style_store;
   const char* style_name = reader.optional_string(spec, "styleName", style_store, "addTable.styleName");
-  const bool header_row = reader.boolean(spec, "headerRow", true, "addTable.headerRow");
-  const bool totals_row = reader.boolean(spec, "totalsRow", false, "addTable.totalsRow");
   const emscripten::val columns = reader.value(spec, "columns", "addTable.columns");
-  fm_table_style_options_patch_t toggles = FM_STRUCT_INIT(fm_table_style_options_patch_t);
-  js_table_style_toggle(reader, spec, "showFirstColumn", "addTable.showFirstColumn", &toggles.show_first_column_op,
-                        &toggles.show_first_column);
-  js_table_style_toggle(reader, spec, "showLastColumn", "addTable.showLastColumn", &toggles.show_last_column_op,
-                        &toggles.show_last_column);
-  js_table_style_toggle(reader, spec, "showRowStripes", "addTable.showRowStripes", &toggles.show_row_stripes_op,
-                        &toggles.show_row_stripes);
-  js_table_style_toggle(reader, spec, "showColumnStripes", "addTable.showColumnStripes",
-                        &toggles.show_column_stripes_op, &toggles.show_column_stripes);
+  fm_table_spec_t table = FM_STRUCT_INIT(fm_table_spec_t);
+  table.header_row = js_tristate(reader, spec, "headerRow", "addTable.headerRow");
+  table.totals_row = js_tristate(reader, spec, "totalsRow", "addTable.totalsRow");
+  table.show_first_column = js_tristate(reader, spec, "showFirstColumn", "addTable.showFirstColumn");
+  table.show_last_column = js_tristate(reader, spec, "showLastColumn", "addTable.showLastColumn");
+  table.show_row_stripes = js_tristate(reader, spec, "showRowStripes", "addTable.showRowStripes");
+  table.show_column_stripes = js_tristate(reader, spec, "showColumnStripes", "addTable.showColumnStripes");
   if (!reader.ok()) {
     return 0U;
   }
@@ -514,21 +510,14 @@ uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
   for (const std::string& column : names) {
     pointers.push_back(column.c_str());
   }
+  table.range = rect;
+  table.name = name.c_str();
+  table.column_names = pointers.empty() ? nullptr : pointers.data();
+  table.column_count = static_cast<uint32_t>(pointers.size());
+  table.style_name = style_name;
   size_t index = 0;
-  const fm_status_t rc =
-      fm_sheet_add_table(handle_, sheet, &rect, name.c_str(), pointers.empty() ? nullptr : pointers.data(),
-                         pointers.size(), style_name, header_row ? 1 : 0, totals_row ? 1 : 0, &index);
-  if (!succeeded(rc)) {
+  if (!succeeded(fm_sheet_add_table(handle_, sheet, &table, &index))) {
     return 0U;
-  }
-  if (toggles.show_first_column_op != 0 || toggles.show_last_column_op != 0 || toggles.show_row_stripes_op != 0 ||
-      toggles.show_column_stripes_op != 0) {
-    if (const fm_status_t style_rc = fm_sheet_update_table_style_options(handle_, sheet, index, &toggles);
-        style_rc != 0) {
-      fm_sheet_remove_table(handle_, sheet, index);
-      record_failure(style_rc);
-      return 0U;
-    }
   }
   return static_cast<uint32_t>(index);
 }
@@ -573,9 +562,10 @@ void JsWorkbook::setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t col
   JsNarrowNumericReader reader("setTableColumnTotals");
   std::string label;
   std::string formula;
-  const int32_t function = reader.i32(totals, "function", FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "totals.function");
-  const char* label_ptr = reader.optional_string(totals, "label", label, "totals.label");
-  const char* formula_ptr = reader.optional_string(totals, "formula", formula, "totals.formula");
+  const int32_t function =
+      reader.i32(totals, "totalsRowFunction", FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "totals.totalsRowFunction");
+  const char* label_ptr = reader.optional_string(totals, "totalsRowLabel", label, "totals.totalsRowLabel");
+  const char* formula_ptr = reader.optional_string(totals, "totalsRowFormula", formula, "totals.totalsRowFormula");
   if (!reader.ok()) {
     return;
   }
@@ -597,18 +587,15 @@ std::string JsWorkbook::renameTableColumn(uint32_t sheet, uint32_t idx, uint32_t
 }
 
 emscripten::val JsWorkbook::getDefinedName(const std::string& name, int32_t localSheetId) const {
-  const char* stored = nullptr;
-  const char* formula = nullptr;
-  const char* comment = nullptr;
-  int32_t hidden = 0;
+  fm_defined_name_t d = FM_STRUCT_INIT(fm_defined_name_t);
   int32_t present = 0;
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_defined_name(handle_, name.c_str(), localSheetId, &present, &stored,
-                                                            &formula, &comment, &hidden)
+                             ? fm_workbook_get_defined_name(handle_, name.c_str(), localSheetId, &present, &d)
                              : kBindingInvalidHandle;
   return optional_or_null(rc, present,
-                          rc == 0 && present != 0 ? defined_name_to_val(stored, formula, localSheetId, comment, hidden)
-                                                  : emscripten::val::null());
+                          rc == 0 && present != 0
+                              ? defined_name_to_val(d.name, d.formula, localSheetId, d.comment, d.hidden)
+                              : emscripten::val::null());
 }
 
 void JsWorkbook::removeDefinedName(const std::string& name, int32_t localSheetId) {

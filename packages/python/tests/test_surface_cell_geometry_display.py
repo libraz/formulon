@@ -344,7 +344,7 @@ class PaginationDetailTests(unittest.TestCase):
             self.assertIn(10, [b.row for b in p.row_breaks])
             self.assertTrue(next(b for b in p.row_breaks if b.row == 10).manual)
             first = p.pages[0]
-            self.assertEqual(first.rect.first_row, 0)
+            self.assertEqual(first.range.first_row, 0)
             self.assertGreater(first.width_pt, 0.0)
             self.assertGreater(first.height_pt, 0.0)
 

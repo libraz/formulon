@@ -171,39 +171,50 @@ extern "C" fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, std::ui
 }
 
 extern "C" fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                    std::int32_t* out_present, const char** out_ref,
-                                                                    const char** out_sheet, const char** out_name) {
+                                                                    std::int32_t* out_present,
+                                                                    fm_pivot_worksheet_source_t* out) {
   clear_last_error();
-  if (wb == nullptr || out_present == nullptr || out_ref == nullptr || out_sheet == nullptr || out_name == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
   }
   const formulon::pivot::PivotCache* cache = nullptr;
   if (fm_status_t rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
     return rc;
   }
   const formulon::pivot::WorksheetSource& src = cache->worksheet_source();
+  const auto view = [](const std::string& text) { return text.empty() ? nullptr : text.c_str(); };
+  fm_pivot_worksheet_source_t result{};
+  result.struct_size = out->struct_size;
+  if (src.present) {
+    result.ref = view(src.ref);
+    result.sheet = view(src.sheet);
+    result.name = view(src.name);
+  }
   *out_present = src.present ? 1 : 0;
-  *out_ref = src.ref.c_str();
-  *out_sheet = src.sheet.c_str();
-  *out_name = src.name.c_str();
+  *out = result;
   return 0;
 }
 
 extern "C" fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                    std::int32_t present, const char* ref,
-                                                                    const char* sheet, const char* name) {
+                                                                    const fm_pivot_worksheet_source_t* source) {
   clear_last_error();
   formulon::pivot::PivotCache* cache = nullptr;
   if (fm_status_t rc = resolve_cache_mut(wb, cache_id, &cache); rc != 0) {
     return rc;
   }
   formulon::pivot::WorksheetSource& src = cache->mutable_worksheet_source();
-  if (present == 0) {
+  if (source == nullptr) {
     src = formulon::pivot::WorksheetSource{};
     invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
     return 0;
   }
-  if (auto rc = check_utf8({ref, sheet, name}); rc != 0) {
+  if (auto rc = check_record_size(*source); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({source->ref, source->sheet, source->name}); rc != 0) {
     return rc;
   }
   // A worksheet source replaces whatever source kind the cache was read with,
@@ -211,9 +222,9 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_
   cache->mutable_cache_source_attrs().clear();
   cache->mutable_cache_source_children_xml().clear();
   src.present = true;
-  src.ref = text_or_empty(ref);
-  src.sheet = text_or_empty(sheet);
-  src.name = text_or_empty(name);
+  src.ref = text_or_empty(source->ref);
+  src.sheet = text_or_empty(source->sheet);
+  src.name = text_or_empty(source->name);
   invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }

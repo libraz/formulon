@@ -172,6 +172,10 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
     ("pivot/value_order.h", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",
     ("pivot/filter_engine.cpp", "eval/collation.h"): "Label filters collate like the items they filter.",
     ("pivot/pivot_locale.cpp", "eval/collation.h"): "Default data-field names collide under the profile collation.",
+    (
+        "pivot/field_patch.cpp",
+        "eval/collation.h",
+    ): "A renamed field or item collides with a sibling under the profile collation.",
     ("pivot/filter_engine.cpp", "eval/collated_wildcard.h"): "Caption begins/ends/contains match like SEARCH.",
     ("pivot/filter_engine.h", "eval/collated_wildcard.h"): "The record filter keeps one caption matcher per filter.",
     ("pivot/filter_engine.cpp", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",

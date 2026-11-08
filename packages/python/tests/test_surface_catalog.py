@@ -66,9 +66,14 @@ class FunctionCatalogTests(unittest.TestCase):
         self.assertEqual(de.description, "Searches a range or an array.")
         self.assertEqual(de.localized_name, "XLOOKUP")
 
-        # No provider entry -> base returned verbatim; display metadata NULL.
+        # No provider entry -> the engine's fields carry over; display metadata NULL.
         none = formulon.merge_function_metadata(base, None, "fr-FR")
-        self.assertIs(none, base)
+        self.assertIsInstance(none, formulon.MergedFunctionMetadata)
+        self.assertEqual(
+            (none.name, none.min_arity, none.max_arity, none.availability),
+            (base.name, base.min_arity, base.max_arity, base.availability),
+        )
+        self.assertEqual(none.localized_name, base.name)
         self.assertIsNone(none.signature)
         self.assertIsNone(none.description)
 

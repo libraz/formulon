@@ -88,7 +88,7 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
     def test_comment_roundtrip_and_absent(self) -> None:
         with Workbook.create_default() as wb:
             self.assertIsNone(wb.sheet(0).get_comment(0, 0))
-            wb.sheet(0).set_comment(0, 0, Comment("alice", "see note"))
+            wb.sheet(0).set_comment(0, 0, Comment("see note", author="alice"))
             c = wb.sheet(0).get_comment(0, 0)
             self.assertIsNotNone(c)
             self.assertEqual(c.author, "alice")
@@ -107,7 +107,7 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
             )
             links = wb.sheet(0).list_hyperlinks()
             self.assertEqual(len(links), 1)
-            self.assertEqual(links[0].rect, CellRect(2, 3, 2, 3))
+            self.assertEqual(links[0].range, CellRect(2, 3, 2, 3))
             self.assertEqual(links[0].target, "https://example.com")
             self.assertEqual(links[0].display, "Example")
 
@@ -129,7 +129,7 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
             )
             links = wb.sheet(0).list_hyperlinks()
             self.assertEqual(len(links), 1)
-            self.assertEqual(links[0].rect, CellRect(4, 6, 7, 9))
+            self.assertEqual(links[0].range, CellRect(4, 6, 7, 9))
 
 
 class ValidationTests(unittest.TestCase):

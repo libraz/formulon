@@ -66,8 +66,6 @@ HANDLE_FORWARDERS = {
     "Pivot.set_data_field": "set_pivot_data_field",
     "Pivot.set_field_axis": "set_pivot_field_axis",
     "Pivot.set_field_date_group": None,
-    "Pivot.set_field_show_detail": "set_pivot_field_show_detail",
-    "Pivot.set_field_sort": "set_pivot_field_sort",
     "Pivot.set_report_layout": "set_pivot_report_layout",
     "Pivot.set_row_field_order": "set_pivot_row_field_order",
     "Pivot.show_details": None,

@@ -95,20 +95,19 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
         {
           columnOffset: 0,
           kind: mod.FilterKind.Custom,
-          customCount: 1,
-          operator1: mod.ComparisonOperator.NotEqual,
-          value1: 'b',
+          conditions: [{ operator: mod.ComparisonOperator.NotEqual, value: 'b' }],
         },
       ],
       sort: {
-        ref: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 },
-        conditions: [{ ref: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 }, descending: true }],
+        range: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 },
+        conditions: [{ range: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 }, descending: true }],
       },
     });
     const custom = wb.sheet(0).getAutoFilter();
     assert.equal(custom.columns[0].kind, 2);
-    assert.equal(custom.columns[0].operator1, mod.ComparisonOperator.NotEqual);
-    assert.equal(custom.columns[0].value1, 'b');
+    assert.equal(custom.columns[0].conditions.length, 1);
+    assert.equal(custom.columns[0].conditions[0].operator, mod.ComparisonOperator.NotEqual);
+    assert.equal(custom.columns[0].conditions[0].value, 'b');
     assert.equal(custom.sort.conditions.length, 1);
     assert.equal(custom.sort.conditions[0].descending, true);
     assert.equal(custom.sort.columnSort, false);
@@ -242,8 +241,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
 
     wb.sheet(0).addThreadedComment({
       id: THREAD,
-      row: 2,
-      col: 3,
+      cell: { row: 2, col: 3 },
       personId: ANN,
       created: { year: 2026, month: 1, day: 1, hour: 10, minute: 0, second: 0 },
       text: 'Review this',
@@ -261,8 +259,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     assert.equal(list.length, 2);
     assert.equal(list[0].id, THREAD);
     assert.equal(list[0].parentId, '');
-    assert.equal(list[0].row, 2);
-    assert.equal(list[0].col, 3);
+    assert.deepEqual({ ...list[0].cell }, { row: 2, col: 3 });
     assert.equal(list[0].done, false);
     assert.deepEqual(list[0].mentions, []);
     assert.equal(list[1].id, REPLY);

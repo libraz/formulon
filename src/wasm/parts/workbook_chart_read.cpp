@@ -379,7 +379,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
     legend = val::object();
     legend.set("position", val(info.legend_position));
     legend.set("overlay", val(info.legend_overlay != 0));
-    legend.set("hiddenSeries", indices_to_val(info.legend_hidden_count, rc, [&](size_t i, uint32_t* out) {
+    legend.set("hiddenEntries", indices_to_val(info.legend_hidden_count, rc, [&](size_t i, uint32_t* out) {
                  return fm_chart_get_legend_hidden_at(chart, i, out);
                }));
   }
@@ -401,9 +401,29 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
     push(axes, a);
   }
   o.set("axes", axes);
-  o.set("hiddenCategories", indices_to_val(info.hidden_category_count, rc, [&](size_t i, uint32_t* out) {
-          return fm_chart_get_hidden_category_at(chart, i, out);
-        }));
+  // The filter: the `idx` of every filtered series across the plots, and the hidden categories.
+  val filter = val::object();
+  val hidden_series = val::array();
+  for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {
+    fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
+    if (!step(rc, fm_chart_get_plot_at(chart, i, &plot))) {
+      break;
+    }
+    for (size_t j = 0; j < plot.series_count; ++j) {
+      fm_chart_series_t series = FM_STRUCT_INIT(fm_chart_series_t);
+      if (!step(rc, fm_chart_get_series_at(chart, i, j, &series))) {
+        break;
+      }
+      if (series.filtered != 0) {
+        push(hidden_series, val(series.idx));
+      }
+    }
+  }
+  filter.set("hiddenSeries", hidden_series);
+  filter.set("hiddenCategories", indices_to_val(info.hidden_category_count, rc, [&](size_t i, uint32_t* out) {
+               return fm_chart_get_hidden_category_at(chart, i, out);
+             }));
+  o.set("filter", filter);
 
   val source = val::null();
   if (info.source_range != nullptr) {

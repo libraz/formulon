@@ -16,13 +16,14 @@ import unittest
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import _chart_input
+
 import formulon
 from formulon import (
     UNCHANGED,
     AnchorKind,
     CellRect,
     Chart,
-    ChartInsertKind,
     Picture,
     ShapeInput,
     SlicerInput,
@@ -70,7 +71,7 @@ class _Fixture:
             )
         )
         self.slicer = ws.add_slicer(self.table, 0, SlicerInput(from_row=10, from_col=4, to_row=20, to_col=6))
-        self.chart = ws.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3")
+        self.chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3")
         self.cache = self.wb.add_pivot_cache()
 
     def close(self) -> None:
@@ -118,7 +119,7 @@ class PatchKeyTests(unittest.TestCase):
             ),
             ("Chart.get_preview unknown", lambda: f.chart.get_preview(bogus=1), TypeError),
             ("Chart.get_preview None", lambda: f.chart.get_preview(direction=None), TypeError),
-            ("Chart.get_preview None source", lambda: f.chart.get_preview(source=None), TypeError),
+            ("Chart.get_preview None range", lambda: f.chart.get_preview(range=None), TypeError),
             ("PivotCache.set_worksheet_source unknown", lambda: f.cache.set_worksheet_source(bogus=1), TypeError),
             (
                 "PivotCache.set_worksheet_source None with keyword",

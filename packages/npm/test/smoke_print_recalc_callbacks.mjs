@@ -146,7 +146,6 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
       borderIndex: 0,
       numFmtId: 0,
       wrapText: true,
-      hasWrapText: true,
     });
     wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf);
     // Cells that held nothing are materialised so the ruled box renders.

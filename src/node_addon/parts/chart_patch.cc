@@ -81,12 +81,15 @@ void ReadBoolOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.Bool(v, key, false) ? 1 : 0; });
 }
 
-/// Keeps the std::string bytes behind the `const char*` fields of a patch alive.
-using Arena = std::deque<std::string>;
+/// Keeps the std::string bytes and literal point lists behind the pointer fields of a patch alive.
+struct Arena {
+  std::deque<std::string> strings;
+  std::deque<std::vector<fm_chart_literal_t>> literals;
+};
 
 const char* Intern(Arena& arena, std::string text) {
-  arena.push_back(std::move(text));
-  return arena.back().c_str();
+  arena.strings.push_back(std::move(text));
+  return arena.strings.back().c_str();
 }
 
 void ReadStringOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, int32_t& op,
@@ -120,15 +123,68 @@ fm_chart_title_t ReadTitle(CheckedSpecReader& r, const Napi::Value& v, const cha
   return t;
 }
 
-/// A series reference: absent keeps (`NULL`), `null` or "" removes, a string replaces.
-void ReadRef(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, const char*& out) {
+/// The points of a literal source: a number is a number point, a string a text point; `idx` is the position.
+void ReadLiteral(CheckedSpecReader& r, const Napi::Value& value, const char* key, Arena& arena,
+                 fm_chart_data_source_spec_t& out) {
+  Napi::Array list;
+  if (!r.Array(value, key, &list)) {
+    return;
+  }
+  arena.literals.emplace_back();
+  std::vector<fm_chart_literal_t>& points = arena.literals.back();
+  for (uint32_t i = 0; i < list.Length() && r.ok(); ++i) {
+    Napi::Value element;
+    if (!r.ArrayElement(list, i, &element)) {
+      continue;
+    }
+    fm_chart_literal_t point = FM_STRUCT_INIT(fm_chart_literal_t);
+    point.idx = i;
+    if (element.IsString()) {
+      std::string text;
+      r.String(element, key, &text);
+      point.is_text = 1;
+      point.text = Intern(arena, std::move(text));
+    } else {
+      point.number = r.Double(element, key, 0.0);
+    }
+    points.push_back(point);
+  }
+  out.literal = points.empty() ? nullptr : points.data();
+  out.literal_count = static_cast<uint32_t>(points.size());
+}
+
+/// A series input: absent keeps, `null` removes, a string is a reference (an empty one removes), and an object is
+/// the read-back shape `{ kind, formula, literal }`.
+void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, int32_t& op,
+                fm_chart_data_source_spec_t& out) {
   const Field f = Probe(r, owner, key);
-  if (f.op == FM_CHART_PATCH_OP_CLEAR) {
-    out = "";
-  } else if (f.op == FM_CHART_PATCH_OP_SET) {
+  op = f.op;
+  if (f.op != FM_CHART_PATCH_OP_SET) {
+    return;
+  }
+  if (f.value.IsString()) {
     std::string text;
     r.String(f.value, key, &text);
-    out = Intern(arena, std::move(text));
+    if (text.empty()) {
+      out.kind = FM_CHART_SOURCE_KIND_NONE;
+    } else {
+      out.kind = FM_CHART_SOURCE_KIND_REF;
+      out.formula = Intern(arena, std::move(text));
+    }
+    return;
+  }
+  Napi::Object spec;
+  if (!r.Object(f.value, key, &spec)) {
+    r.FailType(key, "string, null or an object");
+    return;
+  }
+  out.kind = r.I32(spec, "kind", FM_CHART_SOURCE_KIND_NONE);
+  std::string formula;
+  if (r.String(spec, "formula", &formula)) {
+    out.formula = Intern(arena, std::move(formula));
+  }
+  if (out.kind == FM_CHART_SOURCE_KIND_LITERAL) {
+    ReadLiteral(r, r.Get(spec, "literal"), key, arena, out);
   }
 }
 
@@ -192,15 +248,17 @@ void ReadLabelsPatch(CheckedSpecReader& r, const Napi::Object& owner, Arena& are
   ReadStringOp(r, o, "numberFormat", arena, out.number_format_op, out.number_format);
   ReadColorOp(r, o, "fontColor", out.font_color_op, out.font_color);
   ReadDoubleOp(r, o, "fontSizePt", out.font_size_op, out.font_size_pt);
+  ReadBoolOp(r, o, "sourceLinked", out.source_linked_op, out.source_linked);
+  ReadBoolOp(r, o, "deleted", out.deleted_op, out.deleted);
 }
 
 void ReadSeriesPatch(CheckedSpecReader& r, const Napi::Object& spec, Arena& arena, fm_chart_series_patch_t& out) {
-  ReadRef(r, spec, "name", arena, out.name);
-  ReadRef(r, spec, "categories", arena, out.categories);
-  ReadRef(r, spec, "values", arena, out.values);
-  ReadRef(r, spec, "x", arena, out.x);
-  ReadRef(r, spec, "y", arena, out.y);
-  ReadRef(r, spec, "size", arena, out.size);
+  ReadSource(r, spec, "name", arena, out.name_op, out.name);
+  ReadSource(r, spec, "categories", arena, out.categories_op, out.categories);
+  ReadSource(r, spec, "values", arena, out.values_op, out.values);
+  ReadSource(r, spec, "x", arena, out.x_op, out.x);
+  ReadSource(r, spec, "y", arena, out.y_op, out.y);
+  ReadSource(r, spec, "size", arena, out.size_op, out.size);
   ReadFillPatch(r, spec, out.fill);
   ReadLinePatch(r, spec, out.line);
   ReadMarkerPatch(r, spec, out.marker_op, out.marker);
@@ -212,6 +270,35 @@ void ReadPointPatch(CheckedSpecReader& r, const Napi::Object& spec, fm_chart_poi
   ReadFillPatch(r, spec, out.fill);
   ReadLinePatch(r, spec, out.line);
   ReadMarkerPatch(r, spec, out.marker_op, out.marker);
+}
+
+/// Turns every member a replacement record left out (KEEP) into CLEAR. A marker symbol cannot be cleared, so it
+/// stays KEEP.
+void ClearOmittedMembers(fm_chart_point_patch_t& patch) {
+  const auto clear = [](int32_t& op) {
+    if (op == FM_CHART_PATCH_OP_KEEP) {
+      op = FM_CHART_PATCH_OP_CLEAR;
+    }
+  };
+  const auto clear_fill = [&](fm_chart_fill_patch_t& fill) {
+    clear(fill.color_op);
+    clear(fill.transparency_pct_op);
+  };
+  const auto clear_line = [&](fm_chart_line_patch_t& line) {
+    clear(line.color_op);
+    clear(line.transparency_pct_op);
+    clear(line.width_pt_op);
+    clear(line.dash_op);
+    clear(line.none_op);
+  };
+  clear_fill(patch.fill);
+  clear_line(patch.line);
+  clear(patch.marker_op);
+  if (patch.marker_op == FM_CHART_PATCH_OP_SET) {
+    clear(patch.marker.size_pt_op);
+    clear_fill(patch.marker.fill);
+    clear_line(patch.marker.line);
+  }
 }
 
 int32_t HeaderModeArg(CheckedSpecReader& r, const Napi::CallbackInfo& info, size_t idx, const char* key) {
@@ -280,7 +367,8 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
     }
   }
   fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
-  opts.kind = reader.I32(spec, "kind", FM_CHART_INSERT_KIND_COLUMN);
+  opts.type = reader.I32(spec, "type", FM_CHART_PLOT_TYPE_BAR);
+  opts.bar_direction = reader.I32(spec, "barDirection", FM_CHART_BAR_DIRECTION_COLUMN);
   opts.grouping = reader.I32(spec, "grouping", FM_CHART_GROUPING_CLUSTERED);
   opts.source = source.c_str();
   opts.direction = reader.I32(spec, "direction", FM_CHART_SERIES_DIRECTION_AUTO);
@@ -305,11 +393,25 @@ Napi::Value Workbook::SetChartType(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const int32_t grouping = info.Length() > 4 && !info[4].IsUndefined() ? ArgI32(info, 4) : FM_CHART_GROUPING_CLUSTERED;
-  return ValueOrThrow(
-      env,
-      fm_sheet_set_chart_type(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgI32(info, 3), grouping),
-      env.Undefined());
+  // `options` is optional: `{ barDirection?, grouping? }`.
+  int32_t bar_direction = FM_CHART_BAR_DIRECTION_COLUMN;
+  int32_t grouping = FM_CHART_GROUPING_CLUSTERED;
+  if (info.Length() > 4 && !info[4].IsUndefined() && !info[4].IsNull()) {
+    Napi::Object options;
+    if (!PatchObjectArg(info, 4, "setChartType", &options)) {
+      return env.Undefined();
+    }
+    CheckedSpecReader reader(env);
+    bar_direction = reader.I32(options, "barDirection", FM_CHART_BAR_DIRECTION_COLUMN);
+    grouping = reader.I32(options, "grouping", FM_CHART_GROUPING_CLUSTERED);
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
+  }
+  return ValueOrThrow(env,
+                      fm_sheet_set_chart_type(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
+                                              ArgI32(info, 3), bar_direction, grouping),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartTitle(const Napi::CallbackInfo& info) {
@@ -354,12 +456,12 @@ Napi::Value Workbook::SetChartLegend(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   std::vector<uint32_t> hidden;
-  ReadUint32List(reader, reader.Get(spec, "hiddenSeries"), "hiddenSeries", &hidden);
+  ReadUint32List(reader, reader.Get(spec, "hiddenEntries"), "hiddenEntries", &hidden);
   fm_chart_legend_t legend = FM_STRUCT_INIT(fm_chart_legend_t);
   legend.position = reader.I32(spec, "position", FM_CHART_LEGEND_POSITION_RIGHT);
   legend.overlay = reader.Bool(spec, "overlay", false) ? 1 : 0;
-  legend.hidden_series = hidden.empty() ? nullptr : hidden.data();
-  legend.hidden_series_count = static_cast<uint32_t>(hidden.size());
+  legend.hidden_entries = hidden.empty() ? nullptr : hidden.data();
+  legend.hidden_entry_count = static_cast<uint32_t>(hidden.size());
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -407,14 +509,14 @@ Napi::Value Workbook::UpdateChartLegend(const Napi::CallbackInfo& info) {
     patch.overlay = reader.Bool(overlay.value, "overlay", false) ? 1 : 0;
   }
   std::vector<uint32_t> hidden;
-  const Field hidden_field = Probe(reader, spec, "hiddenSeries");
+  const Field hidden_field = Probe(reader, spec, "hiddenEntries");
   if (hidden_field.op == FM_CHART_PATCH_OP_SET) {
-    ReadUint32List(reader, hidden_field.value, "hiddenSeries", &hidden);
-    patch.hidden_series_op = FM_CHART_PATCH_OP_SET;
-    patch.hidden_series = hidden.empty() ? nullptr : hidden.data();
-    patch.hidden_series_count = static_cast<uint32_t>(hidden.size());
+    ReadUint32List(reader, hidden_field.value, "hiddenEntries", &hidden);
+    patch.hidden_entries_op = FM_CHART_PATCH_OP_SET;
+    patch.hidden_entries = hidden.empty() ? nullptr : hidden.data();
+    patch.hidden_entry_count = static_cast<uint32_t>(hidden.size());
   } else if (hidden_field.op == FM_CHART_PATCH_OP_CLEAR) {
-    reader.FailType("hiddenSeries", "value (null cannot clear this field)");
+    reader.FailType("hiddenEntries", "value (null cannot clear this field)");
   }
   if (!reader.ok()) {
     return env.Undefined();
@@ -451,6 +553,10 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   ReadI32Op(reader, spec, "crosses", patch.crosses_op, patch.crosses);
   patch.crosses_at = reader.Double(spec, "crossesAt", 0.0);
   ReadI32Op(reader, spec, "tickLabelPosition", patch.tick_label_position_op, patch.tick_label_position);
+  ReadDoubleOp(reader, spec, "minorUnit", patch.minor_unit_op, patch.minor_unit);
+  ReadBoolOp(reader, spec, "minorGridlines", patch.minor_gridlines_op, patch.minor_gridlines);
+  ReadI32Op(reader, spec, "position", patch.position_op, patch.position);
+  ReadBoolOp(reader, spec, "sourceLinked", patch.source_linked_op, patch.source_linked);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -473,6 +579,7 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
   ReadI32Op(reader, spec, "blanksAs", patch.blanks_as_op, patch.blanks_as);
   ReadBoolOp(reader, spec, "plotVisibleOnly", patch.plot_visible_only_op, patch.plot_visible_only);
   ReadBoolOp(reader, spec, "naAsBlank", patch.na_as_blank_op, patch.na_as_blank);
+  ReadI32Op(reader, spec, "style", patch.style_op, patch.style);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -523,37 +630,30 @@ Napi::Value Workbook::UpdateChartPoint(const Napi::CallbackInfo& info) {
                       env.Undefined());
 }
 
-// The record replaces the point's formatting; `null` removes it. A patch that changes nothing removes
-// the formatting, so a replacement is that removal followed by the record applied as a patch.
+// The record replaces the point's formatting: a member it carries is set and a member it omits is cleared;
+// `null` clears every member, which removes the override.
 Napi::Value Workbook::SetChartPoint(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_chart_point_patch_t replacement = FM_STRUCT_INIT(fm_chart_point_patch_t);
-  const bool remove_only = info[5].IsNull();
-  if (!remove_only) {
+  fm_chart_point_patch_t patch = FM_STRUCT_INIT(fm_chart_point_patch_t);
+  if (!info[5].IsNull()) {
     Napi::Object spec;
     if (!PatchObjectArg(info, 5, "setChartPoint", &spec)) {
       return env.Undefined();
     }
     CheckedSpecReader reader(env);
-    ReadPointPatch(reader, spec, replacement);
+    ReadPointPatch(reader, spec, patch);
     if (!reader.ok()) {
       return env.Undefined();
     }
   }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t object_id = ArgU32(info, 1);
-  const uint32_t plot = ArgU32(info, 2);
-  const uint32_t series = ArgU32(info, 3);
-  const uint32_t point = ArgU32(info, 4);
-  const fm_chart_point_patch_t empty = FM_STRUCT_INIT(fm_chart_point_patch_t);
-  fm_status_t rc = fm_sheet_update_chart_point(handle_, sheet, object_id, plot, series, point, &empty);
-  if (rc == 0 && !remove_only) {
-    rc = fm_sheet_update_chart_point(handle_, sheet, object_id, plot, series, point, &replacement);
-  }
-  return ValueOrThrow(env, rc, env.Undefined());
+  ClearOmittedMembers(patch);
+  return ValueOrThrow(env,
+                      fm_sheet_update_chart_point(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
+                                                  ArgU32(info, 3), ArgU32(info, 4), &patch),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {

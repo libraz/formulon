@@ -66,8 +66,10 @@ __all__ = [
     "ArrayFormula",
     "AutoFilter",
     "AutoFilterColumn",
+    "AutoFilterCondition",
     "AutoFilterDateGroup",
     "AutoFilterEval",
+    "AutoFilterInput",
     "AutoFilterSortCondition",
     "AutoFilterSortState",
     "Border",
@@ -94,6 +96,8 @@ __all__ = [
     "CfDataBarDirection",
     "CfIcon",
     "CfMatch",
+    "CfMatchBar",
+    "CfMatchIcon",
     "CfMatchKind",
     "CfRuleType",
     "CfValueObjectType",
@@ -115,8 +119,9 @@ __all__ = [
     "ChartExtendedLayout",
     "ChartFill",
     "ChartFillPatch",
+    "ChartFilter",
     "ChartGrouping",
-    "ChartInsertKind",
+    "ChartInsertInput",
     "ChartLabelPosition",
     "ChartLabels",
     "ChartLabelsPatch",
@@ -141,6 +146,7 @@ __all__ = [
     "ChartSeriesPatch",
     "ChartSeriesRanges",
     "ChartSource",
+    "ChartSourceInput",
     "ChartSourceKind",
     "ChartTickLabelPosition",
     "ChartTitle",
@@ -231,7 +237,11 @@ __all__ = [
     "PhoneticAlignment",
     "PhoneticType",
     "PictureInput",
+    "PivotDateGroupInput",
     "PivotStyleOptions",
+    "PivotWorksheetSourceInput",
+    "PrintTitlesInput",
+    "ProtectedRangeInput",
     "RowBreak",
     "PageLayout",
     "PageMargins",
@@ -297,6 +307,7 @@ __all__ = [
     "SheetRect",
     "SheetRef",
     "SheetSelection",
+    "SheetSelectionInput",
     "SheetView",
     "SheetViewMode",
     "SheetVisibility",
@@ -310,9 +321,12 @@ __all__ = [
     "Sparkline",
     "SparklineAxisType",
     "SparklineGroup",
+    "SparklineGroupInput",
+    "SparklineInput",
     "SparklineType",
     "Spill",
     "TableColumn",
+    "TableColumnTotalsInput",
     "TableInput",
     "TableProperties",
     "TableStyle",
@@ -322,6 +336,7 @@ __all__ = [
     "TableStyleOptions",
     "TableTotalsRowFunction",
     "ThemeColors",
+    "ThemeColorsInput",
     "ThemeFonts",
     "ThemeScriptFont",
     "ThemeSource",
@@ -341,6 +356,7 @@ __all__ = [
     "Workbook",
     "WorkbookFormat",
     "WorkbookProtection",
+    "WorkbookProtectionInput",
 ]
 
 
@@ -681,7 +697,7 @@ class DefinedName:
     #: The formula text, with a leading ``=``.
     formula: str
     #: The 0-based index of the scope sheet; ``None`` for workbook scope.
-    local_sheet_id: Optional[int]
+    scope: Optional[int]
     #: The note Excel shows in the Name Manager; ``None`` when none.
     comment: Optional[str] = None
     #: Whether the name is hidden from the Name Manager.
@@ -701,6 +717,18 @@ class DefinedNameInput:
     scope: Optional[SheetRef] = None
     comment: Optional[str] = None
     hidden: bool = False
+
+
+def _defined_name_from(d: Dict[str, Any]) -> DefinedName:
+    """Build a :class:`DefinedName` from a decoded ``fm_defined_name_t``."""
+    local_sheet_id = d["local_sheet_id"]
+    return DefinedName(
+        name=LIB.read_cstr(d["name"]),
+        formula=LIB.read_cstr(d["formula"]),
+        scope=None if local_sheet_id < 0 else local_sheet_id,
+        comment=LIB.read_cstr(d["comment"]) or None,
+        hidden=bool(d["hidden"]),
+    )
 
 
 class TableTotalsRowFunction(IntEnum):
@@ -734,6 +762,21 @@ class TableColumn:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "totals_row_function", _enum(TableTotalsRowFunction, self.totals_row_function))
+
+
+@dataclass
+class TableColumnTotalsInput:
+    """The totals-row entry :meth:`Table.set_column_totals` writes for one column. An empty
+    ``totals_row_label`` or ``totals_row_formula``, which a read gives for none, means none. A
+    :class:`TableColumn` read back is accepted in its place; its ``name`` is ignored.
+    """
+
+    totals_row_function: TableTotalsRowFunction = TableTotalsRowFunction.NONE
+    totals_row_label: Optional[str] = None
+    totals_row_formula: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        self.totals_row_function = _enum(TableTotalsRowFunction, self.totals_row_function)
 
 
 @dataclass(frozen=True)
@@ -1867,9 +1910,9 @@ class SheetRect:
 
 @dataclass(frozen=True)
 class Hyperlink:
-    """A sheet hyperlink covering the cells of ``rect``; an attribute the link does not state is ``None``."""
+    """A sheet hyperlink covering the cells of ``range``; an attribute the link does not state is ``None``."""
 
-    rect: CellRect
+    range: CellRect
     target: Optional[str]
     location: Optional[str]
     display: Optional[str]
@@ -1893,10 +1936,10 @@ class HyperlinkInput:
 
 @dataclass(frozen=True)
 class Comment:
-    """A cell comment."""
+    """A cell comment; an omitted ``author`` is the empty string."""
 
-    author: str
     text: str
+    author: str = field(default="", kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -1977,6 +2020,20 @@ class AutoFilterDateGroup:
     grouping: DateTimeGrouping = DateTimeGrouping.YEAR
 
 
+@dataclass(frozen=True)
+class AutoFilterCondition:
+    """One custom condition of an AutoFilter column: a comparison ``operator`` and its ``value`` text.
+
+    ``operator`` is a :class:`ComparisonOperator` other than ``BETWEEN`` and ``NOT_BETWEEN``.
+    """
+
+    operator: ComparisonOperator
+    value: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "operator", _enum(ComparisonOperator, self.operator))
+
+
 @dataclass
 class AutoFilterColumn:
     """One ``<filterColumn>``; only the fields of the criterion selected by ``kind`` are read."""
@@ -1990,13 +2047,8 @@ class AutoFilterColumn:
     values: List[str] = field(default_factory=list)
     date_groups: List[AutoFilterDateGroup] = field(default_factory=list)
     custom_and: bool = False
-    custom_count: int = 0
-    #: A used condition states its operator; ``None`` (the default) in a used slot is rejected on write,
-    #: and an unused slot reads as ``None``.
-    operator1: Optional[ComparisonOperator] = None
-    value1: str = ""
-    operator2: Optional[ComparisonOperator] = None
-    value2: str = ""
+    #: One or two conditions for a ``CUSTOM`` kind, joined by AND when ``custom_and``; empty for any other kind.
+    conditions: List[AutoFilterCondition] = field(default_factory=list)
     top: bool = True
     percent: bool = False
     #: The top-10 count or percent (``val``).
@@ -2015,17 +2067,12 @@ class AutoFilterColumn:
     #: ``None`` when the icon filter names no icon.
     icon_index: Optional[int] = None
 
-    def __post_init__(self) -> None:
-        for name in ("operator1", "operator2"):
-            value = getattr(self, name)
-            object.__setattr__(self, name, None if value is None else _enum(ComparisonOperator, value))
-
 
 @dataclass
 class AutoFilterSortCondition:
     """One ``<sortCondition>`` of an AutoFilter sort state."""
 
-    ref: CellRect
+    range: CellRect
     descending: bool = False
     sort_by: SortBy = SortBy.VALUE
     custom_list: str = ""
@@ -2040,7 +2087,7 @@ class AutoFilterSortCondition:
 class AutoFilterSortState:
     """The ``<sortState>`` of an AutoFilter; ``sort_method`` is a :class:`SortMethod`."""
 
-    ref: CellRect
+    range: CellRect
     column_sort: bool = False
     case_sensitive: bool = False
     sort_method: SortMethod = SortMethod.NONE
@@ -2053,6 +2100,19 @@ class AutoFilter:
 
     range: CellRect
     columns: List[AutoFilterColumn] = field(default_factory=list)
+    sort: Optional[AutoFilterSortState] = None
+
+
+@dataclass
+class AutoFilterInput:
+    """An AutoFilter :meth:`Sheet.set_auto_filter` writes.
+
+    ``range`` is a :class:`CellRect` or an unqualified A1 range and includes the header row.
+    An :class:`AutoFilter` read back is accepted in its place.
+    """
+
+    range: Union[CellRect, str]
+    columns: Sequence[AutoFilterColumn] = ()
     sort: Optional[AutoFilterSortState] = None
 
 
@@ -2109,8 +2169,8 @@ class ThreadedComment:
     """A threaded comment: a thread opener, or a reply to the thread ``parent_id`` names."""
 
     id: str
-    row: int
-    col: int
+    #: The anchor cell.
+    cell: CellAddress
     person_id: str
     #: The local wall-clock time it was created; whole seconds. ``None`` when the comment states none.
     created: Optional[datetime.datetime]
@@ -2124,9 +2184,9 @@ class ThreadedComment:
 class ThreadedCommentInput:
     """A threaded comment :meth:`Sheet.add_threaded_comment` adds.
 
-    ``parent_id`` ``None`` opens a new thread at ``(row, col)``; otherwise
-    the comment replies to that thread, taking its anchor and ignoring
-    ``row``, ``col`` and ``done``. ``created`` is a ``datetime`` (a naive
+    ``parent_id`` ``None`` opens a new thread at ``cell`` (``A1`` when
+    omitted); otherwise the comment replies to that thread, taking its anchor
+    and ignoring ``cell`` and ``done``. ``created`` is a ``datetime`` (a naive
     local wall clock; an aware one is a ValueError) or a ``date`` (midnight);
     fractions of a second are dropped, and ``None`` states no time.
     """
@@ -2134,8 +2194,7 @@ class ThreadedCommentInput:
     id: str
     person_id: str
     text: str
-    row: int = 0
-    col: int = 0
+    cell: Union[CellAddress, str, None] = None
     created: Optional[Union[datetime.datetime, datetime.date]] = None
     parent_id: Optional[str] = None
     done: bool = False
@@ -2346,7 +2405,7 @@ class SlicerInput:
     cross_filter: Optional[SlicerCrossFilter] = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class DataTableInputCell:
     """An input cell of a data table; ``deleted`` marks one removed by a row or column delete."""
 
@@ -2365,7 +2424,7 @@ class DataTable:
     """
 
     #: The result range.
-    rect: CellRect
+    range: CellRect
     two_dimensional: bool
     row_oriented: bool
     row_input: Optional[DataTableInputCell]
@@ -2376,27 +2435,40 @@ class DataTable:
 class DataTableInput:
     """A data table :meth:`Sheet.add_data_table` creates.
 
-    ``rect`` is the result range, a :class:`CellRect` or an unqualified A1
+    ``range`` is the result range, a :class:`CellRect` or an unqualified A1
     range. ``row_input`` / ``column_input`` are the input cells that receive the
     values of the row above / the column left of the range, each a
-    :class:`DataTableInputCell`, a ``(row, col)`` pair or one A1 cell; give
-    one for a one-variable table, both for a two-variable one.
+    :class:`CellAddress`, a :class:`DataTableInputCell` read back or one A1
+    cell; give one for a one-variable table, both for a two-variable one.
     """
 
-    rect: Union[CellRect, str]
-    row_input: Union[DataTableInputCell, Tuple[int, int], str, None] = None
-    column_input: Union[DataTableInputCell, Tuple[int, int], str, None] = None
+    range: Union[CellRect, str]
+    row_input: Union[CellAddress, DataTableInputCell, str, None] = None
+    column_input: Union[CellAddress, DataTableInputCell, str, None] = None
 
 
 @dataclass(frozen=True)
 class Sparkline:
-    """One sparkline: the data ``formula`` and its single A1 ``location``.
+    """One sparkline: the data ``source`` and its single ``location`` cell.
 
-    ``formula`` is a sheet-qualified range, with a leading ``=`` on read and optional on input.
+    ``source`` is ``None`` when the stored text is not a range of a sheet of this workbook; that text is kept for
+    writing the sparkline back unchanged.
     """
 
-    formula: str
-    location: str
+    source: Optional[SheetRect]
+    location: CellAddress
+    _stored_source: Optional[str] = field(default=None, init=False, repr=False, compare=False)
+
+
+@dataclass
+class SparklineInput:
+    """One sparkline of an input: ``source`` is a :class:`SheetRect` or a sheet-qualified A1 range (an unqualified
+    one resolves on the receiving sheet) and ``location`` a :class:`CellAddress` or an A1 cell. A
+    :class:`Sparkline` read back is accepted in its place.
+    """
+
+    source: Union[SheetRect, str, None]
+    location: Union[CellAddress, str]
 
 
 class BlanksAs(IntEnum):
@@ -2412,8 +2484,8 @@ class SparklineGroup:
     """A sparkline group of a sheet's worksheet extension list.
 
     A colour with ``kind=0`` is absent; ``manual_min`` / ``manual_max`` are
-    ``None`` when the axis bound is not set. ``date_axis_ref`` is the group's
-    date range (leading ``=`` on read, optional on input), ``None`` when absent.
+    ``None`` when the axis bound is not set. ``date_axis_range`` is the group's
+    date range, ``None`` when absent or when its stored text does not parse.
     """
 
     type: SparklineType = SparklineType.LINE
@@ -2438,13 +2510,53 @@ class SparklineGroup:
     manual_min: Optional[float] = None
     manual_max: Optional[float] = None
     date_axis: bool = False
-    date_axis_ref: Optional[str] = None
+    date_axis_range: Optional[SheetRect] = None
     line_weight: float = 0.75
     empty_cells_as: BlanksAs = BlanksAs.GAP
     sparklines: List[Sparkline] = field(default_factory=list)
+    _stored_date_axis: Optional[str] = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "empty_cells_as", _enum(BlanksAs, self.empty_cells_as))
+
+
+@dataclass
+class SparklineGroupInput:
+    """A sparkline group :meth:`Sheet.add_sparkline_group` adds: every :class:`SparklineGroup` field, each
+    defaulting as a new line group does. ``sparklines`` needs at least one entry on an add and takes
+    :class:`SparklineInput` or :class:`Sparkline` items; ``date_axis_range`` is a :class:`SheetRect`, a
+    sheet-qualified A1 range or ``None``. A :class:`SparklineGroup` read back is accepted in its place.
+    """
+
+    type: SparklineType = SparklineType.LINE
+    color_series: ColorInput = field(default_factory=lambda: Color())
+    color_negative: ColorInput = field(default_factory=lambda: Color())
+    color_axis: ColorInput = field(default_factory=lambda: Color())
+    color_markers: ColorInput = field(default_factory=lambda: Color())
+    color_first: ColorInput = field(default_factory=lambda: Color())
+    color_last: ColorInput = field(default_factory=lambda: Color())
+    color_high: ColorInput = field(default_factory=lambda: Color())
+    color_low: ColorInput = field(default_factory=lambda: Color())
+    markers: bool = False
+    high: bool = False
+    low: bool = False
+    first: bool = False
+    last: bool = False
+    negative: bool = False
+    display_x_axis: bool = False
+    display_hidden: bool = False
+    min_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
+    max_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
+    manual_min: Optional[float] = None
+    manual_max: Optional[float] = None
+    date_axis: bool = False
+    date_axis_range: Union[SheetRect, str, None] = None
+    line_weight: float = 0.75
+    empty_cells_as: BlanksAs = BlanksAs.GAP
+    sparklines: Sequence[Union[SparklineInput, Sparkline]] = ()
+
+    def __post_init__(self) -> None:
+        self.empty_cells_as = _enum(BlanksAs, self.empty_cells_as)
 
 
 class ChartPlotType(IntEnum):
@@ -2481,18 +2593,6 @@ class ChartExtendedLayout(IntEnum):
     SUNBURST = 5
     TREEMAP = 6
     WATERFALL = 7
-
-
-class ChartInsertKind(IntEnum):
-    """Kinds :meth:`Sheet.add_chart` and :meth:`Chart.set_type` produce."""
-
-    COLUMN = 0
-    BAR = 1
-    LINE = 2
-    AREA = 3
-    PIE = 4
-    SCATTER = 5
-    DOUGHNUT = 6
 
 
 class ChartGrouping(IntEnum):
@@ -2781,21 +2881,67 @@ class ChartAxis:
 
 @dataclass(frozen=True)
 class ChartLegend:
-    """Legend state; ``hidden_series`` lists the ``c:idx`` of series whose legend entry is hidden."""
+    """Legend state; ``hidden_entries`` lists the ``c:idx`` of series whose legend entry is hidden."""
 
     position: ChartLegendPosition
     overlay: bool
-    hidden_series: List[int] = field(default_factory=list)
+    hidden_entries: List[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ChartSource:
     """The rectangle every series was split from and how it was split."""
 
-    range: str
+    range: SheetRect
     direction: ChartSeriesDirection
     header_row: bool
     header_column: bool
+
+
+@dataclass
+class ChartSourceInput:
+    """A chart source :meth:`Chart.set_source` takes: ``range`` is a :class:`SheetRect` or an A1 range (an
+    unqualified one resolves on the chart's sheet); ``header_row`` / ``header_column`` ``None`` follow Excel's
+    detection. A :class:`ChartSource` read back is accepted in its place.
+    """
+
+    range: Union[SheetRect, str]
+    direction: ChartSeriesDirection = ChartSeriesDirection.AUTO
+    header_row: Optional[bool] = None
+    header_column: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class ChartFilter:
+    """The series and categories a chart filter hides, as ``c:idx`` / category indices; both empty when unfiltered."""
+
+    hidden_series: List[int] = field(default_factory=list)
+    hidden_categories: List[int] = field(default_factory=list)
+
+
+@dataclass
+class ChartInsertInput:
+    """A chart :meth:`Sheet.add_chart` creates.
+
+    ``type`` is a writable :class:`ChartPlotType` (``BAR``, ``LINE``, ``AREA``, ``PIE``, ``DOUGHNUT``,
+    ``SCATTER``); ``bar_direction`` (default ``COLUMN``) applies to ``BAR`` only. ``range`` is a
+    :class:`SheetRect` or an A1 range (an unqualified one resolves on the sheet); ``header_row`` /
+    ``header_column`` ``None`` follow Excel's detection. ``title`` ``None`` is Excel's automatic title and
+    ``""`` none; ``legend`` ``None`` is no legend and the default is the bottom, Excel's default for a new
+    chart. ``placement`` reads as for :meth:`Sheet.add_picture`, except that a zero ``width_emu`` or
+    ``height_emu`` means Excel's default 360 x 216 pt frame and an omitted anchor is a two-cell anchor at A1.
+    """
+
+    type: ChartPlotType
+    range: Union[SheetRect, str]
+    bar_direction: Optional[ChartBarDirection] = None
+    grouping: ChartGrouping = ChartGrouping.CLUSTERED
+    direction: ChartSeriesDirection = ChartSeriesDirection.AUTO
+    header_row: Optional[bool] = None
+    header_column: Optional[bool] = None
+    title: Optional[str] = None
+    legend: Optional[ChartLegendPosition] = ChartLegendPosition.BOTTOM
+    placement: Optional[PictureInput] = None
 
 
 @dataclass(frozen=True)
@@ -2821,7 +2967,7 @@ class ChartProperties:
     style: Optional[int]
     plots: List[ChartPlot]
     axes: List[ChartAxis]
-    hidden_categories: List[int]
+    filter: ChartFilter
     source: Optional[ChartSource]
     #: ``c16r3:dataDisplayOptions16/dispNaAsBlank``; ``None`` when the element is absent.
     na_as_blank: Optional[bool]
@@ -2945,14 +3091,16 @@ class ChartLabelsPatch(TypedDict, total=False):
     number_format: Optional[str]
     font_color: Optional[ColorInput]
     font_size_pt: Optional[float]
+    source_linked: Optional[bool]
+    deleted: Optional[bool]
 
 
 class ChartSeriesPatch(TypedDict, total=False):
     """Series patch.
 
-    A reference is its new text or a :class:`ChartDataSource` with a reference; ``""`` removes ``name``,
-    ``categories`` or ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on ``marker``
-    or ``labels`` removes it.
+    An input is its new reference text or a :class:`ChartDataSource` (a reference, literal points, or none);
+    ``None`` removes ``name``, ``categories`` or ``x`` (it is rejected on ``values``, ``y`` and ``size``) and
+    on ``marker`` or ``labels`` removes it.
     """
 
     name: Union[ChartDataSource, str, None]
@@ -2990,7 +3138,7 @@ class ChartSeriesInput:
 
 
 class ChartPointPatch(TypedDict, total=False):
-    """Data-point patch; an empty patch (or ``None``) removes the point's formatting."""
+    """Data-point patch; an omitted key is kept, so an empty patch changes nothing. ``None`` on a key removes it."""
 
     fill: Optional[ChartFillPatch]
     line: Optional[ChartLinePatch]
@@ -3013,8 +3161,9 @@ class ChartAxisPatch(TypedDict, total=False):
     ``title`` takes the forms of :meth:`Chart.set_title`: text, or a
     :class:`ChartTitle` (``AUTO`` leaves the text to the viewer).
     ``None`` on ``title`` removes the axis title, on
-    ``log_base`` makes the axis linear and on ``tick_label_position``
-    (a :class:`ChartTickLabelPosition`) restores the default.
+    ``log_base`` makes the axis linear, on ``minor_unit`` makes the unit automatic and on
+    ``tick_label_position`` (a :class:`ChartTickLabelPosition`) restores the default;
+    ``minor_gridlines``, ``position`` and ``source_linked`` reject ``None``.
     ``crosses_at`` is read when ``crosses`` is ``AT``.
     """
 
@@ -3030,6 +3179,10 @@ class ChartAxisPatch(TypedDict, total=False):
     crosses: Optional[ChartAxisCrosses]
     crosses_at: Optional[float]
     tick_label_position: Optional[ChartTickLabelPosition]
+    minor_unit: Optional[float]
+    minor_gridlines: Optional[bool]
+    position: Optional[ChartAxisPosition]
+    source_linked: Optional[bool]
 
 
 class ChartDisplayPatch(TypedDict, total=False):
@@ -3038,6 +3191,8 @@ class ChartDisplayPatch(TypedDict, total=False):
     blanks_as: Optional[BlanksAs]
     plot_visible_only: Optional[bool]
     na_as_blank: Optional[bool]
+    #: The chart style, 1..48.
+    style: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -3064,12 +3219,50 @@ class WorkbookProtection:
     revisions_spin_count: int = 0
 
 
+@dataclass
+class WorkbookProtectionInput:
+    """The ``<workbookProtection>`` :meth:`Workbook.set_workbook_protection` writes; every field defaults as in
+    :class:`WorkbookProtection`. A :class:`WorkbookProtection` read back is accepted in its place.
+    """
+
+    lock_structure: bool = False
+    lock_windows: bool = False
+    lock_revision: bool = False
+    workbook_legacy_password_hash: Optional[str] = None
+    workbook_algorithm_name: Optional[str] = None
+    workbook_hash_value: Optional[str] = None
+    workbook_salt_value: Optional[str] = None
+    workbook_spin_count: int = 0
+    revisions_legacy_password_hash: Optional[str] = None
+    revisions_algorithm_name: Optional[str] = None
+    revisions_hash_value: Optional[str] = None
+    revisions_salt_value: Optional[str] = None
+    revisions_spin_count: int = 0
+
+
 @dataclass(frozen=True)
 class ProtectedRange:
     """A sheet ``<protectedRange>`` covering the rectangles of ``ranges``."""
 
     name: str
-    ranges: List[CellRect]
+    ranges: Union[Sequence[Union[CellRect, str]], str]
+    #: The legacy 16-bit password hash (hex, ``password``); ``None`` when absent.
+    legacy_password_hash: Optional[str] = None
+    algorithm_name: str = ""
+    hash_value: str = ""
+    salt_value: str = ""
+    spin_count: int = 0
+    security_descriptor: str = ""
+
+
+@dataclass
+class ProtectedRangeInput:
+    """A protected range :meth:`Sheet.add_protected_range` adds; ``ranges`` is a :class:`CellRect` list, A1
+    strings, or one A1 string. A :class:`ProtectedRange` read back is accepted in its place.
+    """
+
+    name: str
+    ranges: Union[Sequence[Union[CellRect, str]], str]
     #: The legacy 16-bit password hash (hex, ``password``); ``None`` when absent.
     legacy_password_hash: Optional[str] = None
     algorithm_name: str = ""
@@ -3155,10 +3348,10 @@ class SheetView:
     right_to_left: bool = False
     tab_selected: bool = False
     view_mode: SheetViewMode = SheetViewMode.NORMAL
-    top_left_row: int = 0
-    top_left_col: int = 0
-    pane_top_left_row: int = 0
-    pane_top_left_col: int = 0
+    #: The top-left visible cell.
+    top_left: CellAddress = field(default_factory=lambda: CellAddress(0, 0))
+    #: The top-left cell of the scrolling pane of a frozen or split view.
+    pane_top_left: CellAddress = field(default_factory=lambda: CellAddress(0, 0))
     #: The split position of a split (unfrozen) pane, in twips.
     split_x_twips: float = 0.0
     split_y_twips: float = 0.0
@@ -3213,9 +3406,19 @@ class IterativeSettings:
 class SheetSelection:
     """The active pane's selection read back by ``get_selection``."""
 
-    active_row: int
-    active_col: int
+    active: CellAddress
     ranges: List[CellRect] = field(default_factory=list)
+
+
+@dataclass
+class SheetSelectionInput:
+    """A selection :meth:`Sheet.set_selection` writes: the ``active`` cell and the selected ``ranges`` (a
+    :class:`CellRect` list or A1 strings, or one A1 string). A :class:`SheetSelection` read back is accepted
+    in its place.
+    """
+
+    active: Union[CellAddress, str]
+    ranges: Union[Sequence[Union[CellRect, str]], str] = ()
 
 
 @dataclass(frozen=True)
@@ -3312,13 +3515,24 @@ class PrintTitles:
     columns: Optional[Span]
 
 
+@dataclass
+class PrintTitlesInput:
+    """The print titles :meth:`Sheet.set_print_titles` writes: ``rows`` and ``columns`` each a :class:`Span`,
+    a span string (``"1:2"``, ``"3"``; ``"A:B"``, ``"B"``; ``$`` allowed) or ``None`` for none. A
+    :class:`PrintTitles` read back is accepted in its place.
+    """
+
+    rows: Union[Span, str, None]
+    columns: Union[Span, str, None]
+
+
 @dataclass(frozen=True)
 class PageLayout:
     """One physical page: the cell block it carries and where it sits."""
 
     area_index: int
     #: The page's cell block.
-    rect: CellRect
+    range: CellRect
     origin_x_pt: float
     origin_y_pt: float
     width_pt: float
@@ -3495,30 +3709,47 @@ class HeaderFooter:
 
 
 @dataclass(frozen=True)
+class CfMatchBar:
+    """The data bar of a data-bar :class:`CfMatch`.
+
+    ``border`` is ``None`` for a bar without a border; ``length_pct`` and ``axis_position_pct`` are percentages.
+    """
+
+    length_pct: float
+    axis_position_pct: float
+    is_negative: bool
+    fill: Color
+    border: Optional[Color]
+    gradient: bool
+    direction: CfDataBarDirection = CfDataBarDirection.CONTEXT
+
+
+@dataclass(frozen=True)
+class CfMatchIcon:
+    """The icon of an icon-set :class:`CfMatch`: its set and the 0-based icon ``index`` within it."""
+
+    set_name: IconSetName
+    index: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "set_name", _enum(IconSetName, self.set_name))
+
+
+@dataclass(frozen=True)
 class CfMatch:
     """A resolved conditional-format match for one cell.
 
-    Active fields depend on ``kind``; the rest carry default-zero values.
+    Which members are set depends on ``kind``: ``dxf_index`` (``None`` when the rule names no differential
+    format) for a format match, ``color`` for a colour scale, ``bar`` for a data bar, ``icon`` for an icon set.
+    The others are ``None``.
     """
 
     kind: CfMatchKind
     priority: int
-    dxf_index_engaged: bool
-    dxf_index: int
-    color: Color
-    bar_length_pct: float
-    bar_axis_position_pct: float
-    bar_is_negative: bool
-    bar_fill: Color
-    bar_border_engaged: bool
-    bar_border: Color
-    bar_gradient: bool
-    icon_set_name: IconSetName
-    icon_index: int
-    bar_direction: CfDataBarDirection = CfDataBarDirection.CONTEXT
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "icon_set_name", _enum(IconSetName, self.icon_set_name))
+    dxf_index: Optional[int] = None
+    color: Optional[Color] = None
+    bar: Optional[CfMatchBar] = None
+    icon: Optional[CfMatchIcon] = None
 
 
 @dataclass(frozen=True)
@@ -3705,23 +3936,26 @@ class Spill:
     blocked: bool
     #: The region including its anchor (for a blocked anchor, the footprint it attempted); ``None`` when the
     #: cell is neither part of a spill nor a blocked anchor.
-    rect: Optional[CellRect]
+    range: Optional[CellRect]
 
 
 @dataclass(frozen=True)
 class ParsedReference:
-    """A parsed reference: the rectangle ``rect`` and its sheet qualifier (``None`` when unqualified)."""
+    """A parsed reference: the rectangle ``range`` and its sheet qualifier (``None`` when unqualified)."""
 
     sheet_name: Optional[str]
-    rect: CellRect
+    range: CellRect
 
 
 @dataclass(frozen=True)
 class ArrayFormula:
-    """A legacy array (CSE) formula: the block it fills and its stored text."""
+    """A legacy array (CSE) formula: the block it fills and its stored text.
+
+    As the argument of :meth:`Sheet.set_array_formula`, ``range`` also takes an unqualified A1 range.
+    """
 
     #: The block; its top-left cell holds the formula.
-    rect: CellRect
+    range: Union[CellRect, str]
     formula: str
 
 
@@ -3826,29 +4060,20 @@ class CellXf:
 class CellXfInput:
     """An ``<xf>`` record :meth:`WorkbookOoxml.add_cell_xf` and :meth:`WorkbookOoxml.add_cell_style_xf` write.
 
-    A ``has_*`` flag left ``None`` is inferred: ``has_horizontal``,
-    ``has_vertical``, ``has_wrap_text`` and ``has_alignment`` read true
-    (their values are always supplied), ``has_justify_last_line`` follows
-    ``justify_last_line``, and ``has_protection`` is true when ``locked`` or
-    ``hidden`` is given. An optional attribute left ``None`` is not written;
-    without ``<protection>`` a cell is locked and not hidden. ``style_xf_index``
-    names the ``<cellStyleXfs>`` entry the format inherits from
-    (``add_cell_xf`` only).
+    An optional attribute left ``None`` is not written: ``<alignment>`` is written when any alignment
+    attribute is given and ``<protection>`` when ``locked`` or ``hidden`` is; without ``<protection>`` a cell is
+    locked and not hidden. A :class:`CellXf` read back is accepted in its place. ``style_xf_index`` names the
+    ``<cellStyleXfs>`` entry the format inherits from (``add_cell_xf`` only).
     """
 
     font_index: int
     fill_index: int
     border_index: int
     num_fmt_id: int
-    horizontal: HorizontalAlign
-    vertical: VerticalAlign
-    wrap_text: bool
+    horizontal: Optional[HorizontalAlign] = None
+    vertical: Optional[VerticalAlign] = None
+    wrap_text: Optional[bool] = None
     justify_last_line: Optional[bool] = None
-    has_alignment: Optional[bool] = None
-    has_horizontal: Optional[bool] = None
-    has_vertical: Optional[bool] = None
-    has_wrap_text: Optional[bool] = None
-    has_justify_last_line: Optional[bool] = None
     apply_number_format: bool = False
     apply_font: bool = False
     apply_fill: bool = False
@@ -3856,7 +4081,6 @@ class CellXfInput:
     apply_alignment: bool = False
     apply_protection: bool = False
     quote_prefix: bool = False
-    has_protection: Optional[bool] = None
     locked: Optional[bool] = None
     hidden: Optional[bool] = None
     #: 0..180, or 255 for vertical text.
@@ -3961,7 +4185,7 @@ class GradientStop:
     color: Color = field(default_factory=Color)
 
 
-@dataclass
+@dataclass(frozen=True)
 class GradientFill:
     """A ``<gradientFill>``.
 
@@ -4076,8 +4300,8 @@ ColorInput = Union[str, Color]
 class FontPatch(TypedDict, total=False):
     """The font keys of :meth:`Sheet.update_cell_format`; an omitted key keeps its value.
 
-    ``None`` clears ``size_pt``, ``bold``, ``italic`` or ``strike`` (the element
-    is removed and reads back ``None``).
+    ``None`` clears ``size_pt``, ``bold``, ``italic``, ``strike``, ``outline``, ``shadow``,
+    ``condense``, ``extend``, ``family`` or ``charset`` (the element is removed and reads back ``None``).
     """
 
     name: str
@@ -4086,8 +4310,15 @@ class FontPatch(TypedDict, total=False):
     bold: Optional[bool]
     italic: Optional[bool]
     strike: Optional[bool]
+    outline: Optional[bool]
+    shadow: Optional[bool]
+    condense: Optional[bool]
+    extend: Optional[bool]
     underline: UnderlineStyle
     vert_align: FontVerticalAlign
+    family: Optional[FontFamily]
+    charset: Optional[int]
+    scheme: FontScheme
     color: ColorInput
 
 
@@ -4102,6 +4333,8 @@ class FillPatch(TypedDict, total=False):
     pattern: FillPattern
     foreground: ColorInput
     background: ColorInput
+    #: ``None`` drops the gradient.
+    gradient: Optional[GradientFill]
 
 
 class BorderSidePatch(TypedDict, total=False):
@@ -4446,10 +4679,10 @@ class CellStyle:
 class ThemeFonts:
     """The theme's major (heading) and minor (body) typefaces."""
 
-    major_latin: str = ""
-    major_east_asian: str = ""
-    minor_latin: str = ""
-    minor_east_asian: str = ""
+    major_latin: str
+    major_east_asian: str
+    minor_latin: str
+    minor_east_asian: str
 
 
 @dataclass(frozen=True)
@@ -4476,6 +4709,16 @@ class ThemeColors:
 
     source: ThemeSource
     colors: List[int]
+
+
+@dataclass
+class ThemeColorsInput:
+    """The 12 scheme colours :meth:`Workbook.set_theme_colors` writes, as ``0xFFRRGGBB`` values in
+    ``a:clrScheme`` order (alpha ignored). A :class:`ThemeColors` read back is accepted in its place; its
+    ``source`` is ignored.
+    """
+
+    colors: Sequence[int]
 
 
 @dataclass(frozen=True)
@@ -4538,17 +4781,50 @@ class PivotLayout:
     """The projected rectangular layout of a PivotTable."""
 
     #: The rectangle the layout covers in absolute sheet coordinates; ``None`` when it spans no cell.
-    rect: Optional[CellRect]
+    range: Optional[CellRect]
     cells: List[PivotCell]
 
 
 @dataclass(frozen=True)
 class PivotWorksheetSource:
-    """Optional worksheet-source metadata for a pivot cache."""
+    """A pivot cache's worksheet source, as :meth:`PivotCache.get_worksheet_source` reads it.
 
-    ref: Optional[str] = None
-    sheet: Optional[str] = None
+    ``range`` is ``None`` when the cache names no range or its sheet is not a sheet of this workbook; ``name``
+    is the defined name or table the source reads, ``None`` when absent.
+    """
+
+    range: Optional[SheetRect] = None
     name: Optional[str] = None
+
+
+@dataclass
+class PivotWorksheetSourceInput:
+    """A pivot cache's worksheet source for :meth:`PivotCache.set_worksheet_source`.
+
+    ``range`` is a :class:`SheetRect` or an A1 range; ``sheet`` qualifies an unqualified A1 ``range`` and may
+    name a sheet the workbook does not have. A qualified range or ``SheetRect`` whose sheet disagrees with
+    ``sheet`` is an ``InvalidArgumentError``. A :class:`PivotWorksheetSource` read back is accepted in its place.
+    """
+
+    range: Union[SheetRect, str, None] = None
+    sheet: Optional[SheetRef] = None
+    name: Optional[str] = None
+
+
+@dataclass
+class PivotDateGroupInput:
+    """A date grouping :meth:`Pivot.set_field_date_group` applies.
+
+    ``periods`` is an OR of :class:`PivotDatePeriod`; ``interval_days`` above 1 groups by runs of days and needs
+    ``periods`` to be ``DAYS`` alone. ``start`` / ``end`` are a ``date`` or ``datetime`` (a naive local wall
+    clock); ``None`` takes the field's first value and its last.
+    """
+
+    periods: PivotDatePeriod
+    calendar: PivotCalendar = PivotCalendar.GREGORIAN
+    interval_days: int = 1
+    start: Optional[Union[datetime.datetime, datetime.date]] = None
+    end: Optional[Union[datetime.datetime, datetime.date]] = None
 
 
 @dataclass
@@ -4595,8 +4871,8 @@ class PivotFieldInput:
     """
 
     source_name: str
+    axis: PivotAxis
     custom_name: str = ""
-    axis: PivotAxis = PivotAxis.ROW
     subtotal_top: bool = True
     number_format: str = ""
 
@@ -4633,6 +4909,8 @@ class PivotField:
     insert_blank_row: bool = False
     fill_down_labels: bool = False
     show_all: bool = False
+    #: True only when every item and the field's expand marker are expanded.
+    show_detail: bool = True
 
 
 @dataclass(frozen=True)
@@ -4752,7 +5030,7 @@ class PivotDataFieldInput:
     show_as_base_item: Optional[int] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PivotFilterInput:
     """Argument shape for :meth:`Pivot.add_filter`.
 
@@ -4822,7 +5100,7 @@ class PivotDataField:
     show_as_base_item: Optional[int]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PivotFilter:
     """One stored filter of a pivot, as :meth:`Pivot.list_filters` reads it.
 
@@ -4884,6 +5162,201 @@ def _decode_pivot_filter_operand(d: Dict[str, object], name: str) -> Optional[Un
     return None
 
 
+_PIVOT_FIELD_PATCH_SPEC = (
+    ("custom_name", "custom_name", "str"),
+    ("number_format", "number_format", "str"),
+    ("default_subtotal", "default_subtotal", "bool"),
+    ("insert_blank_row", "insert_blank_row", "bool"),
+    ("fill_down_labels", "fill_down_labels", "bool"),
+    ("show_all", "show_all", "bool"),
+    ("subtotal_top", "subtotal_top", "bool"),
+    ("sort_order", "sort_order", "i32"),
+    ("sort_by_field", "sort_by_field", "str"),
+    ("show_detail", "show_detail", "bool"),
+)
+_PIVOT_FIELD_PATCH_CLEARABLE = ("custom_name", "number_format", "sort_by_field")
+_PIVOT_ITEM_PATCH_SPEC = (
+    ("visible", "visible", "bool"),
+    ("show_detail", "show_detail", "bool"),
+    ("caption", "caption", "str"),
+)
+_PIVOT_ITEM_PATCH_CLEARABLE = ("caption",)
+_PIVOT_STYLE_PATCH_SPEC = (
+    ("style_name", "style_name", "str"),
+    ("show_row_headers", "show_row_headers", "bool"),
+    ("show_column_headers", "show_column_headers", "bool"),
+    ("show_row_stripes", "show_row_stripes", "bool"),
+    ("show_column_stripes", "show_column_stripes", "bool"),
+    ("show_last_column", "show_last_column", "bool"),
+)
+_PIVOT_STYLE_PATCH_CLEARABLE = ("style_name",)
+
+
+def _encode_clearable_patch(
+    spec: Sequence, clearable: Sequence[str], patch: Mapping, what: str, scope: _ArgScope
+) -> Dict[str, object]:
+    """Encode a flat patch: a key left out keeps, ``None`` clears a ``clearable`` key, else is a ``TypeError``."""
+    for key, value in patch.items():
+        if value is None and key not in clearable:
+            raise TypeError(f"formulon: {key} cannot be None in a {what}")
+    return _encode_patch(spec, patch, (), what, scope)
+
+
+def _pack_pivot_patch(
+    layout: S.Struct, spec: Sequence, clearable: Sequence[str], patch: Mapping, what: str, scope: _ArgScope
+) -> int:
+    """Pack a pivot field, item or style patch into a fresh struct and return its pointer."""
+    fields = _encode_clearable_patch(spec, clearable, patch, what, scope)
+    ptr = scope.struct(layout)
+    layout.pack(LIB, ptr, fields)
+    return ptr
+
+
+def _pack_pivot_field_patch(patch: Mapping, scope: _ArgScope) -> int:
+    """An ``fm_pivot_field_patch_t`` for ``fm_sheet_update_pivot_field``."""
+    return _pack_pivot_patch(
+        S.PIVOT_FIELD_PATCH, _PIVOT_FIELD_PATCH_SPEC, _PIVOT_FIELD_PATCH_CLEARABLE, patch, "pivot field patch", scope
+    )
+
+
+def _pack_pivot_item_patch(patch: Mapping, scope: _ArgScope) -> int:
+    """An ``fm_pivot_item_patch_t`` for ``fm_sheet_update_pivot_field_item``."""
+    return _pack_pivot_patch(
+        S.PIVOT_ITEM_PATCH, _PIVOT_ITEM_PATCH_SPEC, _PIVOT_ITEM_PATCH_CLEARABLE, patch, "pivot item patch", scope
+    )
+
+
+def _pack_pivot_style_options_patch(patch: Mapping, scope: _ArgScope) -> int:
+    """An ``fm_pivot_style_options_patch_t`` for ``fm_sheet_update_pivot_style_options``."""
+    return _pack_pivot_patch(
+        S.PIVOT_STYLE_OPTIONS_PATCH,
+        _PIVOT_STYLE_PATCH_SPEC,
+        _PIVOT_STYLE_PATCH_CLEARABLE,
+        patch,
+        "pivot style options patch",
+        scope,
+    )
+
+
+def _pack_pivot_spec(scope: _ArgScope, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> int:
+    """An ``fm_pivot_spec_t`` for ``fm_sheet_add_pivot``."""
+    ptr = scope.struct(S.PIVOT_SPEC)
+    S.PIVOT_SPEC.pack(
+        LIB,
+        ptr,
+        {
+            "name": scope.cstr(name),
+            "cache_id": _uint(cache_id, "cache_id"),
+            "anchor_row": _uint(anchor_row, "anchor_row"),
+            "anchor_col": _uint(anchor_col, "anchor_col"),
+        },
+    )
+    return ptr
+
+
+def _pack_pivot_date_group(scope: _ArgScope, group: PivotDateGroupInput, *, date1904: bool) -> int:
+    """An ``fm_pivot_date_group_spec_t`` for ``fm_sheet_set_pivot_field_date_group``.
+
+    ``date1904`` is the workbook's date system, which turns ``start`` / ``end`` into serials.
+    """
+    if not isinstance(group, PivotDateGroupInput):
+        raise TypeError(f"formulon: expected a PivotDateGroupInput, got {type(group).__name__}")
+    from ._inputs import civil_datetime, date_serial
+
+    fields: Dict[str, object] = {
+        "periods": _uint(group.periods, "periods"),
+        "calendar": _sint(group.calendar, "calendar"),
+        "interval_days": _uint(group.interval_days, "interval_days"),
+    }
+    for name, bound in (("start", group.start), ("end", group.end)):
+        if bound is not None:
+            fields["has_" + name] = 1
+            fields[name] = float(date_serial(civil_datetime(bound, name), date1904=date1904)[0])
+    ptr = scope.struct(S.PIVOT_DATE_GROUP_SPEC)
+    S.PIVOT_DATE_GROUP_SPEC.pack(LIB, ptr, fields)
+    return ptr
+
+
+def _pivot_worksheet_source_from(workbook: Workbook, d: Dict[str, Any]) -> PivotWorksheetSource:
+    """Build a :class:`PivotWorksheetSource` from a decoded ``fm_pivot_worksheet_source_t``."""
+    ref, sheet = LIB.read_cstr(d["ref"]), LIB.read_cstr(d["sheet"])
+    source_range = None
+    index = workbook._find_sheet(sheet) if sheet else None
+    if ref and index is not None:
+        try:
+            source_range = SheetRect(sheet=index, rect=workbook.parse_reference(ref).range)
+        except FormulonError:
+            source_range = None
+    return PivotWorksheetSource(range=source_range, name=LIB.read_cstr(d["name"]) or None)
+
+
+def _pack_pivot_worksheet_source(
+    scope: _ArgScope, workbook: Workbook, source: Union[PivotWorksheetSourceInput, PivotWorksheetSource]
+) -> int:
+    """An ``fm_pivot_worksheet_source_t`` for ``fm_workbook_set_pivot_cache_worksheet_source``.
+
+    A ``None`` source clears the element: the caller passes a NULL pointer and does not call this.
+
+    The range's sheet is written as a name and the A1 text unqualified, as the element stores them.
+    """
+    if not isinstance(source, (PivotWorksheetSourceInput, PivotWorksheetSource)):
+        raise TypeError(f"formulon: expected a PivotWorksheetSourceInput, got {type(source).__name__}")
+    given = getattr(source, "sheet", None)
+    given_name = None if given is None else (given if isinstance(given, str) else workbook.sheet(given).name)
+    value = source.range
+    ref: Optional[str] = None
+    sheet_name = given_name
+    if isinstance(value, SheetRect):
+        ref = workbook.format_reference(value.rect)
+        sheet_name = workbook._sheet_name(value.sheet)
+    elif isinstance(value, str):
+        parsed = workbook.parse_reference(value)
+        ref = workbook.format_reference(parsed.range)
+        if parsed.sheet_name is not None:
+            sheet_name = parsed.sheet_name
+    elif value is not None:
+        raise TypeError(f"formulon: range must be a SheetRect, an A1 string or None, got {type(value).__name__}")
+    if given_name is not None and sheet_name is not None and given_name.casefold() != sheet_name.casefold():
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT,
+            _diagnostic_override=("the range names a different sheet than sheet", f"sheet={given_name}"),
+        )
+    ptr = scope.struct(S.PIVOT_WORKSHEET_SOURCE)
+    S.PIVOT_WORKSHEET_SOURCE.pack(
+        LIB,
+        ptr,
+        {
+            "ref": scope.nonempty_cstr(ref),
+            "sheet": scope.nonempty_cstr(sheet_name),
+            "name": scope.nonempty_cstr(source.name),
+        },
+    )
+    return ptr
+
+
+def _cf_match_from(d: Dict[str, Any]) -> CfMatch:
+    """Build a :class:`CfMatch` from a decoded ``fm_cf_match_t``, keeping the members of its ``kind`` only."""
+    kind = _enum(CfMatchKind, d["kind"])
+    match = {"kind": kind, "priority": d["priority"]}
+    if kind == CfMatchKind.DIFFERENTIAL_FORMAT:
+        match["dxf_index"] = d["dxf_index"] if d["dxf_index_engaged"] else None
+    elif kind == CfMatchKind.COLOR_SCALE:
+        match["color"] = _color_from(d["color"])
+    elif kind == CfMatchKind.DATA_BAR:
+        match["bar"] = CfMatchBar(
+            length_pct=d["bar_length_pct"],
+            axis_position_pct=d["bar_axis_position_pct"],
+            is_negative=bool(d["bar_is_negative"]),
+            fill=_color_from(d["bar_fill"]),
+            border=_color_from(d["bar_border"]) if d["bar_border_engaged"] else None,
+            gradient=bool(d["bar_gradient"]),
+            direction=_enum(CfDataBarDirection, d["bar_direction"]),
+        )
+    else:
+        match["icon"] = CfMatchIcon(set_name=d["icon_set_name"], index=d["icon_index"])
+    return CfMatch(**match)  # type: ignore[arg-type]
+
+
 def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
     """Project a :class:`CellXfInput` onto the cell XF struct field map.
 
@@ -4891,26 +5364,38 @@ def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
     writer, which pack the same struct, so the presence-flag defaulting
     lives in one place.
     """
-    if not isinstance(record, CellXfInput):
+    if not isinstance(record, (CellXfInput, CellXf)):
         raise TypeError(f"formulon: expected a CellXfInput, got {type(record).__name__}")
-
-    def stated(flag: Optional[bool], inferred: bool) -> int:  # noqa: FBT001 -- private presence-flag encoder
-        return 1 if (inferred if flag is None else flag) else 0
 
     return {
         "font_index": _uint(record.font_index, "font_index"),
         "fill_index": _uint(record.fill_index, "fill_index"),
         "border_index": _uint(record.border_index, "border_index"),
         "num_fmt_id": _uint(record.num_fmt_id, "num_fmt_id", 16),
-        "horizontal": _uint(record.horizontal, "horizontal", 8),
-        "has_horizontal": stated(record.has_horizontal, True),
-        "vertical": _uint(record.vertical, "vertical", 8),
-        "has_vertical": stated(record.has_vertical, True),
+        "horizontal": _uint(record.horizontal or 0, "horizontal", 8),
+        "has_horizontal": 0 if record.horizontal is None else 1,
+        "vertical": _uint(record.vertical or 0, "vertical", 8),
+        "has_vertical": 0 if record.vertical is None else 1,
         "wrap_text": 1 if record.wrap_text else 0,
-        "has_wrap_text": stated(record.has_wrap_text, True),
+        "has_wrap_text": 0 if record.wrap_text is None else 1,
         "justify_last_line": 1 if record.justify_last_line else 0,
-        "has_justify_last_line": stated(record.has_justify_last_line, record.justify_last_line is not None),
-        "has_alignment": stated(record.has_alignment, True),
+        "has_justify_last_line": 0 if record.justify_last_line is None else 1,
+        "has_alignment": 1
+        if any(
+            value is not None
+            for value in (
+                record.horizontal,
+                record.vertical,
+                record.wrap_text,
+                record.justify_last_line,
+                record.text_rotation,
+                record.indent,
+                record.relative_indent,
+                record.shrink_to_fit,
+                record.reading_order,
+            )
+        )
+        else 0,
         "style_xf_index": _uint(record.style_xf_index, "style_xf_index"),
         "has_text_rotation": 1 if record.text_rotation is not None else 0,
         "text_rotation": _uint(record.text_rotation or 0, "text_rotation"),
@@ -4929,7 +5414,7 @@ def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
         "apply_alignment": 1 if record.apply_alignment else 0,
         "apply_protection": 1 if record.apply_protection else 0,
         "quote_prefix": 1 if record.quote_prefix else 0,
-        "has_protection": stated(record.has_protection, record.locked is not None or record.hidden is not None),
+        "has_protection": 1 if record.locked is not None or record.hidden is not None else 0,
         "locked": 0 if record.locked is False else 1,
         "hidden": 1 if record.hidden else 0,
     }
@@ -5280,8 +5765,61 @@ _SPARKLINE_COLORS = (
 )
 
 
-def _pack_sparkline_group(scope: _ArgScope, group: SparklineGroup) -> int:
-    """Build a sparkline group input struct from ``group`` (``sparklines`` is passed separately)."""
+def _qualified_range_text(
+    workbook: Workbook, value: Union[SheetRect, str, None], sheet: int, label: str, stored: Optional[str] = None
+) -> Optional[str]:
+    """The sheet-qualified A1 text of a ``SheetRect`` or A1 string for the engine; ``None`` is ``stored`` (or ``None``).
+
+    An unqualified string resolves on sheet index ``sheet``.
+    """
+    if value is None:
+        return stored
+    from ._inputs import sheet_rect
+
+    resolved = sheet_rect(workbook, value, sheet, label)
+    return workbook.format_reference(resolved.rect, sheet_name=workbook._sheet_name(resolved.sheet))
+
+
+def _parse_qualified_range(workbook: Workbook, text: str, sheet: int) -> Optional[SheetRect]:
+    """The :class:`SheetRect` a stored range text names (unqualified: on ``sheet``); ``None`` if it does not resolve."""
+    try:
+        ref = workbook.parse_reference(text.lstrip("="))
+    except FormulonError:
+        return None
+    if ref.sheet_name is None:
+        return SheetRect(sheet=sheet, rect=ref.range)
+    index = workbook._find_sheet(ref.sheet_name)
+    return None if index is None else SheetRect(sheet=index, rect=ref.range)
+
+
+def _decode_sparkline(workbook: Workbook, sheet: int, d: Dict[str, Any]) -> Sparkline:
+    """Build a :class:`Sparkline` from a decoded ``fm_sparkline_t``."""
+    text = LIB.read_cstr(d["formula"])
+    location = workbook.parse_reference(LIB.read_cstr(d["location"]))
+    item = Sparkline(
+        source=_parse_qualified_range(workbook, text, sheet),
+        location=CellAddress(row=location.range.first_row, col=location.range.first_col),
+    )
+    if item.source is None:
+        object.__setattr__(item, "_stored_source", text)
+    return item
+
+
+def _decode_sparkline_date_axis(workbook: Workbook, sheet: int, text: str) -> Tuple[Optional[SheetRect], Optional[str]]:
+    """``(range, stored text)`` of a group's date axis; the text is kept only when it does not parse."""
+    if not text:
+        return None, None
+    parsed = _parse_qualified_range(workbook, text, sheet)
+    return parsed, (None if parsed is not None else text)
+
+
+def _pack_sparkline_group(
+    scope: _ArgScope, group: Union[SparklineGroup, SparklineGroupInput], workbook: Workbook, sheet: int
+) -> int:
+    """Build a sparkline group input struct from ``group`` (``sparklines`` is passed separately).
+
+    ``sheet`` is the index of the receiving sheet, which resolves an unqualified ``date_axis_range``.
+    """
     ptr = scope.struct_array(S.SPARKLINE_GROUP, 1)
     S.SPARKLINE_GROUP.pack(
         LIB,
@@ -5309,17 +5847,40 @@ def _pack_sparkline_group(scope: _ArgScope, group: SparklineGroup) -> int:
     )
     for key in _SPARKLINE_COLORS:
         _pack_color(ptr + S.SPARKLINE_GROUP.offsets[key][1], getattr(group, key), f"SparklineGroup.{key}")
-    S.write_str_field(LIB, ptr, S.SPARKLINE_GROUP, "date_axis_ref", group.date_axis_ref, scope)
+    date_axis = _qualified_range_text(
+        workbook,
+        group.date_axis_range,
+        sheet,
+        "SparklineGroup.date_axis_range",
+        getattr(group, "_stored_date_axis", None),
+    )
+    S.write_str_field(LIB, ptr, S.SPARKLINE_GROUP, "date_axis_ref", date_axis, scope)
     return ptr
 
 
-def _pack_sparklines(scope: _ArgScope, sparklines: Sequence[Sparkline]) -> int:
-    """Build a sparkline struct array; an empty list still gets a valid block (the core rejects a zero count)."""
+def _pack_sparklines(
+    scope: _ArgScope, sparklines: Sequence[Union[SparklineInput, Sparkline]], workbook: Workbook, sheet: int
+) -> int:
+    """Build a sparkline struct array; an empty list still gets a valid block (the core rejects a zero count).
+
+    ``sheet`` is the index of the receiving sheet, which resolves an unqualified ``source``.
+    """
+    from ._inputs import _cell_address
+
     ptr = scope.struct_array(S.SPARKLINE, max(len(sparklines), 1))
     for i, item in enumerate(sparklines):
         base = ptr + i * S.SPARKLINE.size
-        S.write_str_field(LIB, base, S.SPARKLINE, "formula", item.formula, scope)
-        S.write_str_field(LIB, base, S.SPARKLINE, "location", item.location, scope)
+        source = _qualified_range_text(
+            workbook, item.source, sheet, "Sparkline.source", getattr(item, "_stored_source", None)
+        )
+        if source is None:
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT, _diagnostic_override=("a sparkline needs a source range", "")
+            )
+        location = _cell_address(workbook, item.location, "Sparkline.location")
+        location_text = workbook.format_reference(CellRect(location.row, location.col, location.row, location.col))
+        S.write_str_field(LIB, base, S.SPARKLINE, "formula", source, scope)
+        S.write_str_field(LIB, base, S.SPARKLINE, "location", location_text, scope)
     return ptr
 
 
@@ -5381,6 +5942,8 @@ _LABELS_PATCH_SPEC = (
     ("number_format", "number_format", "str"),
     ("font_color", "font_color", "color"),
     ("font_size_pt", "font_size_pt", "f64"),
+    ("source_linked", "source_linked", "bool"),
+    ("deleted", "deleted", "bool"),
 )
 _PLOT_PATCH_SPEC = (
     ("gap_width_pct", "gap_width_pct", "u32"),
@@ -5401,6 +5964,10 @@ _AXIS_PATCH_SPEC = (
     ("log_base", "log_base", "f64"),
     ("crosses", "crosses", "i32"),
     ("tick_label_position", "tick_label_position", "i32"),
+    ("minor_unit", "minor_unit", "f64"),
+    ("minor_gridlines", "minor_gridlines", "bool"),
+    ("position", "position", "i32"),
+    ("source_linked", "source_linked", "bool"),
 )
 # Patch fields whose `_op` companion drops the unit suffix of the value field.
 _PATCH_OP_PREFIX = {"font_size_pt": "font_size"}
@@ -5416,6 +5983,7 @@ _DISPLAY_PATCH_SPEC = (
     ("blanks_as", "blanks_as", "i32"),
     ("plot_visible_only", "plot_visible_only", "bool"),
     ("na_as_blank", "na_as_blank", "bool"),
+    ("style", "style", "i32"),
 )
 _SERIES_REF_KEYS = ("name", "categories", "values", "x", "y", "size")
 
@@ -5585,17 +6153,20 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxis:
     )
 
 
-def _read_chart(chart: int) -> ChartProperties:
-    """Decode an open chart handle."""
+def _read_chart(chart: int, workbook: Workbook, sheet: int) -> ChartProperties:
+    """Decode an open chart handle; ``workbook`` and ``sheet`` resolve the source range text."""
     d = _read_struct(LIB.fm_chart_get_info, S.CHART_INFO, chart)
     source = None
-    if d["source_range"]:
+    source_text = LIB.read_cstr(d["source_range"]) if d["source_range"] else ""
+    source_range = _parse_qualified_range(workbook, source_text, sheet) if source_text else None
+    if source_range is not None:
         source = ChartSource(
-            range=LIB.read_cstr(d["source_range"]),
+            range=source_range,
             direction=_enum(ChartSeriesDirection, d["source_direction"]),
             header_row=bool(d["source_header_row"]),
             header_column=bool(d["source_header_column"]),
         )
+    plots = [_read_chart_plot(chart, i) for i in range(d["plot_count"])]
     return ChartProperties(
         object_id=d["object_id"],
         name=LIB.read_cstr(d["name"]),
@@ -5610,7 +6181,7 @@ def _read_chart(chart: int) -> ChartProperties:
         else ChartLegend(
             position=_enum(ChartLegendPosition, d["legend_position"]),
             overlay=bool(d["legend_overlay"]),
-            hidden_series=[
+            hidden_entries=[
                 _read_count(LIB.fm_chart_get_legend_hidden_at, chart, _uint(i, "idx"))
                 for i in range(d["legend_hidden_count"])
             ],
@@ -5620,12 +6191,15 @@ def _read_chart(chart: int) -> ChartProperties:
         na_as_blank=_tri(d["na_as_blank"]),
         date1904=bool(d["date1904"]),
         style=d["style"] if d["has_style"] else None,
-        plots=[_read_chart_plot(chart, i) for i in range(d["plot_count"])],
+        plots=plots,
         axes=[_read_chart_axis(chart, i) for i in range(d["axis_count"])],
-        hidden_categories=[
-            _read_count(LIB.fm_chart_get_hidden_category_at, chart, _uint(i, "idx"))
-            for i in range(d["hidden_category_count"])
-        ],
+        filter=ChartFilter(
+            hidden_series=[series.index for plot in plots for series in plot.series if series.filtered],
+            hidden_categories=[
+                _read_count(LIB.fm_chart_get_hidden_category_at, chart, _uint(i, "idx"))
+                for i in range(d["hidden_category_count"])
+            ],
+        ),
         source=source,
     )
 
@@ -5800,22 +6374,49 @@ def _encode_optional_patch(out: Dict[str, object], key: str, patch: Mapping, enc
         out[key] = encode(patch[key], scope)
 
 
-def _source_text(value: object, key: str) -> object:
-    """The reference text of a series input; a :class:`ChartDataSource` reads as its formula."""
+def _data_source_spec(value: object, key: str, scope: _ArgScope) -> Dict[str, object]:
+    """Encode a series input as an ``fm_chart_data_source_spec_t``: reference text, or a :class:`ChartDataSource`."""
+    if isinstance(value, str):
+        return {"kind": ChartSourceKind.REF, "formula": scope.cstr(value)}
     if not isinstance(value, ChartDataSource):
-        return value
-    if value.kind == ChartSourceKind.LITERAL:
-        raise TypeError(f"formulon: {key} cannot be set from a literal ChartDataSource")
-    return value.formula
+        raise TypeError(f"formulon: {key} must be a str, a ChartDataSource or None, got {type(value).__name__}")
+    kind = _enum(ChartSourceKind, value.kind)
+    if kind == ChartSourceKind.REF:
+        return {"kind": int(kind), "formula": scope.cstr(value.formula)}
+    if kind == ChartSourceKind.NONE:
+        return {"kind": int(kind)}
+    points = list(value.literal)
+    array = scope.struct_array(S.CHART_LITERAL, len(points))
+    for i, point in enumerate(points):
+        is_text = isinstance(point, str)
+        if not is_text and (isinstance(point, bool) or not isinstance(point, numbers.Real)):
+            raise TypeError(f"formulon: {key} literal points must be numbers or strings, got {type(point).__name__}")
+        S.CHART_LITERAL.pack(
+            LIB,
+            array + i * S.CHART_LITERAL.size,
+            {
+                "idx": _uint(i, "idx"),
+                "is_text": 1 if is_text else 0,
+                "number": 0.0 if is_text else float(point),
+                "text": scope.cstr(point) if is_text else 0,
+            },
+        )
+    return {"kind": int(kind), "literal": array, "literal_count": len(points)}
 
 
 def _encode_series_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
     unknown = set(patch) - set(_SERIES_REF_KEYS) - {"fill", "line", "marker", "smooth", "labels"}
     if unknown:
         raise TypeError(f"formulon: unknown series patch key(s): {sorted(unknown)}")
-    out: Dict[str, object] = {
-        key: scope.cstr(_source_text(patch[key], key)) for key in _SERIES_REF_KEYS if key in patch
-    }
+    out: Dict[str, object] = {}
+    for key in _SERIES_REF_KEYS:
+        if key not in patch:
+            continue
+        if patch[key] is None:
+            out[key + "_op"] = _PATCH_CLEAR
+        else:
+            out[key + "_op"] = _PATCH_SET
+            out[key] = _data_source_spec(patch[key], key, scope)
     out["fill"] = _encode_fill_patch(patch.get("fill"), scope)
     out["line"] = _encode_line_patch(patch.get("line"), scope)
     _encode_optional_patch(out, "marker", patch, _encode_marker_patch, scope)
@@ -5827,7 +6428,16 @@ def _encode_series_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
 
 
 def _encode_point_patch(patch: Optional[Mapping], scope: _ArgScope) -> Dict[str, object]:
-    patch = patch or {}
+    """Encode a data-point patch; an empty patch keeps everything and ``None`` clears every member.
+
+    A point whose override ends empty loses its ``c:dPt``, so ``None`` is how a point override is removed.
+    """
+    if patch is None:
+        patch = {
+            "fill": {"color": None, "transparency_pct": None},
+            "line": {key: None for key in ("color", "transparency_pct", "width_pt", "dash")},
+            "marker": None,
+        }
     unknown = set(patch) - {"fill", "line", "marker"}
     if unknown:
         raise TypeError(f"formulon: unknown point patch key(s): {sorted(unknown)}")
@@ -5849,6 +6459,66 @@ def _encode_axis_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
 def _header_mode(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
     """Map an optional header flag to ``fm_tristate_t``: ``None`` is Excel's detection."""
     return _tristate_default(flag)
+
+
+def _chart_range_text(workbook: Workbook, value: Union[SheetRect, str], sheet: int, label: str) -> str:
+    """The sheet-qualified A1 text of a chart range; an unqualified string resolves on sheet index ``sheet``."""
+    text = _qualified_range_text(workbook, value, sheet, label)
+    if text is None:
+        raise TypeError(f"formulon: {label} must be a SheetRect or an A1 string")
+    return text
+
+
+def _chart_source_fields(
+    workbook: Workbook, sheet: int, source: Union[ChartSourceInput, ChartSource]
+) -> Tuple[str, int, int, int]:
+    """``(range text, direction, header_row, header_column)`` of a chart source, for ``fm_sheet_set_chart_source``.
+
+    A :class:`ChartSource` read back passes as is; its headers are explicit.
+    """
+    if not isinstance(source, (ChartSourceInput, ChartSource)):
+        raise TypeError(f"formulon: expected a ChartSourceInput, got {type(source).__name__}")
+    return (
+        _chart_range_text(workbook, source.range, sheet, "ChartSourceInput.range"),
+        _sint(_enum(ChartSeriesDirection, source.direction), "direction"),
+        _sint(_header_mode(source.header_row), "header_row"),
+        _sint(_header_mode(source.header_column), "header_column"),
+    )
+
+
+def _encode_chart_insert(
+    scope: _ArgScope, workbook: Workbook, sheet: int, insert: ChartInsertInput, placement: Dict[str, object]
+) -> int:
+    """Pack ``insert`` into an ``fm_chart_insert_t`` and return its pointer.
+
+    ``placement`` holds the ``fm_picture_insert_spec_t`` fields (name, description, anchor) the caller builds
+    from ``insert.placement``. ``bar_direction`` on a plot type other than ``BAR`` is a ``TypeError``.
+    """
+    if not isinstance(insert, ChartInsertInput):
+        raise TypeError(f"formulon: expected a ChartInsertInput, got {type(insert).__name__}")
+    plot_type = _enum(ChartPlotType, insert.type)
+    if insert.bar_direction is not None and plot_type != ChartPlotType.BAR:
+        raise TypeError(f"formulon: bar_direction applies to a BAR chart only, not {plot_type.name}")
+    ptr = scope.struct(S.CHART_INSERT)
+    S.CHART_INSERT.pack(
+        LIB,
+        ptr,
+        {
+            "type": _sint(plot_type, "type"),
+            "bar_direction": _sint(
+                ChartBarDirection.COLUMN if insert.bar_direction is None else insert.bar_direction, "bar_direction"
+            ),
+            "grouping": _sint(insert.grouping, "grouping"),
+            "source": scope.cstr(_chart_range_text(workbook, insert.range, sheet, "ChartInsertInput.range")),
+            "direction": _sint(insert.direction, "direction"),
+            "header_row": _sint(_header_mode(insert.header_row), "header_row"),
+            "header_column": _sint(_header_mode(insert.header_column), "header_column"),
+            "title": scope.opt_cstr(insert.title),
+            "legend": _sint(_nullable_enum(insert.legend, "legend"), "legend"),
+            "placement": placement,
+        },
+    )
+    return ptr
 
 
 def _id_array(values: Sequence[int], name: str, scope: _ArgScope) -> int:
@@ -5980,7 +6650,7 @@ def _cell_rect_from(d: Dict[str, int]) -> CellRect:
 
 def _hyperlink_from(d: Dict[str, Any]) -> Hyperlink:
     return Hyperlink(
-        rect=_cell_rect_from(d["rect"]),
+        range=_cell_rect_from(d["rect"]),
         target=LIB.read_cstr(d["target"]) or None,
         location=LIB.read_cstr(d["location"]) or None,
         display=LIB.read_cstr(d["display"]) or None,
@@ -6008,8 +6678,7 @@ def _format_created(value: Optional[Union[datetime.datetime, datetime.date]]) ->
 def _threaded_comment_from(d: Dict[str, Any]) -> ThreadedComment:
     return ThreadedComment(
         id=LIB.read_cstr(d["id"]),
-        row=d["row"],
-        col=d["col"],
+        cell=CellAddress(row=d["row"], col=d["col"]),
         person_id=LIB.read_cstr(d["person_id"]),
         created=_parse_created(LIB.read_cstr(d["created"])),
         text=LIB.read_cstr(d["text"]),
@@ -6165,9 +6834,6 @@ _FILTER_COLUMN_BOOLS = (
 # (record field, C field) pairs; the C struct keeps the OOXML attribute spellings.
 _FILTER_COLUMN_INTS = (
     ("kind", "kind"),
-    ("custom_count", "custom_count"),
-    ("operator1", "op1"),
-    ("operator2", "op2"),
     ("dynamic_type", "dynamic_type"),
     ("icon_set", "icon_set"),
 )
@@ -6180,8 +6846,6 @@ _FILTER_COLUMN_OPTIONAL = (
     ("icon_index", "icon_index", "has_icon_index"),
 )
 _FILTER_COLUMN_STRINGS = (
-    ("value1", "val1"),
-    ("value2", "val2"),
     ("value_iso", "val_iso"),
     ("max_value_iso", "max_val_iso"),
 )
@@ -6195,9 +6859,7 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
     for name in _FILTER_COLUMN_BOOLS:
         fields[name] = 1 if getattr(col, name) else 0
     for name, c_name in _FILTER_COLUMN_INTS:
-        value = getattr(col, name)
-        # An omitted operator packs as BETWEEN, which C rejects in a used condition slot.
-        fields[c_name] = _sint(0 if value is None else value, name)
+        fields[c_name] = _sint(getattr(col, name), name)
     for name, c_name in _FILTER_COLUMN_DOUBLES:
         fields[c_name] = float(getattr(col, name))
     for name, c_name, flag in _FILTER_COLUMN_OPTIONAL:
@@ -6211,6 +6873,7 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
             fields[c_name] = float(value)
     fields["value_count"] = _uint(len(col.values), "value_count")
     fields["date_group_count"] = _uint(len(col.date_groups), "date_group_count")
+    fields["condition_count"] = _uint(len(col.conditions), "condition_count")
     S.FILTER_COLUMN.pack(LIB, ptr, fields)
     for name, c_name in _FILTER_COLUMN_STRINGS:
         S.write_str_field(LIB, ptr, S.FILTER_COLUMN, c_name, getattr(col, name), scope)
@@ -6220,6 +6883,18 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
             text_ptr = scope.cstr(text)
             LIB.write_bytes(arr + 4 * i, struct.pack("<I", text_ptr))
         LIB.write_bytes(ptr + S.FILTER_COLUMN.offsets["values"][1], struct.pack("<I", arr))
+    if col.conditions:
+        base = scope.struct_array(S.FILTER_CONDITION, len(col.conditions))
+        for i, condition in enumerate(col.conditions):
+            S.FILTER_CONDITION.pack(
+                LIB,
+                base + i * S.FILTER_CONDITION.size,
+                {
+                    "op": _sint(_enum(ComparisonOperator, condition.operator), "operator"),
+                    "value": scope.cstr(condition.value),
+                },
+            )
+        LIB.write_bytes(ptr + S.FILTER_COLUMN.offsets["conditions"][1], struct.pack("<I", base))
     if col.date_groups:
         base = scope.struct_array(S.DATE_GROUP_ITEM, len(col.date_groups))
         for i, g in enumerate(col.date_groups):
@@ -6253,7 +6928,7 @@ def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, scope: _ArgSco
             "has_icon_index": 0 if cond.icon_index is None else 1,
         },
     )
-    _pack_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1], cond.ref)
+    _pack_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1], cond.range)
     S.write_str_field(LIB, ptr, S.SORT_CONDITION, "custom_list", cond.custom_list, scope)
 
 
@@ -6285,7 +6960,7 @@ def _pack_auto_filter(ptr: int, af: AutoFilter, scope: _ArgScope) -> None:
     }
     for name, value in fields.items():
         LIB.write_bytes(ptr + off[name][1], struct.pack("<i" if name != "condition_count" else "<I", value))
-    _pack_cell_rect_at(ptr + off["sort_ref"][1], sort.ref)
+    _pack_cell_rect_at(ptr + off["sort_ref"][1], sort.range)
     if sort.conditions:
         base = scope.struct_array(S.SORT_CONDITION, len(sort.conditions))
         for i, cond in enumerate(sort.conditions):
@@ -6305,21 +6980,29 @@ def _decode_filter_column(ptr: int) -> AutoFilterColumn:
         groups.append(AutoFilterDateGroup(**g))
     kwargs: Dict[str, object] = {name: bool(d[name]) for name in _FILTER_COLUMN_BOOLS}
     kwargs.update({name: d[c_name] for name, c_name in _FILTER_COLUMN_INTS + _FILTER_COLUMN_DOUBLES})
-    used = d["custom_count"] if d["kind"] == FilterKind.CUSTOM else 0
-    for slot, name in enumerate(("operator1", "operator2"), start=1):
-        if slot > used:
-            kwargs[name] = None
+    conditions = [
+        AutoFilterCondition(operator=_enum(ComparisonOperator, c["op"]), value=LIB.read_cstr(c["value"]))
+        for c in (
+            S.FILTER_CONDITION.unpack(LIB, d["conditions"] + i * S.FILTER_CONDITION.size)
+            for i in range(d["condition_count"])
+        )
+    ]
     kwargs.update({name: d[c_name] if d[flag] else None for name, c_name, flag in _FILTER_COLUMN_OPTIONAL})
     kwargs.update({name: LIB.read_cstr(d[c_name]) for name, c_name in _FILTER_COLUMN_STRINGS})
     return AutoFilterColumn(
-        column_offset=d["column_offset"], dxf_index=d["dxf_index"], values=values, date_groups=groups, **kwargs
+        column_offset=d["column_offset"],
+        dxf_index=d["dxf_index"],
+        values=values,
+        date_groups=groups,
+        conditions=conditions,
+        **kwargs,
     )  # type: ignore[arg-type]
 
 
 def _decode_sort_condition(ptr: int) -> AutoFilterSortCondition:
     d = S.SORT_CONDITION.unpack(LIB, ptr)
     return AutoFilterSortCondition(
-        ref=_decode_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1]),
+        range=_decode_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1]),
         descending=bool(d["descending"]),
         sort_by=d["sort_by"],
         custom_list=LIB.read_cstr(d["custom_list"]),
@@ -6335,7 +7018,7 @@ def _decode_auto_filter(ptr: int) -> AutoFilter:
     sort = None
     if d["has_sort"]:
         sort = AutoFilterSortState(
-            ref=_decode_cell_rect_at(ptr + off["sort_ref"][1]),
+            range=_decode_cell_rect_at(ptr + off["sort_ref"][1]),
             column_sort=bool(d["column_sort"]),
             case_sensitive=bool(d["case_sensitive"]),
             sort_method=d["sort_method"],
@@ -6716,14 +7399,14 @@ class Workbook:
 
         self._require()
         if self._sheets is None:
-            self._sheets = [Sheet(self, index, self._sheet_name(index)) for index in range(self._sheet_count())]
+            self._sheets = [Sheet._new(self, index, self._sheet_name(index)) for index in range(self._sheet_count())]
         return self._sheets
 
     def _insert_sheet_handle(self, handles: List[Sheet], index: int) -> Sheet:
         """Track a sheet the engine inserted at ``index``; ``handles`` is the list read before the change."""
         from ._sheet import Sheet
 
-        sheet = Sheet(self, index, self._sheet_name(index))
+        sheet = Sheet._new(self, index, self._sheet_name(index))
         handles.insert(index, sheet)
         self._renumber_sheets(handles)
         return sheet
@@ -7130,16 +7813,7 @@ class Workbook:
                 S.zero_struct(LIB, S.DEFINED_NAME, ptr)
                 _check(LIB.fm_workbook_get_defined_name_at(h, _uint(i, "idx"), ptr))
                 d = S.DEFINED_NAME.unpack(LIB, ptr)
-                local_sheet_id = d["local_sheet_id"]
-                out.append(
-                    DefinedName(
-                        name=LIB.read_cstr(d["name"]),
-                        formula=LIB.read_cstr(d["formula"]),
-                        local_sheet_id=None if local_sheet_id < 0 else local_sheet_id,
-                        comment=LIB.read_cstr(d["comment"]) or None,
-                        hidden=bool(d["hidden"]),
-                    )
-                )
+                out.append(_defined_name_from(d))
         return out
 
     def table(self, name: str) -> Table:
@@ -7185,7 +7859,7 @@ class Workbook:
         )
         handle = self._tables.get(runtime_id)
         if handle is None:
-            handle = Table(self, runtime_id)
+            handle = Table._new(self, runtime_id)
             self._tables[runtime_id] = handle
         return handle
 
@@ -7205,51 +7879,33 @@ class Workbook:
         h = self._require()
         sheet = _uint(sheet_index, "sheet_index")
         with _ArgScope() as scope:
-            rect_ptr = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rect_ptr, rect)
-            name_ptr = scope.nonempty_cstr(table.name)
-            style_ptr = scope.opt_cstr(table.style_name)
             names = [str(column) for column in table.columns or ()]
             name_ptrs = [scope.nonempty_cstr(column) for column in names]
             array_ptr = scope.alloc(4 * len(name_ptrs)) if name_ptrs else 0
             if array_ptr:
                 LIB.write_bytes(array_ptr, b"".join(struct.pack("<I", p) for p in name_ptrs))
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_sheet_add_table(
-                    h,
-                    sheet,
-                    rect_ptr,
-                    name_ptr,
-                    array_ptr,
-                    _uint(len(name_ptrs), "column_count"),
-                    style_ptr,
-                    1 if table.header_row else 0,
-                    1 if table.totals_row else 0,
-                    out,
-                )
+            spec = scope.struct(S.TABLE_SPEC)
+            S.TABLE_SPEC.pack(
+                LIB,
+                spec,
+                {
+                    "range": _cell_rect_fields(rect),
+                    "name": scope.nonempty_cstr(table.name),
+                    "column_names": array_ptr,
+                    "column_count": _uint(len(name_ptrs), "column_count"),
+                    "style_name": scope.opt_cstr(table.style_name),
+                    "header_row": _tristate_default(bool(table.header_row)),
+                    "totals_row": _tristate_default(bool(table.totals_row)),
+                    "show_first_column": _tristate_default(table.show_first_column),
+                    "show_last_column": _tristate_default(table.show_last_column),
+                    "show_row_stripes": _tristate_default(table.show_row_stripes),
+                    "show_column_stripes": _tristate_default(table.show_column_stripes),
+                },
             )
+            out = scope.out_ptr()
+            _check(LIB.fm_sheet_add_table(h, sheet, spec, out))
             index = LIB.read_u32(out)
-        handle = self._table_handle(sheet_index, index)
-        toggles = {
-            name: getattr(table, name)
-            for name in ("show_first_column", "show_last_column", "show_row_stripes", "show_column_stripes")
-            if getattr(table, name) is not None
-        }
-        if toggles:
-            try:
-                with _ArgScope() as scope:
-                    ptr = scope.struct(S.TABLE_STYLE_OPTIONS_PATCH)
-                    values: Dict[str, int] = {}
-                    for name, value in toggles.items():
-                        values[name + "_op"] = _PATCH_SET
-                        values[name] = 1 if value else 0
-                    S.TABLE_STYLE_OPTIONS_PATCH.pack(LIB, ptr, values)
-                    _check(LIB.fm_sheet_update_table_style_options(h, sheet, _uint(index, "table_index"), ptr))
-            except BaseException:
-                _check(LIB.fm_sheet_remove_table(h, sheet, _uint(index, "table_index")))
-                raise
-        return handle
+        return self._table_handle(sheet_index, index)
 
     def _names_a_cell(self, text: str) -> bool:
         """Whether ``text`` reads as one A1 cell (``"T2"``), which a table name may not be."""
@@ -7257,7 +7913,7 @@ class Workbook:
             ref = self.parse_reference(text)
         except FormulaSyntaxError:
             return False
-        rect = ref.rect
+        rect = ref.range
         return ref.sheet_name is None and rect.first_row == rect.last_row and rect.first_col == rect.last_col
 
     # -- Sheet structure ---------------------------------------------------
@@ -7309,8 +7965,10 @@ class Workbook:
         self._renumber_sheets(handles)
 
     # -- Defined names -----------------------------------------------------
-    def set_defined_name(self, defined_name: DefinedNameInput) -> None:
+    def set_defined_name(self, defined_name: Union[DefinedNameInput, DefinedName]) -> None:
         """Set or append a defined name in workbook or sheet scope.
+
+        A :class:`DefinedName` read back from :meth:`get_defined_name` is accepted.
 
         An existing name in the same scope is replaced as a whole: an
         omitted ``comment`` or ``hidden`` goes back to its default.
@@ -7322,8 +7980,8 @@ class Workbook:
         local_sheet_id = _local_sheet_id(None if defined_name.scope is None else self.sheet(defined_name.scope).index)
         h = self._require()
         with _ArgScope() as scope:
-            ptr = scope.struct(S.DEFINED_NAME_INPUT)
-            S.DEFINED_NAME_INPUT.pack(
+            ptr = scope.struct(S.DEFINED_NAME)
+            S.DEFINED_NAME.pack(
                 LIB,
                 ptr,
                 {
@@ -7362,31 +8020,15 @@ class Workbook:
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             present = scope.out_ptr()
-            stored_ptr = scope.out_ptr()
-            formula_ptr = scope.out_ptr()
-            comment_ptr = scope.out_ptr()
-            hidden_ptr = scope.out_ptr()
+            out = scope.struct(S.DEFINED_NAME)
             _check(
                 LIB.fm_workbook_get_defined_name(
-                    h,
-                    name_ptr,
-                    _sint(_local_sheet_id(sheet), "local_sheet_id"),
-                    present,
-                    stored_ptr,
-                    formula_ptr,
-                    comment_ptr,
-                    hidden_ptr,
+                    h, name_ptr, _sint(_local_sheet_id(sheet), "local_sheet_id"), present, out
                 )
             )
             if not LIB.read_u32(present):
                 return None
-            return DefinedName(
-                name=LIB.read_cstr(LIB.read_u32(stored_ptr)),
-                formula=LIB.read_cstr(LIB.read_u32(formula_ptr)),
-                local_sheet_id=sheet,
-                comment=LIB.read_cstr(LIB.read_u32(comment_ptr)) or None,
-                hidden=bool(LIB.read_i32(hidden_ptr)),
-            )
+            return _defined_name_from(S.DEFINED_NAME.unpack(LIB, out))
 
     def remove_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> None:
         """Remove the defined name ``name`` in ``scope`` (``None`` for workbook scope, else a sheet).
@@ -7603,13 +8245,15 @@ class Workbook:
                 **{fld: LIB.read_cstr(d[fld]) or None for fld in self._WORKBOOK_PROTECTION_TEXT},
             )
 
-    def set_workbook_protection(self, protection: Optional[WorkbookProtection]) -> None:
+    def set_workbook_protection(self, protection: Union[WorkbookProtectionInput, WorkbookProtection, None]) -> None:
         """Replace the modelled ``<workbookProtection>`` attributes.
 
-        ``None``, like an all-default record, removes the element.
+        ``None``, like an all-default record, removes the element. A :class:`WorkbookProtection` read back is accepted.
         """
         if protection is None:
             protection = WorkbookProtection()
+        elif not isinstance(protection, (WorkbookProtectionInput, WorkbookProtection)):
+            raise TypeError(f"formulon: expected a WorkbookProtectionInput, got {type(protection).__name__}")
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.WORKBOOK_PROTECTION)
@@ -8004,10 +8648,15 @@ class Workbook:
                 colors=list(struct.unpack("<12I", LIB.read_bytes(colors_ptr + S.THEME_COLORS.offsets["argb"][1], 48))),
             )
 
-    def set_theme_colors(self, *, colors: Sequence[int]) -> None:
-        """Replace the theme's 12 scheme colours (``a:clrScheme`` order; alpha ignored)."""
+    def set_theme_colors(self, colors: Union[ThemeColorsInput, ThemeColors]) -> None:
+        """Replace the theme's 12 scheme colours (``a:clrScheme`` order; alpha ignored).
+
+        A :class:`ThemeColors` read back is accepted; its ``source`` is ignored.
+        """
+        if not isinstance(colors, (ThemeColorsInput, ThemeColors)):
+            raise TypeError(f"formulon: expected a ThemeColorsInput, got {type(colors).__name__}")
         h = self._require()
-        values = [_uint(c, "colors") for c in colors]
+        values = [_uint(c, "colors") for c in colors.colors]
         if len(values) != 12:
             raise ValueError(f"formulon: colors must hold 12 entries, got {len(values)}")
         with _ArgScope() as scope:
@@ -8043,10 +8692,10 @@ class Workbook:
                 scheme=_enum(FontScheme, scheme), script=script, typeface=LIB.read_cstr(LIB.read_u32(face_ptr))
             )
 
-    def set_theme_script_font(self, *, scheme: FontScheme, script: str, typeface: str) -> None:
+    def set_theme_script_font(self, font: ThemeScriptFont) -> None:
         """Set the typeface of one script in the major (heading) or minor (body) font set.
 
-        ``scheme`` picks the heading set (``FontScheme.MAJOR``) or the body set
+        ``font.scheme`` picks the heading set (``FontScheme.MAJOR``) or the body set
         (``FontScheme.MINOR``); ``FontScheme.NONE`` raises. ``script`` is an ISO 15924 code
         of exactly four ASCII letters (``Jpan``, ``Hang``); ``typeface`` must be non-empty. Other
         scripts are unchanged and an unlisted script is appended. Setting
@@ -8054,11 +8703,13 @@ class Workbook:
         theme part first gets one carrying the full default set. Invalid
         arguments raise ``FormulonError``.
         """
+        if not isinstance(font, ThemeScriptFont):
+            raise TypeError(f"formulon: expected a ThemeScriptFont, got {type(font).__name__}")
         h = self._require()
         with _ArgScope() as scope:
-            script_ptr = scope.cstr(script)
-            face_ptr = scope.cstr(typeface)
-            _check(LIB.fm_workbook_set_theme_script_font(h, _sint(scheme, "scheme"), script_ptr, face_ptr))
+            script_ptr = scope.cstr(font.script)
+            face_ptr = scope.cstr(font.typeface)
+            _check(LIB.fm_workbook_set_theme_script_font(h, _sint(font.scheme, "scheme"), script_ptr, face_ptr))
 
     def reset_theme(self) -> None:
         """Restore the default Office theme by removing the theme part.
@@ -8132,7 +8783,7 @@ class Workbook:
 
         handle = self._pivot_caches.get(cache_id)
         if handle is None:
-            handle = PivotCache(self, cache_id)
+            handle = PivotCache._new(self, cache_id)
             self._pivot_caches[cache_id] = handle
         return handle
 
@@ -8188,35 +8839,49 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.REFERENCE)
-            _check(
-                LIB.fm_workbook_parse_reference(
-                    h,
-                    scope.cstr(text),
-                    _sint(1 if r1c1 else 0, "r1c1"),
-                    _sint(0 if base_row is None else 1, "has_base"),
-                    _uint(base_row or 0, "base_row"),
-                    _uint(base_col or 0, "base_col"),
-                    ptr,
-                )
+            spec = scope.struct(S.PARSE_REFERENCE_SPEC)
+            S.PARSE_REFERENCE_SPEC.pack(
+                LIB,
+                spec,
+                {
+                    "r1c1": _tristate_default(bool(r1c1)),
+                    "has_base": 0 if base_row is None else 1,
+                    "base_row": _uint(base_row or 0, "base_row"),
+                    "base_col": _uint(base_col or 0, "base_col"),
+                },
             )
+            _check(LIB.fm_workbook_parse_reference(h, scope.cstr(text), spec, ptr))
             d = S.REFERENCE.unpack(LIB, ptr)
             return ParsedReference(
                 sheet_name=LIB.read_cstr(d["sheet_name"]) if d["has_sheet"] else None,
-                rect=_cell_rect_from(d["rect"]),
+                range=_cell_rect_from(d["rect"]),
             )
 
     def format_reference(
         self,
-        rect: CellRect,
+        range: Union[ParsedReference, CellRect, str],
         *,
         sheet_name: Optional[str] = None,
         absolute: bool = False,
     ) -> str:
-        """Format ``rect`` as A1 reference text (``B:D``, ``2:11``, ``'My Sheet'!A1``).
+        """Format ``range`` as A1 reference text (``B:D``, ``2:11``, ``'My Sheet'!A1``).
+
+        ``range`` is a :class:`CellRect`, an unqualified A1 range, or a
+        :class:`ParsedReference`, which supplies its own ``sheet_name``.
 
         Raises:
-          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` for a coordinate outside the grid or a reversed rectangle.
+          TypeError: when ``sheet_name`` is given with a :class:`ParsedReference`.
+          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` for a coordinate outside the grid, a reversed rectangle
+            or a sheet-qualified string.
         """
+        if isinstance(range, ParsedReference):
+            if sheet_name is not None:
+                raise TypeError("formulon: sheet_name cannot be given with a ParsedReference")
+            sheet_name, rect = range.sheet_name, range.range
+        else:
+            from ._inputs import cell_rect
+
+            rect = cell_rect(self, range, "format_reference range")
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
@@ -8354,8 +9019,14 @@ class WorkbookOoxml:
 
     __slots__ = ("_workbook",)
 
-    def __init__(self, workbook: Workbook) -> None:
-        self._workbook = workbook
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("obtain the OOXML layer from Workbook.ooxml")
+
+    @classmethod
+    def _new(cls, workbook: Workbook) -> "WorkbookOoxml":
+        layer = object.__new__(cls)
+        layer._workbook = workbook
+        return layer
 
     def __repr__(self) -> str:
         return f"{self._workbook!r}.ooxml"
@@ -8592,7 +9263,7 @@ def _workbook_ooxml(self: Workbook) -> WorkbookOoxml:
     """The OOXML-level layer of the workbook: style tables, named styles and passthrough parts. Always the same object."""
     layer = getattr(self, "_ooxml", None)
     if layer is None:
-        layer = WorkbookOoxml(self)
+        layer = WorkbookOoxml._new(self)
         self._ooxml = layer
     return layer
 

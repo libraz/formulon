@@ -127,7 +127,9 @@ std::string write_threaded_comments(const std::vector<ThreadedComment>& comments
   for (const ThreadedComment& c : comments) {
     out.append("  <threadedComment");
     append_xml_attr(out, "ref", a1::encode_a1(c.row, c.col));
-    append_xml_attr(out, "dT", c.created);
+    if (!c.created.empty()) {
+      append_xml_attr(out, "dT", c.created);
+    }
     append_xml_attr(out, "personId", c.person_id);
     append_xml_attr(out, "id", c.id);
     if (!c.parent_id.empty()) {

@@ -89,6 +89,52 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
   return ok();
 }
 
+/// True when `patch` clears every member of a point's override.
+bool clears_all(const ChartPointPatch& patch) {
+  const ChartFillPatch& f = patch.fill;
+  const ChartLinePatch& l = patch.line;
+  return f.color.is_clear() && f.transparency_pct.is_clear() && l.color.is_clear() && l.transparency_pct.is_clear() &&
+         l.width_pt.is_clear() && l.dash.is_clear() && !l.none.value_or(false) && patch.marker.is_clear();
+}
+
+/// True when the `c:dPt` `point` holds no fill, line colour, width, dash or marker of its own.
+bool line_patch_sets(const ChartLinePatch& p) {
+  return p.color.is_set() || p.transparency_pct.is_set() || p.width_pt.is_set() || p.dash.is_set() ||
+         p.none.value_or(false);
+}
+
+bool point_patch_sets(const ChartPointPatch& p) {
+  return p.fill.color.is_set() || p.fill.transparency_pct.is_set() || line_patch_sets(p.line) || p.marker.is_set();
+}
+
+bool point_override_empty(const xml_node& point) {
+  for (xml_node n = point.first_child(); n; n = n.next_sibling()) {
+    const std::string_view name = local_name(n);
+    if (name == "idx" || name == "invertIfNegative" || name == "bubble3D") {
+      continue;
+    }
+    if (name != "spPr") {
+      return false;
+    }
+    for (xml_node sp = n.first_child(); sp; sp = sp.next_sibling()) {
+      const std::string_view part = local_name(sp);
+      if (part == "effectLst") {
+        continue;
+      }
+      if (part != "ln" || sp.attribute("w")) {
+        return false;
+      }
+      for (xml_node ln = sp.first_child(); ln; ln = ln.next_sibling()) {
+        const std::string_view piece = local_name(ln);
+        if (piece != "round" && piece != "bevel" && piece != "miter" && piece != "headEnd" && piece != "tailEnd") {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 /// Checks a title that is not kNone and returns the template text it needs: the text for kText, else unset.
 Expected<std::optional<std::string>, Error> title_text(const Workbook& wb, const Chart& c, const ChartTitle& title) {
   if (title.kind == ChartTitleKind::kRef) {
@@ -277,6 +323,36 @@ Expected<std::uint32_t, Error> insert_chart(Workbook& wb, std::size_t sheet, con
   return id;
 }
 
+Expected<ChartInsertKind, Error> chart_insert_kind(ChartPlotType type, ChartBarDirection bar_direction) {
+  if (type == ChartPlotType::kBar) {
+    switch (bar_direction) {
+      case ChartBarDirection::kAbsent:
+      case ChartBarDirection::kCol:
+        return ChartInsertKind::kColumn;
+      case ChartBarDirection::kBar:
+        return ChartInsertKind::kBar;
+    }
+    return bad_arg("chart: unknown bar direction");
+  }
+  if (bar_direction != ChartBarDirection::kAbsent) {
+    return bad_arg("chart: a bar direction needs a bar plot");
+  }
+  switch (type) {
+    case ChartPlotType::kLine:
+      return ChartInsertKind::kLine;
+    case ChartPlotType::kArea:
+      return ChartInsertKind::kArea;
+    case ChartPlotType::kPie:
+      return ChartInsertKind::kPie;
+    case ChartPlotType::kDoughnut:
+      return ChartInsertKind::kDoughnut;
+    case ChartPlotType::kScatter:
+      return ChartInsertKind::kScatter;
+    default:
+      return bad_arg("chart: only bar, line, area, pie, doughnut and scatter plots are written");
+  }
+}
+
 Expected<void, Error> set_chart_type(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::size_t plot,
                                      ChartInsertKind kind, ChartGrouping grouping) {
   Chart c;
@@ -378,16 +454,20 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
     }
     put_val(scaling(), "c:logBase", kScalingOrder, num(patch.log_base.value));
   }
-  if (!patch.major_unit.is_keep() && (kind == "catAx" || kind == "serAx")) {
-    return bad_arg("chart: a category axis has no major unit");
-  }
-  if (patch.major_unit.is_clear()) {
-    drop(ax, "majorUnit");
-  } else if (patch.major_unit.is_set()) {
-    if (!(std::isfinite(patch.major_unit.value) && patch.major_unit.value > 0.0)) {
-      return bad_arg("chart: major unit must be positive");
+  const ChartPatchField<double>* units[] = {&patch.major_unit, &patch.minor_unit};
+  const char* unit_names[] = {"c:majorUnit", "c:minorUnit"};
+  for (int i = 0; i < 2; ++i) {
+    if (units[i]->is_set() && (kind == "catAx" || kind == "serAx")) {
+      return bad_arg("chart: a category axis has no major or minor unit");
     }
-    put_val(ax, "c:majorUnit", kAxisOrder, num(patch.major_unit.value));
+    if (units[i]->is_clear()) {
+      drop(ax, local_name(unit_names[i]));
+    } else if (units[i]->is_set()) {
+      if (!(std::isfinite(units[i]->value) && units[i]->value > 0.0)) {
+        return bad_arg("chart: axis units must be positive");
+      }
+      put_val(ax, unit_names[i], kAxisOrder, num(units[i]->value));
+    }
   }
   if (patch.number_format.is_clear()) {
     drop(ax, "numFmt");
@@ -396,12 +476,24 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
     io::set_attr(fmt, "formatCode", patch.number_format.value);
     io::set_attr(fmt, "sourceLinked", "0");
   }
-  if (patch.major_gridlines.has_value()) {
-    if (!*patch.major_gridlines) {
-      drop(ax, "majorGridlines");
-    } else if (!child_local(ax, "majorGridlines")) {
+  link_number_format(ax, kAxisOrder, patch.source_linked);
+  const std::optional<bool>* gridlines[] = {&patch.major_gridlines, &patch.minor_gridlines};
+  for (int i = 0; i < 2; ++i) {
+    const char* name = i == 0 ? "majorGridlines" : "minorGridlines";
+    if (!gridlines[i]->has_value()) {
+      continue;
+    }
+    if (!**gridlines[i]) {
+      drop(ax, name);
+    } else if (!child_local(ax, name)) {
       pugi::xml_document frag;
-      copy_at(ax, fragment(frag, gridlines_xml()), kAxisOrder);
+      copy_at(ax, fragment(frag, gridlines_xml(i == 1)), kAxisOrder);
+    }
+  }
+  if (patch.position.has_value()) {
+    const int p = static_cast<int>(*patch.position);
+    if (p < 0 || p >= static_cast<int>(std::size(kChartAxisPositionTokens))) {
+      return bad_arg("chart: unknown axis position");
     }
   }
   if (patch.crosses.has_value()) {
@@ -436,6 +528,9 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
       }
     }
   }
+  if (patch.position.has_value()) {
+    put_val(ax, "c:axPos", kAxisOrder, kChartAxisPositionTokens[static_cast<int>(*patch.position)]);
+  }
   return commit(wb, c, false);
 }
 
@@ -446,6 +541,9 @@ Expected<void, Error> set_chart_display(Workbook& wb, std::size_t sheet, std::ui
   if (patch.blanks_as.is_set() &&
       (static_cast<int>(patch.blanks_as.value) < 0 || static_cast<int>(patch.blanks_as.value) > 3)) {
     return bad_arg("chart: unknown display option");
+  }
+  if (patch.style.is_set() && (patch.style.value < 1 || patch.style.value > 48)) {
+    return bad_arg("chart: style must be 1..48");
   }
   patch_display(c, patch);
   return commit(wb, c, false);
@@ -470,12 +568,16 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
   ASSIGN_OR_RETURN(xml_node ser, series_at(node, series_idx));
   xml_node point = find_point(ser, point_idx);
   if (fill_empty(patch.fill) && line_empty(patch.line) && patch.marker.is_keep()) {
+    return ok();
+  }
+  if (clears_all(patch)) {
     if (point) {
       ser.remove_child(point);
     }
     return commit(wb, c, false);
   }
-  if (!patch.marker.is_keep() && !has_markers(node)) {
+  // A plot without markers has none to set; clearing one (a read record passed back) changes nothing.
+  if (patch.marker.is_set() && !has_markers(node)) {
     return bad_arg("chart: markers need a line, scatter or radar plot");
   }
   const std::string_view name = local_name(node);
@@ -509,6 +611,10 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
     Palette palette;
     load_palette(wb, c.path, palette);
     settle_marker(ser, point, palette);
+  }
+  // An override that a clearing patch empties disappears; a patch that sets a member keeps its point.
+  if (!point_patch_sets(patch) && point_override_empty(point)) {
+    ser.remove_child(point);
   }
   return commit(wb, c, false);
 }
@@ -588,7 +694,8 @@ Expected<std::uint32_t, Error> add_chart_series(Workbook& wb, std::size_t sheet,
     return unsupported("chart: series are added to column, bar, line, area, pie, doughnut and scatter plots");
   }
   const bool scatter = kind == static_cast<int>(ChartInsertKind::kScatter);
-  if (!(scatter ? patch.y : patch.val) || (scatter ? patch.y : patch.val)->empty()) {
+  const std::optional<ChartSeriesSource>& values = scatter ? patch.y : patch.val;
+  if (!values || values->kind == ChartDataSource::Kind::kNone) {
     return bad_arg("chart: a series needs its values");
   }
   std::uint32_t idx = 0;
@@ -599,9 +706,10 @@ Expected<std::uint32_t, Error> add_chart_series(Workbook& wb, std::size_t sheet,
       order = std::max(order, val_u(s, "order") + 1U);
     }
   }
-  // The template numbers and colours series by position, so the new one is placed at `idx`.
+  // The template numbers and colours series by position, so the new one is placed at `idx`. A literal input
+  // replaces the placeholder reference below.
   ChartSeriesRefs refs;
-  refs.val = refs.y = scatter ? *patch.y : *patch.val;
+  refs.val = refs.y = values->kind == ChartDataSource::Kind::kRef ? values->formula : std::string("A1");
   ChartSplit split;
   split.series.assign(idx + 1U, refs);
   pugi::xml_document t;

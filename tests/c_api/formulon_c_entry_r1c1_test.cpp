@@ -288,7 +288,7 @@ TEST(FormulonCApiEntryR1C1, BracketedEndpointNamingATableStaysStructured) {
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "X"), 0);
   const fm_cell_rect_t rect{0, 0, 2, 1};
   const char* const columns[] = {"Qty", "X"};
-  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &rect, "Tbl", columns, 2, nullptr, 1, 0, ignored_index()), 0)
+  ASSERT_EQ(AddTable(wb.handle, 0, &rect, "Tbl", columns, 2, nullptr, 1, 0, ignored_index()), 0)
       << fm_get_last_error_message();
   std::vector<formulon::TableMetadata> tables = wb.handle->workbook().tables();
   tables[0].name = "RC";

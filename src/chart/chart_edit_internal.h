@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -47,6 +48,9 @@ inline bool valid_kind_grouping(ChartInsertKind kind, ChartGrouping grouping) {
 
 // Child orders of the CT_ types edits insert into (unions where siblings share a parent tag).
 // clang-format off
+inline constexpr const char* const kSpaceOrder[] = {"date1904", "lang", "roundedCorners", "AlternateContent", "style",
+    "clrMapOvr", "pivotSource", "protection", "chart", "spPr", "txPr", "externalData", "printSettings", "userShapes",
+    "extLst", nullptr};
 inline constexpr const char* const kChartOrder[] = {"title", "autoTitleDeleted", "pivotFmts", "view3D", "floor", "sideWall",
     "backWall", "plotArea", "legend", "plotVisOnly", "dispBlanksAs", "showDLblsOverMax", "extLst", nullptr};
 inline constexpr const char* const kTitleOrder[] = {"tx", "layout", "overlay", "spPr", "txPr", "extLst", nullptr};
@@ -340,6 +344,9 @@ inline bool line_empty(const ChartLinePatch& p) {
 
 Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const ChartFillPatch& fill,
                                   const ChartLinePatch& line);
+
+/// Sets `c:numFmt/@sourceLinked` of `owner`; linking an owner without a number format writes `General`.
+void link_number_format(xml_node owner, Order order, const std::optional<bool>& linked);
 
 Expected<void, Error> apply_marker(xml_node owner, Order order, const ChartPatchField<ChartMarkerPatch>& patch);
 

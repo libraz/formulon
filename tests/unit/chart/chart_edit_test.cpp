@@ -402,7 +402,7 @@ TEST(ChartEdit, ChartexAndPivotRefusals) {
   const Located p = Find(pv);
   ASSERT_TRUE(Must(get_chart(pv, p.sheet, p.id)).is_pivot_chart);
   ChartSeriesPatch rename;
-  rename.name = std::string("Sheet1!$A$1");
+  rename.name = ChartSeriesSource::Ref("Sheet1!$A$1");
   ExpectCode(set_chart_series(pv, p.sheet, p.id, 0, 0, rename), Code::kIoChartUnsupportedKind);
   ExpectCode(add_chart_series(pv, p.sheet, p.id, 0, rename), Code::kIoChartUnsupportedKind);
   ExpectCode(remove_chart_series(pv, p.sheet, p.id, 0, 0), Code::kIoChartUnsupportedKind);
@@ -449,10 +449,10 @@ TEST(ChartEdit, NoOpAndFailedEditsWriteNothing) {
     MustOk(set_chart_title(wb, c.sheet, c.id, same));
   }
   ChartSeriesPatch bad;
-  bad.val = std::string("Nope!$A$1:$A$4");
+  bad.val = ChartSeriesSource::Ref("Nope!$A$1:$A$4");
   bad.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF000000U));
   ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, m.plots[0].series[0].idx, bad), Code::kIoChartInvalidReference);
-  bad.val = std::string();
+  bad.val = ChartSeriesSource::None();
   ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, m.plots[0].series[0].idx, bad), Code::kInvalidArgument);
   ChartSeriesPatch marker;
   marker.marker = ChartPatchField<ChartMarkerPatch>::Set(ChartMarkerPatch{});
@@ -974,7 +974,7 @@ TEST(ChartEdit, MarkerSettlesAsExcel) {
   Workbook wb = LoadFixture("chart_line.xlsx");
   const Located c = Find(wb, "xl/charts/chart1.xml");
   ChartSeriesPatch extra;
-  extra.val = std::string("Sheet1!$B$2:$B$5");
+  extra.val = ChartSeriesSource::Ref("Sheet1!$B$2:$B$5");
   std::uint32_t idx = 0;
   while (idx < 7U) {
     idx = Must(add_chart_series(wb, c.sheet, c.id, 0, extra));
@@ -1718,12 +1718,12 @@ TEST(ChartEdit, PointsSeriesAndSource) {
   EXPECT_EQ(m.plots[0].series[1].points[1].line.width_emu, std::optional<std::int64_t>(12700));
   EXPECT_EQ(m.plots[0].series[1].points[1].marker->symbol, ChartMarkerSymbol::kTriangle);
   MustOk(set_chart_point(wb, 0, id, 0, 1, 2, ChartPointPatch{}));
-  EXPECT_EQ(Must(get_chart(wb, 0, id)).plots[0].series[1].points.size(), 1U);
+  EXPECT_EQ(Must(get_chart(wb, 0, id)).plots[0].series[1].points.size(), 2U);
 
   ChartSeriesPatch add;
-  add.name = std::string("Sheet1!$D$1");
-  add.cat = std::string("Sheet1!$A$2:$A$5");
-  add.val = std::string("Sheet1!$D$2:$D$5");
+  add.name = ChartSeriesSource::Ref("Sheet1!$D$1");
+  add.cat = ChartSeriesSource::Ref("Sheet1!$A$2:$A$5");
+  add.val = ChartSeriesSource::Ref("Sheet1!$D$2:$D$5");
   add.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF123456U));
   MustOk(remove_chart_series(wb, 0, id, 0, 2));
   EXPECT_EQ(Must(add_chart_series(wb, 0, id, 0, add)), 2U);
@@ -1735,8 +1735,8 @@ TEST(ChartEdit, PointsSeriesAndSource) {
   EXPECT_EQ(Must(get_chart_data(wb, 0, id)).series[2].name, std::optional<std::string>("S3"));
 
   ChartSeriesPatch refs;
-  refs.name = std::string();
-  refs.val = std::string("Sheet1!$C$2:$C$5");
+  refs.name = ChartSeriesSource::None();
+  refs.val = ChartSeriesSource::Ref("Sheet1!$C$2:$C$5");
   MustOk(set_chart_series(wb, 0, id, 0, 2, refs));
   EXPECT_TRUE(NoRefresh(wb));
   m = Must(get_chart(wb, 0, id));
@@ -2317,7 +2317,7 @@ TEST(ChartEdit, DoughnutFormsMatchExcel) {
   EXPECT_EQ(m.plots[0].hole_size, 50U);
 
   ChartSeriesPatch add;
-  add.val = std::string("Sheet1!$B$2:$B$5");
+  add.val = ChartSeriesSource::Ref("Sheet1!$B$2:$B$5");
   EXPECT_EQ(Must(add_chart_series(wb, 0, column, 0, add)), 2U);
   EXPECT_EQ(Must(get_chart(wb, 0, column)).plots[0].series[2].points.size(), 4U);
   MustOk(set_chart_source(wb, 0, column, "Sheet1!$A$1:$B$5", D::kAuto, H::kAuto, H::kAuto));

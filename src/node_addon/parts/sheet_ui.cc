@@ -823,8 +823,9 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   std::string display_name;
   std::string user_id;
   std::string provider_id;
-  reader.String(spec, "id", &id);
-  reader.String(spec, "displayName", &display_name);
+  id = reader.RequiredString(spec, "id");
+  display_name = reader.RequiredString(spec, "displayName");
+  // An omitted `userId` / `providerId` is the empty string.
   reader.String(spec, "userId", &user_id);
   reader.String(spec, "providerId", &provider_id);
   fm_person_t p = FM_STRUCT_INIT(fm_person_t);

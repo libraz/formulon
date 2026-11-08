@@ -30,8 +30,9 @@ from formulon import (
     PivotInput,
     ShapeInput,
     ShapePaint,
-    Sparkline,
-    SparklineGroup,
+    SheetSelectionInput,
+    SparklineGroupInput,
+    SparklineInput,
     StatusCode,
     ValidationType,
     Value,
@@ -220,19 +221,19 @@ class RecordA1Tests(unittest.TestCase):
 
     def test_auto_filter_sort_refs(self) -> None:
         self.ws.set_values("A1", [["k", "v"], [2, "b"], [1, "a"]])
-        sort = AutoFilterSortState(ref="A2:B3", conditions=[AutoFilterSortCondition(ref="A2:A3")])
+        sort = AutoFilterSortState(range="A2:B3", conditions=[AutoFilterSortCondition(range="A2:A3")])
         self.ws.set_auto_filter(
             AutoFilter(range=CellRect(first_row=0, first_col=0, last_row=2, last_col=1), sort=sort)  # type: ignore[arg-type]
         )
         got = self.ws.get_auto_filter()
         assert got is not None and got.sort is not None
-        self.assertEqual(got.sort.ref, CellRect(first_row=1, first_col=0, last_row=2, last_col=1))
-        self.assertEqual(got.sort.conditions[0].ref, CellRect(first_row=1, first_col=0, last_row=2, last_col=0))
+        self.assertEqual(got.sort.range, CellRect(first_row=1, first_col=0, last_row=2, last_col=1))
+        self.assertEqual(got.sort.conditions[0].range, CellRect(first_row=1, first_col=0, last_row=2, last_col=0))
 
     def test_print_area_and_selection_take_one_string(self) -> None:
         self.ws.set_print_area("A1:C3")
         self.assertEqual(self.ws.get_print_area(), [CellRect(first_row=0, first_col=0, last_row=2, last_col=2)])
-        self.ws.set_selection(active_row=1, active_col=1, ranges="B2:C3")
+        self.ws.set_selection(SheetSelectionInput(CellAddress(1, 1), ranges="B2:C3"))
         self.assertEqual(self.ws.get_selection().ranges, [CellRect(first_row=1, first_col=1, last_row=2, last_col=2)])
 
 
@@ -271,7 +272,7 @@ class ColourInputTests(unittest.TestCase):
             ws = wb[0]
             ws.set_values("A1", [[1, 2, 3]])
             index = ws.add_sparkline_group(
-                SparklineGroup(color_series="#112233", sparklines=[Sparkline(formula="Sheet1!A1:C1", location="D1")])  # type: ignore[arg-type]
+                SparklineGroupInput(color_series="#112233", sparklines=[SparklineInput("Sheet1!A1:C1", "D1")])
             )
             self.assertEqual(ws.list_sparkline_groups()[index].color_series, Color(kind=ColorKind.RGB, argb=0xFF112233))
             ws.update_sparkline_group(index, color_high="#445566")

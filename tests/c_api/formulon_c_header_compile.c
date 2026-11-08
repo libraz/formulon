@@ -83,7 +83,9 @@ int main(void) {
   // Records the AutoFilter, validation and threaded-comment entry points read
   // and write. The pointer-bearing ones are pinned per target.
   _Static_assert(sizeof(fm_date_group_item_t) == 8, "fm_date_group_item_t ABI layout changed");
-  _Static_assert(sizeof(fm_filter_column_t) == (sizeof(void*) == 4 ? 152 : 192),
+  _Static_assert(sizeof(fm_filter_condition_t) == (sizeof(void*) == 4 ? 8 : 16),
+                 "fm_filter_condition_t ABI layout changed");
+  _Static_assert(sizeof(fm_filter_column_t) == (sizeof(void*) == 4 ? 144 : 168),
                  "fm_filter_column_t ABI layout changed");
   _Static_assert(sizeof(fm_sort_condition_t) == (sizeof(void*) == 4 ? 48 : 56),
                  "fm_sort_condition_t ABI layout changed");

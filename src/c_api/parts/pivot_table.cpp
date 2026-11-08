@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -94,48 +95,57 @@ formulon::pivot::PivotLayout pivot_layout_from_fm(std::int32_t layout) {
   }
 }
 
+// The default style the desktop spreadsheet gives a new PivotTable.
+formulon::pivot::PivotStyleInfo new_pivot_style(const formulon::Workbook& book) {
+  formulon::pivot::PivotStyleInfo style;
+  style.name = std::string(formulon::c_api::parts::default_pivot_style_name(book));
+  style.show_row_headers = true;
+  style.show_col_headers = true;
+  style.show_last_column = true;
+  return style;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
 // PivotTable lifecycle / metadata
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_index, const char* utf8_name,
-                                          std::uint32_t cache_id, std::uint32_t anchor_row, std::uint32_t anchor_col,
+extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_index, const fm_pivot_spec_t* spec,
                                           std::size_t* out_pivot_index) {
   clear_last_error();
-  if (utf8_name == nullptr || out_pivot_index == nullptr) {
+  if (spec == nullptr || out_pivot_index == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({utf8_name}); rc != 0) {
+  if (spec->name == nullptr) {
+    return null_argument("name");
+  }
+  if (auto rc = check_utf8({spec->name}); rc != 0) {
     return rc;
   }
   const formulon::pivot::PivotCache* cache = nullptr;
-  if (auto rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
+  if (auto rc = resolve_cache(wb, spec->cache_id, &cache); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(anchor_row, anchor_col); rc != 0) {
+  if (auto rc = check_cell_coord(spec->anchor_row, spec->anchor_col); rc != 0) {
     return rc;
   }
   auto table = std::make_unique<formulon::pivot::PivotTable>();
-  table->set_name(utf8_name);
-  table->set_pivot_cache_id(cache_id);
+  table->set_name(spec->name);
+  table->set_pivot_cache_id(spec->cache_id);
   // Default span of 1x1 anchored at the requested cell; callers can
   // adjust via `fm_sheet_set_pivot_anchor`.
-  table->set_anchor(anchor_row, anchor_col, 1U, 1U);
+  table->set_anchor(spec->anchor_row, spec->anchor_col, 1U, 1U);
   // Excel stores the Values caption in the creating UI's wording and keeps it
   // when the file is opened under another locale.
   table->set_data_caption(formulon::pivot::pivot_layout_options_for(wb->workbook().excel_profile()).values_label);
-  // The default style the desktop spreadsheet gives a new PivotTable.
-  formulon::pivot::PivotStyleInfo style;
-  style.name = std::string(formulon::c_api::parts::default_pivot_style_name(wb->workbook()));
-  style.show_row_headers = true;
-  style.show_col_headers = true;
-  style.show_last_column = true;
-  table->set_style_info(std::move(style));
+  table->set_style_info(new_pivot_style(wb->workbook()));
   table->apply_new_pivot_defaults();
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   sheet.add_pivot_table(std::move(table));
@@ -251,27 +261,74 @@ extern "C" fm_status_t fm_sheet_show_pivot_details(fm_workbook_t* wb, std::size_
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_update_pivot_style_options(
-    fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* utf8_style_name,
-    std::int32_t show_row_headers, std::int32_t show_column_headers, std::int32_t show_row_stripes,
-    std::int32_t show_column_stripes, std::int32_t show_last_column) {
+extern "C" fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, std::size_t sheet_index,
+                                                           std::size_t pivot_index,
+                                                           const fm_pivot_style_options_patch_t* patch) {
   clear_last_error();
+  if (wb == nullptr || patch == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({utf8_style_name}); rc != 0) {
+  // The whole patch is checked before anything changes.
+  if (auto rc = check_enum_domain(patch->style_name_op, FM_CHART_PATCH_OP_KEEP, FM_CHART_PATCH_OP_SET, "style_name");
+      rc != 0) {
     return rc;
   }
-  formulon::pivot::PivotStyleInfo info;
-  if (utf8_style_name != nullptr) {
-    info.name = utf8_style_name;
+  if (patch->style_name_op == FM_CHART_PATCH_OP_SET) {
+    if (patch->style_name == nullptr) {
+      return invalid_argument("style_name must not be NULL under SET", "style_name");
+    }
+    if (auto rc = check_utf8({patch->style_name}); rc != 0) {
+      return rc;
+    }
   }
-  info.show_row_headers = show_row_headers != 0;
-  info.show_col_headers = show_column_headers != 0;
-  info.show_row_stripes = show_row_stripes != 0;
-  info.show_col_stripes = show_column_stripes != 0;
-  info.show_last_column = show_last_column != 0;
+  const std::tuple<std::int32_t, std::int32_t, bool formulon::pivot::PivotStyleInfo::*, const char*> toggles[] = {
+      {patch->show_row_headers_op, patch->show_row_headers, &formulon::pivot::PivotStyleInfo::show_row_headers,
+       "show_row_headers"},
+      {patch->show_column_headers_op, patch->show_column_headers, &formulon::pivot::PivotStyleInfo::show_col_headers,
+       "show_column_headers"},
+      {patch->show_row_stripes_op, patch->show_row_stripes, &formulon::pivot::PivotStyleInfo::show_row_stripes,
+       "show_row_stripes"},
+      {patch->show_column_stripes_op, patch->show_column_stripes, &formulon::pivot::PivotStyleInfo::show_col_stripes,
+       "show_column_stripes"},
+      {patch->show_last_column_op, patch->show_last_column, &formulon::pivot::PivotStyleInfo::show_last_column,
+       "show_last_column"}};
+  bool changes = patch->style_name_op != FM_CHART_PATCH_OP_KEEP;
+  for (const auto& [op, value, member, field] : toggles) {
+    if (auto rc = check_enum_domain(op, FM_CHART_PATCH_OP_KEEP, FM_CHART_PATCH_OP_SET, field); rc != 0) {
+      return rc;
+    }
+    if (op == FM_CHART_PATCH_OP_CLEAR) {
+      return invalid_argument("CLEAR is not valid for a toggle", field);
+    }
+    if (op == FM_CHART_PATCH_OP_SET) {
+      if (auto rc = check_enum_domain(value, 0, 1, field); rc != 0) {
+        return rc;
+      }
+      changes = true;
+    }
+  }
+  if (!changes) {
+    return 0;
+  }
+  formulon::pivot::PivotStyleInfo info =
+      table->style_info().has_value() ? *table->style_info() : new_pivot_style(wb->workbook());
+  if (patch->style_name_op == FM_CHART_PATCH_OP_SET) {
+    info.name = patch->style_name;
+  } else if (patch->style_name_op == FM_CHART_PATCH_OP_CLEAR) {
+    info.name.clear();
+  }
+  for (const auto& [op, value, member, field] : toggles) {
+    if (op == FM_CHART_PATCH_OP_SET) {
+      info.*member = value != 0;
+    }
+  }
   table->set_style_info(std::move(info));
   return 0;
 }

@@ -7,18 +7,20 @@ import enum
 import unittest
 from typing import List, Tuple
 
+import _chart_input
+
 import formulon
 from formulon import (
     AnchorKind,
     AutoFilter,
     AutoFilterColumn,
+    AutoFilterCondition,
     BlanksAs,
     CellAddress,
     CellRect,
     CfIcon,
     CfRuleType,
     Cfvo,
-    ChartInsertKind,
     ChartLegend,
     ChartLegendPosition,
     ChartPointState,
@@ -38,16 +40,20 @@ from formulon import (
     IconSet,
     IconSetName,
     Person,
+    PhoneticProperties,
     PivotAxis,
+    PivotDateGroupInput,
     PivotDatePeriod,
     PivotFieldInput,
     PivotFilterKind,
     PivotInput,
     PivotSortOrder,
     SlicerSortOrder,
+    TableColumnTotalsInput,
     TableInput,
     TableStyle,
     TableStyleElement,
+    ThemeScriptFont,
     ThemeSource,
     ThreadedCommentInput,
     ValidationOutcome,
@@ -100,7 +106,7 @@ def _serial(day: datetime.date) -> float:
     return float((day - datetime.date(1899, 12, 30)).days)
 
 
-def _chart_workbook(kind: int = ChartInsertKind.COLUMN, source: str = "Sheet1!$A$1:$C$4"):
+def _chart_workbook(kind: _chart_input.Kind = _chart_input.COLUMN, source: str = "Sheet1!$A$1:$C$4"):
     wb = Workbook.create_default()
     sheet = wb.sheet(0)
     sheet.set_text(0, 1, "S1")
@@ -109,7 +115,9 @@ def _chart_workbook(kind: int = ChartInsertKind.COLUMN, source: str = "Sheet1!$A
         sheet.set_text(r + 1, 0, cat)
         sheet.set_number(r + 1, 1, float(r + 1))
         sheet.set_number(r + 1, 2, float((r + 1) * 2))
-    oid = sheet.add_chart(kind, source, anchor=DrawingAnchor(anchor_kind=AnchorKind.TWO_CELL, row=6)).object_id
+    oid = _chart_input.add_chart(
+        sheet, kind, source, anchor=DrawingAnchor(anchor_kind=AnchorKind.TWO_CELL, row=6)
+    ).object_id
     return wb, oid
 
 
@@ -367,7 +375,7 @@ class EnumRecordFieldTests(unittest.TestCase):
                     range=CellRect(0, 0, 5, 0),
                     columns=[
                         AutoFilterColumn(
-                            column_offset=0, kind=FilterKind.CUSTOM, custom_count=1, operator1=op, value1="2"
+                            column_offset=0, kind=FilterKind.CUSTOM, conditions=[AutoFilterCondition(op, "2")]
                         )
                     ],
                 )
@@ -375,7 +383,7 @@ class EnumRecordFieldTests(unittest.TestCase):
             sheet.set_auto_filter(custom(ComparisonOperator.LESS_THAN_OR_EQUAL))
             got = sheet.get_auto_filter()
             assert got is not None
-            self.assertIs(got.columns[0].operator1, ComparisonOperator.LESS_THAN_OR_EQUAL)
+            self.assertIs(got.columns[0].conditions[0].operator, ComparisonOperator.LESS_THAN_OR_EQUAL)
             for op in (ComparisonOperator.BETWEEN, ComparisonOperator.NOT_BETWEEN):
                 with self.subTest(op=op), self.assertRaises(FormulonError):
                     sheet.set_auto_filter(custom(op))
@@ -403,7 +411,7 @@ class EnumRecordFieldTests(unittest.TestCase):
             states = data.series[0].states
             self.assertTrue(states)
             self.assertTrue(all(isinstance(s, ChartPointState) for s in states))
-        wb, oid = _chart_workbook(ChartInsertKind.SCATTER, "Sheet1!$B$1:$C$4")
+        wb, oid = _chart_workbook(_chart_input.SCATTER, "Sheet1!$B$1:$C$4")
         with wb:
             self.assertIs(wb.sheet(0).chart(oid).get_data().domain, ChartDomain.XY)
 
@@ -435,11 +443,11 @@ class EnumRecordFieldTests(unittest.TestCase):
             table = sheet.add_table(
                 TableInput(range=CellRect(0, 0, 3, 1), name="Sales", columns=["Product", "Amount"], totals_row=True)
             )
-            table.set_column_totals(1, function=TableTotalsRowFunction.SUM)
+            table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.SUM))
             with self.assertRaises(TypeError):
-                table.set_column_totals(1, function="sum")  # type: ignore[arg-type]
+                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function="sum"))  # type: ignore[arg-type]
             with self.assertRaises(FormulonError):
-                table.set_column_totals(1, function=99)  # type: ignore[arg-type]
+                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=99))  # type: ignore[arg-type]
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
             columns = reloaded.sheet(0).list_tables()[0].get_properties().columns
@@ -501,13 +509,13 @@ class EnumRecordFieldTests(unittest.TestCase):
             sheet = wb.sheet(0)
             sheet.set_text(0, 0, "x")
             sheet.set_cell_phonetic_properties(
-                0, 0, font_index=0, type=PhoneticType.HIRAGANA, alignment=PhoneticAlignment.CENTER
+                0, 0, PhoneticProperties(font_index=0, type=PhoneticType.HIRAGANA, alignment=PhoneticAlignment.CENTER)
             )
             props = sheet.get_cell_phonetic_properties(0, 0)
             self.assertIs(props.type, PhoneticType.HIRAGANA)
             self.assertIs(props.alignment, PhoneticAlignment.CENTER)
             self.assertTrue(props.present)
-            sheet.set_cell_phonetic_properties(0, 0, font_index=0, type=3, alignment=1)
+            sheet.set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=3, alignment=1))
             props = sheet.get_cell_phonetic_properties(0, 0)
             self.assertIs(props.type, PhoneticType.NO_CONVERSION)
             self.assertIs(props.alignment, PhoneticAlignment.LEFT)
@@ -527,7 +535,7 @@ class EnumRecordFieldTests(unittest.TestCase):
             sheet.set_text(2, 0, "West")
             sheet.set_number(2, 1, 30.0)
             cache = wb.add_pivot_cache()
-            cache.set_worksheet_source(ref="A1:B3", sheet="Sheet1")
+            cache.set_worksheet_source(formulon.PivotWorksheetSourceInput(range="A1:B3", sheet="Sheet1"))
             cache.add_field("Region")
             cache.add_field("Amount")
             for region, amount in (("East", 10.0), ("West", 30.0)):
@@ -538,7 +546,7 @@ class EnumRecordFieldTests(unittest.TestCase):
                 sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
             )
             pivot.add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
-            pivot.set_field_sort(0, PivotSortOrder.DESCENDING)
+            pivot.update_field(0, sort_order=PivotSortOrder.DESCENDING)
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
             sheet = reloaded.sheet(0)
@@ -547,15 +555,15 @@ class EnumRecordFieldTests(unittest.TestCase):
 
     def test_theme_script_font_takes_a_font_scheme(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_theme_script_font(scheme=FontScheme.MAJOR, script="Jpan", typeface="Head Face")
-            wb.set_theme_script_font(scheme=FontScheme.MINOR, script="Jpan", typeface="Body Face")
+            wb.set_theme_script_font(ThemeScriptFont(scheme=FontScheme.MAJOR, script="Jpan", typeface="Head Face"))
+            wb.set_theme_script_font(ThemeScriptFont(scheme=FontScheme.MINOR, script="Jpan", typeface="Body Face"))
             major = wb.get_theme_script_font(scheme=FontScheme.MAJOR, script="Jpan")
             minor = wb.get_theme_script_font(scheme=FontScheme.MINOR, script="Jpan")
             assert major is not None and minor is not None
             self.assertEqual((major.scheme, major.typeface), (FontScheme.MAJOR, "Head Face"))
             self.assertEqual((minor.scheme, minor.typeface), (FontScheme.MINOR, "Body Face"))
             with self.assertRaises(FormulonError):
-                wb.set_theme_script_font(scheme=FontScheme.NONE, script="Jpan", typeface="x")
+                wb.set_theme_script_font(ThemeScriptFont(scheme=FontScheme.NONE, script="Jpan", typeface="x"))
 
     def test_merged_function_metadata_availability_is_an_enum(self) -> None:
         base = formulon.get_function_metadata("XLOOKUP")
@@ -572,7 +580,7 @@ class ValueInputUnionTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.add_person(Person(id=ALICE, display_name="Alice"))
             wb.sheet(0).add_threaded_comment(
-                ThreadedCommentInput(id=THREAD, row=2, col=1, person_id=ALICE, created=stamp, text="Check")
+                ThreadedCommentInput(id=THREAD, cell=CellAddress(2, 1), person_id=ALICE, created=stamp, text="Check")
             )
             comment = wb.sheet(0).list_threaded_comments()[0]
             self.assertIsInstance(comment.created, datetime.datetime)
@@ -583,7 +591,7 @@ class ValueInputUnionTests(unittest.TestCase):
             wb.add_person(Person(id=ALICE, display_name="Alice"))
             wb.sheet(0).add_threaded_comment(
                 ThreadedCommentInput(
-                    id=THREAD, row=0, col=0, person_id=ALICE, created=datetime.date(2026, 3, 4), text="d"
+                    id=THREAD, cell=CellAddress(0, 0), person_id=ALICE, created=datetime.date(2026, 3, 4), text="d"
                 )
             )
             self.assertEqual(wb.sheet(0).list_threaded_comments()[0].created, datetime.datetime(2026, 3, 4))
@@ -594,7 +602,7 @@ class ValueInputUnionTests(unittest.TestCase):
             wb.add_person(Person(id=ALICE, display_name="Alice"))
             with self.assertRaises(ValueError):
                 wb.sheet(0).add_threaded_comment(
-                    ThreadedCommentInput(id=THREAD, row=0, col=0, person_id=ALICE, created=aware, text="z")
+                    ThreadedCommentInput(id=THREAD, cell=CellAddress(0, 0), person_id=ALICE, created=aware, text="z")
                 )
             self.assertEqual(wb.sheet(0).list_threaded_comments(), [])
 
@@ -660,9 +668,11 @@ class ValueInputUnionTests(unittest.TestCase):
             pivot.add_field(PivotFieldInput(source_name="When", axis=PivotAxis.ROW))
             pivot.set_field_date_group(
                 0,
-                periods=PivotDatePeriod.MONTHS,
-                start=datetime.date(2024, 1, 1),
-                end=datetime.datetime(2024, 12, 31, 0, 0, 0),
+                PivotDateGroupInput(
+                    periods=PivotDatePeriod.MONTHS,
+                    start=datetime.date(2024, 1, 1),
+                    end=datetime.datetime(2024, 12, 31, 0, 0, 0),
+                ),
             )
 
     def test_set_error_accepts_an_excel_error(self) -> None:

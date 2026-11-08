@@ -937,15 +937,26 @@ FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, size_t sheet_inde
  */
 FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t sheet_index, const char* new_name);
 
-/** @brief A defined name to set (`fm_workbook_set_defined_name`). */
+/**
+ * @brief One defined name, as `fm_workbook_set_defined_name` takes it and
+ *        `fm_workbook_get_defined_name` / `fm_workbook_get_defined_name_at`
+ *        read it.
+ *
+ * On input `name` and `formula` are non-empty UTF-8, `formula` accepts one
+ * leading `=`, `local_sheet_id` is `-1` for workbook scope or a 0-based sheet
+ * index, `comment` `NULL` or "" means none, and `hidden` is 0/1 (non-zero
+ * hides the name from the Name Manager). On read `name` and `comment` are
+ * model-backed views and `formula` a read-scratch-backed view with its
+ * leading `=`; see `fm_workbook_get_defined_name_at` for the lifetimes.
+ */
 typedef struct {
   uint32_t struct_size;
-  const char* name;       /* UTF-8; non-empty */
-  const char* formula;    /* UTF-8; non-empty; one leading `=` is accepted and dropped */
+  const char* name;       /* stored spelling on read; model-backed view */
+  const char* formula;    /* as `fm_sheet_get_formula` spells it on read, `=` included */
   int32_t local_sheet_id; /* -1 = workbook scope, else the 0-based sheet index of the scope */
-  const char* comment;    /* Name Manager comment; `NULL` or "" = none */
-  int32_t hidden;         /* non-zero hides the name from the Name Manager */
-} fm_defined_name_input_t;
+  const char* comment;    /* Name Manager comment, "" on read when none; model-backed view */
+  int32_t hidden;         /* 0/1 */
+} fm_defined_name_t;
 
 /**
  * @brief Sets a defined name, appending it or replacing the entry with the
@@ -963,15 +974,15 @@ typedef struct {
  * name; replacing an existing entry does not re-check it.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `input`, `input->name` or
- *         `input->formula` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `name->name` or
+ *         `name->formula` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` or `formula` is empty, a new `name`
  *         is invalid or names a table, or `local_sheet_id` is outside `[-1, sheet_count)`;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
  * parse.
  */
-FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_input_t* input);
+FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_t* name);
 
 /* -------------------------------------------------------------------------- */
 /* Row / column structural edits                                              */
@@ -1637,9 +1648,26 @@ typedef struct {
 } fm_parsed_reference_t;
 
 /**
+ * @brief Options of `fm_workbook_parse_reference`.
+ *
+ * `r1c1` is an `fm_tristate_t`: `FM_TRISTATE_DEFAULT` and `FM_TRISTATE_FALSE`
+ * parse A1, `FM_TRISTATE_TRUE` parses R1C1. `has_base` is 0/1 and states the
+ * `(base_row, base_col)` pair that R1C1 relative axes are measured from; it is
+ * ignored when `r1c1` selects A1.
+ */
+typedef struct {
+  uint32_t struct_size;
+  int32_t r1c1;
+  int32_t has_base;
+  uint32_t base_row;
+  uint32_t base_col;
+} fm_parse_reference_spec_t;
+
+/**
  * @brief Parses `text` as `INDIRECT` reads a reference under the workbook's
- *        profile: A1 when `r1c1` is 0, R1C1 (letters and brackets of the
- *        profile's locale) when 1.
+ *        profile: A1 unless `spec->r1c1` is `FM_TRISTATE_TRUE`, then R1C1
+ *        (letters and brackets of the profile's locale). `spec == NULL` is a
+ *        plain A1 parse with no base.
  *
  * Accepts an optional local sheet qualifier (quoted with `''` escaping, or
  * bare), `$` markers (dropped), a `:` range in either order, and whole
@@ -1657,12 +1685,11 @@ typedef struct {
  *         `FM_STATUS_PARSER_INVALID_REFERENCE` (1004) when `text` is not a reference;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `text` or `out` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `text` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `r1c1` or `has_base` is not 0/1, or
- *         `has_base` is 1 with the base outside the grid.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `r1c1` is outside `fm_tristate_t`,
+ *         `has_base` is not 0/1, or `has_base` is 1 with the base outside the grid.
  */
-FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
-                                               int32_t has_base, uint32_t base_row, uint32_t base_col,
-                                               fm_parsed_reference_t* out);
+FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text,
+                                               const fm_parse_reference_spec_t* spec, fm_parsed_reference_t* out);
 
 /**
  * @brief Formats the rectangle `range` as A1 reference text, the inverse of
@@ -1942,16 +1969,6 @@ FM_API fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const fm_va
  */
 FM_API fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, size_t* out_count);
 
-/** @brief One defined name as `fm_workbook_get_defined_name_at` reads it. */
-typedef struct {
-  uint32_t struct_size;
-  const char* name;       /* stored spelling; model-backed view */
-  const char* formula;    /* as `fm_sheet_get_formula` spells it, `=` included; see the getter for its lifetime */
-  int32_t local_sheet_id; /* -1 = workbook scope, else the 0-based sheet index of the scope */
-  const char* comment;    /* Name Manager comment, "" when none; model-backed view */
-  int32_t hidden;         /* 0/1 */
-} fm_defined_name_t;
-
 /**
  * @brief Reads the `index`-th defined name with its scope and attributes.
  *
@@ -1975,25 +1992,20 @@ FM_API fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size
 /**
  * @brief Reads the defined name `name` (ASCII case-insensitive) in scope
  *        `local_sheet_id` (`-1` for workbook scope, else a 0-based sheet
- *        index). `*out_present` is `1` and the outputs filled when there is
- *        one, else `0`, the strings `NULL` and `*out_hidden` `0` (still
+ *        index). `*out_present` is `1` and `*out` filled the way
+ *        `fm_workbook_get_defined_name_at` fills it when there is one, else
+ *        `0`, the strings of `*out` `NULL` and `hidden` `0` (still
  *        `FM_STATUS_OK` (0)).
  *
- * `*out_name` is the stored spelling, a model-backed view.
- * `*out_formula` is a read-scratch-backed view with the leading `=`, as for
- * `fm_workbook_get_defined_name_at`'s `formula`;
- * `*out_comment` is a model-backed view, `""` when the name has no comment.
- * `*out_hidden` is 0/1.
- *
- * Lifetime: transient.
+ * Lifetime: transient; the views in `*out` follow
+ * `fm_workbook_get_defined_name_at`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is not valid UTF-8.
  */
 FM_API fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, const char* name, int32_t local_sheet_id,
-                                                int32_t* out_present, const char** out_name, const char** out_formula,
-                                                const char** out_comment, int32_t* out_hidden);
+                                                int32_t* out_present, fm_defined_name_t* out);
 
 /**
  * @brief Removes the defined name `name` (ASCII case-insensitive) in scope
@@ -2092,8 +2104,31 @@ FM_API fm_status_t fm_workbook_resolve_table_runtime_id(const fm_workbook_t* wb,
                                                         size_t* out_table_index);
 
 /**
- * @brief Creates a worksheet table (`xl/tables/tableN.xml`) over `rect` on
- *        `sheet_index` and writes its sheet-local index to `*out_table_index`.
+ * @brief A worksheet table to create (`fm_sheet_add_table`).
+ *
+ * The six flags are `fm_tristate_t`s: `header_row` `DEFAULT` is on,
+ * `totals_row` `DEFAULT` is off, and the four style toggles `DEFAULT` to the
+ * creation default (row stripes on for a styled table, the others off).
+ */
+typedef struct {
+  uint32_t struct_size;
+  fm_cell_rect_t range;
+  const char* name;
+  const char* const* column_names; /* NULL = take the headers from the sheet */
+  uint32_t column_count;
+  const char* style_name; /* NULL = the workbook default; "" = no table style */
+  int32_t header_row;
+  int32_t totals_row;
+  int32_t show_first_column;
+  int32_t show_last_column;
+  int32_t show_row_stripes;
+  int32_t show_column_stripes;
+} fm_table_spec_t;
+
+/**
+ * @brief Creates a worksheet table (`xl/tables/tableN.xml`) over `spec->range`
+ *        on `sheet_index`, with its style toggles, and writes its sheet-local
+ *        index to `*out_table_index`.
  *
  * `column_names` `NULL` takes the headers from the first row's displayed
  * text, naming a blank cell with the locale's column word and the first free
@@ -2113,21 +2148,22 @@ FM_API fm_status_t fm_workbook_resolve_table_runtime_id(const fm_workbook_t* wb,
  * `style_name` `NULL` applies the workbook's table-style default
  * (`fm_workbook_get_table_style_defaults`), else `TableStyleMedium2`; a styled
  * table starts with row stripes on and the other three toggles off. An empty
- * `style_name` creates the table without `<tableStyleInfo>`. `header_row` and
- * `totals_row` are `0` or `1`. The table's filter definition is created
+ * `style_name` creates the table without `<tableStyleInfo>`. `header_row`,
+ * `totals_row` and the four toggles are `fm_tristate_t`; a toggle set to
+ * `FM_TRISTATE_TRUE` or `FM_TRISTATE_FALSE` is written in the same call, and
+ * a failure creates nothing. The table's filter definition is created
  * automatically.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `rect`, `name` or `out_table_index` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `spec->name` or `out_table_index` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rect` is inverted or outside the grid, a
- *         name breaks the rules above, or the column names do not match the range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `range` is inverted or outside the grid, a
+ *         name breaks the rules above, the column names do not match the range, or a
+ *         flag is outside `fm_tristate_t`;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `name` is taken;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8.
  */
-FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* rect,
-                                      const char* name, const char* const* column_names, size_t column_count,
-                                      const char* style_name, int32_t header_row, int32_t totals_row,
+FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_table_spec_t* spec,
                                       size_t* out_table_index);
 
 /**
@@ -2881,7 +2917,7 @@ typedef enum {
  * @brief Relational comparison shared by data validation
  *        (`fm_data_validation_t::op`), conditional formatting `cellIs`
  *        (`fm_cf_rule_t::op`) and AutoFilter custom conditions
- *        (`fm_filter_column_t::op1` / `op2`).
+ *        (`fm_filter_condition_t::op`).
  *
  * OOXML `ST_DataValidationOperator` order, the one schema order covering all
  * eight; zero is its default `between`. An AutoFilter condition always states
@@ -3112,10 +3148,10 @@ typedef struct {
  *        `parent_id` is non-empty.
  *
  * Ids are brace-wrapped uppercase GUIDs and `created` is
- * `YYYY-MM-DDTHH:MM:SS.ss`; the caller supplies both, the engine never mints
- * them. `done` is the thread's resolved state and is meaningful on the
- * opening comment only. On input every `const char*` may be `NULL`, meaning
- * empty, and `mentions` may be `NULL` only with a zero `mention_count`.
+ * `YYYY-MM-DDTHH:MM:SS.ss`, or empty for a comment with no time (written
+ * without `dT`); the caller supplies both, the engine never mints them. `done` is the thread's resolved state and is
+ * meaningful on the opening comment only. On input every `const char*` may be `NULL`, meaning empty, and `mentions` may
+ * be `NULL` only with a zero `mention_count`.
  */
 typedef struct {
   uint32_t struct_size;
@@ -4118,16 +4154,63 @@ FM_API fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pagina
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) for a NULL argument. */
 FM_API fm_status_t fm_pagination_get_row_break_count(const fm_pagination_t* pagination, size_t* out_count);
 
-/** @brief Reads a 0-based row index that a horizontal break precedes. */
-FM_API fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out_row);
+/**
+ * @brief One row break as the worksheet declares it (`<rowBreaks><brk>`):
+ *        the break sits before row `row` (0-based) and covers columns
+ *        `first..last` (OOXML `min` / `max`). `manual` is `1` for a user
+ *        break and `0` for an automatic one (`man` absent).
+ */
+typedef struct {
+  uint32_t struct_size;
+  uint32_t row;
+  uint32_t first;
+  uint32_t last;
+  int32_t manual;
+} fm_row_break_t;
+
+/**
+ * @brief One column break (`<colBreaks><brk>`): the break sits before column
+ *        `col` (0-based) and covers rows `first..last`; `manual` as in
+ *        `fm_row_break_t`.
+ */
+typedef struct {
+  uint32_t struct_size;
+  uint32_t col;
+  uint32_t first;
+  uint32_t last;
+  int32_t manual;
+} fm_column_break_t;
+
+/**
+ * @brief Reads horizontal break `index` (the domain `[0,
+ *        fm_pagination_get_row_break_count)`) into `*out`.
+ *
+ * `out->row` is the 0-based row the break precedes. For a manual break
+ * `first` / `last` are the span declared on the sheet and `manual` is `1`;
+ * for a break the page walk computed they are `0` / `0` (the whole-sheet
+ * span, the convention of `fm_sheet_set_row_break`) and `manual` is `0`.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `pagination` or `out` is `NULL`;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
+ */
+FM_API fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pagination, size_t index, fm_row_break_t* out);
 
 /** @brief Writes the number of vertical (column) page breaks to `*out_count`;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) for a NULL argument. */
 FM_API fm_status_t fm_pagination_get_column_break_count(const fm_pagination_t* pagination, size_t* out_count);
 
-/** @brief Reads a 0-based column index that a vertical break precedes. */
+/**
+ * @brief Reads vertical break `index` (the domain `[0,
+ *        fm_pagination_get_column_break_count)`) into `*out`; the column
+ *        counterpart of `fm_pagination_get_row_break_at`.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `pagination` or `out` is `NULL`;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
+ */
 FM_API fm_status_t fm_pagination_get_column_break_at(const fm_pagination_t* pagination, size_t index,
-                                                     uint32_t* out_col);
+                                                     fm_column_break_t* out);
 
 /** @brief A rectangle in points. Sheet geometry measures from the top-left
  *         of cell A1; pagination measures from the page's top-left corner. */
@@ -4254,27 +4337,6 @@ FM_API fm_status_t fm_pagination_get_print_titles(const fm_pagination_t* paginat
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
  */
 FM_API fm_status_t fm_pagination_get_page_at(const fm_pagination_t* pagination, size_t index, fm_page_layout_t* out);
-
-/**
- * @brief Reports whether horizontal break `index` (the domain of
- *        `fm_pagination_get_row_break_at`) is a manual break (`1`) rather
- *        than one the page walk computed (`0`).
- *
- * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
- */
-FM_API fm_status_t fm_pagination_is_row_break_manual(const fm_pagination_t* pagination, size_t index,
-                                                     int32_t* out_manual);
-
-/**
- * @brief Vertical-break counterpart of
- *        `fm_pagination_is_row_break_manual`.
- *
- * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `index` is out of range.
- */
-FM_API fm_status_t fm_pagination_is_column_break_manual(const fm_pagination_t* pagination, size_t index,
-                                                        int32_t* out_manual);
 
 /* -------------------------------------------------------------------------- */
 /* Print settings - raw XML                                                   */
@@ -4498,33 +4560,6 @@ FM_API fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t she
 /* -------------------------------------------------------------------------- */
 /* Print settings - manual page breaks                                        */
 /* -------------------------------------------------------------------------- */
-
-/**
- * @brief One row break as the worksheet declares it (`<rowBreaks><brk>`):
- *        the break sits before row `row` (0-based) and covers columns
- *        `first..last` (OOXML `min` / `max`). `manual` is `1` for a user
- *        break and `0` for an automatic one (`man` absent).
- */
-typedef struct {
-  uint32_t struct_size;
-  uint32_t row;
-  uint32_t first;
-  uint32_t last;
-  int32_t manual;
-} fm_row_break_t;
-
-/**
- * @brief One column break (`<colBreaks><brk>`): the break sits before column
- *        `col` (0-based) and covers rows `first..last`; `manual` as in
- *        `fm_row_break_t`.
- */
-typedef struct {
-  uint32_t struct_size;
-  uint32_t col;
-  uint32_t first;
-  uint32_t last;
-  int32_t manual;
-} fm_column_break_t;
 
 /**
  * @brief Sets or removes the row break before `row`.
@@ -5581,8 +5616,8 @@ typedef enum {
 #define FM_PIVOT_VALUES_FIELD 0xFFFFFFFEu
 
 /**
- * @brief Calendar periods of a date group, as bits of the `periods_mask` of
- *        `fm_sheet_set_pivot_field_date_group` and the `date_periods` of
+ * @brief Calendar periods of a date group, as bits of the `periods` of
+ *        `fm_pivot_date_group_spec_t` and the `date_periods` of
  *        `fm_pivot_field_info_t`.
  */
 #define FM_PIVOT_PERIOD_SECONDS 1u
@@ -5698,7 +5733,7 @@ typedef struct {
  *                           the cache does not cover this field. Pivot field
  *                           `i` binds to cache field `i`.
  *   * `sort_order`        — `fm_pivot_sort_order_t`, as written by
- *                           `fm_sheet_set_pivot_field_sort`.
+ *                           `fm_sheet_update_pivot_field`.
  *   * `sort_by_field`     — the by-field key; empty for label order.
  *   * `date_periods`      — for a date-grouped field, the `FM_PIVOT_PERIOD_*`
  *                           bits of its group fields; `0` otherwise.
@@ -5721,6 +5756,10 @@ typedef struct {
  *   * `show_all`          — non-zero when items without data are listed
  *                           (OOXML `showAll`; absent in a file reads `1`, a
  *                           field created through the API starts at `0`).
+ *   * `show_detail`       -- `1` only when every item and the field's default
+ *                           expand marker are expanded, else `0`; a field
+ *                           with no items reads `1`. Writing it through
+ *                           `fm_pivot_field_patch_t` applies to all of them.
  */
 typedef struct {
   uint32_t struct_size;
@@ -5740,6 +5779,7 @@ typedef struct {
   int32_t insert_blank_row;
   int32_t fill_down_labels;
   int32_t show_all;
+  int32_t show_detail;
 } fm_pivot_field_info_t;
 
 /**
@@ -6010,29 +6050,53 @@ FM_API fm_status_t fm_workbook_add_pivot_cache(fm_workbook_t* wb, uint32_t reque
 FM_API fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, uint32_t cache_id);
 
 /**
- * @brief Reads the cache's worksheet source metadata.
+ * @brief A cache's `<worksheetSource>`, as `fm_workbook_get_pivot_cache_worksheet_source`
+ *        reads it and `fm_workbook_set_pivot_cache_worksheet_source` writes it.
  *
- * `out_present` is non-zero when a `<worksheetSource>` is present.
- * `out_ref`, `out_sheet`, and `out_name` are model-backed strings owned by
- * the workbook handle and remain valid until the cache is mutated or the
- * handle is destroyed. Reads do not invalidate them.
- *
- * Lifetime: transient.
+ * `ref`, `sheet` and `name` are the element's attributes as text; each may
+ * be `NULL` (absent) on input, and reads `NULL` when absent. The sheet is
+ * kept as written: it may name a sheet the workbook does not have. On read
+ * the strings are model-backed views owned by the workbook handle.
  */
-FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workbook_t* wb, uint32_t cache_id,
-                                                                int32_t* out_present, const char** out_ref,
-                                                                const char** out_sheet, const char** out_name);
+typedef struct {
+  uint32_t struct_size;
+  const char* ref;
+  const char* sheet;
+  const char* name;
+} fm_pivot_worksheet_source_t;
 
 /**
- * @brief Sets or clears the cache's worksheet source metadata.
+ * @brief Reads the cache's worksheet source into `*out`.
  *
- * Pass `present == 0` to clear `<worksheetSource>`. When present is
- * non-zero, nullable string attributes are copied; `NULL` means absent, and
- * the cache becomes a worksheet-type source: any other `<cacheSource>` type,
- * attribute or child captured on load is dropped.
+ * `*out_present` is non-zero when a `<worksheetSource>` is present; when it
+ * is `0`, `*out` is zeroed apart from `struct_size`. The views in `*out`
+ * remain valid until the cache is mutated or the handle is destroyed. Reads
+ * do not invalidate them.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out` is `NULL`;
+ *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`.
  */
-FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* wb, uint32_t cache_id, int32_t present,
-                                                                const char* ref, const char* sheet, const char* name);
+FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workbook_t* wb, uint32_t cache_id,
+                                                                int32_t* out_present, fm_pivot_worksheet_source_t* out);
+
+/**
+ * @brief Sets or clears the cache's worksheet source.
+ *
+ * `source == NULL` clears `<worksheetSource>`. Otherwise the strings are
+ * copied, `NULL` means absent, and the cache becomes a worksheet-type
+ * source: any other `<cacheSource>` type, attribute or child captured on
+ * load is dropped.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8.
+ */
+FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* wb, uint32_t cache_id,
+                                                                const fm_pivot_worksheet_source_t* source);
 
 /** @brief Number of fields on the cache identified by `cache_id`. */
 FM_API fm_status_t fm_workbook_get_pivot_cache_field_count(const fm_workbook_t* wb, uint32_t cache_id,
@@ -6354,8 +6418,20 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache_calculated_item(fm_workbook_t*
  */
 
 /**
+ * @brief A pivot table to create (`fm_sheet_add_pivot`): its name, the id of
+ *        the cache it reads and the cell its report starts at.
+ */
+typedef struct {
+  uint32_t struct_size;
+  const char* name;
+  uint32_t cache_id;
+  uint32_t anchor_row;
+  uint32_t anchor_col;
+} fm_pivot_spec_t;
+
+/**
  * @brief Creates a new empty pivot table on `sheet_index`, with the options
- *        Excel gives a new pivot. `cache_id` must reference an existing
+ *        Excel gives a new pivot. `spec->cache_id` must reference an existing
  *        cache. The new table's flat index is written to `*out_pivot_index`.
  *
  * The pivot takes the workbook's PivotTable style default
@@ -6363,15 +6439,15 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache_calculated_item(fm_workbook_t*
  * row / column headers and last column on, banded rows / columns off.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, or `out_pivot_index`
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `spec->name`, or `out_pivot_index`
  *         is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` does not match any existing cache;
+ *         `FM_STATUS_NOT_FOUND` (6) when `spec->cache_id` does not match any existing cache;
  *         `FM_STATUS_PRECONDITION_FAILED` (9), creating nothing, when the report range
  *         would overlap another structure.
  */
-FM_API fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, size_t sheet_index, const char* name, uint32_t cache_id,
-                                      uint32_t anchor_row, uint32_t anchor_col, size_t* out_pivot_index);
+FM_API fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, size_t sheet_index, const fm_pivot_spec_t* spec,
+                                      size_t* out_pivot_index);
 
 /**
  * @brief Removes the pivot table at `pivot_index` from `sheet_index`, clearing
@@ -6397,8 +6473,8 @@ FM_API fm_status_t fm_sheet_rename_pivot(fm_workbook_t* wb, size_t sheet_index, 
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `pivot_index` is out of range, or the
- *           anchor is outside the grid;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `pivot_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the anchor is outside the grid;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
  *           structure.
  */
@@ -6410,15 +6486,46 @@ FM_API fm_status_t fm_sheet_update_pivot_grand_totals(fm_workbook_t* wb, size_t 
                                                       int32_t rows_enabled, int32_t columns_enabled);
 
 /**
- * @brief Sets the pivot's table style and toggles, making the style element
- *        present. A `NULL` or empty `style_name` writes the element
- *        without a style name (no table style); the flags are `0` or non-zero.
- *        `fm_sheet_add_pivot` gives a new pivot its starting style.
+ * @brief Partial update of a pivot table's style (`fm_sheet_update_pivot_style_options`).
+ *
+ * Each field has an `fm_chart_patch_op_t` companion: `KEEP` (0) leaves it,
+ * `SET` writes the value beside it, `CLEAR` on `style_name` writes the
+ * element without a style name (no table style; the element stays). The
+ * toggles are `0` / `1` and reject `CLEAR`. A patch on a pivot without the
+ * style element creates it, the fields it leaves at `KEEP` taking the
+ * creation defaults of `fm_sheet_add_pivot`. A patch whose ops are all
+ * `KEEP` changes nothing.
+ */
+typedef struct {
+  uint32_t struct_size;
+  int32_t style_name_op;
+  const char* style_name;
+  int32_t show_row_headers_op;
+  int32_t show_row_headers;
+  int32_t show_column_headers_op;
+  int32_t show_column_headers;
+  int32_t show_row_stripes_op;
+  int32_t show_row_stripes;
+  int32_t show_column_stripes_op;
+  int32_t show_column_stripes;
+  int32_t show_last_column_op;
+  int32_t show_last_column;
+} fm_pivot_style_options_patch_t;
+
+/**
+ * @brief Merges `patch` into the pivot's table style and toggles. The whole
+ *        patch is checked before anything changes.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `pivot_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range, `CLEAR` hits a
+ *         toggle, `SET` carries a `NULL` `style_name`, or a toggle is not 0 / 1;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `style_name` is not valid UTF-8.
  */
 FM_API fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                       const char* style_name, int32_t show_row_headers,
-                                                       int32_t show_column_headers, int32_t show_row_stripes,
-                                                       int32_t show_column_stripes, int32_t show_last_column);
+                                                       const fm_pivot_style_options_patch_t* patch);
 
 /** @brief Reads the pivot's compact / tabular / outline report layout. */
 FM_API fm_status_t fm_sheet_get_pivot_report_layout(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -6456,8 +6563,8 @@ FM_API fm_status_t fm_sheet_get_pivot_field_count(const fm_workbook_t* wb, size_
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `out_field_index` or
  *           `spec->source_name` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `pivot_index` is out of range, or
- *           `spec->axis` names no declared enumerator.
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `pivot_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `spec->axis` names no declared enumerator.
  */
 FM_API fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                             const fm_pivot_field_spec_t* spec, size_t* out_field_index);
@@ -6483,102 +6590,126 @@ FM_API fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, size_t sheet
                                                  size_t field_index, int32_t axis);
 
 /**
- * @brief Sets the sort directive on pivot field `field_index`.
+ * @brief Partial update of a pivot field (`fm_sheet_update_pivot_field`).
  *
- * `order` is a raw signed 32-bit `fm_pivot_sort_order_t` ordinal; unknown
- * values return `FM_STATUS_INVALID_ARGUMENT` (2). `FM_PIVOT_SORT_ORDER_MANUAL` keeps sibling
- * items in the field's item document order (`fm_sheet_add_pivot_field_item`
- * order) and takes no `by_field` key: a non-NULL, non-empty `by_field` with it
- * returns `FM_STATUS_INVALID_ARGUMENT` (2). For the other orders, `by_field == NULL` (or
- * empty) sorts by label and clears the by-field key.
+ * Each field has an `fm_chart_patch_op_t` companion: `KEEP` (0) leaves it,
+ * `SET` writes the value beside it, `CLEAR` is accepted only where stated.
+ *
+ *   * `custom_name`    -- the report name; `CLEAR` restores the source name.
+ *                         A `SET` name is non-`NULL`, at most 255 UTF-16 code
+ *                         units, and must not equal under the profile's
+ *                         collation another field's source or custom name or
+ *                         a data field's name (the field's own source name is
+ *                         allowed). Data field names are not changed.
+ *   * `number_format`  -- a format code under the rules of
+ *                         `fm_pivot_field_spec_t::number_format`; `CLEAR`
+ *                         removes the format.
+ *   * `default_subtotal` -- `0` / `1`; custom subtotal functions replace the
+ *                         automatic subtotal whatever this says.
+ *   * `insert_blank_row`, `fill_down_labels`, `show_all`, `subtotal_top` --
+ *                         `0` / `1` (`fm_pivot_field_info_t` reads the first
+ *                         three as `0` / `1` and `subtotal_top` as an
+ *                         `fm_tristate_t`).
+ *   * `sort_order`     -- an `fm_pivot_sort_order_t`. `MANUAL` keeps sibling
+ *                         items in the field's item document order and takes
+ *                         no by-field key: it with a non-empty `sort_by_field`
+ *                         (set by this patch or already stored and not
+ *                         cleared) is `FM_STATUS_INVALID_ARGUMENT` (2).
+ *   * `sort_by_field`  -- the by-field key; `CLEAR` sorts by label.
+ *   * `show_detail`    -- `0` / `1`: expands or collapses every item of the
+ *                         field together with its subtotal row.
+ *
+ * `CLEAR` is accepted on `custom_name`, `number_format` and `sort_by_field`
+ * only.
  */
-FM_API fm_status_t fm_sheet_set_pivot_field_sort(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                 size_t field_index, int32_t order, const char* by_field);
-
-/** @brief Sets the `subtotal_top` flag on pivot field `field_index`. */
-FM_API fm_status_t fm_sheet_set_pivot_field_subtotal_top(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                         size_t field_index, int32_t top);
+typedef struct {
+  uint32_t struct_size;
+  int32_t custom_name_op;
+  const char* custom_name;
+  int32_t number_format_op;
+  const char* number_format;
+  int32_t default_subtotal_op;
+  int32_t default_subtotal;
+  int32_t insert_blank_row_op;
+  int32_t insert_blank_row;
+  int32_t fill_down_labels_op;
+  int32_t fill_down_labels;
+  int32_t show_all_op;
+  int32_t show_all;
+  int32_t subtotal_top_op;
+  int32_t subtotal_top;
+  int32_t sort_order_op;
+  int32_t sort_order;
+  int32_t sort_by_field_op;
+  const char* sort_by_field;
+  int32_t show_detail_op;
+  int32_t show_detail;
+} fm_pivot_field_patch_t;
 
 /**
- * @brief Turns the automatic subtotal of pivot field `field_index` on or off
- *        (`0` off, any other value on). Custom subtotal functions replace the
- *        automatic subtotal whatever this flag says.
- */
-FM_API fm_status_t fm_sheet_set_pivot_field_default_subtotal(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                             size_t field_index, int32_t on);
-
-/**
- * @brief Sets whether a blank row follows each item block of pivot field
- *        `field_index` (`0` off, any other value on).
- */
-FM_API fm_status_t fm_sheet_set_pivot_field_insert_blank_row(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                             size_t field_index, int32_t on);
-
-/**
- * @brief Sets whether pivot field `field_index` repeats its item labels on
- *        every row of a block (`0` off, any other value on).
- */
-FM_API fm_status_t fm_sheet_set_pivot_field_fill_down_labels(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                             size_t field_index, int32_t on);
-
-/**
- * @brief Renames pivot field `field_index` in the report; `NULL` or an empty
- *        `name` restores its source name. Data field names are not changed.
+ * @brief Merges `patch` into pivot field `field_index`. Every field of the
+ *        patch is checked first, then all are applied in one report rewrite:
+ *        on any failure nothing changes. A patch whose ops are all `KEEP`
+ *        (including a zero-initialised one) is a no-op.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) for malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) if an index is out of range, `name` is longer
- *           than 255 UTF-16 code units, or it equals under the profile's
- *           collation another field's source or custom name or a data
- *           field's name (the field's own source name is allowed);
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `pivot_index` or `field_index` is out
+ *           of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range, `CLEAR` hits a field that does not accept it, a
+ *           flag is not 0 / 1, `sort_order` is not an `fm_pivot_sort_order_t`, `MANUAL`
+ *           meets a by-field key, `SET` carries a `NULL` string, or `custom_name` breaks the
+ *           rules above;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
  *           structure.
  */
-FM_API fm_status_t fm_sheet_set_pivot_field_custom_name(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                        size_t field_index, const char* name);
+FM_API fm_status_t fm_sheet_update_pivot_field(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                               size_t field_index, const fm_pivot_field_patch_t* patch);
 
 /**
- * @brief Sets whether pivot field `field_index` lists items without data
- *        (`0` off, any other value on).
- */
-FM_API fm_status_t fm_sheet_set_pivot_field_show_all(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                     size_t field_index, int32_t on);
-
-/**
- * @brief Expands (non-zero) or collapses (`0`) every item of pivot field
- *        `field_index`, together with the field's subtotal row.
- */
-FM_API fm_status_t fm_sheet_set_pivot_field_show_detail(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                        size_t field_index, int32_t on);
-
-/**
- * @brief Expands (non-zero) or collapses (`0`) item `item_index` of pivot field
- *        `field_index`.
+ * @brief Partial update of a pivot field item (`fm_sheet_update_pivot_field_item`).
  *
- * @return `FM_STATUS_INVALID_ARGUMENT` (2) when an index is out of range, otherwise as
- *         `fm_sheet_set_pivot_field_show_detail`.
+ * Ops as for `fm_pivot_field_patch_t`.
+ *
+ *   * `visible`     -- `0` / `1`: shows or hides the item.
+ *   * `show_detail` -- `0` / `1`: expands or collapses the item.
+ *   * `caption`     -- shown instead of the item's value; `CLEAR` removes it,
+ *                      as does a `SET` caption equal to the item's own value.
+ *                      The item's value, not the caption, still decides
+ *                      hidden-item matching and ordering. A caption is at most
+ *                      255 UTF-16 code units and must not match, under the
+ *                      workbook profile's text collation, the label another
+ *                      item of the field shows.
+ *
+ * `CLEAR` is accepted on `caption` only.
  */
-FM_API fm_status_t fm_sheet_set_pivot_field_item_show_detail(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                             size_t field_index, size_t item_index, int32_t on);
+typedef struct {
+  uint32_t struct_size;
+  int32_t visible_op;
+  int32_t visible;
+  int32_t show_detail_op;
+  int32_t show_detail;
+  int32_t caption_op;
+  const char* caption;
+} fm_pivot_item_patch_t;
 
 /**
- * @brief Shows `caption` instead of the value of item `item_index` of pivot
- *        field `field_index`.
+ * @brief Merges `patch` into item `item_index` of pivot field `field_index`,
+ *        with the validate-then-apply and empty-patch rules of
+ *        `fm_sheet_update_pivot_field`.
  *
- * `NULL` or an empty string clears the caption, as does a caption equal to
- * the item's own value. The item's value, not the caption, still decides
- * hidden-item matching and ordering.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when an index is out of range, `caption` is not
- *         valid UTF-8 or is longer than 255 UTF-16 code units, or it matches,
- *         under the workbook profile's text collation, the label another item
- *         of the field shows.
+ * @return `FM_STATUS_INDEX_OUT_OF_RANGE` (5054) when `pivot_index`, `field_index` or
+ *         `item_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range, `CLEAR` hits a
+ *         field other than `caption`, a flag is not 0 / 1, `SET` carries a `NULL`
+ *         `caption`, or the caption breaks the rules above; otherwise as
+ *         `fm_sheet_update_pivot_field`.
  */
-FM_API fm_status_t fm_sheet_set_pivot_field_item_caption(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                         size_t field_index, size_t item_index, const char* caption);
+FM_API fm_status_t fm_sheet_update_pivot_field_item(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    size_t field_index, size_t item_index,
+                                                    const fm_pivot_item_patch_t* patch);
 
 /**
  * @brief Appends a manual-filter item to pivot field `field_index`, addressed
@@ -6626,10 +6757,6 @@ FM_API fm_status_t fm_sheet_add_pivot_field_item_by_cache_index(fm_workbook_t* w
 FM_API fm_status_t fm_sheet_clear_pivot_field_items(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t field_index);
 
-/** @brief Toggles the visibility of item `item_index` on field `field_index`. */
-FM_API fm_status_t fm_sheet_set_pivot_field_item_visible(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                         size_t field_index, size_t item_index, int32_t visible);
-
 /**
  * @brief Appends a subtotal function to pivot field `field_index`.
  *
@@ -6645,31 +6772,48 @@ FM_API fm_status_t fm_sheet_clear_pivot_field_subtotal_functions(fm_workbook_t* 
                                                                  size_t pivot_index, size_t field_index);
 
 /**
+ * @brief A date grouping to apply (`fm_sheet_set_pivot_field_date_group`).
+ *
+ * `periods` is an OR of `FM_PIVOT_PERIOD_*`; `calendar` an
+ * `fm_pivot_calendar_t`. `start` / `end` are date serials, read only when
+ * `has_start` / `has_end` is 1; with `0` the grouping takes the field's first
+ * value and its last (the midnight after it for a date without a time).
+ */
+typedef struct {
+  uint32_t struct_size;
+  uint32_t periods;
+  int32_t calendar;
+  uint32_t interval_days;
+  int32_t has_start;
+  double start;
+  int32_t has_end;
+  double end;
+} fm_pivot_date_group_spec_t;
+
+/**
  * @brief Groups the date field `field_index` (a source field, or one of its
- *        group fields) by the `FM_PIVOT_PERIOD_*` bits of `periods_mask`, as
- *        Excel's Group command does, replacing any grouping it has.
+ *        group fields) by `group->periods`, as Excel's Group command does,
+ *        replacing any grouping it has.
  *
  * Each period becomes a group field appended to the pivot cache, finest
  * first, named and labelled in the workbook profile's locale. Every pivot on
  * the cache gains them: this pivot shows them in the field's place on its
  * axis, coarsest outermost; another pivot showing the field shows them
  * before it. `interval_days` above 1 groups by runs of that many days and
- * needs `periods_mask == FM_PIVOT_PERIOD_DAYS`.
+ * needs `periods == FM_PIVOT_PERIOD_DAYS`.
  * `FM_PIVOT_CALENDAR_JAPANESE` groups the years period by era year.
- * `start_or_nan` / `end_or_nan` are date serials; NaN takes the field's
- * first value and its last (the midnight after it for a date without a time).
  *
- * @return `FM_STATUS_INVALID_ARGUMENT` (2) for an index out of range, a `periods_mask` of 0
+ * @return `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `group` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an index out of range, `periods` of 0
  *         or with an unknown bit, an unknown `calendar`, `interval_days == 0`,
- *         `interval_days > 1` with any period but days, an infinite or
- *         otherwise invalid date bound, a start after the end, or a field
+ *         `interval_days > 1` with any period but days, `has_start` / `has_end`
+ *         not 0 / 1, a NaN or infinite bound with its flag set, a start after the end, or a field
  *         holding a blank, a value that is not a date, or no value;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field is grouped and its group fields
  *         are not the last fields of the cache.
  */
 FM_API fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                       size_t field_index, uint32_t periods_mask, int32_t calendar,
-                                                       uint32_t interval_days, double start_or_nan, double end_or_nan);
+                                                       size_t field_index, const fm_pivot_date_group_spec_t* group);
 
 /**
  * @brief Removes the date grouping of field `field_index` (a source field, or
@@ -6682,14 +6826,6 @@ FM_API fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, size_t
  */
 FM_API fm_status_t fm_sheet_clear_pivot_field_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                          size_t field_index);
-
-/**
- * @brief Sets the number format of pivot field `field_index` from a format
- *        code, under the rules of `fm_pivot_field_spec_t::number_format`.
- *        `format_code` must be non-NULL (use the empty string to clear).
- */
-FM_API fm_status_t fm_sheet_set_pivot_field_number_format(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                          size_t field_index, const char* format_code);
 
 /**
  * @brief Replaces the row-axis field order with `indices[0..count)`.
@@ -6966,7 +7102,7 @@ FM_API fm_status_t fm_sheet_get_pivot_field_item_count(const fm_workbook_t* wb, 
 
 /**
  * @brief Reads item `item_index` of pivot field `field_index` into `out`. The
- *        index is the one `fm_sheet_set_pivot_field_item_visible` takes.
+ *        index is the one `fm_sheet_update_pivot_field_item` takes.
  *
  * Lifetime: transient.
  *
@@ -7918,6 +8054,18 @@ typedef struct {
 } fm_date_group_item_t;
 
 /**
+ * @brief One custom condition of an AutoFilter column (`<customFilter>`).
+ *
+ * `op` is an `fm_comparison_operator_t` other than `BETWEEN` /
+ * `NOT_BETWEEN`; `value` is the `<customFilter val>` text, `NULL` meaning
+ * empty on input.
+ */
+typedef struct {
+  int32_t op;
+  const char* value;
+} fm_filter_condition_t;
+
+/**
  * @brief One `<filterColumn>` of an AutoFilter.
  *
  * `column_offset` is the 0-based offset from the AutoFilter range's first column.
@@ -7926,11 +8074,13 @@ typedef struct {
  *   * `kind` -- an `fm_filter_kind_t`.
  *   * values -- `filter_blank` matches blank cells; `values` lists displayed
  *     texts and `date_groups` date-group items.
- *   * custom -- `custom_count` (1 or 2) conditions `op1`/`val1` and
- *     `op2`/`val2`, joined by AND when `custom_and` is set. Operators
- *     are `fm_comparison_operator_t` members other than `BETWEEN` /
- *     `NOT_BETWEEN`, which the setter rejects with
- *     `FM_STATUS_INVALID_ARGUMENT` (2).
+ *   * custom -- `condition_count` (1 or 2) `conditions`, joined by AND when
+ *     `custom_and` is set. Operators are `fm_comparison_operator_t` members
+ *     other than `BETWEEN` / `NOT_BETWEEN`, which the setter rejects with
+ *     `FM_STATUS_INVALID_ARGUMENT` (2), as it does any other
+ *     `condition_count` for a custom kind. Other kinds read `condition_count`
+ *     0 and ignore it on input. The read `conditions` array shares the
+ *     AutoFilter getter's lifetime.
  *   * top10 -- `top` (else bottom), `percent`, the rank `top_val`, and the
  *     `filter_val` threshold Excel last stored when `has_filter_val`.
  *   * dynamic -- `dynamic_type` is an `fm_dynamic_filter_type_t`; `dyn_val` / `dyn_max_val` are the
@@ -7955,11 +8105,8 @@ typedef struct {
   const fm_date_group_item_t* date_groups;
   uint32_t date_group_count;
   int32_t custom_and;
-  int32_t custom_count;
-  int32_t op1;
-  const char* val1;
-  int32_t op2;
-  const char* val2;
+  const fm_filter_condition_t* conditions;
+  uint32_t condition_count;
   int32_t top;
   int32_t percent;
   int32_t has_filter_val;
@@ -10120,6 +10267,8 @@ typedef struct {
  *
  * `*_east_asian` is the `a:ea` face when it names one, otherwise the
  * `a:font script="Jpan"` face. Getter strings are read-scratch-backed views.
+ * An empty face writes `typeface=""`, as the Office theme's East Asian
+ * entries are.
  */
 typedef struct {
   uint32_t struct_size;
@@ -11421,17 +11570,6 @@ typedef enum {
   FM_CHART_EXTENDED_LAYOUT_WATERFALL = 7,
 } fm_chart_extended_layout_t;
 
-/** @brief Kinds `fm_sheet_add_chart` and `fm_sheet_set_chart_type` produce. */
-typedef enum {
-  FM_CHART_INSERT_KIND_COLUMN = 0,
-  FM_CHART_INSERT_KIND_BAR = 1,
-  FM_CHART_INSERT_KIND_LINE = 2,
-  FM_CHART_INSERT_KIND_AREA = 3,
-  FM_CHART_INSERT_KIND_PIE = 4,
-  FM_CHART_INSERT_KIND_SCATTER = 5,
-  FM_CHART_INSERT_KIND_DOUGHNUT = 6,
-} fm_chart_insert_kind_t;
-
 typedef enum {
   FM_CHART_GROUPING_CLUSTERED = 0,
   FM_CHART_GROUPING_STACKED = 1,
@@ -11780,6 +11918,24 @@ typedef struct {
   double number;
   const char* text;
 } fm_chart_literal_t;
+
+/**
+ * @brief One series input to write (`fm_chart_series_patch_t`).
+ *
+ * `kind` is an `fm_chart_source_kind_t`. `REF` writes the reference text
+ * `formula`; `LITERAL` writes the `literal_count` points of `literal` (each
+ * element carries its `struct_size`): a series name is one point written as
+ * `<c:tx><c:v>` (`CT_SerTx` has no `c:strLit`), `values` / `y` / `size` hold
+ * numbers (`c:numLit`), and `categories` / `x` are `c:numLit` when every
+ * point is a number, else `c:strLit`; `NONE` writes no input. `formula` is read for `REF` only and
+ * `literal` for `LITERAL` only.
+ */
+typedef struct {
+  int32_t kind;
+  const char* formula;
+  const fm_chart_literal_t* literal;
+  uint32_t literal_count;
+} fm_chart_data_source_spec_t;
 
 /** @brief One formatted data point (`c:dPt`). */
 typedef struct {
@@ -12211,13 +12367,20 @@ FM_API fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, 
 /**
  * @brief Options of `fm_sheet_add_chart`.
  *
- * `kind` is an `fm_chart_insert_kind_t`; `grouping` (an
- * `fm_chart_grouping_t`) applies to column, bar, line and area. `source` is
+ * `type` is an `fm_chart_plot_type_t` of `BAR`, `LINE`, `AREA`, `PIE`,
+ * `DOUGHNUT` or `SCATTER` (any other is `FM_STATUS_INVALID_ARGUMENT` (2)).
+ * `bar_direction` is an `fm_chart_bar_direction_t` read for `BAR` only (zero
+ * is `COLUMN`); `FM_CHART_BAR_DIRECTION_BAR` with any other type is
+ * `FM_STATUS_INVALID_ARGUMENT` (2). `grouping` (an
+ * `fm_chart_grouping_t`) applies to bar, line and area. `source` is
  * one A1 rectangle, sheet-qualified or on the target sheet. `direction` is
  * an `fm_chart_series_direction_t`, `header_row`/`header_column`
  * `fm_tristate_t`s (`FM_TRISTATE_DEFAULT` follows Excel's detection). `title` is
  * `NULL` for Excel's automatic title, empty for none, else the text.
- * `legend` is an `fm_chart_legend_position_t`. `placement` reads as for
+ * `legend` is an `fm_chart_legend_position_t`; zero is
+ * `FM_CHART_LEGEND_POSITION_RIGHT`, the OOXML default, while Excel's insert
+ * default is `FM_CHART_LEGEND_POSITION_BOTTOM`, which the bindings pass for an
+ * omitted option. `placement` reads as for
  * `fm_sheet_add_picture`, its `name` and `description` naming the chart (an
  * empty name becomes `Chart <n>`, n being the object id minus one), except that a zero width or height
  * means Excel's default 360 x 216 pt frame. Excel inserts charts with a
@@ -12225,7 +12388,8 @@ FM_API fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, 
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t kind;
+  int32_t type;
+  int32_t bar_direction;
   int32_t grouping;
   const char* source;
   int32_t direction;
@@ -12250,7 +12414,7 @@ typedef struct {
 /**
  * @brief Outline patch; a `SET` `color` is kind None, Rgb or Theme
  *        (`theme` below 12, `tint` within [-1, 1]), `dash` is an
- *        `fm_chart_line_dash_t`, `none` 0/1 (`CLEAR` rejected).
+ *        `fm_chart_line_dash_t`, `none` 0/1 (`CLEAR` resets it to 0).
  */
 typedef struct {
   int32_t color_op;
@@ -12277,9 +12441,10 @@ typedef struct {
 } fm_chart_marker_patch_t;
 
 /**
- * @brief Data-label patch. The `show_*` flags are 0/1 (`CLEAR` rejected);
- *        `position` is an `fm_chart_label_position_t`; a `SET` `font_color`
- *        is kind None, Rgb or Theme.
+ * @brief Data-label patch. The `show_*`, `source_linked` and `deleted`
+ *        flags are 0/1 (`CLEAR` rejected); `position` is an
+ *        `fm_chart_label_position_t`; a `SET` `font_color` is kind None, Rgb
+ *        or Theme.
  */
 typedef struct {
   int32_t show_value_op;
@@ -12302,24 +12467,39 @@ typedef struct {
   fm_color_spec_t font_color;
   int32_t font_size_op;
   double font_size_pt;
+  int32_t source_linked_op;
+  int32_t source_linked;
+  int32_t deleted_op;
+  int32_t deleted;
 } fm_chart_labels_patch_t;
 
 /**
  * @brief Series patch.
  *
- * Each reference is `NULL` to keep it; otherwise the new reference text, an
- * empty string removing `name`, `categories` or `x`. An empty `values`, `y`
- * or `size` is `FM_STATUS_INVALID_ARGUMENT` (2). `marker_op`/`labels_op` `CLEAR` removes
+ * Each input (`name`, `categories`, `values`, `x`, `y`, `size`) has an
+ * `fm_chart_patch_op_t` companion and an `fm_chart_data_source_spec_t`. `KEEP`
+ * leaves it. `SET` with `REF` writes `formula` (`NULL` or empty is
+ * `FM_STATUS_INVALID_ARGUMENT` (2)); with `LITERAL` writes the points
+ * (`literal_count` 0 is `FM_STATUS_INVALID_ARGUMENT` (2)); with `NONE`, like
+ * `CLEAR`, removes the input of `name`, `categories` or `x` and is
+ * `FM_STATUS_INVALID_ARGUMENT` (2) on `values`, `y` and `size`.
+ * `marker_op`/`labels_op` `CLEAR` removes
  * the marker or the data labels; `smooth` is 0/1 (`CLEAR` rejected).
  */
 typedef struct {
   uint32_t struct_size;
-  const char* name;
-  const char* categories;
-  const char* values;
-  const char* x;
-  const char* y;
-  const char* size;
+  int32_t name_op;
+  fm_chart_data_source_spec_t name;
+  int32_t categories_op;
+  fm_chart_data_source_spec_t categories;
+  int32_t values_op;
+  fm_chart_data_source_spec_t values;
+  int32_t x_op;
+  fm_chart_data_source_spec_t x;
+  int32_t y_op;
+  fm_chart_data_source_spec_t y;
+  int32_t size_op;
+  fm_chart_data_source_spec_t size;
   fm_chart_fill_patch_t fill;
   fm_chart_line_patch_t line;
   int32_t marker_op;
@@ -12330,7 +12510,14 @@ typedef struct {
   fm_chart_labels_patch_t labels;
 } fm_chart_series_patch_t;
 
-/** @brief Data-point patch; a patch that changes nothing removes the point's formatting. */
+/**
+ * @brief Data-point patch (`fm_sheet_update_chart_point`).
+ *
+ * A patch whose ops are all `KEEP` changes nothing. A point whose override
+ * ends empty after the patch (the fill and line members all cleared and
+ * `marker_op` `CLEAR`) loses its `c:dPt`; clearing every member is how a
+ * point override is removed, and removing a point that has none does nothing.
+ */
 typedef struct {
   uint32_t struct_size;
   fm_chart_fill_patch_t fill;
@@ -12366,9 +12553,12 @@ typedef struct {
  * is read when `crosses` is `FM_CHART_AXIS_CROSSES_AT`. `title` takes the
  * kinds of `fm_sheet_set_chart_title` (`NONE` removes the axis title, `AUTO`
  * leaves the text to the viewer). `CLEAR` on `title` removes the axis
- * title, on `log_base` makes the axis linear, and on `tick_label_position`
- * restores the default. A set `tick_label_position` is an
- * `fm_chart_tick_label_position_t` other than `ABSENT`.
+ * title, on `log_base` makes the axis linear, on `tick_label_position`
+ * restores the default, and on `minor_unit` makes the unit automatic. A set
+ * `tick_label_position` is an `fm_chart_tick_label_position_t` other than
+ * `ABSENT`. `minor_gridlines` and `source_linked` are 0/1 and `position` an
+ * `fm_chart_axis_position_t` (`CLEAR` rejected on these three; an axis always
+ * has `c:axPos`).
  */
 typedef struct {
   uint32_t struct_size;
@@ -12395,6 +12585,14 @@ typedef struct {
   double crosses_at;
   int32_t tick_label_position_op;
   int32_t tick_label_position; /* fm_chart_tick_label_position_t */
+  int32_t minor_unit_op;
+  double minor_unit;
+  int32_t minor_gridlines_op;
+  int32_t minor_gridlines;
+  int32_t position_op;
+  int32_t position; /* fm_chart_axis_position_t */
+  int32_t source_linked_op;
+  int32_t source_linked;
 } fm_chart_axis_patch_t;
 
 /**
@@ -12402,42 +12600,43 @@ typedef struct {
  *
  * `position` is an `fm_chart_legend_position_t` other than
  * `FM_CHART_LEGEND_POSITION_NONE` (a chart without a legend takes `NULL`
- * instead); `overlay` is `0` / `1`; the `hidden_series_count` series `c:idx`
- * values of `hidden_series` are the entries hidden from the legend
- * (`hidden_series` may be `NULL` when the count is 0). The read side is
+ * instead); `overlay` is `0` / `1`; the `hidden_entry_count` series `c:idx`
+ * values of `hidden_entries` are the entries hidden from the legend
+ * (`hidden_entries` may be `NULL` when the count is 0). The read side is
  * `fm_chart_info_t`'s `legend_*` fields and `fm_chart_get_legend_hidden_at`.
  */
 typedef struct {
   uint32_t struct_size;
   int32_t position;
   int32_t overlay;
-  const uint32_t* hidden_series;
-  uint32_t hidden_series_count;
+  const uint32_t* hidden_entries;
+  uint32_t hidden_entry_count;
 } fm_chart_legend_t;
 
 /**
  * @brief Legend merge (`fm_sheet_update_chart_legend`). `position` is an
  *        `fm_chart_legend_position_t` other than `FM_CHART_LEGEND_POSITION_NONE`
  *        (`INVALID_ARGUMENT`; `fm_sheet_set_chart_legend(..., NULL)` removes the
- *        legend). With `hidden_series_op` `SET` the `hidden_series_count`
+ *        legend). With `hidden_entries_op` `SET` the `hidden_entry_count`
  *        series `c:idx` values replace the hidden legend entries
- *        (`hidden_series` may be `NULL` when the count is 0); `KEEP` leaves
+ *        (`hidden_entries` may be `NULL` when the count is 0); `KEEP` leaves
  *        them alone.
  */
 typedef struct {
   uint32_t struct_size;
   int32_t position;
   int32_t overlay;
-  int32_t hidden_series_op;
-  const uint32_t* hidden_series;
-  uint32_t hidden_series_count;
+  int32_t hidden_entries_op;
+  const uint32_t* hidden_entries;
+  uint32_t hidden_entry_count;
 } fm_chart_legend_patch_t;
 
 /**
  * @brief Display-option patch. `blanks_as` (`c:dispBlanksAs`) is an
  *        `fm_blanks_as_t` of `GAP`, `ZERO` or `SPAN`; `plot_visible_only`
  *        (`c:plotVisOnly`) and `na_as_blank` (`c16r3:dispNaAsBlank`, `#N/A`
- *        points drawn as blank cells) are 0/1. `CLEAR` removes the element;
+ *        points drawn as blank cells) are 0/1. `style` (`c:style`) is 1..48
+ *        (`ST_Style`). `CLEAR` removes the element;
  *        `na_as_blank` set to 0 removes it too, as Excel writes it.
  */
 typedef struct {
@@ -12448,6 +12647,8 @@ typedef struct {
   int32_t plot_visible_only;
   int32_t na_as_blank_op;
   int32_t na_as_blank;
+  int32_t style_op;
+  int32_t style;
 } fm_chart_display_patch_t;
 
 /**
@@ -12470,16 +12671,21 @@ FM_API fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, con
                                       uint32_t* out_object_id);
 
 /**
- * @brief Replaces plot group `plot` with `kind` (an
- *        `fm_chart_insert_kind_t`) and `grouping` (an `fm_chart_grouping_t`),
- *        keeping each series' references, idx, order and explicit colors.
+ * @brief Replaces plot group `plot` with `type` (an `fm_chart_plot_type_t`
+ *        of `BAR`, `LINE`, `AREA`, `PIE`, `DOUGHNUT` or `SCATTER`),
+ *        `bar_direction` (an `fm_chart_bar_direction_t`, read for `BAR` only
+ *        as for `fm_chart_insert_t`) and `grouping` (an
+ *        `fm_chart_grouping_t`), keeping each series' references, idx, order
+ *        and explicit colors.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `type` is not a writable type or
+ *         `bar_direction` is `FM_CHART_BAR_DIRECTION_BAR` for another type;
  *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart, or a plot that
  *         shares its axes with another plot group.
  */
 FM_API fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                           int32_t kind, int32_t grouping);
+                                           int32_t type, int32_t bar_direction, int32_t grouping);
 
 /**
  * @brief Sets the chart title: `NONE` removes it, `TEXT` writes `text`,
@@ -12498,7 +12704,7 @@ FM_API fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_inde
  *        `legend` is `NULL` (a no-op on a chart without one).
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `hidden_series` is `NULL`
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `hidden_entries` is `NULL`
  *         with a non-zero count;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `position` is
  *         `FM_CHART_LEGEND_POSITION_NONE` or outside the enumeration, or
@@ -12509,12 +12715,12 @@ FM_API fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_ind
 
 /**
  * @brief Merges `patch` into the chart's legend: sets the position and
- *        overlay, and the hidden entries when `hidden_series_op` is `SET`.
+ *        overlay, and the hidden entries when `hidden_entries_op` is `SET`.
  *        On a chart without a legend, `KEEP` hidden entries show every entry.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`, or
- *         `hidden_series` is `NULL` with a non-zero count.
+ *         `hidden_entries` is `NULL` with a non-zero count.
  */
 FM_API fm_status_t fm_sheet_update_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                 const fm_chart_legend_patch_t* patch);
@@ -12534,7 +12740,8 @@ FM_API fm_status_t fm_sheet_update_chart_axis(fm_workbook_t* wb, size_t sheet_in
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when a `SET` value is outside its domain
- *         (`blanks_as` `ABSENT` included; `CLEAR` removes the element).
+ *         (`blanks_as` `ABSENT` and a `style` outside 1..48 included; `CLEAR`
+ *         removes the element).
  */
 FM_API fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  const fm_chart_display_patch_t* patch);
@@ -12554,8 +12761,9 @@ FM_API fm_status_t fm_sheet_update_chart_series(fm_workbook_t* wb, size_t sheet_
                                                 size_t series_index, const fm_chart_series_patch_t* patch);
 
 /**
- * @brief Patches point `point_index` of series `series_index`; a patch that
- *        changes nothing removes the point's formatting.
+ * @brief Patches point `point_index` of series `series_index`. An all-`KEEP`
+ *        patch changes nothing; a patch that leaves the point's override
+ *        empty removes it (see `fm_chart_point_patch_t`).
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`.

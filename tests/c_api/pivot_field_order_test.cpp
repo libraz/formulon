@@ -24,8 +24,7 @@ fm_status_t BuildFieldOrderPivot(fm_workbook_t* wb, std::size_t* out_pivot_index
       return status;
     }
   }
-  if (const fm_status_t status = fm_sheet_add_pivot(wb, 0U, "FieldOrder", cache_id, 0U, 0U, out_pivot_index);
-      status != 0) {
+  if (const fm_status_t status = AddPivot(wb, 0U, "FieldOrder", cache_id, 0U, 0U, out_pivot_index); status != 0) {
     return status;
   }
   for (const char* name : kFieldNames) {

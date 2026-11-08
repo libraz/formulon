@@ -89,7 +89,7 @@ test('threaded mention and image integer fields reject before C mutation', async
           id: '{AAAAAAAA-0000-0000-0000-000000000001}',
           personId: '{11111111-1111-1111-1111-111111111111}',
           text: 'x',
-          row: 2 ** 32,
+          cell: { row: 2 ** 32, col: 0 },
           mentions: [{ personId: 'p', mentionId: 'm', start: 2 ** 32 }],
         }),
       RangeError,

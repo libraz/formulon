@@ -98,9 +98,14 @@ emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   }
   o.set("dateGroups", groups);
   o.set("customAnd", c.custom_and != 0);
-  o.set("customCount", c.custom_count);
-  o.set("operator1", c.op1);
-  o.set("operator2", c.op2);
+  emscripten::val conditions = emscripten::val::array();
+  for (uint32_t i = 0; i < c.condition_count; ++i) {
+    emscripten::val condition = emscripten::val::object();
+    condition.set("operator", c.conditions[i].op);
+    condition.set("value", std::string(c.conditions[i].value != nullptr ? c.conditions[i].value : ""));
+    conditions.set(i, condition);
+  }
+  o.set("conditions", conditions);
   o.set("top", c.top != 0);
   o.set("percent", c.percent != 0);
   o.set("topValue", c.top_val);
@@ -112,8 +117,7 @@ emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   o.set("cellColor", c.cell_color != 0);
   o.set("iconSet", c.icon_set);
   js_set_present_or_null(o, "iconIndex", c.has_icon_index, c.icon_index);
-  js_set_cstr_fields(o,
-                     {{"value1", c.val1}, {"value2", c.val2}, {"valueIso", c.val_iso}, {"maxValueIso", c.max_val_iso}});
+  js_set_cstr_fields(o, {{"valueIso", c.val_iso}, {"maxValueIso", c.max_val_iso}});
   return o;
 }
 
@@ -160,8 +164,8 @@ struct FilterColumnStore {
   std::vector<std::string> values;
   std::vector<const char*> value_ptrs;
   std::vector<fm_date_group_item_t> date_groups;
-  std::string val1;
-  std::string val2;
+  std::vector<std::string> condition_values;
+  std::vector<fm_filter_condition_t> conditions;
   std::string val_iso;
   std::string max_val_iso;
 };
@@ -260,21 +264,37 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   c.date_groups = st.date_groups.empty() ? nullptr : st.date_groups.data();
   c.date_group_count = static_cast<uint32_t>(st.date_groups.size());
   c.custom_and = pull_flag(v, "customAnd", reader);
-  c.custom_count = reader.i32(v, "customCount", 0, "filterColumn.customCount");
-  c.op1 = reader.i32(v, "operator1", 0, "filterColumn.operator1");
-  c.op2 = reader.i32(v, "operator2", 0, "filterColumn.operator2");
+  const emscripten::val conditions = js_pull_array(v, "conditions", reader);
+  const uint32_t condition_count = reader.length(conditions, "filterColumn.conditions.length");
   if (!reader.ok()) {
     return;
   }
-  st.val1 = reader.string(v, "value1", "filterColumn.value1");
-  st.val2 = reader.string(v, "value2", "filterColumn.value2");
+  st.conditions.reserve(condition_count);
+  st.condition_values.reserve(condition_count);
+  for (uint32_t i = 0; i < condition_count; ++i) {
+    const emscripten::val condition = reader.array_element(conditions, i, "filterColumn.conditions[]");
+    if (!reader.ok()) {
+      return;
+    }
+    fm_filter_condition_t entry{};
+    entry.op = reader.i32(condition, "operator", 0, "filterColumn.conditions[].operator");
+    st.condition_values.push_back(reader.string(condition, "value", "filterColumn.conditions[].value"));
+    if (!reader.ok()) {
+      return;
+    }
+    st.conditions.push_back(entry);
+  }
+  // The value pointers are taken after both vectors stop growing.
+  for (uint32_t i = 0; i < condition_count; ++i) {
+    st.conditions[i].value = st.condition_values[i].c_str();
+  }
+  c.conditions = st.conditions.empty() ? nullptr : st.conditions.data();
+  c.condition_count = condition_count;
   st.val_iso = reader.string(v, "valueIso", "filterColumn.valueIso");
   st.max_val_iso = reader.string(v, "maxValueIso", "filterColumn.maxValueIso");
   if (!reader.ok()) {
     return;
   }
-  c.val1 = st.val1.c_str();
-  c.val2 = st.val2.c_str();
   c.val_iso = st.val_iso.c_str();
   c.max_val_iso = st.max_val_iso.c_str();
   c.top = pull_flag(v, "top", reader, true);

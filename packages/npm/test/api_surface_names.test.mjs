@@ -68,7 +68,7 @@ function fillTable(ws) {
 
 function addCache(wb) {
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -92,9 +92,9 @@ function addPivot(ws, wb) {
   return { pivot, cache };
 }
 
-function addChart(ws, kind = f.ChartInsertKind.Column) {
+function addChart(ws, kind = f.ChartPlotType.Bar) {
   fillTable(ws);
-  return ws.addChart({ kind, source: 'Sheet1!$A$1:$B$3', legend: f.ChartLegendPosition.Right });
+  return ws.addChart({ type: kind, range: 'Sheet1!$A$1:$B$3', legend: f.ChartLegendPosition.Right });
 }
 
 describe('method names', () => {
@@ -358,12 +358,12 @@ describe('update merges and set(null) removes a singleton', () => {
   it('Chart.updateLegend merges while Chart.setLegend replaces and setLegend(null) removes', () => {
     withSheet((ws) => {
       const chart = addChart(ws);
-      chart.setLegend({ position: f.ChartLegendPosition.Bottom, overlay: true, hiddenSeries: [] });
+      chart.setLegend({ position: f.ChartLegendPosition.Bottom, overlay: true, hiddenEntries: [] });
       chart.updateLegend({ overlay: false });
       let legend = chart.getProperties().legend;
       assert.equal(legend.position, f.ChartLegendPosition.Bottom);
       assert.equal(legend.overlay, false);
-      chart.setLegend({ position: f.ChartLegendPosition.Top, overlay: true, hiddenSeries: [] });
+      chart.setLegend({ position: f.ChartLegendPosition.Top, overlay: true, hiddenEntries: [] });
       legend = chart.getProperties().legend;
       assert.equal(legend.position, f.ChartLegendPosition.Top);
       chart.setLegend(null);
@@ -503,7 +503,7 @@ describe('update merges and set(null) removes a singleton', () => {
   it('setHyperlinkRange links the range from its top-left cell and null removes it', () => {
     withSheet((ws) => {
       ws.setHyperlinkRange('B1:B2', { target: 'https://example.com/r' });
-      assert.deepEqual({ ...ws.getHyperlink('B1').rect }, { firstRow: 0, firstCol: 1, lastRow: 1, lastCol: 1 });
+      assert.deepEqual({ ...ws.getHyperlink('B1').range }, { firstRow: 0, firstCol: 1, lastRow: 1, lastCol: 1 });
       assert.equal(ws.getHyperlink('B2'), null);
       ws.setHyperlinkRange('B1:B2', null);
       assert.equal(ws.listHyperlinks().length, 0);
@@ -699,21 +699,20 @@ describe('conditional formats and auto filters', () => {
           {
             columnOffset: 1,
             kind: f.FilterKind.Custom,
-            customCount: 2,
             customAnd: true,
-            operator1: f.ComparisonOperator.LessThan,
-            value1: '20',
-            operator2: f.ComparisonOperator.NotEqual,
-            value2: '5',
+            conditions: [
+              { operator: f.ComparisonOperator.LessThan, value: '20' },
+              { operator: f.ComparisonOperator.NotEqual, value: '5' },
+            ],
           },
         ],
       });
       const column = ws.getAutoFilter().columns[0];
       assert.equal(column.columnOffset, 1);
-      assert.equal(column.operator1, f.ComparisonOperator.LessThan);
-      assert.equal(column.value1, '20');
-      assert.equal(column.operator2, f.ComparisonOperator.NotEqual);
-      assert.equal(column.value2, '5');
+      assert.deepEqual(JSON.parse(JSON.stringify(column.conditions)), [
+        { operator: f.ComparisonOperator.LessThan, value: '20' },
+        { operator: f.ComparisonOperator.NotEqual, value: '5' },
+      ]);
       hasKeys(column, [
         'topValue',
         'filterValue',
@@ -738,6 +737,11 @@ describe('conditional formats and auto filters', () => {
         'maxValIso',
         'dxfId',
         'iconId',
+        'customCount',
+        'operator1',
+        'value1',
+        'operator2',
+        'value2',
       ]);
     });
   });
@@ -865,7 +869,7 @@ describe('unit-suffixed fields', () => {
 
   it('chart fill, line and marker carry transparencyPct and sizePt', () => {
     withSheet((ws) => {
-      const chart = addChart(ws, f.ChartInsertKind.Line);
+      const chart = addChart(ws, f.ChartPlotType.Line);
       chart.updateSeries(0, 0, {
         fill: { color: '#FF0000', transparencyPct: 25 },
         line: { color: '#0000FF', transparencyPct: 10, widthPt: 2 },
@@ -889,7 +893,7 @@ describe('unit-suffixed fields', () => {
       lacksKeys(plot, ['gapWidth', 'firstSliceAngle']);
       assert.throws(() => chart.updatePlot(0, { gapWidth: 40 }), TypeError);
 
-      const pie = addChart(ws, f.ChartInsertKind.Pie);
+      const pie = addChart(ws, f.ChartPlotType.Pie);
       pie.updatePlot(0, { firstSliceAngleDeg: 90 });
       assert.equal(pie.getProperties().plots[0].firstSliceAngleDeg, 90);
     });

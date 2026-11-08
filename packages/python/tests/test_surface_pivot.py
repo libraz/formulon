@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Tuple
 from formulon import (
     PIVOT_VALUES_FIELD,
     CellAddress,
+    CellRect,
     ErrorCode,
     ExcelError,
     FormulonError,
@@ -22,6 +23,7 @@ from formulon import (
     PivotCache,
     PivotCalendar,
     PivotDataFieldInput,
+    PivotDateGroupInput,
     PivotDatePeriod,
     PivotFieldInput,
     PivotFilterInput,
@@ -30,7 +32,9 @@ from formulon import (
     PivotInput,
     PivotReportLayout,
     PivotSortOrder,
+    PivotWorksheetSourceInput,
     Sheet,
+    SheetRect,
     StatusCode,
     Workbook,
 )
@@ -109,8 +113,8 @@ class PivotTests(unittest.TestCase):
     def test_cache_source_and_report_layout_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             cache = wb.add_pivot_cache().cache_id
-            wb.pivot_cache(cache).set_worksheet_source(ref="A1:B9", sheet="Sheet1")
-            self.assertEqual(wb.pivot_cache(cache).get_worksheet_source().sheet, "Sheet1")
+            wb.pivot_cache(cache).set_worksheet_source(PivotWorksheetSourceInput(range="A1:B9", sheet="Sheet1"))
+            self.assertEqual(wb.pivot_cache(cache).get_worksheet_source().range, SheetRect(0, CellRect(0, 0, 8, 1)))
             pivot = wb.sheet(0).add_pivot(PivotInput(name="Layout", cache_id=cache, anchor=CellAddress(0, 0)))
             wb.sheet(0).pivot(pivot).set_report_layout(PivotReportLayout.TABULAR)
             self.assertEqual(wb.sheet(0).pivot(pivot).get_report_layout(), PivotReportLayout.TABULAR)
@@ -126,7 +130,7 @@ class _PivotFixture:
         self.wb = wb
         wb.set_profile_id("win-365-ja_JP")
         self.cache = wb.add_pivot_cache().cache_id
-        wb.pivot_cache(self.cache).set_worksheet_source(ref="A1:D5", sheet="Sheet1")
+        wb.pivot_cache(self.cache).set_worksheet_source(PivotWorksheetSourceInput(range="A1:D5", sheet="Sheet1"))
         for name in ("Region", "Product", "Amount", "Date"):
             wb.pivot_cache(self.cache).add_field(name)
         for item in ("East", "West"):
@@ -176,9 +180,9 @@ def _grid(wb: Workbook, pivot: int = 0) -> List[str]:
             text = f"#{int(v.code)}"
         else:
             text = ""
-        assert layout.rect is not None
-        rows.setdefault(cell.row, [""] * (layout.rect.last_col - layout.rect.first_col + 1))[
-            cell.col - layout.rect.first_col
+        assert layout.range is not None
+        rows.setdefault(cell.row, [""] * (layout.range.last_col - layout.range.first_col + 1))[
+            cell.col - layout.range.first_col
         ] = text
     return ["|".join(rows[r]) for r in sorted(rows)]
 
@@ -302,7 +306,7 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def cache_source(t: Any, f: _PivotFixture, r: None) -> None:
             source = f.wb.pivot_cache(f.cache).get_worksheet_source()
-            eq((source.ref, source.sheet), ("B2:E6", "Data"))
+            eq(source.range, SheetRect(0, CellRect(1, 1, 5, 4)))
             eq(f.grid(), _BASE_GRID)
 
         def cache_field_add(t: Any, f: _PivotFixture, r: int) -> None:
@@ -324,7 +328,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq(r.index, 1)
             self.assertIs(f.wb.sheet(0).pivot(1), r)
             layout = f.wb.sheet(0).pivot(1).get_layout()
-            eq((layout.rect.first_row, layout.rect.first_col), (20, 1))
+            eq((layout.range.first_row, layout.range.first_col), (20, 1))
             eq(f.grid(0), _BASE_GRID)
 
         def pivot_remove(t: Any, f: _PivotFixture, r: None) -> None:
@@ -349,7 +353,7 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def set_anchor(t: Any, f: _PivotFixture, r: None) -> None:
             layout = f.wb.sheet(0).pivot(f.pivot).get_layout()
-            eq((layout.rect.first_row, layout.rect.first_col), (10, 2))
+            eq((layout.range.first_row, layout.range.first_col), (10, 2))
             eq(f.grid(), _BASE_GRID)
 
         def set_layout(t: Any, f: _PivotFixture, r: None) -> None:
@@ -378,7 +382,7 @@ class PivotMutatorTableTests(unittest.TestCase):
         def clear_date_group_setup(f: _PivotFixture) -> None:
             _date_rows(f)
             f.wb.sheet(0).pivot(f.pivot).set_field_date_group(
-                f.date, periods=PivotDatePeriod.YEARS, calendar=PivotCalendar.GREGORIAN
+                f.date, PivotDateGroupInput(periods=PivotDatePeriod.YEARS, calendar=PivotCalendar.GREGORIAN)
             )
 
         def number_format(t: Any, f: _PivotFixture, r: None) -> None:
@@ -631,7 +635,9 @@ class PivotMutatorTableTests(unittest.TestCase):
             ),
             "PivotCache.set_worksheet_source": (
                 None,
-                lambda f: f.wb.pivot_cache(f.cache).set_worksheet_source(ref="B2:E6", sheet="Data"),
+                lambda f: f.wb.pivot_cache(f.cache).set_worksheet_source(
+                    PivotWorksheetSourceInput(range="B2:E6", sheet="Sheet1")
+                ),
                 None,
                 cache_source,
             ),
@@ -802,14 +808,14 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["Product|(すべて)", "|", *_BASE_GRID]),
             ),
-            "Pivot.set_field_sort": (
+            "Pivot.update_field#sort_order": (
                 # East now outsums West, so sorting ascending by the data
                 # field differs from both label orders.
                 lambda f: f.wb.pivot_cache(f.cache).set_record_value(0, 2, 40),
                 lambda f: (
                     f.wb.sheet(0)
                     .pivot(f.pivot)
-                    .set_field_sort(f.region, PivotSortOrder.ASCENDING, by_field="Sum of Amount")
+                    .update_field(f.region, sort_order=PivotSortOrder.ASCENDING, sort_by_field="Sum of Amount")
                 ),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "West|37", "East|45", "総計|82"]),
@@ -885,7 +891,9 @@ class PivotMutatorTableTests(unittest.TestCase):
                 lambda f: (
                     f.wb.sheet(0)
                     .pivot(f.pivot)
-                    .set_field_date_group(f.date, periods=PivotDatePeriod.YEARS, calendar=PivotCalendar.JAPANESE)
+                    .set_field_date_group(
+                        f.date, PivotDateGroupInput(periods=PivotDatePeriod.YEARS, calendar=PivotCalendar.JAPANESE)
+                    )
                 ),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "令和6年|40", "令和7年|12", "総計|52"]),
@@ -998,16 +1006,16 @@ class PivotMutatorTableTests(unittest.TestCase):
                     rejects(lambda: f.wb.sheet(0).pivot(f.pivot).update_field(99, fill_down_labels=True), IDX),
                 ),
             ),
-            "Pivot.set_field_show_detail": (
+            "Pivot.update_field#show_detail_all": (
                 None,
-                lambda f: f.wb.sheet(0).pivot(f.pivot).set_field_show_detail(f.region, on=False),
+                lambda f: f.wb.sheet(0).pivot(f.pivot).update_field(f.region, show_detail=False),
                 None,
                 lambda t, f, r: (
                     eq(
                         [f.wb.sheet(0).pivot(f.pivot).get_field_item(f.region, i).show_detail for i in (0, 1)],
                         [False, False],
                     ),
-                    rejects(lambda: f.wb.sheet(0).pivot(f.pivot).set_field_show_detail(99, on=False), IDX),
+                    rejects(lambda: f.wb.sheet(0).pivot(f.pivot).update_field(99, show_detail=False), IDX),
                 ),
             ),
             "Pivot.update_field_item#show_detail": (
@@ -1069,14 +1077,16 @@ class PivotMutatorTableTests(unittest.TestCase):
             wb.sheet(0).pivot(f.pivot).clear_field_items(f.region)
             wb.sheet(0).pivot(f.pivot).add_field_item(f.region, "West", visible=True)
             wb.sheet(0).pivot(f.pivot).add_field_item(f.region, "East", visible=True)
-            wb.sheet(0).pivot(f.pivot).set_field_sort(f.region, PivotSortOrder.MANUAL)
+            wb.sheet(0).pivot(f.pivot).update_field(f.region, sort_order=PivotSortOrder.MANUAL)
             self.assertEqual(f.grid(), ["行ラベル|Sum of Amount", "West|37", "East|15", "総計|52"])
-            wb.sheet(0).pivot(f.pivot).set_field_sort(f.region, PivotSortOrder.ASCENDING)
+            wb.sheet(0).pivot(f.pivot).update_field(f.region, sort_order=PivotSortOrder.ASCENDING)
             self.assertEqual(f.grid(), _BASE_GRID)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).pivot(f.pivot).set_field_sort(f.region, 3)
+                wb.sheet(0).pivot(f.pivot).update_field(f.region, sort_order=3)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).pivot(f.pivot).set_field_sort(f.region, PivotSortOrder.MANUAL, by_field="Sum of Amount")
+                wb.sheet(0).pivot(f.pivot).update_field(
+                    f.region, sort_order=PivotSortOrder.MANUAL, sort_by_field="Sum of Amount"
+                )
 
     def test_pivot_mutators_forward_their_arguments(self) -> None:
         with Workbook.create_default() as wb:
@@ -1128,10 +1138,12 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self._assert_fixture_definition(wb, f, f.pivot)
 
             wb.sheet(0).pivot(f.pivot).update_grand_totals(rows=False, columns=True)
-            wb.sheet(0).pivot(f.pivot).set_field_sort(f.region, PivotSortOrder.DESCENDING, by_field="Sum of Amount")
+            wb.sheet(0).pivot(f.pivot).update_field(
+                f.region, sort_order=PivotSortOrder.DESCENDING, sort_by_field="Sum of Amount"
+            )
             wb.sheet(0).pivot(f.pivot).update_field_item(f.region, 1, visible=False)
             wb.sheet(0).pivot(f.pivot).set_field_date_group(
-                f.date, periods=PivotDatePeriod.YEARS, calendar=PivotCalendar.GREGORIAN
+                f.date, PivotDateGroupInput(periods=PivotDatePeriod.YEARS, calendar=PivotCalendar.GREGORIAN)
             )
             self.assertEqual(wb.sheet(0).pivot(f.pivot).get_grand_totals(), PivotGrandTotals(rows=False, columns=True))
             region = wb.sheet(0).pivot(f.pivot).list_fields()[f.region]
@@ -1360,7 +1372,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
 class PivotFieldBindingTests(unittest.TestCase):
     def _wide_pivot(self, wb: Workbook) -> int:
         cache = wb.add_pivot_cache().cache_id
-        wb.pivot_cache(cache).set_worksheet_source(ref="A1:D3", sheet="Sheet1")
+        wb.pivot_cache(cache).set_worksheet_source(PivotWorksheetSourceInput(range="A1:D3", sheet="Sheet1"))
         for name in ("Region", "Product", "Sales", "Qty"):
             wb.pivot_cache(cache).add_field(name)
         for sales in (100, 200):

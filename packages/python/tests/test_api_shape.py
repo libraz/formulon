@@ -18,6 +18,8 @@ import pickle
 import tempfile
 import unittest
 
+import _chart_input
+
 import formulon
 from formulon import (
     CellAddress,
@@ -30,7 +32,10 @@ from formulon import (
     NotFoundError,
     PivotInput,
     Sheet,
+    SheetSelectionInput,
     StatusCode,
+    ThemeColorsInput,
+    ThemeScriptFont,
     Value,
     ValueKind,
     Workbook,
@@ -858,7 +863,7 @@ def _workbook_with_pivot() -> "tuple[Workbook, int, int]":
     """A default workbook with one two-field pivot on sheet 0: ``(wb, pivot_index, cache_id)``."""
     wb = Workbook.create_default()
     cache_id = wb.add_pivot_cache().cache_id
-    wb.pivot_cache(cache_id).set_worksheet_source(ref="A1:B3", sheet="Sheet1")
+    wb.pivot_cache(cache_id).set_worksheet_source(formulon.PivotWorksheetSourceInput(range="A1:B3", sheet="Sheet1"))
     wb.pivot_cache(cache_id).add_field("Region")
     wb.pivot_cache(cache_id).add_field("Amount")
     for region, amount in (("East", 10.0), ("West", 30.0)):
@@ -929,19 +934,19 @@ class SetterRoundTripTests(unittest.TestCase):
         self.assertEqual(self.ws.get_page_margins(), before)
 
     def test_whole_records(self) -> None:
-        self.ws.set_comment(1, 1, Comment("Ann", "Note"))
+        self.ws.set_comment(1, 1, Comment("Note", author="Ann"))
         self.ws.set_comment(1, 1, self.ws.get_comment(1, 1))
-        self.assertEqual(self.ws.get_comment(1, 1), Comment("Ann", "Note"))
+        self.assertEqual(self.ws.get_comment(1, 1), Comment("Note", author="Ann"))
 
         titles = formulon.PrintTitles(rows=formulon.Span(0, 1), columns=None)
         self.ws.set_print_titles(titles)
         self.ws.set_print_titles(self.ws.get_print_titles())
         self.assertEqual(self.ws.get_print_titles(), titles)
 
-        selection = formulon.SheetSelection(2, 3, [formulon.CellRect(2, 3, 4, 5)])
-        self.ws.set_selection(active_row=2, active_col=3, ranges=selection.ranges)
+        selection = formulon.SheetSelection(CellAddress(2, 3), [formulon.CellRect(2, 3, 4, 5)])
+        self.ws.set_selection(SheetSelectionInput(CellAddress(2, 3), ranges=selection.ranges))
         got = self.ws.get_selection()
-        self.ws.set_selection(active_row=got.active_row, active_col=got.active_col, ranges=got.ranges)
+        self.ws.set_selection(got)
         self.assertEqual(self.ws.get_selection(), selection)
 
         protection = formulon.SheetProtectionInput(hash_value="abc")
@@ -981,11 +986,13 @@ class SetterRoundTripTests(unittest.TestCase):
         self.assertEqual(self.wb.get_defined_name("Rate"), got)
 
         colors = self.wb.get_theme_colors()
-        self.wb.set_theme_colors(colors=colors.colors)
+        self.wb.set_theme_colors(ThemeColorsInput(colors=colors.colors))
         self.assertEqual(self.wb.get_theme_colors().colors, colors.colors)
 
         script = self.wb.get_theme_script_font(scheme=formulon.FontScheme.MAJOR, script="Jpan")
-        self.wb.set_theme_script_font(scheme=formulon.FontScheme.MAJOR, script=script.script, typeface=script.typeface)
+        self.wb.set_theme_script_font(
+            ThemeScriptFont(scheme=formulon.FontScheme.MAJOR, script=script.script, typeface=script.typeface)
+        )
         self.assertEqual(self.wb.get_theme_script_font(scheme=formulon.FontScheme.MAJOR, script="Jpan"), script)
 
         style = self.ws.pivot(self.pivot).get_style_options()
@@ -1013,10 +1020,8 @@ class AbsentValueTests(unittest.TestCase):
             formulon.TableInput(range=formulon.CellRect(20, 0, 22, 1), name="T", columns=["A", "B"], style_name="")
         )
         wb.set_defined_name(formulon.DefinedNameInput("Rate", "Sheet1!$A$1"))
-        chart = ws.add_chart(formulon.ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3", legend=None)
-        ws.add_sparkline_group(
-            formulon.SparklineGroup(sparklines=[formulon.Sparkline(formula="Sheet1!A1:B1", location="C1")])
-        )
+        chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3", legend=None)
+        ws.add_sparkline_group(formulon.SparklineGroupInput(sparklines=[formulon.SparklineInput("Sheet1!A1:B1", "C1")]))
         cls.wb, cls.pivot, cls.cache, cls.table, cls.chart = wb, pivot, cache, table, chart
 
     @classmethod
@@ -1050,7 +1055,7 @@ class AbsentValueTests(unittest.TestCase):
         self.assertIsNone(chart.legend)
         drawing = ws.drawing(self.chart).get_drawing_properties()
         self.assertFalse(hasattr(drawing, "media_path"))
-        self.assertIsNone(ws.list_sparkline_groups()[0].date_axis_ref)
+        self.assertIsNone(ws.list_sparkline_groups()[0].date_axis_range)
         data_field = ws.pivot(self.pivot).list_data_fields()[0]
         self.assertEqual(
             (data_field.number_format, data_field.show_as_base_field, data_field.show_as_base_item), (None, None, None)
@@ -1073,7 +1078,7 @@ class AbsentValueTests(unittest.TestCase):
         # A3, A9
         with Workbook.create_default() as wb:
             wb.set_defined_name(formulon.DefinedNameInput("Rate", "Sheet1!$A$1", None, comment="x", hidden=True))
-            self.assertIsNone(wb.list_defined_names()[0].local_sheet_id)
+            self.assertIsNone(wb.list_defined_names()[0].scope)
             wb.set_defined_name(formulon.DefinedNameInput("Rate", "Sheet1!$B$1"))
             self.assertEqual(
                 wb.get_defined_name("Rate"),
@@ -1117,8 +1122,8 @@ class AbsentValueTests(unittest.TestCase):
             ws = wb.sheet(0)
             with self.assertRaises(InvalidArgumentError):
                 wb.set_defined_name(formulon.DefinedNameInput("Rate", ""))
-            ws.set_comment(0, 0, Comment("Ann", ""))
-            self.assertEqual(ws.get_comment(0, 0), Comment("Ann", ""))
+            ws.set_comment(0, 0, Comment("", author="Ann"))
+            self.assertEqual(ws.get_comment(0, 0), Comment("", author="Ann"))
             ws.remove_comment(0, 0)
             self.assertIsNone(ws.get_comment(0, 0))
             with self.assertRaises(NotFoundError):
@@ -1148,7 +1153,7 @@ class AbsentValueTests(unittest.TestCase):
             ws = wb.sheet(0)
             for r in range(3):
                 ws.set_number(r, 0, float(r))
-            chart = ws.add_chart(formulon.ChartInsertKind.COLUMN, "Sheet1!$A$1:$A$3", title="T")
+            chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$A$3", title="T")
             ws.chart(chart).set_title(None)
             ws.chart(chart).set_legend(None)
             info = ws.chart(chart).get_properties()

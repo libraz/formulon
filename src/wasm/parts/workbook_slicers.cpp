@@ -74,14 +74,15 @@ fm_slicer_t pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& sp
     s.fields |= FM_SLICER_FIELD_ROW_HEIGHT;
     s.row_height_emu = reader.i64(spec, "rowHeightEmu", 0, "slicer.rowHeightEmu");
   }
-  if (has("fromRow")) {
+  // The two-cell anchor is all or nothing: any of its four cells makes the other three required.
+  if (has("fromRow") || has("fromCol") || has("toRow") || has("toCol")) {
     s.fields |= FM_SLICER_FIELD_ANCHOR;
-    s.from_row = reader.u32(spec, "fromRow", 0U, "slicer.fromRow");
-    s.from_col = reader.u32(spec, "fromCol", 0U, "slicer.fromCol");
+    s.from_row = reader.required_u32(spec, "fromRow", "slicer.fromRow");
+    s.from_col = reader.required_u32(spec, "fromCol", "slicer.fromCol");
     s.from_row_offset_emu = reader.i64(spec, "fromRowOffsetEmu", 0, "slicer.fromRowOffsetEmu");
     s.from_col_offset_emu = reader.i64(spec, "fromColOffsetEmu", 0, "slicer.fromColOffsetEmu");
-    s.to_row = reader.u32(spec, "toRow", 0U, "slicer.toRow");
-    s.to_col = reader.u32(spec, "toCol", 0U, "slicer.toCol");
+    s.to_row = reader.required_u32(spec, "toRow", "slicer.toRow");
+    s.to_col = reader.required_u32(spec, "toCol", "slicer.toCol");
     s.to_row_offset_emu = reader.i64(spec, "toRowOffsetEmu", 0, "slicer.toRowOffsetEmu");
     s.to_col_offset_emu = reader.i64(spec, "toColOffsetEmu", 0, "slicer.toColOffsetEmu");
   }

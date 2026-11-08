@@ -5,7 +5,7 @@ function makePivot(Workbook) {
   const wb = Workbook.createDefault();
   wb.setProfileId('win-365-ja_JP');
   const cache = wb.addPivotCache(0);
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -39,8 +39,8 @@ function pivotGrid(wb, pivot) {
   for (const cell of layout.cells) {
     const value = cell.value;
     const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '';
-    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.rect.lastCol - layout.rect.firstCol + 1).fill(''));
-    rows.get(cell.row)[cell.col - layout.rect.firstCol] = text;
+    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.range.lastCol - layout.range.firstCol + 1).fill(''));
+    rows.get(cell.row)[cell.col - layout.range.firstCol] = text;
   }
   return [...rows.keys()].sort((a, b) => a - b).map((row) => rows.get(row).join('|'));
 }
@@ -54,9 +54,10 @@ test('pivot nested integer fields reject narrowing before their C mutations', as
   for (const value of invalid) {
     withPivot(mod.Workbook, ({ wb, pivot }) => {
       const before = pivot.listFields().length;
+      // `axis` is required: a value that is no whole number is a TypeError, a whole one past uint32 a RangeError.
       assert.throws(
         () => pivot.addField({ sourceName: 'Region', axis: value }),
-        RangeError,
+        Number.isInteger(value) ? RangeError : TypeError,
         `pivotFieldAdd axis=${String(value)}`,
       );
       assert.equal(pivot.listFields().length, before);
@@ -66,7 +67,7 @@ test('pivot nested integer fields reject narrowing before their C mutations', as
       const before = pivot.listDataFields().length;
       assert.throws(
         () => pivot.addDataField({ name: 'Bad', fieldIndex: value, aggregation: 0 }),
-        RangeError,
+        Number.isInteger(value) ? RangeError : TypeError,
         `pivotDataFieldAdd fieldIndex=${String(value)}`,
       );
       assert.equal(pivot.listDataFields().length, before);
@@ -209,7 +210,7 @@ test('pivot cache source snapshots each nested getter once before mutation', asy
     const cache = wb.addPivotCache(0);
     let reads = 0;
     const source = { sheet: 'Sheet1' };
-    Object.defineProperty(source, 'ref', {
+    Object.defineProperty(source, 'range', {
       enumerable: true,
       get() {
         reads += 1;
@@ -219,7 +220,12 @@ test('pivot cache source snapshots each nested getter once before mutation', asy
     });
     cache.setWorksheetSource(source);
     assert.equal(reads, 1);
-    assert.equal(cache.getWorksheetSource().ref, 'A1:B3');
+    assert.deepEqual(JSON.parse(JSON.stringify(cache.getWorksheetSource().range.rect)), {
+      firstRow: 0,
+      firstCol: 0,
+      lastRow: 2,
+      lastCol: 1,
+    });
   } finally {
     wb.dispose();
   }
@@ -246,14 +252,15 @@ test('setWorksheetSource(null) clears the source and an empty source is still a 
   const wb = mod.Workbook.createDefault();
   try {
     const cache = wb.addPivotCache(0);
-    cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
-    assert.equal(cache.getWorksheetSource().present, true);
-    assert.equal(cache.getWorksheetSource().ref, 'A1:B3');
+    cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
+    assert.deepEqual(JSON.parse(JSON.stringify(cache.getWorksheetSource())), {
+      range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
+      name: null,
+    });
     cache.setWorksheetSource(null);
     assert.equal(cache.getWorksheetSource(), null);
     cache.setWorksheetSource({});
-    assert.equal(cache.getWorksheetSource().present, true);
-    assert.equal(cache.getWorksheetSource().ref, null);
+    assert.deepEqual(JSON.parse(JSON.stringify(cache.getWorksheetSource())), { range: null, name: null });
   } finally {
     wb.dispose();
   }

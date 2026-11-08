@@ -126,39 +126,9 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
   result->set("pages", pages);
 }
 
-/// The span a declared break at `position` covers on the perpendicular axis; a break the sheet does not
-/// declare (computed by the page walk) covers the whole sheet, which is `0..0`.
-void declared_break_span(const fm_workbook_t* handle, uint32_t sheet, bool rows, uint32_t position, uint32_t* first,
-                         uint32_t* last) {
-  *first = 0;
-  *last = 0;
-  size_t count = 0;
-  if (rows ? fm_sheet_get_row_break_count(handle, sheet, &count) != 0
-           : fm_sheet_get_column_break_count(handle, sheet, &count) != 0) {
-    return;
-  }
-  for (size_t i = 0; i < count; ++i) {
-    if (rows) {
-      fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
-      if (fm_sheet_get_row_break_at(handle, sheet, i, &brk) == 0 && brk.row == position) {
-        *first = brk.first;
-        *last = brk.last;
-        return;
-      }
-    } else {
-      fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
-      if (fm_sheet_get_column_break_at(handle, sheet, i, &brk) == 0 && brk.col == position) {
-        *first = brk.first;
-        *last = brk.last;
-        return;
-      }
-    }
-  }
-}
-
-/// The breaks in effect as `RowBreak` / `ColumnBreak` records, in ascending position.
-emscripten::val pagination_breaks(const fm_workbook_t* handle, uint32_t sheet, const fm_pagination_t* pagination,
-                                  bool rows) {
+/// The breaks in effect as `RowBreak` / `ColumnBreak` records, in ascending position. A break the page walk
+/// computed covers the whole sheet (`first` / `last` of `0`).
+emscripten::val pagination_breaks(const fm_pagination_t* pagination, bool rows) {
   emscripten::val out = emscripten::val::array();
   size_t count = 0;
   if (rows) {
@@ -167,26 +137,26 @@ emscripten::val pagination_breaks(const fm_workbook_t* handle, uint32_t sheet, c
     fm_pagination_get_column_break_count(pagination, &count);
   }
   for (size_t i = 0; i < count; ++i) {
-    uint32_t position = 0;
-    int32_t manual = 0;
-    const fm_status_t at_rc = rows ? fm_pagination_get_row_break_at(pagination, i, &position)
-                                   : fm_pagination_get_column_break_at(pagination, i, &position);
-    if (at_rc != 0) {
-      continue;
-    }
-    if (rows) {
-      fm_pagination_is_row_break_manual(pagination, i, &manual);
-    } else {
-      fm_pagination_is_column_break_manual(pagination, i, &manual);
-    }
-    uint32_t first = 0;
-    uint32_t last = 0;
-    declared_break_span(handle, sheet, rows, position, &first, &last);
     emscripten::val entry = emscripten::val::object();
-    entry.set(rows ? "row" : "col", position);
-    entry.set("first", first);
-    entry.set("last", last);
-    entry.set("manual", manual != 0);
+    if (rows) {
+      fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+      if (fm_pagination_get_row_break_at(pagination, i, &brk) != 0) {
+        continue;
+      }
+      entry.set("row", brk.row);
+      entry.set("first", brk.first);
+      entry.set("last", brk.last);
+      entry.set("manual", brk.manual != 0);
+    } else {
+      fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+      if (fm_pagination_get_column_break_at(pagination, i, &brk) != 0) {
+        continue;
+      }
+      entry.set("col", brk.col);
+      entry.set("first", brk.first);
+      entry.set("last", brk.last);
+      entry.set("manual", brk.manual != 0);
+    }
     out.call<void>("push", entry);
   }
   return out;
@@ -211,8 +181,8 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
     print_area.set(i, cell_rect_to_val(range));
   }
   result.set("printArea", print_area);
-  result.set("rowBreaks", pagination_breaks(handle_, sheet, pagination, /*rows=*/true));
-  result.set("columnBreaks", pagination_breaks(handle_, sheet, pagination, /*rows=*/false));
+  result.set("rowBreaks", pagination_breaks(pagination, /*rows=*/true));
+  result.set("columnBreaks", pagination_breaks(pagination, /*rows=*/false));
   std::size_t page_count = 0;
   fm_pagination_get_page_count(pagination, &page_count);
   result.set("pageCount", page_count);
@@ -475,8 +445,10 @@ emscripten::val JsWorkbook::getSheetSelection(uint32_t sheet) const {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("activeRow", row);
-  o.set("activeCol", col);
+  emscripten::val active = emscripten::val::object();
+  active.set("row", row);
+  active.set("col", col);
+  o.set("active", active);
   o.set("ranges", cell_rects_to_val(found.data(), found.size()));
   return o;
 }
@@ -487,8 +459,13 @@ void JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection) {
     return;
   }
   JsNarrowNumericReader reader("setSelection");
-  const uint32_t row = reader.u32(selection, "activeRow", 0U, "selection.activeRow");
-  const uint32_t col = reader.u32(selection, "activeCol", 0U, "selection.activeCol");
+  const emscripten::val active = reader.value(selection, "active", "selection.active");
+  uint32_t row = 0;
+  uint32_t col = 0;
+  if (reader.require_object(active, "selection.active")) {
+    row = reader.required_u32(active, "row", "selection.active.row");
+    col = reader.required_u32(active, "col", "selection.active.col");
+  }
   const std::vector<fm_cell_rect_t> ranges = js_pull_ranges(selection, "ranges", &reader);
   if (!reader.ok()) {
     return;

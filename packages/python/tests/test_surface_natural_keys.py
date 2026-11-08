@@ -7,6 +7,7 @@ import unittest
 
 from formulon import (
     AnchorKind,
+    CellAddress,
     CellRect,
     DataValidationInput,
     DefinedName,
@@ -33,7 +34,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
             wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$B$1", 0))
             self.assertEqual(
                 wb.get_defined_name("rate"),
-                DefinedName(name="Rate", formula="=Sheet1!$A$1", local_sheet_id=None, comment=None, hidden=False),
+                DefinedName(name="Rate", formula="=Sheet1!$A$1", scope=None, comment=None, hidden=False),
             )
             scoped = wb.get_defined_name("Rate", 0)
             self.assertIsNotNone(scoped)
@@ -61,8 +62,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
             wb.sheet(0).add_threaded_comment(
                 ThreadedCommentInput(
                     id=THREAD,
-                    row=4,
-                    col=2,
+                    cell=CellAddress(4, 2),
                     person_id=ALICE,
                     created=datetime.datetime(2026, 1, 2, 3, 4, 5),
                     text="Check this",
@@ -71,7 +71,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
             thread = wb.sheet(0).get_threaded_comment(THREAD)
             self.assertIsNotNone(thread)
             assert thread is not None
-            self.assertEqual((thread.row, thread.col, thread.text), (4, 2, "Check this"))
+            self.assertEqual((thread.cell, thread.text), (CellAddress(4, 2), "Check this"))
             self.assertIsNone(wb.sheet(0).get_threaded_comment(ALICE))
 
     def test_shapes_and_drawing_objects_are_read_by_object_id(self) -> None:
@@ -108,7 +108,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
             self.assertIsNotNone(jpan)
             assert jpan is not None
             self.assertTrue(jpan.typeface)
-            wb.set_theme_script_font(scheme=FontScheme.MINOR, script="Zzzz", typeface="Test Face")
+            wb.set_theme_script_font(ThemeScriptFont(scheme=FontScheme.MINOR, script="Zzzz", typeface="Test Face"))
             self.assertEqual(
                 wb.get_theme_script_font(scheme=FontScheme.MINOR, script="Zzzz"),
                 ThemeScriptFont(scheme=FontScheme.MINOR, script="Zzzz", typeface="Test Face"),

@@ -4,8 +4,12 @@ c	record.chart_axis_patch	op-type:major_gridlines_op	`major_gridlines_op` is `in
 c	record.chart_axis_patch	op-type:major_unit_op	`major_unit_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:max_op	`max_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:min_op	`min_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:minor_gridlines_op	`minor_gridlines_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:minor_unit_op	`minor_unit_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:number_format_op	`number_format_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:position_op	`position_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:reversed_op	`reversed_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:source_linked_op	`source_linked_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:tick_label_position_op	`tick_label_position_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:title_op	`title_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:visible_op	`visible_op` is `int32_t`, not `fm_patch_op_t`
@@ -13,8 +17,10 @@ c	record.chart_axis_patch	op:crosses_at	`crosses_at` has no `crosses_at_op`
 c	record.chart_display_patch	op-type:blanks_as_op	`blanks_as_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_display_patch	op-type:na_as_blank_op	`na_as_blank_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_display_patch	op-type:plot_visible_only_op	`plot_visible_only_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_display_patch	op-type:style_op	`style_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_fill_patch	op-type:color_op	`color_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_fill_patch	op-type:transparency_pct_op	`transparency_pct_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:deleted_op	`deleted_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:font_color_op	`font_color_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:font_size_op	`font_size_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:number_format_op	`number_format_op` is `int32_t`, not `fm_patch_op_t`
@@ -25,8 +31,10 @@ c	record.chart_labels_patch	op-type:show_legend_key_op	`show_legend_key_op` is `
 c	record.chart_labels_patch	op-type:show_percent_op	`show_percent_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:show_series_op	`show_series_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:show_value_op	`show_value_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_labels_patch	op-type:source_linked_op	`source_linked_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op:font_size_pt	`font_size_pt` has no `font_size_pt_op`
-c	record.chart_legend_patch	op-type:hidden_series_op	`hidden_series_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_legend_patch	op-type:hidden_entries_op	`hidden_entries_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_legend_patch	op:hidden_entry_count	`hidden_entry_count` has no `hidden_entry_count_op`
 c	record.chart_legend_patch	op:overlay	`overlay` has no `overlay_op`
 c	record.chart_legend_patch	op:position	`position` has no `position_op`
 c	record.chart_line_patch	op-type:color_op	`color_op` is `int32_t`, not `fm_patch_op_t`
@@ -42,15 +50,15 @@ c	record.chart_plot_patch	op-type:hole_size_op	`hole_size_op` is `int32_t`, not 
 c	record.chart_plot_patch	op-type:overlap_op	`overlap_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_plot_patch	op-type:vary_colors_op	`vary_colors_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_point_patch	op-type:marker_op	`marker_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:categories_op	`categories_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_series_patch	op-type:labels_op	`labels_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_series_patch	op-type:marker_op	`marker_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:name_op	`name_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:size_op	`size_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_series_patch	op-type:smooth_op	`smooth_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_series_patch	op:categories	`categories` has no `categories_op`
-c	record.chart_series_patch	op:name	`name` has no `name_op`
-c	record.chart_series_patch	op:size	`size` has no `size_op`
-c	record.chart_series_patch	op:values	`values` has no `values_op`
-c	record.chart_series_patch	op:x	`x` has no `x_op`
-c	record.chart_series_patch	op:y	`y` has no `y_op`
+c	record.chart_series_patch	op-type:values_op	`values_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:x_op	`x_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_series_patch	op-type:y_op	`y_op` is `int32_t`, not `fm_patch_op_t`
 c	record.header_footer	engaged:align_with_margins_engaged	`align_with_margins_engaged` keeps a field; give it a `<field>_op`
 c	record.header_footer	engaged:different_first_engaged	`different_first_engaged` keeps a field; give it a `<field>_op`
 c	record.header_footer	engaged:different_odd_even_engaged	`different_odd_even_engaged` keeps a field; give it a `<field>_op`
@@ -96,6 +104,19 @@ c	record.page_setup	op:scale_pct	`scale_pct` has no `scale_pct_op`
 c	record.pivot_cache_options	op:missing_items_limit	`missing_items_limit` has no `missing_items_limit_op`
 c	record.pivot_cache_options	op:refresh_on_load	`refresh_on_load` has no `refresh_on_load_op`
 c	record.pivot_cache_options	op:save_data	`save_data` has no `save_data_op`
+c	record.pivot_field_patch	op-type:custom_name_op	`custom_name_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:default_subtotal_op	`default_subtotal_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:fill_down_labels_op	`fill_down_labels_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:insert_blank_row_op	`insert_blank_row_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:number_format_op	`number_format_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:show_all_op	`show_all_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:show_detail_op	`show_detail_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:sort_by_field_op	`sort_by_field_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:sort_order_op	`sort_order_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_field_patch	op-type:subtotal_top_op	`subtotal_top_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_item_patch	op-type:caption_op	`caption_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_item_patch	op-type:show_detail_op	`show_detail_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_item_patch	op-type:visible_op	`visible_op` is `int32_t`, not `fm_patch_op_t`
 c	record.pivot_options	op:alt_text	`alt_text` has no `alt_text_op`
 c	record.pivot_options	op:alt_text_summary	`alt_text_summary` has no `alt_text_summary_op`
 c	record.pivot_options	op:auto_formatting	`auto_formatting` has no `auto_formatting_op`
@@ -122,6 +143,12 @@ c	record.pivot_options	op:show_empty_row	`show_empty_row` has no `show_empty_row
 c	record.pivot_options	op:show_error	`show_error` has no `show_error_op`
 c	record.pivot_options	op:show_headers	`show_headers` has no `show_headers_op`
 c	record.pivot_options	op:show_missing	`show_missing` has no `show_missing_op`
+c	record.pivot_style_info_patch	op-type:show_column_headers_op	`show_column_headers_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_style_info_patch	op-type:show_column_stripes_op	`show_column_stripes_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_style_info_patch	op-type:show_last_column_op	`show_last_column_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_style_info_patch	op-type:show_row_headers_op	`show_row_headers_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_style_info_patch	op-type:show_row_stripes_op	`show_row_stripes_op` is `int32_t`, not `fm_patch_op_t`
+c	record.pivot_style_info_patch	op-type:style_name_op	`style_name_op` is `int32_t`, not `fm_patch_op_t`
 c	record.print_options	engaged:grid_lines_engaged	`grid_lines_engaged` keeps a field; give it a `<field>_op`
 c	record.print_options	engaged:headings_engaged	`headings_engaged` keeps a field; give it a `<field>_op`
 c	record.print_options	engaged:horizontal_centered_engaged	`horizontal_centered_engaged` keeps a field; give it a `<field>_op`

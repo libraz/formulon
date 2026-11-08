@@ -16,6 +16,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_cf_overlay_test.cpp
   formulon_c_cf_validation_test.cpp
   formulon_c_cf_visual_payload_test.cpp
+  formulon_c_chart_patch_test.cpp
   formulon_c_chart_test.cpp
   formulon_c_clock_test.cpp
   formulon_c_collation_test.cpp
@@ -27,6 +28,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_formula_entry_test.cpp
   formulon_c_entry_r1c1_test.cpp
   formulon_c_function_metadata_test.cpp
+  formulon_c_input_records_test.cpp
   formulon_c_input_validation_test.cpp
   formulon_c_lambda_text_test.cpp
   formulon_c_locale_test.cpp
@@ -36,6 +38,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_parse_error_test.cpp
   formulon_c_pivot_authoring_test.cpp
   formulon_c_pivot_options_test.cpp
+  formulon_c_pivot_patch_test.cpp
   formulon_c_pivot_calc_test.cpp
   formulon_c_pivot_definition_test.cpp
   formulon_c_pivot_filters_test.cpp

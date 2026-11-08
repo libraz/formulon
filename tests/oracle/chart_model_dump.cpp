@@ -912,14 +912,18 @@ Expected<void, Error> build_chart(Workbook& wb, const JsonValue& c, std::size_t 
     }
     for (std::size_t i = 0; i < made.size(); ++i) {
       const JsonValue& s = series->as_array()[i];
+      const auto source = [&s](const char* key) {
+        std::string ref = str_or(s, key, "");
+        return ref.empty() ? ChartSeriesSource::None() : ChartSeriesSource::Ref(std::move(ref));
+      };
       ChartSeriesPatch p;
-      p.name = str_or(s, "name", "");
+      p.name = source("name");
       if (scatter) {
-        p.x = str_or(s, "x", "");
-        p.y = str_or(s, "y", "");
+        p.x = source("x");
+        p.y = source("y");
       } else {
-        p.cat = str_or(s, "cat", "");
-        p.val = str_or(s, "val", "");
+        p.cat = source("cat");
+        p.val = source("val");
       }
       RETURN_IF_ERROR(set_chart_series(wb, host, id, 0, made[i].idx, p));
     }

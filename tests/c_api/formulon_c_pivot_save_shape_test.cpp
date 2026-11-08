@@ -41,7 +41,7 @@ void SetText(fm_workbook_t* wb, std::uint32_t cache_id, std::size_t record, std:
 void BuildHostPivot(fm_workbook_t* wb) {
   std::uint32_t cache_id = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb, 0, &cache_id), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb, cache_id, 1, "A1:D9", "Sheet1", nullptr), 0);
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, 1, "A1:D9", "Sheet1", nullptr), 0);
   const char* const headers[] = {"Region", "Product", "Qty", "Amt"};
   for (const char* header : headers) {
     std::size_t idx = 99;
@@ -56,7 +56,7 @@ void BuildHostPivot(fm_workbook_t* wb) {
     ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb, cache_id, record, 3, row.amt), 0);
   }
   std::size_t pivot = 99;
-  ASSERT_EQ(fm_sheet_add_pivot(wb, 0, "PT1", cache_id, 2U, 5U, &pivot), 0) << fm_get_last_error_message();
+  ASSERT_EQ(AddPivot(wb, 0, "PT1", cache_id, 2U, 5U, &pivot), 0) << fm_get_last_error_message();
   const fm_pivot_axis_t axes[] = {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE};
   for (std::size_t i = 0; i < 4; ++i) {
     fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
@@ -252,7 +252,7 @@ TEST(FormulonCApiPivotSaveShape, ApiPivotReportIsInTheCellsAndFormulasReadIt) {
   ExpectSheetNumber(wb.handle, 9U, 0U, 2000.0);
 
   // Hiding South re-projects the report one row shorter; the old last row is cleared.
-  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0U, 0U, 0U, 1U, 0), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0U, 0U, 0U, 1U, 0), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ExpectSheetNumber(wb.handle, 2U, kValueCol, 400.0);
   EXPECT_EQ(SheetValue(wb.handle, 3U, kValueCol).kind, FM_VALUE_KIND_BLANK);
@@ -317,7 +317,7 @@ TEST(FormulonCApiPivotSaveShape, CreatingAPivotOverAnotherReportCreatesNothing) 
   std::uint32_t cache_id = 0;
   BuildScratch(wb, &cache_id);
   std::size_t created = 99;
-  EXPECT_EQ(fm_sheet_add_pivot(wb.handle, 0U, "PT2", cache_id, 1U, kValueCol, &created), kPreconditionFailed);
+  EXPECT_EQ(AddPivot(wb.handle, 0U, "PT2", cache_id, 1U, kValueCol, &created), kPreconditionFailed);
   EXPECT_EQ(created, 99U);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_count(wb.handle, 0U, &count), 0);
@@ -325,7 +325,7 @@ TEST(FormulonCApiPivotSaveShape, CreatingAPivotOverAnotherReportCreatesNothing) 
   ExpectSheetNumber(wb.handle, 1U, kValueCol, 400.0);
 
   // Beside the report there is room.
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0U, "PT2", cache_id, 0U, 7U, &created), 0) << fm_get_last_error_message();
+  ASSERT_EQ(AddPivot(wb.handle, 0U, "PT2", cache_id, 0U, 7U, &created), 0) << fm_get_last_error_message();
   EXPECT_EQ(created, 1U);
   fm_pivot_options_t options = FM_STRUCT_INIT(fm_pivot_options_t);
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, created, &options), 0);

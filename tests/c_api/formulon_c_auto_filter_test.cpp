@@ -16,6 +16,7 @@
 #include "c_api/parts/common.h"
 #include "formulon_c_count_of.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
 #include "utils/error.h"
@@ -24,7 +25,7 @@ namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_date_group_item_t) == 8U, "fm_date_group_item_t ABI layout changed");
-static_assert(sizeof(fm_filter_column_t) == (kWasm32 ? 152U : 192U), "fm_filter_column_t ABI layout changed");
+static_assert(sizeof(fm_filter_column_t) == (kWasm32 ? 144U : 168U), "fm_filter_column_t ABI layout changed");
 static_assert(sizeof(fm_sort_condition_t) == (kWasm32 ? 48U : 56U), "fm_sort_condition_t ABI layout changed");
 static_assert(sizeof(fm_auto_filter_t) == (kWasm32 ? 68U : 88U), "fm_auto_filter_t ABI layout changed");
 
@@ -100,7 +101,9 @@ struct ColumnCopy {
   fm_filter_column_t record{};
   std::vector<std::string> values;
   std::vector<fm_date_group_item_t> date_groups;
-  std::string val1, val2, val_iso, max_val_iso;
+  std::vector<fm_filter_condition_t> conditions;
+  std::vector<std::string> condition_values;
+  std::string val_iso, max_val_iso;
 };
 
 struct FilterCopy {
@@ -125,8 +128,10 @@ FilterCopy Copy(const fm_auto_filter_t& in) {
       col.values.push_back(Str(c.values[v]));
     }
     col.date_groups.assign(c.date_groups, c.date_groups + c.date_group_count);
-    col.val1 = Str(c.val1);
-    col.val2 = Str(c.val2);
+    for (std::uint32_t k = 0; k < c.condition_count; ++k) {
+      col.conditions.push_back(c.conditions[k]);
+      col.condition_values.push_back(Str(c.conditions[k].value));
+    }
     col.val_iso = Str(c.val_iso);
     col.max_val_iso = Str(c.max_val_iso);
     out.columns.push_back(col);
@@ -160,11 +165,10 @@ class EveryKind {
     columns_[1].show_button = 1;
     columns_[1].kind = 2;
     columns_[1].custom_and = 1;
-    columns_[1].custom_count = 2;
-    columns_[1].op1 = FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL;
-    columns_[1].val1 = "10";
-    columns_[1].op2 = FM_COMPARISON_OPERATOR_NOT_EQUAL;
-    columns_[1].val2 = "a*";
+    custom_[0] = fm_filter_condition_t{FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, "10"};
+    custom_[1] = fm_filter_condition_t{FM_COMPARISON_OPERATOR_NOT_EQUAL, "a*"};
+    columns_[1].conditions = custom_;
+    columns_[1].condition_count = 2;
 
     columns_[2].column_offset = 2;
     columns_[2].show_button = 1;
@@ -220,6 +224,7 @@ class EveryKind {
  private:
   const char* values_[2] = {"x", "10"};
   fm_date_group_item_t groups_[1]{};
+  fm_filter_condition_t custom_[2]{};
   fm_filter_column_t columns_[6]{};
   fm_sort_condition_t conditions_[2]{};
   fm_auto_filter_t filter_ = FM_STRUCT_INIT(fm_auto_filter_t);
@@ -244,11 +249,12 @@ void ExpectEveryKind(const FilterCopy& got) {
   EXPECT_EQ(custom.record.kind, 2);
   EXPECT_EQ(custom.record.column_offset, 1U);
   EXPECT_EQ(custom.record.custom_and, 1);
-  EXPECT_EQ(custom.record.custom_count, 2);
-  EXPECT_EQ(custom.record.op1, FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL);
-  EXPECT_EQ(custom.val1, "10");
-  EXPECT_EQ(custom.record.op2, FM_COMPARISON_OPERATOR_NOT_EQUAL);
-  EXPECT_EQ(custom.val2, "a*");
+  ASSERT_EQ(custom.record.condition_count, 2U);
+  ASSERT_EQ(custom.conditions.size(), 2U);
+  EXPECT_EQ(custom.conditions[0].op, FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL);
+  EXPECT_EQ(custom.condition_values[0], "10");
+  EXPECT_EQ(custom.conditions[1].op, FM_COMPARISON_OPERATOR_NOT_EQUAL);
+  EXPECT_EQ(custom.condition_values[1], "a*");
 
   const ColumnCopy& top = got.columns[2];
   EXPECT_EQ(top.record.kind, 3);
@@ -391,9 +397,9 @@ TEST(FormulonCApiAutoFilter, CustomConditionComparesAsEachSharedOperatorNames) {
     fm_filter_column_t column{};
     column.kind = 2;
     column.show_button = 1;
-    column.custom_count = 1;
-    column.op1 = c.op;
-    column.val1 = "3";
+    const fm_filter_condition_t condition{c.op, "3"};
+    column.conditions = &condition;
+    column.condition_count = 1;
     fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
     filter.range = fm_cell_rect_t{0, 0, 5, 0};
     filter.columns = &column;
@@ -449,24 +455,29 @@ TEST(FormulonCApiAutoFilter, RejectsMalformedRecords) {
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
 
   column.kind = 2;
-  column.custom_count = 3;
+  fm_filter_condition_t conditions[3] = {
+      {FM_COMPARISON_OPERATOR_EQUAL, "1"}, {FM_COMPARISON_OPERATOR_EQUAL, "2"}, {FM_COMPARISON_OPERATOR_EQUAL, "3"}};
+  column.conditions = conditions;
+  // A custom column holds one or two conditions.
+  column.condition_count = 0;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kAutoFilterInvalid);
-  column.custom_count = 1;
-  column.op1 = FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL + 1;
+  column.condition_count = 3;
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kAutoFilterInvalid);
+  column.condition_count = 1;
+  conditions[0].op = FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL + 1;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
   // A custom condition always states a relational operator; the range members are rejected.
-  column.op1 = FM_COMPARISON_OPERATOR_BETWEEN;
+  conditions[0].op = FM_COMPARISON_OPERATOR_BETWEEN;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
-  column.op1 = FM_COMPARISON_OPERATOR_NOT_BETWEEN;
+  conditions[0].op = FM_COMPARISON_OPERATOR_NOT_BETWEEN;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
-  column.op1 = FM_COMPARISON_OPERATOR_EQUAL;
-  column.custom_count = 2;
-  column.op2 = FM_COMPARISON_OPERATOR_BETWEEN;
+  conditions[0].op = FM_COMPARISON_OPERATOR_EQUAL;
+  column.condition_count = 2;
+  conditions[1].op = FM_COMPARISON_OPERATOR_BETWEEN;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
-  column.custom_count = 1;
-  column.op2 = FM_COMPARISON_OPERATOR_EQUAL;
+  column.condition_count = 1;
+  conditions[1].op = FM_COMPARISON_OPERATOR_EQUAL;
 
-  column.op1 = FM_COMPARISON_OPERATOR_EQUAL;
   filter.has_sort = 1;
   filter.sort_method = 3;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
@@ -504,9 +515,7 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   FillNumbers(wb.handle);
   const char* names[] = {"N"};
   std::size_t table = 0;
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 5, 0}), "Nums", names, 1, nullptr, 1, 0, &table),
-      0)
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 5, 0}), "Nums", names, 1, nullptr, 1, 0, &table), 0)
       << fm_get_last_error_message();
 
   fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
@@ -519,9 +528,9 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   fm_filter_column_t column{};
   column.kind = 2;
   column.show_button = 1;
-  column.custom_count = 1;
-  column.op1 = FM_COMPARISON_OPERATOR_GREATER_THAN;
-  column.val1 = "3";
+  const fm_filter_condition_t greater_than_three{FM_COMPARISON_OPERATOR_GREATER_THAN, "3"};
+  column.conditions = &greater_than_three;
+  column.condition_count = 1;
   fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
   filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = &column;
@@ -543,8 +552,9 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   EXPECT_EQ(present, 1);
   ASSERT_EQ(out.column_count, 1U);
   EXPECT_EQ(out.columns[0].kind, 2);
-  EXPECT_EQ(out.columns[0].op1, FM_COMPARISON_OPERATOR_GREATER_THAN);
-  EXPECT_STREQ(out.columns[0].val1, "3");
+  ASSERT_EQ(out.columns[0].condition_count, 1U);
+  EXPECT_EQ(out.columns[0].conditions[0].op, FM_COMPARISON_OPERATOR_GREATER_THAN);
+  EXPECT_STREQ(out.columns[0].conditions[0].value, "3");
   EXPECT_EQ(HiddenRows(reloaded.handle), (std::set<std::uint32_t>{1, 2, 3}));
 
   ASSERT_EQ(fm_sheet_clear_table_auto_filter_criteria(reloaded.handle, 0, 0), 0);
@@ -577,6 +587,7 @@ class OwnedRecord {
  public:
   explicit OwnedRecord(const FilterCopy& copy) : conditions_(copy.conditions), record_(copy.record) {
     values_.resize(copy.columns.size());
+    filter_conditions_.resize(copy.columns.size());
     for (std::size_t i = 0; i < copy.columns.size(); ++i) {
       const ColumnCopy& c = copy.columns[i];
       for (const std::string& v : c.values) {
@@ -585,8 +596,11 @@ class OwnedRecord {
       fm_filter_column_t column = c.record;
       column.values = values_[i].empty() ? nullptr : values_[i].data();
       column.date_groups = c.date_groups.empty() ? nullptr : c.date_groups.data();
-      column.val1 = c.val1.c_str();
-      column.val2 = c.val2.c_str();
+      filter_conditions_[i] = c.conditions;
+      for (std::size_t k = 0; k < c.conditions.size(); ++k) {
+        filter_conditions_[i][k].value = c.condition_values[k].c_str();
+      }
+      column.conditions = filter_conditions_[i].empty() ? nullptr : filter_conditions_[i].data();
       column.val_iso = c.val_iso.c_str();
       column.max_val_iso = c.max_val_iso.c_str();
       columns_.push_back(column);
@@ -602,6 +616,7 @@ class OwnedRecord {
 
  private:
   std::vector<std::vector<const char*>> values_;
+  std::vector<std::vector<fm_filter_condition_t>> filter_conditions_;
   std::vector<fm_filter_column_t> columns_;
   std::vector<fm_sort_condition_t> conditions_;
   fm_auto_filter_t record_ = FM_STRUCT_INIT(fm_auto_filter_t);
@@ -621,9 +636,7 @@ TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
 
   const char* names[] = {"A", "B", "C"};
   std::size_t table = 0;
-  ASSERT_EQ(
-      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 8, 6}), "T", names, 3, nullptr, 1, 0, &table),
-      0);
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 8, 6}), "T", names, 3, nullptr, 1, 0, &table), 0);
   std::string table_xml = kUnmodelledXml;
   table_xml.replace(table_xml.find("A1:C9"), 5, "E1:G9");
   table_xml.replace(table_xml.find("A2:C9"), 5, "E2:G9");

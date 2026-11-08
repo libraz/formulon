@@ -308,20 +308,13 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldItemAt(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClear(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetAxis(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetSort(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info);
+  Napi::Value PivotUpdateField(const Napi::CallbackInfo& info);
+  Napi::Value PivotUpdateFieldItem(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAddItem(const Napi::CallbackInfo& info);
   /// Appends a manual-filter item addressed by its position in the bound
   /// cache field's shared items. The only form that can express the blank
   /// item, which has no label of its own and is matched by its binding.
   Napi::Value PivotFieldClearItems(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetItemVisible(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetDefaultSubtotal(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetInsertBlankRow(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetFillDownLabels(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetShowDetail(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetItemShowDetail(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetItemCaption(const Napi::CallbackInfo& info);
   Napi::Value PivotGetOptions(const Napi::CallbackInfo& info);
   Napi::Value PivotUpdateOptions(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheGetOptions(const Napi::CallbackInfo& info);
@@ -336,8 +329,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheCalculatedItemSetFormula(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheCalculatedItemMove(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheCalculatedItemRemove(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetCustomName(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetShowAll(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldDefaultName(const Napi::CallbackInfo& info);
   Napi::Value PivotProject(const Napi::CallbackInfo& info);
   Napi::Value PivotProjectionPending(const Napi::CallbackInfo& info);
@@ -346,7 +337,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldClearSubtotalFunctions(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearDateGroup(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldSetNumberFormat(const Napi::CallbackInfo& info);
   Napi::Value PivotSetRowFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotSetColFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldCount(const Napi::CallbackInfo& info);

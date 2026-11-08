@@ -264,7 +264,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
 class WorkbookRoundtripTests(unittest.TestCase):
     def test_comment_enumeration_and_cf_formula_evaluation(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_comment(2, 3, Comment("Ada", "review"))
+            wb.sheet(0).set_comment(2, 3, Comment("review", author="Ada"))
             self.assertEqual(len(wb.sheet(0).list_comments()), 1)
             self.assertEqual(wb.sheet(0).list_comments(), [SheetComment(row=2, col=3, author="Ada", text="review")])
             self.assertTrue(wb.sheet(0).evaluate_cf_formula(0, 0, 0, 0, "=A1=0"))

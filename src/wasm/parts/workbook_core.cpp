@@ -348,12 +348,12 @@ void JsWorkbook::setDefinedName(emscripten::val input) {
   }
   const std::string name = reader.required_string(input, "name", "name");
   const std::string formula = reader.required_string(input, "formula", "formula");
-  const emscripten::val scope = reader.value(input, "localSheetId", "localSheetId");
+  const emscripten::val scope = reader.value(input, "scope", "scope");
   int32_t local_sheet_id = -1;
   if (js_value_present(scope)) {
-    const uint32_t sheet = reader.u32_value(scope, 0U, "localSheetId");
+    const uint32_t sheet = reader.u32_value(scope, 0U, "scope");
     if (reader.ok() && sheet > 2147483647U) {
-      reader.fail_range("localSheetId", "[0, 2147483647]");
+      reader.fail_range("scope", "[0, 2147483647]");
     }
     local_sheet_id = static_cast<int32_t>(sheet);
   }
@@ -363,7 +363,7 @@ void JsWorkbook::setDefinedName(emscripten::val input) {
   if (!reader.ok()) {
     return;
   }
-  fm_defined_name_input_t in = FM_STRUCT_INIT(fm_defined_name_input_t);
+  fm_defined_name_t in = FM_STRUCT_INIT(fm_defined_name_t);
   in.name = name.c_str();
   in.formula = formula.c_str();
   in.local_sheet_id = local_sheet_id;

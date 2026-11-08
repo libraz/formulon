@@ -646,18 +646,22 @@ std::vector<std::uint32_t> read_category_filter(const xml_node& plot_area) {
   return {};
 }
 
+/// The chart style on the `ST_Style` scale 1..48: a plain or fallback `c:style` first, else a `c14:style` choice,
+/// whose 100+n reads as n.
 std::optional<std::int32_t> read_style(const xml_node& root) {
-  for (const xml_node& alt : children_local(root, "AlternateContent")) {
-    if (const xml_node style = kid(kid(alt, "Choice"), "style")) {
-      return int_of(style);
-    }
-  }
   if (const xml_node style = kid(root, "style")) {
     return int_of(style);
   }
   for (const xml_node& alt : children_local(root, "AlternateContent")) {
     if (const xml_node style = kid(kid(alt, "Fallback"), "style")) {
       return int_of(style);
+    }
+  }
+  constexpr std::int32_t kC14StyleBase = 100;
+  for (const xml_node& alt : children_local(root, "AlternateContent")) {
+    if (const xml_node style = kid(kid(alt, "Choice"), "style")) {
+      const std::optional<std::int32_t> value = int_of(style);
+      return value && *value > kC14StyleBase ? std::optional<std::int32_t>(*value - kC14StyleBase) : value;
     }
   }
   return std::nullopt;

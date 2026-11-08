@@ -74,6 +74,9 @@ EXCLUDED_FILES = frozenset(
         "packages/python/tests/test_api_surface_names.py",
         "packages/npm/test/api_surface_names.test.mjs",
         "packages/npm-native/test/api_surface_names.test.mjs",
+        "packages/python/tests/test_api_enums_values.py",
+        "packages/npm/test/api_enums_values.test.mjs",
+        "packages/npm-native/test/api_enums_values.test.mjs",
         # Names Node's own process.memoryUsage(), not a Formulon member.
         "packages/npm-native/README.md",
         "tools/dev/binding_drift/api_conventions_bindings_test.py",

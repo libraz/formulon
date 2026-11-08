@@ -75,7 +75,7 @@ function fillTableSource(ws) {
 
 function addCache(wb) {
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -146,12 +146,12 @@ test('an auto filter takes A1 text in its range and in its nested sort state', (
     fillTableSource(ws);
     ws.setAutoFilter({
       range: 'A1:B3',
-      sort: { ref: 'A2:B3', conditions: [{ ref: 'B2:B3', descending: true }] },
+      sort: { range: 'A2:B3', conditions: [{ range: 'B2:B3', descending: true }] },
     });
     const filter = ws.getAutoFilter();
     assert.deepEqual(plain(filter.range), rect(0, 0, 2, 1));
-    assert.deepEqual(plain(filter.sort.ref), rect(1, 0, 2, 1));
-    assert.deepEqual(plain(filter.sort.conditions[0].ref), rect(1, 1, 2, 1));
+    assert.deepEqual(plain(filter.sort.range), rect(1, 0, 2, 1));
+    assert.deepEqual(plain(filter.sort.conditions[0].range), rect(1, 1, 2, 1));
   });
 });
 
@@ -180,7 +180,7 @@ test('a pivot anchor and a selection take one A1 cell, and the selection its ran
     addPivot(ws, cache);
     addPivot(ws, cache, 'Second', { row: 20, col: 6 });
     const anchors = ws.listPivots().map((p) => {
-      const { rect: at } = p.getLayout();
+      const { range: at } = p.getLayout();
       return [at.firstRow, at.firstCol];
     });
     assert.deepEqual(anchors, [
@@ -188,11 +188,10 @@ test('a pivot anchor and a selection take one A1 cell, and the selection its ran
       [20, 6],
     ]);
     ws.setSelection({ active: 'C3', ranges: 'B2:D4' });
-    assert.deepEqual(plain(ws.getSelection()), { activeRow: 2, activeCol: 2, ranges: [rect(1, 1, 3, 3)] });
+    assert.deepEqual(plain(ws.getSelection()), { active: { row: 2, col: 2 }, ranges: [rect(1, 1, 3, 3)] });
     ws.setSelection({ active: { row: 0, col: 0 }, ranges: ['A1', 'C1:C2'] });
     assert.deepEqual(plain(ws.getSelection()), {
-      activeRow: 0,
-      activeCol: 0,
+      active: { row: 0, col: 0 },
       ranges: [rect(0, 0, 0, 0), rect(0, 2, 1, 2)],
     });
   });
@@ -200,8 +199,8 @@ test('a pivot anchor and a selection take one A1 cell, and the selection its ran
 
 test('a data table, a reference and a print area take A1 text', () => {
   withSheet((ws, wb) => {
-    assert.equal(wb.formatReference({ rect: 'B2:C3' }), 'B2:C3');
-    assert.equal(wb.formatReference({ sheetName: 'Sheet1', rect: 'A1' }), 'Sheet1!A1');
+    assert.equal(wb.formatReference({ range: 'B2:C3' }), 'B2:C3');
+    assert.equal(wb.formatReference({ sheetName: 'Sheet1', range: 'A1' }), 'Sheet1!A1');
     ws.setPrintArea('A1:C3');
     assert.deepEqual(plain(ws.getPrintArea()), [rect(0, 0, 2, 2)]);
     ws.setPrintArea(['A1:B2', 'D1']);
@@ -209,7 +208,7 @@ test('a data table, a reference and a print area take A1 text', () => {
     ws.setNumber('A1', 1);
     ws.setNumber('A2', 2);
     ws.setNumber('A3', 3);
-    ws.addDataTable({ rect: 'B2:B3', columnInput: 'A1' });
+    ws.addDataTable({ range: 'B2:B3', columnInput: 'A1' });
     assert.notEqual(ws.getDataTable('B2'), null);
   });
 });
@@ -228,9 +227,9 @@ test('A1 text in a record field is refused with the method and the field it was 
       /^Sheet\.addPivot anchor "A1:B2" is not one cell/,
     );
     rejectsWith(
-      () => ws.setAutoFilter({ range: 'A1:B3', sort: { ref: 'Sheet1!A1:B3' } }),
+      () => ws.setAutoFilter({ range: 'A1:B3', sort: { range: 'Sheet1!A1:B3' } }),
       StatusCode.InvalidArgument,
-      /^Sheet\.setAutoFilter sort\.ref /,
+      /^Sheet\.setAutoFilter sort\.range /,
     );
     assert.throws(
       () => ws.setSelection({ active: 'A1', ranges: 7 }),
@@ -256,7 +255,7 @@ function handlePrototypes(ws, wb) {
   const table = ws.addTable({ range: 'A1:B3', name: 'Tbl' });
   const cache = addCache(wb);
   const pivot = addPivot(ws, cache);
-  const chart = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3', legend: null });
+  const chart = ws.addChart({ type: formulon.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3', legend: null });
   const shape = ws.addShape({ presetGeometry: 'rect', anchorKind: 0, fromRow: 2, widthEmu: 9144, heightEmu: 9144 });
   const slicer = ws.addSlicer(table, 0, { fromRow: 20, fromCol: 3, toRow: 30, toCol: 5 });
   const picture = ws.addPicture(PNG_1X1);
@@ -420,10 +419,10 @@ test('setDefinedName scopes a name to the sheet its scope names', () => {
     wb.setDefinedName({ name: 'ByName', formula: '=Data!$A$1', scope: 'Data' });
     wb.setDefinedName({ name: 'ByHandle', formula: '=Sheet1!$A$2', scope: ws });
     wb.setDefinedName({ name: 'Global', formula: '=Sheet1!$A$3', scope: null });
-    assert.equal(wb.getDefinedName('ByIndex', 0).localSheetId, 0);
-    assert.equal(wb.getDefinedName('ByName', 'Data').localSheetId, 1);
-    assert.equal(wb.getDefinedName('ByHandle', ws).localSheetId, 0);
-    assert.equal(wb.getDefinedName('Global').localSheetId, null);
+    assert.equal(wb.getDefinedName('ByIndex', 0).scope, 0);
+    assert.equal(wb.getDefinedName('ByName', 'Data').scope, 1);
+    assert.equal(wb.getDefinedName('ByHandle', ws).scope, 0);
+    assert.equal(wb.getDefinedName('Global').scope, null);
     assert.equal(wb.getDefinedName('ByIndex'), null);
     rejectsWith(
       () => wb.setDefinedName({ name: 'Lost', formula: '=1', scope: 'Missing' }),
@@ -470,7 +469,7 @@ test('dates reach a cell through setValue and setValues, and the clock pins to a
 
 const SPARKLINES = () => ({
   type: formulon.SparklineType.Column,
-  sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1' }],
+  sparklines: [{ source: 'Sheet1!A1:D1', location: 'F1' }],
 });
 
 // Per roundtrip_cases.json id: `make(ws, wb)` builds the object, `get(target)` reads the record and `put(target,
@@ -482,7 +481,7 @@ const DRIVERS = {
     put: (ws, record) => ws.updateCellFormat('B1', record),
   },
   chart_legend: {
-    make: (ws) => ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3', legend: 0 }),
+    make: (ws) => ws.addChart({ type: formulon.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3', legend: 0 }),
     get: (chart) => chart.getProperties().legend,
     put: (chart, record) => chart.updateLegend(record),
   },
@@ -529,7 +528,7 @@ const DRIVERS = {
     get: (pivot) => pivot.getGrandTotals(),
     put: (pivot, record) => pivot.updateGrandTotals(record),
   },
-  pivot_item: {
+  pivot_field_item: {
     make: (ws, wb) => {
       const pivot = addPivot(ws, addCache(wb));
       pivot.addFieldItem(0, 'East');
@@ -619,8 +618,7 @@ const DRIVERS = {
       wb.addPerson({ id: PERSON, displayName: 'Alice', userId: 'alice', providerId: 'None' });
       ws.addThreadedComment({
         id: '{00000000-0000-4000-8000-000000000001}',
-        row: 4,
-        col: 2,
+        cell: { row: 4, col: 2 },
         personId: PERSON,
         created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
         text: 'Hi',
@@ -657,7 +655,7 @@ const DRIVERS = {
     get: (ws) => ws.getHyperlink('A1'),
     put: (ws, record) => ws.setHyperlink('B1', record),
     again: (ws) => ws.getHyperlink('B1'),
-    identity: ['ref', 'rect'],
+    identity: ['range'],
   },
   validation: {
     make: (ws) => {

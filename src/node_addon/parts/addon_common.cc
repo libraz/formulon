@@ -704,19 +704,36 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(m.kind)));
   o.Set("priority", Napi::Number::New(env, m.priority));
-  o.Set("dxfIndexEngaged", Napi::Boolean::New(env, m.dxf_index_engaged != 0));
-  o.Set("dxfIndex", Napi::Number::New(env, m.dxf_index));
-  o.Set("color", ColorSpecToJs(env, m.color));
-  o.Set("barLengthPct", Napi::Number::New(env, m.bar_length_pct));
-  o.Set("barAxisPositionPct", Napi::Number::New(env, m.bar_axis_position_pct));
-  o.Set("barIsNegative", Napi::Boolean::New(env, m.bar_is_negative != 0));
-  o.Set("barFill", ColorSpecToJs(env, m.bar_fill));
-  o.Set("barBorderEngaged", Napi::Boolean::New(env, m.bar_border_engaged != 0));
-  o.Set("barBorder", ColorSpecToJs(env, m.bar_border));
-  o.Set("barGradient", Napi::Boolean::New(env, m.bar_gradient != 0));
-  o.Set("barDirection", Napi::Number::New(env, static_cast<int32_t>(m.bar_direction)));
-  o.Set("iconSetName", Napi::Number::New(env, m.icon_set_name));
-  o.Set("iconIndex", Napi::Number::New(env, static_cast<int32_t>(m.icon_index)));
+  // Each kind carries only its own fields.
+  switch (m.kind) {
+    case FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT:
+      o.Set("dxfIndex", m.dxf_index_engaged != 0 ? Napi::Value(Napi::Number::New(env, m.dxf_index)) : env.Null());
+      break;
+    case FM_CF_MATCH_KIND_COLOR_SCALE:
+      o.Set("color", ColorSpecToJs(env, m.color));
+      break;
+    case FM_CF_MATCH_KIND_DATA_BAR: {
+      Napi::Object bar = Napi::Object::New(env);
+      bar.Set("lengthPct", Napi::Number::New(env, m.bar_length_pct));
+      bar.Set("axisPositionPct", Napi::Number::New(env, m.bar_axis_position_pct));
+      bar.Set("isNegative", Napi::Boolean::New(env, m.bar_is_negative != 0));
+      bar.Set("fill", ColorSpecToJs(env, m.bar_fill));
+      bar.Set("border", m.bar_border_engaged != 0 ? Napi::Value(ColorSpecToJs(env, m.bar_border)) : env.Null());
+      bar.Set("gradient", Napi::Boolean::New(env, m.bar_gradient != 0));
+      bar.Set("direction", Napi::Number::New(env, static_cast<int32_t>(m.bar_direction)));
+      o.Set("bar", bar);
+      break;
+    }
+    case FM_CF_MATCH_KIND_ICON_SET: {
+      Napi::Object icon = Napi::Object::New(env);
+      icon.Set("setName", Napi::Number::New(env, m.icon_set_name));
+      icon.Set("index", Napi::Number::New(env, static_cast<int32_t>(m.icon_index)));
+      o.Set("icon", icon);
+      break;
+    }
+    default:
+      break;
+  }
   return o;
 }
 
@@ -816,8 +833,8 @@ void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_
   const bool has_name = reader.String(spec, "name", &name_buf);
   const bool has_nfmt = reader.String(spec, "numberFormat", &nfmt_buf);
   out.name = has_name ? name_buf.c_str() : nullptr;
-  out.field_index = reader.U32(spec, "fieldIndex", 0U);
-  out.aggregation = static_cast<fm_pivot_aggregation_t>(reader.U32(spec, "aggregation", 0U));
+  out.field_index = reader.RequiredU32(spec, "fieldIndex");
+  out.aggregation = static_cast<fm_pivot_aggregation_t>(reader.U32(spec, "aggregation", FM_PIVOT_AGGREGATION_SUM));
   out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;
   out.show_as = static_cast<fm_pivot_show_values_as_t>(reader.U32(spec, "showAs", 0U));
   out.show_as_base_field = reader.I32(spec, "showAsBaseField", -1);

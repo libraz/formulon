@@ -763,7 +763,7 @@ TEST(FormulonCApiPivot, RemovingADataFieldRepointsOrDropsEveryValueFilterType) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache_id), 0);
-  ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb.handle, cache_id, 1, "A1:C4", "Sheet1", nullptr), 0);
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, 1, "A1:C4", "Sheet1", nullptr), 0);
   for (const char* name : {"Region", "Sales", "Qty"}) {
     std::size_t idx = 0;
     ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, name, &idx), 0);
@@ -779,7 +779,7 @@ TEST(FormulonCApiPivot, RemovingADataFieldRepointsOrDropsEveryValueFilterType) {
     }
   }
   std::size_t pivot = 0;
-  ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, 0, 6, &pivot), 0) << fm_get_last_error_message();
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0, 6, &pivot), 0) << fm_get_last_error_message();
   const struct {
     const char* name;
     fm_pivot_axis_t axis;

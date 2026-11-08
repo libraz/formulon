@@ -116,6 +116,21 @@ Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const Chart
   return ok();
 }
 
+void link_number_format(xml_node owner, Order order, const std::optional<bool>& linked) {
+  if (!linked.has_value()) {
+    return;
+  }
+  xml_node fmt = child_local(owner, "numFmt");
+  if (!fmt) {
+    if (!*linked) {
+      return;
+    }
+    fmt = ensure(owner, "c:numFmt", order);
+    io::set_attr(fmt, "formatCode", "General");
+  }
+  io::set_attr(fmt, "sourceLinked", *linked ? "1" : "0");
+}
+
 Expected<void, Error> apply_marker(xml_node owner, Order order, const ChartPatchField<ChartMarkerPatch>& patch) {
   if (patch.is_clear()) {
     drop(owner, "marker");
@@ -247,6 +262,13 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
   pugi::xml_document frag;
   const xml_node defaults = fragment(frag, labels_xml(pie, lang));
   xml_node d = child_local(ser, "dLbls");
+  if (d && flag(child_local(d, "delete")) && !p.deleted.has_value()) {
+    // Deleted labels store no other key, so only an explicit `deleted` changes them.
+    const bool touches = p.show_val || p.show_cat || p.show_ser || p.show_pct || p.show_legend_key ||
+                         !p.separator.is_keep() || !p.position.is_keep() || !p.number_format.is_keep() ||
+                         !p.font_color.is_keep() || !p.font_size_pt.is_keep() || p.source_linked;
+    return touches ? bad_arg("chart: the labels are deleted; set deleted to false to change them") : ok();
+  }
   if (!d) {
     d = copy_at(ser, defaults, kSerOrder);
   }
@@ -282,25 +304,37 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
     io::set_attr(fmt, "formatCode", p.number_format.value);
     io::set_attr(fmt, "sourceLinked", "0");
   }
-  if (p.font_color.is_keep() && p.font_size_pt.is_keep()) {
-    return ok();
-  }
-  xml_node tx = child_local(d, "txPr");
-  if (!tx) {
-    tx = copy_at(d, child_local(defaults, "txPr"), kLabelsOrder);
-  }
-  xml_node para = ensure(tx, "a:p", kTextOrder);
-  xml_node ppr = child_local(para, "pPr") ? child_local(para, "pPr") : para.prepend_child("a:pPr");
-  xml_node rpr = child_local(ppr, "defRPr") ? child_local(ppr, "defRPr") : ppr.append_child("a:defRPr");
-  if (p.font_size_pt.is_clear()) {
-    rpr.remove_attribute("sz");
-  } else if (p.font_size_pt.is_set()) {
-    if (!in_range(p.font_size_pt.value, 1.0, 4000.0)) {
-      return bad_arg("chart: label font size must be 1..4000 pt");
+  link_number_format(d, kLabelsOrder, p.source_linked);
+  if (!p.font_color.is_keep() || !p.font_size_pt.is_keep()) {
+    xml_node tx = child_local(d, "txPr");
+    if (!tx) {
+      tx = copy_at(d, child_local(defaults, "txPr"), kLabelsOrder);
     }
-    io::set_attr(rpr, "sz", rounded(p.font_size_pt.value * 100.0));
+    xml_node para = ensure(tx, "a:p", kTextOrder);
+    xml_node ppr = child_local(para, "pPr") ? child_local(para, "pPr") : para.prepend_child("a:pPr");
+    xml_node rpr = child_local(ppr, "defRPr") ? child_local(ppr, "defRPr") : ppr.append_child("a:defRPr");
+    if (p.font_size_pt.is_clear()) {
+      rpr.remove_attribute("sz");
+    } else if (p.font_size_pt.is_set()) {
+      if (!in_range(p.font_size_pt.value, 1.0, 4000.0)) {
+        return bad_arg("chart: label font size must be 1..4000 pt");
+      }
+      io::set_attr(rpr, "sz", rounded(p.font_size_pt.value * 100.0));
+    }
+    RETURN_IF_ERROR(apply_paint(rpr, kRunOrder, p.font_color, ChartPatchField<double>{}));
   }
-  return apply_paint(rpr, kRunOrder, p.font_color, ChartPatchField<double>{});
+  if (p.deleted.value_or(false)) {
+    // CT_DLbls holds either `c:delete` or the label group; only per-label `c:dLbl` entries stay beside it.
+    for (xml_node n = d.first_child(); n;) {
+      const xml_node next = n.next_sibling();
+      if (local_name(n) != "dLbl") {
+        d.remove_child(n);
+      }
+      n = next;
+    }
+    put_val(d, "c:delete", kLabelsOrder, "1");
+  }
+  return ok();
 }
 
 }  // namespace chart_edit

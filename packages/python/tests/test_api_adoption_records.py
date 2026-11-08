@@ -304,8 +304,8 @@ class WorkbookEntryTests(unittest.TestCase):
             wb.set_defined_name(DefinedNameInput(name="Base", formula="=2", scope="Sheet1"))
             wb.set_defined_name(DefinedNameInput(name="Global", formula="3"))
             self.assertEqual(wb.get_defined_name("Rate", "Rates").formula, "=0.5")
-            self.assertEqual(wb.get_defined_name("Base", 0).local_sheet_id, 0)
-            self.assertIsNone(wb.get_defined_name("Global").local_sheet_id)
+            self.assertEqual(wb.get_defined_name("Base", 0).scope, 0)
+            self.assertIsNone(wb.get_defined_name("Global").scope)
             self.assertNotIn("local_sheet_id", {f.name for f in dataclasses.fields(DefinedNameInput)})
 
     def test_profile_id_accessors(self) -> None:

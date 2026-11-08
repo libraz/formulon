@@ -143,14 +143,14 @@ class RangeInputTests(unittest.TestCase):
 class NoteVisibilityTests(unittest.TestCase):
     def test_visibility_reads_back_and_persists(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_comment(1, 1, Comment("Alice", "shown"))
-            wb.sheet(0).set_comment(3, 3, Comment("Alice", "hidden"))
+            wb.sheet(0).set_comment(1, 1, Comment("shown", author="Alice"))
+            wb.sheet(0).set_comment(3, 3, Comment("hidden", author="Alice"))
             self.assertIs(wb.sheet(0).get_comment_visible(1, 1), False)
             wb.sheet(0).set_comment_visible(1, 1, True)
             with Workbook.load(wb.save()) as reloaded:
                 self.assertIs(reloaded.sheet(0).get_comment_visible(1, 1), True)
                 self.assertIs(reloaded.sheet(0).get_comment_visible(3, 3), False)
-                reloaded.sheet(0).set_comment(1, 1, Comment("Alice", "edited"))
+                reloaded.sheet(0).set_comment(1, 1, Comment("edited", author="Alice"))
                 self.assertIs(reloaded.sheet(0).get_comment_visible(1, 1), True)
                 self.assertIsNone(reloaded.sheet(0).get_comment_visible(7, 7))
                 with self.assertRaises(FormulonError):

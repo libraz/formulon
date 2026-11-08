@@ -133,14 +133,13 @@ Napi::Value Workbook::CellAt(const Napi::CallbackInfo& info) {
 
 namespace {
 
-Napi::Object DefinedNameToJs(Napi::Env env, const char* name, const char* formula, int32_t local_sheet_id,
-                             const char* comment, int32_t hidden) {
+Napi::Object DefinedNameToJs(Napi::Env env, const fm_defined_name_t& d) {
   Napi::Object item = Napi::Object::New(env);
-  item.Set("name", JsString(env, name));
-  item.Set("formula", JsString(env, formula));
-  item.Set("localSheetId", JsIndexOrNull(env, local_sheet_id));
-  item.Set("comment", JsStringOrNull(env, comment));
-  item.Set("hidden", Napi::Boolean::New(env, hidden != 0));
+  item.Set("name", JsString(env, d.name));
+  item.Set("formula", JsString(env, d.formula));
+  item.Set("scope", JsIndexOrNull(env, d.local_sheet_id));
+  item.Set("comment", JsStringOrNull(env, d.comment));
+  item.Set("hidden", Napi::Boolean::New(env, d.hidden != 0));
   return item;
 }
 
@@ -158,7 +157,7 @@ Napi::Value Workbook::ListDefinedNames(const Napi::CallbackInfo& info) {
     fm_defined_name_t d = FM_STRUCT_INIT(fm_defined_name_t);
     rc = fm_workbook_get_defined_name_at(handle_, i, &d);
     if (rc == 0) {
-      arr.Set(static_cast<uint32_t>(i), DefinedNameToJs(env, d.name, d.formula, d.local_sheet_id, d.comment, d.hidden));
+      arr.Set(static_cast<uint32_t>(i), DefinedNameToJs(env, d));
     }
   }
   return ValueOrThrow(env, rc, arr);
@@ -171,17 +170,13 @@ Napi::Value Workbook::GetDefinedName(const Napi::CallbackInfo& info) {
   }
   const std::string name = ArgString(info, 0);
   const int32_t local_sheet_id = ArgI32(info, 1);
-  const char* stored = nullptr;
-  const char* formula = nullptr;
-  const char* comment = nullptr;
-  int32_t hidden = 0;
+  fm_defined_name_t found = FM_STRUCT_INIT(fm_defined_name_t);
   int32_t present = 0;
-  const fm_status_t rc = fm_workbook_get_defined_name(handle_, name.c_str(), local_sheet_id, &present, &stored,
-                                                      &formula, &comment, &hidden);
+  const fm_status_t rc = fm_workbook_get_defined_name(handle_, name.c_str(), local_sheet_id, &present, &found);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
   }
-  return OptionalOrNull(env, rc, present, DefinedNameToJs(env, stored, formula, local_sheet_id, comment, hidden));
+  return OptionalOrNull(env, rc, present, DefinedNameToJs(env, found));
 }
 
 Napi::Value Workbook::RemoveDefinedName(const Napi::CallbackInfo& info) {
@@ -324,46 +319,10 @@ Napi::Value Workbook::GetTableStyleOptions(const Napi::CallbackInfo& info) {
 
 namespace {
 
-/// A `<tableStyleInfo>` toggle of a table input, each `-1` when the input omits it.
-struct TableStyleToggles {
-  int32_t first_column = -1;
-  int32_t last_column = -1;
-  int32_t row_stripes = -1;
-  int32_t column_stripes = -1;
-
-  bool any() const { return first_column >= 0 || last_column >= 0 || row_stripes >= 0 || column_stripes >= 0; }
-};
-
 int32_t OptionalBool(CheckedSpecReader& reader, const Napi::Object& spec, const char* key) {
   bool present = false;
   const bool value = reader.Bool(spec, key, false, &present);
   return present ? (value ? 1 : 0) : -1;
-}
-
-TableStyleToggles ReadTableStyleToggles(CheckedSpecReader& reader, const Napi::Object& spec) {
-  TableStyleToggles toggles;
-  toggles.first_column = OptionalBool(reader, spec, "showFirstColumn");
-  toggles.last_column = OptionalBool(reader, spec, "showLastColumn");
-  toggles.row_stripes = OptionalBool(reader, spec, "showRowStripes");
-  toggles.column_stripes = OptionalBool(reader, spec, "showColumnStripes");
-  return toggles;
-}
-
-/// Sets the supplied toggles on the table's style element, keeping the others.
-fm_status_t ApplyTableStyleToggles(fm_workbook_t* handle, std::size_t sheet, std::size_t idx,
-                                   const TableStyleToggles& toggles) {
-  fm_table_style_options_patch_t patch = FM_STRUCT_INIT(fm_table_style_options_patch_t);
-  const auto set = [](int32_t supplied, int32_t* op, int32_t* value) {
-    if (supplied >= 0) {
-      *op = FM_CHART_PATCH_OP_SET;
-      *value = supplied;
-    }
-  };
-  set(toggles.first_column, &patch.show_first_column_op, &patch.show_first_column);
-  set(toggles.last_column, &patch.show_last_column_op, &patch.show_last_column);
-  set(toggles.row_stripes, &patch.show_row_stripes_op, &patch.show_row_stripes);
-  set(toggles.column_stripes, &patch.show_column_stripes_op, &patch.show_column_stripes);
-  return fm_sheet_update_table_style_options(handle, sheet, idx, &patch);
 }
 
 }  // namespace
@@ -386,9 +345,6 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   reader.String(spec, "name", &name);
   // An omitted style takes the workbook default; an empty one creates no style element.
   const bool has_style = reader.String(spec, "styleName", &style_name);
-  const bool header_row = reader.Bool(spec, "headerRow", true);
-  const bool totals_row = reader.Bool(spec, "totalsRow", false);
-  const TableStyleToggles toggles = ReadTableStyleToggles(reader, spec);
   Napi::Array columns;
   const bool has_columns = reader.Array(spec, "columns", &columns);
   std::vector<std::string> names;
@@ -412,16 +368,23 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   for (const std::string& column : names) {
     pointers.push_back(column.c_str());
   }
-  std::size_t index = 0;
-  fm_status_t rc =
-      fm_sheet_add_table(handle_, sheet, &rect, name.c_str(), pointers.data(), pointers.size(),
-                         has_style ? style_name.c_str() : nullptr, header_row ? 1 : 0, totals_row ? 1 : 0, &index);
-  if (rc == 0 && toggles.any()) {
-    rc = ApplyTableStyleToggles(handle_, sheet, index, toggles);
-    if (rc != 0) {
-      fm_sheet_remove_table(handle_, sheet, index);
-    }
+  fm_table_spec_t table = FM_STRUCT_INIT(fm_table_spec_t);
+  table.range = rect;
+  table.name = name.c_str();
+  table.column_names = pointers.empty() ? nullptr : pointers.data();
+  table.column_count = static_cast<uint32_t>(pointers.size());
+  table.style_name = has_style ? style_name.c_str() : nullptr;
+  table.header_row = reader.Tristate(spec, "headerRow");
+  table.totals_row = reader.Tristate(spec, "totalsRow");
+  table.show_first_column = reader.Tristate(spec, "showFirstColumn");
+  table.show_last_column = reader.Tristate(spec, "showLastColumn");
+  table.show_row_stripes = reader.Tristate(spec, "showRowStripes");
+  table.show_column_stripes = reader.Tristate(spec, "showColumnStripes");
+  if (!reader.ok()) {
+    return env.Undefined();
   }
+  std::size_t index = 0;
+  const fm_status_t rc = fm_sheet_add_table(handle_, sheet, &table, &index);
   return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<uint32_t>(index)));
 }
 
@@ -522,9 +485,9 @@ Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string label;
   std::string formula;
-  const int32_t function = reader.I32(totals, "function", FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
-  const bool has_label = reader.String(totals, "label", &label);
-  const bool has_formula = reader.String(totals, "formula", &formula);
+  const int32_t function = reader.I32(totals, "totalsRowFunction", FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  const bool has_label = reader.String(totals, "totalsRowLabel", &label);
+  const bool has_formula = reader.String(totals, "totalsRowFormula", &formula);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -635,9 +598,9 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   const std::string name = reader.RequiredString(input, "name");
   const std::string formula = reader.RequiredString(input, "formula");
   bool scoped = false;
-  const uint32_t sheet = reader.U32(input, "localSheetId", 0U, &scoped);
+  const uint32_t sheet = reader.U32(input, "scope", 0U, &scoped);
   if (reader.ok() && scoped && sheet > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
-    reader.FailRange("localSheetId", "int32");
+    reader.FailRange("scope", "int32");
   }
   std::string comment;
   const bool has_comment = reader.String(input, "comment", &comment);
@@ -645,7 +608,7 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  fm_defined_name_input_t in = FM_STRUCT_INIT(fm_defined_name_input_t);
+  fm_defined_name_t in = FM_STRUCT_INIT(fm_defined_name_t);
   in.name = name.c_str();
   in.formula = formula.c_str();
   in.local_sheet_id = scoped ? static_cast<int32_t>(sheet) : -1;

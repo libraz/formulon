@@ -10,6 +10,8 @@ import zipfile
 from formulon import (
     AnchorKind,
     BlanksAs,
+    CellAddress,
+    CellRect,
     Color,
     ColorKind,
     Comment,
@@ -20,9 +22,11 @@ from formulon import (
     ShapeInput,
     ShapePaint,
     ShapeProperties,
+    SheetRect,
     Sparkline,
     SparklineAxisType,
-    SparklineGroup,
+    SparklineGroupInput,
+    SparklineInput,
     SparklineType,
     Workbook,
 )
@@ -120,8 +124,8 @@ class ShapeTests(unittest.TestCase):
                 wb.sheet(0).remove_drawing(99)
 
 
-def _group(**overrides) -> SparklineGroup:
-    group = SparklineGroup(
+def _group(**overrides) -> SparklineGroupInput:
+    group = SparklineGroupInput(
         type=SparklineType.COLUMN,
         color_series=Color(kind=1, argb=0xFF336699),
         color_negative=Color(kind=2, theme=5, tint=-0.25),
@@ -133,7 +137,7 @@ def _group(**overrides) -> SparklineGroup:
         manual_min=-1.5,
         line_weight=1.25,
         empty_cells_as=BlanksAs.ZERO,
-        sparklines=[Sparkline("Sheet1!A1:D1", "F1"), Sparkline("Sheet1!A2:D2", "F2")],
+        sparklines=[SparklineInput("Sheet1!A1:D1", "F1"), SparklineInput("Sheet1!A2:D2", "F2")],
     )
     for key, value in overrides.items():
         setattr(group, key, value)
@@ -145,7 +149,7 @@ class SparklineGroupTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             self.assertEqual(wb.sheet(0).list_sparkline_groups(), [])
             wb.sheet(0).add_sparkline_group(_group())
-            wb.sheet(0).add_sparkline_group(SparklineGroup(sparklines=[Sparkline("Sheet1!A9:D9", "G9")]))
+            wb.sheet(0).add_sparkline_group(SparklineGroupInput(sparklines=[SparklineInput("Sheet1!A9:D9", "G9")]))
             with Workbook.load(wb.save()) as loaded:
                 groups = loaded.sheet(0).list_sparkline_groups()
                 self.assertEqual(len(groups), 2)
@@ -160,55 +164,61 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual((first.manual_min, first.manual_max), (-1.5, None))
                 self.assertEqual(first.line_weight, 1.25)
                 self.assertEqual(first.empty_cells_as, BlanksAs.ZERO)
-                self.assertEqual(first.sparklines, [Sparkline("=Sheet1!A1:D1", "F1"), Sparkline("=Sheet1!A2:D2", "F2")])
+                self.assertEqual(
+                    first.sparklines,
+                    [
+                        Sparkline(SheetRect(0, CellRect(0, 0, 0, 3)), CellAddress(0, 5)),
+                        Sparkline(SheetRect(0, CellRect(1, 0, 1, 3)), CellAddress(1, 5)),
+                    ],
+                )
                 self.assertEqual((second.type, second.line_weight), (SparklineType.LINE, 0.75))
 
                 loaded.sheet(0).insert_rows(0, 2)
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines[1],
-                    Sparkline("=Sheet1!A4:D4", "F4"),
+                    Sparkline(SheetRect(0, CellRect(3, 0, 3, 3)), CellAddress(3, 5)),
                 )
 
                 loaded.sheet(0).update_sparkline_group(
-                    0, type=SparklineType.STACKED, high=True, date_axis=True, date_axis_ref="Sheet1!A4:D4"
+                    0, type=SparklineType.STACKED, high=True, date_axis=True, date_axis_range="Sheet1!A4:D4"
                 )
                 updated = loaded.sheet(0).list_sparkline_groups()[0]
                 # A partial update leaves every omitted field as it was.
                 self.assertEqual((updated.markers, updated.negative, updated.manual_min), (True, True, -1.5))
                 self.assertEqual((updated.type, updated.high, updated.date_axis), (SparklineType.STACKED, True, True))
-                self.assertEqual(updated.date_axis_ref, "=Sheet1!A4:D4")
+                self.assertEqual(updated.date_axis_range, SheetRect(0, CellRect(3, 0, 3, 3)))
                 self.assertEqual(len(updated.sparklines), 2)
 
-                loaded.sheet(0).update_sparkline_group(0, sparklines=[Sparkline("Sheet1!B1:B5", "H1")])
+                loaded.sheet(0).update_sparkline_group(0, sparklines=[SparklineInput("Sheet1!B1:B5", "H1")])
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines,
-                    [Sparkline("=Sheet1!B1:B5", "H1")],
+                    [Sparkline(SheetRect(0, CellRect(0, 1, 4, 1)), CellAddress(0, 7))],
                 )
                 with self.assertRaises(InvalidArgumentError):
                     loaded.sheet(0).update_sparkline_group(0, sparklines=[])
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines,
-                    [Sparkline("=Sheet1!B1:B5", "H1")],
+                    [Sparkline(SheetRect(0, CellRect(0, 1, 4, 1)), CellAddress(0, 7))],
                 )
                 loaded.sheet(0).remove_sparkline_group(0)
                 remaining = loaded.sheet(0).list_sparkline_groups()
                 self.assertEqual(len(remaining), 1)
-                self.assertEqual(remaining[0].sparklines[0].location, "G11")
+                self.assertEqual(remaining[0].sparklines[0].location, CellAddress(10, 6))
 
     def test_arguments_are_validated(self) -> None:
-        good = [Sparkline("Sheet1!A1:D1", "F1")]
+        good = [SparklineInput("Sheet1!A1:D1", "F1")]
         with Workbook.create_default() as wb:
             for bad in (
-                SparklineGroup(),
-                SparklineGroup(sparklines=[Sparkline("Sheet1!A1:D1", "F1:F2")]),
-                SparklineGroup(sparklines=[Sparkline("", "F1")]),
-                SparklineGroup(type=7, sparklines=good),
-                SparklineGroup(line_weight=-1.0, sparklines=good),
+                SparklineGroupInput(),
+                SparklineGroupInput(sparklines=[SparklineInput("Sheet1!A1:D1", "F1:F2")]),
+                SparklineGroupInput(sparklines=[SparklineInput("", "F1")]),
+                SparklineGroupInput(type=7, sparklines=good),
+                SparklineGroupInput(line_weight=-1.0, sparklines=good),
             ):
                 with self.assertRaises(FormulonError):
                     wb.sheet(0).add_sparkline_group(bad)
             with self.assertRaises(FormulonError):
-                wb.sheet(4).add_sparkline_group(SparklineGroup(sparklines=good))
+                wb.sheet(4).add_sparkline_group(SparklineGroupInput(sparklines=good))
             self.assertEqual(wb.sheet(0).list_sparkline_groups(), [])
             with self.assertRaises(FormulonError):
                 wb.sheet(0).update_sparkline_group(0, markers=True)
@@ -221,11 +231,11 @@ class SparklineGroupTests(unittest.TestCase):
 class NoteShapeTests(unittest.TestCase):
     def test_surviving_note_keeps_its_own_shape_when_notes_are_added(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_comment(1, 1, Comment("Alice", "one"))
-            wb.sheet(0).set_comment(3, 3, Comment("Alice", "two"))
+            wb.sheet(0).set_comment(1, 1, Comment("one", author="Alice"))
+            wb.sheet(0).set_comment(3, 3, Comment("two", author="Alice"))
             wb.sheet(0).set_comment_visible(1, 1, True)
             with Workbook.load(wb.save()) as first:
-                first.sheet(0).set_comment(8, 8, Comment("Alice", "three"))
+                first.sheet(0).set_comment(8, 8, Comment("three", author="Alice"))
                 first.sheet(0).set_comment_visible(3, 3, True)
                 saved = first.save()
                 vml = zipfile.ZipFile(io.BytesIO(saved)).read("xl/drawings/vmlDrawing1.vml").decode("utf-8")

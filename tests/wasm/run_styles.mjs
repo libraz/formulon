@@ -150,14 +150,11 @@ export function registerStyles(Module, test) {
       );
       assert.equal('textRotation' in omittedRead, false);
 
-      const explicitEmpty = wb.addCellXf({
-        fontIndex: f1,
-        fillIndex: fill,
-        borderIndex: border,
-        numFmtId: custom,
-        hasAlignment: true,
-      });
-      assert.notEqual(explicitEmpty, omitted);
+      // The presence flags are gone: an alignment is present when one of its keys is, so a stray flag adds none.
+      const flagged = wb.getCellXf(
+        wb.addCellXf({ fontIndex: f1, fillIndex: fill, borderIndex: border, numFmtId: custom, hasAlignment: true }),
+      );
+      assert.equal(flagged.horizontal, null);
 
       const rfont = wb.getFont(f1);
       assert.equal(rfont.name, 'Arial');

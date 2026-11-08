@@ -407,7 +407,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   if (range_spec.has_value()) {
     fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
-    const fm_status_t parsed = fm_workbook_parse_reference(wb.handle, range_spec->c_str(), 0, 0, 0, 0, &ref);
+    const fm_status_t parsed = fm_workbook_parse_reference(wb.handle, range_spec->c_str(), nullptr, &ref);
     if (parsed != 0 || ref.valid == 0 || ref.has_sheet != 0) {
       err << "formulon: dump: --range requires an A1 range without a sheet name, such as A1:B2\n";
       return kExitUsage;

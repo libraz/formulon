@@ -727,23 +727,39 @@ emscripten::val value_array_to_val(const fm_value_array_t* array) {
   return out;
 }
 
-JsCfMatch translate_cf_match(const fm_cf_match_t& m) {
-  JsCfMatch out;
-  out.kind = static_cast<int32_t>(m.kind);
-  out.priority = m.priority;
-  out.dxfIndexEngaged = m.dxf_index_engaged != 0;
-  out.dxfIndex = m.dxf_index;
-  out.color = js_color_spec(m.color);
-  out.barLengthPct = m.bar_length_pct;
-  out.barAxisPositionPct = m.bar_axis_position_pct;
-  out.barIsNegative = m.bar_is_negative != 0;
-  out.barFill = js_color_spec(m.bar_fill);
-  out.barBorderEngaged = m.bar_border_engaged != 0;
-  out.barBorder = js_color_spec(m.bar_border);
-  out.barGradient = m.bar_gradient != 0;
-  out.barDirection = static_cast<int32_t>(m.bar_direction);
-  out.iconSetName = m.icon_set_name;
-  out.iconIndex = static_cast<int32_t>(m.icon_index);
+emscripten::val translate_cf_match(const fm_cf_match_t& m) {
+  emscripten::val out = emscripten::val::object();
+  out.set("kind", static_cast<int32_t>(m.kind));
+  out.set("priority", m.priority);
+  switch (m.kind) {
+    case FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT:
+      out.set("dxfIndex", m.dxf_index_engaged != 0 ? emscripten::val(m.dxf_index) : emscripten::val::null());
+      break;
+    case FM_CF_MATCH_KIND_COLOR_SCALE:
+      out.set("color", js_color_spec(m.color));
+      break;
+    case FM_CF_MATCH_KIND_DATA_BAR: {
+      emscripten::val bar = emscripten::val::object();
+      bar.set("lengthPct", m.bar_length_pct);
+      bar.set("axisPositionPct", m.bar_axis_position_pct);
+      bar.set("isNegative", m.bar_is_negative != 0);
+      bar.set("fill", js_color_spec(m.bar_fill));
+      bar.set("border", m.bar_border_engaged != 0 ? js_color_spec(m.bar_border) : emscripten::val::null());
+      bar.set("gradient", m.bar_gradient != 0);
+      bar.set("direction", static_cast<int32_t>(m.bar_direction));
+      out.set("bar", bar);
+      break;
+    }
+    case FM_CF_MATCH_KIND_ICON_SET: {
+      emscripten::val icon = emscripten::val::object();
+      icon.set("setName", m.icon_set_name);
+      icon.set("index", static_cast<int32_t>(m.icon_index));
+      out.set("icon", icon);
+      break;
+    }
+    default:
+      break;
+  }
   return out;
 }
 
@@ -945,6 +961,64 @@ JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& va
     return JsPatchKey::kKeep;
   }
   return JsPatchKey::kSet;
+}
+
+void js_patch_flag(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                   int32_t* op, int32_t* value) {
+  const emscripten::val v = reader.value(owner, key, field);
+  if (js_patch_key(reader, v, field, false) != JsPatchKey::kSet) {
+    return;
+  }
+  *op = FM_CHART_PATCH_OP_SET;
+  *value = reader.boolean_value(v, false) ? 1 : 0;
+}
+
+void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                     bool nullable, std::string& storage, int32_t* op, const char** value) {
+  const emscripten::val v = reader.value(owner, key, field);
+  switch (js_patch_key(reader, v, field, nullable)) {
+    case JsPatchKey::kClear:
+      *op = FM_CHART_PATCH_OP_CLEAR;
+      break;
+    case JsPatchKey::kSet:
+      *op = FM_CHART_PATCH_OP_SET;
+      *value = reader.optional_string_value(v, storage, field);
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
+}
+
+void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                     bool nullable, int32_t* op, double* value) {
+  const emscripten::val v = reader.value(owner, key, field);
+  switch (js_patch_key(reader, v, field, nullable)) {
+    case JsPatchKey::kClear:
+      *op = FM_CHART_PATCH_OP_CLEAR;
+      break;
+    case JsPatchKey::kSet:
+      *op = FM_CHART_PATCH_OP_SET;
+      *value = reader.number_value(v, 0.0, field);
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
+}
+
+void js_patch_int(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                  bool nullable, int32_t* op, int32_t* value) {
+  const emscripten::val v = reader.value(owner, key, field);
+  switch (js_patch_key(reader, v, field, nullable)) {
+    case JsPatchKey::kClear:
+      *op = FM_CHART_PATCH_OP_CLEAR;
+      break;
+    case JsPatchKey::kSet:
+      *op = FM_CHART_PATCH_OP_SET;
+      *value = reader.i32_value(v, 0, field);
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
 }
 
 int32_t js_tristate(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field) {

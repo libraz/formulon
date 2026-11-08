@@ -207,7 +207,7 @@ function makePivotWorkbook(Workbook) {
   const cacheId = cache.cacheId;
   // A cache without a worksheet source cannot be saved, so the fixture
   // declares the range its two fields and two records occupy.
-  wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.pivotCache(cacheId).setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   wb.pivotCache(cacheId).addField('Region');
   wb.pivotCache(cacheId).addField('Amount');
   for (const [region, amount] of [
@@ -470,7 +470,9 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.deepEqual(wb.sheet(0).pivot(pivot).getRowFieldOrder(), [0]);
     assert.deepEqual(wb.sheet(0).pivot(pivot).getColumnFieldOrder(), []);
 
-    wb.sheet(0).pivot(pivot).setFieldSort(0, Module.PivotSortOrder.Descending, { byField: 'Sum of Amount' });
+    wb.sheet(0)
+      .pivot(pivot)
+      .updateField(0, { sortOrder: Module.PivotSortOrder.Descending, sortByField: 'Sum of Amount' });
     const region = wb.sheet(0).pivot(pivot).listFields()[0];
     assert.equal(region.sourceName, 'Region');
     assert.equal(region.axis, 0);
@@ -670,10 +672,10 @@ test('scroll origin, pane origin and selection round-trip through save', async (
   const wb = Module.Workbook.createDefault();
   wb.sheet(0).updateView({ freezeRows: 2, freezeCols: 1 });
   const view = wb.sheet(0).getView();
-  assert.equal(view.paneTopLeftRow, 2);
-  assert.equal(view.paneTopLeftCol, 1);
-  wb.sheet(0).updateView({ topLeftRow: 5, topLeftCol: 0, paneTopLeftRow: 40, paneTopLeftCol: 6 });
-  expectFailure(() => wb.sheet(0).updateView({ paneTopLeftRow: 1, paneTopLeftCol: 6 }));
+  assert.equal(view.paneTopLeft.row, 2);
+  assert.equal(view.paneTopLeft.col, 1);
+  wb.sheet(0).updateView({ topLeft: { row: 5, col: 0 }, paneTopLeft: { row: 40, col: 6 } });
+  expectFailure(() => wb.sheet(0).updateView({ paneTopLeft: { row: 1, col: 6 } }));
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
@@ -689,10 +691,10 @@ test('scroll origin, pane origin and selection round-trip through save', async (
   const loaded = Module.Workbook.load(saved);
   try {
     const got = loaded.sheet(0).getView();
-    assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
+    assert.deepEqual([got.topLeft.row, got.topLeft.col, got.paneTopLeft.row, got.paneTopLeft.col], [5, 0, 40, 6]);
     const selection = loaded.sheet(0).getSelection();
-    assert.equal(selection.activeRow, 41);
-    assert.equal(selection.activeCol, 7);
+    assert.equal(selection.active.row, 41);
+    assert.equal(selection.active.col, 7);
     assert.deepEqual(
       selection.ranges.map((r) => [r.firstRow, r.firstCol, r.lastRow, r.lastCol]),
       [
@@ -745,7 +747,7 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
   try {
     const cache = wb.addPivotCache();
     const cacheId = cache.cacheId;
-    wb.pivotCache(cacheId).setWorksheetSource({ ref: 'A1:D3', sheet: 'Sheet1' });
+    wb.pivotCache(cacheId).setWorksheetSource({ range: 'A1:D3', sheet: 'Sheet1' });
     for (const name of ['Region', 'Product', 'Sales', 'Qty']) wb.pivotCache(cacheId).addField(name);
     for (const sales of [100, 200]) {
       const rec = wb.pivotCache(cacheId).addRecord();

@@ -13,7 +13,7 @@
 // so no JS exception ever unwinds a C++ frame.
 //
 // What lives here:
-//   * Value-object structs (`JsSheetView`, `JsCfMatch`, ...) for the
+//   * Value-object structs (`JsSheetView`, ...) for the
 //     records the JS-facing API returns.
 //   * Failure builders (`record_failure`, `succeeded`, `failed`,
 //     `optional_or_null`) and the `Value` converters (`value_to_val`,
@@ -93,27 +93,6 @@ struct JsReadDiagnostics {
   uint32_t undecodedPartCount = 0;
   uint32_t skippedFeatureCount = 0;
   uint32_t unknownContentTypeCount = 0;
-};
-
-/// JS-side mirror of `fm_cf_match_t`. The active sub-fields depend on
-/// `kind`; the rest carry default-zero values. The colours are
-/// `{kind, argb, theme, tint, indexed}` objects.
-struct JsCfMatch {
-  int32_t kind = 0;
-  int32_t priority = 0;
-  bool dxfIndexEngaged = false;
-  uint32_t dxfIndex = 0;
-  emscripten::val color = emscripten::val::null();
-  double barLengthPct = 0.0;
-  double barAxisPositionPct = 0.0;
-  bool barIsNegative = false;
-  emscripten::val barFill = emscripten::val::null();
-  bool barBorderEngaged = false;
-  emscripten::val barBorder = emscripten::val::null();
-  bool barGradient = false;
-  int32_t barDirection = 0;
-  int32_t iconSetName = 0;
-  int32_t iconIndex = 0;
 };
 
 /// JS-side mirror of `fm_sheet_view_t`.
@@ -281,6 +260,25 @@ enum class JsPatchKey : int32_t {
 /// is false a `null` records a type error on `reader` and reads as `kKeep`.
 JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& value, const char* field, bool nullable);
 
+/// Reads the boolean `owner[key]` of a patch into an `_op` / value pair: an omitted key leaves `KEEP`, a
+/// boolean writes `SET`; `null` records a type error (a flag cannot be cleared).
+void js_patch_flag(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                   int32_t* op, int32_t* value);
+
+/// Reads the string `owner[key]` of a patch into an `_op` / pointer pair: an omitted key leaves `KEEP`, a
+/// string writes `SET` (the pointer views `storage`); `null` writes `CLEAR` when `nullable`, else records a type error.
+void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                     bool nullable, std::string& storage, int32_t* op, const char** value);
+
+/// Reads the number `owner[key]` of a patch into an `_op` / value pair: an omitted key leaves `KEEP`, a number writes
+/// `SET`; `null` writes `CLEAR` when `nullable`, else records a type error.
+void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                     bool nullable, int32_t* op, double* value);
+
+/// As `js_patch_number` for an integer-valued key.
+void js_patch_int(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                  bool nullable, int32_t* op, int32_t* value);
+
 /// Reads the optional boolean `owner[key]` as an `fm_tristate_t`: an omitted or `null` value is
 /// `FM_TRISTATE_DEFAULT`, `true` / `false` are `FM_TRISTATE_TRUE` / `FM_TRISTATE_FALSE`.
 int32_t js_tristate(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field);
@@ -358,7 +356,7 @@ emscripten::val value_array_to_val(const fm_value_array_t* array);
 
 /// Translates an `fm_cf_match_t` POD into the embind value-object
 /// mirror.
-JsCfMatch translate_cf_match(const fm_cf_match_t& m);
+emscripten::val translate_cf_match(const fm_cf_match_t& m);
 
 /// Builds a `CellRect` `{firstRow, firstCol, lastRow, lastCol}` JS object.
 emscripten::val cell_rect_to_val(const fm_cell_rect_t& m);

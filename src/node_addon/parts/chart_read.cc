@@ -243,7 +243,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
         hidden.Set(static_cast<uint32_t>(i), JsNumber(env, idx));
       }
     }
-    legend.Set("hiddenSeries", hidden);
+    legend.Set("hiddenEntries", hidden);
     o.Set("legend", legend);
   }
 
@@ -266,6 +266,20 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
     }
   }
   o.Set("axes", axes);
+  // The filter: the `idx` of every filtered series across the plots, and the hidden category positions.
+  Napi::Array hidden_series = Napi::Array::New(env);
+  for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {
+    fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
+    if (!Step(rc, fm_chart_get_plot_at(chart, i, &plot))) {
+      break;
+    }
+    for (size_t j = 0; j < plot.series_count && rc == 0; ++j) {
+      fm_chart_series_t series = FM_STRUCT_INIT(fm_chart_series_t);
+      if (Step(rc, fm_chart_get_series_at(chart, i, j, &series)) && series.filtered != 0) {
+        hidden_series.Set(hidden_series.Length(), JsNumber(env, series.idx));
+      }
+    }
+  }
   Napi::Array hidden_categories = Napi::Array::New(env);
   for (size_t i = 0; i < info.hidden_category_count && rc == 0; ++i) {
     uint32_t idx = 0;
@@ -273,7 +287,10 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
       hidden_categories.Set(static_cast<uint32_t>(i), JsNumber(env, idx));
     }
   }
-  o.Set("hiddenCategories", hidden_categories);
+  Napi::Object filter = Napi::Object::New(env);
+  filter.Set("hiddenSeries", hidden_series);
+  filter.Set("hiddenCategories", hidden_categories);
+  o.Set("filter", filter);
 
   if (info.source_range != nullptr) {
     Napi::Object source = Napi::Object::New(env);

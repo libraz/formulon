@@ -731,8 +731,9 @@ void JsWorkbook::addPerson(emscripten::val person) {
     return;
   }
   JsNarrowNumericReader reader("addPerson");
-  const std::string id = reader.string(person, "id", "person.id");
-  const std::string display_name = reader.string(person, "displayName", "person.displayName");
+  const std::string id = reader.required_string(person, "id", "person.id");
+  const std::string display_name = reader.required_string(person, "displayName", "person.displayName");
+  // An omitted `userId` / `providerId` is the empty string.
   const std::string user_id = reader.string(person, "userId", "person.userId");
   const std::string provider_id = reader.string(person, "providerId", "person.providerId");
   if (!reader.ok()) {

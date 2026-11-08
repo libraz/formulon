@@ -42,9 +42,7 @@ Napi::Object TableStyleToJs(Napi::Env env, const fm_table_style_t& style) {
     Napi::Object e = Napi::Object::New(env);
     e.Set("type", Napi::Number::New(env, element.type));
     e.Set("size", Napi::Number::New(env, element.size));
-    if (element.has_dxf_index != 0) {
-      e.Set("dxfIndex", Napi::Number::New(env, element.dxf_index));
-    }
+    e.Set("dxfIndex", element.has_dxf_index != 0 ? Napi::Value(Napi::Number::New(env, element.dxf_index)) : env.Null());
     elements.Set(i, e);
   }
   out.Set("elements", elements);

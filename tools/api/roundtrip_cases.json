@@ -201,14 +201,34 @@
         "py": "get_pivot_field"
       },
       "set": {
-        "op": "binding.update_pivot_field",
+        "op": "pivot_field.update",
         "js": "updatePivotField",
         "py": "update_pivot_field"
       },
-      "create": [
-        "pivot_cache.create",
-        "pivot.create"
+      "create": [],
+      "surfaces": [
+        "wasm",
+        "native",
+        "py"
       ],
+      "handle": "Pivot"
+    },
+    {
+      "id": "pivot_field_item",
+      "kind": "patch",
+      "scope": "sheet",
+      "record": "PivotItem",
+      "get": {
+        "op": "pivot_field_item.get",
+        "js": "getPivotFieldItem",
+        "py": "get_pivot_field_item"
+      },
+      "set": {
+        "op": "pivot_field_item.update",
+        "js": "updatePivotFieldItem",
+        "py": "update_pivot_field_item"
+      },
+      "create": [],
       "surfaces": [
         "wasm",
         "native",
@@ -230,32 +250,6 @@
         "op": "pivot_grand_totals.set",
         "js": "updatePivotGrandTotals",
         "py": "update_pivot_grand_totals"
-      },
-      "create": [
-        "pivot_cache.create",
-        "pivot.create"
-      ],
-      "surfaces": [
-        "wasm",
-        "native",
-        "py"
-      ],
-      "handle": "Pivot"
-    },
-    {
-      "id": "pivot_item",
-      "kind": "patch",
-      "scope": "sheet",
-      "record": "PivotItem",
-      "get": {
-        "op": "pivot_field_item.get",
-        "js": "getPivotFieldItem",
-        "py": "get_pivot_field_item"
-      },
-      "set": {
-        "op": "binding.update_pivot_item",
-        "js": "updatePivotFieldItem",
-        "py": "update_pivot_field_item"
       },
       "create": [
         "pivot_cache.create",

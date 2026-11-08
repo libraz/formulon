@@ -61,12 +61,10 @@ void JsWorkbook::pivotCacheRemove(uint32_t cacheId) {
 
 emscripten::val JsWorkbook::pivotCacheGetWorksheetSource(uint32_t cacheId) const {
   int32_t present = 0;
-  const char* ref = nullptr;
-  const char* sheet = nullptr;
-  const char* name = nullptr;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_pivot_cache_worksheet_source(handle_, cacheId, &present, &ref, &sheet, &name)
-                         : kBindingInvalidHandle;
+  fm_pivot_worksheet_source_t source = FM_STRUCT_INIT(fm_pivot_worksheet_source_t);
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_pivot_cache_worksheet_source(handle_, cacheId, &present, &source)
+                             : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
@@ -75,7 +73,7 @@ emscripten::val JsWorkbook::pivotCacheGetWorksheetSource(uint32_t cacheId) const
   }
   emscripten::val o = emscripten::val::object();
   o.set("present", true);
-  js_set_cstr_or_null_fields(o, {{"ref", ref}, {"sheet", sheet}, {"name", name}});
+  js_set_cstr_or_null_fields(o, {{"ref", source.ref}, {"sheet", source.sheet}, {"name", source.name}});
   return o;
 }
 
@@ -95,8 +93,12 @@ void JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val 
   if (!reader.ok()) {
     return;
   }
-  succeeded(
-      fm_workbook_set_pivot_cache_worksheet_source(handle_, cacheId, present ? 1 : 0, ref_ptr, sheet_ptr, name_ptr));
+  // `present == false` clears the element; a NULL string is an absent attribute.
+  fm_pivot_worksheet_source_t c_source = FM_STRUCT_INIT(fm_pivot_worksheet_source_t);
+  c_source.ref = ref_ptr;
+  c_source.sheet = sheet_ptr;
+  c_source.name = name_ptr;
+  succeeded(fm_workbook_set_pivot_cache_worksheet_source(handle_, cacheId, present ? &c_source : nullptr));
 }
 
 double JsWorkbook::pivotCacheFieldCount(uint32_t cacheId) const {

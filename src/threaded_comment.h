@@ -36,7 +36,7 @@ struct ThreadedComment {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::string person_id;  ///< `Person::id` of the author.
-  std::string created;    ///< `YYYY-MM-DDTHH:MM:SS.ss` (Excel's `dT`).
+  std::string created;    ///< `YYYY-MM-DDTHH:MM:SS.ss` (Excel's `dT`); empty when the comment has no time.
   std::string text;
   std::string parent_id;  ///< Empty for a thread's opening comment.
   bool done = false;      ///< Resolved state; meaningful on the opening comment only.

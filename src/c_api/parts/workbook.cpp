@@ -481,7 +481,7 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t index,
   return finish_status(wb->workbook().rename_sheet(saturate_index(index), std::string(new_name)));
 }
 
-extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_input_t* input) {
+extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_t* input) {
   clear_last_error();
   if (wb == nullptr || input == nullptr) {
     return null_argument();
@@ -612,35 +612,29 @@ std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name, i
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, const char* name, int32_t local_sheet_id,
-                                                    int32_t* out_present, const char** out_name,
-                                                    const char** out_formula, const char** out_comment,
-                                                    int32_t* out_hidden) {
+                                                    int32_t* out_present, fm_defined_name_t* out) {
   clear_last_error();
-  if (wb == nullptr || name == nullptr || out_present == nullptr || out_name == nullptr || out_formula == nullptr ||
-      out_comment == nullptr || out_hidden == nullptr) {
+  if (wb == nullptr || name == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
   }
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   *out_present = 0;
-  *out_name = nullptr;
-  *out_formula = nullptr;
-  *out_comment = nullptr;
-  *out_hidden = 0;
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_defined_name_t{};
+  out->struct_size = struct_size;
   const std::size_t idx = find_defined_name_index(wb, name, local_sheet_id);
   if (idx == wb->workbook().defined_names().size()) {
     return 0;
   }
-  fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
-  if (auto rc = fm_workbook_get_defined_name_at(wb, idx, &entry); rc != 0) {
+  if (auto rc = fm_workbook_get_defined_name_at(wb, idx, out); rc != 0) {
     return rc;
   }
   *out_present = 1;
-  *out_name = entry.name;
-  *out_formula = entry.formula;
-  *out_comment = entry.comment;
-  *out_hidden = entry.hidden;
   return 0;
 }
 

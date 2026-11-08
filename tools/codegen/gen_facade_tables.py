@@ -45,6 +45,20 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   other than a plain ``CellRect``; ``DEFAULT_ARGS`` (``{Class.method:
   [[position, default], ...]}``), the ledger's ``params`` defaults at their
   positions in the longest overload. Same rule for an absent or empty region.
+* ``INPUT_KEYS`` (``{Class.method: [position, [key, ...]]}``) and
+  ``INPUT_NESTED_KEYS`` (``{Class.method: {path: [key, ...]}}``) in the
+  ``<input-keys>`` region of ``common.mjs``: for each non-patch op whose
+  argument is a d.ts input record, the position of that argument and, sorted,
+  the keys it accepts (the record's, plus those of the read record named by
+  ``patch_record``). Nested paths are
+  dotted field names; a segment ending in ``[]`` descends into each element of
+  an array field. A discriminated input has the keys of every alternative.
+* ``PATCH_NULLABLE`` (``{Class.method: {key: type}}``) in the
+  ``<patch-nullable>`` region of ``common.mjs``: the ledger's ``clearable:``
+  fields (snake_case, emitted camelCase) of each patch op's patch record, with
+  the ``typeof`` name checkPatch tests (``number``, ``string``, ``boolean``,
+  ``array``, else ``object``). An op without a clearable field has no entry.
+  Same rule for an absent or empty region.
 * ``packages/python/formulon/_handle_tables.py``: the same tables for the handle
   classes, the whole file generated.
 * ``src/node_addon/generated/facade_scope.inc``: ``kSheetMethods``, the sorted
@@ -103,9 +117,13 @@ def _region_re(comment: str, tag: str) -> "re.Pattern[str]":
 _REGION = {"js": _region_re("//", "facade-tables"), "py": _region_re("#", "facade-tables")}
 _RANGE_REGION = {"js": _region_re("//", "record-range-fields"), "py": _region_re("#", "record-range-fields")}
 _SIGNATURE_REGION = _region_re("//", "method-signatures")
+_INPUT_REGION = _region_re("//", "input-keys")
+_NULLABLE_REGION = _region_re("//", "patch-nullable")
 OOXML_NAMESPACE = "ooxml"
 # The d.ts types a record field holds an address in; the facade also takes an A1 string for each.
 RANGE_TYPES = ("CellRect", "SheetRect", "CellAddress")
+# Address records and value types an op may take that are not input records (the set R39 uses).
+_NOT_INPUT_RECORDS = frozenset({"CellRect", "SheetRect", "CellAddress", "CellRef", "CivilTime", "ErrorValue"})
 INPUT_ROLES = frozenset({"input", "patch", "both"})
 _INDENT = "  "
 _FACADE_CLASSES = ("Workbook.", "Sheet.")
@@ -632,6 +650,195 @@ def signatures_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optiona
     return out + _js_frozen("DEFAULT_ARGS", body)
 
 
+def _array_element(text: str) -> Optional[str]:
+    """The element type of the array field type `text` (`T[]`, `readonly T[]`, `ReadonlyArray<T>`), else None."""
+    kinds = [k for k in _strip_null(text, True) if k != "undefined"]
+    match = _ARRAY_RE.fullmatch(kinds[0].strip()) if len(kinds) == 1 else None
+    if match is None:
+        return None
+    inner = [
+        a.strip() for a in _strip_null(next(g for g in match.groups() if g), True) if a not in ("string", "undefined")
+    ]
+    return inner[0] if len(inner) == 1 else None
+
+
+def _record_alternative(surface: JsSurface, text: str) -> Optional[str]:
+    """The one input record `text` names, `| null` / `undefined` aside, or None."""
+    kinds = [k.strip() for k in _strip_null(text, True) if k != "undefined"]
+    if len(kinds) != 1:
+        return None
+    name = kinds[0]
+    return name if _record_fields(surface, name) else None
+
+
+def _input_arg(surface: JsSurface, ledger: facade_scope.Ledger, entry: dict, member) -> Optional[Tuple[int, str]]:
+    """`(position, record)` of the argument of `member` that is an input record, None when it takes none."""
+    addressed = {p for field in ("cell_args", "rect_args", "span_args", "ref_args") for p in _flat(entry.get(field))}
+    for position, (_name, ptype) in enumerate(member.params):
+        if position in addressed:
+            continue
+        for alternative in _strip_null(ptype, True):
+            decl = surface.decls.get(alternative)
+            if (
+                decl is not None
+                and (decl.kind == "interface" or (decl.kind == "type" and _record_fields(surface, alternative)))
+                and alternative not in _NOT_INPUT_RECORDS
+                and not alternative.endswith("Patch")
+                and not any(m.is_method for m in decl.members)
+            ):
+                return position, alternative
+    return None
+
+
+def _flat(value: object) -> List[int]:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [p for item in value for p in _flat(item)]
+    if isinstance(value, dict):
+        return [p for item in value.values() for p in _flat(item)]
+    return []
+
+
+def _input_keys_of(surface: JsSurface, record: str, read: Optional[str]) -> List[str]:
+    keys = set(_record_fields(surface, record))
+    if read:
+        keys |= set(_record_fields(surface, read))
+    return sorted(keys)
+
+
+def _input_nested(surface: JsSurface, record: str) -> Dict[str, List[str]]:
+    """`{path: [key, ...]}` of every record nested in `record`, sorted by path."""
+    out: Dict[str, List[str]] = {}
+
+    def walk(name: str, prefix: str, seen: Tuple[str, ...]) -> None:
+        for field, ftype in _record_fields(surface, name).items():
+            element = _array_element(ftype)
+            nested = _record_alternative(surface, element if element is not None else ftype)
+            if nested is None or nested in seen:
+                continue
+            path = f"{prefix}{field}{'[]' if element is not None else ''}"
+            out[path] = sorted(_record_fields(surface, nested))
+            walk(nested, path + ".", (*seen, nested))
+
+    walk(record, "", (record,))
+    return dict(sorted(out.items()))
+
+
+def input_keys(
+    ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
+) -> Tuple[Dict[str, list], Dict[str, Dict[str, list]]]:
+    """`(INPUT_KEYS, INPUT_NESTED_KEYS)` rows of every non-patch op taking a d.ts input record."""
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    top: Dict[str, list] = {}
+    nested: Dict[str, Dict[str, list]] = {}
+    for _key, entry in facade_scope._ops(ledger, ("op",)):
+        if entry.get("patch") is True:
+            continue
+        for qualified_name in facade_scope._qualified_js(ledger, entry):
+            cls, name = qualified_name.split(".", 1)
+            member = facade_scope._patch_member(surface, entry, name, cls)
+            if member is None and entry.get("namespace") == "ooxml":
+                # The facade installs the `Workbook` / `Sheet` rows on the OOXML namespace objects too.
+                member = facade_scope._patch_member(surface, entry, name, f"{cls}Ooxml")
+            found = _input_arg(surface, ledger, entry, member) if member is not None else None
+            if found is None:
+                continue
+            position, record = found
+            read = entry.get("patch_record")
+            if not isinstance(read, str) or read == "none":
+                read = None
+            if read is None and record.endswith("Input") and _record_fields(surface, record[: -len("Input")]):
+                # `XInput` takes the `X` a read returns as is, so X's fields are accepted (and dropped) too.
+                read = record[: -len("Input")]
+            top[qualified_name] = [position, _input_keys_of(surface, record, read)]
+            paths = _input_nested(surface, record)
+            if paths:
+                nested[qualified_name] = paths
+    return dict(sorted(top.items())), dict(sorted(nested.items()))
+
+
+def input_keys_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """The JS `INPUT_KEYS` and `INPUT_NESTED_KEYS` tables."""
+    top, nested = input_keys(ledger, dts)
+    body = "".join(_js_patch_entry(name, position, keys) for name, (position, keys) in top.items())
+    out = f"const INPUT_KEYS = Object.freeze({{\n{body}}});\n"
+    rows = []
+    for name, paths in nested.items():
+        lines = "".join(_js_key_list(_INDENT * 2, _js_bare_key(path), keys) for path, keys in paths.items())
+        rows.append(f"{_INDENT}{_js_key(name)}: {{\n{lines}{_INDENT}}},\n")
+    return out + f"const INPUT_NESTED_KEYS = Object.freeze({{\n{''.join(rows)}}});\n"
+
+
+_PRIMITIVES = {"number": "number", "string": "string", "boolean": "boolean", "true": "boolean", "false": "boolean"}
+
+
+def _typeof_name(surface: JsSurface, text: str) -> str:
+    """The `typeof` word checkPatch tests a field of declared type `text` against."""
+    names = set()
+    for kind in _strip_null(text, True):
+        kind = kind.strip()
+        if kind == "undefined":
+            continue
+        decl = surface.decls.get(kind)
+        if kind in _PRIMITIVES:
+            names.add(_PRIMITIVES[kind])
+        elif kind[:1] in "'\"":
+            names.add("string")
+        elif _array_element(kind) is not None or kind.endswith("[]"):
+            names.add("array")
+        elif decl is not None and decl.kind == "const" and re.search(r":\s*-?\d", decl.text):
+            names.add("number")
+        elif decl is not None and decl.kind == "const" and re.search(r":\s*['\"]", decl.text):
+            names.add("string")
+        else:
+            names.add("object")
+    return names.pop() if len(names) == 1 else "object"
+
+
+def patch_nullable(
+    ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
+) -> Dict[str, Dict[str, str]]:
+    """`{Class.method: {key: typeof}}` of the patch ops whose patch record lists `clearable` fields."""
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    clearable: Dict[str, List[str]] = {}
+    for entry in ledger.entries.values():
+        if isinstance(entry, dict) and isinstance(entry.get("js"), str) and entry.get("clearable"):
+            clearable[entry["js"]] = [_camel(f) for f in entry["clearable"]]
+    out: Dict[str, Dict[str, str]] = {}
+    for key, entry in facade_scope._ops(ledger, ("op",)):
+        if entry.get("patch") is not True:
+            continue
+        for qualified_name in facade_scope._qualified_js(ledger, entry):
+            cls, name = qualified_name.split(".", 1)
+            member = facade_scope._patch_member(surface, entry, name, cls)
+            patch_type = facade_scope._patch_type(member.params) if member is not None else None
+            fields = clearable.get(patch_type or "")
+            if not fields:
+                continue
+            declared = facade_scope._patch_keys(surface.decls, surface.raw, patch_type) or {}
+            unknown = sorted(set(fields) - set(declared))
+            if unknown:
+                raise ValueError(f"{key}: clearable fields {patch_type} lacks: {', '.join(unknown)}")
+            out[qualified_name] = {f: _typeof_name(surface, declared[f]) for f in sorted(fields)}
+    return dict(sorted(out.items()))
+
+
+def patch_nullable_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """The JS `PATCH_NULLABLE` table."""
+    rows = ""
+    for name, fields in patch_nullable(ledger, dts).items():
+        body = ", ".join(f"{_js_bare_key(f)}: '{t}'" for f, t in fields.items())
+        line = f"{_INDENT}{_js_key(name)}: {{ {body} }},"
+        if len(line) > _LINE_WIDTH:
+            inner = "".join(f"{_INDENT * 2}{_js_bare_key(f)}: '{t}',\n" for f, t in fields.items())
+            line = f"{_INDENT}{_js_key(name)}: {{\n{inner}{_INDENT}}},"
+        rows += line + "\n"
+    return f"const PATCH_NULLABLE = Object.freeze({{\n{rows}}});\n"
+
+
 def _splice(text: str, pattern: "re.Pattern[str]", region: str, path: Path) -> str:
     match = pattern.search(text)
     if match is None:
@@ -663,6 +870,10 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
         common = _splice(common, _RANGE_REGION["js"], range_fields_region("js"), NPM_COMMON)
     if _SIGNATURE_REGION.search(common):
         common = _splice(common, _SIGNATURE_REGION, signatures_region(), NPM_COMMON)
+    if _INPUT_REGION.search(common):
+        common = _splice(common, _INPUT_REGION, input_keys_region(), NPM_COMMON)
+    if _NULLABLE_REGION.search(common):
+        common = _splice(common, _NULLABLE_REGION, patch_nullable_region(), NPM_COMMON)
     result.append((NPM_COMMON, common))
     result.append(_region_output(PYTHON_SHEET, _REGION["py"], py_region))
     result.append(_region_output(PYTHON_INPUTS, _RANGE_REGION["py"], lambda: range_fields_region("py")))
@@ -676,7 +887,7 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
 _FILLABLE = {
     PYTHON_SHEET: (_REGION["py"],),
     PYTHON_INPUTS: (_RANGE_REGION["py"],),
-    NPM_COMMON: (_RANGE_REGION["js"], _SIGNATURE_REGION),
+    NPM_COMMON: (_RANGE_REGION["js"], _SIGNATURE_REGION, _INPUT_REGION, _NULLABLE_REGION),
 }
 
 

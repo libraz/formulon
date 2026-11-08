@@ -39,9 +39,7 @@ emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
   emscripten::val out = emscripten::val::object();
   out.set("type", static_cast<uint32_t>(cfvo.type));
   out.set("gte", cfvo.gte != 0);
-  if (cfvo.value != nullptr) {
-    out.set("value", std::string(cfvo.value));
-  }
+  out.set("value", cfvo.value != nullptr ? emscripten::val(std::string(cfvo.value)) : emscripten::val::null());
   return out;
 }
 
@@ -87,7 +85,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val rang
       if (fm_cf_results_get_match_at(results, i, j, &m) != 0) {
         continue;
       }
-      matches.set(emitted_matches, emscripten::val(translate_cf_match(m)));
+      matches.set(emitted_matches, translate_cf_match(m));
       ++emitted_matches;
     }
     cell.set("row", row);

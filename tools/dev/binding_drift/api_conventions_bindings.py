@@ -96,7 +96,7 @@ _RETIRED_RESULT_TYPES = (
     "IndexResult",
     "ObjectIdResult",
 )
-_PATCH_ALIAS = "{ [K in keyof T]?: T[K] | null }"
+_PATCH_ALIAS = "{ [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] }"
 
 
 # ---------------------------------------------------------------------------
@@ -1346,7 +1346,12 @@ def _rule_js_records(ctx: Context) -> Iterable[Violation]:
             alias = decls.get("Patch")
             if alias is None or alias.kind != "type" or _norm(alias.text) != _PATCH_ALIAS:
                 yield _violation(
-                    ctx, "R7.js", surface, "Patch", "alias", f"declare `export type Patch<T> = {_PATCH_ALIAS};` once"
+                    ctx,
+                    "R7.js",
+                    surface,
+                    "Patch",
+                    "alias",
+                    f"declare `export type Patch<T, Clearable extends keyof T = never> = {_PATCH_ALIAS};` once",
                 )
 
 
@@ -1478,19 +1483,67 @@ def _js_fields(decls: Dict[str, TsDecl], raw: str, name: str, seen: Tuple[str, .
     out: Dict[str, str] = {}
     for match in _TS_EXTENDS_RE.finditer(raw):
         if match.group(1) == name:
-            for parent in (p.strip() for p in match.group(2).split(",")):
-                if parent not in seen:
+            for parent in _split_top_level(match.group(2).strip(), ","):
+                if parent in seen:
+                    continue
+                if parent in decls:
                     out.update(_js_fields(decls, raw, parent, seen + (name,)) or {})
+                else:
+                    # A utility-type parent (`Omit<T, ...>`, `Pick<T, ...>`).
+                    out.update(_patch_keys(decls, raw, parent) or {})
     out.update({m.name: m.type for m in decl.members if not m.is_method})
     return out
 
 
+def _split_top_level(text: str, sep: str) -> List[str]:
+    """`text` split at `sep` outside any bracket."""
+    out, depth, start = [], 0, 0
+    for i, ch in enumerate(text):
+        if ch in "<{([":
+            depth += 1
+        elif ch in ">})]":
+            depth -= 1
+        elif ch == sep and depth == 0:
+            out.append(text[start:i].strip())
+            start = i + 1
+    out.append(text[start:].strip())
+    return out
+
+
+def _first_type_arg(args: str) -> str:
+    """The first top-level argument of a type argument list."""
+    depth = 0
+    for i, ch in enumerate(args):
+        if ch in "<{([":
+            depth += 1
+        elif ch in ">})]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            return args[:i]
+    return args
+
+
 def _patch_keys(decls: Dict[str, TsDecl], raw: str, text: str) -> Optional[Dict[str, str]]:
-    """Key -> type of a patch type expression: an interface, `Patch<T>`, `Pick<T, 'a' | 'b'>` or `{ ... }`."""
+    """Key -> type of a patch type expression: an interface, `Patch<T[, C]>`, `Pick` / `Omit<T, 'a' | 'b'>`, `{ ... }`, or an `&` of these."""
     text = text.strip()
+    parts = _split_top_level(text, "&")
+    if len(parts) > 1:
+        merged: Dict[str, str] = {}
+        for part in parts:
+            keys = _patch_keys(decls, raw, part)
+            if keys is None:
+                return None
+            merged.update(keys)
+        return merged
+    omit = re.fullmatch(r"Omit<\s*([A-Za-z_$][\w$]*)\s*,(.*)>", text, re.S)
+    if omit:
+        fields = _patch_keys(decls, raw, omit.group(1))
+        gone = {a or b for a, b in re.findall(r"'([^']*)'|\"([^\"]*)\"", omit.group(2))}
+        return None if fields is None else {k: v for k, v in fields.items() if k not in gone}
     inner = re.fullmatch(r"(?:Patch|Partial)<(.*)>", text, re.S)
     if inner:
-        return _patch_keys(decls, raw, inner.group(1))
+        # `Patch<T, 'a' | 'b'>`: the keys are T's; the second argument names the clearable ones.
+        return _patch_keys(decls, raw, _first_type_arg(inner.group(1)))
     pick = re.fullmatch(r"Pick<\s*([A-Za-z_$][\w$]*)\s*,(.*)>", text, re.S)
     if pick:
         fields = _patch_keys(decls, raw, pick.group(1))

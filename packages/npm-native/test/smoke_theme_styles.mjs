@@ -167,24 +167,21 @@ test('attribute patch over a column keeps the row style (bases / remap / snapsho
     const bases = wb.sheet(0).ooxml.getRangeXfBases({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
     assert.ok(bases.includes(0) && bases.includes(rowXf));
     // Row 2 of a one-column selection is a single cell; excluding it hides the row style.
-    const excluded = wb
-      .sheet(0)
-      .ooxml.getRangeXfBasesExcluding({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2, 2, 9], [1, 1, 9]);
+    const column = { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 };
+    const excluded = wb.sheet(0).ooxml.getRangeXfBasesExcluding(column, [{ row: 2, col: 1 }, 'B3', 'J10']);
     assert.deepEqual(excluded, [0]);
-    assert.throws(
-      () =>
-        wb.sheet(0).ooxml.getRangeXfBasesExcluding({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2], []),
-      TypeError,
-    );
+    assert.throws(() => wb.sheet(0).ooxml.getRangeXfBasesExcluding(column, [2]), TypeError);
 
     const snap = wb.sheet(0).ooxml.snapshotRangeXfs({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
     assert.ok(snap.length > 0);
-    assert.throws(
-      () =>
-        wb.sheet(0).ooxml.remapRangeXfs({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf], [xfA]),
-      TypeError,
+    assert.throws(() => wb.sheet(0).ooxml.remapRangeXfs(column, { 0: xfA }), TypeError);
+    wb.sheet(0).ooxml.remapRangeXfs(
+      column,
+      new Map([
+        [0, xfA],
+        [rowXf, xfB],
+      ]),
     );
-    wb.sheet(0).ooxml.remapRangeXfs({ firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf], [xfA, xfB]);
 
     let e = wb.sheet(0).ooxml.getEffectiveStyle(2, 1);
     assert.equal(e.source, 0);

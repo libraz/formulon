@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
+import _chart_input
 from _xf_input import input_of
 
 from formulon import (
@@ -20,8 +21,9 @@ from formulon import (
     ChartBarDirection,
     ChartDomain,
     ChartFill,
+    ChartFilter,
     ChartGrouping,
-    ChartInsertKind,
+    ChartInsertInput,
     ChartLabelPosition,
     ChartLegend,
     ChartLegendPosition,
@@ -33,6 +35,7 @@ from formulon import (
     ChartPointState,
     ChartSeriesDirection,
     ChartSeriesInput,
+    ChartSourceInput,
     ChartSourceKind,
     ChartTickLabelPosition,
     ChartTitle,
@@ -67,11 +70,11 @@ def _grid(wb: Workbook) -> None:
     wb.sheet(0).set_text(0, 6, "Y")
 
 
-def _chart(kind: int = ChartInsertKind.COLUMN, source: str = SOURCE, **options) -> "tuple[Workbook, int]":
+def _chart(kind: _chart_input.Kind = _chart_input.COLUMN, source: str = SOURCE, **options) -> "tuple[Workbook, int]":
     wb = Workbook.create_default()
     _grid(wb)
-    return wb, wb.sheet(0).add_chart(
-        kind, source, anchor=DrawingAnchor(anchor_kind=AnchorKind.TWO_CELL, row=6), **options
+    return wb, _chart_input.add_chart(
+        wb.sheet(0), kind, source, anchor=DrawingAnchor(anchor_kind=AnchorKind.TWO_CELL, row=6), **options
     ).object_id
 
 
@@ -86,7 +89,6 @@ def _rgb(value: int) -> Color:
 class ChartEnumTests(unittest.TestCase):
     def test_ordinals_match_the_c_header(self) -> None:
         self.assertEqual((ChartPlotType.BAR, ChartPlotType.OF_PIE, ChartPlotType.EXTENDED), (0, 9, 16))
-        self.assertEqual((ChartInsertKind.COLUMN, ChartInsertKind.SCATTER, ChartInsertKind.DOUGHNUT), (0, 5, 6))
         self.assertEqual((ChartGrouping.CLUSTERED, ChartGrouping.STANDARD), (0, 3))
         self.assertEqual((BlanksAs.ZERO, BlanksAs.GAP, BlanksAs.SPAN), (0, 1, 2))
         self.assertEqual((ChartPointState.VALUE, ChartPointState.GAP, ChartPointState.CONNECT), (0, 1, 2))
@@ -121,12 +123,12 @@ class ChartReadTests(unittest.TestCase):
             self.assertFalse(info.is_extended or info.is_pivot_chart or info.on_chartsheet)
             self.assertEqual(info.title.kind, ChartTitleKind.AUTO)
             self.assertEqual(info.legend.position, ChartLegendPosition.RIGHT)
-            self.assertEqual((info.legend.overlay, info.legend.hidden_series), (False, []))
-            self.assertEqual(info.hidden_categories, [])
+            self.assertEqual((info.legend.overlay, info.legend.hidden_entries), (False, []))
+            self.assertEqual(info.filter.hidden_categories, [])
             self.assertIsNotNone(info.source)
             self.assertEqual(
                 (info.source.range, info.source.direction, info.source.header_row, info.source.header_column),
-                (SOURCE, ChartSeriesDirection.COLUMNS, True, True),
+                (SheetRect(0, CellRect(0, 0, 4, 3)), ChartSeriesDirection.COLUMNS, True, True),
             )
 
             self.assertEqual(len(info.plots), 1)
@@ -197,7 +199,7 @@ class ChartReadTests(unittest.TestCase):
             self.assertIn(states[1], (ChartPointState.GAP, ChartPointState.VALUE))
 
     def test_scatter_is_the_xy_domain(self) -> None:
-        wb, oid = _chart(ChartInsertKind.SCATTER, "Sheet1!$F$1:$G$5")
+        wb, oid = _chart(_chart_input.SCATTER, "Sheet1!$F$1:$G$5")
         with wb:
             wb.sheet(0).ooxml.set_range_xf_index(
                 CellRect(1, 5, 4, 5), wb.ooxml.add_cell_xf(replace(input_of(wb.ooxml.get_cell_xf(0)), num_fmt_id=2))
@@ -217,19 +219,19 @@ class ChartReadTests(unittest.TestCase):
             self.assertEqual(len(wb.sheet(0).chart(oid).get_preview().series), 3)
             rows = wb.sheet(0).chart(oid).get_preview(direction=ChartSeriesDirection.ROWS)
             self.assertEqual(len(rows.series), 4)
-            narrow = wb.sheet(0).chart(oid).get_preview(source="Sheet1!$A$1:$B$5")
+            narrow = wb.sheet(0).chart(oid).get_preview(range="Sheet1!$A$1:$B$5")
             self.assertEqual(len(narrow.series), 1)
             self.assertEqual(narrow.series[0].name, "S1")
-            headerless = wb.sheet(0).chart(oid).get_preview(source="Sheet1!$B$2:$B$5", header_row=False)
+            headerless = wb.sheet(0).chart(oid).get_preview(range="Sheet1!$B$2:$B$5", header_row=False)
             self.assertEqual(headerless.series[0].values, [2.0, 4.0, 6.0, 8.0])
             self.assertEqual(len(wb.sheet(0).chart(oid).get_properties().plots[0].series), 3)
-            self.assertEqual(wb.sheet(0).chart(oid).get_properties().source.range, SOURCE)
+            self.assertEqual(wb.sheet(0).chart(oid).get_properties().source.range, SheetRect(0, CellRect(0, 0, 4, 3)))
 
             plain = wb.sheet(0).chart(oid).get_preview()
             self.assertEqual(wb.sheet(0).chart(oid).get_preview(direction=UNCHANGED), plain)
 
             with self.assertRaises(FormulonError):
-                wb.sheet(0).chart(oid).get_preview(source="not a range")
+                wb.sheet(0).chart(oid).get_preview(range="not a range")
             with self.assertRaises(TypeError):
                 wb.sheet(0).chart(oid).get_preview(colour=1)  # type: ignore[call-arg]
 
@@ -263,17 +265,17 @@ class ChartEditTests(unittest.TestCase):
             wb.sheet(0).chart(oid).set_legend(ChartLegend(ChartLegendPosition.BOTTOM, True, [1]))
             legend = wb.sheet(0).chart(oid).get_properties().legend
             self.assertEqual(
-                (legend.position, legend.overlay, legend.hidden_series), (ChartLegendPosition.BOTTOM, True, [1])
+                (legend.position, legend.overlay, legend.hidden_entries), (ChartLegendPosition.BOTTOM, True, [1])
             )
             wb.sheet(0).chart(oid).update_legend(position=ChartLegendPosition.TOP)
             legend = wb.sheet(0).chart(oid).get_properties().legend
             self.assertEqual(
-                (legend.position, legend.overlay, legend.hidden_series), (ChartLegendPosition.TOP, True, [1])
+                (legend.position, legend.overlay, legend.hidden_entries), (ChartLegendPosition.TOP, True, [1])
             )
             wb.sheet(0).chart(oid).set_legend(None)
             self.assertIsNone(wb.sheet(0).chart(oid).get_properties().legend)
             with self.assertRaises(ValueError):
-                wb.sheet(0).chart(oid).update_legend(position=ChartLegendPosition.TOP, hidden_series=[-1])
+                wb.sheet(0).chart(oid).update_legend(position=ChartLegendPosition.TOP, hidden_entries=[-1])
 
             wb.sheet(0).chart(oid).update_display(blanks_as=BlanksAs.SPAN, plot_visible_only=False)
             info = wb.sheet(0).chart(oid).get_properties()
@@ -420,7 +422,7 @@ class ChartEditTests(unittest.TestCase):
             self.assertEqual((s.line.color, s.line.width_pt, s.line.dash), (_rgb(0xFF00FF00), 2.5, ChartLineDash.DASH))
             self.assertEqual(wb.sheet(0).chart(oid).get_data().series[1].name, "S3")
 
-            wb.sheet(0).chart(oid).update_series(0, 1, fill={"transparency_pct": None}, name="")
+            wb.sheet(0).chart(oid).update_series(0, 1, fill={"transparency_pct": None}, name=None)
             s = wb.sheet(0).chart(oid).get_properties().plots[0].series[1]
             self.assertEqual(s.name.kind, ChartSourceKind.NONE)
             self.assertIsNone(s.fill.transparency_pct)
@@ -451,7 +453,7 @@ class ChartEditTests(unittest.TestCase):
                 wb.sheet(0).chart(oid).update_series(0, 0, fill={"colour": 1})  # type: ignore[typeddict-unknown-key]
 
     def test_line_series_marker_and_smooth(self) -> None:
-        wb, oid = _chart(ChartInsertKind.LINE)
+        wb, oid = _chart(_chart_input.LINE)
         with wb:
             wb.sheet(0).chart(oid).update_series(
                 0,
@@ -499,7 +501,7 @@ class ChartEditTests(unittest.TestCase):
                 wb.sheet(0).chart(oid).update_plot(0, hole_size=50)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).chart(oid).update_plot(5, gap_width_pct=80)
-        wb, oid = _chart(ChartInsertKind.DOUGHNUT, "Sheet1!$A$1:$B$5")
+        wb, oid = _chart(_chart_input.DOUGHNUT, "Sheet1!$A$1:$B$5")
         with wb:
             wb.sheet(0).chart(oid).update_plot(0, hole_size=60, first_slice_angle_deg=90, vary_colors=True)
             plot = wb.sheet(0).chart(oid).get_properties().plots[0]
@@ -509,15 +511,15 @@ class ChartEditTests(unittest.TestCase):
     def test_filter(self) -> None:
         wb, oid = _chart()
         with wb:
-            wb.sheet(0).chart(oid).set_filter([1], [2])
+            wb.sheet(0).chart(oid).set_filter(ChartFilter(hidden_series=[1], hidden_categories=[2]))
             info = wb.sheet(0).chart(oid).get_properties()
-            self.assertEqual(info.hidden_categories, [2])
+            self.assertEqual(info.filter.hidden_categories, [2])
             self.assertEqual([s.index for s in info.plots[0].series if s.filtered], [1])
             data = wb.sheet(0).chart(oid).get_data()
             self.assertEqual([s.index for s in data.series if s.filtered], [1])
-            wb.sheet(0).chart(oid).set_filter([], [])
+            wb.sheet(0).chart(oid).set_filter(ChartFilter())
             info = wb.sheet(0).chart(oid).get_properties()
-            self.assertEqual(info.hidden_categories, [])
+            self.assertEqual(info.filter.hidden_categories, [])
             self.assertFalse(any(s.filtered for s in info.plots[0].series))
 
     def test_add_and_remove_series(self) -> None:
@@ -545,35 +547,37 @@ class ChartEditTests(unittest.TestCase):
     def test_set_source(self) -> None:
         wb, oid = _chart()
         with wb:
-            wb.sheet(0).chart(oid).set_source("Sheet1!$A$1:$C$5")
+            wb.sheet(0).chart(oid).set_source(ChartSourceInput(range="Sheet1!$A$1:$C$5"))
             info = wb.sheet(0).chart(oid).get_properties()
             self.assertEqual(len(info.plots[0].series), 2)
-            self.assertEqual(info.source.range, "Sheet1!$A$1:$C$5")
+            self.assertEqual(info.source.range, SheetRect(0, CellRect(0, 0, 4, 2)))
             wb.sheet(0).chart(oid).set_source(
-                "Sheet1!$A$1:$D$5", direction=ChartSeriesDirection.ROWS, header_row=True, header_column=True
+                ChartSourceInput(
+                    range="Sheet1!$A$1:$D$5", direction=ChartSeriesDirection.ROWS, header_row=True, header_column=True
+                )
             )
             info = wb.sheet(0).chart(oid).get_properties()
             self.assertEqual(info.source.direction, ChartSeriesDirection.ROWS)
             self.assertEqual(len(info.plots[0].series), 4)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).chart(oid).set_source("not a range")
+                wb.sheet(0).chart(oid).set_source(ChartSourceInput(range="not a range"))
 
     def test_set_type(self) -> None:
         wb, oid = _chart()
         with wb:
-            wb.sheet(0).chart(oid).set_type(0, ChartInsertKind.LINE)
+            wb.sheet(0).chart(oid).set_type(0, ChartPlotType.LINE)
             plot = wb.sheet(0).chart(oid).get_properties().plots[0]
             self.assertEqual((plot.type, len(plot.series)), (ChartPlotType.LINE, 3))
-            wb.sheet(0).chart(oid).set_type(0, ChartInsertKind.COLUMN, ChartGrouping.STACKED)
+            wb.sheet(0).chart(oid).set_type(0, ChartPlotType.BAR, grouping=ChartGrouping.STACKED)
             plot = wb.sheet(0).chart(oid).get_properties().plots[0]
             self.assertEqual(
                 (plot.type, plot.bar_direction, plot.grouping),
                 (ChartPlotType.BAR, ChartBarDirection.COLUMN, ChartGrouping.STACKED),
             )
-            wb.sheet(0).chart(oid).set_type(0, ChartInsertKind.PIE)
+            wb.sheet(0).chart(oid).set_type(0, ChartPlotType.PIE)
             self.assertEqual(wb.sheet(0).chart(oid).get_properties().plots[0].type, ChartPlotType.PIE)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).chart(oid).set_type(3, ChartInsertKind.LINE)
+                wb.sheet(0).chart(oid).set_type(3, ChartPlotType.LINE)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).chart(oid).set_type(0, 99)
 
@@ -597,9 +601,9 @@ class ChartDrawingTests(unittest.TestCase):
             self.assertEqual((obj.from_row, obj.from_col, obj.width_emu, obj.height_emu), (3, 2, 2_000_000, 1_000_000))
             self.assertEqual(obj.edit_as, AnchorEditAs.ONE_CELL)
 
-            other = (
-                wb.sheet(0).add_chart(ChartInsertKind.PIE, "Sheet1!$A$1:$B$5", anchor=DrawingAnchor(row=20)).object_id
-            )
+            other = _chart_input.add_chart(
+                wb.sheet(0), _chart_input.PIE, "Sheet1!$A$1:$B$5", anchor=DrawingAnchor(row=20)
+            ).object_id
             self.assertEqual([o.object_id for o in wb.sheet(0).list_drawings()], [oid, other])
             wb.sheet(0).drawing(other).set_z_order(0)
             self.assertEqual([o.object_id for o in wb.sheet(0).list_drawings()], [other, oid])
@@ -611,15 +615,12 @@ class ChartDrawingTests(unittest.TestCase):
         with wb:
             obj = wb.sheet(0).list_drawings()[0].get_drawing_properties()
             self.assertEqual((obj.width_emu, obj.height_emu), (360 * 12700, 216 * 12700))
-            sized = (
-                wb.sheet(0)
-                .add_chart(
-                    ChartInsertKind.AREA,
-                    SOURCE,
-                    anchor=DrawingAnchor(anchor_kind=AnchorKind.ONE_CELL, width_emu=500_000, height_emu=400_000),
-                )
-                .object_id
-            )
+            sized = _chart_input.add_chart(
+                wb.sheet(0),
+                _chart_input.AREA,
+                SOURCE,
+                anchor=DrawingAnchor(anchor_kind=AnchorKind.ONE_CELL, width_emu=500_000, height_emu=400_000),
+            ).object_id
             by_id = {o.object_id: o.get_drawing_properties() for o in wb.sheet(0).list_drawings()}
             self.assertEqual((by_id[sized].width_emu, by_id[sized].height_emu), (500_000, 400_000))
             self.assertEqual(by_id[sized].anchor_kind, AnchorKind.ONE_CELL)
@@ -627,11 +628,9 @@ class ChartDrawingTests(unittest.TestCase):
     def test_snapshot_remove_restore(self) -> None:
         wb, a = _chart(title="A")
         with wb:
-            b = (
-                wb.sheet(0)
-                .add_chart(ChartInsertKind.PIE, "Sheet1!$A$1:$B$5", anchor=DrawingAnchor(row=20), title="B")
-                .object_id
-            )
+            b = _chart_input.add_chart(
+                wb.sheet(0), _chart_input.PIE, "Sheet1!$A$1:$B$5", anchor=DrawingAnchor(row=20), title="B"
+            ).object_id
             snap = wb.sheet(0).drawing(a).snapshot()
             self.assertIsInstance(snap, bytes)
             self.assertGreater(len(snap), 0)
@@ -682,15 +681,15 @@ class ChartErrorTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _grid(wb)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_chart(ChartInsertKind.COLUMN, "not a range")
+                _chart_input.add_chart(wb.sheet(0), _chart_input.COLUMN, "not a range")
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_chart(99, SOURCE)
+                wb.sheet(0).add_chart(ChartInsertInput(type=99, range=SOURCE))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_chart(
-                    ChartInsertKind.COLUMN, SOURCE, anchor=DrawingAnchor(anchor_kind=AnchorKind.ABSOLUTE)
+                _chart_input.add_chart(
+                    wb.sheet(0), _chart_input.COLUMN, SOURCE, anchor=DrawingAnchor(anchor_kind=AnchorKind.ABSOLUTE)
                 )
             with self.assertRaises(ValueError):
-                wb.sheet(0).add_chart(ChartInsertKind.COLUMN, SOURCE, anchor=DrawingAnchor(row=-1))
+                _chart_input.add_chart(wb.sheet(0), _chart_input.COLUMN, SOURCE, anchor=DrawingAnchor(row=-1))
             self.assertEqual(wb.sheet(0).list_drawings(), [])
 
     def test_failed_edit_leaves_the_chart_unchanged(self) -> None:

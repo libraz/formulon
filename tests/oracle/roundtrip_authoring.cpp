@@ -326,7 +326,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
       const std::string token(text.substr(0, comma));
       fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
       RETURN_IF_ERROR(
-          checked(fm_workbook_parse_reference(wb, token.c_str(), 0, 0, 0U, 0U, &ref), "fm_workbook_parse_reference"));
+          checked(fm_workbook_parse_reference(wb, token.c_str(), nullptr, &ref), "fm_workbook_parse_reference"));
       if (ref.valid == 0) {
         return invalid("print_area token is not an A1 range: " + token);
       }
@@ -346,7 +346,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
       if (v == nullptr || !v->is_string() || v->as_string().empty()) {
         continue;
       }
-      RETURN_IF_ERROR(checked(fm_workbook_parse_reference(wb, v->as_string().c_str(), 0, 0, 0U, 0U, ref),
+      RETURN_IF_ERROR(checked(fm_workbook_parse_reference(wb, v->as_string().c_str(), nullptr, ref),
                               "fm_workbook_parse_reference"));
       if (ref->valid == 0) {
         return invalid("print_titles span is not an A1 range: " + v->as_string());

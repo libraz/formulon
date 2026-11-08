@@ -108,7 +108,7 @@ function failureProbes(wb, mod) {
     [true, () => wb.sheet(99).chart(1).snapshot()],
     [true, () => wb.sheet(99).chart(1).getProperties()],
     [true, () => wb.sheet(99).chart(1).getData()],
-    [true, () => wb.sheet(99).addChart({ kind: 0, source: 'A1:B2' })],
+    [true, () => wb.sheet(99).addChart({ type: 0, range: 'A1:B2' })],
     [true, () => wb.sheet(99).chart(1).addSeries(0, { values: 'A1:A2' })],
     [true, () => wb.sheet(99).ooxml.getRangeXfBases({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
     [

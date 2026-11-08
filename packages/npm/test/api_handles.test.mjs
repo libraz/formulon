@@ -65,7 +65,7 @@ function fillSource(sheet) {
 // A cache over `sourceSheet`'s A1:B3 with the two records filled in.
 function addCache(wb, sourceSheet) {
   const cache = wb.addPivotCache();
-  cache.setWorksheetSource({ ref: 'A1:B3', sheet: sourceSheet });
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: sourceSheet });
   cache.addField('Region');
   cache.addField('Amount');
   for (const [region, amount] of [
@@ -103,8 +103,8 @@ function addTable(sheet, name, rect = { firstRow: 0, firstCol: 0, lastRow: 1, la
 // A column chart over Sheet1!A1:B3.
 function addChart(formulon, sheet) {
   return sheet.addChart({
-    kind: formulon.ChartInsertKind.Column,
-    source: 'Sheet1!$A$1:$B$3',
+    type: formulon.ChartPlotType.Bar,
+    range: 'Sheet1!$A$1:$B$3',
     legend: formulon.ChartLegendPosition.Right,
   });
 }
@@ -273,7 +273,7 @@ test('identity 6: removing a source sheet orphans the pivots and the cache that 
     expectCode(() => cacheA.getOptions(), f.StatusCode.NotFound);
     assert.equal(pb.getProperties().name, 'PB');
     assert.equal(pb.getCache(), cacheB);
-    assert.equal(cacheB.getWorksheetSource().sheet, 'DataB');
+    assert.equal(cacheB.getWorksheetSource().range.sheet, dataB.index);
     assert.equal(out.listPivots().length, 1);
     assert.equal(out.listPivots()[0], pb);
   });
@@ -443,8 +443,8 @@ test('identity 12: a failed pivot edit and table churn leave the handles on thei
     assert.equal(ws.pivot('P1'), first);
     assert.equal(ws.listPivots()[0], first);
     assert.equal(ws.listPivots()[1], second);
-    assert.equal(first.getLayout().rect.firstRow, 0);
-    assert.equal(second.getLayout().rect.firstRow, 7);
+    assert.equal(first.getLayout().range.firstRow, 0);
+    assert.equal(second.getLayout().range.firstRow, 7);
 
     // Tables survive growth of the list, row deletion and sheet removal elsewhere, and removal of an earlier one.
     const home = wb.addSheet('Home');
@@ -647,8 +647,7 @@ test('threaded comments: done on a thread resolves it, on a reply is ThreadedCom
     wb.addPerson({ id: PERSON, displayName: 'Alice', userId: 'alice', providerId: 'None' });
     ws.addThreadedComment({
       id: THREAD,
-      row: 1,
-      col: 1,
+      cell: { row: 1, col: 1 },
       personId: PERSON,
       created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
       text: 'Check',
@@ -656,8 +655,7 @@ test('threaded comments: done on a thread resolves it, on a reply is ThreadedCom
     });
     ws.addThreadedComment({
       id: REPLY,
-      row: 1,
-      col: 1,
+      cell: { row: 1, col: 1 },
       personId: PERSON,
       created: { year: 2026, month: 1, day: 2, hour: 3, minute: 5, second: 5 },
       text: 'Done?',
@@ -691,8 +689,8 @@ test('sparklines: update replaces, keeps or refuses to empty the group', async (
     const ws = wb.sheet(0);
     ws.addSparklineGroup({
       sparklines: [
-        { formula: 'Sheet1!A1:D1', location: 'F1' },
-        { formula: 'Sheet1!A2:D2', location: 'F2' },
+        { source: 'Sheet1!A1:D1', location: 'F1' },
+        { source: 'Sheet1!A2:D2', location: 'F2' },
       ],
     });
     const group = ws.listSparklineGroups()[0];
@@ -707,9 +705,15 @@ test('sparklines: update replaces, keeps or refuses to empty the group', async (
     assert.deepEqual(plain(ws.listSparklineGroups()[0].sparklines), plain(original));
 
     // The key replaces them.
-    const replacement = [{ formula: '=Sheet1!B1:B5', location: 'H1' }];
+    const replacement = [{ source: 'Sheet1!B1:B5', location: 'H1' }];
+    const replaced = [
+      {
+        source: { sheet: 0, rect: { firstRow: 0, firstCol: 1, lastRow: 4, lastCol: 1 } },
+        location: { row: 0, col: 7 },
+      },
+    ];
     ws.updateSparklineGroup(0, { ...ws.listSparklineGroups()[0], sparklines: replacement });
-    assert.deepEqual(plain(ws.listSparklineGroups()[0].sparklines), replacement);
+    assert.deepEqual(plain(ws.listSparklineGroups()[0].sparklines), replaced);
     assert.equal(ws.listSparklineGroups()[0].markers, true);
 
     // An empty list is refused and the group is untouched.
@@ -717,7 +721,7 @@ test('sparklines: update replaces, keeps or refuses to empty the group', async (
       () => ws.updateSparklineGroup(0, { ...ws.listSparklineGroups()[0], sparklines: [] }),
       f.StatusCode.InvalidArgument,
     );
-    assert.deepEqual(plain(ws.listSparklineGroups()[0].sparklines), replacement);
+    assert.deepEqual(plain(ws.listSparklineGroups()[0].sparklines), replaced);
     assert.equal(typeof ws.setSparklineGroupSparklines, 'undefined');
   });
 });

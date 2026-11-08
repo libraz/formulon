@@ -398,10 +398,11 @@ void append_grey_ln(std::string& x, int lum) {
   x += "\"/></a:schemeClr></a:solidFill><a:round/></a:ln>";
 }
 
-std::string gridlines_xml() {
-  std::string x = "<c:majorGridlines><c:spPr>";
-  append_grey_ln(x, 15);
-  return x + "<a:effectLst/></c:spPr></c:majorGridlines>";
+std::string gridlines_xml(bool minor) {
+  const std::string tag = minor ? "c:minorGridlines" : "c:majorGridlines";
+  std::string x = "<" + tag + "><c:spPr>";
+  append_grey_ln(x, minor ? 5 : 15);
+  return x + "<a:effectLst/></c:spPr></" + tag + ">";
 }
 
 Expected<ChartSplit, Error> split_chart_source(const Workbook& wb, std::size_t host_sheet, std::string_view source,
