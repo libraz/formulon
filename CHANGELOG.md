@@ -2207,22 +2207,6 @@ order.
 - `make npm-typecheck` type-checks the README examples and the public
   declarations with TypeScript.
 
-### Removed
-
-- `fm_cf_color_t` and the `*_argb` fields of the chart and shape records
-  (see `fm_color_spec_t` under BREAKING), `CfColor`, the `*Argb` keys of
-  JavaScript colour patches, `fillRgb` / `lineRgb`, and `EvalArray`.
-- `kCliInvalidArgs`, `kCliFileNotFound` and `kCliOutputFailed` (7005 to 7007).
-- `fm_workbook_evaluate_formula_array_cell`: `fm_sheet_evaluate_formula_array`
-  returns an owned `fm_value_array_t` read with `fm_value_array_get_value_at`.
-- `fm_sheet_set_tab_hidden`, `fm_workbook_set_defined_name_scoped`,
-  `fm_workbook_set_iterative_enabled`, `fm_sheet_set_fit_to_page` and
-  `fm_sheet_set_thread_resolved`; the replacements are in the table under
-  [C ABI changes](#c-abi-changes).
-- `fm_workbook_probe_image`: use `fm_get_image_info`, which takes no workbook.
-- The former names of the renamed C functions (the `removed` rows of the
-  migration table), with no aliases.
-
 ### Changed
 
 - `fm_get_function_metadata` (`getFunctionMetadata`, `function_metadata`) reports the
@@ -2320,6 +2304,22 @@ order.
   number exactly, so `0.1+0.2` matches its own list entry.
 - The threads WebAssembly build skips Binaryen's memory packing: raw size
   grows by 19 KB and the Brotli size shrinks by 1.5 KB.
+
+### Removed
+
+- `fm_cf_color_t` and the `*_argb` fields of the chart and shape records
+  (see `fm_color_spec_t` under BREAKING), `CfColor`, the `*Argb` keys of
+  JavaScript colour patches, `fillRgb` / `lineRgb`, and `EvalArray`.
+- `kCliInvalidArgs`, `kCliFileNotFound` and `kCliOutputFailed` (7005 to 7007).
+- `fm_workbook_evaluate_formula_array_cell`: `fm_sheet_evaluate_formula_array`
+  returns an owned `fm_value_array_t` read with `fm_value_array_get_value_at`.
+- `fm_sheet_set_tab_hidden`, `fm_workbook_set_defined_name_scoped`,
+  `fm_workbook_set_iterative_enabled`, `fm_sheet_set_fit_to_page` and
+  `fm_sheet_set_thread_resolved`; the replacements are in the table under
+  [C ABI changes](#c-abi-changes).
+- `fm_workbook_probe_image`: use `fm_get_image_info`, which takes no workbook.
+- The former names of the renamed C functions (the `removed` rows of the
+  migration table), with no aliases.
 
 ### Fixed
 

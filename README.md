@@ -88,7 +88,7 @@ formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
 ```
 
-Failures throw `FormulonError` in JavaScript and `FormulonError` subclasses in Python. A string that starts with `=` passed to `setValue` / `ws[...] =` is entered as a formula; enter untrusted text with `setText` / `set_text`, which always stores text. Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
+Failures throw `FormulonError` in JavaScript and `FormulonError` subclasses in Python. A string that starts with `=` passed to `setValue` (JavaScript) or `set_value` / `ws[...] =` (Python) is entered as a formula; enter untrusted text with `setText` / `set_text`, which always stores text. Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
 
 ## Switching Excel profiles
 
