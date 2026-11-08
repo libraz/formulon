@@ -35,23 +35,38 @@ void JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
 
 namespace {
 
-/// The six AutoFilter entry points, once for sheets and once for tables, so
-/// every JS method below is written a single time.
+/// The five AutoFilter entry points, once for sheets and once for tables, so
+/// every JS method below is written a single time. A table is addressed by
+/// its sheet and sheet-local index; the sheet entry points ignore `table`.
 struct AutoFilterOps {
-  fm_status_t (*get)(const fm_workbook_t*, size_t, fm_auto_filter_t*, int32_t*);
-  fm_status_t (*set)(fm_workbook_t*, size_t, const fm_auto_filter_t*);
-  fm_status_t (*remove)(fm_workbook_t*, size_t);
-  fm_status_t (*apply)(fm_workbook_t*, size_t);
-  fm_status_t (*clear)(fm_workbook_t*, size_t);
-  fm_status_t (*evaluate)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*);
+  fm_status_t (*get)(const fm_workbook_t*, size_t, size_t, fm_auto_filter_t*, int32_t*);
+  fm_status_t (*set)(fm_workbook_t*, size_t, size_t, const fm_auto_filter_t*);
+  fm_status_t (*apply)(fm_workbook_t*, size_t, size_t);
+  fm_status_t (*clear)(fm_workbook_t*, size_t, size_t);
+  fm_status_t (*evaluate)(const fm_workbook_t*, size_t, size_t, uint8_t*, size_t, size_t*, uint32_t*);
 };
 
-constexpr AutoFilterOps kSheetAutoFilter = {fm_sheet_get_auto_filter,    fm_sheet_set_auto_filter,
-                                            fm_sheet_remove_auto_filter, fm_sheet_apply_auto_filter,
-                                            fm_sheet_clear_auto_filter,  fm_sheet_evaluate_auto_filter};
-constexpr AutoFilterOps kTableAutoFilter = {
-    fm_workbook_get_table_auto_filter,   fm_workbook_set_table_auto_filter,   fm_workbook_remove_table_auto_filter,
-    fm_workbook_apply_table_auto_filter, fm_workbook_clear_table_auto_filter, fm_workbook_evaluate_table_auto_filter};
+fm_status_t sheet_get(const fm_workbook_t* wb, size_t sheet, size_t, fm_auto_filter_t* out, int32_t* present) {
+  return fm_sheet_get_auto_filter(wb, sheet, out, present);
+}
+fm_status_t sheet_set(fm_workbook_t* wb, size_t sheet, size_t, const fm_auto_filter_t* filter) {
+  return fm_sheet_set_auto_filter(wb, sheet, filter);
+}
+fm_status_t sheet_apply(fm_workbook_t* wb, size_t sheet, size_t) {
+  return fm_sheet_apply_auto_filter(wb, sheet);
+}
+fm_status_t sheet_clear(fm_workbook_t* wb, size_t sheet, size_t) {
+  return fm_sheet_clear_auto_filter_criteria(wb, sheet);
+}
+fm_status_t sheet_evaluate(const fm_workbook_t* wb, size_t sheet, size_t, uint8_t* buf, size_t cap, size_t* count,
+                           uint32_t* first_row) {
+  return fm_sheet_evaluate_auto_filter(wb, sheet, buf, cap, count, first_row);
+}
+
+constexpr AutoFilterOps kSheetAutoFilter = {sheet_get, sheet_set, sheet_apply, sheet_clear, sheet_evaluate};
+constexpr AutoFilterOps kTableAutoFilter = {fm_sheet_get_table_auto_filter, fm_sheet_set_table_auto_filter,
+                                            fm_sheet_apply_table_auto_filter, fm_sheet_clear_table_auto_filter_criteria,
+                                            fm_sheet_evaluate_table_auto_filter};
 
 emscripten::val date_group_to_val(const fm_date_group_item_t& d) {
   emscripten::val o = emscripten::val::object();
@@ -67,7 +82,7 @@ emscripten::val date_group_to_val(const fm_date_group_item_t& d) {
 
 emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   emscripten::val o = emscripten::val::object();
-  o.set("colId", c.col_id);
+  o.set("columnOffset", c.column_offset);
   o.set("hiddenButton", c.hidden_button != 0);
   o.set("showButton", c.show_button != 0);
   o.set("kind", c.kind);
@@ -84,20 +99,21 @@ emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   o.set("dateGroups", groups);
   o.set("customAnd", c.custom_and != 0);
   o.set("customCount", c.custom_count);
-  o.set("op1", c.op1);
-  o.set("op2", c.op2);
+  o.set("operator1", c.op1);
+  o.set("operator2", c.op2);
   o.set("top", c.top != 0);
   o.set("percent", c.percent != 0);
-  o.set("topVal", c.top_val);
-  js_set_present_or_null(o, "filterVal", c.has_filter_val, c.filter_val);
+  o.set("topValue", c.top_val);
+  js_set_present_or_null(o, "filterValue", c.has_filter_val, c.filter_val);
   o.set("dynamicType", c.dynamic_type);
-  js_set_present_or_null(o, "dynVal", c.has_dyn_val, c.dyn_val);
-  js_set_present_or_null(o, "dynMaxVal", c.has_dyn_max_val, c.dyn_max_val);
-  o.set("dxfId", c.dxf_id);
+  js_set_present_or_null(o, "dynamicValue", c.has_dyn_val, c.dyn_val);
+  js_set_present_or_null(o, "dynamicMaxValue", c.has_dyn_max_val, c.dyn_max_val);
+  o.set("dxfIndex", c.dxf_index);
   o.set("cellColor", c.cell_color != 0);
   o.set("iconSet", c.icon_set);
-  js_set_present_or_null(o, "iconId", c.has_icon_id, c.icon_id);
-  js_set_cstr_fields(o, {{"val1", c.val1}, {"val2", c.val2}, {"valIso", c.val_iso}, {"maxValIso", c.max_val_iso}});
+  js_set_present_or_null(o, "iconIndex", c.has_icon_index, c.icon_index);
+  js_set_cstr_fields(o,
+                     {{"value1", c.val1}, {"value2", c.val2}, {"valueIso", c.val_iso}, {"maxValueIso", c.max_val_iso}});
   return o;
 }
 
@@ -106,9 +122,9 @@ emscripten::val sort_condition_to_val(const fm_sort_condition_t& c) {
   o.set("ref", cell_rect_to_val(c.ref));
   o.set("descending", c.descending != 0);
   o.set("sortBy", c.sort_by);
-  js_set_present_or_null(o, "dxfId", c.has_dxf_id, c.dxf_id);
+  js_set_present_or_null(o, "dxfIndex", c.has_dxf_index, c.dxf_index);
   o.set("iconSet", c.icon_set);
-  js_set_present_or_null(o, "iconId", c.has_icon_id, c.icon_id);
+  js_set_present_or_null(o, "iconIndex", c.has_icon_index, c.icon_index);
   js_set_cstr(o, "customList", c.custom_list);
   return o;
 }
@@ -182,7 +198,7 @@ int32_t pull_flag(const emscripten::val& v, const char* key, JsNarrowNumericRead
 void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filter_column_t& c,
                         JsNarrowNumericReader& reader) {
   c = fm_filter_column_t{};
-  c.col_id = reader.u32(v, "colId", 0U, "filterColumn.colId");
+  c.column_offset = reader.u32(v, "columnOffset", 0U, "filterColumn.columnOffset");
   if (!reader.ok()) {
     return;
   }
@@ -245,15 +261,15 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   c.date_group_count = static_cast<uint32_t>(st.date_groups.size());
   c.custom_and = pull_flag(v, "customAnd", reader);
   c.custom_count = reader.i32(v, "customCount", 0, "filterColumn.customCount");
-  c.op1 = reader.i32(v, "op1", 0, "filterColumn.op1");
-  c.op2 = reader.i32(v, "op2", 0, "filterColumn.op2");
+  c.op1 = reader.i32(v, "operator1", 0, "filterColumn.operator1");
+  c.op2 = reader.i32(v, "operator2", 0, "filterColumn.operator2");
   if (!reader.ok()) {
     return;
   }
-  st.val1 = reader.string(v, "val1", "filterColumn.val1");
-  st.val2 = reader.string(v, "val2", "filterColumn.val2");
-  st.val_iso = reader.string(v, "valIso", "filterColumn.valIso");
-  st.max_val_iso = reader.string(v, "maxValIso", "filterColumn.maxValIso");
+  st.val1 = reader.string(v, "value1", "filterColumn.value1");
+  st.val2 = reader.string(v, "value2", "filterColumn.value2");
+  st.val_iso = reader.string(v, "valueIso", "filterColumn.valueIso");
+  st.max_val_iso = reader.string(v, "maxValueIso", "filterColumn.maxValueIso");
   if (!reader.ok()) {
     return;
   }
@@ -263,29 +279,29 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   c.max_val_iso = st.max_val_iso.c_str();
   c.top = pull_flag(v, "top", reader, true);
   c.percent = pull_flag(v, "percent", reader);
-  c.top_val = reader.number(v, "topVal", 0.0, "filterColumn.topVal");
-  const emscripten::val filter_val = reader.value(v, "filterVal", "filterColumn.filterVal");
+  c.top_val = reader.number(v, "topValue", 0.0, "filterColumn.topValue");
+  const emscripten::val filter_val = reader.value(v, "filterValue", "filterColumn.filterValue");
   c.has_filter_val = js_value_present(filter_val) ? 1 : 0;
-  c.filter_val = reader.number_value(filter_val, 0.0, "filterColumn.filterVal");
+  c.filter_val = reader.number_value(filter_val, 0.0, "filterColumn.filterValue");
   c.dynamic_type = reader.i32(v, "dynamicType", 0, "filterColumn.dynamicType");
   if (!reader.ok()) {
     return;
   }
-  const emscripten::val dyn_val = reader.value(v, "dynVal", "filterColumn.dynVal");
+  const emscripten::val dyn_val = reader.value(v, "dynamicValue", "filterColumn.dynamicValue");
   c.has_dyn_val = js_value_present(dyn_val) ? 1 : 0;
-  c.dyn_val = reader.number_value(dyn_val, 0.0, "filterColumn.dynVal");
-  const emscripten::val dyn_max_val = reader.value(v, "dynMaxVal", "filterColumn.dynMaxVal");
+  c.dyn_val = reader.number_value(dyn_val, 0.0, "filterColumn.dynamicValue");
+  const emscripten::val dyn_max_val = reader.value(v, "dynamicMaxValue", "filterColumn.dynamicMaxValue");
   c.has_dyn_max_val = js_value_present(dyn_max_val) ? 1 : 0;
-  c.dyn_max_val = reader.number_value(dyn_max_val, 0.0, "filterColumn.dynMaxVal");
-  c.dxf_id = reader.u32(v, "dxfId", UINT32_MAX, "filterColumn.dxfId");
+  c.dyn_max_val = reader.number_value(dyn_max_val, 0.0, "filterColumn.dynamicMaxValue");
+  c.dxf_index = reader.u32(v, "dxfIndex", UINT32_MAX, "filterColumn.dxfIndex");
   if (!reader.ok()) {
     return;
   }
   c.cell_color = pull_flag(v, "cellColor", reader);
   c.icon_set = reader.i32(v, "iconSet", 0, "filterColumn.iconSet");
-  const emscripten::val icon_id = reader.value(v, "iconId", "filterColumn.iconId");
-  c.has_icon_id = js_value_present(icon_id) ? 1 : 0;
-  c.icon_id = reader.i32_value(icon_id, 0, "filterColumn.iconId");
+  const emscripten::val icon_index = reader.value(v, "iconIndex", "filterColumn.iconIndex");
+  c.has_icon_index = js_value_present(icon_index) ? 1 : 0;
+  c.icon_index = reader.i32_value(icon_index, 0, "filterColumn.iconIndex");
 }
 
 void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_sort_condition_t& c,
@@ -302,25 +318,31 @@ void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_
   }
   custom_list = reader.string(v, "customList", "sortCondition.customList");
   c.custom_list = custom_list.c_str();
-  const emscripten::val dxf_id = reader.value(v, "dxfId", "sortCondition.dxfId");
-  c.has_dxf_id = js_value_present(dxf_id) ? 1 : 0;
-  c.dxf_id = reader.u32_value(dxf_id, 0U, "sortCondition.dxfId");
+  const emscripten::val dxf_index = reader.value(v, "dxfIndex", "sortCondition.dxfIndex");
+  c.has_dxf_index = js_value_present(dxf_index) ? 1 : 0;
+  c.dxf_index = reader.u32_value(dxf_index, 0U, "sortCondition.dxfIndex");
   c.icon_set = reader.i32(v, "iconSet", 0, "sortCondition.iconSet");
-  const emscripten::val icon_id = reader.value(v, "iconId", "sortCondition.iconId");
-  c.has_icon_id = js_value_present(icon_id) ? 1 : 0;
-  c.icon_id = reader.i32_value(icon_id, 0, "sortCondition.iconId");
+  const emscripten::val icon_index = reader.value(v, "iconIndex", "sortCondition.iconIndex");
+  c.has_icon_index = js_value_present(icon_index) ? 1 : 0;
+  c.icon_index = reader.i32_value(icon_index, 0, "sortCondition.iconIndex");
 }
 
-emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {
+emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet, uint32_t table) {
   fm_auto_filter_t f = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
-  const fm_status_t rc = wb != nullptr ? ops.get(wb, index, &f, &present) : kBindingInvalidHandle;
+  const fm_status_t rc = wb != nullptr ? ops.get(wb, sheet, table, &f, &present) : kBindingInvalidHandle;
   return optional_or_null(rc, present, rc == 0 && present != 0 ? auto_filter_to_val(f) : emscripten::val::null());
 }
 
-void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index, const emscripten::val& filter) {
+void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet, uint32_t table,
+                     const emscripten::val& filter) {
   if (wb == nullptr) {
     record_invalid_handle();
+    return;
+  }
+  // `null` removes the filter.
+  if (filter.isNull()) {
+    succeeded(ops.set(wb, sheet, table, nullptr));
     return;
   }
   JsNarrowNumericReader reader("setAutoFilter");
@@ -398,24 +420,26 @@ void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index
   if (!reader.ok()) {
     return;
   }
-  succeeded(ops.set(wb, index, &f));
+  succeeded(ops.set(wb, sheet, table, &f));
 }
 
-void run_auto_filter(fm_workbook_t* wb, fm_status_t (*fn)(fm_workbook_t*, size_t), uint32_t index) {
-  succeeded(wb != nullptr ? fn(wb, index) : kBindingInvalidHandle);
+void run_auto_filter(fm_workbook_t* wb, fm_status_t (*fn)(fm_workbook_t*, size_t, size_t), uint32_t sheet,
+                     uint32_t table) {
+  succeeded(wb != nullptr ? fn(wb, sheet, table) : kBindingInvalidHandle);
 }
 
-emscripten::val evaluate_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {
+emscripten::val evaluate_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet,
+                                     uint32_t table) {
   if (wb == nullptr) {
     record_invalid_handle();
     return emscripten::val::undefined();
   }
   size_t len = 0;
   uint32_t first_row = 0;
-  fm_status_t rc = ops.evaluate(wb, index, nullptr, 0, &len, &first_row);
+  fm_status_t rc = ops.evaluate(wb, sheet, table, nullptr, 0, &len, &first_row);
   std::vector<uint8_t> flags(len);
   if (rc == 0 && len > 0) {
-    rc = ops.evaluate(wb, index, flags.data(), flags.size(), &len, &first_row);
+    rc = ops.evaluate(wb, sheet, table, flags.data(), flags.size(), &len, &first_row);
   }
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
@@ -433,51 +457,43 @@ emscripten::val evaluate_auto_filter(const fm_workbook_t* wb, const AutoFilterOp
 }  // namespace
 
 emscripten::val JsWorkbook::getAutoFilter(uint32_t sheet) const {
-  return get_auto_filter(handle_, kSheetAutoFilter, sheet);
+  return get_auto_filter(handle_, kSheetAutoFilter, sheet, 0U);
 }
 
 void JsWorkbook::setAutoFilter(uint32_t sheet, emscripten::val filter) {
-  set_auto_filter(handle_, kSheetAutoFilter, sheet, filter);
-}
-
-void JsWorkbook::removeAutoFilter(uint32_t sheet) {
-  run_auto_filter(handle_, fm_sheet_remove_auto_filter, sheet);
+  set_auto_filter(handle_, kSheetAutoFilter, sheet, 0U, filter);
 }
 
 void JsWorkbook::applyAutoFilter(uint32_t sheet) {
-  run_auto_filter(handle_, fm_sheet_apply_auto_filter, sheet);
+  run_auto_filter(handle_, kSheetAutoFilter.apply, sheet, 0U);
 }
 
 void JsWorkbook::clearAutoFilter(uint32_t sheet) {
-  run_auto_filter(handle_, fm_sheet_clear_auto_filter, sheet);
+  run_auto_filter(handle_, kSheetAutoFilter.clear, sheet, 0U);
 }
 
 emscripten::val JsWorkbook::evaluateAutoFilter(uint32_t sheet) const {
-  return evaluate_auto_filter(handle_, kSheetAutoFilter, sheet);
+  return evaluate_auto_filter(handle_, kSheetAutoFilter, sheet, 0U);
 }
 
-emscripten::val JsWorkbook::getTableAutoFilter(uint32_t table) const {
-  return get_auto_filter(handle_, kTableAutoFilter, table);
+emscripten::val JsWorkbook::getTableAutoFilter(uint32_t sheet, uint32_t table) const {
+  return get_auto_filter(handle_, kTableAutoFilter, sheet, table);
 }
 
-void JsWorkbook::setTableAutoFilter(uint32_t table, emscripten::val filter) {
-  set_auto_filter(handle_, kTableAutoFilter, table, filter);
+void JsWorkbook::setTableAutoFilter(uint32_t sheet, uint32_t table, emscripten::val filter) {
+  set_auto_filter(handle_, kTableAutoFilter, sheet, table, filter);
 }
 
-void JsWorkbook::removeTableAutoFilter(uint32_t table) {
-  run_auto_filter(handle_, fm_workbook_remove_table_auto_filter, table);
+void JsWorkbook::applyTableAutoFilter(uint32_t sheet, uint32_t table) {
+  run_auto_filter(handle_, kTableAutoFilter.apply, sheet, table);
 }
 
-void JsWorkbook::applyTableAutoFilter(uint32_t table) {
-  run_auto_filter(handle_, fm_workbook_apply_table_auto_filter, table);
+void JsWorkbook::clearTableAutoFilter(uint32_t sheet, uint32_t table) {
+  run_auto_filter(handle_, kTableAutoFilter.clear, sheet, table);
 }
 
-void JsWorkbook::clearTableAutoFilter(uint32_t table) {
-  run_auto_filter(handle_, fm_workbook_clear_table_auto_filter, table);
-}
-
-emscripten::val JsWorkbook::evaluateTableAutoFilter(uint32_t table) const {
-  return evaluate_auto_filter(handle_, kTableAutoFilter, table);
+emscripten::val JsWorkbook::evaluateTableAutoFilter(uint32_t sheet, uint32_t table) const {
+  return evaluate_auto_filter(handle_, kTableAutoFilter, sheet, table);
 }
 
 }  // namespace parts

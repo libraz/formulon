@@ -30,14 +30,6 @@ functions:
     embind_cpp: sheetCount
     node_cpp: SheetCount
 
-  - name: fm_workbook_get_table_count
-    area: workbook_counts
-    body: status_sizet_out
-    accessor: "wb->workbook().tables().size()"
-    js_method: tableCount
-    embind_cpp: tableCount
-    node_cpp: TableCount
-
   # ----- status + size_t out: styles pools -------------------------------
   - name: fm_workbook_get_font_count
     area: styles_counts

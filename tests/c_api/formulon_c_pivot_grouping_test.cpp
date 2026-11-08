@@ -52,7 +52,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   date_spec.source_name = "Date";
   date_spec.custom_name = "";
   date_spec.axis = FM_PIVOT_AXIS_ROW;
-  date_spec.subtotal_top = 0;
+  date_spec.subtotal_top = FM_TRISTATE_FALSE;
   date_spec.number_format = "";
   std::size_t date_field = 99;
   st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &date_spec, &date_field);
@@ -63,7 +63,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
-  amount_spec.subtotal_top = 0;
+  amount_spec.subtotal_top = FM_TRISTATE_FALSE;
   amount_spec.number_format = "";
   std::size_t amount_field = 99;
   st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field);
@@ -78,7 +78,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
-  df_spec.aggregation = FM_PIVOT_AGG_SUM;
+  df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df_spec.number_format = "";
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   df_spec.show_as_base_field = -1;
@@ -103,14 +103,14 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
 
 // Collects (row label, Sum(Amount)) pairs from a one-row-field,
 // one-data-field pivot's projected grid, in row order.
-std::vector<std::pair<std::string, double>> CollectDaysGroupRows(fm_pivot_cells_t* handle) {
+std::vector<std::pair<std::string, double>> CollectDaysGroupRows(fm_pivot_report_t* handle) {
   std::vector<fm_pivot_cell_t> cells = CollectCells(handle);
   std::vector<std::pair<std::string, double>> labels_by_row;
   std::vector<double> sums_by_row;
   for (const fm_pivot_cell_t& c : cells) {
-    if (c.kind == FM_PIVOT_CELL_ROW_LABEL && c.value.kind == FM_VAL_TEXT) {
+    if (c.kind == FM_PIVOT_CELL_KIND_ROW_LABEL && c.value.kind == FM_VALUE_KIND_TEXT) {
       labels_by_row.emplace_back(std::string(c.value.u.text), 0.0);
-    } else if (c.kind == FM_PIVOT_CELL_DATA && c.value.kind == FM_VAL_NUMBER) {
+    } else if (c.kind == FM_PIVOT_CELL_KIND_DATA && c.value.kind == FM_VALUE_KIND_NUMBER) {
       sums_by_row.push_back(c.value.u.number);
     }
   }
@@ -175,7 +175,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   region_spec.source_name = "Region";
   region_spec.custom_name = "";
   region_spec.axis = FM_PIVOT_AXIS_ROW;
-  region_spec.subtotal_top = 0;
+  region_spec.subtotal_top = FM_TRISTATE_FALSE;
   region_spec.number_format = "";
   std::size_t region_field = 99;
   if (fm_status_t st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &region_spec, &region_field); st != 0) {
@@ -185,7 +185,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
-  amount_spec.subtotal_top = 0;
+  amount_spec.subtotal_top = FM_TRISTATE_FALSE;
   amount_spec.number_format = "";
   std::size_t amount_field = 99;
   if (fm_status_t st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field); st != 0) {
@@ -198,7 +198,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
-  df_spec.aggregation = FM_PIVOT_AGG_SUM;
+  df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df_spec.number_format = "";
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   df_spec.show_as_base_field = -1;
@@ -216,14 +216,14 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   return 0;
 }
 
-// Sum of every `FM_PIVOT_CELL_DATA` cell in the projected layout.
-double SumDataCells(fm_pivot_cells_t* handle) {
+// Sum of every `FM_PIVOT_CELL_KIND_DATA` cell in the projected layout.
+double SumDataCells(fm_pivot_report_t* handle) {
   double total = 0.0;
-  const std::size_t n = count_of(fm_pivot_cells_get_cell_count, handle);
+  const std::size_t n = count_of(fm_pivot_report_get_cell_count, handle);
   for (std::size_t i = 0; i < n; ++i) {
     fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
-    EXPECT_EQ(fm_pivot_cells_get_cell_at(handle, i, &cell), 0);
-    if (cell.kind == FM_PIVOT_CELL_DATA && cell.value.kind == FM_VAL_NUMBER) {
+    EXPECT_EQ(fm_pivot_report_get_cell_at(handle, i, &cell), 0);
+    if (cell.kind == FM_PIVOT_CELL_KIND_DATA && cell.value.kind == FM_VALUE_KIND_NUMBER) {
       total += cell.value.u.number;
     }
   }
@@ -370,8 +370,8 @@ TEST(FormulonCApiPivot, AddItemAtBindsTheBlankItemByCacheIndex) {
   // The blank shared item is at cache index 1, so the index-addressed adder is
   // the only way to name it: an empty label carries no binding of its own.
   ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "North", 1, ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U, /*visible=*/0,
-                                                 ignored_index()),
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U,
+                                                         /*visible=*/0, ignored_index()),
             0);
   {
     PivotCellsGuard projected;
@@ -391,7 +391,7 @@ TEST(FormulonCApiPivot, AddItemWithEmptyNameCannotHideTheBlankRow) {
   // A name-addressed item defaults to cache index 0, which here holds
   // "North". The item is unlabelled, so it takes its label from that binding
   // and hides North, never the blank row. This is the gap
-  // `fm_sheet_add_pivot_field_shared_item` closes.
+  // `fm_sheet_add_pivot_field_item_by_cache_index` closes.
   ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "North", 1, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "", 0, ignored_index()), 0);
   PivotCellsGuard projected;
@@ -406,8 +406,8 @@ TEST(FormulonCApiPivot, AddItemAtHidesANonBlankItemBeforeAnyReload) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U, /*visible=*/0,
-                                                 ignored_index()),
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U,
+                                                         /*visible=*/0, ignored_index()),
             0);
   {
     PivotCellsGuard projected;
@@ -436,11 +436,11 @@ TEST(FormulonCApiPivot, SoleVisiblePageItemAddedByCacheIndexNamesItsValue) {
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_index, nullptr, 0U), 0);
   ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, 0, FM_PIVOT_AXIS_PAGE), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_index, 0, /*cache_index=*/0U, /*visible=*/0,
-                                                 ignored_index()),
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, /*cache_index=*/0U,
+                                                         /*visible=*/0, ignored_index()),
             0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U, /*visible=*/1,
-                                                 ignored_index()),
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U,
+                                                         /*visible=*/1, ignored_index()),
             0);
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_index, "South"));
 }

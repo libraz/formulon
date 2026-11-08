@@ -24,7 +24,9 @@ from formulon import (
     Chart,
     ChartInsertKind,
     Picture,
-    SheetRect,
+    ShapeInput,
+    SlicerInput,
+    TableInput,
     Workbook,
 )
 
@@ -35,7 +37,7 @@ FORMULON_DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
 
 # Patch-key combinations (pairwise model; the table below covers every pair of the values).
 #   method : Shape.update | Slicer.update | Table.update | Chart.get_preview | PivotCache.set_worksheet_source
-#            | Sheet.set_cell_format
+#            | Sheet.update_cell_format
 #   key    : unknown | None-on-a-non-nullable-key | anchor-key-without-trigger | nullable-key-None (accepted)
 #   depth  : top-level | nested (a patch mapping inside a keyword)
 # The cases are written by hand from that model; the generator was not available when the file was written.
@@ -61,13 +63,13 @@ class _Fixture:
     def __init__(self) -> None:
         self.wb = _workbook()
         ws = self.wb.sheet(0)
-        self.table = self.wb.add_table(
-            range=SheetRect(0, CellRect(0, 0, 2, 1)), name="Sales", display_name="Sales", columns=["Product", "Amount"]
-        )
+        self.table = ws.add_table(TableInput(range=CellRect(0, 0, 2, 1), name="Sales", columns=["Product", "Amount"]))
         self.shape = ws.add_shape(
-            anchor_kind=AnchorKind.ONE_CELL, from_row=6, width_emu=914400, height_emu=457200, preset_geometry="rect"
+            ShapeInput(
+                anchor_kind=AnchorKind.ONE_CELL, from_row=6, width_emu=914400, height_emu=457200, preset_geometry="rect"
+            )
         )
-        self.slicer = ws.add_slicer(0, 0, from_row=10, from_col=4, to_row=20, to_col=6)
+        self.slicer = ws.add_slicer(self.table, 0, SlicerInput(from_row=10, from_col=4, to_row=20, to_col=6))
         self.chart = ws.add_chart(ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3")
         self.cache = self.wb.add_pivot_cache()
 
@@ -88,7 +90,7 @@ class PatchKeyTests(unittest.TestCase):
         return [
             ("Shape.update unknown", lambda: f.shape.update(bogus=1), TypeError),
             ("Shape.update None", lambda: f.shape.update(name=None), TypeError),
-            ("Shape.update None rotation", lambda: f.shape.update(rotation=None), TypeError),
+            ("Shape.update None rotation", lambda: f.shape.update(rotation_deg=None), TypeError),
             ("Shape.update anchor orphan", lambda: f.shape.update(from_row=1), TypeError),
             ("Shape.update edit_as orphan", lambda: f.shape.update(edit_as=1), TypeError),
             ("Shape.update fill_kind None keeps", lambda: f.shape.update(fill_kind=None, line_kind=None), None),
@@ -98,11 +100,22 @@ class PatchKeyTests(unittest.TestCase):
             ("Slicer.update corner orphan", lambda: f.slicer.update(to_row=3), TypeError),
             ("Slicer.update style None clears", lambda: f.slicer.update(style=None), None),
             ("Table.update unknown", lambda: f.table.update(bogus=1), TypeError),
-            ("Table.update None name", lambda: f.table.update(name=None), TypeError),
+            ("Table.update name is gone", lambda: f.table.update(name="Other"), TypeError),
             ("Table.update None range", lambda: f.table.update(range=None), TypeError),
             ("Table.update None flag", lambda: f.table.update(header_row=None), TypeError),
             ("Table.update rect is gone", lambda: f.table.update(rect=CellRect(0, 0, 2, 1)), TypeError),
-            ("Table.update style None clears", lambda: f.table.update(style_name=None), None),
+            ("Table.update style is gone", lambda: f.table.update(style_name="TableStyleLight1"), TypeError),
+            ("Table.update_style_options unknown", lambda: f.table.update_style_options(bogus=1), TypeError),
+            (
+                "Table.update_style_options None flag",
+                lambda: f.table.update_style_options(show_first_column=None),
+                TypeError,
+            ),
+            (
+                "Table.update_style_options style None clears",
+                lambda: f.table.update_style_options(style_name=None),
+                None,
+            ),
             ("Chart.get_preview unknown", lambda: f.chart.get_preview(bogus=1), TypeError),
             ("Chart.get_preview None", lambda: f.chart.get_preview(direction=None), TypeError),
             ("Chart.get_preview None source", lambda: f.chart.get_preview(source=None), TypeError),
@@ -113,12 +126,20 @@ class PatchKeyTests(unittest.TestCase):
                 TypeError,
             ),
             ("PivotCache.set_worksheet_source positional value", lambda: f.cache.set_worksheet_source("A1"), TypeError),
-            ("set_cell_format unknown", lambda: ws.set_cell_format("A1", bogus=1), TypeError),
-            ("set_cell_format nested font unknown", lambda: ws.set_cell_format("A1", font={"bogus": 1}), TypeError),
-            ("set_cell_format nested fill unknown", lambda: ws.set_cell_format("A1", fill={"bogus": 1}), TypeError),
+            ("update_cell_format unknown", lambda: ws.update_cell_format("A1", bogus=1), TypeError),
             (
-                "set_cell_format nested alignment None",
-                lambda: ws.set_cell_format("A1", alignment={"bogus": None}),
+                "update_cell_format nested font unknown",
+                lambda: ws.update_cell_format("A1", font={"bogus": 1}),
+                TypeError,
+            ),
+            (
+                "update_cell_format nested fill unknown",
+                lambda: ws.update_cell_format("A1", fill={"bogus": 1}),
+                TypeError,
+            ),
+            (
+                "update_cell_format nested alignment None",
+                lambda: ws.update_cell_format("A1", alignment={"bogus": None}),
                 TypeError,
             ),
         ]

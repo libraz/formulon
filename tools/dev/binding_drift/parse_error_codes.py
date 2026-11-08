@@ -11,7 +11,7 @@ from .surface_files import CAPI_HEADER, REPO_ROOT, _read
 PARSE_ERROR_H = REPO_ROOT / "src" / "parser" / "parse_error.h"
 
 _C_TYPE = "fm_parse_error_code_t"
-_C_PREFIX = "FM_PARSE_ERROR_"
+_C_PREFIX = "FM_PARSE_ERROR_CODE_"
 
 
 def _c_typedef_enum_values(text: str, type_name: str) -> Optional[Dict[str, int]]:
@@ -36,7 +36,7 @@ def _c_typedef_enum_values(text: str, type_name: str) -> Optional[Dict[str, int]
 
 
 def c_member_name(cpp_name: str) -> str:
-    """`ExpectedRParenOrComma` -> `FM_PARSE_ERROR_EXPECTED_RPAREN_OR_COMMA`."""
+    """`ExpectedRParenOrComma` -> `FM_PARSE_ERROR_CODE_EXPECTED_RPAREN_OR_COMMA`."""
     return _C_PREFIX + re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", cpp_name).upper()
 
 

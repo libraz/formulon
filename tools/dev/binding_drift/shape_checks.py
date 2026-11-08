@@ -203,15 +203,15 @@ _STYLE_RECORD_EXEMPT_TYPES: Set[Tuple[str, str]] = set()
 _STYLE_RECORD_PRESENCE_FLAGS = {
     "fm_cell_xf_t": {
         "has_alignment": (
-            "horizontal_align",
-            "vertical_align",
+            "horizontal",
+            "vertical",
             "wrap_text",
             "justify_last_line",
             "text_rotation",
             "indent",
         ),
-        "has_horizontal_align": "horizontal_align",
-        "has_vertical_align": "vertical_align",
+        "has_horizontal": "horizontal",
+        "has_vertical": "vertical",
         "has_wrap_text": "wrap_text",
         "has_justify_last_line": "justify_last_line",
         "has_protection": ("locked", "hidden"),
@@ -227,7 +227,7 @@ _STYLE_RECORD_PRESENCE_FLAGS = {
         "has_strike": "strike",
         "has_family": "family",
         "has_charset": "charset",
-        "has_size": "size",
+        "has_size_pt": "size_pt",
         "has_outline": "outline",
         "has_shadow": "shadow",
         "has_condense": "condense",

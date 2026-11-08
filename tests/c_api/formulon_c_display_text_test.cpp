@@ -32,7 +32,7 @@ struct WorkbookGuard {
 
 fm_value_t Number(double v) {
   fm_value_t value{};
-  value.kind = FM_VAL_NUMBER;
+  value.kind = FM_VALUE_KIND_NUMBER;
   value.u.number = v;
   return value;
 }
@@ -167,12 +167,12 @@ TEST(FormulonCApiDisplayText, CellUsesItsNumberFormat) {
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 0, 0, &text, &status), 0);
   EXPECT_STREQ(text, "1.50");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 0, &text, &status), 0);
   EXPECT_STREQ(text, "plain");
   ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 5, 5, &text, &status), 0);
   EXPECT_STREQ(text, "");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
 }
 
 TEST(FormulonCApiDisplayText, SpillCellsDisplayResolvedValuesWithTheirOwnFormat) {
@@ -183,13 +183,13 @@ TEST(FormulonCApiDisplayText, SpillCellsDisplayResolvedValuesWithTheirOwnFormat)
 
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(value.u.number, 4.0);
   const char* text = nullptr;
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
 
   fm_cell_xf_t xf{};
   xf.num_fmt_id = 2;  // 0.00
@@ -198,7 +198,7 @@ TEST(FormulonCApiDisplayText, SpillCellsDisplayResolvedValuesWithTheirOwnFormat)
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 1, xf_index), 0);
   ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
   EXPECT_EQ(value.u.number, 4.0);
 
@@ -248,15 +248,15 @@ TEST(FormulonCApiDisplayText, SpillPhantomsUseColumnRowAndCellStylePrecedence) {
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   // C2 carries an explicit xf and therefore beats row 2's inherited decimal
   // format, even though the row and the cell both sit outside the spill.
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 2, &text, &status), 0);
   EXPECT_STREQ(text, "13%");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
 
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
@@ -287,7 +287,7 @@ TEST(FormulonCApiDisplayText, SpillPhantomWithoutLayoutUsesDefaultXfZero) {
   EXPECT_STREQ(text, "2");
   ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 3);  // default xf 0
@@ -311,7 +311,7 @@ TEST(FormulonCApiDisplayText, SpillPhantomUsesNonGeneralDefaultXfZero) {
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 3);  // the non-General default xf 0
@@ -336,7 +336,7 @@ TEST(FormulonCApiDisplayText, InvalidRowXfFallsBackToDefaultRecord) {
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 1);     // the row override still supplies precedence
@@ -370,10 +370,10 @@ TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 2, &text, &status), 0);
   EXPECT_STREQ(text, "2");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 2);  // column, despite the unwritten gap
@@ -398,12 +398,12 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
 
   ASSERT_EQ(fm_sheet_set_cell_xf_index(loaded.handle, 0, 0, 1, 0), 0);
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell, even though its xf is the default record
@@ -417,7 +417,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, 0U);
@@ -443,7 +443,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnForm
   int32_t status = -1;
   ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
-  EXPECT_EQ(status, FM_DISPLAY_OK);
+  EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit range cell
@@ -537,7 +537,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
   EXPECT_STREQ(text, "200.00%");
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
 
   const Bytes saved = SaveXlsbPackage(loaded.handle);
@@ -548,7 +548,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
   ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
   ASSERT_EQ(fm_sheet_get_value(reloaded.handle, 0, 0, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
@@ -577,7 +577,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
   EXPECT_STREQ(text, "2");
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
@@ -593,7 +593,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
   ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
   ASSERT_EQ(fm_sheet_get_value(reloaded.handle, 0, 0, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell XF0 survived the phantom record
@@ -692,23 +692,23 @@ TEST(FormulonCApiDisplayText, ReferencesPreserveValuesAndUseDestinationFormats) 
   for (uint32_t row = 0; row < 4; ++row) {
     ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, row, 1, &text, &status), 0);
     EXPECT_STREQ(text, expected[row]);
-    EXPECT_EQ(status, FM_DISPLAY_OK);
+    EXPECT_EQ(status, FM_DISPLAY_STATUS_OK);
   }
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(value.u.number, 0.125);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_TEXT);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(value.u.text, "0012.345");
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(value.u.number, 0.0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 3, 1, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_ERROR);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(value.u.error_code, static_cast<int32_t>(formulon::ErrorCode::Div0));
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 2, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(value.u.number, 12.5);
 }
 
@@ -717,7 +717,7 @@ TEST(FormulonCApiDisplayText, OutOfCalendarDateOverflows) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const auto rendered = Format(wb.handle, Number(-1.0), "yyyy/m/d");
   EXPECT_EQ(rendered.first, "########");
-  EXPECT_EQ(rendered.second, FM_DISPLAY_OVERFLOW);
+  EXPECT_EQ(rendered.second, FM_DISPLAY_STATUS_OVERFLOW);
 }
 
 TEST(FormulonCApiDisplayText, FormatValueCoversEveryScalarKind) {
@@ -727,22 +727,22 @@ TEST(FormulonCApiDisplayText, FormatValueCoversEveryScalarKind) {
   EXPECT_EQ(Format(wb.handle, Number(0.25), "").first, "0.25");
 
   fm_value_t boolean{};
-  boolean.kind = FM_VAL_BOOL;
+  boolean.kind = FM_VALUE_KIND_BOOL;
   boolean.u.boolean = 1;
   EXPECT_EQ(Format(wb.handle, boolean, "General").first, "TRUE");
 
   fm_value_t text{};
-  text.kind = FM_VAL_TEXT;
+  text.kind = FM_VALUE_KIND_TEXT;
   text.u.text = "abc";
   EXPECT_EQ(Format(wb.handle, text, "General").first, "abc");
 
   fm_value_t error{};
-  error.kind = FM_VAL_ERROR;
+  error.kind = FM_VALUE_KIND_ERROR;
   error.u.error_code = 1;  // #DIV/0!
   EXPECT_EQ(Format(wb.handle, error, "0.00").first, "#DIV/0!");
 
   fm_value_t blank{};
-  blank.kind = FM_VAL_BLANK;
+  blank.kind = FM_VALUE_KIND_BLANK;
   EXPECT_EQ(Format(wb.handle, blank, "0.00").first, "");
 }
 
@@ -765,12 +765,12 @@ TEST(FormulonCApiDisplayText, RejectsBadArguments) {
 
   fm_value_t value = Number(std::numeric_limits<double>::quiet_NaN());
   EXPECT_EQ(fm_workbook_format_value(wb.handle, &value, "0", &text, &status), kInvalidArgument);
-  value.kind = FM_VAL_ARRAY;
+  value.kind = FM_VALUE_KIND_ARRAY;
   EXPECT_EQ(fm_workbook_format_value(wb.handle, &value, "0", &text, &status), kInvalidArgument);
-  value.kind = FM_VAL_ERROR;
+  value.kind = FM_VALUE_KIND_ERROR;
   value.u.error_code = 9999;
   EXPECT_EQ(fm_workbook_format_value(wb.handle, &value, "0", &text, &status), kInvalidArgument);
-  value.kind = FM_VAL_TEXT;
+  value.kind = FM_VALUE_KIND_TEXT;
   value.u.text = nullptr;
   EXPECT_NE(fm_workbook_format_value(wb.handle, &value, "0", &text, &status), 0);
   value = Number(1.0);

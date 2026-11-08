@@ -27,7 +27,7 @@ const kColorTheme = 2;
 function parseErrorCodes() {
   const header = readFileSync(path.join(repoRoot, 'src', 'c_api', 'formulon_c.h'), 'utf8');
   const codes = new Map();
-  for (const m of header.matchAll(/^\s*FM_PARSE_ERROR_(\w+) = (\d+),?/gm)) {
+  for (const m of header.matchAll(/^\s*FM_PARSE_ERROR_CODE_(\w+) = (\d+),?/gm)) {
     const pascal = m[1]
       .toLowerCase()
       .split('_')
@@ -77,7 +77,7 @@ export function registerAdoption(factory, test) {
 
   test('raw: record-carrying calls round-trip through struct_size-bearing records', () =>
     withWorkbook((wb) => {
-      wb.setIterative({ enabled: true, maxIterations: 37, maxChange: 0.25 });
+      wb.updateIterative({ enabled: true, maxIterations: 37, maxChange: 0.25 });
       assert.deepEqual(wb.getIterative(), { enabled: true, maxIterations: 37, maxChange: 0.25 });
 
       const person = {
@@ -147,8 +147,8 @@ export function registerAdoption(factory, test) {
   test('raw: CF colours are colour specs', () =>
     withWorkbook((wb) => {
       const colors = [
-        { kind: kColorRgb, rgb: 0xff112233, theme: 0, tint: 0, indexed: 0 },
-        { kind: kColorRgb, rgb: 0xff445566, theme: 0, tint: 0, indexed: 0 },
+        { kind: kColorRgb, argb: 0xff112233, theme: 0, tint: 0, indexed: 0 },
+        { kind: kColorRgb, argb: 0xff445566, theme: 0, tint: 0, indexed: 0 },
       ];
       wb.addCfRule(0, {
         type: 2,
@@ -161,10 +161,10 @@ export function registerAdoption(factory, test) {
   test('raw: tab colour round-trips and clears', () =>
     withWorkbook((wb) => {
       assert.equal(wb.getTabColor(0), null);
-      const rgb = { kind: kColorRgb, rgb: 0xffff0000, theme: 0, tint: 0, indexed: 0 };
+      const rgb = { kind: kColorRgb, argb: 0xffff0000, theme: 0, tint: 0, indexed: 0 };
       wb.setTabColor(0, rgb);
       assert.deepEqual(wb.getTabColor(0), rgb);
-      const theme = { kind: kColorTheme, rgb: 0, theme: 4, tint: 0.5, indexed: 0 };
+      const theme = { kind: kColorTheme, argb: 0, theme: 4, tint: 0.5, indexed: 0 };
       wb.setTabColor(0, theme);
       assert.deepEqual(wb.getTabColor(0), theme);
       wb.setTabColor(0, null);

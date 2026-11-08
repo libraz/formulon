@@ -1,7 +1,7 @@
 //
 // Stable C ABI clock-seam regression tests. Covers the
-// `fm_workbook_get_pinned_now` / `fm_workbook_set_pinned_now` /
-// `fm_workbook_clear_pinned_now` trio, the civil-field validation domain,
+// `fm_workbook_get_pinned_now` / `fm_workbook_set_pinned_now` pair
+// (`NULL` releases the pin), the civil-field validation domain,
 // the effect of a pin on `NOW` / `TODAY`, and the fact that a pin is model
 // state a save does not carry.
 
@@ -95,11 +95,11 @@ TEST(FormulonCApiClock, APinReadsBackFieldForField) {
   EXPECT_EQ(now.second, kPinned.second);
 }
 
-TEST(FormulonCApiClock, ClearingRestoresTheHostClock) {
+TEST(FormulonCApiClock, ReleasingThePinRestoresTheHostClock) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_pinned_now(wb.handle, &kPinned), 0);
-  ASSERT_EQ(fm_workbook_clear_pinned_now(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_pinned_now(wb.handle, nullptr), 0);
 
   fm_civil_time_t now{};
   int32_t pinned = 1;
@@ -107,11 +107,11 @@ TEST(FormulonCApiClock, ClearingRestoresTheHostClock) {
   EXPECT_EQ(pinned, 0);
 }
 
-TEST(FormulonCApiClock, ClearingAnUnpinnedWorkbookIsANoOp) {
+TEST(FormulonCApiClock, ReleasingAnUnpinnedWorkbookIsANoOp) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_workbook_clear_pinned_now(wb.handle), 0);
-  EXPECT_EQ(fm_workbook_clear_pinned_now(wb.handle), 0);
+  EXPECT_EQ(fm_workbook_set_pinned_now(wb.handle, nullptr), 0);
+  EXPECT_EQ(fm_workbook_set_pinned_now(wb.handle, nullptr), 0);
 }
 
 TEST(FormulonCApiClock, TodayAndNowResolveThroughThePin) {
@@ -121,13 +121,13 @@ TEST(FormulonCApiClock, TodayAndNowResolveThroughThePin) {
 
   fm_value_t today{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TODAY()", &today), 0);
-  ASSERT_EQ(today.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(today.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(today.u.number, kPinnedSerial);
 
   // 15:30:45 is 55,845 seconds into the day.
   fm_value_t now{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=NOW()", &now), 0);
-  ASSERT_EQ(now.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(now.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(now.u.number, kPinnedSerial + 55845.0 / 86400.0);
 }
 
@@ -140,7 +140,7 @@ TEST(FormulonCApiClock, MovingThePinMovesTheResult) {
 
   fm_value_t today{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TODAY()", &today), 0);
-  ASSERT_EQ(today.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(today.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(today.u.number, kPinnedSerial + 1.0);
 }
 
@@ -153,7 +153,7 @@ TEST(FormulonCApiClock, APinnedFormulaCellRecalcsAgainstThePin) {
 
   fm_value_t cell{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &cell), 0);
-  ASSERT_EQ(cell.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(cell.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(cell.u.number, kPinnedSerial);
 }
 
@@ -223,6 +223,5 @@ TEST(FormulonCApiClock, NullArgumentsAreRejected) {
   EXPECT_EQ(fm_workbook_get_pinned_now(wb.handle, nullptr, &pinned), null_ptr);
   EXPECT_EQ(fm_workbook_get_pinned_now(wb.handle, &now, nullptr), null_ptr);
   EXPECT_EQ(fm_workbook_set_pinned_now(nullptr, &kPinned), null_ptr);
-  EXPECT_EQ(fm_workbook_set_pinned_now(wb.handle, nullptr), null_ptr);
-  EXPECT_EQ(fm_workbook_clear_pinned_now(nullptr), null_ptr);
+  EXPECT_EQ(fm_workbook_set_pinned_now(nullptr, nullptr), null_ptr);
 }

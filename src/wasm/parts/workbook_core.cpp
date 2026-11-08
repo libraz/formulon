@@ -534,7 +534,7 @@ void JsWorkbook::setIterative(emscripten::val patch) {
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_workbook_set_iterative(handle_, &p));
+  succeeded(fm_workbook_update_iterative(handle_, &p));
 }
 
 emscripten::val JsWorkbook::getIterative() const {
@@ -643,8 +643,16 @@ void JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint3
   succeeded(fm_workbook_set_pinned_now(handle_, &now));
 }
 
-void JsWorkbook::clearPinnedNow() {
-  succeeded(handle_ != nullptr ? fm_workbook_clear_pinned_now(handle_) : kBindingInvalidHandle);
+void JsWorkbook::releasePinnedNow(emscripten::val now) {
+  if (!now.isNull()) {
+    record_type_error("setPinnedNow: a single argument must be null");
+    return;
+  }
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  succeeded(fm_workbook_set_pinned_now(handle_, nullptr));
 }
 
 std::string JsWorkbook::profileId() const {

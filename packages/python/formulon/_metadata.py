@@ -7,7 +7,7 @@ host-injected function-metadata provider seam.
 
 The calculation engine ships no human-readable function documentation:
 :func:`get_function_metadata` returns only structural data (name,
-arity, availability) and leaves ``signature_template`` / ``description``
+arity, availability) and leaves ``signature`` / ``description``
 as ``None``. That content is a display concern, so a host supplies its own
 metadata document and merges it over the engine result at display time.
 
@@ -230,14 +230,14 @@ class MergedFunctionMetadata:
 
     Returned by :func:`merge_function_metadata` when a provider entry is
     supplied; carries the engine's structural fields plus the merged
-    ``signature_template`` / ``description`` and the ``localized_name``.
+    ``signature`` / ``description`` and the ``localized_name``.
     """
 
     name: str
     min_arity: int
     max_arity: Optional[int]
     availability: int
-    signature_template: Optional[str]
+    signature: Optional[str]
     description: Optional[str]
     #: ``entry.aliases[locale]`` when present, else the canonical ``name``.
     localized_name: str
@@ -260,8 +260,8 @@ def merge_function_metadata(
 
     Field precedence (first non-``None`` wins):
 
-    - ``signature_template``: ``entry["localized"][locale]["signature"]`` ->
-      ``entry["signature"]`` -> ``base.signature_template``
+    - ``signature``: ``entry["localized"][locale]["signature"]`` ->
+      ``entry["signature"]`` -> ``base.signature``
     - ``description``: ``entry["localized"][locale]["description"]`` ->
       ``entry["description"]`` -> ``base.description``
     - ``localized_name``: ``entry["aliases"][locale]`` -> ``base.name``
@@ -270,7 +270,7 @@ def merge_function_metadata(
       base: a :class:`FunctionMetadata` from
         :func:`get_function_metadata`.
       entry: the provider's ``functions[NAME]`` mapping, or ``None`` to
-        leave ``base`` unchanged (``signature_template`` / ``description``
+        leave ``base`` unchanged (``signature`` / ``description``
         stay ``None``).
       locale: a BCP-47 display locale tag (e.g. ``"fr-FR"``) matching the
         keys in ``aliases`` / ``localized``.
@@ -287,7 +287,7 @@ def merge_function_metadata(
     signature = _first(
         localized.get("signature"),
         entry.get("signature"),  # type: ignore[arg-type]
-        base.signature_template,
+        base.signature,
     )
     description = _first(
         localized.get("description"),
@@ -301,7 +301,7 @@ def merge_function_metadata(
         min_arity=base.min_arity,
         max_arity=base.max_arity,
         availability=base.availability,
-        signature_template=signature,
+        signature=signature,
         description=description,
         localized_name=localized_name,
     )

@@ -59,7 +59,7 @@ test('showFormulas and showOutlineSymbols read back and round-trip', async () =>
   const initial = wb.sheet(0).getView();
   assert.equal(initial.showFormulas, false);
   assert.equal(initial.showOutlineSymbols, true);
-  wb.sheet(0).setView({ showFormulas: true, showOutlineSymbols: false });
+  wb.sheet(0).updateView({ showFormulas: true, showOutlineSymbols: false });
   const loaded = roundTrip(mod, wb);
   const view = loaded.sheet(0).getView();
   assert.equal(view.showFormulas, true);
@@ -73,7 +73,7 @@ test('font toggles round-trip and dedup', async () => {
   const wb = mod.Workbook.createDefault();
   const record = {
     name: 'Arial',
-    size: 12,
+    sizePt: 12,
     outline: true,
     shadow: false,
     condense: true,
@@ -94,7 +94,7 @@ test('font toggles round-trip and dedup', async () => {
 test('gradient fills add, read, dedup and round-trip in cells and dxfs', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const rgb = (argb) => ({ kind: 1, rgb: argb, theme: 0, tint: 0, indexed: 0 });
+  const rgb = (argb) => ({ kind: 1, argb: argb, theme: 0, tint: 0, indexed: 0 });
   const gradient = {
     type: 1,
     degree: 0,
@@ -104,7 +104,7 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
     bottom: 0.75,
     stops: [
       { position: 0, color: rgb(0xffff0000) },
-      { position: 1, color: { kind: 2, rgb: 0, theme: 4, tint: 0.5, indexed: 0 } },
+      { position: 1, color: { kind: 2, argb: 0, theme: 4, tint: 0.5, indexed: 0 } },
     ],
   };
   const added = wb.ooxml.addFill({ gradient });
@@ -113,7 +113,7 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
   assert.equal(fill.gradient.type, 1);
   assert.equal(fill.gradient.top, 0.25);
   assert.equal(fill.gradient.stops.length, 2);
-  assert.equal(fill.gradient.stops[0].color.rgb, 0xffff0000);
+  assert.equal(fill.gradient.stops[0].color.argb, 0xffff0000);
   assert.equal(fill.gradient.stops[1].color.theme, 4);
   assert.equal(wb.ooxml.getFill(0).gradient, undefined);
 
@@ -126,13 +126,43 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
   release(wb);
 });
 
+test('a dxf carries its number format as a format code and reads null without one', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const dxf = wb.ooxml.addDxf({ numberFormat: '0.00%' });
+  const read = wb.ooxml.getDxf(dxf);
+  assert.equal(read.numberFormat, '0.00%');
+  for (const key of ['numFmt', 'numFmtId', 'numFmtCode']) assert.equal(key in read, false, key);
+  assert.equal(wb.ooxml.addDxf(read), dxf);
+  const bare = wb.ooxml.addDxf({ font: { bold: true } });
+  assert.equal(wb.ooxml.getDxf(bare).numberFormat, null);
+  const loaded = mod.Workbook.load(wb.save());
+  assert.equal(loaded.ooxml.getDxf(dxf).numberFormat, '0.00%');
+  loaded.dispose();
+  wb.dispose();
+});
+
+test('getDefaultFont reads the workbook default font and follows setDefaultFont', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getDefaultFont().name, 'Calibri');
+  assert.deepEqual(wb.getDefaultFont(), wb.ooxml.getFont(0));
+  wb.ooxml.addFont({ name: 'Meiryo', sizePt: 11 });
+  assert.equal(wb.getDefaultFont().name, 'Calibri');
+  wb.setDefaultFont({ name: 'Meiryo', sizePt: 11, charset: 128 });
+  assert.equal(wb.getDefaultFont().name, 'Meiryo');
+  assert.equal(wb.getDefaultFont().charset, 128);
+  assert.deepEqual(wb.getDefaultFont(), wb.ooxml.getFont(0));
+  wb.dispose();
+});
+
 test('custom icon sets round-trip through the conditional-format API', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const icons = [
-    { iconSet: '3Triangles', iconId: 0 },
-    { iconSet: 'NoIcons', iconId: 0 },
-    { iconSet: '5Boxes', iconId: 4 },
+    { iconSet: '3Triangles', iconIndex: 0 },
+    { iconSet: 'NoIcons', iconIndex: 0 },
+    { iconSet: '5Boxes', iconIndex: 4 },
   ];
   const rule = (list) => ({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
@@ -154,7 +184,7 @@ test('custom icon sets round-trip through the conditional-format API', async () 
     .find((r) => r.iconSet);
   assert.deepEqual(back.iconSet.icons, icons);
   expectFailure(() => wb.sheet(0).addCfRule(rule(icons.slice(0, 2))));
-  expectFailure(() => wb.sheet(0).addCfRule(rule([icons[0], { iconSet: '7Dwarfs', iconId: 0 }, icons[2]])));
+  expectFailure(() => wb.sheet(0).addCfRule(rule([icons[0], { iconSet: '7Dwarfs', iconIndex: 0 }, icons[2]])));
   release(loaded);
   release(wb);
 });
@@ -226,17 +256,17 @@ test('sheet format defaults expose customHeight and zeroHeight and keep omitted 
   const initial = wb.sheet(0).getFormatDefaults();
   assert.equal(initial.customHeight, false);
   assert.equal(initial.zeroHeight, false);
-  wb.sheet(0).setFormatDefaults({ defaultRowHeight: 18, customHeight: true });
+  wb.sheet(0).updateFormatDefaults({ defaultRowHeightPt: 18, customHeight: true });
   assert.deepEqual(
     [wb.sheet(0).getFormatDefaults().customHeight, wb.sheet(0).getFormatDefaults().zeroHeight],
     [true, false],
   );
   // An omitted flag keeps the stored one.
-  wb.sheet(0).setFormatDefaults({ defaultRowHeight: 18, zeroHeight: true });
+  wb.sheet(0).updateFormatDefaults({ defaultRowHeightPt: 18, zeroHeight: true });
   const loaded = roundTrip(mod, wb);
   const defaults = loaded.sheet(0).getFormatDefaults();
-  assert.deepEqual([defaults.customHeight, defaults.zeroHeight, defaults.defaultRowHeight], [true, true, 18]);
-  loaded.sheet(0).setFormatDefaults({ defaultRowHeight: 18, customHeight: false, zeroHeight: false });
+  assert.deepEqual([defaults.customHeight, defaults.zeroHeight, defaults.defaultRowHeightPt], [true, true, 18]);
+  loaded.sheet(0).updateFormatDefaults({ defaultRowHeightPt: 18, customHeight: false, zeroHeight: false });
   assert.deepEqual(
     [loaded.sheet(0).getFormatDefaults().customHeight, loaded.sheet(0).getFormatDefaults().zeroHeight],
     [false, false],

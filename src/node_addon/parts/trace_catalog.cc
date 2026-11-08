@@ -46,7 +46,7 @@ Napi::Value TraceToArray(const Napi::CallbackInfo& info, const fm_workbook_t* ha
       break;
     }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("sheet", Napi::Number::New(env, n.sheet));
+    item.Set("sheet", Napi::Number::New(env, n.sheet_index));
     item.Set("row", Napi::Number::New(env, n.row));
     item.Set("col", Napi::Number::New(env, n.col));
     arr.Set(static_cast<uint32_t>(emitted), item);
@@ -192,7 +192,7 @@ Napi::Value FunctionMetadata(const Napi::CallbackInfo& info) {
   }
   out.Set("availability", Napi::Number::New(env, static_cast<uint32_t>(md.availability)));
   if (md.signature_template != nullptr) {
-    out.Set("signatureTemplate", Napi::String::New(env, md.signature_template));
+    out.Set("signature", Napi::String::New(env, md.signature_template));
   }
   if (md.description != nullptr) {
     out.Set("description", Napi::String::New(env, md.description));

@@ -115,7 +115,8 @@ emscripten::val JsWorkbook::listSlicers(uint32_t sheet) const {
   return arr;
 }
 
-uint32_t JsWorkbook::addSlicer(uint32_t sheet, uint32_t table, uint32_t column, emscripten::val spec) {
+uint32_t JsWorkbook::addSlicer(uint32_t sheet, uint32_t tableSheet, uint32_t table, uint32_t column,
+                               emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return 0U;
@@ -127,7 +128,7 @@ uint32_t JsWorkbook::addSlicer(uint32_t sheet, uint32_t table, uint32_t column, 
     return 0U;
   }
   uint32_t id = 0;
-  if (!succeeded(fm_sheet_add_slicer(handle_, sheet, table, column, &slicer, &id))) {
+  if (!succeeded(fm_sheet_add_slicer(handle_, sheet, tableSheet, table, column, &slicer, &id))) {
     return 0U;
   }
   return id;

@@ -298,7 +298,7 @@ Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
 }
 
 // Every member is optional; an omitted key keeps the cache's current value.
-Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::PivotCacheUpdateOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
@@ -331,7 +331,7 @@ Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_workbook_set_pivot_cache_options(handle_, cache_id, &o), env.Undefined());
+  return ValueOrThrow(env, fm_workbook_update_pivot_cache_options(handle_, cache_id, &o), env.Undefined());
 }
 
 Napi::Value Workbook::PivotCacheCalculatedFieldAdd(const Napi::CallbackInfo& info) {

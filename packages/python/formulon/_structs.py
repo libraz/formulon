@@ -80,6 +80,7 @@ RECORD_NAMES = frozenset(
         "fm_chart_info_t",
         "fm_chart_insert_t",
         "fm_chart_legend_patch_t",
+        "fm_chart_legend_t",
         "fm_chart_literal_t",
         "fm_chart_plot_patch_t",
         "fm_chart_plot_t",
@@ -89,6 +90,7 @@ RECORD_NAMES = frozenset(
         "fm_chart_series_patch_t",
         "fm_chart_series_t",
         "fm_chart_unresolved_t",
+        "fm_column_break_t",
         "fm_column_layout_t",
         "fm_comment_t",
         "fm_data_table_t",
@@ -105,7 +107,7 @@ RECORD_NAMES = frozenset(
         "fm_iterative_settings_patch_t",
         "fm_locale_facts_t",
         "fm_margins_pt_t",
-        "fm_page_break_t",
+        "fm_row_break_t",
         "fm_page_layout_t",
         "fm_page_margins_t",
         "fm_page_setup_t",
@@ -123,7 +125,7 @@ RECORD_NAMES = frozenset(
         "fm_pivot_filter_spec_t",
         "fm_pivot_item_info_t",
         "fm_pivot_options_t",
-        "fm_pivot_style_info_t",
+        "fm_pivot_style_options_t",
         "fm_print_options_t",
         "fm_print_titles_t",
         "fm_protected_range_t",
@@ -133,6 +135,7 @@ RECORD_NAMES = frozenset(
         "fm_save_diagnostics_t",
         "fm_shape_t",
         "fm_sheet_format_defaults_t",
+        "fm_sheet_protection_patch_t",
         "fm_sheet_protection_t",
         "fm_sheet_view_t",
         "fm_slicer_t",
@@ -141,6 +144,8 @@ RECORD_NAMES = frozenset(
         "fm_styles_batch_t",
         "fm_table_column_info_t",
         "fm_table_info_t",
+        "fm_table_style_options_patch_t",
+        "fm_table_style_options_t",
         "fm_table_style_t",
         "fm_theme_colors_t",
         "fm_theme_fonts_t",
@@ -270,7 +275,7 @@ SHEET_RECT = Struct(
 
 COLOR_SPEC = Struct(
     "fm_color_spec_t",
-    [("tint", F64), ("rgb", U32), ("theme", U32), ("indexed", U32), ("kind", U8)],
+    [("tint", F64), ("argb", U32), ("theme", U32), ("indexed", U32), ("kind", U8)],
 )
 # Inline ``fm_color_spec_t``, packed and decoded as a nested dict. Nested
 # rather than flattened into its owner: it is 8-aligned, so its trailing
@@ -301,11 +306,11 @@ WORKBOOK_PROTECTION = Struct(
         ("lock_revision", I32),
         ("workbook_spin_count", U32),
         ("revisions_spin_count", U32),
-        ("workbook_password", PTR),
+        ("workbook_legacy_password_hash", PTR),
         ("workbook_algorithm_name", PTR),
         ("workbook_hash_value", PTR),
         ("workbook_salt_value", PTR),
-        ("revisions_password", PTR),
+        ("revisions_legacy_password_hash", PTR),
         ("revisions_algorithm_name", PTR),
         ("revisions_hash_value", PTR),
         ("revisions_salt_value", PTR),
@@ -319,7 +324,7 @@ PROTECTED_RANGE = Struct(
         ("name", PTR),
         ("ranges", PTR),
         ("range_count", U32),
-        ("password", PTR),
+        ("legacy_password_hash", PTR),
         ("algorithm_name", PTR),
         ("hash_value", PTR),
         ("salt_value", PTR),
@@ -338,7 +343,7 @@ DATA_VALIDATION = Struct(
         ("allow_blank", I32),
         ("show_input_message", I32),
         ("show_error_message", I32),
-        ("show_dropdown", I32),
+        ("show_in_cell_dropdown", I32),
         ("formula1", PTR),
         ("formula2", PTR),
         ("error_title", PTR),
@@ -348,32 +353,54 @@ DATA_VALIDATION = Struct(
     ],
 )
 
+# The ``allow_*`` flags of ``fm_sheet_protection_t`` in field order. The two
+# select flags are ``fm_tristate_t``; the others are 0 / 1.
+SHEET_PROTECTION_ALLOW_FLAGS = (
+    "allow_edit_objects",
+    "allow_edit_scenarios",
+    "allow_format_cells",
+    "allow_format_columns",
+    "allow_format_rows",
+    "allow_insert_columns",
+    "allow_insert_rows",
+    "allow_insert_hyperlinks",
+    "allow_delete_columns",
+    "allow_delete_rows",
+    "allow_select_locked_cells",
+    "allow_select_unlocked_cells",
+    "allow_sort",
+    "allow_auto_filter",
+    "allow_pivot_tables",
+)
+SHEET_PROTECTION_TEXT_FIELDS = ("algorithm_name", "hash_value", "salt_value", "legacy_password_hash")
+
 SHEET_PROTECTION = Struct(
     "fm_sheet_protection_t",
     [
-        ("enabled", I32),
         ("algorithm_name", PTR),
         ("hash_value", PTR),
         ("salt_value", PTR),
         ("spin_count", U32),
-        ("legacy_password", PTR),
-        ("sheet", I32),
-        ("objects", I32),
-        ("scenarios", I32),
-        ("format_cells", I32),
-        ("format_columns", I32),
-        ("format_rows", I32),
-        ("insert_columns", I32),
-        ("insert_rows", I32),
-        ("insert_hyperlinks", I32),
-        ("delete_columns", I32),
-        ("delete_rows", I32),
-        ("select_locked_cells", I32),
-        ("select_unlocked_cells", I32),
-        ("sort", I32),
-        ("auto_filter", I32),
-        ("pivot_tables", I32),
-    ],
+        ("legacy_password_hash", PTR),
+    ]
+    + [(name, I32) for name in SHEET_PROTECTION_ALLOW_FLAGS],
+)
+
+SHEET_PROTECTION_PATCH = Struct(
+    "fm_sheet_protection_patch_t",
+    [
+        ("algorithm_name_op", I32),
+        ("algorithm_name", PTR),
+        ("hash_value_op", I32),
+        ("hash_value", PTR),
+        ("salt_value_op", I32),
+        ("salt_value", PTR),
+        ("spin_count_op", I32),
+        ("spin_count", U32),
+        ("legacy_password_hash_op", I32),
+        ("legacy_password_hash", PTR),
+    ]
+    + [field for name in SHEET_PROTECTION_ALLOW_FLAGS for field in ((name + "_op", I32), (name, I32))],
 )
 
 CFVO = Struct(
@@ -386,8 +413,8 @@ CF_MATCH = Struct(
     [
         ("kind", I32),
         ("priority", I32),
-        ("dxf_id_engaged", I32),
-        ("dxf_id", U32),
+        ("dxf_index_engaged", I32),
+        ("dxf_index", U32),
         ("color", COLOR_SPEC_BLOB),
         ("bar_length_pct", F64),
         ("bar_axis_position_pct", F64),
@@ -412,8 +439,8 @@ CF_RULE = Struct(
         ("_pad0", U8),
         ("priority", I32),
         ("stop_if_true", I32),
-        ("dxf_id_engaged", I32),
-        ("dxf_id", U32),
+        ("dxf_index_engaged", I32),
+        ("dxf_index", U32),
         ("ranges", PTR),
         ("range_count", U32),
         ("formula1", PTR),
@@ -468,11 +495,11 @@ CF_RULE = Struct(
     ],
 )
 
-CF_ICON = Struct("fm_cf_icon_t", [("icon_set", PTR), ("icon_id", I32)])
+CF_ICON = Struct("fm_cf_icon_t", [("icon_set", PTR), ("icon_index", I32)])
 
 CELL_NODE = Struct(
     "fm_cell_node_t",
-    [("sheet", U32), ("row", U32), ("col", U32)],
+    [("sheet_index", U32), ("row", U32), ("col", U32)],
 )
 
 PARSE_ERROR = Struct(
@@ -544,7 +571,7 @@ PIVOT_FIELD_INFO = Struct(
         ("date_calendar", I32),
         ("group_base_index", I32),
         ("default_subtotal", I32),
-        ("subtotal_fns", U32),
+        ("subtotal_functions", U32),
         ("insert_blank_row", I32),
         ("fill_down_labels", I32),
         ("show_all", I32),
@@ -571,6 +598,34 @@ TABLE_INFO = Struct(
     ],
 )
 
+TABLE_STYLE_OPTIONS = Struct(
+    "fm_table_style_options_t",
+    [
+        ("style_name", PTR),
+        ("present", I32),
+        ("show_first_column", I32),
+        ("show_last_column", I32),
+        ("show_row_stripes", I32),
+        ("show_column_stripes", I32),
+    ],
+)
+
+TABLE_STYLE_OPTIONS_PATCH = Struct(
+    "fm_table_style_options_patch_t",
+    [
+        ("style_name_op", I32),
+        ("style_name", PTR),
+        ("show_first_column_op", I32),
+        ("show_first_column", I32),
+        ("show_last_column_op", I32),
+        ("show_last_column", I32),
+        ("show_row_stripes_op", I32),
+        ("show_row_stripes", I32),
+        ("show_column_stripes_op", I32),
+        ("show_column_stripes", I32),
+    ],
+)
+
 TABLE_COLUMN_INFO = Struct(
     "fm_table_column_info_t",
     [
@@ -583,7 +638,7 @@ TABLE_COLUMN_INFO = Struct(
 
 TABLE_STYLE_ELEMENT = Struct(
     "fm_table_style_element_t",
-    [("type", PTR), ("size", U32), ("has_dxf_id", I32), ("dxf_id", U32)],
+    [("type", PTR), ("size", U32), ("has_dxf_index", I32), ("dxf_index", U32)],
 )
 
 TABLE_STYLE = Struct(
@@ -591,15 +646,15 @@ TABLE_STYLE = Struct(
     [("name", PTR), ("pivot", I32), ("table", I32), ("elements", PTR), ("element_count", U32)],
 )
 
-PIVOT_STYLE_INFO = Struct(
-    "fm_pivot_style_info_t",
+PIVOT_STYLE_OPTIONS = Struct(
+    "fm_pivot_style_options_t",
     [
-        ("name", PTR),
+        ("style_name", PTR),
         ("present", I32),
         ("show_row_headers", I32),
-        ("show_col_headers", I32),
+        ("show_column_headers", I32),
         ("show_row_stripes", I32),
-        ("show_col_stripes", I32),
+        ("show_column_stripes", I32),
         ("show_last_column", I32),
     ],
 )
@@ -634,7 +689,7 @@ PIVOT_OPTIONS = Struct(
         ("show_data_tips", I32),
         ("grid_drop_zones", I32),
         ("show_empty_row", I32),
-        ("show_empty_col", I32),
+        ("show_empty_column", I32),
         ("show_data_drop_down", I32),
         ("print_drill", I32),
         ("field_print_titles", I32),
@@ -792,12 +847,12 @@ DEFINED_NAME = Struct(
 SHEET_VIEW = Struct(
     "fm_sheet_view_t",
     [
-        ("zoom_scale", U32),
+        ("zoom_pct", U32),
         ("freeze_rows", U32),
         ("freeze_cols", U32),
         ("visibility", I32),
         ("show_grid_lines", I32),
-        ("show_row_col_headers", I32),
+        ("show_row_column_headers", I32),
         ("show_zeros", I32),
         ("right_to_left", I32),
         ("tab_selected", I32),
@@ -818,13 +873,13 @@ COLUMN_LAYOUT = Struct(
     [
         ("first", U32),
         ("last", U32),
-        ("width", F64),
+        ("width_chars", F64),
         ("hidden", I32),
         ("outline_level", U8),
-        ("collapsed", U8),
-        ("has_width", I32),
-        ("has_style", I32),
-        ("style_xf", U32),
+        ("collapsed", I32),
+        ("has_width_chars", I32),
+        ("has_xf_index", I32),
+        ("xf_index", U32),
     ],
 )
 
@@ -832,13 +887,13 @@ ROW_LAYOUT = Struct(
     "fm_row_layout_t",
     [
         ("row", U32),
-        ("height", F64),
+        ("height_pt", F64),
         ("hidden", I32),
         ("outline_level", U8),
-        ("collapsed", U8),
-        ("has_style", I32),
-        ("style_xf", U32),
-        ("has_height", I32),
+        ("collapsed", I32),
+        ("has_xf_index", I32),
+        ("xf_index", U32),
+        ("has_height_pt", I32),
         ("custom_height", I32),
     ],
 )
@@ -846,21 +901,21 @@ ROW_LAYOUT = Struct(
 SHEET_FORMAT_DEFAULTS = Struct(
     "fm_sheet_format_defaults_t",
     [
-        ("default_col_width", F64),
-        ("default_row_height", F64),
-        ("base_col_width", F64),
-        ("has_default_col_width", I32),
-        ("has_default_row_height", I32),
+        ("default_column_width_chars", F64),
+        ("default_row_height_pt", F64),
+        ("base_column_width_chars", F64),
+        ("has_default_column_width_chars", I32),
+        ("has_default_row_height_pt", I32),
         ("custom_height", I32),
         ("zero_height", I32),
-        ("effective_default_col_width", F64),
-        ("effective_default_row_height", F64),
+        ("effective_default_column_width_chars", F64),
+        ("effective_default_row_height_pt", F64),
     ],
 )
 
 RECT_PT = Struct(
     "fm_rect_pt_t",
-    [("x", F64), ("y", F64), ("width", F64), ("height", F64)],
+    [("x", F64), ("y", F64), ("width_pt", F64), ("height_pt", F64)],
 )
 
 WIDTH_MODEL = Struct(
@@ -868,7 +923,7 @@ WIDTH_MODEL = Struct(
     [
         ("points_per_char", F64),
         ("padding_pt", F64),
-        ("normal_font_size", F64),
+        ("normal_font_size_pt", F64),
         ("calibrated", I32),
         ("_pad", I32),
         ("normal_font_name", PTR),
@@ -884,12 +939,12 @@ PAPER_INFO = Struct(
 MARGINS_PT = Struct(
     "fm_margins_pt_t",
     [
-        ("left", F64),
-        ("right", F64),
-        ("top", F64),
-        ("bottom", F64),
-        ("header", F64),
-        ("footer", F64),
+        ("left_in", F64),
+        ("right_in", F64),
+        ("top_in", F64),
+        ("bottom_in", F64),
+        ("header_in", F64),
+        ("footer_in", F64),
     ],
 )
 
@@ -899,7 +954,7 @@ PRINT_TITLES = Struct(
         ("has_rows", I32),
         ("first_row", U32),
         ("last_row", U32),
-        ("has_cols", I32),
+        ("has_columns", I32),
         ("first_col", U32),
         ("last_col", U32),
     ],
@@ -926,11 +981,11 @@ CELL_XF = Struct(
         ("fill_index", U32),
         ("border_index", U32),
         ("num_fmt_id", U16),
-        ("horizontal_align", U8),
-        ("vertical_align", U8),
+        ("horizontal", U8),
+        ("vertical", U8),
         ("wrap_text", I32),
         ("justify_last_line", I32),
-        ("xf_id", U32),
+        ("style_xf_index", U32),
         ("has_alignment", I32),
         ("has_text_rotation", I32),
         ("text_rotation", U32),
@@ -942,8 +997,8 @@ CELL_XF = Struct(
         ("shrink_to_fit", I32),
         ("has_reading_order", I32),
         ("reading_order", I32),
-        ("has_horizontal_align", I32),
-        ("has_vertical_align", I32),
+        ("has_horizontal", I32),
+        ("has_vertical", I32),
         ("has_wrap_text", I32),
         ("has_justify_last_line", I32),
         ("apply_number_format", I32),
@@ -963,7 +1018,7 @@ FONT_RECORD = Struct(
     "fm_font_record_t",
     [
         ("name", PTR),
-        ("size", F64),
+        ("size_pt", F64),
         ("bold", I32),
         ("italic", I32),
         ("strike", I32),
@@ -972,7 +1027,7 @@ FONT_RECORD = Struct(
         ("has_strike", I32),
         ("has_family", I32),
         ("has_charset", I32),
-        ("has_size", I32),
+        ("has_size_pt", I32),
         ("outline", I32),
         ("shadow", I32),
         ("condense", I32),
@@ -999,8 +1054,8 @@ FILL_RECORD = Struct(
     "fm_fill_record_t",
     [
         ("pattern", U8),
-        ("fg", COLOR_SPEC_BLOB),
-        ("bg", COLOR_SPEC_BLOB),
+        ("foreground", COLOR_SPEC_BLOB),
+        ("background", COLOR_SPEC_BLOB),
         ("has_gradient", I32),
         ("gradient_type", I32),
         ("gradient_degree", F64),
@@ -1049,9 +1104,7 @@ DXF_RECORD = Struct(
         ("fill", FILL_RECORD_BLOB),
         ("border_engaged", I32),
         ("border", BORDER_RECORD_BLOB),
-        ("num_fmt_engaged", I32),
-        ("num_fmt_id", U16),
-        ("num_fmt_code", PTR),
+        ("number_format", PTR),
         ("alignment_xml", PTR),
         ("protection_xml", PTR),
     ],
@@ -1061,7 +1114,7 @@ CELL_STYLE_RECORD = Struct(
     "fm_cell_style_record_t",
     [
         ("name", PTR),
-        ("xf_id", U32),
+        ("style_xf_index", U32),
         ("builtin_id", U32),
         ("i_level", U32),
         ("hidden", I32),
@@ -1115,12 +1168,22 @@ EXTERNAL_LINK_RECORD = Struct(
     ],
 )
 
-PAGE_BREAK = Struct(
-    "fm_page_break_t",
+ROW_BREAK = Struct(
+    "fm_row_break_t",
     [
-        ("id", U32),
-        ("min", U32),
-        ("max", U32),
+        ("row", U32),
+        ("first", U32),
+        ("last", U32),
+        ("manual", I32),
+    ],
+)
+
+COLUMN_BREAK = Struct(
+    "fm_column_break_t",
+    [
+        ("col", U32),
+        ("first", U32),
+        ("last", U32),
         ("manual", I32),
     ],
 )
@@ -1138,8 +1201,8 @@ PAGE_SETUP = Struct(
         ("orientation", I32),
         ("paper_size_engaged", I32),
         ("paper_size", U32),
-        ("scale_engaged", I32),
-        ("scale", U32),
+        ("scale_pct_engaged", I32),
+        ("scale_pct", U32),
         ("fit_to_width_engaged", I32),
         ("fit_to_width", U32),
         ("fit_to_height_engaged", I32),
@@ -1154,18 +1217,18 @@ PAGE_SETUP = Struct(
 PAGE_MARGINS = Struct(
     "fm_page_margins_t",
     [
-        ("left_engaged", I32),
-        ("left", F64),
-        ("right_engaged", I32),
-        ("right", F64),
-        ("top_engaged", I32),
-        ("top", F64),
-        ("bottom_engaged", I32),
-        ("bottom", F64),
-        ("header_engaged", I32),
-        ("header", F64),
-        ("footer_engaged", I32),
-        ("footer", F64),
+        ("left_in_engaged", I32),
+        ("left_in", F64),
+        ("right_in_engaged", I32),
+        ("right_in", F64),
+        ("top_in_engaged", I32),
+        ("top_in", F64),
+        ("bottom_in_engaged", I32),
+        ("bottom_in", F64),
+        ("header_in_engaged", I32),
+        ("header_in", F64),
+        ("footer_in_engaged", I32),
+        ("footer_in", F64),
     ],
 )
 
@@ -1256,7 +1319,7 @@ DATE_GROUP_ITEM = Struct(
 FILTER_COLUMN = Struct(
     "fm_filter_column_t",
     [
-        ("col_id", U32),
+        ("column_offset", U32),
         ("hidden_button", I32),
         ("show_button", I32),
         ("kind", I32),
@@ -1283,11 +1346,11 @@ FILTER_COLUMN = Struct(
         ("dyn_max_val", F64),
         ("val_iso", PTR),
         ("max_val_iso", PTR),
-        ("dxf_id", U32),
+        ("dxf_index", U32),
         ("cell_color", I32),
         ("icon_set", I32),
-        ("icon_id", I32),
-        ("has_icon_id", I32),
+        ("icon_index", I32),
+        ("has_icon_index", I32),
     ],
 )
 
@@ -1298,11 +1361,11 @@ SORT_CONDITION = Struct(
         ("descending", I32),
         ("sort_by", I32),
         ("custom_list", PTR),
-        ("dxf_id", U32),
-        ("has_dxf_id", I32),
+        ("dxf_index", U32),
+        ("has_dxf_index", I32),
         ("icon_set", I32),
-        ("icon_id", I32),
-        ("has_icon_id", I32),
+        ("icon_index", I32),
+        ("has_icon_index", I32),
     ],
 )
 
@@ -1379,7 +1442,7 @@ PERSON = Struct(
 
 IMAGE_INFO = Struct(
     "fm_image_info_t",
-    [("format", I32), ("px_width", U32), ("px_height", U32)],
+    [("format", I32), ("width_px", U32), ("height_px", U32)],
 )
 
 DRAWING_OBJECT = Struct(
@@ -1420,8 +1483,8 @@ DRAWING_ANCHOR = Struct(
     ],
 )
 
-IMAGE_INSERT = Struct(
-    "fm_image_insert_t",
+PICTURE_INSERT_SPEC = Struct(
+    "fm_picture_insert_spec_t",
     [
         ("name", PTR),
         ("description", PTR),
@@ -1446,7 +1509,7 @@ SHAPE = Struct(
         ("fill_color", COLOR_SPEC_BLOB),
         ("line_kind", I32),
         ("line_color", COLOR_SPEC_BLOB),
-        ("rotation", I32),
+        ("rotation_deg", F64),
         ("hidden", I32),
         ("text_box", I32),
         ("from_row_offset_emu", I64),
@@ -1455,7 +1518,7 @@ SHAPE = Struct(
         ("to_col_offset_emu", I64),
         ("width_emu", I64),
         ("height_emu", I64),
-        ("line_width_emu", I64),
+        ("line_width_pt", F64),
         ("name", PTR),
         ("preset_geometry", PTR),
         ("text", PTR),
@@ -1468,14 +1531,14 @@ DATA_TABLE = Struct(
         ("rect", nested(CELL_RECT)),
         ("row_input_row", U32),
         ("row_input_col", U32),
-        ("col_input_row", U32),
-        ("col_input_col", U32),
+        ("column_input_row", U32),
+        ("column_input_col", U32),
         ("has_row_input", I32),
-        ("has_col_input", I32),
+        ("has_column_input", I32),
         ("two_dimensional", I32),
         ("row_oriented", I32),
         ("row_input_deleted", I32),
-        ("col_input_deleted", I32),
+        ("column_input_deleted", I32),
     ],
 )
 
@@ -1570,8 +1633,8 @@ CHART_MARKER = Struct(
     "fm_chart_marker_t",
     [
         ("symbol", I32),
-        ("has_size", I32),
-        ("size", U32),
+        ("has_size_pt", I32),
+        ("size_pt", U32),
         ("fill", nested(CHART_FILL)),
         ("line", nested(CHART_LINE)),
     ],
@@ -1602,7 +1665,7 @@ CHART_INFO = Struct(
         ("object_id", U32),
         ("name", PTR),
         ("description", PTR),
-        ("is_chartex", I32),
+        ("is_extended", I32),
         ("is_pivot_chart", I32),
         ("on_chartsheet", I32),
         ("anchor_kind", I32),
@@ -1623,7 +1686,7 @@ CHART_INFO = Struct(
         ("legend_overlay", I32),
         ("legend_hidden_count", U32),
         ("blanks_as", I32),
-        ("plot_vis_only", I32),
+        ("plot_visible_only", I32),
         ("date1904", I32),
         ("has_style", I32),
         ("style", I32),
@@ -1642,19 +1705,19 @@ CHART_PLOT = Struct(
     "fm_chart_plot_t",
     [
         ("type", I32),
-        ("chartex_layout", PTR),
-        ("bar_dir", I32),
+        ("extended_layout", I32),
+        ("bar_direction", I32),
         ("has_grouping", I32),
         ("grouping", I32),
         ("vary_colors", I32),
-        ("has_gap_width", I32),
-        ("gap_width", U32),
+        ("has_gap_width_pct", I32),
+        ("gap_width_pct", U32),
         ("has_overlap", I32),
         ("overlap", I32),
         ("has_hole_size", I32),
         ("hole_size", U32),
-        ("has_first_slice_angle", I32),
-        ("first_slice_angle", U32),
+        ("has_first_slice_angle_deg", I32),
+        ("first_slice_angle_deg", U32),
         ("axis_id_count", U32),
         ("series_count", U32),
     ],
@@ -1710,7 +1773,7 @@ CHART_AXIS = Struct(
         ("id", U32),
         ("kind", I32),
         ("position", I32),
-        ("deleted", I32),
+        ("visible", I32),
         ("cross_axis", U32),
         ("crosses", I32),
         ("crosses_at", F64),
@@ -1725,7 +1788,7 @@ CHART_AXIS = Struct(
         ("title", nested(CHART_TITLE)),
         ("major_gridlines", I32),
         ("minor_gridlines", I32),
-        ("tick_label_pos", PTR),
+        ("tick_label_position", PTR),
     ],
 )
 
@@ -1741,8 +1804,8 @@ CHART_PREVIEW_OVERRIDES = Struct(
         ("header_column", I32),
         ("blanks_as_op", I32),
         ("blanks_as", I32),
-        ("plot_vis_only_op", I32),
-        ("plot_vis_only", I32),
+        ("plot_visible_only_op", I32),
+        ("plot_visible_only", I32),
         ("na_as_blank_op", I32),
         ("na_as_blank", I32),
     ],
@@ -1792,7 +1855,7 @@ CHART_AXIS_TITLE_TEXT = Struct(
 
 CHART_UNRESOLVED = Struct(
     "fm_chart_unresolved_t",
-    [("series_index", U32), ("source", PTR), ("axis_id", U32)],
+    [("series_index", U32), ("source", I32), ("axis_id", U32)],
 )
 
 CHART_INSERT = Struct(
@@ -1806,7 +1869,7 @@ CHART_INSERT = Struct(
         ("header_column", I32),
         ("title", PTR),
         ("legend", I32),
-        ("placement", nested(IMAGE_INSERT)),
+        ("placement", nested(PICTURE_INSERT_SPEC)),
     ],
 )
 
@@ -1815,7 +1878,7 @@ CHART_FILL_PATCH = Struct(
     [
         ("color_op", I32),
         ("color", COLOR_SPEC_BLOB),
-        ("transparency_op", I32),
+        ("transparency_pct_op", I32),
         ("transparency_pct", F64),
     ],
 )
@@ -1825,9 +1888,9 @@ CHART_LINE_PATCH = Struct(
     [
         ("color_op", I32),
         ("color", COLOR_SPEC_BLOB),
-        ("transparency_op", I32),
+        ("transparency_pct_op", I32),
         ("transparency_pct", F64),
-        ("width_op", I32),
+        ("width_pt_op", I32),
         ("width_pt", F64),
         ("dash_op", I32),
         ("dash", I32),
@@ -1841,8 +1904,8 @@ CHART_MARKER_PATCH = Struct(
     [
         ("symbol_op", I32),
         ("symbol", I32),
-        ("size_op", I32),
-        ("size", F64),
+        ("size_pt_op", I32),
+        ("size_pt", F64),
         ("fill", nested(CHART_FILL_PATCH)),
         ("line", nested(CHART_LINE_PATCH)),
     ],
@@ -1907,12 +1970,12 @@ CHART_POINT_PATCH = Struct(
 CHART_PLOT_PATCH = Struct(
     "fm_chart_plot_patch_t",
     [
-        ("gap_width_op", I32),
-        ("gap_width", U32),
+        ("gap_width_pct_op", I32),
+        ("gap_width_pct", U32),
         ("overlap_op", I32),
         ("overlap", I32),
-        ("first_slice_angle_op", I32),
-        ("first_slice_angle", U32),
+        ("first_slice_angle_deg_op", I32),
+        ("first_slice_angle_deg", U32),
         ("vary_colors_op", I32),
         ("vary_colors", I32),
         ("hole_size_op", I32),
@@ -1944,8 +2007,18 @@ CHART_AXIS_PATCH = Struct(
         ("crosses_op", I32),
         ("crosses", I32),
         ("crosses_at", F64),
-        ("tick_label_pos_op", I32),
-        ("tick_label_pos", PTR),
+        ("tick_label_position_op", I32),
+        ("tick_label_position", PTR),
+    ],
+)
+
+CHART_LEGEND = Struct(
+    "fm_chart_legend_t",
+    [
+        ("position", I32),
+        ("overlay", I32),
+        ("hidden_series", PTR),
+        ("hidden_series_count", U32),
     ],
 )
 
@@ -1965,8 +2038,8 @@ CHART_DISPLAY_PATCH = Struct(
     [
         ("blanks_as_op", I32),
         ("blanks_as", I32),
-        ("plot_vis_only_op", I32),
-        ("plot_vis_only", I32),
+        ("plot_visible_only_op", I32),
+        ("plot_visible_only", I32),
         ("na_as_blank_op", I32),
         ("na_as_blank", I32),
     ],

@@ -125,7 +125,7 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, const DumpScope& 
     const std::string escaped_sheet_name = escape_c_string(sheet_name);
     return for_each_cell(
         wb, s, scope, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
-          if (formulas ? formula == nullptr : v.kind == FM_VAL_BLANK) {
+          if (formulas ? formula == nullptr : v.kind == FM_VALUE_KIND_BLANK) {
             return;
           }
           out << escaped_sheet_name << '!' << format_a1(row, col) << ' '
@@ -154,7 +154,7 @@ fm_status_t dump_cells_json(const fm_workbook_t* wb, const DumpScope& scope, std
     bool first_cell = true;
     const fm_status_t cells_rc = for_each_cell(
         wb, s, scope, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
-          if (formula == nullptr && v.kind == FM_VAL_BLANK) {
+          if (formula == nullptr && v.kind == FM_VALUE_KIND_BLANK) {
             return;
           }
           if (!first_cell) {
@@ -247,30 +247,34 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
   }
   snapshot << "[tables]\n";
   doc += "],\"tables\":[";
-  std::size_t n_tables = 0;
-  if (auto rc = fm_workbook_get_table_count(wb, &n_tables); rc != 0) {
+  std::size_t n_sheets_for_tables = 0;
+  if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets_for_tables); rc != 0) {
     return rc;
   }
-  for (std::size_t i = 0; i < n_tables; ++i) {
-    const char* name = nullptr;
-    const char* display = nullptr;
-    fm_cell_rect_t rect{};
-    std::size_t sheet_index = 0;
-    if (auto rc = fm_workbook_get_table(wb, i, &name, &display, &rect, &sheet_index); rc != 0) {
+  bool first_table = true;
+  for (std::size_t sheet_index = 0; sheet_index < n_sheets_for_tables; ++sheet_index) {
+    std::size_t n_tables = 0;
+    if (auto rc = fm_sheet_get_table_count(wb, sheet_index, &n_tables); rc != 0) {
       return rc;
     }
-    // The ref as the table part stores it: a single cell is one address.
-    std::string ref = format_a1(rect.first_row, rect.first_col);
-    if (rect.first_row != rect.last_row || rect.first_col != rect.last_col) {
-      ref += ':' + format_a1(rect.last_row, rect.last_col);
-    }
-    if (json) {
-      doc += (i != 0 ? "," : "") + std::string("{\"name\":") + render_json_string(view_or_empty(name)) +
-             ",\"display_name\":" + render_json_string(view_or_empty(display)) +
-             ",\"sheet\":" + std::to_string(sheet_index) + ",\"ref\":" + render_json_string(ref) + "}";
-    } else {
-      snapshot << escape_c_string(name) << ' ' << escape_c_string(display) << ' ' << sheet_index << ' '
-               << escape_c_string(ref.c_str()) << '\n';
+    for (std::size_t i = 0; i < n_tables; ++i) {
+      const char* name = nullptr;
+      fm_cell_rect_t rect{};
+      if (auto rc = fm_sheet_get_table(wb, sheet_index, i, &name, &rect); rc != 0) {
+        return rc;
+      }
+      // The ref as the table part stores it: a single cell is one address.
+      std::string ref = format_a1(rect.first_row, rect.first_col);
+      if (rect.first_row != rect.last_row || rect.first_col != rect.last_col) {
+        ref += ':' + format_a1(rect.last_row, rect.last_col);
+      }
+      if (json) {
+        doc += (first_table ? "" : ",") + std::string("{\"name\":") + render_json_string(view_or_empty(name)) +
+               ",\"sheet\":" + std::to_string(sheet_index) + ",\"ref\":" + render_json_string(ref) + "}";
+      } else {
+        snapshot << escape_c_string(name) << ' ' << sheet_index << ' ' << escape_c_string(ref.c_str()) << '\n';
+      }
+      first_table = false;
     }
   }
   snapshot << "[passthrough_parts]\n";

@@ -67,7 +67,7 @@ function getModule() {
 // towards 10, and the progress callback fires after every sweep.
 function makeIterativeWorkbook(Module) {
   const wb = Module.Workbook.createDefault();
-  wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+  wb.updateIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
   wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
   return wb;
 }

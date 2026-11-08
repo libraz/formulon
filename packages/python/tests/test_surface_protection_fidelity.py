@@ -12,7 +12,7 @@ from formulon import (
     FormulonError,
     InvalidArgumentError,
     ProtectedRange,
-    SheetRect,
+    TableInput,
     Workbook,
     WorkbookProtection,
 )
@@ -23,12 +23,12 @@ def _full_protection() -> WorkbookProtection:
         lock_structure=True,
         lock_windows=True,
         lock_revision=False,
-        workbook_password="CF1A",
+        workbook_legacy_password_hash="CF1A",
         workbook_algorithm_name="SHA-512",
         workbook_hash_value="aGFzaA==",
         workbook_salt_value="c2FsdA==",
         workbook_spin_count=100000,
-        revisions_password="8D2B",
+        revisions_legacy_password_hash="8D2B",
         revisions_algorithm_name="SHA-256",
         revisions_hash_value="cmV2",
         revisions_salt_value="c2Fs",
@@ -53,7 +53,9 @@ class ProtectedRangeTests(unittest.TestCase):
     def test_add_list_update_remove_and_row_edit_shift(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).add_protected_range(
-                ProtectedRange(name="Inputs", ranges=[CellRect(1, 1, 2, 2), CellRect(4, 4, 4, 4)], password="CC1A")
+                ProtectedRange(
+                    name="Inputs", ranges=[CellRect(1, 1, 2, 2), CellRect(4, 4, 4, 4)], legacy_password_hash="CC1A"
+                )
             )
             wb.sheet(0).add_protected_range(
                 ProtectedRange(
@@ -71,7 +73,7 @@ class ProtectedRangeTests(unittest.TestCase):
                 self.assertEqual(len(reloaded.sheet(0).list_protected_ranges()), 2)
                 self.assertEqual([r.name for r in ranges], ["Inputs", "Totals"])
                 self.assertEqual(ranges[0].ranges, [CellRect(1, 1, 2, 2), CellRect(4, 4, 4, 4)])
-                self.assertEqual(ranges[0].password, "CC1A")
+                self.assertEqual(ranges[0].legacy_password_hash, "CC1A")
                 self.assertEqual(ranges[1].spin_count, 100000)
                 self.assertEqual(ranges[1].security_descriptor, "O:WDG:WD")
 
@@ -84,11 +86,12 @@ class ProtectedRangeTests(unittest.TestCase):
                 renamed = reloaded.sheet(0).list_protected_ranges()[0]
                 self.assertEqual((renamed.name, renamed.ranges), ("Renamed", [CellRect(3, 3, 3, 3)]))
                 # A partial update keeps the fields it does not name.
-                self.assertEqual(renamed.password, "CC1A")
-                reloaded.sheet(0).update_protected_range(0, password="")
+                self.assertEqual(renamed.legacy_password_hash, "CC1A")
+                reloaded.sheet(0).update_protected_range(0, legacy_password_hash="")
                 cleared = reloaded.sheet(0).list_protected_ranges()[0]
                 self.assertEqual(
-                    (cleared.name, cleared.ranges, cleared.password), ("Renamed", [CellRect(3, 3, 3, 3)], "")
+                    (cleared.name, cleared.ranges, cleared.legacy_password_hash),
+                    ("Renamed", [CellRect(3, 3, 3, 3)], None),
                 )
                 reloaded.sheet(0).update_protected_range(0, name="Again")
                 self.assertEqual(reloaded.sheet(0).list_protected_ranges()[0].ranges, [CellRect(3, 3, 3, 3)])
@@ -127,8 +130,8 @@ class RangeInputTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 ConditionalFormatInput(type=0)  # type: ignore[call-arg]
             with self.assertRaises(TypeError):
-                wb.add_table(range=SheetRect(0, None), name="T", display_name="T", columns=["A"])  # type: ignore[arg-type]
-            self.assertEqual(wb.list_tables(), [])
+                wb.sheet(0).add_table(TableInput(name="T", columns=["A"]))  # type: ignore[call-arg]
+            self.assertEqual(wb.sheet(0).list_tables(), [])
 
     def test_an_empty_validation_range_list_is_rejected(self) -> None:
         with Workbook.create_default() as wb:

@@ -28,6 +28,7 @@ from formulon import (
     ParseError,
     ParseErrorCode,
     PivotInput,
+    ShapeInput,
     ShapePaint,
     Sparkline,
     SparklineGroup,
@@ -121,11 +122,11 @@ class DateWriteTests(unittest.TestCase):
     @staticmethod
     def _preformat(ws, effective: str) -> None:
         if effective == "custom":
-            ws.set_cell_format("A1", number_format="0.00")
+            ws.update_cell_format("A1", number_format="0.00")
         elif effective == "row_style":
-            ws.set_cell_format("1:1", number_format="0.00")
+            ws.update_cell_format("1:1", number_format="0.00")
         elif effective == "column_style":
-            ws.set_cell_format("A:A", number_format="0.00")
+            ws.update_cell_format("A:A", number_format="0.00")
 
     def test_table_rows(self) -> None:
         errors = {"TypeError": TypeError, "ValueError": ValueError, "InvalidArgument": InvalidArgumentError}
@@ -240,27 +241,29 @@ class ColourInputTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = wb[0]
             shape = ws.add_shape(
-                anchor_kind=AnchorKind.TWO_CELL,
-                to_row=3,
-                to_col=3,
-                fill_kind=ShapePaint.SOLID,
-                fill_color="#FF0000",
-                line_kind=ShapePaint.SOLID,
-                line_color=Color(kind=ColorKind.RGB, rgb=0x800000FF),
+                ShapeInput(
+                    anchor_kind=AnchorKind.TWO_CELL,
+                    to_row=3,
+                    to_col=3,
+                    fill_kind=ShapePaint.SOLID,
+                    fill_color="#FF0000",
+                    line_kind=ShapePaint.SOLID,
+                    line_color=Color(kind=ColorKind.RGB, argb=0x800000FF),
+                ),
             )
             # A shape colour reads back opaque; the alpha of the input is ignored.
             props = shape.get_properties()
-            self.assertEqual(props.fill_color, Color(kind=ColorKind.RGB, rgb=0xFFFF0000))
-            self.assertEqual(props.line_color, Color(kind=ColorKind.RGB, rgb=0xFF0000FF))
+            self.assertEqual(props.fill_color, Color(kind=ColorKind.RGB, argb=0xFFFF0000))
+            self.assertEqual(props.line_color, Color(kind=ColorKind.RGB, argb=0xFF0000FF))
             shape.update(fill_kind=ShapePaint.SOLID, fill_color="#00FF00")
-            self.assertEqual(shape.get_properties().fill_color, Color(kind=ColorKind.RGB, rgb=0xFF00FF00))
+            self.assertEqual(shape.get_properties().fill_color, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
             passed_back = {
                 f.name: getattr(props, f.name)
                 for f in dataclasses.fields(props)
                 if f.name in ("fill_kind", "fill_color", "line_kind", "line_color")
             }
             shape.update(**{**passed_back, "fill_kind": None, "fill_color": None})
-            self.assertEqual(shape.get_properties().fill_color, Color(kind=ColorKind.RGB, rgb=0xFF00FF00))
+            self.assertEqual(shape.get_properties().fill_color, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
             self.assertEqual(shape.get_properties().line_color, props.line_color)
 
     def test_sparkline_colours_take_text(self) -> None:
@@ -270,20 +273,20 @@ class ColourInputTests(unittest.TestCase):
             index = ws.add_sparkline_group(
                 SparklineGroup(color_series="#112233", sparklines=[Sparkline(formula="Sheet1!A1:C1", location="D1")])  # type: ignore[arg-type]
             )
-            self.assertEqual(ws.list_sparkline_groups()[index].color_series, Color(kind=ColorKind.RGB, rgb=0xFF112233))
+            self.assertEqual(ws.list_sparkline_groups()[index].color_series, Color(kind=ColorKind.RGB, argb=0xFF112233))
             ws.update_sparkline_group(index, color_high="#445566")
-            self.assertEqual(ws.list_sparkline_groups()[index].color_high, Color(kind=ColorKind.RGB, rgb=0xFF445566))
+            self.assertEqual(ws.list_sparkline_groups()[index].color_high, Color(kind=ColorKind.RGB, argb=0xFF445566))
 
     def test_cell_format_colour_keys(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb[0]
-            ws.set_cell_format("A1", fill={"fg": "#336699"}, border={"left": {"color": "#000000"}})
+            ws.update_cell_format("A1", fill={"foreground": "#336699"}, border={"left": {"color": "#000000"}})
             fmt = ws.get_cell_format("A1")
-            self.assertEqual(fmt.fill.fg, Color(kind=ColorKind.RGB, rgb=0xFF336699))
-            self.assertEqual(fmt.border.left.color, Color(kind=ColorKind.RGB, rgb=0xFF000000))
+            self.assertEqual(fmt.fill.foreground, Color(kind=ColorKind.RGB, argb=0xFF336699))
+            self.assertEqual(fmt.border.left.color, Color(kind=ColorKind.RGB, argb=0xFF000000))
             for patch in ({"font": {"color_argb": 0xFF000000}}, {"fill": {"fg_argb": 0}}):
                 with self.subTest(patch=patch), self.assertRaises(TypeError):
-                    ws.set_cell_format("A1", **patch)
+                    ws.update_cell_format("A1", **patch)
 
 
 class TypedErrorTests(unittest.TestCase):

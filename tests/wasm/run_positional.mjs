@@ -153,7 +153,14 @@ export function registerPositional(Module, test, hookProbe) {
   test('WASM-only table and auto-filter positions are guarded', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      for (const method of ['removeTable', 'updateTable', 'getAutoFilterXml']) {
+      for (const method of [
+        'removeTable',
+        'updateTable',
+        'getTable',
+        'getTableCount',
+        'getTableStyleOptions',
+        'getAutoFilterXml',
+      ]) {
         expectRangeError(() => wb[method](2 ** 32, {}));
       }
       expectRangeError(() => wb.setAutoFilterXml(2 ** 32, ''));
@@ -238,7 +245,7 @@ export function registerPositional(Module, test, hookProbe) {
       try {
         const before = wb.getCellXfCount();
         const spec = {};
-        Object.defineProperty(spec, 'horizontalAlign', {
+        Object.defineProperty(spec, 'horizontal', {
           get() {
             wb[lifecycle]();
             return 1;
@@ -266,7 +273,7 @@ export function registerPositional(Module, test, hookProbe) {
       try {
         const before = wb.getCellXfCount();
         const spec = {};
-        Object.defineProperty(spec, 'horizontalAlign', {
+        Object.defineProperty(spec, 'horizontal', {
           get() {
             descriptor.value.call(wb);
             return 1;
@@ -304,7 +311,7 @@ export function registerPositional(Module, test, hookProbe) {
 
       let originalDeleteError;
       const originalDeleteSpec = {};
-      Object.defineProperty(originalDeleteSpec, 'horizontalAlign', {
+      Object.defineProperty(originalDeleteSpec, 'horizontal', {
         get() {
           try {
             wb.delete();
@@ -320,7 +327,7 @@ export function registerPositional(Module, test, hookProbe) {
 
       let proxyDeleteError;
       const proxyDeleteSpec = {};
-      Object.defineProperty(proxyDeleteSpec, 'horizontalAlign', {
+      Object.defineProperty(proxyDeleteSpec, 'horizontal', {
         get() {
           try {
             proxy.delete();
@@ -343,7 +350,7 @@ export function registerPositional(Module, test, hookProbe) {
     try {
       let caught;
       const spec = {};
-      Object.defineProperty(spec, 'horizontalAlign', {
+      Object.defineProperty(spec, 'horizontal', {
         get() {
           try {
             wb.delete();

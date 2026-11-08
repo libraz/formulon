@@ -46,8 +46,8 @@ namespace {
 // Fills `out` without touching its `struct_size`.
 void fill_image_info(const formulon::ImageInfo& info, fm_image_info_t* out) {
   out->format = static_cast<int32_t>(info.format);
-  out->px_width = info.px_width;
-  out->px_height = info.px_height;
+  out->width_px = info.px_width;
+  out->height_px = info.px_height;
 }
 
 }  // namespace
@@ -153,9 +153,9 @@ extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                          int32_t* out_present, const uint8_t** out_bytes, size_t* out_len,
-                                          fm_image_info_t* out_info) {
+extern "C" fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                            int32_t* out_present, const uint8_t** out_bytes, size_t* out_len,
+                                            fm_image_info_t* out_info) {
   clear_last_error();
   if (out_present == nullptr || out_bytes == nullptr || out_len == nullptr || out_info == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "output pointer is NULL");
@@ -199,8 +199,8 @@ extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
-                                          const fm_image_insert_t* opts, uint32_t* out_object_id) {
+extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
+                                            const fm_picture_insert_spec_t* opts, uint32_t* out_object_id) {
   clear_last_error();
   if (bytes == nullptr || opts == nullptr || out_object_id == nullptr) {
     return null_argument();

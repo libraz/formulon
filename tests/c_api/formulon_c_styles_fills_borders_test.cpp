@@ -45,16 +45,16 @@ TEST(FormulonCApiStyles, AddFillAndBorderDistinguishColourSpecifications) {
 
   fm_fill_record_t themed_fill{};
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, 1U, &themed_fill), 0);
-  ASSERT_EQ(themed_fill.fg.kind, static_cast<uint8_t>(kFmColorTheme));
+  ASSERT_EQ(themed_fill.foreground.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   fm_fill_record_t literal_fill = themed_fill;
-  literal_fill.fg = RgbColor(0xFF112233U);
+  literal_fill.foreground = RgbColor(0xFF112233U);
   std::size_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &literal_fill, &fill_index), 0);
   EXPECT_NE(fill_index, 1U);
 
   fm_border_record_t themed_border{};
   ASSERT_EQ(fm_workbook_get_border(wb.handle, 1U, &themed_border), 0);
-  ASSERT_EQ(themed_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  ASSERT_EQ(themed_border.left.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   fm_border_record_t literal_border = themed_border;
   literal_border.left.color = RgbColor(0xFF112233U);
   std::size_t border_index = 0;
@@ -71,14 +71,14 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_color_spec_t theme{};
-  theme.kind = static_cast<uint8_t>(kFmColorTheme);
+  theme.kind = static_cast<uint8_t>(FM_COLOR_KIND_THEME);
   theme.theme = 3U;
   theme.tint = 0.5;
   fm_color_spec_t indexed{};
-  indexed.kind = static_cast<uint8_t>(kFmColorIndexed);
+  indexed.kind = static_cast<uint8_t>(FM_COLOR_KIND_INDEXED);
   indexed.indexed = 9U;
   fm_color_spec_t automatic{};
-  automatic.kind = static_cast<uint8_t>(kFmColorAuto);
+  automatic.kind = static_cast<uint8_t>(FM_COLOR_KIND_AUTO);
 
   fm_font_record_t font = MakeArial();
   font.color = theme;
@@ -86,7 +86,7 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), 0);
   fm_font_record_t got_font{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, font_index, &got_font), 0);
-  EXPECT_EQ(got_font.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(got_font.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   EXPECT_EQ(got_font.color.theme, 3U);
   EXPECT_DOUBLE_EQ(got_font.color.tint, 0.5);
   std::size_t font_again = 0xFFFFFFFFU;
@@ -94,15 +94,15 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   EXPECT_EQ(font_again, font_index);
 
   fm_fill_record_t fill = MakeRedFill();
-  fill.fg = indexed;
-  fill.bg = automatic;
+  fill.foreground = indexed;
+  fill.background = automatic;
   std::size_t fill_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   fm_fill_record_t got_fill{};
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, fill_index, &got_fill), 0);
-  EXPECT_EQ(got_fill.fg.kind, static_cast<uint8_t>(kFmColorIndexed));
-  EXPECT_EQ(got_fill.fg.indexed, 9U);
-  EXPECT_EQ(got_fill.bg.kind, static_cast<uint8_t>(kFmColorAuto));
+  EXPECT_EQ(got_fill.foreground.kind, static_cast<uint8_t>(FM_COLOR_KIND_INDEXED));
+  EXPECT_EQ(got_fill.foreground.indexed, 9U);
+  EXPECT_EQ(got_fill.background.kind, static_cast<uint8_t>(FM_COLOR_KIND_AUTO));
   std::size_t fill_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &got_fill, &fill_again), 0);
   EXPECT_EQ(fill_again, fill_index);
@@ -114,9 +114,9 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &border, &border_index), 0);
   fm_border_record_t got_border{};
   ASSERT_EQ(fm_workbook_get_border(wb.handle, border_index, &got_border), 0);
-  EXPECT_EQ(got_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(got_border.left.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   EXPECT_EQ(got_border.left.color.theme, 3U);
-  EXPECT_EQ(got_border.right.color.kind, static_cast<uint8_t>(kFmColorIndexed));
+  EXPECT_EQ(got_border.right.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_INDEXED));
   EXPECT_EQ(got_border.right.color.indexed, 9U);
   std::size_t border_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &got_border, &border_again), 0);
@@ -134,9 +134,9 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), 0);
   fm_dxf_record_t got_dxf{};
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, dxf_index, &got_dxf), 0);
-  EXPECT_EQ(got_dxf.font.color.kind, static_cast<uint8_t>(kFmColorAuto));
-  EXPECT_EQ(got_dxf.fill.fg.kind, static_cast<uint8_t>(kFmColorIndexed));
-  EXPECT_EQ(got_dxf.border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(got_dxf.font.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_AUTO));
+  EXPECT_EQ(got_dxf.fill.foreground.kind, static_cast<uint8_t>(FM_COLOR_KIND_INDEXED));
+  EXPECT_EQ(got_dxf.border.left.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   std::size_t dxf_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &got_dxf, &dxf_again), 0);
   EXPECT_EQ(dxf_again, dxf_index);
@@ -149,21 +149,21 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
 
   fm_font_record_t reloaded_font{};
   ASSERT_EQ(fm_workbook_get_font(reloaded.handle, font_index, &reloaded_font), 0);
-  EXPECT_EQ(reloaded_font.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(reloaded_font.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   EXPECT_EQ(reloaded_font.color.theme, 3U);
   EXPECT_DOUBLE_EQ(reloaded_font.color.tint, 0.5);
   fm_fill_record_t reloaded_fill{};
   ASSERT_EQ(fm_workbook_get_fill(reloaded.handle, fill_index, &reloaded_fill), 0);
-  EXPECT_EQ(reloaded_fill.fg.kind, static_cast<uint8_t>(kFmColorIndexed));
-  EXPECT_EQ(reloaded_fill.fg.indexed, 9U);
-  EXPECT_EQ(reloaded_fill.bg.kind, static_cast<uint8_t>(kFmColorAuto));
+  EXPECT_EQ(reloaded_fill.foreground.kind, static_cast<uint8_t>(FM_COLOR_KIND_INDEXED));
+  EXPECT_EQ(reloaded_fill.foreground.indexed, 9U);
+  EXPECT_EQ(reloaded_fill.background.kind, static_cast<uint8_t>(FM_COLOR_KIND_AUTO));
   fm_border_record_t reloaded_border{};
   ASSERT_EQ(fm_workbook_get_border(reloaded.handle, border_index, &reloaded_border), 0);
-  EXPECT_EQ(reloaded_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(reloaded_border.left.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   fm_dxf_record_t reloaded_dxf{};
   ASSERT_EQ(fm_workbook_get_dxf(reloaded.handle, dxf_index, &reloaded_dxf), 0);
-  EXPECT_EQ(reloaded_dxf.font.color.kind, static_cast<uint8_t>(kFmColorAuto));
-  EXPECT_EQ(reloaded_dxf.border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(reloaded_dxf.font.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_AUTO));
+  EXPECT_EQ(reloaded_dxf.border.left.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
 }
 
 TEST(FormulonCApiStyles, AddFillDedupReturnsExistingIndex) {
@@ -183,7 +183,7 @@ TEST(FormulonCApiStyles, AddFillDistinctReturnsNewIndex) {
   std::size_t b = 0;
   fm_fill_record_t red = MakeRedFill();
   fm_fill_record_t blue = MakeRedFill();
-  blue.fg = RgbColor(0xFF0000FFU);
+  blue.foreground = RgbColor(0xFF0000FFU);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &red, &a), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &blue, &b), 0);
   EXPECT_NE(a, b);
@@ -206,7 +206,7 @@ TEST(FormulonCApiStyles, AddFillGrowsTable) {
   fm_fill_record_t out{};
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.pattern, 1U);
-  EXPECT_EQ(out.fg.rgb, 0xFFFF0000U);
+  EXPECT_EQ(out.foreground.argb, 0xFFFF0000U);
 }
 
 TEST(FormulonCApiStyles, AddBorderDedupReturnsExistingIndex) {

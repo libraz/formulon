@@ -58,8 +58,8 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     const png = makePng(4);
     const probe = mod.getImageInfo(png);
     assert.equal(probe.format, mod.ImageFormat.Png);
-    assert.equal(probe.pxWidth, 4);
-    assert.equal(probe.pxHeight, 1);
+    assert.equal(probe.widthPx, 4);
+    assert.equal(probe.heightPx, 1);
     assert.throws(() => mod.getImageInfo(new Uint8Array([1, 2, 3])), isFormulonError);
 
     const empty = wb.sheet(0).listDrawings();
@@ -83,16 +83,17 @@ test('images probe, insert, list, read back, survive save and load, and remove',
       assert.equal(o.fromCol, 3);
       assert.equal(o.widthEmu, 4 * 9525);
       assert.equal(o.heightEmu, 9525);
-      assert.equal(o.imageFormat, mod.ImageFormat.Png);
+      assert.equal(o.format, mod.ImageFormat.Png);
       assert.equal(o.name, 'logo');
       assert.equal(o.description, 'alt');
-      assert.ok(o.mediaPath.length > 0);
+      assert.equal('mediaPath' in o, false);
+      assert.equal('imageFormat' in o, false);
       const img = list[0].getProperties();
       assert.ok(img.bytes instanceof Uint8Array);
       assert.deepEqual([...img.bytes], [...png]);
       assert.equal(img.format, mod.ImageFormat.Png);
-      assert.equal(img.pxWidth, 4);
-      assert.equal(img.pxHeight, 1);
+      assert.equal(img.widthPx, 4);
+      assert.equal(img.heightPx, 1);
       return list[0];
     };
     check(wb);
@@ -200,7 +201,7 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
     assert.deepEqual(ids(), [a.objectId, b.objectId]);
     assert.equal(wb.sheet(0).listDrawings()[0].getDrawingProperties().fromRow, 1);
 
-    const copy = wb.sheet(0).restoreDrawing(snap, { newId: true });
+    const copy = wb.sheet(0).restoreDrawing(snap, { assignNewId: true });
     assert.notEqual(copy.objectId, a.objectId);
     assert.deepEqual(ids(), [a.objectId, b.objectId, copy.objectId]);
 

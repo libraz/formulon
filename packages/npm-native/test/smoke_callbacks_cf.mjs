@@ -20,7 +20,7 @@ test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
   let secondCalls = 0;
 
   for (const wb of [first, second]) {
-    wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+    wb.updateIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
   }
   first.setIterativeProgress(() => {
@@ -40,7 +40,7 @@ test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
 test('dispose is rejected while this workbook is executing its progress callback', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+  wb.updateIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
   wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
   let calls = 0;
   wb.setIterativeProgress(() => {
@@ -75,7 +75,7 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 15,
     timePeriod: 0,
-    dxfId: dxf,
+    dxfIndex: dxf,
   });
   wb.recalc();
 

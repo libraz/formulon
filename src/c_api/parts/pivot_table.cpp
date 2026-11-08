@@ -18,6 +18,7 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "c_api/parts/table_style_defaults.h"
 #include "pivot/calculated.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
@@ -130,7 +131,7 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
   table->set_data_caption(formulon::pivot::pivot_layout_options_for(wb->workbook().excel_profile()).values_label);
   // The default style the desktop spreadsheet gives a new PivotTable.
   formulon::pivot::PivotStyleInfo style;
-  style.name = "PivotStyleLight16";
+  style.name = std::string(formulon::c_api::parts::default_pivot_style_name(wb->workbook()));
   style.show_row_headers = true;
   style.show_col_headers = true;
   style.show_last_column = true;
@@ -169,8 +170,8 @@ extern "C" fm_status_t fm_sheet_remove_pivot(fm_workbook_t* wb, std::size_t shee
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_pivot_name(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                               const char* utf8_name) {
+extern "C" fm_status_t fm_sheet_rename_pivot(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                             const char* utf8_name) {
   clear_last_error();
   if (wb == nullptr || utf8_name == nullptr) {
     return null_argument();
@@ -191,17 +192,16 @@ extern "C" fm_status_t fm_sheet_set_pivot_name(fm_workbook_t* wb, std::size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                 const fm_cell_rect_t* rect) {
+                                                 std::uint32_t anchor_row, std::uint32_t anchor_col) {
   clear_last_error();
-  if (wb == nullptr || rect == nullptr) {
+  if (wb == nullptr) {
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  // Reject before `set_anchor` so downstream layout never iterates an
-  // out-of-grid or inverted rectangle.
-  if (auto rc = check_sheet_rect(*rect); rc != 0) {
+  // Reject before `set_anchor` so downstream layout never starts outside the grid.
+  if (auto rc = check_cell_coord(anchor_row, anchor_col); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotTable* table = nullptr;
@@ -209,21 +209,20 @@ extern "C" fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, std::size_t 
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->set_anchor(rect->first_row, rect->first_col, rect->last_row - rect->first_row + 1U,
-                    rect->last_col - rect->first_col + 1U);
+  table->set_anchor(anchor_row, anchor_col, 1U, 1U);
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_sheet_set_pivot_grand_totals(fm_workbook_t* wb, std::size_t sheet_index,
-                                                       std::size_t pivot_index, std::int32_t rows_enabled,
-                                                       std::int32_t cols_enabled) {
+extern "C" fm_status_t fm_sheet_update_pivot_grand_totals(fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t pivot_index, std::int32_t rows_enabled,
+                                                          std::int32_t columns_enabled) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->set_grand_totals(rows_enabled != 0, cols_enabled != 0);
+  table->set_grand_totals(rows_enabled != 0, columns_enabled != 0);
   return edit.commit();
 }
 
@@ -252,11 +251,10 @@ extern "C" fm_status_t fm_sheet_show_pivot_details(fm_workbook_t* wb, std::size_
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_pivot_style_info(fm_workbook_t* wb, std::size_t sheet_index,
-                                                     std::size_t pivot_index, const char* utf8_style_name,
-                                                     std::int32_t show_row_headers, std::int32_t show_col_headers,
-                                                     std::int32_t show_row_stripes, std::int32_t show_col_stripes,
-                                                     std::int32_t show_last_column) {
+extern "C" fm_status_t fm_sheet_update_pivot_style_options(
+    fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* utf8_style_name,
+    std::int32_t show_row_headers, std::int32_t show_column_headers, std::int32_t show_row_stripes,
+    std::int32_t show_column_stripes, std::int32_t show_last_column) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
@@ -270,9 +268,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_style_info(fm_workbook_t* wb, std::siz
     info.name = utf8_style_name;
   }
   info.show_row_headers = show_row_headers != 0;
-  info.show_col_headers = show_col_headers != 0;
+  info.show_col_headers = show_column_headers != 0;
   info.show_row_stripes = show_row_stripes != 0;
-  info.show_col_stripes = show_col_stripes != 0;
+  info.show_col_stripes = show_column_stripes != 0;
   info.show_last_column = show_last_column != 0;
   table->set_style_info(std::move(info));
   return 0;
@@ -702,19 +700,19 @@ extern "C" fm_status_t fm_sheet_resolve_pivot_runtime_id(const fm_workbook_t* wb
 
 extern "C" fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, std::size_t sheet_index,
                                                        std::size_t pivot_index, std::int32_t* out_rows,
-                                                       std::int32_t* out_cols) {
+                                                       std::int32_t* out_columns) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out_rows, out_cols}, sheet_index, pivot_index, &table); rc != 0) {
+  if (auto rc = resolve_pivot_checked(wb, {out_rows, out_columns}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
   *out_rows = table->grand_totals_rows() ? 1 : 0;
-  *out_cols = table->grand_totals_cols() ? 1 : 0;
+  *out_columns = table->grand_totals_cols() ? 1 : 0;
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_pivot_style_info(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                     std::size_t pivot_index, fm_pivot_style_info_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_style_options(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index, fm_pivot_style_options_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
@@ -723,16 +721,16 @@ extern "C" fm_status_t fm_sheet_get_pivot_style_info(const fm_workbook_t* wb, st
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  fm_pivot_style_info_t result{};
+  fm_pivot_style_options_t result{};
   result.struct_size = out->struct_size;
-  result.name = "";
+  result.style_name = "";
   if (const auto& info = table->style_info(); info.has_value()) {
-    result.name = info->name.c_str();
+    result.style_name = info->name.c_str();
     result.present = 1;
     result.show_row_headers = info->show_row_headers ? 1 : 0;
-    result.show_col_headers = info->show_col_headers ? 1 : 0;
+    result.show_column_headers = info->show_col_headers ? 1 : 0;
     result.show_row_stripes = info->show_row_stripes ? 1 : 0;
-    result.show_col_stripes = info->show_col_stripes ? 1 : 0;
+    result.show_column_stripes = info->show_col_stripes ? 1 : 0;
     result.show_last_column = info->show_last_column ? 1 : 0;
   }
   *out = result;
@@ -831,7 +829,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_options(const fm_workbook_t* wb, std::
   result.show_data_tips = table->show_data_tips() ? 1 : 0;
   result.grid_drop_zones = table->grid_drop_zones() ? 1 : 0;
   result.show_empty_row = table->show_empty_row() ? 1 : 0;
-  result.show_empty_col = table->show_empty_col() ? 1 : 0;
+  result.show_empty_column = table->show_empty_col() ? 1 : 0;
   result.show_data_drop_down = table->show_data_drop_down() ? 1 : 0;
   result.print_drill = table->print_drill() ? 1 : 0;
   result.field_print_titles = table->field_print_titles() ? 1 : 0;
@@ -852,8 +850,8 @@ extern "C" fm_status_t fm_sheet_get_pivot_options(const fm_workbook_t* wb, std::
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                  const fm_pivot_options_t* options) {
+extern "C" fm_status_t fm_sheet_update_pivot_options(fm_workbook_t* wb, std::size_t sheet_index,
+                                                     std::size_t pivot_index, const fm_pivot_options_t* options) {
   clear_last_error();
   if (wb == nullptr || options == nullptr) {
     return null_argument();
@@ -901,7 +899,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t
   table->set_show_data_tips(o.show_data_tips != 0);
   table->set_grid_drop_zones(o.grid_drop_zones != 0);
   table->set_show_empty_row(o.show_empty_row != 0);
-  table->set_show_empty_col(o.show_empty_col != 0);
+  table->set_show_empty_col(o.show_empty_column != 0);
   table->set_show_data_drop_down(o.show_data_drop_down != 0);
   table->set_print_drill(o.print_drill != 0);
   table->set_field_print_titles(o.field_print_titles != 0);
@@ -930,7 +928,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_default_name(const fm_workb
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(aggregation, 0, FM_PIVOT_AGG_VARP, "aggregation"); rc != 0) {
+  if (auto rc = check_enum_domain(aggregation, 0, FM_PIVOT_AGGREGATION_VARP, "aggregation"); rc != 0) {
     return rc;
   }
   if (auto rc = check_index(field_index, table->fields().size(), "field_index"); rc != 0) {

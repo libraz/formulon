@@ -64,12 +64,12 @@ export function registerDrawing(Module, test) {
   test('getImageInfo reports the format and pixel size, and rejects non-images', () => {
     const info = Module.getImageInfo(makePng(3, 2));
     assert.equal(info.format, ImageFormat.Png);
-    assert.equal(info.pxWidth, 3);
-    assert.equal(info.pxHeight, 2);
+    assert.equal(info.widthPx, 3);
+    assert.equal(info.heightPx, 2);
     expectFailure(() => Module.getImageInfo(new Uint8Array([1, 2, 3, 4])));
   });
 
-  test('insertImage, listDrawingObjects, getImage and removeDrawing round-trip through save and load', () => {
+  test('addImage, listDrawingObjects, getPicture and removeDrawing round-trip through save and load', () => {
     withWorkbook(Module, (wb) => {
       const png = makePng(4, 3);
       assert.equal(wb.listDrawingObjects(0).length, 0);
@@ -94,15 +94,14 @@ export function registerDrawing(Module, test) {
         assert.equal(o.fromColOffsetEmu, 100);
         assert.equal(o.widthEmu, 4 * EMU_PER_PX);
         assert.equal(o.heightEmu, 3 * EMU_PER_PX);
-        assert.equal(o.imageFormat, ImageFormat.Png);
+        assert.equal(o.format, ImageFormat.Png);
         assert.equal(o.name, 'Logo');
         assert.equal(o.description, 'alt text');
-        assert.ok(o.mediaPath.length > 0);
-        const found = book.getImage(0, o.objectId);
+        const found = book.getPicture(0, o.objectId);
         const img = found;
         assert.equal(img.format, ImageFormat.Png);
-        assert.equal(img.pxWidth, 4);
-        assert.equal(img.pxHeight, 3);
+        assert.equal(img.widthPx, 4);
+        assert.equal(img.heightPx, 3);
         assert.ok(img.bytes instanceof Uint8Array);
         assert.deepEqual(Buffer.from(img.bytes), Buffer.from(png));
       };
@@ -114,7 +113,7 @@ export function registerDrawing(Module, test) {
         check(loaded);
         loaded.removeDrawingObject(0, ins);
         assert.equal(loaded.listDrawingObjects(0).length, 0);
-        assert.equal(loaded.getImage(0, ins), null);
+        assert.equal(loaded.getPicture(0, ins), null);
         expectFailure(() => loaded.removeDrawingObject(0, ins), StatusCode.NotFound);
       } finally {
         loaded.dispose();
@@ -148,7 +147,7 @@ export function registerDrawing(Module, test) {
       expectFailure(() => wb.addImage(99, makePng(1, 1)));
       expectFailure(() => wb.addImage(0, makePng(1, 1), { anchor: { anchorKind: AnchorKind.Absolute } }));
       expectFailure(() => wb.listDrawingObjects(99));
-      assert.equal(wb.getImage(0, 12345), null);
+      assert.equal(wb.getPicture(0, 12345), null);
     });
   });
 
@@ -210,7 +209,7 @@ export function registerDrawing(Module, test) {
       const restored = wb.restoreDrawing(0, snap);
       assert.equal(restored, a);
       assert.deepEqual(ids(), [a, b]);
-      assert.deepEqual(Buffer.from(wb.getImage(0, a).bytes), Buffer.from(png));
+      assert.deepEqual(Buffer.from(wb.getPicture(0, a).bytes), Buffer.from(png));
 
       wb.setDrawingAnchor(0, a, { row: 9 });
       wb.setDrawingZOrder(0, a, 1);
@@ -218,7 +217,7 @@ export function registerDrawing(Module, test) {
       assert.deepEqual(ids(), [a, b]);
       assert.equal(wb.listDrawingObjects(0)[0].fromRow, 1);
 
-      const copy = wb.restoreDrawing(0, snap, { newId: true });
+      const copy = wb.restoreDrawing(0, snap, { assignNewId: true });
       assert.notEqual(copy, a);
       assert.deepEqual(ids(), [a, b, copy]);
 

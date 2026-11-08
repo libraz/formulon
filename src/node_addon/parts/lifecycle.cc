@@ -164,22 +164,31 @@ Napi::Value Workbook::SetPinnedNow(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  // The registration guard requires all six as int32; the calendar domain
-  // is validated in exactly one place, the C layer.
+  // `null` releases the pin.
+  if (info[0].IsNull()) {
+    return ValueOrThrow(env, fm_workbook_set_pinned_now(handle_, nullptr), env.Undefined());
+  }
+  // The registration guard checks only that the first argument is present, so the six fields are checked here.
+  // The calendar domain is validated in exactly one place, the C layer.
   fm_civil_time_t now{};
   std::int32_t* const fields[] = {&now.year, &now.month, &now.day, &now.hour, &now.minute, &now.second};
   for (std::size_t index = 0; index < 6; ++index) {
-    *fields[index] = ArgI32(info, index);
+    const Napi::Value value = info[index];
+    const std::string label = "Workbook.setPinnedNow argument " + std::to_string(index + 1);
+    if (!value.IsNumber()) {
+      Napi::TypeError::New(env, label + " must be a primitive number").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    const double number = NumberValue(value, 0.0);
+    if (!std::isfinite(number) || std::trunc(number) != number ||
+        number < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
+        number > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
+      Napi::RangeError::New(env, label + " is outside int32 range").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    *fields[index] = static_cast<std::int32_t>(number);
   }
   return ValueOrThrow(env, fm_workbook_set_pinned_now(handle_, &now), env.Undefined());
-}
-
-Napi::Value Workbook::ClearPinnedNow(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  return ValueOrThrow(env, fm_workbook_clear_pinned_now(handle_), env.Undefined());
 }
 
 Napi::Value Workbook::ProfileId(const Napi::CallbackInfo& info) {
@@ -323,7 +332,7 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_workbook_set_iterative(handle_, &p), env.Undefined());
+  return ValueOrThrow(env, fm_workbook_update_iterative(handle_, &p), env.Undefined());
 }
 
 Napi::Value Workbook::GetIterative(const Napi::CallbackInfo& info) {

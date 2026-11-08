@@ -44,7 +44,7 @@ formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
     ranges.push_back({r.first_row, r.first_col, r.last_row, r.last_col});
   }
   out.sqref = formulon::io::format_sqref_text(ranges);
-  out.password = text_or_empty(range.password);
+  out.password = text_or_empty(range.legacy_password_hash);
   out.algorithm_name = text_or_empty(range.algorithm_name);
   out.hash_value = text_or_empty(range.hash_value);
   out.salt_value = text_or_empty(range.salt_value);
@@ -90,11 +90,11 @@ extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* 
   out->lock_revision = p.lock_revision ? 1 : 0;
   out->workbook_spin_count = p.workbook_spin_count;
   out->revisions_spin_count = p.revisions_spin_count;
-  out->workbook_password = store_cstr(store, p.workbook_password);
+  out->workbook_legacy_password_hash = store_cstr(store, p.workbook_password);
   out->workbook_algorithm_name = store_cstr(store, p.workbook_algorithm_name);
   out->workbook_hash_value = store_cstr(store, p.workbook_hash_value);
   out->workbook_salt_value = store_cstr(store, p.workbook_salt_value);
-  out->revisions_password = store_cstr(store, p.revisions_password);
+  out->revisions_legacy_password_hash = store_cstr(store, p.revisions_password);
   out->revisions_algorithm_name = store_cstr(store, p.revisions_algorithm_name);
   out->revisions_hash_value = store_cstr(store, p.revisions_hash_value);
   out->revisions_salt_value = store_cstr(store, p.revisions_salt_value);
@@ -110,9 +110,9 @@ extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
   if (auto rc = check_record_size(*protection); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({protection->workbook_password, protection->workbook_algorithm_name,
+  if (auto rc = check_utf8({protection->workbook_legacy_password_hash, protection->workbook_algorithm_name,
                             protection->workbook_hash_value, protection->workbook_salt_value,
-                            protection->revisions_password, protection->revisions_algorithm_name,
+                            protection->revisions_legacy_password_hash, protection->revisions_algorithm_name,
                             protection->revisions_hash_value, protection->revisions_salt_value});
       rc != 0) {
     return rc;
@@ -121,12 +121,12 @@ extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
   p.lock_structure = protection->lock_structure != 0;
   p.lock_windows = protection->lock_windows != 0;
   p.lock_revision = protection->lock_revision != 0;
-  p.workbook_password = text_or_empty(protection->workbook_password);
+  p.workbook_password = text_or_empty(protection->workbook_legacy_password_hash);
   p.workbook_algorithm_name = text_or_empty(protection->workbook_algorithm_name);
   p.workbook_hash_value = text_or_empty(protection->workbook_hash_value);
   p.workbook_salt_value = text_or_empty(protection->workbook_salt_value);
   p.workbook_spin_count = protection->workbook_spin_count;
-  p.revisions_password = text_or_empty(protection->revisions_password);
+  p.revisions_password = text_or_empty(protection->revisions_legacy_password_hash);
   p.revisions_algorithm_name = text_or_empty(protection->revisions_algorithm_name);
   p.revisions_hash_value = text_or_empty(protection->revisions_hash_value);
   p.revisions_salt_value = text_or_empty(protection->revisions_salt_value);
@@ -173,7 +173,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
   formulon::io::parse_selection_sqref_text(r.sqref, rects);
   out->ranges = publish_rects(wb, rects);
   out->range_count = static_cast<std::uint32_t>(rects.size());
-  out->password = store_cstr(store, r.password);
+  out->legacy_password_hash = store_cstr(store, r.password);
   out->algorithm_name = store_cstr(store, r.algorithm_name);
   out->hash_value = store_cstr(store, r.hash_value);
   out->salt_value = store_cstr(store, r.salt_value);

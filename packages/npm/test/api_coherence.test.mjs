@@ -74,15 +74,15 @@ const rect = (firstRow, firstCol, lastRow, lastCol) => ({ firstRow, firstCol, la
 // ---- Fixtures ----------------------------------------------------------------------------------
 
 // A1:B3 holds "Product/Amount" and two data rows; the table covers A1:B3.
-function addSalesTable(wb, ws, name = 'Sales', lastRow = 2) {
+function addSalesTable(ws, name = 'Sales', lastRow = 2) {
   ws.setText(0, 0, 'Product');
   ws.setText(0, 1, 'Amount');
   ws.setText(1, 0, 'A');
   ws.setNumber(1, 1, 10);
   ws.setText(2, 0, 'B');
   ws.setNumber(2, 1, 20);
-  return wb.addTable({
-    range: { sheet: ws.index, rect: rect(0, 0, lastRow, 1) },
+  return ws.addTable({
+    range: rect(0, 0, lastRow, 1),
     name,
     columns: ['Product', 'Amount'],
     styleName: 'TableStyleMedium2',
@@ -109,15 +109,15 @@ function addBox(f, ws, name, extra = {}) {
 const SLICER_ANCHOR = { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 };
 
 function addSlicerOf(wb, ws) {
-  return ws.addSlicer(0, 0, { ...SLICER_ANCHOR, caption: 'Pick', style: 'SlicerStyleLight3' });
+  return ws.addSlicer('Sales', 0, { ...SLICER_ANCHOR, caption: 'Pick', style: 'SlicerStyleLight3' });
 }
 
 function sparklineGroup(f) {
   return {
     type: f.SparklineType.Column,
-    colorSeries: { kind: 1, rgb: 0xff336699, theme: 0, tint: 0, indexed: 0 },
-    colorNegative: { kind: 2, rgb: 0, theme: 5, tint: -0.25, indexed: 0 },
-    colorLow: { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 12 },
+    colorSeries: { kind: 1, argb: 0xff336699, theme: 0, tint: 0, indexed: 0 },
+    colorNegative: { kind: 2, argb: 0, theme: 5, tint: -0.25, indexed: 0 },
+    colorLow: { kind: 3, argb: 0, theme: 0, tint: 0, indexed: 12 },
     markers: true,
     negative: true,
     displayXAxis: true,
@@ -158,7 +158,7 @@ function addPivotOver(wb, f) {
   cache.addField('Amount');
   cache.addFieldSharedItem(0, 'East');
   cache.addFieldSharedItem(0, 'West');
-  const pivot = ws.addPivot({ name: 'P1', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+  const pivot = ws.addPivot({ name: 'P1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
   pivot.addField({ sourceName: 'Region', axis: f.PivotAxis.Row });
   return { cache, pivot, ws };
 }
@@ -166,7 +166,7 @@ function addPivotOver(wb, f) {
 // ---- Criterion 3: patch keys ---------------------------------------------------------------------
 //
 // Parameter model (pairwise, strength 2, generated with coverwise pairwise_generate, seed 7):
-//   method   : setCellFormat | Shape.update | Slicer.update | Table.update | updateSparklineGroup | updateProtectedRange
+//   method   : updateCellFormat | Shape.update | Slicer.update | Table.update | Table.updateStyleOptions | updateSparklineGroup | updateProtectedRange
 //   keyKind  : unknown | recordOnly | nullable | absent | nonNullable | anchorNoTrigger
 //   depth    : top | nested
 //   valueKind: valid | null
@@ -174,23 +174,23 @@ function addPivotOver(wb, f) {
 //   absent          -> method = Shape.update, valueKind = null
 //   anchorNoTrigger -> method in {Shape.update, Slicer.update}, valueKind = valid
 //   recordOnly      -> method in {Shape.update, Slicer.update, Table.update}, valueKind = valid
-//   nullable        -> method in {Slicer.update, Table.update, updateSparklineGroup, setCellFormat}, valueKind = null
-//   setCellFormat & nullable -> depth = nested
-//   depth = nested  -> method = setCellFormat and keyKind in {unknown, nullable, nonNullable}
+//   nullable        -> method in {Slicer.update, Table.updateStyleOptions, updateSparklineGroup, updateCellFormat}, valueKind = null
+//   updateCellFormat & nullable -> depth = nested
+//   depth = nested  -> method = updateCellFormat and keyKind in {unknown, nullable, nonNullable}
 //   unknown -> valid; nonNullable -> null
 // The 23 rows below are the generated suite; the expectation of a row follows from keyKind alone:
 //   unknown / nonNullable -> TypeError and nothing changed; anchorNoTrigger -> TypeError and nothing changed;
 //   recordOnly / absent -> accepted and nothing changed; nullable -> accepted and the key is cleared.
 const PATCH_ROWS = [
   ['Shape.update', 'recordOnly', 'top', 'valid'],
-  ['setCellFormat', 'unknown', 'nested', 'valid'],
+  ['updateCellFormat', 'unknown', 'nested', 'valid'],
   ['Slicer.update', 'anchorNoTrigger', 'top', 'valid'],
   ['Shape.update', 'absent', 'top', 'null'],
   ['updateSparklineGroup', 'nullable', 'top', 'null'],
   ['Shape.update', 'anchorNoTrigger', 'top', 'valid'],
   ['Table.update', 'unknown', 'top', 'valid'],
   ['updateProtectedRange', 'unknown', 'top', 'valid'],
-  ['setCellFormat', 'nonNullable', 'top', 'null'],
+  ['updateCellFormat', 'nonNullable', 'top', 'null'],
   ['updateProtectedRange', 'nonNullable', 'top', 'null'],
   ['updateSparklineGroup', 'unknown', 'top', 'valid'],
   ['Slicer.update', 'nullable', 'top', 'null'],
@@ -198,25 +198,25 @@ const PATCH_ROWS = [
   ['Shape.update', 'nonNullable', 'top', 'null'],
   ['Shape.update', 'unknown', 'top', 'valid'],
   ['Slicer.update', 'unknown', 'top', 'valid'],
-  ['setCellFormat', 'nullable', 'nested', 'null'],
+  ['updateCellFormat', 'nullable', 'nested', 'null'],
   ['updateSparklineGroup', 'nonNullable', 'top', 'null'],
   ['Slicer.update', 'recordOnly', 'top', 'valid'],
-  ['setCellFormat', 'nonNullable', 'nested', 'null'],
+  ['updateCellFormat', 'nonNullable', 'nested', 'null'],
   ['Slicer.update', 'nonNullable', 'top', 'null'],
-  ['Table.update', 'nullable', 'top', 'null'],
+  ['Table.updateStyleOptions', 'nullable', 'top', 'null'],
   ['Table.update', 'recordOnly', 'top', 'valid'],
 ];
 
 // Per method: a fixture, how to apply a patch, how to read the state back, and the patches per key kind.
 // `nullable.cleared` checks the state after the clear.
 const SUBJECTS = {
-  setCellFormat: {
+  updateCellFormat: {
     setup(f, wb) {
       const ws = wb.sheet(0);
-      ws.setCellFormat('A1', { numberFormat: '0.00', font: { name: 'Arial', size: 14, bold: true } });
+      ws.updateCellFormat('A1', { numberFormat: '0.00', font: { name: 'Arial', sizePt: 14, bold: true } });
       return ws;
     },
-    apply: (t, patch) => t.setCellFormat('A1', patch),
+    apply: (t, patch) => t.updateCellFormat('A1', patch),
     read: (t) => plain(t.getCellFormat('A1')),
     unknown: { top: { bogus: 1 }, nested: { font: { bogus: 1 } } },
     nonNullable: { top: { numberFormat: null }, nested: { font: { name: null } } },
@@ -247,7 +247,7 @@ const SUBJECTS = {
   },
   'Slicer.update': {
     setup(f, wb) {
-      addSalesTable(wb, wb.sheet(0));
+      addSalesTable(wb.sheet(0));
       return addSlicerOf(wb, wb.sheet(0));
     },
     apply: (t, patch) => t.update(patch),
@@ -263,15 +263,23 @@ const SUBJECTS = {
   },
   'Table.update': {
     setup(f, wb) {
-      return addSalesTable(wb, wb.sheet(0));
+      return addSalesTable(wb.sheet(0));
     },
     apply: (t, patch) => t.update(patch),
     read: (t) => plain(t.getProperties()),
     unknown: { top: { bogus: 1 } },
     recordOnly: { top: { columns: [{ name: 'X' }, { name: 'Y' }] } },
+    nonNullable: { top: { headerRow: null } },
+  },
+  'Table.updateStyleOptions': {
+    setup(f, wb) {
+      return addSalesTable(wb.sheet(0));
+    },
+    apply: (t, patch) => t.updateStyleOptions(patch),
+    read: (t) => plain(t.getStyleOptions()),
+    unknown: { top: { bogus: 1 } },
     nullable: { top: { styleName: null } },
     cleared: (state) => assert.equal(state.styleName, null),
-    nonNullable: { top: { name: null } },
   },
   updateSparklineGroup: {
     setup(f, wb) {
@@ -333,18 +341,18 @@ for (const [method, keyKind, depth, valueKind] of PATCH_ROWS) {
   });
 }
 
-test('patch: an unknown key is a TypeError at the top level of setCellFormat and nested in every group', async () => {
+test('patch: an unknown key is a TypeError at the top level of updateCellFormat and nested in every group', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     const before = plain(ws.getCellFormat('A1'));
-    assertMisuse(() => ws.setCellFormat('A1', { bogus: 1 }), TypeError);
+    assertMisuse(() => ws.updateCellFormat('A1', { bogus: 1 }), TypeError);
     for (const group of ['font', 'fill', 'border', 'alignment']) {
-      assertMisuse(() => ws.setCellFormat('A1', { [group]: { bogus: 1 } }), TypeError, group);
+      assertMisuse(() => ws.updateCellFormat('A1', { [group]: { bogus: 1 } }), TypeError, group);
     }
-    assertMisuse(() => ws.setCellFormat('A1', { font: { bold: true, bogus: 1 } }), TypeError);
+    assertMisuse(() => ws.updateCellFormat('A1', { font: { bold: true, bogus: 1 } }), TypeError);
     assert.deepEqual(plain(ws.getCellFormat('A1')), before);
     // The same keys without the bogus one are accepted.
-    ws.setCellFormat('A1', { font: { bold: true } });
+    ws.updateCellFormat('A1', { font: { bold: true } });
     assert.equal(ws.getCellFormat('A1').font.bold, true);
   });
 });
@@ -352,12 +360,12 @@ test('patch: an unknown key is a TypeError at the top level of setCellFormat and
 test('patch: an unknown key is a TypeError on every other patch entry point', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    const table = addSalesTable(wb, ws);
+    const table = addSalesTable(ws);
     const shape = addBox(f, ws, 'S1');
     ws.addSparklineGroup(sparklineGroup(f));
     ws.addProtectedRange(PROTECTED);
     const slicer = addSlicerOf(wb, ws);
-    assertMisuse(() => ws.setView({ bogus: 1 }), TypeError, 'setView');
+    assertMisuse(() => ws.updateView({ bogus: 1 }), TypeError, 'updateView');
     assertMisuse(() => table.update({ bogus: 1 }), TypeError, 'Table.update');
     assertMisuse(() => shape.update({ bogus: 1 }), TypeError, 'Shape.update');
     assertMisuse(() => slicer.update({ bogus: 1 }), TypeError, 'Slicer.update');
@@ -373,9 +381,9 @@ test('patch: Shape.update treats fill and line kind and colour null as "unchange
     const props = shape.getProperties();
     assert.equal(props.name, 'Renamed');
     assert.equal(props.fillKind, f.ShapePaint.Solid);
-    assert.equal(props.fillColor.rgb, 0xffff0000);
+    assert.equal(props.fillColor.argb, 0xffff0000);
     assert.equal(props.lineKind, f.ShapePaint.Solid);
-    for (const key of ['presetGeometry', 'text', 'hidden', 'rotation', 'anchorKind']) {
+    for (const key of ['presetGeometry', 'text', 'hidden', 'rotationDeg', 'anchorKind']) {
       assertMisuse(() => shape.update({ [key]: null }), TypeError, key);
     }
     assert.equal(shape.getProperties().name, 'Renamed');
@@ -390,7 +398,7 @@ test('patch: Shape.update and Slicer.update accept the getter record back and ke
     assert.doesNotThrow(() => shape.update(shape.getProperties()));
     assert.deepEqual(plain(shape.getProperties()), shapeBefore);
 
-    addSalesTable(wb, ws);
+    addSalesTable(ws);
     const slicer = addSlicerOf(wb, ws);
     const slicerBefore = plain(slicer.getProperties());
     assert.doesNotThrow(() => slicer.update(slicer.getProperties()));
@@ -412,7 +420,7 @@ test('patch: anchor keys are accepted with their trigger key', async () => {
     assert.equal(oneCell.getProperties().fromRow, 3);
     assert.equal(oneCell.getProperties().anchorKind, f.AnchorKind.OneCell);
 
-    addSalesTable(wb, ws);
+    addSalesTable(ws);
     const slicer = addSlicerOf(wb, ws);
     slicer.update({ fromRow: 6, fromCol: 3, toRow: 20, toCol: 6 });
     const s = slicer.getProperties();
@@ -427,7 +435,7 @@ test('patch: anchor keys are accepted with their trigger key', async () => {
 test('patch: Slicer.update(style: null) clears the style; an empty patch changes nothing', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    addSalesTable(wb, ws);
+    addSalesTable(ws);
     const slicer = addSlicerOf(wb, ws);
     const before = plain(slicer.getProperties());
     assert.equal(before.style, 'SlicerStyleLight3');
@@ -443,7 +451,7 @@ test('patch: updateSparklineGroup is read-modify-write and every omitted field s
     const ws = wb.sheet(0);
     ws.addSparklineGroup(sparklineGroup(f));
     let current = plain(ws.listSparklineGroups()[0]);
-    const colorGreen = { kind: 1, rgb: 0xff00ff00, theme: 0, tint: 0, indexed: 0 };
+    const colorGreen = { kind: 1, argb: 0xff00ff00, theme: 0, tint: 0, indexed: 0 };
     const patches = [
       {},
       { type: f.SparklineType.Stacked },
@@ -511,11 +519,10 @@ test('patch: updateProtectedRange with ranges: [] is InvalidArgument; an omitted
     assert.deepEqual(plain(ws.listProtectedRanges()[0]), before);
     ws.updateProtectedRange(0, { spinCount: 7 });
     assert.deepEqual(plain(ws.listProtectedRanges()[0].ranges), before.ranges);
-    // A null on any field is a misuse: protected-range fields have no nullable key.
+    // A null is a misuse on every key except legacyPasswordHash.
     for (const key of [
       'name',
       'ranges',
-      'password',
       'algorithmName',
       'hashValue',
       'saltValue',
@@ -524,6 +531,9 @@ test('patch: updateProtectedRange with ranges: [] is InvalidArgument; an omitted
     ]) {
       assertMisuse(() => ws.updateProtectedRange(0, { [key]: null }), TypeError, key);
     }
+    // `legacyPasswordHash` is the one nullable key: null removes the hash.
+    ws.updateProtectedRange(0, { legacyPasswordHash: null });
+    assert.equal(ws.listProtectedRanges()[0].legacyPasswordHash, null);
     assert.equal(ws.listProtectedRanges()[0].spinCount, 7);
   });
 });
@@ -531,7 +541,7 @@ test('patch: updateProtectedRange with ranges: [] is InvalidArgument; an omitted
 test('patch: Table.update takes an A1 range and boolean headerRow / totalsRow', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    const table = addSalesTable(wb, ws);
+    const table = addSalesTable(ws);
     const props = table.getProperties();
     assert.equal(props.headerRow, true);
     assert.equal(props.totalsRow, false);
@@ -541,7 +551,7 @@ test('patch: Table.update takes an A1 range and boolean headerRow / totalsRow', 
     table.update({ range: 'A1:B5' });
     assert.deepEqual(plain(table.getProperties().range), { sheet: 0, rect: rect(0, 0, 4, 1) });
     assert.equal(table.getProperties().name, 'Sales');
-    assert.equal(table.getProperties().styleName, 'TableStyleMedium2');
+    assert.equal(table.getStyleOptions().styleName, 'TableStyleMedium2');
 
     table.update({ totalsRow: true });
     assert.equal(table.getProperties().totalsRow, true);
@@ -569,6 +579,10 @@ test('patch: Table.update takes an A1 range and boolean headerRow / totalsRow', 
     assertMisuse(() => table.update({ rect: rect(0, 0, 3, 1) }), TypeError, 'rect');
     assertMisuse(() => table.update({ headerRowCount: 1 }), TypeError, 'headerRowCount');
     assertMisuse(() => table.update({ totalsRow: 1 }), TypeError, 'numeric totalsRow');
+    // The style keys and the display name left the table patch: style goes through updateStyleOptions.
+    for (const key of ['styleName', 'showRowStripes', 'displayName']) {
+      assertMisuse(() => table.update({ [key]: true }), TypeError, key);
+    }
   });
 });
 
@@ -592,20 +606,22 @@ test('patch: PivotCache.setWorksheetSource takes null to clear and {} for an att
   });
 });
 
-test('patch: Pivot.addFieldSharedItem takes an options bag like addFieldItem', async () => {
+test('patch: Pivot.addFieldItem binds a cache item by cacheIndex and takes an options bag', async () => {
   await withWorkbook((wb, f) => {
     const { pivot } = addPivotOver(wb, f);
-    pivot.addFieldSharedItem(0, 0);
-    pivot.addFieldSharedItem(0, 1, { visible: false });
+    pivot.addFieldItem(0, { cacheIndex: 0 });
+    pivot.addFieldItem(0, { cacheIndex: 1 }, { visible: false });
     const items = pivot.listFieldItems(0);
     assert.equal(items.length, 2);
     assert.deepEqual([items[0].cacheIndex, items[0].visible], [0, true]);
     assert.deepEqual([items[1].cacheIndex, items[1].visible], [1, false]);
     pivot.addFieldItem(0, 'Extra', { visible: false });
     assert.equal(pivot.listFieldItems(0)[2].visible, false);
-    pivot.addFieldSharedItem(0, 0, {});
+    pivot.addFieldItem(0, { cacheIndex: 0 }, {});
     assert.equal(pivot.listFieldItems(0)[3].visible, true);
-    assertMisuse(() => pivot.addFieldSharedItem(0, 0, { visible: 'no' }), TypeError, 'non-boolean visible');
+    assertMisuse(() => pivot.addFieldItem(0, { cacheIndex: 0 }, { visible: 'no' }), TypeError, 'non-boolean visible');
+    assertMisuse(() => pivot.addFieldItem(0, { cacheIndex: 'x' }), TypeError, 'non-numeric cacheIndex');
+    assert.equal('addFieldSharedItem' in pivot, false);
   });
 });
 
@@ -615,12 +631,12 @@ test('addDataTable takes A1 strings for its rectangle and input cells', async ()
     ws.setNumber(0, 0, 1);
     ws.setNumber(1, 0, 2);
     ws.setNumber(2, 0, 3);
-    ws.addDataTable({ rect: 'B2:B3', colInput: 'A1' });
+    ws.addDataTable({ rect: 'B2:B3', columnInput: 'A1' });
     const table = ws.getDataTable(1, 1);
     assert.notEqual(table, null);
-    assert.equal(table.colInput.row, 0);
-    assert.equal(table.colInput.col, 0);
-    ws.addDataTable({ rect: rect(1, 3, 2, 3), colInput: { row: 0, col: 0 } });
+    assert.equal(table.columnInput.row, 0);
+    assert.equal(table.columnInput.col, 0);
+    ws.addDataTable({ rect: rect(1, 3, 2, 3), columnInput: { row: 0, col: 0 } });
     assert.notEqual(ws.getDataTable(1, 3), null);
   });
 });
@@ -843,7 +859,7 @@ test('Sheet.restoreDrawing puts a snapshot of a shape back after the sheet was s
 test('Slicer.setZOrder reorders the drawing and survives save and load; Slicer has no rename or snapshot', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    addSalesTable(wb, ws);
+    addSalesTable(ws);
     const shape = addBox(f, ws, 'Box');
     const slicer = addSlicerOf(wb, ws);
     const ids = orderOf(ws);
@@ -912,12 +928,13 @@ test('getCellRectPt and getWidthModel default to the Display mode', async () => 
   });
 });
 
-test('Pivot.setAnchor takes a CellRect or an A1 string', async () => {
+test('Pivot.setAnchor takes one cell as a CellAddress or an A1 string', async () => {
   await withWorkbook((wb, f) => {
     const { pivot } = addPivotOver(wb, f);
-    assert.doesNotThrow(() => pivot.setAnchor(rect(3, 6, 3, 6)));
+    assert.doesNotThrow(() => pivot.setAnchor({ row: 3, col: 6 }));
     assert.doesNotThrow(() => pivot.setAnchor('H1'));
     assertMisuse(() => pivot.setAnchor(5), TypeError, 'number');
+    assertMisuse(() => pivot.setAnchor(rect(3, 6, 3, 6)), TypeError, 'rectangle');
   });
 });
 

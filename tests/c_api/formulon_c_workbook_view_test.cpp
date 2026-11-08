@@ -150,8 +150,8 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetRejectsHiddenSheets) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "VeryHidden", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VERY_HIDDEN), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
   EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), kInvalidArgument);
   EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), kInvalidArgument);
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
@@ -174,9 +174,9 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VISIBILITY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), 0);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
     EXPECT_EQ(ActiveSheet(wb.handle), 3U);
     EXPECT_TRUE(tab_selected(wb, 3));
     EXPECT_FALSE(tab_selected(wb, 1));
@@ -184,16 +184,16 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_VERY_HIDDEN), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 3), 0);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 3, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 3, FM_SHEET_VISIBILITY_HIDDEN), 0);
     EXPECT_EQ(ActiveSheet(wb.handle), 2U);
     EXPECT_TRUE(tab_selected(wb, 2));
   }
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VISIBILITY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), 0);
     ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 1), 0);
     // Old S3 (now index 2) became active; hidden old S2 (now index 1) was skipped.
@@ -203,7 +203,7 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_VISIBILITY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 3), 0);
     ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 3), 0);
     EXPECT_EQ(ActiveSheet(wb.handle), 2U);
@@ -344,7 +344,7 @@ TEST(FormulonCApiWorkbookView, PhoneticPropertiesPresenceTracksExplicitTriples) 
   Load(saved, reloaded);
   ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &present), 0);
   EXPECT_EQ(present, 1);
-  uint32_t font_id = 9;
+  size_t font_id = 9;
   uint32_t type = 9;
   uint32_t alignment = 9;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &font_id, &type, &alignment), 0);

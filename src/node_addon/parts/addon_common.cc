@@ -240,6 +240,21 @@ bool CheckedSpecReader::Bool(const Napi::Value& value, const char* key, bool dfl
   return result;
 }
 
+int32_t CheckedSpecReader::Tristate(const Napi::Object& owner, const char* key) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value)) {
+    return FM_TRISTATE_DEFAULT;
+  }
+  return Tristate(value, key);
+}
+
+int32_t CheckedSpecReader::Tristate(const Napi::Value& value, const char* key) {
+  if (value.IsUndefined() || value.IsNull()) {
+    return FM_TRISTATE_DEFAULT;
+  }
+  return Bool(value, key, false) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+}
+
 double CheckedSpecReader::Double(const Napi::Object& owner, const char* key, double dflt, bool* present) {
   double value = dflt;
   if (!ReadNumber(owner, key, &value, present)) {
@@ -571,16 +586,16 @@ Napi::Value ValueToJs(Napi::Env env, const fm_value_t& v) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(v.kind)));
   switch (v.kind) {
-    case FM_VAL_NUMBER:
+    case FM_VALUE_KIND_NUMBER:
       o.Set("number", Napi::Number::New(env, v.u.number));
       break;
-    case FM_VAL_BOOL:
+    case FM_VALUE_KIND_BOOL:
       o.Set("boolean", Napi::Boolean::New(env, v.u.boolean != 0));
       break;
-    case FM_VAL_TEXT:
+    case FM_VALUE_KIND_TEXT:
       o.Set("text", JsString(env, v.u.text));
       break;
-    case FM_VAL_ERROR:
+    case FM_VALUE_KIND_ERROR:
       o.Set("errorCode", Napi::Number::New(env, v.u.error_code));
       break;
     default:
@@ -623,13 +638,13 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
   if (!ValueField(env, object, "kind", &kind)) {
     return false;
   }
-  if (!IsIntegerIn(kind, static_cast<double>(FM_VAL_BLANK), static_cast<double>(FM_VAL_LAMBDA))) {
+  if (!IsIntegerIn(kind, static_cast<double>(FM_VALUE_KIND_BLANK), static_cast<double>(FM_VALUE_KIND_LAMBDA))) {
     return RejectValue(env, "value.kind must be a ValueKind");
   }
   out->kind = static_cast<int32_t>(kind.As<Napi::Number>().DoubleValue());
   Napi::Value field;
   switch (out->kind) {
-    case FM_VAL_NUMBER:
+    case FM_VALUE_KIND_NUMBER:
       if (!ValueField(env, object, "number", &field)) {
         return false;
       }
@@ -638,7 +653,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
       }
       out->u.number = field.As<Napi::Number>().DoubleValue();
       break;
-    case FM_VAL_BOOL:
+    case FM_VALUE_KIND_BOOL:
       if (!ValueField(env, object, "boolean", &field)) {
         return false;
       }
@@ -647,7 +662,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
       }
       out->u.boolean = field.As<Napi::Boolean>().Value() ? 1 : 0;
       break;
-    case FM_VAL_TEXT:
+    case FM_VALUE_KIND_TEXT:
       if (!ValueField(env, object, "text", &field)) {
         return false;
       }
@@ -657,7 +672,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
       *text = field.As<Napi::String>().Utf8Value();
       out->u.text = text->c_str();
       break;
-    case FM_VAL_ERROR:
+    case FM_VALUE_KIND_ERROR:
       if (!ValueField(env, object, "errorCode", &field)) {
         return false;
       }
@@ -689,8 +704,8 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(m.kind)));
   o.Set("priority", Napi::Number::New(env, m.priority));
-  o.Set("dxfIdEngaged", Napi::Number::New(env, m.dxf_id_engaged));
-  o.Set("dxfId", Napi::Number::New(env, m.dxf_id));
+  o.Set("dxfIndexEngaged", Napi::Number::New(env, m.dxf_index_engaged));
+  o.Set("dxfIndex", Napi::Number::New(env, m.dxf_index));
   o.Set("color", ColorSpecToJs(env, m.color));
   o.Set("barLengthPct", Napi::Number::New(env, m.bar_length_pct));
   o.Set("barAxisPositionPct", Napi::Number::New(env, m.bar_axis_position_pct));
@@ -708,7 +723,7 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
 Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("kind", Napi::Number::New(env, static_cast<uint32_t>(spec.kind)));
-  out.Set("rgb", Napi::Number::New(env, spec.rgb));
+  out.Set("argb", Napi::Number::New(env, spec.argb));
   out.Set("theme", Napi::Number::New(env, spec.theme));
   out.Set("tint", Napi::Number::New(env, spec.tint));
   out.Set("indexed", Napi::Number::New(env, spec.indexed));
@@ -716,7 +731,7 @@ Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec) {
 }
 
 Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_spec_t& spec) {
-  return spec.kind != kFmColorNone ? Napi::Value(ColorSpecToJs(env, spec)) : env.Null();
+  return spec.kind != FM_COLOR_KIND_NONE ? Napi::Value(ColorSpecToJs(env, spec)) : env.Null();
 }
 
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r) {
@@ -740,6 +755,10 @@ Napi::Value JsBool(Napi::Env env, int32_t v) {
   return Napi::Boolean::New(env, v != 0);
 }
 
+Napi::Value JsTristate(Napi::Env env, int32_t v) {
+  return Napi::Boolean::New(env, v == FM_TRISTATE_TRUE);
+}
+
 Napi::Value JsStringOrNull(Napi::Env env, const char* s) {
   return s != nullptr && s[0] != '\0' ? Napi::Value(Napi::String::New(env, s)) : env.Null();
 }
@@ -757,7 +776,7 @@ Napi::Value JsBoolOrNull(Napi::Env env, int32_t present, int32_t v) {
 }
 
 Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles) {
-  if (titles.has_rows == 0 && titles.has_cols == 0) {
+  if (titles.has_rows == 0 && titles.has_columns == 0) {
     return env.Null();
   }
   const auto span = [&](int32_t present, uint32_t first, uint32_t last) -> Napi::Value {
@@ -771,7 +790,7 @@ Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles) {
   };
   Napi::Object out = Napi::Object::New(env);
   out.Set("rows", span(titles.has_rows, titles.first_row, titles.last_row));
-  out.Set("columns", span(titles.has_cols, titles.first_col, titles.last_col));
+  out.Set("columns", span(titles.has_columns, titles.first_col, titles.last_col));
   return out;
 }
 
@@ -840,7 +859,7 @@ namespace {
 fm_color_spec_t ColorSpecFields(CheckedSpecReader& reader, const Napi::Object& v) {
   fm_color_spec_t spec{};
   spec.kind = reader.U8(v, "kind", 0U);
-  spec.rgb = reader.U32(v, "rgb", 0U);
+  spec.argb = reader.U32(v, "argb", 0U);
   spec.theme = reader.U32(v, "theme", 0U);
   spec.tint = reader.Double(v, "tint", 0.0);
   spec.indexed = reader.U32(v, "indexed", 0U);

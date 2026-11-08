@@ -81,20 +81,20 @@ function addCache(wb, sourceSheet) {
 
 // A pivot of `cache` on `sheet` anchored at (row, col): Region on rows, Sum of Amount as the data field.
 function addPivot(formulon, sheet, cache, name, anchorRow, anchorCol) {
-  const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchorRow, anchorCol });
+  const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchor: { row: anchorRow, col: anchorCol } });
   pivot.addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Data });
+  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Value });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { pivot, amount };
 }
 
 // A table of two columns at A1:B2 on `sheet`, named `name`.
-function addTable(wb, sheet, name, rect = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }) {
+function addTable(sheet, name, rect = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }) {
   sheet.setText(rect.firstRow, rect.firstCol, 'Product');
   sheet.setText(rect.firstRow, rect.firstCol + 1, 'Amount');
   sheet.setNumber(rect.firstRow + 1, rect.firstCol + 1, 5);
-  return wb.addTable({
-    range: { sheet: sheet.index, rect },
+  return sheet.addTable({
+    range: rect,
     name,
     columns: ['Product', 'Amount'],
   });
@@ -117,12 +117,15 @@ test('identity 1: every way to reach one target returns the same handle', async 
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     fillSource(ws);
-    const table = addTable(wb, wb.addSheet('T'), 'Tbl');
+    const tableSheet = wb.addSheet('T');
+    const table = addTable(tableSheet, 'Tbl');
     assert.equal(wb.table('Tbl'), table);
-    assert.equal(wb.table(0), table);
-    assert.equal(wb.table(table), table);
-    assert.equal(wb.listTables()[0], table);
+    assert.equal(tableSheet.table('Tbl'), table);
+    assert.equal(tableSheet.table(0), table);
+    assert.equal(tableSheet.table(table), table);
+    assert.equal(tableSheet.listTables()[0], table);
     assert.equal(table.workbook, wb);
+    assert.equal(table.sheet, tableSheet);
 
     const cache = addCache(wb, 'Sheet1');
     const { pivot } = addPivot(f, ws, cache, 'P1', 0, 4);
@@ -156,16 +159,16 @@ test('identity 2: removing an earlier table or pivot leaves the handle on its ow
     const ws = wb.sheet(0);
     const data = wb.addSheet('Data');
     fillSource(data);
-    const a = addTable(wb, ws, 'TblA', { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
-    const b = addTable(wb, ws, 'TblB', { firstRow: 5, firstCol: 0, lastRow: 6, lastCol: 1 });
-    const c = addTable(wb, ws, 'TblC', { firstRow: 10, firstCol: 0, lastRow: 11, lastCol: 1 });
+    const a = addTable(ws, 'TblA', { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
+    const b = addTable(ws, 'TblB', { firstRow: 5, firstCol: 0, lastRow: 6, lastCol: 1 });
+    const c = addTable(ws, 'TblC', { firstRow: 10, firstCol: 0, lastRow: 11, lastCol: 1 });
     assert.deepEqual([a.index, b.index, c.index], [0, 1, 2]);
-    wb.removeTable(a);
+    ws.removeTable(a);
     assert.equal(b.index, 0);
     assert.equal(c.index, 1);
     assert.equal(c.name, 'TblC');
     assert.equal(wb.table('TblC'), c);
-    assert.equal(wb.table(0), b);
+    assert.equal(ws.table(0), b);
 
     const cache = addCache(wb, 'Data');
     const out = wb.addSheet('Out');
@@ -185,8 +188,9 @@ test('identity 3: the handle of a removed target throws NotFound', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     fillSource(ws);
-    const table = addTable(wb, wb.addSheet('T'), 'Tbl');
-    wb.removeTable(table);
+    const tableSheet = wb.addSheet('T');
+    const table = addTable(tableSheet, 'Tbl');
+    tableSheet.removeTable(table);
     expectCode(() => table.name, f.StatusCode.NotFound);
     expectCode(() => table.index, f.StatusCode.NotFound);
     expectCode(() => table.getProperties(), f.StatusCode.NotFound);
@@ -298,7 +302,7 @@ test('identity 7: copySheet keeps the existing handles; a sheet with a slicer is
 
     // A slicer on the sheet makes the copy fail; the handles stay as they were.
     const tableSheet = wb.addSheet('Tables');
-    const table = addTable(wb, tableSheet, 'Tbl');
+    const table = addTable(tableSheet, 'Tbl');
     const slicer = tableSheet.addSlicer(table, 0, { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 });
     const sheetCount = wb.listSheets().length;
     expectCode(() => wb.copySheet(tableSheet, 0, 'TablesCopy'), f.StatusCode.NotImplemented);
@@ -320,13 +324,15 @@ test('identity 8: a rename leaves the handle in place', async () => {
     assert.equal(ws.pivot('Q'), pivot);
     expectCode(() => ws.pivot('P1'), f.StatusCode.NotFound);
 
-    const tables = addTable(wb, wb.addSheet('T'), 'Tbl');
-    tables.update({ displayName: 'Renamed' });
-    assert.equal(tables.displayName, 'Renamed');
+    const tableSheet = wb.addSheet('T');
+    const tables = addTable(tableSheet, 'Tbl');
+    tables.rename('Renamed');
+    assert.equal(tables.name, 'Renamed');
     assert.equal(wb.table('Renamed'), tables);
-    tables.update({ name: 'NewName' });
+    tables.rename('NewName');
     assert.equal(tables.name, 'NewName');
-    assert.equal(wb.table(0), tables);
+    assert.equal(tableSheet.table(0), tables);
+    assert.equal('displayName' in tables, false);
 
     const chart = addChart(f, ws);
     chart.rename('Revenue');
@@ -392,17 +398,19 @@ test('identity 11: a handle of another workbook is InvalidArgument', async () =>
       const os = other.sheet(0);
       fillSource(ws);
       fillSource(os);
-      const foreignTable = addTable(other, other.addSheet('T'), 'Tbl');
+      const foreignSheet = other.addSheet('T');
+      const foreignTable = addTable(foreignSheet, 'Tbl');
       const foreignCache = addCache(other, 'Sheet1');
       const { pivot: foreignPivot } = addPivot(f, os, foreignCache, 'P1', 0, 4);
       const foreignChart = addChart(f, os);
-      const localTable = addTable(wb, wb.addSheet('T'), 'Tbl');
+      const localSheet = wb.addSheet('T');
+      const localTable = addTable(localSheet, 'Tbl');
       const localCache = addCache(wb, 'Sheet1');
       addPivot(f, ws, localCache, 'P1', 0, 4);
       addChart(f, ws);
 
-      expectCode(() => wb.table(foreignTable), f.StatusCode.InvalidArgument);
-      expectCode(() => wb.removeTable(foreignTable), f.StatusCode.InvalidArgument);
+      expectCode(() => localSheet.table(foreignTable), f.StatusCode.InvalidArgument);
+      expectCode(() => localSheet.removeTable(foreignTable), f.StatusCode.InvalidArgument);
       expectCode(() => ws.pivot(foreignPivot), f.StatusCode.InvalidArgument);
       expectCode(() => ws.removePivot(foreignPivot), f.StatusCode.InvalidArgument);
       expectCode(() => wb.pivotCache(foreignCache), f.StatusCode.InvalidArgument);
@@ -414,7 +422,7 @@ test('identity 11: a handle of another workbook is InvalidArgument', async () =>
       const second = wb.addSheet('Second');
       expectCode(() => second.drawing(ws.listCharts()[0]), f.StatusCode.InvalidArgument);
       // The local handles are unaffected.
-      assert.equal(wb.table(0), localTable);
+      assert.equal(localSheet.table(0), localTable);
     } finally {
       other.dispose();
     }
@@ -427,10 +435,10 @@ test('identity 12: a failed pivot edit and table churn leave the handles on thei
     const data = wb.addSheet('Data');
     fillSource(data);
     const cache = addCache(wb, 'Data');
-    // Each report is six rows tall: moving the first onto the second cannot be placed.
+    // Moving the first report onto the second's anchor cell cannot be placed.
     const { pivot: first } = addPivot(f, ws, cache, 'P1', 0, 0);
     const { pivot: second } = addPivot(f, ws, cache, 'P2', 7, 0);
-    expectCode(() => first.setAnchor('A3:A3'), f.StatusCode.PreconditionFailed, 'moving P1 onto P2');
+    expectCode(() => first.setAnchor('A8'), f.StatusCode.PreconditionFailed, 'moving P1 onto P2');
     assert.equal(first.name, 'P1');
     assert.equal(ws.pivot('P1'), first);
     assert.equal(ws.listPivots()[0], first);
@@ -440,9 +448,10 @@ test('identity 12: a failed pivot edit and table churn leave the handles on thei
 
     // Tables survive growth of the list, row deletion and sheet removal elsewhere, and removal of an earlier one.
     const home = wb.addSheet('Home');
-    const target = addTable(wb, home, 'Target', { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
-    const early = addTable(wb, wb.addSheet('Early'), 'Early');
-    for (let i = 0; i < 12; i++) addTable(wb, wb.addSheet(`S${i}`), `Extra${i}`);
+    const target = addTable(home, 'Target', { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
+    const earlySheet = wb.addSheet('Early');
+    const early = addTable(earlySheet, 'Early');
+    for (let i = 0; i < 12; i++) addTable(wb.addSheet(`S${i}`), `Extra${i}`);
     assert.equal(wb.table('Target'), target);
     assert.equal(target.name, 'Target');
     const elsewhere = wb.addSheet('Elsewhere');
@@ -451,14 +460,14 @@ test('identity 12: a failed pivot edit and table churn leave the handles on thei
     assert.equal(target.name, 'Target');
     wb.removeSheet(elsewhere);
     assert.equal(target.name, 'Target');
-    wb.removeTable(early);
+    earlySheet.removeTable(early);
     assert.equal(target.name, 'Target');
     assert.equal(target.getProperties().range.rect.lastCol, 1);
     assert.equal(
-      wb.listTables().find((t) => t.name === 'Target'),
+      home.listTables().find((t) => t.name === 'Target'),
       target,
     );
-    assert.equal(wb.listTables()[target.index], target);
+    assert.equal(home.listTables()[target.index], target);
   });
 });
 
@@ -468,44 +477,50 @@ test('handle refs: indices, names, ids and their rejected spellings', async () =
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     fillSource(ws);
-    const table = addTable(wb, wb.addSheet('T'), 'Tbl');
+    const tableSheet = wb.addSheet('T');
+    const table = addTable(tableSheet, 'Tbl');
     const cache = addCache(wb, 'Sheet1');
     const { pivot } = addPivot(f, ws, cache, 'P1', 0, 4);
     const NotFound = f.StatusCode.NotFound;
     const OutOfRange = f.StatusCode.IndexOutOfRange;
 
     // 0 is the first element; the last index is valid and the count is not.
-    assert.equal(wb.table(0), table);
-    assert.equal(wb.table(-0), table);
+    assert.equal(tableSheet.table(0), table);
+    assert.equal(tableSheet.table(-0), table);
     assert.equal(ws.pivot(0), pivot);
     assert.equal(ws.pivot(-0), pivot);
-    expectCode(() => wb.table(1), OutOfRange);
+    expectCode(() => tableSheet.table(1), OutOfRange);
     expectCode(() => ws.pivot(1), OutOfRange);
     // 2^31 is out of range, 2^32 is outside the integer type.
-    expectCode(() => wb.table(2 ** 31), OutOfRange);
+    expectCode(() => tableSheet.table(2 ** 31), OutOfRange);
     expectCode(() => ws.pivot(2 ** 31), OutOfRange);
-    assert.throws(() => wb.table(2 ** 32), RangeError);
+    assert.throws(() => tableSheet.table(2 ** 32), RangeError);
     assert.throws(() => ws.drawing(2 ** 32), RangeError);
     // Non-integers and negatives are range errors, like every other index.
     for (const bad of [NaN, Infinity, -Infinity, -1, 1.5]) {
-      assert.throws(() => wb.table(bad), RangeError, `table ${bad}`);
+      assert.throws(() => tableSheet.table(bad), RangeError, `table ${bad}`);
       assert.throws(() => ws.pivot(bad), RangeError, `pivot ${bad}`);
       assert.throws(() => wb.pivotCache(bad), RangeError, `pivotCache ${bad}`);
       assert.throws(() => ws.drawing(bad), RangeError, `drawing ${bad}`);
     }
     // null, undefined and values of another type are type errors.
     for (const bad of [null, undefined, true, {}, []]) {
-      assert.throws(() => wb.table(bad), TypeError, `table ${bad}`);
+      assert.throws(() => tableSheet.table(bad), TypeError, `table ${bad}`);
       assert.throws(() => ws.pivot(bad), TypeError, `pivot ${bad}`);
       assert.throws(() => wb.pivotCache(bad), TypeError, `pivotCache ${bad}`);
       assert.throws(() => ws.drawing(bad), TypeError, `drawing ${bad}`);
     }
-    assert.throws(() => wb.table(), TypeError);
+    assert.throws(() => tableSheet.table(), TypeError);
+    // The workbook-wide lookup takes a name only.
+    assert.throws(() => wb.table(0), TypeError);
+    assert.throws(() => wb.table(table), TypeError);
     assert.throws(() => ws.chart('x'), TypeError);
     // An empty name matches nothing; a name matches case-insensitively.
     expectCode(() => wb.table(''), NotFound);
+    expectCode(() => tableSheet.table(''), NotFound);
     expectCode(() => ws.pivot(''), NotFound);
     assert.equal(wb.table('tbl'), table);
+    assert.equal(tableSheet.table('tbl'), table);
     assert.equal(ws.pivot('p1'), pivot);
     // An id nobody holds is NotFound.
     expectCode(() => wb.pivotCache(cache.cacheId + 100), NotFound);
@@ -522,10 +537,10 @@ test('print: fitToPage false removes the attribute; the getters report the state
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     assert.equal(ws.getPageSetup().fitToPageStated, false);
-    ws.setPageSetup({ fitToPage: true });
+    ws.updatePageSetup({ fitToPage: true });
     assert.equal(ws.getPageSetup().fitToPage, true);
     assert.equal(ws.getPageSetup().fitToPageStated, true);
-    ws.setPageSetup({ fitToPage: false });
+    ws.updatePageSetup({ fitToPage: false });
     assert.equal(ws.getPageSetup().fitToPage, false);
     assert.equal(ws.getPageSetup().fitToPageStated, false);
 
@@ -541,7 +556,7 @@ test('print: fitToPage false removes the attribute; the getters report the state
       horizontalCenteredStated: false,
       verticalCenteredStated: false,
     });
-    ws.setPrintOptions({ gridLines: true, horizontalCentered: true });
+    ws.updatePrintOptions({ gridLines: true, horizontalCentered: true });
     const set = ws.getPrintOptions();
     assert.equal(set.gridLines, true);
     assert.equal(set.gridLinesStated, true);
@@ -553,14 +568,14 @@ test('print: fitToPage false removes the attribute; the getters report the state
     assert.equal(empty.oddHeader, null);
     assert.equal(empty.differentFirst, false);
     assert.equal(empty.differentFirstStated, false);
-    ws.setHeaderFooter({ oddHeader: '&CReport', oddFooter: '&P/&N', differentFirst: true });
+    ws.updateHeaderFooter({ oddHeader: '&CReport', oddFooter: '&P/&N', differentFirst: true });
     const hf = ws.getHeaderFooter();
     assert.equal(hf.oddHeader, '&CReport');
     assert.equal(hf.oddFooter, '&P/&N');
     assert.equal(hf.evenHeader, null);
     assert.equal(hf.differentFirst, true);
     assert.equal(hf.differentFirstStated, true);
-    ws.setHeaderFooter({ oddHeader: null });
+    ws.updateHeaderFooter({ oddHeader: null });
     assert.equal(ws.getHeaderFooter().oddHeader, null);
     assert.equal(ws.getHeaderFooter().oddFooter, '&P/&N');
   });
@@ -582,7 +597,7 @@ test('pivot numberFormat is a format code and the builtin id 27 survives a round
     assert.equal(pivot.listFields()[amount].numberFormat, null);
 
     // The profile's code for id 27 maps back to id 27, and its read-back writes id 27 again.
-    const code27 = wb.ooxml.getNumFmtString(27);
+    const code27 = wb.ooxml.getNumberFormat(27);
     assert.ok(code27, 'the profile has a code for numFmtId 27');
     pivot.updateField(amount, { numberFormat: code27 });
     assert.match(pivotPart(wb), /<pivotField [^>]*numFmtId="27"/);

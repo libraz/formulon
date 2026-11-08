@@ -681,7 +681,7 @@ extern "C" fm_status_t fm_workbook_get_passthrough_at(const fm_workbook_t* wb, s
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_passthrough(const fm_workbook_t* wb, const char* path, int32_t* out_present) {
+extern "C" fm_status_t fm_workbook_has_passthrough(const fm_workbook_t* wb, const char* path, int32_t* out_present) {
   clear_last_error();
   if (wb == nullptr || path == nullptr || out_present == nullptr) {
     return null_argument();

@@ -11,15 +11,17 @@ from formulon import (
     CellRect,
     FormulonError,
     NotFoundError,
-    SheetRect,
     Slicer,
     SlicerCrossFilter,
+    SlicerInput,
     SlicerProperties,
     SlicerSortOrder,
+    TableInput,
     Workbook,
 )
 
 ANCHOR = {"from_row": 4, "from_col": 3, "to_row": 14, "to_col": 5}
+SALES = "Sales"
 
 
 def _parts(data: bytes) -> dict:
@@ -32,9 +34,7 @@ def _sales() -> Workbook:
     wb.sheet(0).set_text(0, 0, "Product")
     wb.sheet(0).set_text(0, 1, "Amount")
     wb.sheet(0).set_number(1, 1, 10.0)
-    wb.add_table(
-        range=SheetRect(0, CellRect(0, 0, 1, 1)), name="Sales", display_name="Sales", columns=["Product", "Amount"]
-    )
+    wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 1, 1), name=SALES, columns=["Product", "Amount"]))
     return wb
 
 
@@ -43,14 +43,16 @@ class SlicerTests(unittest.TestCase):
         with _sales() as wb:
             self.assertEqual(wb.sheet(0).list_slicers(), [])
             slicer = wb.sheet(0).add_slicer(
+                SALES,
                 0,
-                0,
-                **ANCHOR,
-                caption="Pick a product",
-                style="SlicerStyleLight3",
-                column_count=2,
-                sort_order=SlicerSortOrder.DESCENDING,
-                cross_filter=SlicerCrossFilter.NONE,
+                SlicerInput(
+                    **ANCHOR,
+                    caption="Pick a product",
+                    style="SlicerStyleLight3",
+                    column_count=2,
+                    sort_order=SlicerSortOrder.DESCENDING,
+                    cross_filter=SlicerCrossFilter.NONE,
+                ),
             )
             self.assertIsInstance(slicer, Slicer)
             object_id = slicer.object_id
@@ -98,10 +100,10 @@ class SlicerTests(unittest.TestCase):
 
     def test_removing_a_table_removes_its_slicers(self) -> None:
         with _sales() as wb:
-            wb.sheet(0).add_slicer(0, 0, **ANCHOR)
-            wb.sheet(0).add_slicer(0, 1, **ANCHOR)
+            wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR))
+            wb.sheet(0).add_slicer(SALES, 1, SlicerInput(**ANCHOR))
             self.assertEqual(len(wb.sheet(0).list_slicers()), 2)
-            wb.remove_table(0)
+            wb.sheet(0).remove_table(0)
             self.assertEqual(wb.sheet(0).list_slicers(), [])
             parts = _parts(wb.save())
             for name in ("xl/slicers/slicer1.xml", "xl/slicerCaches/slicerCache1.xml"):
@@ -112,17 +114,17 @@ class SlicerTests(unittest.TestCase):
     def test_arguments_are_validated(self) -> None:
         with _sales() as wb:
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_slicer(1, 0, **ANCHOR)
+                wb.sheet(0).add_slicer("Missing", 0, SlicerInput(**ANCHOR))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_slicer(0, 2, **ANCHOR)
+                wb.sheet(0).add_slicer(SALES, 2, SlicerInput(**ANCHOR))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_slicer(0, 0, from_row=4, from_col=3, to_row=1, to_col=5)
+                wb.sheet(0).add_slicer(SALES, 0, SlicerInput(from_row=4, from_col=3, to_row=1, to_col=5))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_slicer(0, 0, **ANCHOR, column_count=0)
+                wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR, column_count=0))
             with self.assertRaises(TypeError):
-                wb.sheet(0).add_slicer(0, 0, from_row=1, from_col=2, to_row=3)  # type: ignore[call-arg]
+                SlicerInput(from_row=1, from_col=2, to_row=3)  # type: ignore[call-arg]
             self.assertEqual(wb.sheet(0).list_slicers(), [])
-            object_id = wb.sheet(0).add_slicer(0, 0, **ANCHOR).object_id
+            object_id = wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR)).object_id
             with self.assertRaises(FormulonError):
                 wb.sheet(0).slicer(object_id + 1).update(caption="x")
             with self.assertRaises(FormulonError):

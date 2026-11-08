@@ -28,18 +28,6 @@ double JsWorkbook::sheetCount() const {
   return static_cast<double>(count);
 }
 
-double JsWorkbook::tableCount() const {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return 0.0;
-  }
-  std::size_t count = 0;
-  if (!succeeded(fm_workbook_get_table_count(handle_, &count))) {
-    return 0.0;
-  }
-  return static_cast<double>(count);
-}
-
 }  // namespace parts
 }  // namespace wasm
 }  // namespace formulon

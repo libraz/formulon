@@ -22,7 +22,7 @@ TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
   EXPECT_EQ(md.min_arity, 1U);
   // SUM is variadic.
   EXPECT_EQ(md.max_arity, 0xFFFFFFFFU);
-  EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
+  EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_IMPLEMENTED);
   // Display text is host-supplied; the engine always reports NULL.
   EXPECT_EQ(md.signature_template, nullptr);
   EXPECT_EQ(md.description, nullptr);
@@ -50,23 +50,23 @@ TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesUnavailableStubs) {
   fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("WEBSERVICE", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "WEBSERVICE");
-  EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
+  EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_UNAVAILABLE_STUB);
 
   ASSERT_EQ(fm_get_function_metadata("CUBEVALUE", &present, &md), 0);
-  EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
+  EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_UNAVAILABLE_STUB);
 }
 
 TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesNonStubSpecialCases) {
   int32_t present = 0;
   fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
   ASSERT_EQ(fm_get_function_metadata("FILTERXML", &present, &md), 0);
-  EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
+  EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_IMPLEMENTED);
 
   ASSERT_EQ(fm_get_function_metadata("INFO", &present, &md), 0);
-  EXPECT_EQ(md.availability, FM_FUNCTION_ENVIRONMENT_BOUND);
+  EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_ENVIRONMENT_BOUND);
 
   ASSERT_EQ(fm_get_function_metadata("SUM", &present, &md), 0);
-  EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
+  EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_IMPLEMENTED);
 }
 
 TEST(FormulonCApiFunctionMetadata, NullArgsReturnBindingNullPointer) {
@@ -212,7 +212,7 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
     EXPECT_STREQ(md.canonical_name, fn.name);
     EXPECT_EQ(md.min_arity, fn.min_arity) << fn.name;
     EXPECT_EQ(md.max_arity, fn.max_arity) << fn.name;
-    EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
+    EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_IMPLEMENTED);
   }
 }
 

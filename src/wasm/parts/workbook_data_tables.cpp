@@ -51,7 +51,7 @@ void JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
   if (js_value_present(spec)) {
     table.rect = js_pull_range(reader.value(spec, "rect", "rect"), &reader);
     pull_input(reader, spec, "rowInput", &table.has_row_input, &table.row_input_row, &table.row_input_col);
-    pull_input(reader, spec, "colInput", &table.has_col_input, &table.col_input_row, &table.col_input_col);
+    pull_input(reader, spec, "columnInput", &table.has_column_input, &table.column_input_row, &table.column_input_col);
   }
   if (!reader.ok()) {
     return;
@@ -72,7 +72,8 @@ emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t 
   table.set("twoDimensional", t.two_dimensional != 0);
   table.set("rowOriented", t.row_oriented != 0);
   table.set("rowInput", input_to_val(t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));
-  table.set("colInput", input_to_val(t.has_col_input, t.col_input_row, t.col_input_col, t.col_input_deleted));
+  table.set("columnInput",
+            input_to_val(t.has_column_input, t.column_input_row, t.column_input_col, t.column_input_deleted));
   return optional_or_null(rc, present, table);
 }
 

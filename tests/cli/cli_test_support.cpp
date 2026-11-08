@@ -357,7 +357,7 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
   settings.enabled = 1;
   settings.max_iterations = max_iterations;
   settings.max_change = max_change;
-  if (iterative && fm_workbook_set_iterative(wb, &settings) != 0) {
+  if (iterative && fm_workbook_update_iterative(wb, &settings) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -462,7 +462,7 @@ bool write_lossy_xlsx_fixture(const std::string& path) {
   }
   fm_hyperlink_t hyperlink = FM_STRUCT_INIT(fm_hyperlink_t);
   hyperlink.target = "https://example.com";
-  if (fm_sheet_add_hyperlink(wb, 0, &hyperlink) != 0) {
+  if (fm_sheet_set_hyperlink(wb, 0, 0, 0, &hyperlink) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }

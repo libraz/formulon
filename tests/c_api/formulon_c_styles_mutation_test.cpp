@@ -40,7 +40,7 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   fm_font_record_t reloaded_font{};
   ASSERT_EQ(fm_workbook_get_font(wb2.handle, reloaded.font_index, &reloaded_font), 0);
   EXPECT_STREQ(reloaded_font.name, "Arial");
-  EXPECT_DOUBLE_EQ(reloaded_font.size, 12.0);
+  EXPECT_DOUBLE_EQ(reloaded_font.size_pt, 12.0);
   EXPECT_EQ(reloaded_font.bold, 1);
 }
 
@@ -54,7 +54,7 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   uint32_t num_fmt_id = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
-  ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "0.00%", &num_fmt_id), 0);
+  ASSERT_EQ(fm_workbook_add_number_format(wb.handle, "0.00%", &num_fmt_id), 0);
 
   fm_cell_xf_t xf{};
   xf.font_index = static_cast<uint32_t>(font_index);
@@ -94,16 +94,16 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   fm_font_record_t reloaded_font{};
   ASSERT_EQ(fm_workbook_get_font(wb2.handle, reloaded.font_index, &reloaded_font), 0);
   EXPECT_STREQ(reloaded_font.name, "Arial");
-  EXPECT_DOUBLE_EQ(reloaded_font.size, 12.0);
+  EXPECT_DOUBLE_EQ(reloaded_font.size_pt, 12.0);
   EXPECT_EQ(reloaded_font.bold, 1);
 
   fm_fill_record_t reloaded_fill{};
   ASSERT_EQ(fm_workbook_get_fill(wb2.handle, reloaded.fill_index, &reloaded_fill), 0);
   EXPECT_EQ(reloaded_fill.pattern, 1U);
-  EXPECT_EQ(reloaded_fill.fg.rgb, 0xFFFF0000U);
+  EXPECT_EQ(reloaded_fill.foreground.argb, 0xFFFF0000U);
 
   const char* reloaded_fmt = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb2.handle, reloaded.num_fmt_id, &present, &reloaded_fmt), 0);
+  ASSERT_EQ(fm_workbook_get_number_format(wb2.handle, reloaded.num_fmt_id, &present, &reloaded_fmt), 0);
   ASSERT_NE(reloaded_fmt, nullptr);
   EXPECT_STREQ(reloaded_fmt, "0.00%");
 }
@@ -114,9 +114,9 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
 
   fm_cell_xf_t xf{};
   xf.has_alignment = 1;
-  xf.horizontal_align = 7;  // distributed
-  xf.has_horizontal_align = 1;
-  xf.vertical_align = 2;  // bottom
+  xf.horizontal = 7;  // distributed
+  xf.has_horizontal = 1;
+  xf.vertical = 2;  // bottom
   xf.justify_last_line = 1;
   xf.has_justify_last_line = 1;
   std::size_t xf_index = 0;
@@ -138,7 +138,7 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, 0, 0, &reread_index), 0);
   fm_cell_xf_t reread{};
   ASSERT_EQ(fm_workbook_get_cell_xf(reloaded.handle, reread_index, &reread), 0);
-  EXPECT_EQ(reread.horizontal_align, 7U);
+  EXPECT_EQ(reread.horizontal, 7U);
   EXPECT_EQ(reread.justify_last_line, 1);
 }
 
@@ -147,21 +147,21 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_xf_t style_xf{};
   style_xf.has_alignment = 1;
-  style_xf.horizontal_align = 2;
-  style_xf.has_horizontal_align = 1;
+  style_xf.horizontal = 2;
+  style_xf.has_horizontal = 1;
   std::size_t xf_id = 0;
   ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
   fm_cell_style_record_t highlight{};
   highlight.name = "Highlight";
-  highlight.xf_id = static_cast<uint32_t>(xf_id);
+  highlight.style_xf_index = static_cast<uint32_t>(xf_id);
   highlight.builtin_id = FM_CELL_STYLE_BUILTIN_ID_NONE;
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &highlight), 0);
 
   fm_cell_xf_t cell_xf{};
   cell_xf.has_alignment = 1;
-  cell_xf.horizontal_align = 2;
-  cell_xf.has_horizontal_align = 1;
-  cell_xf.xf_id = static_cast<uint32_t>(xf_id);
+  cell_xf.horizontal = 2;
+  cell_xf.has_horizontal = 1;
+  cell_xf.style_xf_index = static_cast<uint32_t>(xf_id);
   std::size_t cell_xf_id = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &cell_xf_id), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "styled"), 0);
@@ -182,7 +182,7 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_sheet_get_cell_xf_index(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);
   fm_cell_xf_t reread{};
   ASSERT_EQ(fm_workbook_get_cell_xf(loaded.handle, reread_cell_xf, &reread), 0);
-  EXPECT_EQ(reread.xf_id, style.xf_id);
+  EXPECT_EQ(reread.style_xf_index, style.style_xf_index);
 }
 
 TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
@@ -191,7 +191,7 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
 
   // A cell xf may only inherit from a named-style xf that already exists.
   fm_cell_xf_t cell_xf{};
-  cell_xf.xf_id = 3;
+  cell_xf.style_xf_index = 3;
   std::size_t cell_xf_index = 0;
   EXPECT_NE(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &cell_xf_index), 0);
 
@@ -214,12 +214,12 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
   // 0..53 is the whole OOXML ordinal space; anything else needs the sentinel.
   fm_cell_style_record_t custom{};
   custom.name = "Custom";
-  custom.xf_id = static_cast<uint32_t>(xf_id);
+  custom.style_xf_index = static_cast<uint32_t>(xf_id);
   custom.builtin_id = 54;
   EXPECT_NE(fm_workbook_set_cell_style(wb.handle, &custom), 0);
   custom.builtin_id = FM_CELL_STYLE_BUILTIN_ID_NONE;
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &custom), 0);
-  custom.xf_id = static_cast<uint32_t>(xf_id) + 1U;
+  custom.style_xf_index = static_cast<uint32_t>(xf_id) + 1U;
   EXPECT_NE(fm_workbook_set_cell_style(wb.handle, &custom), 0);
 }
 

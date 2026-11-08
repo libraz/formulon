@@ -194,25 +194,25 @@ void ExpectRowMatches(const fm_workbook_t* wb, const ProbeRow& r, fm_status_t st
   SCOPED_TRACE(std::string("row ") + std::to_string(r.row) + " " + r.formula);
   const std::uint32_t row0 = r.row - 1U;
   const fm_value_t f = ValueAt(wb, row0, kColF);
-  ASSERT_EQ(f.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(f.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(f.u.number, static_cast<double>(r.error_type));
   if (r.stored == nullptr) {
     EXPECT_NE(status, 0);
     EXPECT_EQ(FormulaAt(wb, row0, kColE), "");
-    EXPECT_EQ(ValueAt(wb, row0, kColE).kind, FM_VAL_BLANK);
+    EXPECT_EQ(ValueAt(wb, row0, kColE).kind, FM_VALUE_KIND_BLANK);
     return;
   }
   ASSERT_EQ(status, 0) << fm_get_last_error_message();
   EXPECT_EQ(FormulaAt(wb, row0, kColE), r.stored);
   const fm_value_t g = ValueAt(wb, row0, kColG);
-  ASSERT_EQ(g.kind, FM_VAL_TEXT);
+  ASSERT_EQ(g.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(g.u.text, r.stored);
   const fm_value_t e = ValueAt(wb, row0, kColE);
   if (r.error_type == -1) {
-    ASSERT_EQ(e.kind, FM_VAL_NUMBER);
+    ASSERT_EQ(e.kind, FM_VALUE_KIND_NUMBER);
     EXPECT_EQ(e.u.number, r.value);
   } else {
-    EXPECT_EQ(e.kind, FM_VAL_ERROR);
+    EXPECT_EQ(e.kind, FM_VALUE_KIND_ERROR);
   }
 }
 
@@ -242,10 +242,10 @@ void ExpectOut7Row(std::uint32_t row, const char* shown) {
   ASSERT_EQ(status[i], 0) << fm_get_last_error_message();
   EXPECT_EQ(FormulaAt(wb.handle, row - 1U, kColE), shown);
   const fm_value_t g = ValueAt(wb.handle, row - 1U, kColG);
-  ASSERT_EQ(g.kind, FM_VAL_TEXT);
+  ASSERT_EQ(g.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(g.u.text, shown);
   const fm_value_t f = ValueAt(wb.handle, row - 1U, kColF);
-  ASSERT_EQ(f.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(f.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(f.u.number, 5.0);  // #NAME?
 }
 
@@ -288,7 +288,7 @@ TEST(FormulonCApiEntryR1C1, BracketedEndpointNamingATableStaysStructured) {
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "X"), 0);
   const fm_cell_rect_t rect{0, 0, 2, 1};
   const char* const columns[] = {"Qty", "X"};
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, &rect, "Tbl", "Tbl", columns, 2, nullptr, 1, 0, ignored_index()), 0)
+  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &rect, "Tbl", columns, 2, nullptr, 1, 0, ignored_index()), 0)
       << fm_get_last_error_message();
   std::vector<formulon::TableMetadata> tables = wb.handle->workbook().tables();
   tables[0].name = "RC";

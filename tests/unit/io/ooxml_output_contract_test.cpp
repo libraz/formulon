@@ -339,11 +339,11 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
   // Engage two of the six. ECMA-376 makes all six required, so the other
   // four have to be filled from the schema defaults rather than omitted.
   fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
-  margins.left_engaged = 1;
-  margins.left = 1.25;
-  margins.footer_engaged = 1;
-  margins.footer = 0.5;
-  ASSERT_EQ(fm_sheet_set_page_margins(wb.handle, 0, &margins), 0);
+  margins.left_in_engaged = 1;
+  margins.left_in = 1.25;
+  margins.footer_in_engaged = 1;
+  margins.footer_in = 0.5;
+  ASSERT_EQ(fm_sheet_update_page_margins(wb.handle, 0, &margins), 0);
 
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
@@ -370,10 +370,10 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
   // caller could no longer tell a stated margin from a defaulted one.
   fm_page_margins_t read = FM_STRUCT_INIT(fm_page_margins_t);
   ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, 0, &read), 0);
-  EXPECT_EQ(read.left_engaged, 1);
-  EXPECT_EQ(read.footer_engaged, 1);
-  EXPECT_EQ(read.right_engaged, 0);
-  EXPECT_EQ(read.top_engaged, 0);
+  EXPECT_EQ(read.left_in_engaged, 1);
+  EXPECT_EQ(read.footer_in_engaged, 1);
+  EXPECT_EQ(read.right_in_engaged, 0);
+  EXPECT_EQ(read.top_in_engaged, 0);
 }
 
 TEST(OoxmlPageMargins, IncompleteSourceElementIsCompletedOnSave) {

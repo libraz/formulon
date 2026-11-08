@@ -50,7 +50,7 @@ const squaresWorkbook = (mod) => {
   return wb;
 };
 
-const squares = { rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 }, colInput: { row: 0, col: 1 } };
+const squares = { rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 }, columnInput: { row: 0, col: 1 } };
 
 test('a one-variable data table computes, reads back and refuses writes', async () => {
   const mod = await load();
@@ -67,7 +67,7 @@ test('a one-variable data table computes, reads back and refuses writes', async 
     twoDimensional: false,
     rowOriented: false,
     rowInput: null,
-    colInput: { row: 0, col: 1, deleted: false },
+    columnInput: { row: 0, col: 1, deleted: false },
   });
   assert.equal(wb.sheet(0).getDataTable(1, 1), null);
 
@@ -95,14 +95,14 @@ test('a two-variable data table fills a multiplication table', async () => {
   wb.sheet(0).addDataTable({
     rect: { firstRow: 3, firstCol: 3, lastRow: 5, lastCol: 5 },
     rowInput: { row: 0, col: 5 },
-    colInput: { row: 1, col: 5 },
+    columnInput: { row: 1, col: 5 },
   });
   wb.recalc();
   assert.deepEqual([num(wb, 3, 3), num(wb, 4, 4), num(wb, 5, 5)], [10, 40, 90]);
   const table = wb.sheet(0).getDataTable(4, 4);
   assert.equal(table.twoDimensional, true);
   assert.deepEqual(table.rowInput, { row: 0, col: 5, deleted: false });
-  assert.deepEqual(table.colInput, { row: 1, col: 5, deleted: false });
+  assert.deepEqual(table.columnInput, { row: 1, col: 5, deleted: false });
   // The inputs keep their values.
   assert.equal(num(wb, 0, 5), 1);
   assert.equal(num(wb, 1, 5), 1);
@@ -120,15 +120,15 @@ test('a data table survives save and load as a dataTable formula and follows row
   assert.equal((sheet.match(/t="dataTable"/g) ?? []).length, 1);
 
   const loaded = mod.Workbook.load(saved);
-  assert.deepEqual(loaded.sheet(0).getDataTable(4, 1).colInput, { row: 0, col: 1, deleted: false });
+  assert.deepEqual(loaded.sheet(0).getDataTable(4, 1).columnInput, { row: 0, col: 1, deleted: false });
   assert.throws(() => loaded.sheet(0).setNumber(4, 1, 1), isFormulonError);
   loaded.sheet(0).insertRows(0, 2);
   const moved = loaded.sheet(0).getDataTable(6, 1);
   assert.deepEqual([moved.rect.firstRow, moved.rect.lastRow], [4, 6]);
-  assert.deepEqual(moved.colInput, { row: 2, col: 1, deleted: false });
+  assert.deepEqual(moved.columnInput, { row: 2, col: 1, deleted: false });
   // Deleting the input's row marks it deleted and the table turns into errors.
   loaded.sheet(0).deleteRows(2, 1);
-  assert.equal(loaded.sheet(0).getDataTable(5, 1).colInput.deleted, true);
+  assert.equal(loaded.sheet(0).getDataTable(5, 1).columnInput.deleted, true);
   loaded.recalc();
   assert.equal(loaded.sheet(0).getTypedValue(3, 1).kind, KIND.Error);
   release(loaded);
@@ -162,11 +162,11 @@ test('data table arguments are validated', async () => {
     () => wb.sheet(0).addDataTable({ ...squares, rect: { ...squares.rect, firstRow: 0 } }),
     isFormulonError,
   );
-  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, colInput: { row: 3, col: 1 } }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: 3, col: 1 } }), isFormulonError);
   assert.throws(() => wb.sheet(5).addDataTable(squares), isFormulonError);
   assert.throws(() => wb.sheet(5).getDataTable(0, 0), isFormulonError);
   assert.throws(() => wb.sheet(5).removeDataTable(0, 0), isFormulonError);
-  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, colInput: { row: -1, col: 1 } }), RangeError);
+  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: -1, col: 1 } }), RangeError);
   wb.sheet(0).addDataTable(squares);
   assert.throws(() => wb.sheet(0).addDataTable(squares), isFormulonError);
   release(wb);

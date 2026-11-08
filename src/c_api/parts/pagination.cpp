@@ -14,6 +14,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "print/page_setup.h"
 #include "utils/error.h"
 
 using formulon::c_api::parts::check_index;
@@ -184,12 +185,12 @@ extern "C" fm_status_t fm_pagination_get_margins(const fm_pagination_t* paginati
     return rc;
   }
   const formulon::print::MarginsPt& margins = pagination->result.margins;
-  out->left = margins.left;
-  out->right = margins.right;
-  out->top = margins.top;
-  out->bottom = margins.bottom;
-  out->header = margins.header;
-  out->footer = margins.footer;
+  out->left_in = margins.left / formulon::print::kPointsPerInch;
+  out->right_in = margins.right / formulon::print::kPointsPerInch;
+  out->top_in = margins.top / formulon::print::kPointsPerInch;
+  out->bottom_in = margins.bottom / formulon::print::kPointsPerInch;
+  out->header_in = margins.header / formulon::print::kPointsPerInch;
+  out->footer_in = margins.footer / formulon::print::kPointsPerInch;
   return 0;
 }
 
@@ -204,17 +205,17 @@ extern "C" fm_status_t fm_pagination_get_printable(const fm_pagination_t* pagina
   const formulon::print::RectPt& rect = pagination->result.printable;
   out->x = rect.x;
   out->y = rect.y;
-  out->width = rect.width;
-  out->height = rect.height;
+  out->width_pt = rect.width;
+  out->height_pt = rect.height;
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_get_scale(const fm_pagination_t* pagination, double* out_scale) {
+extern "C" fm_status_t fm_pagination_get_scale(const fm_pagination_t* pagination, double* out_scale_pct) {
   clear_last_error();
-  if (pagination == nullptr || out_scale == nullptr) {
+  if (pagination == nullptr || out_scale_pct == nullptr) {
     return null_argument();
   }
-  *out_scale = pagination->result.scale;
+  *out_scale_pct = pagination->result.scale * 100.0;
   return 0;
 }
 
@@ -239,7 +240,7 @@ extern "C" fm_status_t fm_pagination_get_print_titles(const fm_pagination_t* pag
   out->has_rows = titles.has_rows ? 1 : 0;
   out->first_row = titles.first_row;
   out->last_row = titles.last_row;
-  out->has_cols = titles.has_cols ? 1 : 0;
+  out->has_columns = titles.has_cols ? 1 : 0;
   out->first_col = titles.first_col;
   out->last_col = titles.last_col;
   return 0;

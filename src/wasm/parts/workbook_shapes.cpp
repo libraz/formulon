@@ -49,8 +49,8 @@ emscripten::val shape_to_val(const fm_shape_t& s) {
   o.set("fillColor", js_color_spec_or_null(s.fill_color));
   js_set_index_or_null(o, "lineKind", s.line_kind);
   o.set("lineColor", js_color_spec_or_null(s.line_color));
-  o.set("lineWidthEmu", static_cast<double>(s.line_width_emu));
-  o.set("rotation", s.rotation);
+  o.set("lineWidthPt", s.line_width_pt);
+  o.set("rotationDeg", s.rotation_deg);
   o.set("hidden", s.hidden != 0);
   return o;
 }
@@ -105,13 +105,13 @@ fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec
     s.line_kind = reader.i32(spec, "lineKind", 0, "shape.lineKind");
     s.line_color = js_pull_color_spec(spec, "lineColor", &reader);
   }
-  if (present(reader, spec, "lineWidthEmu")) {
+  if (present(reader, spec, "lineWidthPt")) {
     s.fields |= FM_SHAPE_FIELD_LINE_WIDTH;
-    s.line_width_emu = reader.i64(spec, "lineWidthEmu", 0, "shape.lineWidthEmu");
+    s.line_width_pt = reader.number(spec, "lineWidthPt", 0.0, "shape.lineWidthPt");
   }
-  if (present(reader, spec, "rotation")) {
+  if (present(reader, spec, "rotationDeg")) {
     s.fields |= FM_SHAPE_FIELD_ROTATION;
-    s.rotation = reader.i32(spec, "rotation", 0, "shape.rotation");
+    s.rotation_deg = reader.number(spec, "rotationDeg", 0.0, "shape.rotationDeg");
   }
   if (present(reader, spec, "hidden")) {
     s.fields |= FM_SHAPE_FIELD_HIDDEN;
@@ -158,7 +158,7 @@ fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten:
   for (std::size_t i = 0; i < 8U; ++i) {
     *group_color(g, i) = js_pull_color_spec(spec, kSparklineColorKeys[i], &reader);
   }
-  g.type = reader.i32(spec, "type", FM_SPARKLINE_LINE, "group.type");
+  g.type = reader.i32(spec, "type", FM_SPARKLINE_TYPE_LINE, "group.type");
   g.markers = reader.boolean(spec, "markers", false, "group.markers") ? 1 : 0;
   g.high = reader.boolean(spec, "high", false, "group.high") ? 1 : 0;
   g.low = reader.boolean(spec, "low", false, "group.low") ? 1 : 0;
@@ -167,8 +167,8 @@ fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten:
   g.negative = reader.boolean(spec, "negative", false, "group.negative") ? 1 : 0;
   g.display_x_axis = reader.boolean(spec, "displayXAxis", false, "group.displayXAxis") ? 1 : 0;
   g.display_hidden = reader.boolean(spec, "displayHidden", false, "group.displayHidden") ? 1 : 0;
-  g.min_axis_type = reader.i32(spec, "minAxisType", FM_SPARKLINE_AXIS_INDIVIDUAL, "group.minAxisType");
-  g.max_axis_type = reader.i32(spec, "maxAxisType", FM_SPARKLINE_AXIS_INDIVIDUAL, "group.maxAxisType");
+  g.min_axis_type = reader.i32(spec, "minAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL, "group.minAxisType");
+  g.max_axis_type = reader.i32(spec, "maxAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL, "group.maxAxisType");
   if (present(reader, spec, "manualMin")) {
     g.has_manual_min = 1;
     g.manual_min = reader.number(spec, "manualMin", 0.0, "group.manualMin");
@@ -180,7 +180,7 @@ fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten:
   g.date_axis = reader.boolean(spec, "dateAxis", false, "group.dateAxis") ? 1 : 0;
   g.date_axis_ref = reader.optional_string(spec, "dateAxisRef", ref_store, "group.dateAxisRef");
   g.line_weight = reader.number(spec, "lineWeight", 0.75, "group.lineWeight");
-  g.empty_cells_as = reader.i32(spec, "emptyCellsAs", FM_SPARKLINE_EMPTY_GAP, "group.emptyCellsAs");
+  g.empty_cells_as = reader.i32(spec, "emptyCellsAs", FM_SPARKLINE_EMPTY_CELLS_GAP, "group.emptyCellsAs");
   return g;
 }
 

@@ -333,12 +333,13 @@ bool load_fragment(pugi::xml_document& doc, const std::string& fragment) {
 }
 
 /// Upserts a manual break into an axis vector, keeping it sorted by index.
-fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, std::uint32_t span_max, bool manual) {
+fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, std::uint32_t first, std::uint32_t last,
+                         bool manual) {
   const auto pos = std::lower_bound(breaks.begin(), breaks.end(), index,
                                     [](const ManualBreak& entry, std::uint32_t key) { return entry.id < key; });
   if (pos != breaks.end() && pos->id == index) {
-    pos->min = 0U;
-    pos->max = span_max;
+    pos->min = first;
+    pos->max = last;
     pos->manual = manual;
     return 0;
   }
@@ -349,26 +350,26 @@ fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, 
   }
   ManualBreak entry;
   entry.id = index;
-  entry.min = 0U;
-  entry.max = span_max;
+  entry.min = first;
+  entry.max = last;
   entry.manual = manual;
   breaks.insert(pos, entry);
   return 0;
 }
 
-/// Erases the break at `index`; NOT_FOUND when the axis has none there.
-fm_status_t erase_break(std::vector<ManualBreak>& breaks, std::uint32_t index, const char* what) {
+/// Erases the break at `index`; a no-op when the axis has none there.
+void erase_break(std::vector<ManualBreak>& breaks, std::uint32_t index) {
   const auto pos = std::lower_bound(breaks.begin(), breaks.end(), index,
                                     [](const ManualBreak& entry, std::uint32_t key) { return entry.id < key; });
-  if (pos == breaks.end() || pos->id != index) {
-    return not_found(what, "index=" + std::to_string(index));
+  if (pos != breaks.end() && pos->id == index) {
+    breaks.erase(pos);
   }
-  breaks.erase(pos);
-  return 0;
 }
 
-/// Shared body of `fm_sheet_add_row_break` / `fm_sheet_add_column_break`.
-fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t index, bool manual, bool rows) {
+/// Shared body of `fm_sheet_set_row_break` / `fm_sheet_set_column_break`.
+/// A null record removes the break; `first == last == 0` takes the whole span.
+fm_status_t set_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t index, bool rows,
+                      const std::uint32_t* first_in, const std::uint32_t* last_in, const int32_t* manual_in) {
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -376,8 +377,25 @@ fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t 
     return rc;
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  return rows ? upsert_break(print.manual_row_breaks, index, kWholeSheetColSpanMax, manual)
-              : upsert_break(print.manual_col_breaks, index, kWholeSheetRowSpanMax, manual);
+  std::vector<ManualBreak>& breaks = rows ? print.manual_row_breaks : print.manual_col_breaks;
+  if (first_in == nullptr) {
+    erase_break(breaks, index);
+    return 0;
+  }
+  const std::uint32_t span_max = rows ? kWholeSheetColSpanMax : kWholeSheetRowSpanMax;
+  std::uint32_t first = *first_in;
+  std::uint32_t last = *last_in;
+  if (first == 0U && last == 0U) {
+    last = span_max;
+  }
+  if (first > last || last > span_max) {
+    return invalid_argument("break span is out of range",
+                            "first=" + std::to_string(first) + " last=" + std::to_string(last));
+  }
+  if (*manual_in != 0 && *manual_in != 1) {
+    return invalid_argument("manual must be 0 or 1", "manual=" + std::to_string(*manual_in));
+  }
+  return upsert_break(breaks, index, first, last, *manual_in != 0);
 }
 
 // Counts one axis. The `size_t` return has no room for a status, so an
@@ -400,8 +418,9 @@ fm_status_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool r
   return 0;
 }
 
-fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, bool rows,
-                     fm_page_break_t* out) {
+template <typename Record>
+fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, bool rows, Record* out,
+                     std::uint32_t Record::*position) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
@@ -418,9 +437,9 @@ fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size
     return rc;
   }
   const ManualBreak& entry = breaks[index];
-  out->id = entry.id;
-  out->min = entry.min;
-  out->max = entry.max;
+  out->*position = entry.id;
+  out->first = entry.min;
+  out->last = entry.max;
   out->manual = entry.manual ? 1 : 0;
   return 0;
 }
@@ -495,38 +514,28 @@ extern "C" fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet
 /* Manual page breaks                                                         */
 /* -------------------------------------------------------------------------- */
 
-extern "C" fm_status_t fm_sheet_add_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t manual) {
+extern "C" fm_status_t fm_sheet_set_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                              const fm_row_break_t* brk) {
   clear_last_error();
-  return add_break(wb, sheet_index, row, manual != 0, /*rows=*/true);
+  if (brk != nullptr) {
+    if (auto rc = check_record_size(*brk); rc != 0) {
+      return rc;
+    }
+    return set_break(wb, sheet_index, row, /*rows=*/true, &brk->first, &brk->last, &brk->manual);
+  }
+  return set_break(wb, sheet_index, row, /*rows=*/true, nullptr, nullptr, nullptr);
 }
 
-extern "C" fm_status_t fm_sheet_add_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t manual) {
+extern "C" fm_status_t fm_sheet_set_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col,
+                                                 const fm_column_break_t* brk) {
   clear_last_error();
-  return add_break(wb, sheet_index, col, manual != 0, /*rows=*/false);
-}
-
-extern "C" fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
+  if (brk != nullptr) {
+    if (auto rc = check_record_size(*brk); rc != 0) {
+      return rc;
+    }
+    return set_break(wb, sheet_index, col, /*rows=*/false, &brk->first, &brk->last, &brk->manual);
   }
-  if (auto rc = check_row_index(row); rc != 0) {
-    return rc;
-  }
-  return erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_row_breaks, row,
-                     "no row break at that row");
-}
-
-extern "C" fm_status_t fm_sheet_remove_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_column_index(col); rc != 0) {
-    return rc;
-  }
-  return erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_col_breaks, col,
-                     "no column break at that column");
+  return set_break(wb, sheet_index, col, /*rows=*/false, nullptr, nullptr, nullptr);
 }
 
 extern "C" fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_index) {
@@ -545,8 +554,8 @@ extern "C" fm_status_t fm_sheet_get_row_break_count(const fm_workbook_t* wb, siz
 }
 
 extern "C" fm_status_t fm_sheet_get_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
-                                                 fm_page_break_t* out) {
-  return break_at(wb, sheet_index, index, /*rows=*/true, out);
+                                                 fm_row_break_t* out) {
+  return break_at(wb, sheet_index, index, /*rows=*/true, out, &fm_row_break_t::row);
 }
 
 extern "C" fm_status_t fm_sheet_get_column_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
@@ -554,15 +563,15 @@ extern "C" fm_status_t fm_sheet_get_column_break_count(const fm_workbook_t* wb, 
 }
 
 extern "C" fm_status_t fm_sheet_get_column_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
-                                                    fm_page_break_t* out) {
-  return break_at(wb, sheet_index, index, /*rows=*/false, out);
+                                                    fm_column_break_t* out) {
+  return break_at(wb, sheet_index, index, /*rows=*/false, out, &fm_column_break_t::col);
 }
 
 /* -------------------------------------------------------------------------- */
 /* Typed patch setters                                                        */
 /* -------------------------------------------------------------------------- */
 
-extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_index, const fm_page_setup_t* setup) {
+extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t sheet_index, const fm_page_setup_t* setup) {
   clear_last_error();
   if (setup == nullptr) {
     return null_argument("setup");
@@ -578,8 +587,9 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
       return rc;
     }
   }
-  if (setup->scale_engaged != 0 && (setup->scale < kMinPrintScalePercent || setup->scale > kMaxPrintScalePercent)) {
-    return invalid_argument("scale is out of range", "scale=" + std::to_string(setup->scale));
+  if (setup->scale_pct_engaged != 0 &&
+      (setup->scale_pct < kMinPrintScalePercent || setup->scale_pct > kMaxPrintScalePercent)) {
+    return invalid_argument("scale is out of range", "scale=" + std::to_string(setup->scale_pct));
   }
 
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
@@ -591,8 +601,8 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
   if (setup->paper_size_engaged != 0) {
     set_attr_u32(root, "paperSize", setup->paper_size);
   }
-  if (setup->scale_engaged != 0) {
-    set_attr_u32(root, "scale", setup->scale);
+  if (setup->scale_pct_engaged != 0) {
+    set_attr_u32(root, "scale", setup->scale_pct);
   }
   if (setup->fit_to_width_engaged != 0) {
     set_attr_u32(root, "fitToWidth", setup->fit_to_width);
@@ -611,8 +621,8 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet_index,
-                                                 const fm_page_margins_t* margins) {
+extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sheet_index,
+                                                    const fm_page_margins_t* margins) {
   clear_last_error();
   if (margins == nullptr) {
     return null_argument("margins");
@@ -634,9 +644,12 @@ extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet
   // stated margin from a defaulted one. The OOXML writer fills the gap
   // when it emits the element instead.
   const MarginField fields[] = {
-      {"left", margins->left_engaged, margins->left},       {"right", margins->right_engaged, margins->right},
-      {"top", margins->top_engaged, margins->top},          {"bottom", margins->bottom_engaged, margins->bottom},
-      {"header", margins->header_engaged, margins->header}, {"footer", margins->footer_engaged, margins->footer},
+      {"left", margins->left_in_engaged, margins->left_in},
+      {"right", margins->right_in_engaged, margins->right_in},
+      {"top", margins->top_in_engaged, margins->top_in},
+      {"bottom", margins->bottom_in_engaged, margins->bottom_in},
+      {"header", margins->header_in_engaged, margins->header_in},
+      {"footer", margins->footer_in_engaged, margins->footer_in},
   };
   for (const MarginField& field : fields) {
     if (field.engaged == 0) {
@@ -662,8 +675,8 @@ extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_print_options(fm_workbook_t* wb, size_t sheet_index,
-                                                  const fm_print_options_t* options) {
+extern "C" fm_status_t fm_sheet_update_print_options(fm_workbook_t* wb, size_t sheet_index,
+                                                     const fm_print_options_t* options) {
   clear_last_error();
   if (options == nullptr) {
     return null_argument("options");
@@ -688,7 +701,8 @@ extern "C" fm_status_t fm_sheet_set_print_options(fm_workbook_t* wb, size_t shee
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_header_footer(fm_workbook_t* wb, size_t sheet_index, const fm_header_footer_t* hf) {
+extern "C" fm_status_t fm_sheet_update_header_footer(fm_workbook_t* wb, size_t sheet_index,
+                                                     const fm_header_footer_t* hf) {
   clear_last_error();
   if (hf == nullptr) {
     return null_argument("hf");
@@ -746,7 +760,7 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   out->orientation =
       view.orientation == Orientation::kLandscape ? FM_PAGE_ORIENTATION_LANDSCAPE : FM_PAGE_ORIENTATION_PORTRAIT;
   out->paper_size = view.paper_size;
-  out->scale = view.scale;
+  out->scale_pct = view.scale;
   out->fit_to_width = view.fit_to_width;
   out->fit_to_height = view.fit_to_height;
   out->fit_to_page = view.fit_to_page ? 1 : 0;
@@ -758,10 +772,8 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   if (load_fragment(doc, print.page_setup_xml)) {
     const pugi::xml_node root = doc.first_child();
     const EngagedAttr attrs[] = {
-        {"orientation", &out->orientation_engaged},
-        {"paperSize", &out->paper_size_engaged},
-        {"scale", &out->scale_engaged},
-        {"fitToWidth", &out->fit_to_width_engaged},
+        {"orientation", &out->orientation_engaged},   {"paperSize", &out->paper_size_engaged},
+        {"scale", &out->scale_pct_engaged},           {"fitToWidth", &out->fit_to_width_engaged},
         {"fitToHeight", &out->fit_to_height_engaged},
     };
     read_engaged(root, attrs, std::size(attrs));
@@ -790,19 +802,19 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_page_margins_t{};
   out->struct_size = struct_size;
-  out->left = view.left;
-  out->right = view.right;
-  out->top = view.top;
-  out->bottom = view.bottom;
-  out->header = view.header;
-  out->footer = view.footer;
+  out->left_in = view.left;
+  out->right_in = view.right;
+  out->top_in = view.top;
+  out->bottom_in = view.bottom;
+  out->header_in = view.header;
+  out->footer_in = view.footer;
 
   pugi::xml_document doc;
   if (load_fragment(doc, print.page_margins_xml)) {
     const pugi::xml_node root = doc.first_child();
     const EngagedAttr attrs[] = {
-        {"left", &out->left_engaged},     {"right", &out->right_engaged},   {"top", &out->top_engaged},
-        {"bottom", &out->bottom_engaged}, {"header", &out->header_engaged}, {"footer", &out->footer_engaged},
+        {"left", &out->left_in_engaged},     {"right", &out->right_in_engaged},   {"top", &out->top_in_engaged},
+        {"bottom", &out->bottom_in_engaged}, {"header", &out->header_in_engaged}, {"footer", &out->footer_in_engaged},
     };
     read_engaged(root, attrs, std::size(attrs));
   }
@@ -913,10 +925,10 @@ extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_in
   }
   formulon::ColorSpec spec;
   if (color != nullptr) {
-    if (auto rc = check_enum_domain(color->kind, kFmColorNone, kFmColorAuto, "kind"); rc != 0) {
+    if (auto rc = check_enum_domain(color->kind, FM_COLOR_KIND_NONE, FM_COLOR_KIND_AUTO, "kind"); rc != 0) {
       return rc;
     }
-    if (color->kind == kFmColorTheme && !std::isfinite(color->tint)) {
+    if (color->kind == FM_COLOR_KIND_THEME && !std::isfinite(color->tint)) {
       return invalid_argument("theme tint must be finite", "field=tint");
     }
     spec = formulon::c_api::parts::color_spec_from_c(*color);

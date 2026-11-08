@@ -99,14 +99,14 @@ constexpr RdField kTitleRd[] = {
 
 constexpr RdField kFillRd[] = {
     RD("color", fm_chart_fill_t, color, kColor),
-    RD("transparency", fm_chart_fill_t, transparency_pct, kNanNull),
+    RD("transparencyPct", fm_chart_fill_t, transparency_pct, kNanNull),
     RD_END,
 };
 
 // clang-format off
 constexpr RdField kLineRd[] = {
     RD("color", fm_chart_line_t, color, kColor),
-    RD("transparency", fm_chart_line_t, transparency_pct, kNanNull),
+    RD("transparencyPct", fm_chart_line_t, transparency_pct, kNanNull),
     RD("widthPt", fm_chart_line_t, width_pt, kNanNull),
     RD_OPT("dash", fm_chart_line_t, has_dash, dash, kOptI32),
     RD("none", fm_chart_line_t, none, kBool),
@@ -116,7 +116,7 @@ constexpr RdField kLineRd[] = {
 
 constexpr RdField kMarkerRd[] = {
     RD("symbol", fm_chart_marker_t, symbol, kI32),
-    RD_OPT("size", fm_chart_marker_t, has_size, size, kOptU32),
+    RD_OPT("sizePt", fm_chart_marker_t, has_size_pt, size_pt, kOptU32),
     RD_OBJ("fill", fm_chart_marker_t, fill, kFillRd),
     RD_OBJ("line", fm_chart_marker_t, line, kLineRd),
     RD_END,
@@ -161,17 +161,17 @@ constexpr RdField kSeriesRd[] = {
 constexpr RdField kPlotRd[] = {
     RD("type", fm_chart_plot_t, type, kI32),
     RD_OPT("grouping", fm_chart_plot_t, has_grouping, grouping, kOptI32),
-    RD_OPT("gapWidth", fm_chart_plot_t, has_gap_width, gap_width, kOptU32),
+    RD_OPT("gapWidthPct", fm_chart_plot_t, has_gap_width_pct, gap_width_pct, kOptU32),
     RD_OPT("overlap", fm_chart_plot_t, has_overlap, overlap, kOptI32),
     RD_OPT("holeSize", fm_chart_plot_t, has_hole_size, hole_size, kOptU32),
-    RD_OPT("firstSliceAngle", fm_chart_plot_t, has_first_slice_angle, first_slice_angle, kOptU32),
+    RD_OPT("firstSliceAngleDeg", fm_chart_plot_t, has_first_slice_angle_deg, first_slice_angle_deg, kOptU32),
     RD_END,
 };
 
 constexpr RdField kAxisRd[] = {
     RD("id", fm_chart_axis_t, id, kU32),
     RD("kind", fm_chart_axis_t, kind, kI32),
-    RD("deleted", fm_chart_axis_t, deleted, kBool),
+    RD("visible", fm_chart_axis_t, visible, kBool),
     RD("crossAxis", fm_chart_axis_t, cross_axis, kU32),
     RD("crosses", fm_chart_axis_t, crosses, kEnumOrNull),
     RD("crossesAt", fm_chart_axis_t, crosses_at, kNanNull),
@@ -186,7 +186,7 @@ constexpr RdField kAxisRd[] = {
     RD_TITLE("title", fm_chart_axis_t, title, kTitleRd),
     RD("majorGridlines", fm_chart_axis_t, major_gridlines, kBool),
     RD("minorGridlines", fm_chart_axis_t, minor_gridlines, kBool),
-    RD("tickLabelPosition", fm_chart_axis_t, tick_label_pos, kStrOrNull),
+    RD("tickLabelPosition", fm_chart_axis_t, tick_label_position, kStrOrNull),
     RD_END,
 };
 
@@ -194,13 +194,13 @@ constexpr RdField kInfoRd[] = {
     RD("objectId", fm_chart_info_t, object_id, kU32),
     RD("name", fm_chart_info_t, name, kStr),
     RD("description", fm_chart_info_t, description, kStr),
-    RD("isChartex", fm_chart_info_t, is_chartex, kBool),
+    RD("isExtended", fm_chart_info_t, is_extended, kBool),
     RD("isPivotChart", fm_chart_info_t, is_pivot_chart, kBool),
     RD("onChartsheet", fm_chart_info_t, on_chartsheet, kBool),
     RD_TITLE("title", fm_chart_info_t, title, kTitleRd),
     RD("autoTitleDeleted", fm_chart_info_t, auto_title_deleted, kTri),
     RD("blanksAs", fm_chart_info_t, blanks_as, kEnumOrNull),
-    RD("plotVisibleOnly", fm_chart_info_t, plot_vis_only, kTri),
+    RD("plotVisibleOnly", fm_chart_info_t, plot_visible_only, kTri),
     RD("naAsBlank", fm_chart_info_t, na_as_blank, kTri),
     RD("date1904", fm_chart_info_t, date1904, kBool),
     RD_OPT("style", fm_chart_info_t, has_style, style, kOptI32),
@@ -256,8 +256,8 @@ val fields_to_val(const void* base, const RdField* f) {
         }
         break;
       case Rd::kTri:
-        if (const int32_t tri = load<int32_t>(base, f->off); tri != FM_CHART_TRI_ABSENT) {
-          v = val(tri == FM_CHART_TRI_TRUE);
+        if (const int32_t tri = load<int32_t>(base, f->off); tri != FM_TRISTATE_DEFAULT) {
+          v = val(tri == FM_TRISTATE_TRUE);
         }
         break;
       case Rd::kColor:
@@ -273,7 +273,7 @@ val fields_to_val(const void* base, const RdField* f) {
         break;
       case Rd::kTitle:
         // A title of kind NONE is no title.
-        if (load<int32_t>(base, f->off + offsetof(fm_chart_title_t, kind)) != FM_CHART_TITLE_NONE) {
+        if (load<int32_t>(base, f->off + offsetof(fm_chart_title_t, kind)) != FM_CHART_TITLE_KIND_NONE) {
           v = fields_to_val(static_cast<const char*>(base) + f->off, f->sub);
         }
         break;
@@ -333,10 +333,9 @@ val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
     return val::object();
   }
   val o = fields_to_val(&p, kPlotRd);
-  const bool has_layout = p.chartex_layout != nullptr && p.chartex_layout[0] != '\0';
-  o.set("chartexLayout", has_layout ? val(std::string(p.chartex_layout)) : val::null());
-  o.set("barDirection", p.bar_dir == FM_CHART_BAR_DIR_ABSENT ? val::null() : val(p.bar_dir));
-  o.set("varyColors", val(p.vary_colors == FM_CHART_TRI_TRUE));
+  o.set("extendedLayout", p.extended_layout >= 0 ? val(p.extended_layout) : val::null());
+  o.set("barDirection", p.bar_direction == FM_CHART_BAR_DIRECTION_ABSENT ? val::null() : val(p.bar_direction));
+  o.set("varyColors", val(p.vary_colors == FM_TRISTATE_TRUE));
   val axis_ids = val::array();
   for (size_t i = 0; i < p.axis_id_count; ++i) {
     uint32_t id = 0;
@@ -376,7 +375,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   val o = fields_to_val(&info, kInfoRd);
 
   val legend = val::null();
-  if (info.legend_position != FM_CHART_LEGEND_NONE) {
+  if (info.legend_position != FM_CHART_LEGEND_POSITION_NONE) {
     legend = val::object();
     legend.set("position", val(info.legend_position));
     legend.set("overlay", val(info.legend_overlay != 0));
@@ -445,8 +444,8 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
   o.set("plotIndex", val(s.plot_index));
   o.set("index", val(s.idx));
   o.set("name", s.name != nullptr ? val(std::string(s.name)) : val::null());
-  o.set("formatCode", val(string_from_cstr(s.format_code)));
-  o.set("xFormatCode", val(string_from_cstr(s.x_format_code)));
+  o.set("numberFormat", val(string_from_cstr(s.format_code)));
+  o.set("xNumberFormat", val(string_from_cstr(s.x_format_code)));
   o.set("filtered", val(s.filtered != 0));
   o.set("values", copy_doubles(pts.values, pts.count));
   o.set("states", bytes_to_val(pts.states, pts.count));
@@ -493,7 +492,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   for (size_t level = 0; level < info.category_level_count && rc == 0; ++level) {
     size_t count = 0;
     val row = val::array();
-    if (step(rc, fm_chart_data_get_category_level_size(data, level, &count))) {
+    if (step(rc, fm_chart_data_get_category_level_count(data, level, &count))) {
       for (size_t i = 0; i < count && rc == 0; ++i) {
         const char* label = nullptr;
         if (step(rc, fm_chart_data_get_category_level_at(data, level, i, &label))) {
@@ -507,7 +506,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   categories.set("labels", labels);
   categories.set("levels", levels);
   categories.set("values", numeric ? copy_doubles(numbers.data(), numbers.size()) : val::null());
-  categories.set("formatCode", val(string_from_cstr(info.category_format_code)));
+  categories.set("numberFormat", val(string_from_cstr(info.category_format_code)));
   categories.set("generated", val(info.categories_generated != 0));
   o.set("categories", categories);
 
@@ -538,7 +537,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
     }
     val item = val::object();
     item.set("seriesIndex", val(u.series_index));
-    item.set("source", val(string_from_cstr(u.source)));
+    item.set("source", val(u.source));
     item.set("axisId", val(u.axis_id));
     push(unresolved, item);
   }
@@ -599,7 +598,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
   const auto set = [&](const char* key, int32_t& op, int32_t& out, bool is_bool) {
     const val v = reader.value(spec, key, key);
     if (js_value_present(v)) {
-      op = FM_CHART_PATCH_SET;
+      op = FM_CHART_PATCH_OP_SET;
       out = is_bool ? (reader.boolean_value(v, false) ? 1 : 0) : reader.i32_value(v, 0, key);
     }
   };
@@ -607,7 +606,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
   set("headerRow", o.header_row_op, o.header_row, true);
   set("headerColumn", o.header_column_op, o.header_column, true);
   set("blanksAs", o.blanks_as_op, o.blanks_as, false);
-  set("plotVisibleOnly", o.plot_vis_only_op, o.plot_vis_only, true);
+  set("plotVisibleOnly", o.plot_visible_only_op, o.plot_visible_only, true);
   set("naAsBlank", o.na_as_blank_op, o.na_as_blank, true);
   if (!reader.ok()) {
     return val::undefined();

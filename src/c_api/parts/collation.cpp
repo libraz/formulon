@@ -31,7 +31,8 @@ using formulon::c_api::parts::value_from_fm;
 namespace {
 
 fm_status_t check_strength(std::int32_t strength, formulon::eval::CollationStrength* out) {
-  if (strength != FM_COLLATION_COMPARE && strength != FM_COLLATION_DYNAMIC && strength != FM_COLLATION_CLASSIC_EXACT) {
+  if (strength != FM_COLLATION_STRENGTH_COMPARE && strength != FM_COLLATION_STRENGTH_DYNAMIC &&
+      strength != FM_COLLATION_STRENGTH_CLASSIC_EXACT) {
     return invalid_argument("strength out of range");
   }
   *out = static_cast<formulon::eval::CollationStrength>(strength);

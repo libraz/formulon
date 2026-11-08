@@ -47,7 +47,7 @@ using FilterPayload = std::variant<std::monostate, int, double, std::string>;
 
 fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_double, FilterPayload& out,
                             const char* field) {
-  if (kind == FM_PIVOT_FILTER_VALUE_INT) {
+  if (kind == FM_PIVOT_FILTER_OPERAND_KIND_INT) {
     out = static_cast<int>(as_int);
     return 0;
   }
@@ -63,13 +63,13 @@ fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_do
 void payload_to_fm(const FilterPayload& payload, std::int32_t* kind, std::int32_t* as_int, double* as_double,
                    const char** as_text) {
   if (const auto* int_value = std::get_if<int>(&payload); int_value != nullptr) {
-    *kind = FM_PIVOT_FILTER_VALUE_INT;
+    *kind = FM_PIVOT_FILTER_OPERAND_KIND_INT;
     *as_int = static_cast<std::int32_t>(*int_value);
   } else if (const auto* double_value = std::get_if<double>(&payload); double_value != nullptr) {
-    *kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
+    *kind = FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
     *as_double = *double_value;
   } else if (const auto* text_value = std::get_if<std::string>(&payload); text_value != nullptr) {
-    *kind = FM_PIVOT_FILTER_VALUE_TEXT;
+    *kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
     *as_text = text_value->c_str();
   }
 }
@@ -95,24 +95,24 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  const formulon::pivot::FilterType type = pivot_filter_type_from_fm(static_cast<fm_pivot_filter_type_t>(spec->type));
+  const formulon::pivot::FilterType type = pivot_filter_type_from_fm(static_cast<fm_pivot_filter_kind_t>(spec->type));
   const bool caption = formulon::pivot::is_caption_filter_type(type);
   const bool ranged = formulon::pivot::is_range_filter_type(type);
   const std::string kind_detail = "type=" + std::to_string(static_cast<int>(spec->type)) +
                                   " value_kind=" + std::to_string(static_cast<int>(spec->value_kind));
   if (formulon::pivot::is_operandless_filter_type(type)) {
-    if (spec->value_kind != FM_PIVOT_FILTER_VALUE_NONE) {
+    if (spec->value_kind != FM_PIVOT_FILTER_OPERAND_KIND_NONE) {
       return invalid_argument("this filter type takes no value", kind_detail);
     }
-  } else if (spec->value_kind == FM_PIVOT_FILTER_VALUE_NONE) {
+  } else if (spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_NONE) {
     return invalid_argument("spec->value_kind is unset", kind_detail);
-  } else if (caption != (spec->value_kind == FM_PIVOT_FILTER_VALUE_TEXT)) {
+  } else if (caption != (spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT)) {
     return invalid_argument(caption ? "a label filter takes a text value" : "this filter type takes a number",
                             kind_detail);
   }
   const bool text_high = caption && ranged;
   if (text_high != (spec->value_high_text != nullptr) ||
-      text_high != (spec->value_high_kind == FM_PIVOT_FILTER_VALUE_TEXT)) {
+      text_high != (spec->value_high_kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT)) {
     return invalid_argument(text_high ? "a label range takes its upper bound in value_high_text"
                                       : "value_high_text is only taken by a label range",
                             "type=" + std::to_string(static_cast<int>(spec->type)));
@@ -133,37 +133,37 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   filter.type = type;
   filter.data_field_index = spec->data_field_index;
   switch (spec->value_kind) {
-    case FM_PIVOT_FILTER_VALUE_INT:
-    case FM_PIVOT_FILTER_VALUE_DOUBLE:
+    case FM_PIVOT_FILTER_OPERAND_KIND_INT:
+    case FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE:
       if (auto rc = numeric_payload(spec->value_kind, spec->value_int, spec->value_double, filter.value, "value");
           rc != 0) {
         return rc;
       }
       break;
-    case FM_PIVOT_FILTER_VALUE_TEXT:
+    case FM_PIVOT_FILTER_OPERAND_KIND_TEXT:
       if (spec->value_text == nullptr) {
         return null_argument("spec->value_text");
       }
       filter.value = std::string(spec->value_text);
       break;
-    case FM_PIVOT_FILTER_VALUE_NONE:
+    case FM_PIVOT_FILTER_OPERAND_KIND_NONE:
       break;
     default:
       return invalid_argument("spec->value_kind is out of range", kind_detail);
   }
   switch (spec->value_high_kind) {
-    case FM_PIVOT_FILTER_VALUE_INT:
-    case FM_PIVOT_FILTER_VALUE_DOUBLE:
+    case FM_PIVOT_FILTER_OPERAND_KIND_INT:
+    case FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE:
       if (auto rc = numeric_payload(spec->value_high_kind, spec->value_high_int, spec->value_high_double,
                                     filter.value_high, "value_high");
           rc != 0) {
         return rc;
       }
       break;
-    case FM_PIVOT_FILTER_VALUE_TEXT:
+    case FM_PIVOT_FILTER_OPERAND_KIND_TEXT:
       filter.value_high = std::string(spec->value_high_text);
       break;
-    case FM_PIVOT_FILTER_VALUE_NONE:
+    case FM_PIVOT_FILTER_OPERAND_KIND_NONE:
       // Leave default monostate.
       break;
     default:
@@ -230,9 +230,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
   result.struct_size = out->struct_size;
   result.axis = *axis;
   result.field_name = filter.field_name.c_str();
-  result.type = static_cast<fm_pivot_filter_type_t>(filter.type);
-  result.value_kind = FM_PIVOT_FILTER_VALUE_NONE;
-  result.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  result.type = static_cast<fm_pivot_filter_kind_t>(filter.type);
+  result.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
+  result.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
   result.data_field_index = filter.data_field_index;
 
   payload_to_fm(filter.value, &result.value_kind, &result.value_int, &result.value_double, &result.value_text);

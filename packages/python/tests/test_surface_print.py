@@ -7,10 +7,11 @@ import unittest
 from formulon import (
     CellRect,
     CellXfInput,
+    ColumnBreak,
     FormulonError,
-    NotFoundError,
     PageOrientation,
     PrintTitles,
+    RowBreak,
     Span,
     Workbook,
 )
@@ -27,15 +28,15 @@ class PrintSettingsTests(unittest.TestCase):
 
             setup = wb.sheet(0).get_page_setup()
             self.assertEqual(setup.paper_size, 9)
-            self.assertEqual(setup.scale, 85)
-            self.assertTrue(setup.scale_stated)
+            self.assertEqual(setup.scale_pct, 85)
+            self.assertTrue(setup.scale_pct_stated)
 
             # Empty removes the element and restores the defaults.
             wb.sheet(0).ooxml.set_page_setup_xml("")
             self.assertIsNone(wb.sheet(0).ooxml.get_page_setup_xml())
             cleared = wb.sheet(0).get_page_setup()
-            self.assertEqual(cleared.scale, 100)
-            self.assertFalse(cleared.scale_stated)
+            self.assertEqual(cleared.scale_pct, 100)
+            self.assertFalse(cleared.scale_pct_stated)
 
     def test_malformed_fragment_is_rejected_at_set_time(self) -> None:
         with Workbook.create_default() as wb:
@@ -46,13 +47,13 @@ class PrintSettingsTests(unittest.TestCase):
 
     def test_fit_to_page_keeps_the_rest_of_sheet_pr(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).ooxml.set_sheet_pr_xml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>')
-            wb.sheet(0).set_page_setup(fit_to_page=True)
+            wb.sheet(0).ooxml.set_sheet_pr_xml('<sheetPr codeName="Sheet1"><tabColor argb="FFFF0000"/></sheetPr>')
+            wb.sheet(0).update_page_setup(fit_to_page=True)
             xml = wb.sheet(0).ooxml.get_sheet_pr_xml()
             # A VBA binding and a tab colour are not print settings, and
             # toggling fit-to-page must not be how they get lost.
             self.assertIn('codeName="Sheet1"', xml)
-            self.assertIn('<tabColor rgb="FFFF0000"/>', xml)
+            self.assertIn('<tabColor argb="FFFF0000"/>', xml)
             self.assertIn('fitToPage="true"', xml)
             self.assertTrue(wb.sheet(0).get_page_setup().fit_to_page)
 
@@ -61,7 +62,7 @@ class PrintSettingsTests(unittest.TestCase):
             wb.sheet(0).ooxml.set_page_setup_xml(
                 '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>'
             )
-            wb.sheet(0).set_page_setup(orientation=PageOrientation.LANDSCAPE)
+            wb.sheet(0).update_page_setup(orientation=PageOrientation.LANDSCAPE)
             xml = wb.sheet(0).ooxml.get_page_setup_xml()
             self.assertIn('orientation="landscape"', xml)
             self.assertIn('horizontalDpi="600"', xml)
@@ -73,32 +74,32 @@ class PrintSettingsTests(unittest.TestCase):
             # Rejected rather than clamped: a mis-stated print scale lands
             # on paper, unlike the on-screen zoom.
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_page_setup(scale=9)
+                wb.sheet(0).update_page_setup(scale_pct=9)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_page_setup(scale=401)
-            wb.sheet(0).set_page_setup(scale=400)
-            self.assertEqual(wb.sheet(0).get_page_setup().scale, 400)
+                wb.sheet(0).update_page_setup(scale_pct=401)
+            wb.sheet(0).update_page_setup(scale_pct=400)
+            self.assertEqual(wb.sheet(0).get_page_setup().scale_pct, 400)
 
     def test_margins_patch_reports_presence_separately(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_page_margins(left=0.25, top=1.5)
+            wb.sheet(0).update_page_margins(left_in=0.25, top_in=1.5)
             margins = wb.sheet(0).get_page_margins()
-            self.assertAlmostEqual(margins.left, 0.25)
-            self.assertAlmostEqual(margins.top, 1.5)
-            self.assertTrue(margins.left_stated)
+            self.assertAlmostEqual(margins.left_in, 0.25)
+            self.assertAlmostEqual(margins.top_in, 1.5)
+            self.assertTrue(margins.left_in_stated)
             # An unstated margin still reports its effective default, with
             # the flag clear so the caller can tell the two apart.
-            self.assertAlmostEqual(margins.right, 0.7)
-            self.assertFalse(margins.right_stated)
+            self.assertAlmostEqual(margins.right_in, 0.7)
+            self.assertFalse(margins.right_in_stated)
 
     def test_negative_margin_is_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_page_margins(bottom=-1.0)
+                wb.sheet(0).update_page_margins(bottom_in=-1.0)
 
     def test_header_footer_sections_take_decoded_text(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_header_footer(odd_header="&C\u5e33\u7968", odd_footer="&R&P / &N")
+            wb.sheet(0).update_header_footer(odd_header="&C\u5e33\u7968", odd_footer="&R&P / &N")
             # `&` introduces Excel's codes but lives in XML element text, so
             # it reaches the file escaped and decodes back to `&C...`.
             self.assertEqual(
@@ -107,7 +108,7 @@ class PrintSettingsTests(unittest.TestCase):
                 "<oddFooter>&amp;R&amp;P / &amp;N</oddFooter></headerFooter>",
             )
             # Omitting a section leaves it; "" clears it.
-            wb.sheet(0).set_header_footer(odd_footer="")
+            wb.sheet(0).update_header_footer(odd_footer="")
             self.assertEqual(
                 wb.sheet(0).ooxml.get_header_footer_xml(),
                 "<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>",
@@ -115,7 +116,7 @@ class PrintSettingsTests(unittest.TestCase):
 
     def test_print_options_patch(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_print_options(grid_lines=True, horizontal_centered=True)
+            wb.sheet(0).update_print_options(grid_lines=True, horizontal_centered=True)
             self.assertEqual(
                 wb.sheet(0).ooxml.get_print_options_xml(),
                 '<printOptions gridLines="true" horizontalCentered="true"/>',
@@ -145,25 +146,27 @@ class PrintSettingsTests(unittest.TestCase):
 
     def test_manual_breaks(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_row_break(40)
-            wb.sheet(0).add_row_break(10)
-            wb.sheet(0).add_column_break(5)
+            wb.sheet(0).set_row_break(40, RowBreak(row=40))
+            wb.sheet(0).set_row_break(10, RowBreak(row=10))
+            wb.sheet(0).set_column_break(5, ColumnBreak(col=5))
             rows = wb.sheet(0).list_row_breaks()
             # Kept sorted by index regardless of insertion order.
-            self.assertEqual([b.id for b in rows], [10, 40])
-            self.assertEqual(rows[0].max, 16383)
+            self.assertEqual([b.row for b in rows], [10, 40])
+            self.assertEqual(rows[0].last, 16383)
             self.assertTrue(rows[0].manual)
-            self.assertEqual(wb.sheet(0).list_column_breaks()[0].max, 1048575)
+            self.assertEqual(wb.sheet(0).list_column_breaks()[0].last, 1048575)
 
-            # Re-adding an existing index replaces rather than duplicates.
-            wb.sheet(0).add_row_break(10, manual=False)
+            # Setting an existing index replaces rather than duplicates.
+            wb.sheet(0).set_row_break(10, RowBreak(row=10, manual=False))
             rows = wb.sheet(0).list_row_breaks()
             self.assertEqual(len(rows), 2)
             self.assertFalse(rows[0].manual)
 
-            # Removing an absent break reports it as missing.
-            with self.assertRaises(NotFoundError):
-                wb.sheet(0).remove_row_break(999)
+            # None removes a break; removing an absent one does nothing.
+            wb.sheet(0).set_row_break(999, None)
+            self.assertEqual(len(wb.sheet(0).list_row_breaks()), 2)
+            wb.sheet(0).set_row_break(40, None)
+            self.assertEqual([b.row for b in wb.sheet(0).list_row_breaks()], [10])
             wb.sheet(0).clear_breaks()
             self.assertEqual(wb.sheet(0).list_row_breaks(), [])
             self.assertEqual(wb.sheet(0).list_column_breaks(), [])
@@ -174,20 +177,20 @@ class PrintSettingsTests(unittest.TestCase):
                 for col in range(20):
                     wb.sheet(0).set_number(row, col, 1.0)
             portrait = wb.sheet(0).get_pagination().page_count
-            wb.sheet(0).set_page_setup(orientation=PageOrientation.LANDSCAPE)
+            wb.sheet(0).update_page_setup(orientation=PageOrientation.LANDSCAPE)
             self.assertNotEqual(wb.sheet(0).get_pagination().page_count, portrait)
 
     def test_authored_report_survives_save_and_load(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "\u58f2\u4e0a")
-            wb.sheet(0).set_page_setup(
+            wb.sheet(0).update_page_setup(
                 paper_size=9, orientation=PageOrientation.PORTRAIT, fit_to_page=True, fit_to_width=1, fit_to_height=0
             )
-            wb.sheet(0).set_page_margins(left=0.5, right=0.5, top=0.8, bottom=0.8)
-            wb.sheet(0).set_header_footer(odd_header="&C\u6708\u6b21\u5831\u544a")
+            wb.sheet(0).update_page_margins(left_in=0.5, right_in=0.5, top_in=0.8, bottom_in=0.8)
+            wb.sheet(0).update_header_footer(odd_header="&C\u6708\u6b21\u5831\u544a")
             wb.sheet(0).set_print_area([CellRect(0, 0, 79, 5)])
             wb.sheet(0).set_print_titles(PrintTitles(rows=Span(0, 1), columns=None))
-            wb.sheet(0).add_row_break(39)
+            wb.sheet(0).set_row_break(39, RowBreak(row=39))
             data = wb.save()
 
         with Workbook.load(data) as reloaded:
@@ -196,10 +199,10 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertEqual(setup.orientation, PageOrientation.PORTRAIT)
             self.assertTrue(setup.fit_to_page)
             self.assertEqual(setup.fit_to_height, 0)
-            self.assertAlmostEqual(reloaded.sheet(0).get_page_margins().left, 0.5)
+            self.assertAlmostEqual(reloaded.sheet(0).get_page_margins().left_in, 0.5)
             self.assertEqual(reloaded.sheet(0).get_print_area(), [CellRect(0, 0, 79, 5)])
             self.assertEqual(reloaded.sheet(0).get_print_titles(), PrintTitles(rows=Span(0, 1), columns=None))
-            self.assertEqual([b.id for b in reloaded.sheet(0).list_row_breaks()], [39])
+            self.assertEqual([b.row for b in reloaded.sheet(0).list_row_breaks()], [39])
 
     def test_set_range_xf_index_materialises_the_rectangle(self) -> None:
         with Workbook.create_default() as wb:
@@ -211,8 +214,8 @@ class PrintSettingsTests(unittest.TestCase):
                     fill_index=0,
                     border_index=0,
                     num_fmt_id=0,
-                    horizontal_align=0,
-                    vertical_align=2,
+                    horizontal=0,
+                    vertical=2,
                     wrap_text=True,
                 )
             )

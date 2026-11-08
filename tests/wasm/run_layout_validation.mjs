@@ -31,8 +31,8 @@ export function registerLayoutValidation(Module, test) {
   test('layout nested getters are read once and leave state unchanged on failure', () => {
     withWorkbook(Module, (wb) => {
       const beforeProtection = protection(wb);
-      const protectionInput = { ...beforeProtection, enabled: true };
-      Object.defineProperty(protectionInput, 'formatRows', {
+      const protectionInput = { allowSort: true };
+      Object.defineProperty(protectionInput, 'allowFormatRows', {
         enumerable: true,
         get() {
           throw new Error('wasm protection getter');
@@ -42,14 +42,14 @@ export function registerLayoutValidation(Module, test) {
       assert.deepEqual(protection(wb), beforeProtection);
 
       const beforeFormat = wb.getFormatDefaults(0);
-      const formatInput = { defaultColWidth: 12.5 };
-      Object.defineProperty(formatInput, 'defaultRowHeight', {
+      const formatInput = { defaultColWidthChars: 12.5 };
+      Object.defineProperty(formatInput, 'defaultRowHeightPt', {
         enumerable: true,
         get() {
           throw new Error('wasm format getter');
         },
       });
-      assert.throws(() => wb.setFormatDefaults(0, formatInput), /wasm format getter/);
+      assert.throws(() => wb.updateFormatDefaults(0, formatInput), /wasm format getter/);
       assert.deepEqual(wb.getFormatDefaults(0), beforeFormat);
     });
   });

@@ -109,7 +109,7 @@ class JsWorkbook {
   /// `fm_sheet_set_cell_phonetic_runs` for the ordering rules.
   void setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val runs);
 
-  /// Stores how the cell's guide renders: `fontId`, `type` (0=halfwidth
+  /// Stores how the cell's guide renders: `fontIndex`, `type` (0=halfwidth
   /// katakana, 1=fullwidth katakana, 2=hiragana, 3=no conversion) and
   /// `alignment` (0=no control, 1=left, 2=center, 3=distributed).
   /// Independent of the readings in both directions.
@@ -143,7 +143,7 @@ class JsWorkbook {
   double getCellPhoneticRunCount(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getCellPhoneticRun(uint32_t sheet, uint32_t row, uint32_t col, uint32_t phoneticRunIndex) const;
 
-  /// Reads the guide's rendering back as `{ fontId, type, alignment }`.
+  /// Reads the guide's rendering back as `{ fontIndex, type, alignment }`.
   /// A cell with no annotation reports the all-zero triple.
   emscripten::val getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const;
   bool getCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
@@ -205,7 +205,8 @@ class JsWorkbook {
   /// say "no reading", and every field combination is a legal date.
   emscripten::val pinnedNow() const;
   void setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute, uint32_t second);
-  void clearPinnedNow();
+  /// `setPinnedNow(null)`: releases the pin; any other single argument is a TypeError.
+  void releasePinnedNow(emscripten::val now);
   std::string profileId() const;
   void setProfileId(const std::string& profile_id);
   /// The stored file name; `null` when none is set.
@@ -227,21 +228,29 @@ class JsWorkbook {
   emscripten::val getDefinedName(const std::string& name, int32_t localSheetId) const;
   void removeDefinedName(const std::string& name, int32_t localSheetId);
 
-  double tableCount() const;
-  emscripten::val tableAt(uint32_t idx) const;
-  uint32_t tableRuntimeId(uint32_t idx) const;
-  uint32_t resolveTableRuntimeId(uint32_t id) const;
-  uint32_t createTable(emscripten::val spec);
-  void updateTable(uint32_t idx, emscripten::val spec);
-  void removeTable(uint32_t idx);
+  /// Tables are addressed by their sheet and a sheet-local index.
+  double tableCount(uint32_t sheet) const;
+  emscripten::val tableAt(uint32_t sheet, uint32_t idx) const;
+  /// The table's applied style, `null` when it has no `<tableStyleInfo>`.
+  emscripten::val getTableStyleOptions(uint32_t sheet, uint32_t idx) const;
+  void updateTableStyleOptions(uint32_t sheet, uint32_t idx, emscripten::val patch);
+  uint32_t tableRuntimeId(uint32_t sheet, uint32_t idx) const;
+  /// `{ sheet, index }` of the table with runtime id `id`.
+  emscripten::val resolveTableRuntimeId(uint32_t id) const;
+  /// `{ sheet, index }` of the table named `name` (case-insensitive), `null` when there is none.
+  emscripten::val findTable(const std::string& name) const;
+  uint32_t createTable(uint32_t sheet, emscripten::val spec);
+  void updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec);
+  void renameTable(uint32_t sheet, uint32_t idx, const std::string& name);
+  void removeTable(uint32_t sheet, uint32_t idx);
   /// Sets column `column`'s totals-row function / label from
   /// `{ function?, label?, formula? }`.
-  void setTableColumnTotals(uint32_t idx, uint32_t column, emscripten::val totals);
-  /// Renames column `column` of table `idx`; `value` is the final name.
-  std::string renameTableColumn(uint32_t idx, uint32_t column, const std::string& name);
+  void setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t column, emscripten::val totals);
+  /// Renames column `column` of table `idx`; the result is the final name.
+  std::string renameTableColumn(uint32_t sheet, uint32_t idx, uint32_t column, const std::string& name);
 
   emscripten::val listPassthroughs() const;
-  emscripten::val getPassthrough(const std::string& path) const;
+  bool hasPassthrough(const std::string& path) const;
 
   double pivotCount(uint32_t sheet) const;
   emscripten::val pivotLayout(uint32_t sheet, uint32_t pivotIndex) const;
@@ -291,10 +300,9 @@ class JsWorkbook {
 
   /// Manual page breaks. The enumerators return the whole array rather
   /// than a count + getter pair, matching the rest of this surface.
-  void addSheetRowBreak(uint32_t sheet, uint32_t row, bool manual);
-  void addSheetColBreak(uint32_t sheet, uint32_t col, bool manual);
-  void removeSheetRowBreak(uint32_t sheet, uint32_t row);
-  void removeSheetColBreak(uint32_t sheet, uint32_t col);
+  /// `{ first?, last?, manual? }` upserts the break; `null` removes it.
+  void setSheetRowBreak(uint32_t sheet, uint32_t row, emscripten::val input);
+  void setSheetColBreak(uint32_t sheet, uint32_t col, emscripten::val input);
   void clearSheetBreaks(uint32_t sheet);
   emscripten::val getSheetRowBreaks(uint32_t sheet) const;
   emscripten::val getSheetColBreaks(uint32_t sheet) const;
@@ -313,8 +321,11 @@ class JsWorkbook {
   // ---- Sheet view / layout ------------------------------------------------
 
   JsSheetView getSheetView(uint32_t sheet) const;
-  JsSheetProtection getSheetProtection(uint32_t sheet) const;
+  /// The sheet protection record, `null` when the sheet is not protected.
+  emscripten::val getSheetProtection(uint32_t sheet) const;
+  /// Protects the sheet with the record; `null` unprotects it.
   void setSheetProtection(uint32_t sheet, emscripten::val in);
+  void updateSheetProtection(uint32_t sheet, emscripten::val patch);
   void setSheetZoom(uint32_t sheet, uint32_t zoomScale);
   void setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols);
   /// States the whole tab visibility, including `veryHidden`. Takes a raw
@@ -396,6 +407,8 @@ class JsWorkbook {
   void setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t xf_index);
   emscripten::val getCellXf(uint32_t xf_index) const;
   emscripten::val getFont(uint32_t font_index) const;
+  /// The workbook default font, font record 0.
+  emscripten::val getDefaultFont() const;
   emscripten::val getFill(uint32_t fill_index) const;
   emscripten::val getBorder(uint32_t border_index) const;
   emscripten::val getNumFmt(uint32_t num_fmt_id) const;
@@ -424,7 +437,7 @@ class JsWorkbook {
   emscripten::val getCellStyle(const std::string& name) const;
   emscripten::val getCellStyleXf(uint32_t index) const;
   uint32_t addCellStyleXf(emscripten::val record);
-  /// Adds or replaces a `<cellStyle>` from `{ name, xfId, builtinId, iLevel, hidden, customBuiltin }`.
+  /// Adds or replaces a `<cellStyle>` from `{ name, styleXfIndex, builtinId, iLevel, hidden, customBuiltin }`.
   void setCellStyle(emscripten::val record);
   /// Removes the named style; cell formats that used it fall back to Normal.
   void removeCellStyle(const std::string& name);
@@ -496,19 +509,18 @@ class JsWorkbook {
   /// The merges intersecting `range`, in storage order.
   emscripten::val getMergesInRange(uint32_t sheet, emscripten::val range) const;
 
-  /// Typed AutoFilter model for a sheet or (workbook-wide table index) a table.
+  /// Typed AutoFilter model for a sheet or (sheet and sheet-local table index) a table.
+  /// `setAutoFilter` / `setTableAutoFilter` take `null` to remove the filter.
   emscripten::val getAutoFilter(uint32_t sheet) const;
   void setAutoFilter(uint32_t sheet, emscripten::val filter);
-  void removeAutoFilter(uint32_t sheet);
   void applyAutoFilter(uint32_t sheet);
   void clearAutoFilter(uint32_t sheet);
   emscripten::val evaluateAutoFilter(uint32_t sheet) const;
-  emscripten::val getTableAutoFilter(uint32_t table) const;
-  void setTableAutoFilter(uint32_t table, emscripten::val filter);
-  void removeTableAutoFilter(uint32_t table);
-  void applyTableAutoFilter(uint32_t table);
-  void clearTableAutoFilter(uint32_t table);
-  emscripten::val evaluateTableAutoFilter(uint32_t table) const;
+  emscripten::val getTableAutoFilter(uint32_t sheet, uint32_t table) const;
+  void setTableAutoFilter(uint32_t sheet, uint32_t table, emscripten::val filter);
+  void applyTableAutoFilter(uint32_t sheet, uint32_t table);
+  void clearTableAutoFilter(uint32_t sheet, uint32_t table);
+  emscripten::val evaluateTableAutoFilter(uint32_t sheet, uint32_t table) const;
 
   emscripten::val validateValue(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val value) const;
   emscripten::val listInvalidCells(uint32_t sheet, emscripten::val cursor, emscripten::val limit) const;
@@ -542,7 +554,7 @@ class JsWorkbook {
 
   emscripten::val listSlicers(uint32_t sheet) const;
   emscripten::val getSlicer(uint32_t sheet, uint32_t objectId) const;
-  uint32_t addSlicer(uint32_t sheet, uint32_t table, uint32_t column, emscripten::val spec);
+  uint32_t addSlicer(uint32_t sheet, uint32_t tableSheet, uint32_t table, uint32_t column, emscripten::val spec);
   void updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val spec);
   void removeSlicer(uint32_t sheet, uint32_t objectId);
   void addDataTable(uint32_t sheet, emscripten::val spec);
@@ -562,12 +574,18 @@ class JsWorkbook {
   uint32_t insertChart(uint32_t sheet, emscripten::val options);
   void setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t kind, emscripten::val grouping);
   void setChartTitle(uint32_t sheet, uint32_t objectId, emscripten::val title);
-  void setChartLegend(uint32_t sheet, uint32_t objectId, int32_t position, bool overlay, emscripten::val hiddenSeries);
+  /// Replaces the legend with `{ position, overlay, hiddenSeries }`; `null` removes it.
+  void setChartLegend(uint32_t sheet, uint32_t objectId, emscripten::val legend);
+  /// Merges `{ position?, overlay?, hiddenSeries? }` into the legend.
+  void updateChartLegend(uint32_t sheet, uint32_t objectId, emscripten::val patch);
   void setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, emscripten::val patch);
   void setChartDisplay(uint32_t sheet, uint32_t objectId, emscripten::val patch);
   void setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, emscripten::val patch);
+  /// Replaces the point's formatting with the record; `null` removes it.
   void setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, uint32_t pointIndex,
-                     emscripten::val patch);
+                     emscripten::val point);
+  void updateChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, uint32_t pointIndex,
+                        emscripten::val patch);
   void setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, emscripten::val patch);
   void setChartFilter(uint32_t sheet, uint32_t objectId, emscripten::val hiddenSeries,
                       emscripten::val hiddenCategories);
@@ -642,9 +660,9 @@ class JsWorkbook {
                        uint32_t anchorCol);
   void pivotRemove(uint32_t sheet, uint32_t pivotIndex);
   void pivotSetName(uint32_t sheet, uint32_t pivotIndex, const std::string& name);
-  void pivotSetAnchor(uint32_t sheet, uint32_t pivotIndex, emscripten::val rect);
+  void pivotSetAnchor(uint32_t sheet, uint32_t pivotIndex, emscripten::val cell);
   void pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIndex, bool rowsEnabled, bool colsEnabled);
-  void pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIndex, emscripten::val info);
+  void pivotUpdateStyleOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val info);
   double pivotGetLayout(uint32_t sheet, uint32_t pivotIndex) const;
   void pivotSetLayout(uint32_t sheet, uint32_t pivotIndex, uint32_t layout);
   /// Definition read-back; works for pivots created in-session and loaded
@@ -654,7 +672,7 @@ class JsWorkbook {
   uint32_t pivotRuntimeId(uint32_t sheet, uint32_t pivotIndex) const;
   uint32_t resolvePivotRuntimeId(uint32_t sheet, uint32_t id) const;
   emscripten::val pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIndex) const;
-  emscripten::val pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val pivotGetStyleOptions(uint32_t sheet, uint32_t pivotIndex) const;
   emscripten::val pivotRowFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
   emscripten::val pivotColFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
 
@@ -701,13 +719,11 @@ class JsWorkbook {
   void pivotProject(uint32_t sheet, uint32_t pivotIndex);
   bool pivotProjectionPending(uint32_t sheet, uint32_t pivotIndex) const;
   uint32_t pivotShowDetails(uint32_t sheet, uint32_t pivotIndex, uint32_t row, uint32_t col);
-  uint32_t pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, const std::string& name,
+  /// Appends a manual-filter item: `item` is a new item's name, or `{ cacheIndex }` for the bound cache
+  /// field's shared item at that position (the only form that can express the blank item, which has no
+  /// label of its own and is matched by its binding).
+  uint32_t pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val item,
                              bool visible);
-  /// Appends a manual-filter item addressed by its position in the bound
-  /// cache field's shared items. The only form that can express the blank
-  /// item, which has no label of its own and is matched by its binding.
-  uint32_t pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t cacheIndex,
-                               bool visible);
   void pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
   void pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
                                 bool visible);
@@ -858,9 +874,9 @@ fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const ems
 
 /// Reads an `ImageInsertInput` (`name`, `description`, nested `anchor`); an
 /// absent `input` is all defaults. The stores own the returned strings.
-fm_image_insert_t pull_image_insert(JsNarrowNumericReader& reader, const emscripten::val& input,
-                                    int32_t default_anchor_kind, std::string& name_store,
-                                    std::string& description_store);
+fm_picture_insert_spec_t pull_image_insert(JsNarrowNumericReader& reader, const emscripten::val& input,
+                                           int32_t default_anchor_kind, std::string& name_store,
+                                           std::string& description_store);
 
 }  // namespace parts
 }  // namespace wasm

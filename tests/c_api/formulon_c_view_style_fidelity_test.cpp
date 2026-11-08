@@ -61,10 +61,10 @@ bool Has(const std::string& text, const char* needle) {
 
 fm_row_layout_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
   size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   for (size_t i = 0; i < count; ++i) {
     fm_row_layout_t entry = FM_STRUCT_INIT(fm_row_layout_t);
-    EXPECT_EQ(fm_sheet_get_row_override_at(wb.handle, 0, i, &entry), 0);
+    EXPECT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, i, &entry), 0);
     if (entry.row == row) {
       return entry;
     }
@@ -100,11 +100,11 @@ TEST(FormulonCApiOutline, CollapsedIsReadBackAndRoundTrips) {
   EXPECT_EQ(RowOverride(reloaded, 2).collapsed, 0);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_column_override_count(reloaded.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_layout_count(reloaded.handle, 0, &count), 0);
   int collapsed_spans = 0;
   for (size_t i = 0; i < count; ++i) {
     fm_column_layout_t col = FM_STRUCT_INIT(fm_column_layout_t);
-    ASSERT_EQ(fm_sheet_get_column_override_at(reloaded.handle, 0, i, &col), 0);
+    ASSERT_EQ(fm_sheet_get_column_layout_at(reloaded.handle, 0, i, &col), 0);
     collapsed_spans += col.collapsed != 0 ? 1 : 0;
   }
   EXPECT_EQ(collapsed_spans, 1);
@@ -120,8 +120,8 @@ TEST(FormulonCApiOutline, ClearingCollapsedRemovesAnOtherwiseEmptyOverride) {
   ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 9, 9, 0), 0);
   size_t rows = 0;
   size_t cols = 0;
-  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
-  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &cols), 0);
+  ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &rows), 0);
+  ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &cols), 0);
   EXPECT_EQ(rows, 0U);
   EXPECT_EQ(cols, 0U);
 }
@@ -169,9 +169,9 @@ TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_font_record_t font{};
   font.name = "Arial";
-  font.size = 12.0;
-  font.color.kind = kFmColorRgb;
-  font.color.rgb = 0xFF000000U;
+  font.size_pt = 12.0;
+  font.color.kind = FM_COLOR_KIND_RGB;
+  font.color.argb = 0xFF000000U;
   font.has_outline = 1;
   font.outline = 1;
   font.has_shadow = 1;
@@ -219,7 +219,7 @@ namespace {
 fm_fill_record_t GradientFill(fm_gradient_stop_t* stops, size_t count) {
   fm_fill_record_t fill{};
   fill.has_gradient = 1;
-  fill.gradient_type = FM_GRADIENT_PATH;
+  fill.gradient_type = FM_GRADIENT_TYPE_PATH;
   fill.gradient_degree = 0.0;
   fill.gradient_left = 0.5;
   fill.gradient_right = 0.5;
@@ -237,10 +237,10 @@ TEST(FormulonCApiGradientFill, AddGetAndDedup) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_gradient_stop_t stops[2]{};
   stops[0].position = 0.0;
-  stops[0].color.kind = kFmColorRgb;
-  stops[0].color.rgb = 0xFFFF0000U;
+  stops[0].color.kind = FM_COLOR_KIND_RGB;
+  stops[0].color.argb = 0xFFFF0000U;
   stops[1].position = 1.0;
-  stops[1].color.kind = kFmColorTheme;
+  stops[1].color.kind = FM_COLOR_KIND_THEME;
   stops[1].color.theme = 4;
   stops[1].color.tint = 0.5;
   fm_fill_record_t fill = GradientFill(stops, 2);
@@ -258,14 +258,14 @@ TEST(FormulonCApiGradientFill, AddGetAndDedup) {
   fm_fill_record_t back{};
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, index, &back), 0);
   EXPECT_EQ(back.has_gradient, 1);
-  EXPECT_EQ(back.gradient_type, FM_GRADIENT_PATH);
+  EXPECT_EQ(back.gradient_type, FM_GRADIENT_TYPE_PATH);
   EXPECT_EQ(back.gradient_left, 0.5);
   EXPECT_EQ(back.gradient_top, 0.25);
   EXPECT_EQ(back.gradient_bottom, 0.75);
   ASSERT_EQ(back.gradient_stop_count, 2U);
-  EXPECT_EQ(back.gradient_stops[0].color.kind, kFmColorRgb);
-  EXPECT_EQ(back.gradient_stops[0].color.rgb, 0xFFFF0000U);
-  EXPECT_EQ(back.gradient_stops[1].color.kind, kFmColorTheme);
+  EXPECT_EQ(back.gradient_stops[0].color.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(back.gradient_stops[0].color.argb, 0xFFFF0000U);
+  EXPECT_EQ(back.gradient_stops[1].color.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(back.gradient_stops[1].color.theme, 4U);
   EXPECT_EQ(back.gradient_stops[1].position, 1.0);
 }
@@ -299,8 +299,8 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   fm_gradient_stop_t stops[3]{};
   for (int i = 0; i < 3; ++i) {
     stops[i].position = i * 0.5;
-    stops[i].color.kind = kFmColorRgb;
-    stops[i].color.rgb = 0xFF000000U | (0x40U * static_cast<uint32_t>(i + 1));
+    stops[i].color.kind = FM_COLOR_KIND_RGB;
+    stops[i].color.argb = 0xFF000000U | (0x40U * static_cast<uint32_t>(i + 1));
   }
   fm_fill_record_t fill = GradientFill(stops, 3);
   std::size_t fill_index = 0;
@@ -315,7 +315,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   fm_dxf_record_t dxf{};
   dxf.fill_engaged = 1;
   dxf.fill = GradientFill(stops, 3);
-  dxf.fill.gradient_type = FM_GRADIENT_LINEAR;
+  dxf.fill.gradient_type = FM_GRADIENT_TYPE_LINEAR;
   dxf.fill.gradient_degree = 45.0;
   dxf.fill.gradient_left = dxf.fill.gradient_right = dxf.fill.gradient_top = dxf.fill.gradient_bottom = 0.0;
   std::size_t dxf_index = 0;
@@ -332,7 +332,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   ASSERT_EQ(back.has_gradient, 1);
   ASSERT_EQ(back.gradient_stop_count, 3U);
   EXPECT_EQ(back.gradient_stops[2].position, 1.0);
-  EXPECT_EQ(back.gradient_stops[2].color.rgb, 0xFF0000C0U);
+  EXPECT_EQ(back.gradient_stops[2].color.argb, 0xFF0000C0U);
 
   fm_dxf_record_t dxf_back{};
   ASSERT_EQ(fm_workbook_get_dxf(reloaded.handle, dxf_index, &dxf_back), 0);
@@ -397,7 +397,7 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   ASSERT_EQ(back.icon_set_icon_count, 3U);
   EXPECT_STREQ(back.icon_set_icons[0].icon_set, "3Triangles");
   EXPECT_STREQ(back.icon_set_icons[2].icon_set, "5Boxes");
-  EXPECT_EQ(back.icon_set_icons[2].icon_id, 4);
+  EXPECT_EQ(back.icon_set_icons[2].icon_index, 4);
 }
 
 TEST(FormulonCApiCustomIcons, RulesWithoutIconsReportNone) {
@@ -541,10 +541,10 @@ TEST(FormulonCApiFormatDefaultFlags, CustomHeightAndZeroHeightRoundTrip) {
   EXPECT_EQ(d.custom_height, 0);
   EXPECT_EQ(d.zero_height, 0);
 
-  d.has_default_row_height = 1;
-  d.default_row_height = 18.0;
+  d.has_default_row_height_pt = 1;
+  d.default_row_height_pt = 18.0;
   d.custom_height = 1;
-  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &d), 0);
+  ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &d), 0);
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
   EXPECT_EQ(d.custom_height, 1);
   EXPECT_EQ(d.zero_height, 0);
@@ -556,20 +556,20 @@ TEST(FormulonCApiFormatDefaultFlags, CustomHeightAndZeroHeightRoundTrip) {
   fm_sheet_format_defaults_t back = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   ASSERT_EQ(fm_sheet_get_format_defaults(reloaded.handle, 0, &back), 0);
   EXPECT_EQ(back.custom_height, 1);
-  EXPECT_EQ(back.default_row_height, 18.0);
+  EXPECT_EQ(back.default_row_height_pt, 18.0);
 
   // zeroHeight replaces the flag too, and an unset record clears both.
   back.zero_height = 1;
-  ASSERT_EQ(fm_sheet_set_format_defaults(reloaded.handle, 0, &back), 0);
+  ASSERT_EQ(fm_sheet_update_format_defaults(reloaded.handle, 0, &back), 0);
   WorkbookGuard again;
   RoundTrip(reloaded, &again, &xml);
   EXPECT_TRUE(Has(xml, "zeroHeight=\"1\"")) << xml;
   ASSERT_EQ(fm_sheet_get_format_defaults(again.handle, 0, &back), 0);
   EXPECT_EQ(back.zero_height, 1);
-  EXPECT_EQ(back.effective_default_row_height, 0.0);
+  EXPECT_EQ(back.effective_default_row_height_pt, 0.0);
   fm_sheet_format_defaults_t cleared = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  cleared.base_col_width = 8.0;
-  ASSERT_EQ(fm_sheet_set_format_defaults(again.handle, 0, &cleared), 0);
+  cleared.base_column_width_chars = 8.0;
+  ASSERT_EQ(fm_sheet_update_format_defaults(again.handle, 0, &cleared), 0);
   ASSERT_EQ(fm_sheet_get_format_defaults(again.handle, 0, &back), 0);
   EXPECT_EQ(back.custom_height, 0);
   EXPECT_EQ(back.zero_height, 0);

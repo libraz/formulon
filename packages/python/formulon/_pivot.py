@@ -21,7 +21,7 @@ from ._workbook import (
     _STATUS_NOT_FOUND,
     PIVOT_VALUES_FIELD,
     UNCHANGED,
-    CellRect,
+    CellAddress,
     PivotAggregation,
     PivotAxis,
     PivotCalendar,
@@ -34,8 +34,8 @@ from ._workbook import (
     PivotFieldInput,
     PivotFilter,
     PivotFilterInput,
-    PivotFilterType,
-    PivotFilterValueKind,
+    PivotFilterKind,
+    PivotFilterOperandKind,
     PivotGrandTotals,
     PivotItem,
     PivotLayout,
@@ -43,7 +43,7 @@ from ._workbook import (
     PivotReportLayout,
     PivotShowValuesAs,
     PivotSortOrder,
-    PivotStyle,
+    PivotStyleOptions,
     Unchanged,
     Value,
     _ArgScope,
@@ -52,9 +52,9 @@ from ._workbook import (
     _enum_or_none,
     _install_workbook_locks,
     _nullable_enum,
-    _pack_cell_rect_at,
     _read_count,
     _read_cstr_out,
+    _tristate_default,
 )
 
 if TYPE_CHECKING:
@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
 __all__ = ["Pivot"]
 
-# The PivotTable Options :meth:`Pivot.set_options` writes, by C field kind.
+# The PivotTable Options :meth:`Pivot.update_options` writes, by C field kind.
 _PIVOT_OPTION_FLAGS = (
     "show_error",
     "show_missing",
@@ -73,7 +73,7 @@ _PIVOT_OPTION_FLAGS = (
     "show_data_tips",
     "grid_drop_zones",
     "show_empty_row",
-    "show_empty_col",
+    "show_empty_column",
     "show_data_drop_down",
     "print_drill",
     "field_print_titles",
@@ -184,7 +184,7 @@ class Pivot:
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             _check(
-                LIB.fm_sheet_set_pivot_name(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), name_ptr)
+                LIB.fm_sheet_rename_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), name_ptr)
             )
 
     def get_cache(self) -> PivotCache:
@@ -207,15 +207,15 @@ class Pivot:
                 handle = LIB.read_u32(out)
                 present_p = scope.out_ptr()
                 rect_p = scope.struct(S.CELL_RECT)
-                _check(LIB.fm_pivot_cells_get_bounds(handle, present_p, rect_p))
+                _check(LIB.fm_pivot_report_get_bounds(handle, present_p, rect_p))
                 rect = _decode_cell_rect_at(rect_p) if LIB.read_u32(present_p) else None
                 cells: List[PivotCell] = []
-                n = _read_count(LIB.fm_pivot_cells_get_cell_count, handle)
+                n = _read_count(LIB.fm_pivot_report_get_cell_count, handle)
                 # One scratch block for the whole walk.
                 cptr = scope.struct(S.PIVOT_CELL)
                 for i in range(n):
                     S.zero_struct(LIB, S.PIVOT_CELL, cptr)
-                    _check(LIB.fm_pivot_cells_get_cell_at(handle, _uint(i, "idx"), cptr))
+                    _check(LIB.fm_pivot_report_get_cell_at(handle, _uint(i, "idx"), cptr))
                     d = S.PIVOT_CELL.unpack(LIB, cptr)
                     value = Value._from_wasm(cptr + S.PIVOT_CELL_VALUE_OFFSET)
                     cells.append(
@@ -232,22 +232,36 @@ class Pivot:
                 return PivotLayout(rect=rect, cells=cells)
             finally:
                 if handle:
-                    LIB.fm_pivot_cells_destroy(handle)
+                    LIB.fm_pivot_report_destroy(handle)
 
-    def set_anchor(self, range: Union[CellRect, str]) -> None:
-        """Set the rectangle the pivot reserves (``<location ref>``); its top-left cell is the anchor.
+    def set_anchor(self, cell: Union[CellAddress, str]) -> None:
+        """Move the pivot so its top-left cell is ``cell``, a :class:`CellAddress` or one A1 cell (``"C3"``).
 
-        ``range`` is a :class:`CellRect` or an unqualified A1 range.
+        It has the meaning of ``PivotInput.anchor``.
+
+        Raises:
+          TypeError: when ``cell`` is neither a :class:`CellAddress` nor a ``str``.
+          InvalidArgumentError: when the text is not one unqualified A1 cell.
         """
-        rect = self._sheet._rect(range)
+        if isinstance(cell, CellAddress):
+            row, col = cell.row, cell.col
+        elif isinstance(cell, str):
+            row, col = self._sheet._cell(cell)
+        else:
+            raise TypeError(f"formulon: cell must be a CellAddress or an A1 string, got {type(cell).__name__}")
         h, sheet, pivot_index = self._locate()
-        with _ArgScope() as scope:
-            rp = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rp, rect)
-            _check(LIB.fm_sheet_set_pivot_anchor(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), rp))
+        _check(
+            LIB.fm_sheet_set_pivot_anchor(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(row, "anchor_row"),
+                _uint(col, "anchor_col"),
+            )
+        )
 
     def get_grand_totals(self) -> PivotGrandTotals:
-        """Return the row and column flags :meth:`set_grand_totals` writes."""
+        """Return the row and column flags :meth:`update_grand_totals` writes."""
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             rows = scope.out_ptr()
@@ -259,7 +273,7 @@ class Pivot:
             )
             return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, columns=LIB.read_i32(cols) != 0)
 
-    def set_grand_totals(
+    def update_grand_totals(
         self, *, rows: Union[bool, Unchanged] = UNCHANGED, columns: Union[bool, Unchanged] = UNCHANGED
     ) -> None:
         """Toggle the row / column grand-total bands; an omitted argument keeps its band.
@@ -276,7 +290,7 @@ class Pivot:
                 raise TypeError(f"formulon: {name} must be a bool, got {type(value).__name__}")
         h, sheet, pivot_index = self._locate()
         _check(
-            LIB.fm_sheet_set_pivot_grand_totals(
+            LIB.fm_sheet_update_pivot_grand_totals(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
@@ -285,81 +299,82 @@ class Pivot:
             )
         )
 
-    def get_style_info(self) -> Optional[PivotStyle]:
-        """Return the table style :meth:`set_style_info` writes, or ``None`` without a style element."""
+    def get_style_options(self) -> Optional[PivotStyleOptions]:
+        """Return the table style :meth:`update_style_options` writes, or ``None`` without a style element."""
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
-            ptr = scope.struct(S.PIVOT_STYLE_INFO)
+            ptr = scope.struct(S.PIVOT_STYLE_OPTIONS)
             _check(
-                LIB.fm_sheet_get_pivot_style_info(
+                LIB.fm_sheet_get_pivot_style_options(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
                 )
             )
-            d = S.PIVOT_STYLE_INFO.unpack(LIB, ptr)
+            d = S.PIVOT_STYLE_OPTIONS.unpack(LIB, ptr)
             if not d["present"]:
                 return None
-            return PivotStyle(
-                name=LIB.read_cstr(d["name"]) or None,
+            return PivotStyleOptions(
+                style_name=LIB.read_cstr(d["style_name"]) or None,
                 show_row_headers=d["show_row_headers"] != 0,
-                show_col_headers=d["show_col_headers"] != 0,
+                show_column_headers=d["show_column_headers"] != 0,
                 show_row_stripes=d["show_row_stripes"] != 0,
-                show_col_stripes=d["show_col_stripes"] != 0,
+                show_column_stripes=d["show_column_stripes"] != 0,
                 show_last_column=d["show_last_column"] != 0,
             )
 
-    def set_style_info(
+    def update_style_options(
         self,
         *,
-        name: Union[str, None, Unchanged] = UNCHANGED,
+        style_name: Union[str, None, Unchanged] = UNCHANGED,
         show_row_headers: Union[bool, Unchanged] = UNCHANGED,
-        show_col_headers: Union[bool, Unchanged] = UNCHANGED,
+        show_column_headers: Union[bool, Unchanged] = UNCHANGED,
         show_row_stripes: Union[bool, Unchanged] = UNCHANGED,
-        show_col_stripes: Union[bool, Unchanged] = UNCHANGED,
+        show_column_stripes: Union[bool, Unchanged] = UNCHANGED,
         show_last_column: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the pivot's table style, making the style element present; an omitted argument keeps its value.
 
-        ``name=None`` (or ``""``) writes the element without a style name. A
-        pivot without a style element starts from no name and every toggle
-        off. New pivots start as ``PivotStyleLight16`` with row / column
-        headers and last column on.
+        ``style_name=None`` (or ``""``) writes the element without a style
+        name. A pivot without a style element starts from no name and every
+        toggle off. New pivots start with the workbook's PivotTable style
+        default (else ``PivotStyleLight16``) and row / column headers and
+        last column on.
 
         Raises:
           TypeError: when a toggle is not a ``bool`` (``None`` included) or
-            ``name`` is neither a ``str`` nor ``None``.
+            ``style_name`` is neither a ``str`` nor ``None``.
         """
         toggles = {
             "show_row_headers": show_row_headers,
-            "show_col_headers": show_col_headers,
+            "show_column_headers": show_column_headers,
             "show_row_stripes": show_row_stripes,
-            "show_col_stripes": show_col_stripes,
+            "show_column_stripes": show_column_stripes,
             "show_last_column": show_last_column,
         }
         for key, value in toggles.items():
             if value is not UNCHANGED:
                 _flag(value, key)
-        if name is not UNCHANGED and name is not None and not isinstance(name, str):
-            raise TypeError(f"formulon: name must be a str or None, got {type(name).__name__}")
-        current = self.get_style_info()
-        if name is UNCHANGED:
-            name = current.name if current is not None else None
+        if style_name is not UNCHANGED and style_name is not None and not isinstance(style_name, str):
+            raise TypeError(f"formulon: style_name must be a str or None, got {type(style_name).__name__}")
+        current = self.get_style_options()
+        if style_name is UNCHANGED:
+            style_name = current.style_name if current is not None else None
         flags = {
             key: (getattr(current, key) if current is not None else False) if value is UNCHANGED else value
             for key, value in toggles.items()
         }
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
-            name_ptr = scope.nonempty_cstr(name)
+            name_ptr = scope.nonempty_cstr(style_name)
             _check(
-                LIB.fm_sheet_set_pivot_style_info(
+                LIB.fm_sheet_update_pivot_style_options(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     name_ptr,
                     1 if flags["show_row_headers"] else 0,
-                    1 if flags["show_col_headers"] else 0,
+                    1 if flags["show_column_headers"] else 0,
                     1 if flags["show_row_stripes"] else 0,
-                    1 if flags["show_col_stripes"] else 0,
+                    1 if flags["show_column_stripes"] else 0,
                     1 if flags["show_last_column"] else 0,
                 )
             )
@@ -406,7 +421,7 @@ class Pivot:
                 show_data_tips=d["show_data_tips"] != 0,
                 grid_drop_zones=d["grid_drop_zones"] != 0,
                 show_empty_row=d["show_empty_row"] != 0,
-                show_empty_col=d["show_empty_col"] != 0,
+                show_empty_column=d["show_empty_column"] != 0,
                 show_data_drop_down=d["show_data_drop_down"] != 0,
                 print_drill=d["print_drill"] != 0,
                 field_print_titles=d["field_print_titles"] != 0,
@@ -425,7 +440,7 @@ class Pivot:
                 enable_drill=d["enable_drill"] != 0,
             )
 
-    def set_options(
+    def update_options(
         self,
         *,
         show_error: Union[bool, Unchanged] = UNCHANGED,
@@ -437,7 +452,7 @@ class Pivot:
         show_data_tips: Union[bool, Unchanged] = UNCHANGED,
         grid_drop_zones: Union[bool, Unchanged] = UNCHANGED,
         show_empty_row: Union[bool, Unchanged] = UNCHANGED,
-        show_empty_col: Union[bool, Unchanged] = UNCHANGED,
+        show_empty_column: Union[bool, Unchanged] = UNCHANGED,
         show_data_drop_down: Union[bool, Unchanged] = UNCHANGED,
         print_drill: Union[bool, Unchanged] = UNCHANGED,
         field_print_titles: Union[bool, Unchanged] = UNCHANGED,
@@ -493,7 +508,9 @@ class Pivot:
             for name in _PIVOT_OPTION_TEXTS:
                 S.write_str_field(LIB, ptr, S.PIVOT_OPTIONS, name, pick(name), scope)
             _check(
-                LIB.fm_sheet_set_pivot_options(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr)
+                LIB.fm_sheet_update_pivot_options(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                )
             )
 
     def is_projection_pending(self) -> bool:
@@ -593,7 +610,7 @@ class Pivot:
                 date_calendar=PivotCalendar(d["date_calendar"]),
                 group_base_index=None if d["group_base_index"] < 0 else d["group_base_index"],
                 default_subtotal=d["default_subtotal"] != 0,
-                subtotal_fns=[agg for agg in PivotAggregation if d["subtotal_fns"] & (1 << int(agg))],
+                subtotal_functions=[agg for agg in PivotAggregation if d["subtotal_functions"] & (1 << int(agg))],
                 insert_blank_row=d["insert_blank_row"] != 0,
                 fill_down_labels=d["fill_down_labels"] != 0,
                 show_all=d["show_all"] != 0,
@@ -619,7 +636,7 @@ class Pivot:
                 ptr,
                 {
                     "axis": _sint(spec.axis, "axis"),
-                    "subtotal_top": 1 if spec.subtotal_top else 0,
+                    "subtotal_top": _tristate_default(spec.subtotal_top),
                 },
             )
             S.write_str_field(LIB, ptr, S.PIVOT_FIELD_SPEC, "source_name", spec.source_name, scope)
@@ -854,7 +871,7 @@ class Pivot:
                 show_detail=d["show_detail"] != 0,
             )
 
-    def update_item(
+    def update_field_item(
         self,
         field_index: int,
         item_index: int,
@@ -898,56 +915,52 @@ class Pivot:
             with _ArgScope() as scope:
                 _check(LIB.fm_sheet_set_pivot_field_item_caption(h, *lead, scope.nonempty_cstr(caption)))
 
-    def add_field_item(self, field_index: int, name: str, *, visible: bool = True) -> int:
-        """Append a manual-filter item to pivot field ``field_index``, addressed by its label; return its index.
+    def add_field_item(
+        self,
+        field_index: int,
+        name: Optional[str] = None,
+        *,
+        cache_index: Optional[int] = None,
+        visible: bool = True,
+    ) -> int:
+        """Append a manual-filter item to pivot field ``field_index``; return its item index.
 
-        The item binds to the first shared item of the cache field that
-        renders as ``name`` (unbound when none does), and records are matched
-        by comparing their rendered label against ``name``. The blank item
-        has no label of its own; build it with :meth:`add_field_shared_item`
-        instead.
+        Give exactly one of ``name`` and ``cache_index``:
+
+        - ``name`` addresses the item by label. It binds to the first shared
+          item of the cache field that renders as ``name`` (unbound when none
+          does), and records are matched by comparing their rendered label
+          against it. An empty label cannot express the blank item, which has
+          no label of its own.
+        - ``cache_index`` addresses it by position in the bound cache field's
+          shared items, the index space of OOXML ``<item x="N">``. The label is
+          resolved from that shared item, so this is the form that can express
+          the blank item. ``cache_index`` is not validated: an index that
+          resolves to nothing yields an item with an empty label that filters
+          nothing.
+
+        Raises:
+          TypeError: when both or neither of ``name`` and ``cache_index`` are given.
         """
-        h, sheet, pivot_index = self._locate()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_sheet_add_pivot_field_item(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    name_ptr,
-                    1 if visible else 0,
-                    out,
-                )
-            )
-            return LIB.read_u32(out)
-
-    def add_field_shared_item(self, field_index: int, cache_index: int, *, visible: bool = True) -> int:
-        """Append a manual-filter item addressed by its cache shared-item index; return its index.
-
-        ``cache_index`` selects ``shared_items[cache_index]`` of the bound
-        cache field, the same index space as OOXML ``<item x="N">``. The
-        label is resolved from that shared item, so a shared item that
-        renders to nothing produces the blank item. ``cache_index`` is not
-        validated: an index that resolves to nothing yields an item with an
-        empty label that filters nothing.
-        """
+        if (name is None) == (cache_index is None):
+            raise TypeError("formulon: give exactly one of name and cache_index")
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(
-                LIB.fm_sheet_add_pivot_field_shared_item(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    _uint(cache_index, "cache_index"),
-                    1 if visible else 0,
-                    out,
-                )
+            lead = (
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_index, "field_index"),
             )
+            if name is not None:
+                _check(LIB.fm_sheet_add_pivot_field_item(*lead, scope.cstr(name), 1 if visible else 0, out))
+            else:
+                _check(
+                    LIB.fm_sheet_add_pivot_field_item_by_cache_index(
+                        *lead, _uint(cache_index, "cache_index"), 1 if visible else 0, out
+                    )
+                )
             return LIB.read_u32(out)
 
     def clear_field_items(self, field_index: int) -> None:
@@ -959,24 +972,24 @@ class Pivot:
             )
         )
 
-    def add_field_subtotal_fn(self, field_index: int, agg: PivotAggregation) -> None:
-        """Append a subtotal-fn entry to pivot field ``field_index``."""
+    def add_field_subtotal_function(self, field_index: int, aggregation: PivotAggregation) -> None:
+        """Append a subtotal function to pivot field ``field_index``."""
         h, sheet, pivot_index = self._locate()
         _check(
-            LIB.fm_sheet_add_pivot_field_subtotal_fn(
+            LIB.fm_sheet_add_pivot_field_subtotal_function(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
                 _uint(field_index, "field_index"),
-                _sint(agg, "agg"),
+                _sint(aggregation, "aggregation"),
             )
         )
 
-    def clear_field_subtotal_fns(self, field_index: int) -> None:
-        """Drop every subtotal-fn entry from pivot field ``field_index``."""
+    def clear_field_subtotal_functions(self, field_index: int) -> None:
+        """Drop every subtotal function from pivot field ``field_index``."""
         h, sheet, pivot_index = self._locate()
         _check(
-            LIB.fm_sheet_clear_pivot_field_subtotal_fns(
+            LIB.fm_sheet_clear_pivot_field_subtotal_functions(
                 h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_index, "field_index")
             )
         )
@@ -1207,12 +1220,12 @@ class Pivot:
             return PivotFilter(
                 axis=PivotAxis(d["axis"]),
                 field_name=LIB.read_cstr(d["field_name"]),
-                type=PivotFilterType(d["type"]),
-                value_kind=_enum_or_none(PivotFilterValueKind, d["value_kind"]),
+                type=PivotFilterKind(d["type"]),
+                value_kind=_enum_or_none(PivotFilterOperandKind, d["value_kind"]),
                 value_int=d["value_int"],
                 value_double=d["value_double"],
                 value_text=LIB.read_cstr(d["value_text"]),
-                value_high_kind=_enum_or_none(PivotFilterValueKind, d["value_high_kind"]),
+                value_high_kind=_enum_or_none(PivotFilterOperandKind, d["value_high_kind"]),
                 value_high_int=d["value_high_int"],
                 value_high_double=d["value_high_double"],
                 data_field_index=d["data_field_index"],

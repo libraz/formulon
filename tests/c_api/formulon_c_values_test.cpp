@@ -70,7 +70,7 @@ TEST(FormulonCApi, NumberLiteralRoundTrip) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 42.5);
 }
 TEST(FormulonCApi, GetValueRejectsCoordinatesOutsideTheGrid) {
@@ -82,7 +82,7 @@ TEST(FormulonCApi, GetValueRejectsCoordinatesOutsideTheGrid) {
   EXPECT_EQ(fm_sheet_get_value(wb.handle, 0, 0, formulon::Sheet::kMaxCols, &v), kInvalidArgument);
   // The last addressable cell is still readable.
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, formulon::Sheet::kMaxRows - 1, formulon::Sheet::kMaxCols - 1, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BLANK);
 }
 TEST(FormulonCApi, SetNumberRejectsNaNAndInfinity) {
   // A Number-kind cell must always hold a finite double: ISNUMBER,
@@ -100,7 +100,7 @@ TEST(FormulonCApi, SetNumberRejectsNaNAndInfinity) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BLANK);
 
   // A finite value still succeeds.
   EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.5), 0);
@@ -135,8 +135,8 @@ TEST(FormulonCApi, ParallelRecalcMatchesSerialOnWideIndependentDag) {
     fm_value_t parallel_value{};
     ASSERT_EQ(fm_sheet_get_value(serial.handle, 0U, row, 1U, &serial_value), 0);
     ASSERT_EQ(fm_sheet_get_value(parallel.handle, 0U, row, 1U, &parallel_value), 0);
-    ASSERT_EQ(serial_value.kind, FM_VAL_NUMBER);
-    ASSERT_EQ(parallel_value.kind, FM_VAL_NUMBER);
+    ASSERT_EQ(serial_value.kind, FM_VALUE_KIND_NUMBER);
+    ASSERT_EQ(parallel_value.kind, FM_VALUE_KIND_NUMBER);
     EXPECT_DOUBLE_EQ(parallel_value.u.number, serial_value.u.number);
     EXPECT_DOUBLE_EQ(parallel_value.u.number, static_cast<double>(row + 1U) * 2.0 + 1.0);
   }
@@ -185,15 +185,15 @@ TEST(FormulonCApi, BoolAndBlankSetters) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BOOL);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BOOL);
   EXPECT_EQ(v.u.boolean, 1);
 
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BOOL);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BOOL);
   EXPECT_EQ(v.u.boolean, 0);
 
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BLANK);
 }
 TEST(FormulonCApi, ErrorSetterStoresStaticErrorLiteral) {
   WorkbookGuard wb;
@@ -203,7 +203,7 @@ TEST(FormulonCApi, ErrorSetterStoresStaticErrorLiteral) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_ERROR);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(v.u.error_code, 1);
 }
 TEST(FormulonCApi, ErrorSetterRejectsInvalidErrorCode) {
@@ -221,7 +221,7 @@ TEST(FormulonCApi, FormulaNumericResult) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 20.0);
 }
 TEST(FormulonCApi, FormulaTextResult) {
@@ -232,7 +232,7 @@ TEST(FormulonCApi, FormulaTextResult) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_TEXT);
   ASSERT_NE(v.u.text, nullptr);
   EXPECT_STREQ(v.u.text, "HELLO");
 }
@@ -252,7 +252,7 @@ TEST(FormulonCApi, TextSetterRoundTrip) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_TEXT);
   ASSERT_NE(v.u.text, nullptr);
   EXPECT_STREQ(v.u.text, "hello");
   // Verify the returned pointer is actually NUL-terminated by inspecting
@@ -267,7 +267,7 @@ TEST(FormulonCApi, FormulaErrorSurfacesAsValueError) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_ERROR);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_ERROR);
   // Excel's `#DIV/0!` is `ErrorCode::Div0`, ordinal 1.
   EXPECT_EQ(v.u.error_code, 1);
 }
@@ -340,6 +340,6 @@ TEST(FormulonCApi, IterativeOptionsConverge) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_NEAR(v.u.number, 2.0, 1e-3);
 }

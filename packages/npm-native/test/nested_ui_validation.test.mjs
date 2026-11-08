@@ -38,13 +38,13 @@ test('filter kind is validated without aborting and date-group bytes do not wrap
       () =>
         wb.sheet(0).setAutoFilter({
           range: RANGE,
-          columns: [{ colId: 0, kind: 1, dateGroups: [{ month: 257 }] }],
+          columns: [{ columnOffset: 0, kind: 1, dateGroups: [{ month: 257 }] }],
         }),
       RangeError,
     );
     assert.deepEqual(wb.sheet(0).getAutoFilter(), before);
 
-    wb.sheet(0).setAutoFilter({ range: RANGE, columns: [{ colId: 0, kind: 0 }] });
+    wb.sheet(0).setAutoFilter({ range: RANGE, columns: [{ columnOffset: 0, kind: 0 }] });
     assert.equal(wb.sheet(0).getAutoFilter().columns[0].kind, 0);
   } finally {
     wb.dispose();
@@ -156,13 +156,13 @@ test('nullish UI fields retain their defaults', async () => {
     wb.sheet(0).setAutoFilter({
       range: { ...RANGE, lastCol: 1 },
       columns: [
-        { colId: null, kind: undefined },
-        { colId: 1, kind: 1, dateGroups: [{ month: null }] },
+        { columnOffset: null, kind: undefined },
+        { columnOffset: 1, kind: 1, dateGroups: [{ month: null }] },
       ],
       sort: null,
     });
     const stored = wb.sheet(0).getAutoFilter();
-    assert.equal(stored.columns[0].colId, 0);
+    assert.equal(stored.columns[0].columnOffset, 0);
     assert.equal(stored.columns[0].kind, 0);
     assert.equal(stored.columns[1].dateGroups[0].month, 0);
   } finally {

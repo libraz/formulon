@@ -6,6 +6,7 @@ import {
   FilterOperator,
   SortBy,
   SortMethod,
+  StatusCode,
   ValidationErrorStyle,
 } from '../../packages/npm/common.mjs';
 import { expectFailure, readAll } from './smoke_support.mjs';
@@ -40,11 +41,11 @@ const hiddenRows = (wb) =>
     .map((r) => r.row);
 
 const customGreaterThanThree = {
-  colId: 0,
+  columnOffset: 0,
   kind: FilterKind.Custom,
   customCount: 1,
-  op1: FilterOperator.GreaterThan,
-  val1: '3',
+  operator1: FilterOperator.GreaterThan,
+  value1: '3',
 };
 
 export function registerFilterValidationComments(Module, test) {
@@ -69,7 +70,7 @@ export function registerFilterValidationComments(Module, test) {
         range: range(0, 0, 5, 2),
         columns: [
           {
-            colId: 0,
+            columnOffset: 0,
             kind: FilterKind.Values,
             filterBlank: true,
             values: ['a', 'b'],
@@ -78,22 +79,22 @@ export function registerFilterValidationComments(Module, test) {
             ],
           },
           {
-            colId: 1,
+            columnOffset: 1,
             kind: FilterKind.Top10,
             top: true,
             percent: true,
-            topVal: 10,
-            filterVal: 4.5,
+            topValue: 10,
+            filterValue: 4.5,
           },
           {
-            colId: 2,
+            columnOffset: 2,
             kind: FilterKind.Custom,
             customAnd: true,
             customCount: 2,
-            op1: FilterOperator.GreaterThan,
-            val1: '1',
-            op2: FilterOperator.LessThan,
-            val2: '9',
+            operator1: FilterOperator.GreaterThan,
+            value1: '1',
+            operator2: FilterOperator.LessThan,
+            value2: '9',
           },
         ],
         sort: {
@@ -114,13 +115,13 @@ export function registerFilterValidationComments(Module, test) {
       assert.deepEqual(af.columns[0].dateGroups, filter.columns[0].dateGroups);
       assert.equal(af.columns[1].top, true);
       assert.equal(af.columns[1].percent, true);
-      assert.equal(af.columns[1].topVal, 10);
-      assert.equal(af.columns[1].filterVal, 4.5);
-      assert.equal(af.columns[0].filterVal, null);
-      assert.equal(af.columns[0].iconId, null);
-      assert.equal(af.sort.conditions[0].dxfId, null);
+      assert.equal(af.columns[1].topValue, 10);
+      assert.equal(af.columns[1].filterValue, 4.5);
+      assert.equal(af.columns[0].filterValue, null);
+      assert.equal(af.columns[0].iconIndex, null);
+      assert.equal(af.sort.conditions[0].dxfIndex, null);
       assert.equal(af.columns[2].customAnd, true);
-      assert.equal(af.columns[2].val2, '9');
+      assert.equal(af.columns[2].value2, '9');
       assert.equal(af.sort.caseSensitive, true);
       assert.equal(af.sort.conditions.length, 1);
       assert.equal(af.sort.conditions[0].descending, true);
@@ -130,10 +131,10 @@ export function registerFilterValidationComments(Module, test) {
       assert.deepEqual(wb.getAutoFilter(0), af);
 
       // An omitted `top` reads as true (the schema default).
-      wb.setAutoFilter(0, { range: af.range, columns: [{ colId: 0, kind: FilterKind.Top10, topVal: 2 }] });
+      wb.setAutoFilter(0, { range: af.range, columns: [{ columnOffset: 0, kind: FilterKind.Top10, topValue: 2 }] });
       assert.equal(wb.getAutoFilter(0).columns[0].top, true);
 
-      wb.removeAutoFilter(0);
+      wb.setAutoFilter(0, null);
       assert.equal(wb.getAutoFilter(0), null);
     });
   });
@@ -152,7 +153,7 @@ export function registerFilterValidationComments(Module, test) {
 
       wb.applyAutoFilter(0);
       assert.deepEqual(hiddenRows(wb), [1, 2, 3]);
-      wb.clearAutoFilter(0);
+      wb.clearAutoFilterCriteria(0);
       assert.deepEqual(hiddenRows(wb), []);
       assert.equal(wb.getAutoFilter(0).columns.length, 0);
     });
@@ -161,25 +162,25 @@ export function registerFilterValidationComments(Module, test) {
   test('table AutoFilter methods mirror the sheet ones', () => {
     withWorkbook(Module, (wb) => {
       fillNumbers(wb);
-      const created = wb.addTable({
-        range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 5, lastCol: 0 } },
+      const table = wb.addTable(0, {
+        range: { firstRow: 0, firstCol: 0, lastRow: 5, lastCol: 0 },
         name: 'Nums',
         columns: ['N'],
       });
-      const table = created;
-      const got = wb.getTableAutoFilter(table);
+      const got = wb.getTableAutoFilter(0, table);
       assert.equal(got.range.lastRow, 5);
 
-      wb.setTableAutoFilter(table, { range: range(0, 0, 5, 0), columns: [customGreaterThanThree], sort: null });
-      const ev = wb.evaluateTableAutoFilter(table);
+      wb.setTableAutoFilter(0, table, { range: range(0, 0, 5, 0), columns: [customGreaterThanThree], sort: null });
+      const ev = wb.evaluateTableAutoFilter(0, table);
       assert.deepEqual(ev.match, [false, false, false, true, true]);
-      wb.applyTableAutoFilter(table);
+      wb.applyTableAutoFilter(0, table);
       assert.deepEqual(hiddenRows(wb), [1, 2, 3]);
-      wb.clearTableAutoFilter(table);
+      wb.clearTableAutoFilterCriteria(0, table);
       assert.deepEqual(hiddenRows(wb), []);
-      wb.removeTableAutoFilter(table);
-      assert.equal(wb.getTableAutoFilter(table), null);
-      expectFailure(() => wb.getTableAutoFilter(99));
+      wb.setTableAutoFilter(0, table, null);
+      assert.equal(wb.getTableAutoFilter(0, table), null);
+      expectFailure(() => wb.getTableAutoFilter(0, 99), StatusCode.IndexOutOfRange);
+      expectFailure(() => wb.getTableAutoFilter(9, 0), StatusCode.SheetIndexOutOfRange);
     });
   });
 
@@ -190,8 +191,8 @@ export function registerFilterValidationComments(Module, test) {
       const bad = {
         ...f,
         columns: [
-          { colId: 1, kind: FilterKind.None },
-          { colId: 0, kind: FilterKind.None },
+          { columnOffset: 1, kind: FilterKind.None },
+          { columnOffset: 0, kind: FilterKind.None },
         ],
       };
       expectFailure(() => wb.setAutoFilter(0, bad));
@@ -203,7 +204,7 @@ export function registerFilterValidationComments(Module, test) {
       const base = {
         ranges: [range(0, 0, 2, 0)],
         type: 1,
-        op: 0,
+        operator: 0,
         formula1: '1',
         formula2: '10',
       };
@@ -263,7 +264,7 @@ export function registerFilterValidationComments(Module, test) {
         range: range(0, 0, 2, 0),
         columns: [
           {
-            colId: 0,
+            columnOffset: 0,
             kind: FilterKind.Values,
             values: ['1'],
             dateGroups: [{ year: 2026, month: 1, day: 0, hour: 0, minute: 0, second: 0, grouping: 1 }],
@@ -289,7 +290,7 @@ export function registerFilterValidationComments(Module, test) {
         () =>
           wb.setAutoFilter(0, {
             ...good,
-            columns: [{ ...good.columns[0], colId: Number.NaN }],
+            columns: [{ ...good.columns[0], columnOffset: Number.NaN }],
           }),
         RangeError,
       );
@@ -308,13 +309,13 @@ export function registerFilterValidationComments(Module, test) {
       wb.setAutoFilter(0, {
         range: range(0, 0, 2, 1),
         columns: [
-          { colId: null, kind: undefined },
-          { colId: 1, kind: 1, dateGroups: [{ month: null }] },
+          { columnOffset: null, kind: undefined },
+          { columnOffset: 1, kind: 1, dateGroups: [{ month: null }] },
         ],
         sort: null,
       });
       const stored = wb.getAutoFilter(0);
-      assert.equal(stored.columns[0].colId, 0);
+      assert.equal(stored.columns[0].columnOffset, 0);
       assert.equal(stored.columns[0].kind, 0);
       assert.equal(stored.columns[1].dateGroups[0].month, 0);
     });
@@ -432,7 +433,7 @@ export function registerFilterValidationComments(Module, test) {
       const rule = {
         ranges: [range(0, 0, 9, 0)],
         type: 1,
-        op: 0,
+        operator: 0,
         formula1: '1',
         formula2: '10',
         errorStyle: ValidationErrorStyle.Warning,

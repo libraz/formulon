@@ -173,7 +173,7 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t a1{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &a1), 0);
-  EXPECT_EQ(a1.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(a1.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(a1.u.number, 7.0);
 }
 TEST(FormulonCApi, SaveExXlsxMatchesSave) {
@@ -215,7 +215,7 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 42.0);
 }
 TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnesZero) {
@@ -532,7 +532,7 @@ TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 123.5);
 }
 TEST(FormulonCApi, SaveLoadFormulaTextResult) {
@@ -551,7 +551,7 @@ TEST(FormulonCApi, SaveLoadFormulaTextResult) {
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 1, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_TEXT);
   ASSERT_NE(v.u.text, nullptr);
   EXPECT_STREQ(v.u.text, "WORLD");
 }
@@ -571,7 +571,7 @@ TEST(FormulonCApi, SaveLoadFormulaBoolResult) {
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 2, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BOOL);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BOOL);
   EXPECT_EQ(v.u.boolean, 1);
 }
 TEST(FormulonCApi, SaveLoadFormulaErrorResult) {
@@ -590,7 +590,7 @@ TEST(FormulonCApi, SaveLoadFormulaErrorResult) {
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 3, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_ERROR);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(v.u.error_code, 1);
 }
 

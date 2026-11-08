@@ -154,6 +154,9 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
+  if (auto rc = check_enum_domain(spec->subtotal_top, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "subtotal_top"); rc != 0) {
+    return rc;
+  }
   if (auto rc = validate(*spec); rc != 0) {
     return rc;
   }
@@ -196,7 +199,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   field.source_name = spec->source_name;
   field.custom_name = text_or_empty(spec->custom_name);
   field.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
-  field.subtotal_top = spec->subtotal_top != 0;
+  field.subtotal_top = spec->subtotal_top != FM_TRISTATE_FALSE;
   field.number_format = std::move(number_format);
   sync_field_order(*table, static_cast<std::uint32_t>(index));
   const fm_status_t status = edit.commit();
@@ -351,14 +354,14 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_sort(fm_workbook_t* wb, std::siz
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  fm_status_t enum_status = check_enum_domain(order, 0, FM_PIVOT_SORT_MANUAL, "order");
+  fm_status_t enum_status = check_enum_domain(order, 0, FM_PIVOT_SORT_ORDER_MANUAL, "order");
   if (enum_status != 0) {
     return enum_status;
   }
   if (auto rc = check_utf8({by_field}); rc != 0) {
     return rc;
   }
-  const bool manual = order == FM_PIVOT_SORT_MANUAL;
+  const bool manual = order == FM_PIVOT_SORT_ORDER_MANUAL;
   if (manual && by_field != nullptr && by_field[0] != '\0') {
     return invalid_argument("manual order takes no by_field key");
   }
@@ -367,7 +370,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_sort(fm_workbook_t* wb, std::siz
                               field.sort.manual = manual;
                               field.sort.stated = true;
                               // Manual keeps the ascending form the OOXML reader yields for it.
-                              field.sort.ascending = order != FM_PIVOT_SORT_DESCENDING;
+                              field.sort.ascending = order != FM_PIVOT_SORT_ORDER_DESCENDING;
                               field.sort.by_field = text_or_empty(by_field);
                             });
 }
@@ -566,10 +569,10 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, std::siz
   return status;
 }
 
-extern "C" fm_status_t fm_sheet_add_pivot_field_shared_item(fm_workbook_t* wb, std::size_t sheet_index,
-                                                            std::size_t pivot_index, std::size_t field_index,
-                                                            std::size_t cache_index, std::int32_t visible,
-                                                            std::size_t* out_index) {
+extern "C" fm_status_t fm_sheet_add_pivot_field_item_by_cache_index(fm_workbook_t* wb, std::size_t sheet_index,
+                                                                    std::size_t pivot_index, std::size_t field_index,
+                                                                    std::size_t cache_index, std::int32_t visible,
+                                                                    std::size_t* out_index) {
   clear_last_error();
   if (out_index == nullptr) {
     return null_argument("out_index");
@@ -619,9 +622,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_visible(fm_workbook_t* wb, 
                              &formulon::pivot::PivotItem::visible, visible != 0);
 }
 
-extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_fn(fm_workbook_t* wb, std::size_t sheet_index,
-                                                            std::size_t pivot_index, std::size_t field_index,
-                                                            std::int32_t agg) {
+extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_function(fm_workbook_t* wb, std::size_t sheet_index,
+                                                                  std::size_t pivot_index, std::size_t field_index,
+                                                                  std::int32_t aggregation) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");
@@ -629,17 +632,18 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_fn(fm_workbook_t* wb, s
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  fm_status_t enum_status = check_enum_domain(agg, 0, FM_PIVOT_AGG_VARP, "aggregation");
+  fm_status_t enum_status = check_enum_domain(aggregation, 0, FM_PIVOT_AGGREGATION_VARP, "aggregation");
   if (enum_status != 0) {
     return enum_status;
   }
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_index, [agg](formulon::pivot::PivotField& field) {
-    field.subtotal_fns.push_back(pivot_subtotal_from_fm(static_cast<fm_pivot_aggregation_t>(agg)));
-  });
+  return mutate_pivot_field(
+      wb, sheet_index, pivot_index, field_index, [aggregation](formulon::pivot::PivotField& field) {
+        field.subtotal_fns.push_back(pivot_subtotal_from_fm(static_cast<fm_pivot_aggregation_t>(aggregation)));
+      });
 }
 
-extern "C" fm_status_t fm_sheet_clear_pivot_field_subtotal_fns(fm_workbook_t* wb, std::size_t sheet_index,
-                                                               std::size_t pivot_index, std::size_t field_index) {
+extern "C" fm_status_t fm_sheet_clear_pivot_field_subtotal_functions(fm_workbook_t* wb, std::size_t sheet_index,
+                                                                     std::size_t pivot_index, std::size_t field_index) {
   clear_last_error();
   return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
                             [](formulon::pivot::PivotField& field) { field.subtotal_fns.clear(); });
@@ -724,14 +728,14 @@ extern "C" fm_status_t fm_sheet_get_pivot_field(const fm_workbook_t* wb, std::si
   result.custom_name = field->custom_name.c_str();
   const auto axis = pivot_axis_to_fm(field->axis);
   result.axis = axis.has_value() ? static_cast<std::int32_t>(*axis) : -1;
-  result.subtotal_top = field->subtotal_top ? 1 : 0;
+  result.subtotal_top = field->subtotal_top ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   result.number_format = pivot_num_fmt_code(wb->workbook(), field->number_format);
   const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id());
   result.cache_field_index =
       cache != nullptr && field_index < cache->fields().size() ? static_cast<std::int32_t>(field_index) : -1;
-  result.sort_order = field->sort.manual      ? FM_PIVOT_SORT_MANUAL
-                      : field->sort.ascending ? FM_PIVOT_SORT_ASCENDING
-                                              : FM_PIVOT_SORT_DESCENDING;
+  result.sort_order = field->sort.manual      ? FM_PIVOT_SORT_ORDER_MANUAL
+                      : field->sort.ascending ? FM_PIVOT_SORT_ORDER_ASCENDING
+                                              : FM_PIVOT_SORT_ORDER_DESCENDING;
   result.sort_by_field = field->sort.by_field.c_str();
   result.group_base_index = -1;
   if (result.cache_field_index >= 0) {
@@ -749,7 +753,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_field(const fm_workbook_t* wb, std::si
   // layout treat them, so the flag reads the effective state.
   result.default_subtotal = field->default_subtotal && field->subtotal_fns.empty() ? 1 : 0;
   for (const formulon::pivot::SubtotalFn fn : field->subtotal_fns) {
-    result.subtotal_fns |= 1U << static_cast<unsigned>(fn);
+    result.subtotal_functions |= 1U << static_cast<unsigned>(fn);
   }
   result.insert_blank_row = field->insert_blank_row ? 1 : 0;
   result.fill_down_labels = field->fill_down_labels ? 1 : 0;

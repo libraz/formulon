@@ -6,16 +6,15 @@ c	record.chart_axis_patch	op-type:max_op	`max_op` is `int32_t`, not `fm_patch_op
 c	record.chart_axis_patch	op-type:min_op	`min_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:number_format_op	`number_format_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:reversed_op	`reversed_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_axis_patch	op-type:tick_label_pos_op	`tick_label_pos_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_axis_patch	op-type:tick_label_position_op	`tick_label_position_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:title_op	`title_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op-type:visible_op	`visible_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_axis_patch	op:crosses_at	`crosses_at` has no `crosses_at_op`
 c	record.chart_display_patch	op-type:blanks_as_op	`blanks_as_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_display_patch	op-type:na_as_blank_op	`na_as_blank_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_display_patch	op-type:plot_vis_only_op	`plot_vis_only_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_display_patch	op-type:plot_visible_only_op	`plot_visible_only_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_fill_patch	op-type:color_op	`color_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_fill_patch	op-type:transparency_op	`transparency_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_fill_patch	op:transparency_pct	`transparency_pct` has no `transparency_pct_op`
+c	record.chart_fill_patch	op-type:transparency_pct_op	`transparency_pct_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:font_color_op	`font_color_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:font_size_op	`font_size_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_labels_patch	op-type:number_format_op	`number_format_op` is `int32_t`, not `fm_patch_op_t`
@@ -33,14 +32,12 @@ c	record.chart_legend_patch	op:position	`position` has no `position_op`
 c	record.chart_line_patch	op-type:color_op	`color_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_line_patch	op-type:dash_op	`dash_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_line_patch	op-type:none_op	`none_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_line_patch	op-type:transparency_op	`transparency_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_line_patch	op-type:width_op	`width_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_line_patch	op:transparency_pct	`transparency_pct` has no `transparency_pct_op`
-c	record.chart_line_patch	op:width_pt	`width_pt` has no `width_pt_op`
-c	record.chart_marker_patch	op-type:size_op	`size_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_line_patch	op-type:transparency_pct_op	`transparency_pct_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_line_patch	op-type:width_pt_op	`width_pt_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_marker_patch	op-type:size_pt_op	`size_pt_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_marker_patch	op-type:symbol_op	`symbol_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_plot_patch	op-type:first_slice_angle_op	`first_slice_angle_op` is `int32_t`, not `fm_patch_op_t`
-c	record.chart_plot_patch	op-type:gap_width_op	`gap_width_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_plot_patch	op-type:first_slice_angle_deg_op	`first_slice_angle_deg_op` is `int32_t`, not `fm_patch_op_t`
+c	record.chart_plot_patch	op-type:gap_width_pct_op	`gap_width_pct_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_plot_patch	op-type:hole_size_op	`hole_size_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_plot_patch	op-type:overlap_op	`overlap_op` is `int32_t`, not `fm_patch_op_t`
 c	record.chart_plot_patch	op-type:vary_colors_op	`vary_colors_op` is `int32_t`, not `fm_patch_op_t`
@@ -54,14 +51,89 @@ c	record.chart_series_patch	op:size	`size` has no `size_op`
 c	record.chart_series_patch	op:values	`values` has no `values_op`
 c	record.chart_series_patch	op:x	`x` has no `x_op`
 c	record.chart_series_patch	op:y	`y` has no `y_op`
+c	record.header_footer	engaged:align_with_margins_engaged	`align_with_margins_engaged` keeps a field; give it a `<field>_op`
+c	record.header_footer	engaged:different_first_engaged	`different_first_engaged` keeps a field; give it a `<field>_op`
+c	record.header_footer	engaged:different_odd_even_engaged	`different_odd_even_engaged` keeps a field; give it a `<field>_op`
+c	record.header_footer	engaged:scale_with_doc_engaged	`scale_with_doc_engaged` keeps a field; give it a `<field>_op`
+c	record.header_footer	op:align_with_margins	`align_with_margins` has no `align_with_margins_op`
+c	record.header_footer	op:different_first	`different_first` has no `different_first_op`
+c	record.header_footer	op:different_odd_even	`different_odd_even` has no `different_odd_even_op`
+c	record.header_footer	op:even_footer	`even_footer` has no `even_footer_op`
+c	record.header_footer	op:even_header	`even_header` has no `even_header_op`
+c	record.header_footer	op:first_footer	`first_footer` has no `first_footer_op`
+c	record.header_footer	op:first_header	`first_header` has no `first_header_op`
+c	record.header_footer	op:odd_footer	`odd_footer` has no `odd_footer_op`
+c	record.header_footer	op:odd_header	`odd_header` has no `odd_header_op`
+c	record.header_footer	op:scale_with_doc	`scale_with_doc` has no `scale_with_doc_op`
 c	record.iterative_settings_patch	negative-keep	a negative value keeps a setting
 c	record.iterative_settings_patch	op:enabled	`enabled` has no `enabled_op`
 c	record.iterative_settings_patch	op:max_change	`max_change` has no `max_change_op`
 c	record.iterative_settings_patch	op:max_iterations	`max_iterations` has no `max_iterations_op`
+c	record.page_margins	engaged:bottom_in_engaged	`bottom_in_engaged` keeps a field; give it a `<field>_op`
+c	record.page_margins	engaged:footer_in_engaged	`footer_in_engaged` keeps a field; give it a `<field>_op`
+c	record.page_margins	engaged:header_in_engaged	`header_in_engaged` keeps a field; give it a `<field>_op`
+c	record.page_margins	engaged:left_in_engaged	`left_in_engaged` keeps a field; give it a `<field>_op`
+c	record.page_margins	engaged:right_in_engaged	`right_in_engaged` keeps a field; give it a `<field>_op`
+c	record.page_margins	engaged:top_in_engaged	`top_in_engaged` keeps a field; give it a `<field>_op`
+c	record.page_margins	op:bottom_in	`bottom_in` has no `bottom_in_op`
+c	record.page_margins	op:footer_in	`footer_in` has no `footer_in_op`
+c	record.page_margins	op:header_in	`header_in` has no `header_in_op`
+c	record.page_margins	op:left_in	`left_in` has no `left_in_op`
+c	record.page_margins	op:right_in	`right_in` has no `right_in_op`
+c	record.page_margins	op:top_in	`top_in` has no `top_in_op`
+c	record.page_setup	engaged:fit_to_height_engaged	`fit_to_height_engaged` keeps a field; give it a `<field>_op`
+c	record.page_setup	engaged:fit_to_page_engaged	`fit_to_page_engaged` keeps a field; give it a `<field>_op`
+c	record.page_setup	engaged:fit_to_width_engaged	`fit_to_width_engaged` keeps a field; give it a `<field>_op`
+c	record.page_setup	engaged:orientation_engaged	`orientation_engaged` keeps a field; give it a `<field>_op`
+c	record.page_setup	engaged:paper_size_engaged	`paper_size_engaged` keeps a field; give it a `<field>_op`
+c	record.page_setup	engaged:scale_pct_engaged	`scale_pct_engaged` keeps a field; give it a `<field>_op`
+c	record.page_setup	op:fit_to_height	`fit_to_height` has no `fit_to_height_op`
+c	record.page_setup	op:fit_to_page	`fit_to_page` has no `fit_to_page_op`
+c	record.page_setup	op:fit_to_width	`fit_to_width` has no `fit_to_width_op`
+c	record.page_setup	op:orientation	`orientation` has no `orientation_op`
+c	record.page_setup	op:paper_size	`paper_size` has no `paper_size_op`
+c	record.page_setup	op:scale_pct	`scale_pct` has no `scale_pct_op`
+c	record.pivot_cache_options	op:missing_items_limit	`missing_items_limit` has no `missing_items_limit_op`
+c	record.pivot_cache_options	op:refresh_on_load	`refresh_on_load` has no `refresh_on_load_op`
+c	record.pivot_cache_options	op:save_data	`save_data` has no `save_data_op`
+c	record.pivot_options	op:alt_text	`alt_text` has no `alt_text_op`
+c	record.pivot_options	op:alt_text_summary	`alt_text_summary` has no `alt_text_summary_op`
+c	record.pivot_options	op:auto_formatting	`auto_formatting` has no `auto_formatting_op`
+c	record.pivot_options	op:custom_list_sort	`custom_list_sort` has no `custom_list_sort_op`
+c	record.pivot_options	op:enable_drill	`enable_drill` has no `enable_drill_op`
+c	record.pivot_options	op:error_caption	`error_caption` has no `error_caption_op`
+c	record.pivot_options	op:field_print_titles	`field_print_titles` has no `field_print_titles_op`
+c	record.pivot_options	op:grand_total_caption	`grand_total_caption` has no `grand_total_caption_op`
+c	record.pivot_options	op:grid_drop_zones	`grid_drop_zones` has no `grid_drop_zones_op`
+c	record.pivot_options	op:indent	`indent` has no `indent_op`
+c	record.pivot_options	op:item_print_titles	`item_print_titles` has no `item_print_titles_op`
+c	record.pivot_options	op:merge_item	`merge_item` has no `merge_item_op`
+c	record.pivot_options	op:missing_caption	`missing_caption` has no `missing_caption_op`
+c	record.pivot_options	op:multiple_field_filters	`multiple_field_filters` has no `multiple_field_filters_op`
+c	record.pivot_options	op:page_over_then_down	`page_over_then_down` has no `page_over_then_down_op`
+c	record.pivot_options	op:page_wrap	`page_wrap` has no `page_wrap_op`
+c	record.pivot_options	op:preserve_formatting	`preserve_formatting` has no `preserve_formatting_op`
+c	record.pivot_options	op:print_drill	`print_drill` has no `print_drill_op`
+c	record.pivot_options	op:show_data_drop_down	`show_data_drop_down` has no `show_data_drop_down_op`
+c	record.pivot_options	op:show_data_tips	`show_data_tips` has no `show_data_tips_op`
+c	record.pivot_options	op:show_drill	`show_drill` has no `show_drill_op`
+c	record.pivot_options	op:show_empty_column	`show_empty_column` has no `show_empty_column_op`
+c	record.pivot_options	op:show_empty_row	`show_empty_row` has no `show_empty_row_op`
+c	record.pivot_options	op:show_error	`show_error` has no `show_error_op`
+c	record.pivot_options	op:show_headers	`show_headers` has no `show_headers_op`
+c	record.pivot_options	op:show_missing	`show_missing` has no `show_missing_op`
+c	record.print_options	engaged:grid_lines_engaged	`grid_lines_engaged` keeps a field; give it a `<field>_op`
+c	record.print_options	engaged:headings_engaged	`headings_engaged` keeps a field; give it a `<field>_op`
+c	record.print_options	engaged:horizontal_centered_engaged	`horizontal_centered_engaged` keeps a field; give it a `<field>_op`
+c	record.print_options	engaged:vertical_centered_engaged	`vertical_centered_engaged` keeps a field; give it a `<field>_op`
+c	record.print_options	op:grid_lines	`grid_lines` has no `grid_lines_op`
+c	record.print_options	op:headings	`headings` has no `headings_op`
+c	record.print_options	op:horizontal_centered	`horizontal_centered` has no `horizontal_centered_op`
+c	record.print_options	op:vertical_centered	`vertical_centered` has no `vertical_centered_op`
 c	record.protected_range	op:algorithm_name	`algorithm_name` has no `algorithm_name_op`
 c	record.protected_range	op:hash_value	`hash_value` has no `hash_value_op`
+c	record.protected_range	op:legacy_password_hash	`legacy_password_hash` has no `legacy_password_hash_op`
 c	record.protected_range	op:name	`name` has no `name_op`
-c	record.protected_range	op:password	`password` has no `password_op`
 c	record.protected_range	op:range_count	`range_count` has no `range_count_op`
 c	record.protected_range	op:ranges	`ranges` has no `ranges_op`
 c	record.protected_range	op:salt_value	`salt_value` has no `salt_value_op`
@@ -81,11 +153,11 @@ c	record.shape	op:hidden	`hidden` has no `hidden_op`
 c	record.shape	op:kind	`kind` has no `kind_op`
 c	record.shape	op:line_color	`line_color` has no `line_color_op`
 c	record.shape	op:line_kind	`line_kind` has no `line_kind_op`
-c	record.shape	op:line_width_emu	`line_width_emu` has no `line_width_emu_op`
+c	record.shape	op:line_width_pt	`line_width_pt` has no `line_width_pt_op`
 c	record.shape	op:name	`name` has no `name_op`
 c	record.shape	op:object_id	`object_id` has no `object_id_op`
 c	record.shape	op:preset_geometry	`preset_geometry` has no `preset_geometry_op`
-c	record.shape	op:rotation	`rotation` has no `rotation_op`
+c	record.shape	op:rotation_deg	`rotation_deg` has no `rotation_deg_op`
 c	record.shape	op:text	`text` has no `text_op`
 c	record.shape	op:text_box	`text_box` has no `text_box_op`
 c	record.shape	op:to_col	`to_col` has no `to_col_op`
@@ -93,6 +165,35 @@ c	record.shape	op:to_col_offset_emu	`to_col_offset_emu` has no `to_col_offset_em
 c	record.shape	op:to_row	`to_row` has no `to_row_op`
 c	record.shape	op:to_row_offset_emu	`to_row_offset_emu` has no `to_row_offset_emu_op`
 c	record.shape	op:width_emu	`width_emu` has no `width_emu_op`
+c	record.sheet_format_defaults	has:has_default_column_width_chars	`has_default_column_width_chars` keeps a field; give it a `<field>_op`
+c	record.sheet_format_defaults	has:has_default_row_height_pt	`has_default_row_height_pt` keeps a field; give it a `<field>_op`
+c	record.sheet_format_defaults	op:base_column_width_chars	`base_column_width_chars` has no `base_column_width_chars_op`
+c	record.sheet_format_defaults	op:custom_height	`custom_height` has no `custom_height_op`
+c	record.sheet_format_defaults	op:default_column_width_chars	`default_column_width_chars` has no `default_column_width_chars_op`
+c	record.sheet_format_defaults	op:default_row_height_pt	`default_row_height_pt` has no `default_row_height_pt_op`
+c	record.sheet_format_defaults	op:effective_default_column_width_chars	`effective_default_column_width_chars` has no `effective_default_column_width_chars_op`
+c	record.sheet_format_defaults	op:effective_default_row_height_pt	`effective_default_row_height_pt` has no `effective_default_row_height_pt_op`
+c	record.sheet_format_defaults	op:zero_height	`zero_height` has no `zero_height_op`
+c	record.sheet_protection_patch	op-type:algorithm_name_op	`algorithm_name_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_auto_filter_op	`allow_auto_filter_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_delete_columns_op	`allow_delete_columns_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_delete_rows_op	`allow_delete_rows_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_edit_objects_op	`allow_edit_objects_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_edit_scenarios_op	`allow_edit_scenarios_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_format_cells_op	`allow_format_cells_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_format_columns_op	`allow_format_columns_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_format_rows_op	`allow_format_rows_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_insert_columns_op	`allow_insert_columns_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_insert_hyperlinks_op	`allow_insert_hyperlinks_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_insert_rows_op	`allow_insert_rows_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_pivot_tables_op	`allow_pivot_tables_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_select_locked_cells_op	`allow_select_locked_cells_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_select_unlocked_cells_op	`allow_select_unlocked_cells_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:allow_sort_op	`allow_sort_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:hash_value_op	`hash_value_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:legacy_password_hash_op	`legacy_password_hash_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:salt_value_op	`salt_value_op` is `int32_t`, not `fm_patch_op_t`
+c	record.sheet_protection_patch	op-type:spin_count_op	`spin_count_op` is `int32_t`, not `fm_patch_op_t`
 c	record.slicer	op:anchor_kind	`anchor_kind` has no `anchor_kind_op`
 c	record.slicer	op:cache_name	`cache_name` has no `cache_name_op`
 c	record.slicer	op:caption	`caption` has no `caption_op`
@@ -142,6 +243,11 @@ c	record.sparkline_group	op:min_axis_type	`min_axis_type` has no `min_axis_type_
 c	record.sparkline_group	op:negative	`negative` has no `negative_op`
 c	record.sparkline_group	op:sparkline_count	`sparkline_count` has no `sparkline_count_op`
 c	record.sparkline_group	op:type	`type` has no `type_op`
+c	record.table_style_info_patch	op-type:show_column_stripes_op	`show_column_stripes_op` is `int32_t`, not `fm_patch_op_t`
+c	record.table_style_info_patch	op-type:show_first_column_op	`show_first_column_op` is `int32_t`, not `fm_patch_op_t`
+c	record.table_style_info_patch	op-type:show_last_column_op	`show_last_column_op` is `int32_t`, not `fm_patch_op_t`
+c	record.table_style_info_patch	op-type:show_row_stripes_op	`show_row_stripes_op` is `int32_t`, not `fm_patch_op_t`
+c	record.table_style_info_patch	op-type:style_name_op	`style_name_op` is `int32_t`, not `fm_patch_op_t`
 c	record.threaded_comment_patch	engaged:mentions_engaged	`mentions_engaged` keeps a field; give it a `<field>_op`
 c	record.threaded_comment_patch	negative-keep	a negative value keeps a setting
 c	record.threaded_comment_patch	op:done	`done` has no `done_op`

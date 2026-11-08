@@ -308,7 +308,7 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_workbook_set_pivot_cache_options(handle_, cacheId, &opt));
+  succeeded(fm_workbook_update_pivot_cache_options(handle_, cacheId, &opt));
 }
 
 uint32_t JsWorkbook::pivotCacheCalculatedFieldAdd(uint32_t cacheId, const std::string& name,

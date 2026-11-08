@@ -30,12 +30,14 @@ from formulon import (
     PivotDataFieldInput,
     PivotFieldInput,
     PivotInput,
+    ShapeInput,
     Sheet,
-    SheetRect,
+    SlicerInput,
     Sparkline,
     SparklineGroup,
     StatusCode,
     Table,
+    TableInput,
     ThreadedCommentInput,
     Workbook,
 )
@@ -82,7 +84,7 @@ def add_table(wb: Workbook, sheet: Sheet, name: str, rect: CellRect = CellRect(0
     sheet.set_text(rect.first_row, rect.first_col, "Product")
     sheet.set_text(rect.first_row, rect.first_col + 1, "Amount")
     sheet.set_number(rect.first_row + 1, rect.first_col + 1, 5)
-    return wb.add_table(range=SheetRect(sheet.index, rect), name=name, columns=["Product", "Amount"])
+    return sheet.add_table(TableInput(range=rect, name=name, columns=["Product", "Amount"]))
 
 
 def add_chart(sheet: Sheet) -> formulon.Chart:
@@ -92,11 +94,13 @@ def add_chart(sheet: Sheet) -> formulon.Chart:
 
 def add_shape(sheet: Sheet) -> formulon.Shape:
     return sheet.add_shape(
-        preset_geometry="rect",
-        anchor_kind=formulon.AnchorKind.ONE_CELL,
-        from_row=2,
-        width_emu=914400,
-        height_emu=457200,
+        ShapeInput(
+            preset_geometry="rect",
+            anchor_kind=formulon.AnchorKind.ONE_CELL,
+            from_row=2,
+            width_emu=914400,
+            height_emu=457200,
+        )
     )
 
 
@@ -115,12 +119,15 @@ class IdentityTests(HandleTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            table = add_table(wb, wb.add_sheet("T"), "Tbl")
+            table_sheet = wb.add_sheet("T")
+            table = add_table(wb, table_sheet, "Tbl")
             self.assertIs(wb.table("Tbl"), table)
-            self.assertIs(wb.table(0), table)
-            self.assertIs(wb.table(table), table)
-            self.assertIs(wb.list_tables()[0], table)
+            self.assertIs(table_sheet.table("Tbl"), table)
+            self.assertIs(table_sheet.table(0), table)
+            self.assertIs(table_sheet.table(table), table)
+            self.assertIs(table_sheet.list_tables()[0], table)
             self.assertIs(table.workbook, wb)
+            self.assertIs(table.sheet, table_sheet)
 
             cache = add_cache(wb, "Sheet1")
             pivot, _ = add_pivot(ws, cache, "P1", 0, 4)
@@ -155,12 +162,12 @@ class IdentityTests(HandleTestCase):
             b = add_table(wb, ws, "TblB", CellRect(5, 0, 6, 1))
             c = add_table(wb, ws, "TblC", CellRect(10, 0, 11, 1))
             self.assertEqual([a.index, b.index, c.index], [0, 1, 2])
-            wb.remove_table(a)
+            ws.remove_table(a)
             self.assertEqual(b.index, 0)
             self.assertEqual(c.index, 1)
             self.assertEqual(c.name, "TblC")
             self.assertIs(wb.table("TblC"), c)
-            self.assertIs(wb.table(0), b)
+            self.assertIs(ws.table(0), b)
 
             cache = add_cache(wb, "Data")
             out = wb.add_sheet("Out")
@@ -178,8 +185,9 @@ class IdentityTests(HandleTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            table = add_table(wb, wb.add_sheet("T"), "Tbl")
-            wb.remove_table(table)
+            table_sheet = wb.add_sheet("T")
+            table = add_table(wb, table_sheet, "Tbl")
+            table_sheet.remove_table(table)
             for read in (lambda: table.name, lambda: table.index, table.get_properties, lambda: wb.table("Tbl")):
                 self.assertCode(NotFoundError, read, StatusCode.NOT_FOUND)
 
@@ -286,7 +294,7 @@ class IdentityTests(HandleTestCase):
             # A slicer on the sheet makes the copy fail; the handles stay as they were.
             table_sheet = wb.add_sheet("Tables")
             table = add_table(wb, table_sheet, "Tbl")
-            slicer = table_sheet.add_slicer(table, 0, from_row=4, from_col=3, to_row=14, to_col=5)
+            slicer = table_sheet.add_slicer(table, 0, SlicerInput(from_row=4, from_col=3, to_row=14, to_col=5))
             sheet_count = len(wb.list_sheets())
             self.assertCode(
                 FormulonError, lambda: wb.copy_sheet(table_sheet, 0, "TablesCopy"), StatusCode.NOT_IMPLEMENTED
@@ -307,13 +315,12 @@ class IdentityTests(HandleTestCase):
             self.assertIs(ws.pivot("Q"), pivot)
             self.assertCode(NotFoundError, lambda: ws.pivot("P1"), StatusCode.NOT_FOUND)
 
-            table = add_table(wb, wb.add_sheet("T"), "Tbl")
-            table.update(display_name="Renamed")
-            self.assertEqual(table.display_name, "Renamed")
-            self.assertIs(wb.table("Renamed"), table)
-            table.update(name="NewName")
+            table_sheet = wb.add_sheet("T")
+            table = add_table(wb, table_sheet, "Tbl")
+            table.rename("NewName")
             self.assertEqual(table.name, "NewName")
-            self.assertIs(wb.table(0), table)
+            self.assertIs(wb.table("NewName"), table)
+            self.assertIs(table_sheet.table(0), table)
 
             chart = add_chart(ws)
             chart.rename("Revenue")
@@ -369,18 +376,20 @@ class IdentityTests(HandleTestCase):
             os_ = other.sheet(0)
             fill_source(ws)
             fill_source(os_)
-            foreign_table = add_table(other, other.add_sheet("T"), "Tbl")
+            foreign_table_sheet = other.add_sheet("T")
+            foreign_table = add_table(other, foreign_table_sheet, "Tbl")
             foreign_cache = add_cache(other, "Sheet1")
             foreign_pivot, _ = add_pivot(os_, foreign_cache, "P1", 0, 4)
             foreign_chart = add_chart(os_)
-            local_table = add_table(wb, wb.add_sheet("T"), "Tbl")
+            local_table_sheet = wb.add_sheet("T")
+            local_table = add_table(wb, local_table_sheet, "Tbl")
             local_cache = add_cache(wb, "Sheet1")
             add_pivot(ws, local_cache, "P1", 0, 4)
             add_chart(ws)
 
             refused = (
-                lambda: wb.table(foreign_table),
-                lambda: wb.remove_table(foreign_table),
+                lambda: local_table_sheet.table(foreign_table),
+                lambda: local_table_sheet.remove_table(foreign_table),
                 lambda: ws.pivot(foreign_pivot),
                 lambda: ws.remove_pivot(foreign_pivot),
                 lambda: wb.pivot_cache(foreign_cache),
@@ -397,7 +406,7 @@ class IdentityTests(HandleTestCase):
                 InvalidArgumentError, lambda: second.drawing(ws.list_charts()[0]), StatusCode.INVALID_ARGUMENT
             )
             # The local handles are unaffected.
-            self.assertIs(wb.table(0), local_table)
+            self.assertIs(local_table_sheet.table(0), local_table)
 
     def test_12_a_failed_pivot_edit_and_table_churn_leave_the_handles_on_their_targets(self) -> None:
         with Workbook.create_default() as wb:
@@ -418,7 +427,8 @@ class IdentityTests(HandleTestCase):
             # Tables survive growth of the list, row deletion and sheet removal elsewhere, and removal of an earlier one.
             home = wb.add_sheet("Home")
             target = add_table(wb, home, "Target", CellRect(0, 0, 1, 1))
-            early = add_table(wb, wb.add_sheet("Early"), "Early")
+            early_sheet = wb.add_sheet("Early")
+            early = add_table(wb, early_sheet, "Early")
             for i in range(12):
                 add_table(wb, wb.add_sheet(f"S{i}"), f"Extra{i}")
             self.assertIs(wb.table("Target"), target)
@@ -429,11 +439,11 @@ class IdentityTests(HandleTestCase):
             self.assertEqual(target.name, "Target")
             wb.remove_sheet(elsewhere)
             self.assertEqual(target.name, "Target")
-            wb.remove_table(early)
+            early_sheet.remove_table(early)
             self.assertEqual(target.name, "Target")
             self.assertEqual(target.get_properties().range.rect.last_col, 1)
-            self.assertIs(next(t for t in wb.list_tables() if t.name == "Target"), target)
-            self.assertIs(wb.list_tables()[target.index], target)
+            self.assertIs(next(t for t in home.list_tables() if t.name == "Target"), target)
+            self.assertIs(home.list_tables()[target.index], target)
 
 
 # ---- Handle references ----------------------------------------------------------------
@@ -444,23 +454,24 @@ class HandleRefTests(HandleTestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             fill_source(ws)
-            table = add_table(wb, wb.add_sheet("T"), "Tbl")
+            table_sheet = wb.add_sheet("T")
+            table = add_table(wb, table_sheet, "Tbl")
             cache = add_cache(wb, "Sheet1")
             pivot, _ = add_pivot(ws, cache, "P1", 0, 4)
             not_found, out_of_range = StatusCode.NOT_FOUND, StatusCode.INDEX_OUT_OF_RANGE
 
             # 0 is the first element; the last index is valid and the count is not.
-            self.assertIs(wb.table(0), table)
-            self.assertIs(wb.table(-0), table)
+            self.assertIs(table_sheet.table(0), table)
+            self.assertIs(table_sheet.table(-0), table)
             self.assertIs(ws.pivot(0), pivot)
             self.assertIs(ws.pivot(-0), pivot)
-            self.assertCode(IndexOutOfRangeError, lambda: wb.table(1), out_of_range)
+            self.assertCode(IndexOutOfRangeError, lambda: table_sheet.table(1), out_of_range)
             self.assertCode(IndexOutOfRangeError, lambda: ws.pivot(1), out_of_range)
             # 2^31 is out of range, 2^32 is outside the integer type.
-            self.assertCode(IndexOutOfRangeError, lambda: wb.table(2**31), out_of_range)
+            self.assertCode(IndexOutOfRangeError, lambda: table_sheet.table(2**31), out_of_range)
             self.assertCode(IndexOutOfRangeError, lambda: ws.pivot(2**31), out_of_range)
             with self.assertRaises(ValueError):
-                wb.table(2**32)
+                table_sheet.table(2**32)
             with self.assertRaises(ValueError):
                 ws.drawing(2**32)
             with self.assertRaises(ValueError):
@@ -468,26 +479,26 @@ class HandleRefTests(HandleTestCase):
             # A negative index is a ValueError, like every other index; a float is not an index.
             for bad in (-1,):
                 with self.subTest(bad=bad):
-                    for access in (wb.table, ws.pivot, wb.pivot_cache, ws.drawing):
+                    for access in (table_sheet.table, ws.pivot, wb.pivot_cache, ws.drawing):
                         with self.assertRaises(ValueError):
                             access(bad)
             for bad in (float("nan"), float("inf"), -float("inf"), 1.5):
                 with self.subTest(bad=bad):
-                    for access in (wb.table, ws.pivot, wb.pivot_cache, ws.drawing):
+                    for access in (table_sheet.table, ws.pivot, wb.pivot_cache, ws.drawing):
                         with self.assertRaises(TypeError):
                             access(bad)
             # None and values of another type are type errors.
             for bad in (None, True, {}, []):
                 with self.subTest(bad=bad):
-                    for access in (wb.table, ws.pivot, wb.pivot_cache, ws.drawing):
+                    for access in (table_sheet.table, ws.pivot, wb.pivot_cache, ws.drawing):
                         with self.assertRaises(TypeError):
                             access(bad)
             with self.assertRaises(TypeError):
-                wb.table()  # type: ignore[call-arg]
+                table_sheet.table()  # type: ignore[call-arg]
             with self.assertRaises(TypeError):
                 ws.chart("x")  # type: ignore[arg-type]
             # An empty name matches nothing; a name matches case-insensitively.
-            self.assertCode(NotFoundError, lambda: wb.table(""), not_found)
+            self.assertCode(NotFoundError, lambda: table_sheet.table(""), not_found)
             self.assertCode(NotFoundError, lambda: ws.pivot(""), not_found)
             self.assertIs(wb.table("tbl"), table)
             self.assertIs(ws.pivot("p1"), pivot)
@@ -527,10 +538,10 @@ class PrintGetterTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             self.assertFalse(ws.get_page_setup().fit_to_page_stated)
-            ws.set_page_setup(fit_to_page=True)
+            ws.update_page_setup(fit_to_page=True)
             self.assertTrue(ws.get_page_setup().fit_to_page)
             self.assertTrue(ws.get_page_setup().fit_to_page_stated)
-            ws.set_page_setup(fit_to_page=False)
+            ws.update_page_setup(fit_to_page=False)
             self.assertFalse(ws.get_page_setup().fit_to_page)
             self.assertFalse(ws.get_page_setup().fit_to_page_stated)
 
@@ -548,7 +559,7 @@ class PrintGetterTests(unittest.TestCase):
                     vertical_centered_stated=False,
                 ),
             )
-            ws.set_print_options(grid_lines=True, horizontal_centered=True)
+            ws.update_print_options(grid_lines=True, horizontal_centered=True)
             options = ws.get_print_options()
             self.assertTrue(options.grid_lines)
             self.assertTrue(options.grid_lines_stated)
@@ -560,14 +571,14 @@ class PrintGetterTests(unittest.TestCase):
             self.assertIsNone(empty.odd_header)
             self.assertFalse(empty.different_first)
             self.assertFalse(empty.different_first_stated)
-            ws.set_header_footer(odd_header="&CReport", odd_footer="&P/&N", different_first=True)
+            ws.update_header_footer(odd_header="&CReport", odd_footer="&P/&N", different_first=True)
             footer = ws.get_header_footer()
             self.assertEqual(footer.odd_header, "&CReport")
             self.assertEqual(footer.odd_footer, "&P/&N")
             self.assertIsNone(footer.even_header)
             self.assertTrue(footer.different_first)
             self.assertTrue(footer.different_first_stated)
-            ws.set_header_footer(odd_header=None)
+            ws.update_header_footer(odd_header=None)
             self.assertIsNone(ws.get_header_footer().odd_header)
             self.assertEqual(ws.get_header_footer().odd_footer, "&P/&N")
 
@@ -591,7 +602,7 @@ class PivotNumberFormatTests(unittest.TestCase):
             self.assertIsNone(pivot.list_fields()[amount].number_format)
 
             # The profile's code for id 27 maps back to id 27, and its read-back writes id 27 again.
-            code27 = wb.ooxml.get_num_fmt_string(27)
+            code27 = wb.ooxml.get_number_format(27)
             self.assertTrue(code27, "the profile has a code for numFmtId 27")
             pivot.update_field(amount, number_format=code27)
             self.assertRegex(_pivot_part(wb), r'<pivotField [^>]*numFmtId="27"')

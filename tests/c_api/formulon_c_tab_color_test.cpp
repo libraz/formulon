@@ -25,19 +25,19 @@ fm_color_spec_t GetColor(fm_workbook_t* wb) {
 TEST(FormulonCApiTabColor, FreshSheetHasNoColor) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(GetColor(wb.handle).kind, kFmColorNone);
+  EXPECT_EQ(GetColor(wb.handle).kind, FM_COLOR_KIND_NONE);
 }
 
 TEST(FormulonCApiTabColor, RgbRoundTripsAndIsWrittenAsArgbHex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_color_spec_t color{};
-  color.kind = kFmColorRgb;
-  color.rgb = 0xFF1A2B3CU;
+  color.kind = FM_COLOR_KIND_RGB;
+  color.argb = 0xFF1A2B3CU;
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &color), 0);
   const fm_color_spec_t got = GetColor(wb.handle);
-  EXPECT_EQ(got.kind, kFmColorRgb);
-  EXPECT_EQ(got.rgb, 0xFF1A2B3CU);
+  EXPECT_EQ(got.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(got.argb, 0xFF1A2B3CU);
   EXPECT_EQ(SheetPrXml(wb.handle), "<sheetPr><tabColor rgb=\"FF1A2B3C\"/></sheetPr>");
 }
 
@@ -46,45 +46,45 @@ TEST(FormulonCApiTabColor, ThemeIndexedAndAutoRoundTrip) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_color_spec_t theme{};
-  theme.kind = kFmColorTheme;
+  theme.kind = FM_COLOR_KIND_THEME;
   theme.theme = 4;
   theme.tint = -0.25;
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &theme), 0);
   fm_color_spec_t got = GetColor(wb.handle);
-  EXPECT_EQ(got.kind, kFmColorTheme);
+  EXPECT_EQ(got.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(got.theme, 4U);
   EXPECT_DOUBLE_EQ(got.tint, -0.25);
 
   fm_color_spec_t indexed{};
-  indexed.kind = kFmColorIndexed;
+  indexed.kind = FM_COLOR_KIND_INDEXED;
   indexed.indexed = 12;
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &indexed), 0);
   got = GetColor(wb.handle);
-  EXPECT_EQ(got.kind, kFmColorIndexed);
+  EXPECT_EQ(got.kind, FM_COLOR_KIND_INDEXED);
   EXPECT_EQ(got.indexed, 12U);
 
   fm_color_spec_t automatic{};
-  automatic.kind = kFmColorAuto;
+  automatic.kind = FM_COLOR_KIND_AUTO;
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &automatic), 0);
-  EXPECT_EQ(GetColor(wb.handle).kind, kFmColorAuto);
+  EXPECT_EQ(GetColor(wb.handle).kind, FM_COLOR_KIND_AUTO);
 }
 
 TEST(FormulonCApiTabColor, NullAndNoneClearTheColor) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_color_spec_t color{};
-  color.kind = kFmColorRgb;
-  color.rgb = 0xFF00FF00U;
+  color.kind = FM_COLOR_KIND_RGB;
+  color.argb = 0xFF00FF00U;
 
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &color), 0);
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, nullptr), 0);
-  EXPECT_EQ(GetColor(wb.handle).kind, kFmColorNone);
+  EXPECT_EQ(GetColor(wb.handle).kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(SheetPrXml(wb.handle), "");
 
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &color), 0);
   fm_color_spec_t none{};
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &none), 0);
-  EXPECT_EQ(GetColor(wb.handle).kind, kFmColorNone);
+  EXPECT_EQ(GetColor(wb.handle).kind, FM_COLOR_KIND_NONE);
 }
 
 TEST(FormulonCApiTabColor, KeepsTheRestOfSheetPr) {
@@ -93,8 +93,8 @@ TEST(FormulonCApiTabColor, KeepsTheRestOfSheetPr) {
   ASSERT_EQ(
       fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr codeName=\"S1\"><pageSetUpPr fitToPage=\"1\"/></sheetPr>"), 0);
   fm_color_spec_t color{};
-  color.kind = kFmColorRgb;
-  color.rgb = 0xFFFF0000U;
+  color.kind = FM_COLOR_KIND_RGB;
+  color.argb = 0xFFFF0000U;
   ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &color), 0);
   const std::string xml = SheetPrXml(wb.handle);
   EXPECT_NE(xml.find("codeName=\"S1\""), std::string::npos);
@@ -113,8 +113,8 @@ TEST(FormulonCApiTabColor, ReadsAnExistingSixDigitRgb) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr><tabColor rgb=\"336699\"/></sheetPr>"), 0);
   const fm_color_spec_t got = GetColor(wb.handle);
-  EXPECT_EQ(got.kind, kFmColorRgb);
-  EXPECT_EQ(got.rgb, 0xFF336699U);
+  EXPECT_EQ(got.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(got.argb, 0xFF336699U);
 }
 
 TEST(FormulonCApiTabColor, SetSheetPrXmlWithAndWithoutTabColorSetsAndClears) {
@@ -122,11 +122,11 @@ TEST(FormulonCApiTabColor, SetSheetPrXmlWithAndWithoutTabColorSetsAndClears) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr><tabColor theme=\"5\" tint=\"0.5\"/></sheetPr>"), 0);
   fm_color_spec_t got = GetColor(wb.handle);
-  EXPECT_EQ(got.kind, kFmColorTheme);
+  EXPECT_EQ(got.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(got.theme, 5U);
   EXPECT_DOUBLE_EQ(got.tint, 0.5);
   ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr codeName=\"S1\"/>"), 0);
-  EXPECT_EQ(GetColor(wb.handle).kind, kFmColorNone);
+  EXPECT_EQ(GetColor(wb.handle).kind, FM_COLOR_KIND_NONE);
 }
 
 TEST(FormulonCApiTabColor, SurvivesSaveLoadInBothContainersAndCopySheet) {
@@ -134,8 +134,8 @@ TEST(FormulonCApiTabColor, SurvivesSaveLoadInBothContainersAndCopySheet) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
     fm_color_spec_t color{};
-    color.kind = kFmColorRgb;
-    color.rgb = 0xFF1A2B3CU;
+    color.kind = FM_COLOR_KIND_RGB;
+    color.argb = 0xFF1A2B3CU;
     ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &color), 0);
     uint8_t* bytes = nullptr;
     size_t len = 0;
@@ -144,15 +144,15 @@ TEST(FormulonCApiTabColor, SurvivesSaveLoadInBothContainersAndCopySheet) {
     ASSERT_EQ(fm_workbook_load(bytes, len, &loaded.handle), 0);
     fm_buffer_destroy(bytes);
     const fm_color_spec_t got = GetColor(loaded.handle);
-    EXPECT_EQ(got.kind, kFmColorRgb);
-    EXPECT_EQ(got.rgb, 0xFF1A2B3CU);
+    EXPECT_EQ(got.kind, FM_COLOR_KIND_RGB);
+    EXPECT_EQ(got.argb, 0xFF1A2B3CU);
 
     size_t copy_index = 0;
     ASSERT_EQ(fm_workbook_copy_sheet(loaded.handle, 0, 1, "Copy", &copy_index), 0);
     fm_color_spec_t copied{};
     ASSERT_EQ(fm_sheet_get_tab_color(loaded.handle, copy_index, &copied), 0);
-    EXPECT_EQ(copied.kind, kFmColorRgb);
-    EXPECT_EQ(copied.rgb, 0xFF1A2B3CU);
+    EXPECT_EQ(copied.kind, FM_COLOR_KIND_RGB);
+    EXPECT_EQ(copied.argb, 0xFF1A2B3CU);
   }
 }
 
@@ -170,10 +170,10 @@ TEST(FormulonCApiTabColor, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &unknown), FM_STATUS_INVALID_ARGUMENT);
 
   fm_color_spec_t nan_tint{};
-  nan_tint.kind = kFmColorTheme;
+  nan_tint.kind = FM_COLOR_KIND_THEME;
   nan_tint.tint = std::nan("");
   EXPECT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &nan_tint), FM_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(GetColor(wb.handle).kind, kFmColorNone);
+  EXPECT_EQ(GetColor(wb.handle).kind, FM_COLOR_KIND_NONE);
 }
 
 }  // namespace

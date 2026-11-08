@@ -16,6 +16,7 @@ from formulon import (
     FormulonError,
     InvalidArgumentError,
     Shape,
+    ShapeInput,
     ShapePaint,
     ShapeProperties,
     Sparkline,
@@ -40,7 +41,7 @@ def _box(**overrides):
         fill_kind=ShapePaint.SOLID,
         fill_color="#FF0000",
         line_kind=ShapePaint.NONE,
-        rotation=900000,
+        rotation_deg=15.0,
     )
     fields.update(overrides)
     return fields
@@ -50,17 +51,19 @@ class ShapeTests(unittest.TestCase):
     def test_insert_list_update_remove_and_round_trip(self) -> None:
         with Workbook.create_default() as wb:
             self.assertEqual(wb.sheet(0).list_shapes(), [])
-            rect = wb.sheet(0).add_shape(**_box())
+            rect = wb.sheet(0).add_shape(ShapeInput(**_box()))
             line = wb.sheet(0).add_shape(
-                anchor_kind=AnchorKind.ONE_CELL,
-                from_row=10,
-                from_col_offset_emu=500,
-                width_emu=914400,
-                height_emu=0,
-                preset_geometry="line",
-                line_kind=ShapePaint.SOLID,
-                line_color="#00FF00",
-                line_width_emu=19050,
+                ShapeInput(
+                    anchor_kind=AnchorKind.ONE_CELL,
+                    from_row=10,
+                    from_col_offset_emu=500,
+                    width_emu=914400,
+                    height_emu=0,
+                    preset_geometry="line",
+                    line_kind=ShapePaint.SOLID,
+                    line_color="#00FF00",
+                    line_width_pt=1.5,
+                ),
             )
             self.assertIsInstance(rect, Shape)
             self.assertNotEqual(rect.object_id, line.object_id)
@@ -76,23 +79,23 @@ class ShapeTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     (shapes[0].fill_kind, shapes[0].fill_color),
-                    (ShapePaint.SOLID, Color(ColorKind.RGB, rgb=0xFFFF0000)),
+                    (ShapePaint.SOLID, Color(ColorKind.RGB, argb=0xFFFF0000)),
                 )
                 self.assertEqual(shapes[0].line_kind, ShapePaint.NONE)
-                self.assertEqual((shapes[0].rotation, shapes[0].hidden, shapes[0].text_box), (900000, False, False))
+                self.assertEqual((shapes[0].rotation_deg, shapes[0].hidden, shapes[0].text_box), (15.0, False, False))
                 self.assertEqual((shapes[0].from_row, shapes[0].to_row, shapes[0].to_col), (1, 5, 4))
                 self.assertEqual(shapes[1].kind, DrawingObjectKind.CONNECTOR)
                 self.assertEqual(
                     (shapes[1].from_col_offset_emu, shapes[1].width_emu, shapes[1].line_color),
-                    (500, 914400, Color(ColorKind.RGB, rgb=0xFF00FF00)),
+                    (500, 914400, Color(ColorKind.RGB, argb=0xFF00FF00)),
                 )
-                self.assertEqual(shapes[1].line_width_emu, 19050)
+                self.assertEqual(shapes[1].line_width_pt, 1.5)
 
                 loaded.sheet(0).shape(rect.object_id).update(name="Renamed", hidden=True, fill_kind=ShapePaint.NONE)
                 loaded.sheet(0).insert_rows(0, 3)
                 moved = loaded.sheet(0).list_shapes()[0].get_properties()
                 self.assertEqual((moved.name, moved.hidden, moved.fill_kind), ("Renamed", True, ShapePaint.NONE))
-                self.assertEqual((moved.preset_geometry, moved.rotation), ("roundRect", 900000))
+                self.assertEqual((moved.preset_geometry, moved.rotation_deg), ("roundRect", 15.0))
                 self.assertEqual((moved.from_row, moved.to_row), (4, 8))
 
                 loaded.sheet(0).remove_drawing(rect.object_id)
@@ -107,9 +110,9 @@ class ShapeTests(unittest.TestCase):
                 _box(preset_geometry='a"/>'),
             ):
                 with self.assertRaises(FormulonError):
-                    wb.sheet(0).add_shape(**bad)
+                    wb.sheet(0).add_shape(ShapeInput(**bad))
             with self.assertRaises(FormulonError):
-                wb.sheet(5).add_shape(**_box())
+                wb.sheet(5).add_shape(ShapeInput(**_box()))
             self.assertEqual(wb.sheet(0).list_shapes(), [])
             with self.assertRaises(FormulonError):
                 wb.sheet(0).shape(99).update(name="x")
@@ -120,7 +123,7 @@ class ShapeTests(unittest.TestCase):
 def _group(**overrides) -> SparklineGroup:
     group = SparklineGroup(
         type=SparklineType.COLUMN,
-        color_series=Color(kind=1, rgb=0xFF336699),
+        color_series=Color(kind=1, argb=0xFF336699),
         color_negative=Color(kind=2, theme=5, tint=-0.25),
         color_low=Color(kind=3, indexed=12),
         markers=True,
@@ -148,7 +151,7 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual(len(groups), 2)
                 first, second = groups
                 self.assertEqual(first.type, SparklineType.COLUMN)
-                self.assertEqual((first.color_series.kind, first.color_series.rgb), (1, 0xFF336699))
+                self.assertEqual((first.color_series.kind, first.color_series.argb), (1, 0xFF336699))
                 self.assertEqual((first.color_negative.theme, first.color_negative.tint), (5, -0.25))
                 self.assertEqual(first.color_low.indexed, 12)
                 self.assertEqual(first.color_high.kind, 0)

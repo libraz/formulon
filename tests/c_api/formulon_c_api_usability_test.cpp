@@ -219,8 +219,8 @@ TEST(FormulonCApiUsability, ImageInfoNeedsNoWorkbook) {
   fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
   ASSERT_EQ(fm_get_image_info(png.data(), png.size(), &info), 0) << fm_get_last_error_message();
   EXPECT_EQ(info.format, FM_IMAGE_FORMAT_PNG);
-  EXPECT_EQ(info.px_width, 16U);
-  EXPECT_EQ(info.px_height, 8U);
+  EXPECT_EQ(info.width_px, 16U);
+  EXPECT_EQ(info.height_px, 8U);
 
   const Bytes junk = {'n', 'o', 't', ' ', 'a', 'n', ' ', 'i', 'm', 'a', 'g', 'e'};
   EXPECT_EQ(fm_get_image_info(junk.data(), junk.size(), &info), FM_STATUS_IO_IMAGE_UNSUPPORTED);
@@ -246,11 +246,11 @@ TEST(FormulonCApiUsability, AbsentDrawingAndChartIdsAreNotFound) {
 
   // A drawing whose only object is a picture: its id names no chart.
   const Bytes png = Png(4, 4);
-  fm_image_insert_t opts{};
+  fm_picture_insert_spec_t opts{};
   opts.anchor.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
   opts.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
   std::uint32_t picture = 0;
-  ASSERT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &picture), 0)
+  ASSERT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), &opts, &picture), 0)
       << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, picture, &data), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, picture, &overrides, &data), FM_STATUS_NOT_FOUND);
@@ -433,20 +433,19 @@ TEST(FormulonCApiUsability, TableTotalsFormulaCarriesTheEqualsWhicheverWayItWasE
   const fm_cell_rect_t ref{0, 0, 3, 1};
   const char* columns[] = {"Product", "Amount"};
   std::size_t table = 99;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, &ref, "Sales", "Sales", columns, 2, "TableStyleMedium2", 1, 1, &table),
-            0)
+  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &ref, "Sales", columns, 2, "TableStyleMedium2", 1, 1, &table), 0)
       << fm_get_last_error_message();
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_workbook_get_table_column(wb.handle, table, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "");
 
-  ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, table, 1, "custom", nullptr, "SUM(Sales[Amount])*2"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, "custom", nullptr, "SUM(Sales[Amount])*2"), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_get_table_column(wb.handle, table, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "=SUM([Amount])*2");
-  ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, table, 1, "custom", nullptr, "=SUM(Sales[Amount])*3"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, "custom", nullptr, "=SUM(Sales[Amount])*3"), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_get_table_column(wb.handle, table, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "=SUM([Amount])*3");
 }
 

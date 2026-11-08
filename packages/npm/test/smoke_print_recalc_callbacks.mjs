@@ -37,8 +37,8 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
     wb.sheet(0).ooxml.setPageSetupXml(null);
     assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), null);
     const cleared = wb.sheet(0).getPageSetup();
-    assert.equal(cleared.scale, 100);
-    assert.equal(cleared.scaleStated, false);
+    assert.equal(cleared.scalePct, 100);
+    assert.equal(cleared.scalePctStated, false);
   } finally {
     wb.dispose();
   }
@@ -51,7 +51,7 @@ test('print settings: typed patch leaves unstated attributes alone', async () =>
     wb.sheet(0).ooxml.setPageSetupXml(
       '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>',
     );
-    wb.sheet(0).setPageSetup({ orientation: Module.PageOrientation.Landscape });
+    wb.sheet(0).updatePageSetup({ orientation: Module.PageOrientation.Landscape });
 
     const xml = wb.sheet(0).ooxml.getPageSetupXml();
     assert.match(xml, /orientation="landscape"/);
@@ -62,9 +62,9 @@ test('print settings: typed patch leaves unstated attributes alone', async () =>
     assert.match(xml, /paperSize="9"/);
 
     // A print scale outside Excel's range is rejected, not clamped.
-    expectFailure(() => wb.sheet(0).setPageSetup({ scale: 9 }));
-    expectFailure(() => wb.sheet(0).setPageSetup({ scale: 401 }));
-    wb.sheet(0).setPageSetup({ scale: 400 });
+    expectFailure(() => wb.sheet(0).updatePageSetup({ scalePct: 9 }));
+    expectFailure(() => wb.sheet(0).updatePageSetup({ scalePct: 401 }));
+    wb.sheet(0).updatePageSetup({ scalePct: 400 });
   } finally {
     wb.dispose();
   }
@@ -80,7 +80,7 @@ test('print settings: a change reaches paginate with no save cycle', async () =>
       }
     }
     const portrait = wb.sheet(0).getPagination().pageCount;
-    wb.sheet(0).setPageSetup({ orientation: Module.PageOrientation.Landscape });
+    wb.sheet(0).updatePageSetup({ orientation: Module.PageOrientation.Landscape });
     assert.notEqual(wb.sheet(0).getPagination().pageCount, portrait);
   } finally {
     wb.dispose();
@@ -93,19 +93,19 @@ test('print settings: an authored report survives save and load', async () => {
   let bytes;
   try {
     wb.sheet(0).setText(0, 0, '売上');
-    wb.sheet(0).setPageSetup({
+    wb.sheet(0).updatePageSetup({
       paperSize: 9,
       orientation: Module.PageOrientation.Portrait,
       fitToPage: true,
       fitToWidth: 1,
       fitToHeight: 0,
     });
-    wb.sheet(0).setPageMargins({ left: 0.5, right: 0.5, top: 0.8, bottom: 0.8 });
-    wb.sheet(0).setPrintOptions({ horizontalCentered: true });
-    wb.sheet(0).setHeaderFooter({ oddHeader: '&C月次報告', oddFooter: '&R&P / &N' });
+    wb.sheet(0).updatePageMargins({ leftIn: 0.5, rightIn: 0.5, topIn: 0.8, bottomIn: 0.8 });
+    wb.sheet(0).updatePrintOptions({ horizontalCentered: true });
+    wb.sheet(0).updateHeaderFooter({ oddHeader: '&C月次報告', oddFooter: '&R&P / &N' });
     wb.sheet(0).setPrintArea([{ firstRow: 0, firstCol: 0, lastRow: 79, lastCol: 5 }]);
     wb.sheet(0).setPrintTitles({ rows: { first: 0, last: 1 }, columns: null });
-    wb.sheet(0).addRowBreak(39, true);
+    wb.sheet(0).setRowBreak(39, { manual: true });
 
     const saved = wb.save();
     bytes = saved;
@@ -120,14 +120,14 @@ test('print settings: an authored report survives save and load', async () => {
     assert.equal(setup.orientation, Module.PageOrientation.Portrait);
     assert.equal(setup.fitToPage, true);
     assert.equal(setup.fitToHeight, 0);
-    assert.equal(reloaded.sheet(0).getPageMargins().left, 0.5);
+    assert.equal(reloaded.sheet(0).getPageMargins().leftIn, 0.5);
     assert.deepEqual(reloaded.sheet(0).getPrintArea(), [{ firstRow: 0, firstCol: 0, lastRow: 79, lastCol: 5 }]);
     assert.deepEqual(reloaded.sheet(0).getPrintTitles(), { rows: { first: 0, last: 1 }, columns: null });
     // The header code is stored escaped and decodes back to `&C...`.
     assert.match(reloaded.sheet(0).ooxml.getHeaderFooterXml(), /<oddHeader>&amp;C月次報告<\/oddHeader>/);
     const breaks = reloaded.sheet(0).listRowBreaks();
     assert.deepEqual(
-      breaks.map((b) => b.id),
+      breaks.map((b) => b.row),
       [39],
     );
     assert.equal(breaks[0].manual, true);
@@ -174,19 +174,19 @@ test('sheet layout getters report an absent width, height or style as null', asy
     const columns = wb.sheet(0).listColumnOverrides();
     const widthZero = columns.find((column) => column.first === 0 && column.last === 0);
     assert.ok(widthZero);
-    assert.equal(widthZero.width, 0);
-    assert.equal(wb.sheet(0).ooxml.getColumnStyle(0), null);
+    assert.equal(widthZero.widthChars, 0);
+    assert.equal(wb.sheet(0).ooxml.getColumnXfIndex(0), null);
     assert.equal(widthZero.hidden, false);
     const hidden = columns.find((column) => column.first === 1 && column.last === 1);
     assert.ok(hidden);
     assert.equal(hidden.hidden, true);
-    assert.equal(hidden.width, null);
+    assert.equal(hidden.widthChars, null);
 
     const rows = wb.sheet(0).listRowOverrides();
     const row = rows.find((entry) => entry.row === 3);
     assert.ok(row);
-    assert.equal(row.height, 30);
-    assert.equal(wb.sheet(0).ooxml.getRowStyle(3), null);
+    assert.equal(row.heightPt, 30);
+    assert.equal(wb.sheet(0).ooxml.getRowXfIndex(3), null);
     assert.equal(row.collapsed, false);
   } finally {
     wb.dispose();

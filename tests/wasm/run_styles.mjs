@@ -3,8 +3,8 @@ import { StatusCode } from '../../packages/npm/common.mjs';
 import { expectFailure, readAll } from './smoke_support.mjs';
 
 const isNestedRangeValue = (value) => typeof value === 'number';
-const rgb = (value) => ({ kind: 1, rgb: value, theme: 0, tint: 0, indexed: 0 });
-const NO_COLOR = { kind: 0, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+const rgb = (value) => ({ kind: 1, argb: value, theme: 0, tint: 0, indexed: 0 });
+const NO_COLOR = { kind: 0, argb: 0, theme: 0, tint: 0, indexed: 0 };
 
 export function registerStyles(Module, test) {
   test('xf index round-trips through setCellXfIndex / getCellXfIndex', () => {
@@ -14,7 +14,7 @@ export function registerStyles(Module, test) {
       // An index past the xf table is refused and leaves the cell alone.
       expectFailure(() => wb.setCellXfIndex(0, 2, 3, 9), StatusCode.IndexOutOfRange);
       assert.equal(wb.getCellXfIndex(0, 2, 3), 0);
-      const font = wb.addFont({ name: 'Arial', size: 12, bold: true });
+      const font = wb.addFont({ name: 'Arial', sizePt: 12, bold: true });
       const xf = wb.addCellXf({ fontIndex: font });
       wb.setCellXfIndex(0, 2, 3, xf);
       const r = wb.getCellXfIndex(0, 2, 3);
@@ -38,7 +38,7 @@ export function registerStyles(Module, test) {
 
       const f1 = wb.addFont({
         name: 'Arial',
-        size: 12,
+        sizePt: 12,
         bold: true,
         italic: false,
         strike: false,
@@ -50,7 +50,7 @@ export function registerStyles(Module, test) {
       // Adding the same font again returns the same index (linear-search dedup).
       const f1b = wb.addFont({
         name: 'Arial',
-        size: 12,
+        sizePt: 12,
         bold: true,
         italic: false,
         strike: false,
@@ -60,7 +60,7 @@ export function registerStyles(Module, test) {
       assert.equal(f1b, f1);
       assert.equal(wb.getFontCount(), 2);
 
-      const fill = wb.addFill({ pattern: 1, fg: rgb(0xffff0000), bg: rgb(0xff000000) });
+      const fill = wb.addFill({ pattern: 1, foreground: rgb(0xffff0000), background: rgb(0xff000000) });
       const border = wb.addBorder({
         left: { style: 1, color: rgb(0xff000000) },
         right: { style: 1, color: rgb(0xff000000) },
@@ -72,11 +72,11 @@ export function registerStyles(Module, test) {
       });
 
       // Built-in num_fmt resolves without growing the table.
-      const builtin = wb.addNumFmt('General');
+      const builtin = wb.addNumberFormat('General');
       assert.equal(builtin, 0);
 
       // Custom num_fmt yields >= 164.
-      const custom = wb.addNumFmt('"USD" #,##0');
+      const custom = wb.addNumberFormat('"USD" #,##0');
       assert.ok(custom >= 164, `expected custom id >= 164, got ${custom}`);
 
       const xf = wb.addCellXf({
@@ -84,8 +84,8 @@ export function registerStyles(Module, test) {
         fillIndex: fill,
         borderIndex: border,
         numFmtId: custom,
-        horizontalAlign: 1,
-        verticalAlign: 2,
+        horizontal: 1,
+        vertical: 2,
         wrapText: true,
       });
       assert.ok(wb.getCellXfCount() >= 1);
@@ -96,8 +96,8 @@ export function registerStyles(Module, test) {
         fillIndex: fill,
         borderIndex: border,
         numFmtId: custom,
-        horizontalAlign: 1,
-        verticalAlign: 2,
+        horizontal: 1,
+        vertical: 2,
         wrapText: true,
       });
       assert.equal(xfDup, xf);
@@ -111,8 +111,8 @@ export function registerStyles(Module, test) {
       assert.equal(reread.fontIndex, f1);
       assert.equal(reread.numFmtId, custom);
       assert.equal(reread.wrapText, true);
-      assert.equal(reread.horizontalAlign, 1);
-      assert.equal(reread.verticalAlign, 2);
+      assert.equal(reread.horizontal, 1);
+      assert.equal(reread.vertical, 2);
       assert.equal(reread.justifyLastLine, null);
 
       const optional = wb.addCellXf({
@@ -134,7 +134,7 @@ export function registerStyles(Module, test) {
       assert.equal(optionalRead.shrinkToFit, false);
       assert.equal(optionalRead.readingOrder, 0);
       assert.equal(optionalRead.justifyLastLine, true);
-      assert.equal(optionalRead.horizontalAlign, null);
+      assert.equal(optionalRead.horizontal, null);
       assert.equal(wb.addCellXf(optionalRead), optional);
 
       const omitted = wb.addCellXf({
@@ -145,7 +145,7 @@ export function registerStyles(Module, test) {
       });
       const omittedRead = wb.getCellXf(omitted);
       assert.deepEqual(
-        [omittedRead.horizontalAlign, omittedRead.verticalAlign, omittedRead.wrapText, omittedRead.justifyLastLine],
+        [omittedRead.horizontal, omittedRead.vertical, omittedRead.wrapText, omittedRead.justifyLastLine],
         [null, null, null, null],
       );
       assert.equal('textRotation' in omittedRead, false);
@@ -161,19 +161,19 @@ export function registerStyles(Module, test) {
 
       const rfont = wb.getFont(f1);
       assert.equal(rfont.name, 'Arial');
-      assert.equal(rfont.size, 12);
+      assert.equal(rfont.sizePt, 12);
       assert.equal(rfont.bold, true);
 
       const rfill = wb.getFill(fill);
       assert.equal(rfill.pattern, 1);
-      assert.equal(rfill.fg.kind, 1);
-      assert.equal(rfill.fg.rgb, 0xffff0000);
+      assert.equal(rfill.foreground.kind, 1);
+      assert.equal(rfill.foreground.argb, 0xffff0000);
 
       const rborder = wb.getBorder(border);
       assert.equal(rborder.left.style, 1);
       assert.equal(rborder.diagonalUp, false);
 
-      const rfmt = wb.getNumFmtString(custom);
+      const rfmt = wb.getNumberFormat(custom);
       assert.equal(rfmt, '"USD" #,##0');
     } finally {
       wb.delete();
@@ -183,12 +183,12 @@ export function registerStyles(Module, test) {
   test('selector colours survive get/add identity and save/load', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const theme = { kind: 2, rgb: 0, theme: 3, tint: 0.5, indexed: 0 };
-      const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
-      const automatic = { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+      const theme = { kind: 2, argb: 0, theme: 3, tint: 0.5, indexed: 0 };
+      const indexed = { kind: 3, argb: 0, theme: 0, tint: 0, indexed: 9 };
+      const automatic = { kind: 4, argb: 0, theme: 0, tint: 0, indexed: 0 };
       const font = wb.addFont({
         name: 'SelectorFont',
-        size: 11,
+        sizePt: 11,
         color: theme,
       });
       const gotFont = wb.getFont(font);
@@ -200,13 +200,13 @@ export function registerStyles(Module, test) {
 
       const fill = wb.addFill({
         pattern: 1,
-        fg: indexed,
-        bg: automatic,
+        foreground: indexed,
+        background: automatic,
       });
       const gotFill = wb.getFill(fill);
-      assert.equal(gotFill.fg.kind, 3);
-      assert.equal(gotFill.fg.indexed, 9);
-      assert.equal(gotFill.bg.kind, 4);
+      assert.equal(gotFill.foreground.kind, 3);
+      assert.equal(gotFill.foreground.indexed, 9);
+      assert.equal(gotFill.background.kind, 4);
       const fillAgain = wb.addFill(gotFill);
       assert.equal(fillAgain, fill);
 
@@ -227,18 +227,18 @@ export function registerStyles(Module, test) {
       assert.equal(borderAgain, border);
 
       const dxf = wb.addDxf({
-        font: { name: 'DxfSelector', size: 9, color: automatic },
-        fill: { pattern: 1, fg: indexed },
+        font: { name: 'DxfSelector', sizePt: 9, color: automatic },
+        fill: { pattern: 1, foreground: indexed },
         border: { left: { style: 1, color: theme } },
       });
       const gotDxf = wb.getDxf(dxf);
       assert.equal(gotDxf.font.color.kind, 4);
-      assert.equal(gotDxf.fill.fg.kind, 3);
+      assert.equal(gotDxf.fill.foreground.kind, 3);
       assert.equal(gotDxf.border.left.color.kind, 2);
       const dxfAgain = wb.addDxf(gotDxf);
-      assert.equal(gotDxf.font.size, 9);
+      assert.equal(gotDxf.font.sizePt, 9);
       const bareDxf = wb.addDxf({ font: { bold: true } });
-      assert.equal(wb.getDxf(bareDxf).font.size, null);
+      assert.equal(wb.getDxf(bareDxf).font.sizePt, null);
       assert.equal(wb.getDxf(bareDxf).font.bold, true);
       assert.equal(wb.getDxf(bareDxf).font.italic, null);
       assert.equal(dxfAgain, dxf);
@@ -252,7 +252,7 @@ export function registerStyles(Module, test) {
         const loadedBorder = loaded.getBorder(border);
         const loadedDxf = loaded.getDxf(dxf);
         assert.equal(loadedFont.color.kind, 2);
-        assert.equal(loadedFill.fg.kind, 3);
+        assert.equal(loadedFill.foreground.kind, 3);
         assert.equal(loadedBorder.left.color.kind, 2);
         assert.equal(loadedDxf.font.color.kind, 4);
       } finally {
@@ -263,21 +263,31 @@ export function registerStyles(Module, test) {
     }
   });
 
-  test('dxf alignment and protection XML survive get/add identity and save/load', () => {
+  test('dxf alignment, protection and number format survive get/add identity and save/load', () => {
     const wb = Module.Workbook.createDefault();
-    const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
-    const protectionXml = '<protection locked="0" hidden="1"/>';
+    const alignmentRecord = {
+      horizontal: 2,
+      vertical: 2,
+      wrapText: true,
+      shrinkToFit: false,
+      indent: 0,
+      textRotation: 0,
+      readingOrder: 0,
+      justifyLastLine: false,
+      relativeIndent: 0,
+    };
+    const protectionRecord = { locked: false, hidden: true };
     try {
-      const alignment = wb.addDxf({ alignmentXml });
-      const protection = wb.addDxf({ protectionXml });
+      const alignment = wb.addDxf({ alignment: alignmentRecord });
+      const protection = wb.addDxf({ protection: protectionRecord });
       assert.notEqual(alignment, protection);
 
       const gotAlignment = wb.getDxf(alignment);
-      assert.equal(gotAlignment.alignmentXml, alignmentXml);
-      assert.equal(gotAlignment.protectionXml, undefined);
+      assert.deepEqual(gotAlignment.alignment, alignmentRecord);
+      assert.equal(gotAlignment.protection, undefined);
       const gotProtection = wb.getDxf(protection);
-      assert.equal(gotProtection.alignmentXml, undefined);
-      assert.equal(gotProtection.protectionXml, protectionXml);
+      assert.equal(gotProtection.alignment, undefined);
+      assert.deepEqual(gotProtection.protection, protectionRecord);
 
       const alignmentAgain = wb.addDxf(gotAlignment);
       assert.equal(alignmentAgain, alignment);
@@ -289,11 +299,11 @@ export function registerStyles(Module, test) {
       try {
         assert.equal(loaded.disposed, false);
         const loadedAlignment = loaded.getDxf(alignment);
-        assert.equal(loadedAlignment.alignmentXml, alignmentXml);
-        assert.equal(loadedAlignment.protectionXml, undefined);
+        assert.deepEqual(loadedAlignment.alignment, alignmentRecord);
+        assert.equal(loadedAlignment.protection, undefined);
         const loadedProtection = loaded.getDxf(protection);
-        assert.equal(loadedProtection.alignmentXml, undefined);
-        assert.equal(loadedProtection.protectionXml, protectionXml);
+        assert.equal(loadedProtection.alignment, undefined);
+        assert.deepEqual(loadedProtection.protection, protectionRecord);
         const loadedAlignmentAgain = loaded.addDxf(loadedAlignment);
         assert.equal(loadedAlignmentAgain, alignment);
         const loadedProtectionAgain = loaded.addDxf(loadedProtection);
@@ -309,10 +319,10 @@ export function registerStyles(Module, test) {
   test('addFont / getFont preserve superscript and subscript', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1 });
+      const superscript = wb.addFont({ name: 'Arial', sizePt: 12, vertAlign: 1 });
       assert.equal(wb.getFont(superscript).vertAlign, 1);
 
-      const subscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 2 });
+      const subscript = wb.addFont({ name: 'Arial', sizePt: 12, vertAlign: 2 });
       assert.notEqual(subscript, superscript);
       assert.equal(wb.getFont(subscript).vertAlign, 2);
     } finally {
@@ -323,7 +333,7 @@ export function registerStyles(Module, test) {
   test('addFont(getFont(i)) is the identity and does not grow the table', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, color: rgb(0xff112233) });
+      const added = wb.addFont({ name: 'Arial', sizePt: 12, vertAlign: 1, color: rgb(0xff112233) });
       const before = wb.getFontCount();
       const readBack = wb.getFont(added);
       const again = wb.addFont(readBack);
@@ -337,14 +347,14 @@ export function registerStyles(Module, test) {
   test('a one-field font rewrite keeps the superscript', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, color: rgb(0xff112233) });
+      const added = wb.addFont({ name: 'Arial', sizePt: 12, vertAlign: 1, color: rgb(0xff112233) });
       const edited = wb.getFont(added);
       edited.color = rgb(0xff00ff00);
       const recolored = wb.addFont(edited);
       assert.notEqual(recolored, added);
       const reread = wb.getFont(recolored);
       assert.equal(reread.vertAlign, 1);
-      assert.equal(reread.color.rgb, 0xff00ff00);
+      assert.equal(reread.color.argb, 0xff00ff00);
     } finally {
       wb.delete();
     }
@@ -353,7 +363,7 @@ export function registerStyles(Module, test) {
   test('addDxf / getDxf round-trip a superscript differential font', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const added = wb.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
+      const added = wb.addDxf({ font: { name: 'Calibri', sizePt: 9, vertAlign: 1 } });
       const readBack = wb.getDxf(added);
       assert.equal(readBack.font.vertAlign, 1);
       const before = wb.getDxfCount();
@@ -374,8 +384,8 @@ export function registerStyles(Module, test) {
           fillIndex: 0,
           borderIndex: 0,
           numFmtId: 0,
-          horizontalAlign: 0,
-          verticalAlign: 0,
+          horizontal: 0,
+          vertical: 0,
           wrapText: false,
         }),
       );
@@ -414,7 +424,7 @@ export function registerStyles(Module, test) {
 
       const dxfCount = () => wb.getDxfCount();
       dxfCount.before = dxfCount();
-      assertRejected('dxf.numFmt.numFmtId=65536', () => wb.addDxf({ numFmt: { numFmtId: 65536 } }), dxfCount);
+      assertRejected('dxf.alignment.horizontal=256', () => wb.addDxf({ alignment: { horizontal: 256 } }), dxfCount);
     } finally {
       wb.delete();
     }
@@ -451,13 +461,16 @@ export function registerStyles(Module, test) {
 
       const styleXfBefore = wb.getCellStyleXfCount();
       assert.throws(
-        () => wb.addCellStyleXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, xfId: 0x100000000 }),
+        () => wb.addCellStyleXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, styleXfIndex: 0x100000000 }),
         RangeError,
       );
       assert.equal(wb.getCellStyleXfCount(), styleXfBefore);
 
       const themeBefore = wb.getThemeColors().colors;
-      assert.throws(() => wb.setThemeColors([0x100000000, ...themeBefore.slice(1)]), RangeError);
+      assert.throws(
+        () => wb.setThemeColors([rgb(0x100000000), ...themeBefore.slice(1).map((c) => rgb(c))]),
+        RangeError,
+      );
       assert.deepEqual(wb.getThemeColors().colors, themeBefore);
 
       const dxf = wb.addDxf({ font: { name: 'cf-dxf' } });
@@ -465,7 +478,7 @@ export function registerStyles(Module, test) {
         ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 3,
         priority: 0x100000000,
-        dxfId: dxf,
+        dxfIndex: dxf,
         dataBar: { min: { type: 3 }, max: { type: 4 }, fill: rgb(0xff010203) },
       };
       const cfBefore = readAll(
@@ -528,8 +541,11 @@ export function registerStyles(Module, test) {
       const xf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: null });
       assert.equal(wb.getCellXf(xf).numFmtId, 0);
 
-      const dxf = wb.addDxf({ numFmt: { numFmtId: undefined } });
-      assert.equal(wb.getDxf(dxf).numFmt.numFmtId, 0);
+      const dxf = wb.addDxf({ numberFormat: undefined });
+      assert.equal(wb.getDxf(dxf).numberFormat, null);
+      const formatted = wb.addDxf({ numberFormat: '0.00%' });
+      assert.equal(wb.getDxf(formatted).numberFormat, '0.00%');
+      assert.equal(wb.addDxf(wb.getDxf(formatted)), formatted);
     } finally {
       wb.delete();
     }
@@ -548,7 +564,7 @@ export function registerStyles(Module, test) {
         },
       };
       const invalid = [
-        ['dataBar.fill.rgb=2^32', { dataBar: { fill: rgb(0x100000000) } }],
+        ['dataBar.fill.argb=2^32', { dataBar: { fill: rgb(0x100000000) } }],
         ['dataBar.fill.kind=256', { dataBar: { fill: { ...rgb(0), kind: 256 } } }],
         ['dataBar.minLengthPct=256', { dataBar: { minLengthPct: 256 } }],
         ['dataBar.maxLengthPct=256', { dataBar: { maxLengthPct: 256 } }],
@@ -590,13 +606,13 @@ export function registerStyles(Module, test) {
           dataBar: {
             min: { type: 3 },
             max: { type: 4 },
-            fill: { ...rgb(3), rgb: value },
+            fill: { ...rgb(3), argb: value },
           },
         };
         assert.throws(
           () => wb.addCfRule(0, rule),
           isNestedRangeValue(value) ? RangeError : TypeError,
-          `dataBar.fill.rgb=${String(value)} accepted`,
+          `dataBar.fill.argb=${String(value)} accepted`,
         );
         assert.equal(
           readAll(
@@ -604,7 +620,7 @@ export function registerStyles(Module, test) {
             (i) => wb.getCfRule(0, i),
           ).length,
           0,
-          `dataBar.fill.rgb=${String(value)} mutated rules`,
+          `dataBar.fill.argb=${String(value)} mutated rules`,
         );
       } finally {
         wb.delete();
@@ -621,7 +637,7 @@ export function registerStyles(Module, test) {
         dataBar: {
           min: { type: 3, gte: null },
           max: { type: 4, gte: undefined },
-          fill: { kind: 2, rgb: null, theme: 3, tint: undefined, indexed: null },
+          fill: { kind: 2, argb: null, theme: 3, tint: undefined, indexed: null },
           minLengthPct: null,
           maxLengthPct: undefined,
           axisPosition: null,
@@ -633,7 +649,7 @@ export function registerStyles(Module, test) {
         (i) => wb.getCfRule(0, i),
       )[0].dataBar;
       assert.equal(bar.fill.kind, 2);
-      assert.equal(bar.fill.rgb, 0);
+      assert.equal(bar.fill.argb, 0);
       assert.equal(bar.fill.theme, 3);
       assert.equal(bar.fill.tint, 0);
       assert.equal(bar.fill.indexed, 0);
@@ -658,7 +674,7 @@ export function registerStyles(Module, test) {
     try {
       let horizontalReads = 0;
       const xfSpec = {};
-      Object.defineProperty(xfSpec, 'horizontalAlign', {
+      Object.defineProperty(xfSpec, 'horizontal', {
         get() {
           horizontalReads += 1;
           return horizontalReads === 1 ? 1 : undefined;
@@ -667,7 +683,7 @@ export function registerStyles(Module, test) {
       const xf = wb.addCellXf(xfSpec);
       assert.equal(horizontalReads, 1);
       const storedXf = wb.getCellXf(xf);
-      assert.equal(storedXf.horizontalAlign, 1);
+      assert.equal(storedXf.horizontal, 1);
 
       wb.addDxf({ font: { name: 'first' } });
       const secondDxf = wb.addDxf({ font: { name: 'second' } });
@@ -681,7 +697,7 @@ export function registerStyles(Module, test) {
           fill: rgb(0xff010203),
         },
       };
-      Object.defineProperty(rule, 'dxfId', {
+      Object.defineProperty(rule, 'dxfIndex', {
         get() {
           dxfReads += 1;
           return dxfReads === 1 ? secondDxf : undefined;
@@ -693,12 +709,12 @@ export function registerStyles(Module, test) {
         readAll(
           () => wb.getCfRuleCount(0),
           (i) => wb.getCfRule(0, i),
-        )[0].dxfId,
+        )[0].dxfIndex,
         secondDxf,
       );
 
       const lateFont = { name: 'late font '.repeat(1024) };
-      Object.defineProperty(lateFont, 'size', {
+      Object.defineProperty(lateFont, 'sizePt', {
         get() {
           throw new Error('late font getter');
         },

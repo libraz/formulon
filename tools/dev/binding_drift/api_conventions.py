@@ -65,7 +65,7 @@ SCOPES = (
     "cell_range",
     "cf_results",
     "cell_nodes",
-    "pivot_cells",
+    "pivot_report",
     "pagination",
     "chart",
     "chart_data",
@@ -81,7 +81,7 @@ C_VERBS = frozenset(
         "add", "update", "remove", "insert", "delete",
         "create", "destroy",
         "copy", "move", "rename", "reset", "load", "save", "recalc", "evaluate",
-        "parse", "format", "convert", "resolve",
+        "parse", "format", "convert", "resolve", "find",
         "snapshot", "restore", "remap", "apply", "refresh", "validate", "match", "next",
         "localize", "canonicalize", "compare", "group", "ungroup", "project", "show",
     }
@@ -986,9 +986,9 @@ def _caller_buffer_problems(fn: CFunction) -> Iterable[Tuple[str, str]]:
     for i, param in enumerate(params[:-1]):
         if param.ctype not in ("char*", "uint8_t*") or params[i + 1].ctype != "size_t":
             continue
-        expected = [("buf", param), ("cap", params[i + 1])]
+        expected = [("out", param), ("capacity", params[i + 1])]
         if i + 2 < len(params) and params[i + 2].ctype == "size_t*":
-            expected.append(("out_len", params[i + 2]))
+            expected.append(("out_count", params[i + 2]))
         for want, actual in expected:
             if actual.name != want:
                 yield actual.name, f"caller buffer parameter `{actual.name}` should be named `{want}`"
@@ -999,7 +999,7 @@ def _rule_c_types(ctx: Context) -> Iterable[Violation]:
     """C scalar types: `size_t sheet_index`, `size_t` indices, `uint32_t` ids and rows / columns,
     enums as `int32_t`, no bare C scalars; a `*_count` getter returns `fm_status_t` through
     `size_t* out_count`; a `get` / `is` / `has` takes `const fm_workbook_t*`; a caller buffer is
-    `buf, cap, out_len`.
+    `out, capacity, out_count`.
     """
     for fn in ctx.functions:
         target = ctx.target_c(fn.name)

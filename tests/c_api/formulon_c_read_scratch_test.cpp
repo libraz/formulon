@@ -44,7 +44,7 @@ TEST(FormulonCApiReadScratch, GetValueDoesNotGrowScratch) {
   for (int i = 0; i < kIterations; ++i) {
     fm_value_t v{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-    ASSERT_EQ(v.kind, FM_VAL_TEXT);
+    ASSERT_EQ(v.kind, FM_VALUE_KIND_TEXT);
     ASSERT_NE(v.u.text, nullptr);
     EXPECT_STREQ(v.u.text, "hello");
   }
@@ -69,7 +69,7 @@ TEST(FormulonCApiReadScratch, MixedReadsStayBounded) {
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
     fm_value_t n{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &n), 0);
-    EXPECT_EQ(n.kind, FM_VAL_NUMBER);
+    EXPECT_EQ(n.kind, FM_VALUE_KIND_NUMBER);
   }
   EXPECT_LE(wb.handle->read_scratch.size(), 1U);
 }
@@ -82,7 +82,7 @@ TEST(FormulonCApiReadScratch, AbsentLambdaReadPreservesPreviousScratch) {
 
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_TEXT);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_TEXT);
   ASSERT_NE(value.u.text, nullptr);
   const char* previous_pointer = value.u.text;
   const std::string previous_value = previous_pointer;
@@ -112,7 +112,7 @@ TEST(FormulonCApiReadScratch, AlternatingReadsStayBoundedAndCopiedTextSurvives) 
   for (int i = 0; i < 5000; ++i) {
     fm_value_t first{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &first), 0);
-    ASSERT_EQ(first.kind, FM_VAL_TEXT);
+    ASSERT_EQ(first.kind, FM_VALUE_KIND_TEXT);
     ASSERT_NE(first.u.text, nullptr);
     if (i == 0) {
       retained = first.u.text;  // Explicit caller copy before the next read.
@@ -120,7 +120,7 @@ TEST(FormulonCApiReadScratch, AlternatingReadsStayBoundedAndCopiedTextSurvives) 
 
     fm_value_t second{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &second), 0);
-    ASSERT_EQ(second.kind, FM_VAL_TEXT);
+    ASSERT_EQ(second.kind, FM_VALUE_KIND_TEXT);
     ASSERT_NE(second.u.text, nullptr);
     EXPECT_STREQ(second.u.text, "second");
   }
@@ -142,7 +142,7 @@ TEST(FormulonCApiReadScratch, ModelBackedSheetNameSurvivesScratchRead) {
 
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_TEXT);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_TEXT);
   ASSERT_NE(value.u.text, nullptr);
   EXPECT_STREQ(value.u.text, "payload");
   EXPECT_EQ(std::string(sheet_name), expected_name);
@@ -189,9 +189,9 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   thresholds[1].type = 1;  // Percent.
   thresholds[1].value = "50";
   thresholds[2].type = 4;  // Max.
-  fm_color_spec_t colors[3]{{0.0, 0xFFFF0000U, 0U, 0U, kFmColorRgb},
-                            {0.0, 0xFFFFFF00U, 0U, 0U, kFmColorRgb},
-                            {0.0, 0xFF00FF00U, 0U, 0U, kFmColorRgb}};
+  fm_color_spec_t colors[3]{{0.0, 0xFFFF0000U, 0U, 0U, FM_COLOR_KIND_RGB},
+                            {0.0, 0xFFFFFF00U, 0U, 0U, FM_COLOR_KIND_RGB},
+                            {0.0, 0xFF00FF00U, 0U, 0U, FM_COLOR_KIND_RGB}};
   fm_cf_rule_t cf_input = FM_STRUCT_INIT(fm_cf_rule_t);
   cf_input.type = 2;  // ColorScale.
   cf_input.ranges = &cf_range;
@@ -260,6 +260,6 @@ TEST(FormulonCApiReadScratch, RepeatedTextOverwritesDoNotRetainHistoricalBuffers
   EXPECT_TRUE(wb.handle->workbook().text_storage().empty());
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_TEXT);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(v.u.text, "value-999");
 }

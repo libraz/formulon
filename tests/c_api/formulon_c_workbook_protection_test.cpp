@@ -100,11 +100,11 @@ TEST(FormulonCApiWorkbookProtection, EveryFieldRoundTripsThroughSaveAndLoad) {
   in.lock_revision = 1;
   in.workbook_spin_count = 100000;
   in.revisions_spin_count = 50000;
-  in.workbook_password = "CF1A";
+  in.workbook_legacy_password_hash = "CF1A";
   in.workbook_algorithm_name = "SHA-512";
   in.workbook_hash_value = "aGFzaA==";
   in.workbook_salt_value = "c2FsdA==";
-  in.revisions_password = "8D2B";
+  in.revisions_legacy_password_hash = "8D2B";
   in.revisions_algorithm_name = "SHA-256";
   in.revisions_hash_value = "cmV2";
   in.revisions_salt_value = "c2Fs";
@@ -119,11 +119,11 @@ TEST(FormulonCApiWorkbookProtection, EveryFieldRoundTripsThroughSaveAndLoad) {
   EXPECT_EQ(out.lock_revision, 1);
   EXPECT_EQ(out.workbook_spin_count, 100000U);
   EXPECT_EQ(out.revisions_spin_count, 50000U);
-  EXPECT_STREQ(out.workbook_password, "CF1A");
+  EXPECT_STREQ(out.workbook_legacy_password_hash, "CF1A");
   EXPECT_STREQ(out.workbook_algorithm_name, "SHA-512");
   EXPECT_STREQ(out.workbook_hash_value, "aGFzaA==");
   EXPECT_STREQ(out.workbook_salt_value, "c2FsdA==");
-  EXPECT_STREQ(out.revisions_password, "8D2B");
+  EXPECT_STREQ(out.revisions_legacy_password_hash, "8D2B");
   EXPECT_STREQ(out.revisions_algorithm_name, "SHA-256");
   EXPECT_STREQ(out.revisions_hash_value, "cmV2");
   EXPECT_STREQ(out.revisions_salt_value, "c2Fs");
@@ -158,7 +158,7 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   WorkbookGuard wb;
   Create(&wb);
   fm_protected_range_t inputs = Range("Inputs", kInputsRanges, 2);
-  inputs.password = "CC1A";
+  inputs.legacy_password_hash = "CC1A";
   const fm_cell_rect_t totals_range{9, 0, 11, 0};
   fm_protected_range_t totals = Range("Totals", &totals_range, 1);
   totals.algorithm_name = "SHA-512";
@@ -177,7 +177,7 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Inputs");
   EXPECT_EQ(RangesText(loaded, out), "B2:C3 E5");
-  EXPECT_STREQ(out.password, "CC1A");
+  EXPECT_STREQ(out.legacy_password_hash, "CC1A");
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 1, &out), 0);
   EXPECT_STREQ(out.algorithm_name, "SHA-512");
   EXPECT_STREQ(out.hash_value, "aA==");
@@ -191,7 +191,7 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Renamed");
   EXPECT_EQ(RangesText(loaded, out), "D4");
-  EXPECT_STREQ(out.password, "");
+  EXPECT_STREQ(out.legacy_password_hash, "");
 
   ASSERT_EQ(fm_sheet_remove_protected_range(loaded.handle, 0, 0), 0);
   ASSERT_EQ(RangeCount(loaded), 1U);

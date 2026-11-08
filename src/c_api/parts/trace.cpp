@@ -174,7 +174,7 @@ extern "C" fm_status_t fm_cell_nodes_get_node_at(const fm_cell_nodes_t* nodes, s
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  out->sheet = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);
+  out->sheet_index = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);
   out->row = nodes->nodes[idx].row;
   out->col = nodes->nodes[idx].col;
   return 0;

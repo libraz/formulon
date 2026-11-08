@@ -27,7 +27,7 @@ function failureProbes(wb, mod) {
     [true, () => wb.sheet(99).pivot(0).getReportLayout()],
     [true, () => wb.sheet(99).pivot(0).listFilters()],
     [true, () => wb.sheet(99).pivot(0).getGrandTotals()],
-    [true, () => wb.sheet(99).pivot(0).getStyleInfo()],
+    [true, () => wb.sheet(99).pivot(0).getStyleOptions()],
     [true, () => wb.sheet(99).pivot(0).getOptions()],
     [true, () => wb.pivotCache(9999).getOptions()],
     [true, () => wb.pivotCache(9999).listCalculatedItems()],
@@ -51,7 +51,7 @@ function failureProbes(wb, mod) {
     [true, () => wb.ooxml.getFont(9999)],
     [true, () => wb.ooxml.getFill(9999)],
     [true, () => wb.ooxml.getBorder(9999)],
-    [false, () => wb.ooxml.getNumFmtString(59999)],
+    [false, () => wb.ooxml.getNumberFormat(59999)],
     [true, () => wb.sheet(99).getLambdaText(0, 0)],
     [true, () => wb.sheet(99).getCellPhoneticRuns(0, 0)],
     [true, () => wb.sheet(99).listCfRules()],
@@ -66,7 +66,7 @@ function failureProbes(wb, mod) {
     // A released handle is the only failure path, which is not usable here.
     [false, () => wb.getTableStyleDefaults()],
     [true, () => wb.ooxml.addCellXf({ fontIndex: 9999 })],
-    [false, () => wb.ooxml.addNumFmt('0.00')],
+    [false, () => wb.ooxml.addNumberFormat('0.00')],
     [false, () => wb.getIterative()],
     [true, () => wb.sheet(99).recalcViewport({ firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 })],
     [true, () => wb.sheet(99).ooxml.getPageSetupXml()],
@@ -96,7 +96,7 @@ function failureProbes(wb, mod) {
     [false, () => wb.getThemeFonts()],
     [false, () => wb.getThemeColors()],
     [true, () => wb.resolveColor({ kind: 0 }, 99)],
-    [true, () => wb.sheet(99).getEffectiveStyle(0, 0)],
+    [true, () => wb.sheet(99).ooxml.getEffectiveStyle(0, 0)],
     [true, () => wb.sheet(99).getAutoFilter()],
     [true, () => wb.sheet(99).getDataTable(0, 0)],
     [true, () => wb.sheet(99).evaluateAutoFilter()],
@@ -110,13 +110,12 @@ function failureProbes(wb, mod) {
     [true, () => wb.sheet(99).chart(1).getData()],
     [true, () => wb.sheet(99).addChart({ kind: 0, source: 'A1:B2' })],
     [true, () => wb.sheet(99).chart(1).addSeries(0, { values: 'A1:A2' })],
-    [true, () => wb.sheet(99).ooxml.getRangeStyleBases({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    [true, () => wb.sheet(99).ooxml.getRangeXfBases({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
     [
       true,
-      () =>
-        wb.sheet(99).ooxml.getRangeStyleBasesExcluding({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [], []),
+      () => wb.sheet(99).ooxml.getRangeXfBasesExcluding({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [], []),
     ],
-    [true, () => wb.sheet(99).snapshotRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    [true, () => wb.sheet(99).ooxml.snapshotRangeXfs({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
     [true, () => wb.sheet(99).validateValue(0, 0, { kind: 1, number: 1 })],
   ];
 }

@@ -30,43 +30,43 @@ bool LoadCases(Json* out) {
 
 const std::map<std::string, int32_t>& CodeValues() {
   static const std::map<std::string, int32_t> kCodes = {
-      {"LexerInvalidCharacter", FM_PARSE_ERROR_LEXER_INVALID_CHARACTER},
-      {"LexerUnterminatedString", FM_PARSE_ERROR_LEXER_UNTERMINATED_STRING},
-      {"LexerUnterminatedSheetQuote", FM_PARSE_ERROR_LEXER_UNTERMINATED_SHEET_QUOTE},
-      {"LexerInvalidNumberLiteral", FM_PARSE_ERROR_LEXER_INVALID_NUMBER_LITERAL},
-      {"LexerInvalidErrorLiteral", FM_PARSE_ERROR_LEXER_INVALID_ERROR_LITERAL},
-      {"LexerInvalidEscape", FM_PARSE_ERROR_LEXER_INVALID_ESCAPE},
-      {"LexerInvalidReference", FM_PARSE_ERROR_LEXER_INVALID_REFERENCE},
-      {"LexerExcessiveLength", FM_PARSE_ERROR_LEXER_EXCESSIVE_LENGTH},
-      {"UnexpectedToken", FM_PARSE_ERROR_UNEXPECTED_TOKEN},
-      {"UnexpectedEof", FM_PARSE_ERROR_UNEXPECTED_EOF},
-      {"ExpectedExpression", FM_PARSE_ERROR_EXPECTED_EXPRESSION},
-      {"ExpectedCloseParen", FM_PARSE_ERROR_EXPECTED_CLOSE_PAREN},
-      {"UnbalancedBraces", FM_PARSE_ERROR_UNBALANCED_BRACES},
-      {"ArrayRowMismatch", FM_PARSE_ERROR_ARRAY_ROW_MISMATCH},
-      {"ExpectedRParenOrComma", FM_PARSE_ERROR_EXPECTED_RPAREN_OR_COMMA},
-      {"ExpectedCommaOrSemiInArray", FM_PARSE_ERROR_EXPECTED_COMMA_OR_SEMI_IN_ARRAY},
-      {"InvalidReference", FM_PARSE_ERROR_INVALID_REFERENCE},
-      {"UnsupportedConstruct", FM_PARSE_ERROR_UNSUPPORTED_CONSTRUCT},
-      {"ExpectedOpenParen", FM_PARSE_ERROR_EXPECTED_OPEN_PAREN},
-      {"ExpectedComma", FM_PARSE_ERROR_EXPECTED_COMMA},
-      {"UnbalancedBrackets", FM_PARSE_ERROR_UNBALANCED_BRACKETS},
-      {"InvalidRange", FM_PARSE_ERROR_INVALID_RANGE},
-      {"NestedFormulaTooDeep", FM_PARSE_ERROR_NESTED_FORMULA_TOO_DEEP},
-      {"TooManyErrors", FM_PARSE_ERROR_TOO_MANY_ERRORS},
-      {"LetInvalidName", FM_PARSE_ERROR_LET_INVALID_NAME},
-      {"LetWrongArity", FM_PARSE_ERROR_LET_WRONG_ARITY},
-      {"LambdaInvalidParam", FM_PARSE_ERROR_LAMBDA_INVALID_PARAM},
-      {"LambdaEmpty", FM_PARSE_ERROR_LAMBDA_EMPTY},
-      {"LambdaDuplicateParam", FM_PARSE_ERROR_LAMBDA_DUPLICATE_PARAM},
-      {"EntryWrongArity", FM_PARSE_ERROR_ENTRY_WRONG_ARITY},
-      {"EntryReferenceRequired", FM_PARSE_ERROR_ENTRY_REFERENCE_REQUIRED},
-      {"EntryQualifiedBuiltin", FM_PARSE_ERROR_ENTRY_QUALIFIED_BUILTIN},
-      {"EntryRefusedWhitespace", FM_PARSE_ERROR_ENTRY_REFUSED_WHITESPACE},
-      {"EntryParamShapedName", FM_PARSE_ERROR_ENTRY_PARAM_SHAPED_NAME},
-      {"EntryDoubleEquals", FM_PARSE_ERROR_ENTRY_DOUBLE_EQUALS},
-      {"EntryBomNotSupported", FM_PARSE_ERROR_ENTRY_BOM_NOT_SUPPORTED},
-      {"StructuredRefInvalid", FM_PARSE_ERROR_STRUCTURED_REF_INVALID},
+      {"LexerInvalidCharacter", FM_PARSE_ERROR_CODE_LEXER_INVALID_CHARACTER},
+      {"LexerUnterminatedString", FM_PARSE_ERROR_CODE_LEXER_UNTERMINATED_STRING},
+      {"LexerUnterminatedSheetQuote", FM_PARSE_ERROR_CODE_LEXER_UNTERMINATED_SHEET_QUOTE},
+      {"LexerInvalidNumberLiteral", FM_PARSE_ERROR_CODE_LEXER_INVALID_NUMBER_LITERAL},
+      {"LexerInvalidErrorLiteral", FM_PARSE_ERROR_CODE_LEXER_INVALID_ERROR_LITERAL},
+      {"LexerInvalidEscape", FM_PARSE_ERROR_CODE_LEXER_INVALID_ESCAPE},
+      {"LexerInvalidReference", FM_PARSE_ERROR_CODE_LEXER_INVALID_REFERENCE},
+      {"LexerExcessiveLength", FM_PARSE_ERROR_CODE_LEXER_EXCESSIVE_LENGTH},
+      {"UnexpectedToken", FM_PARSE_ERROR_CODE_UNEXPECTED_TOKEN},
+      {"UnexpectedEof", FM_PARSE_ERROR_CODE_UNEXPECTED_EOF},
+      {"ExpectedExpression", FM_PARSE_ERROR_CODE_EXPECTED_EXPRESSION},
+      {"ExpectedCloseParen", FM_PARSE_ERROR_CODE_EXPECTED_CLOSE_PAREN},
+      {"UnbalancedBraces", FM_PARSE_ERROR_CODE_UNBALANCED_BRACES},
+      {"ArrayRowMismatch", FM_PARSE_ERROR_CODE_ARRAY_ROW_MISMATCH},
+      {"ExpectedRParenOrComma", FM_PARSE_ERROR_CODE_EXPECTED_RPAREN_OR_COMMA},
+      {"ExpectedCommaOrSemiInArray", FM_PARSE_ERROR_CODE_EXPECTED_COMMA_OR_SEMI_IN_ARRAY},
+      {"InvalidReference", FM_PARSE_ERROR_CODE_INVALID_REFERENCE},
+      {"UnsupportedConstruct", FM_PARSE_ERROR_CODE_UNSUPPORTED_CONSTRUCT},
+      {"ExpectedOpenParen", FM_PARSE_ERROR_CODE_EXPECTED_OPEN_PAREN},
+      {"ExpectedComma", FM_PARSE_ERROR_CODE_EXPECTED_COMMA},
+      {"UnbalancedBrackets", FM_PARSE_ERROR_CODE_UNBALANCED_BRACKETS},
+      {"InvalidRange", FM_PARSE_ERROR_CODE_INVALID_RANGE},
+      {"NestedFormulaTooDeep", FM_PARSE_ERROR_CODE_NESTED_FORMULA_TOO_DEEP},
+      {"TooManyErrors", FM_PARSE_ERROR_CODE_TOO_MANY_ERRORS},
+      {"LetInvalidName", FM_PARSE_ERROR_CODE_LET_INVALID_NAME},
+      {"LetWrongArity", FM_PARSE_ERROR_CODE_LET_WRONG_ARITY},
+      {"LambdaInvalidParam", FM_PARSE_ERROR_CODE_LAMBDA_INVALID_PARAM},
+      {"LambdaEmpty", FM_PARSE_ERROR_CODE_LAMBDA_EMPTY},
+      {"LambdaDuplicateParam", FM_PARSE_ERROR_CODE_LAMBDA_DUPLICATE_PARAM},
+      {"EntryWrongArity", FM_PARSE_ERROR_CODE_ENTRY_WRONG_ARITY},
+      {"EntryReferenceRequired", FM_PARSE_ERROR_CODE_ENTRY_REFERENCE_REQUIRED},
+      {"EntryQualifiedBuiltin", FM_PARSE_ERROR_CODE_ENTRY_QUALIFIED_BUILTIN},
+      {"EntryRefusedWhitespace", FM_PARSE_ERROR_CODE_ENTRY_REFUSED_WHITESPACE},
+      {"EntryParamShapedName", FM_PARSE_ERROR_CODE_ENTRY_PARAM_SHAPED_NAME},
+      {"EntryDoubleEquals", FM_PARSE_ERROR_CODE_ENTRY_DOUBLE_EQUALS},
+      {"EntryBomNotSupported", FM_PARSE_ERROR_CODE_ENTRY_BOM_NOT_SUPPORTED},
+      {"StructuredRefInvalid", FM_PARSE_ERROR_CODE_STRUCTURED_REF_INVALID},
   };
   return kCodes;
 }
@@ -174,7 +174,7 @@ TEST(FormulonCApiParseError, RecordIsClearedByTheNextCall) {
   ASSERT_NE(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(1+2"), 0);
   fm_parse_error_t error = FM_STRUCT_INIT(fm_parse_error_t);
   ASSERT_EQ(fm_get_last_parse_error(&error), 0);
-  EXPECT_EQ(error.code, FM_PARSE_ERROR_EXPECTED_CLOSE_PAREN);
+  EXPECT_EQ(error.code, FM_PARSE_ERROR_CODE_EXPECTED_CLOSE_PAREN);
 
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=1+2"), 0);
   EXPECT_EQ(fm_get_last_parse_error(&error), FM_STATUS_NOT_FOUND);
@@ -213,7 +213,7 @@ TEST(FormulonCApiParseError, FailedEntryLeavesTheCellUntouched) {
   ASSERT_NE(fm_sheet_set_formula(wb.handle, 0, 0, 0, "==1"), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 7.0);
 }
 

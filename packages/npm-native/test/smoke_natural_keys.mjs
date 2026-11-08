@@ -44,7 +44,7 @@ test('defined names are read and removed by name and scope', async () => {
 test('hyperlinks, people and threaded comments are read by key', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).addHyperlink(2, 1, { target: 'https://example.com/' });
+  wb.sheet(0).setHyperlink(2, 1, { target: 'https://example.com/' });
   assert.equal(found(wb.sheet(0).getHyperlink(2, 1)).target, 'https://example.com/');
   missing(wb.sheet(0).getHyperlink(2, 2));
   assert.throws(() => wb.sheet(9).getHyperlink(2, 1), isFormulonError);
@@ -90,7 +90,7 @@ test('shapes and drawing objects are read by object id', async () => {
   release(wb);
 });
 
-test('theme script fonts and passthrough parts are read by key', async () => {
+test('theme script fonts and passthrough parts are queried by path', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.ok(found(wb.getThemeScriptFont({ major: true, script: 'Jpan' })).typeface.length > 0);
@@ -102,8 +102,8 @@ test('theme script fonts and passthrough parts are read by key', async () => {
   });
   missing(wb.getThemeScriptFont({ major: true, script: 'Zzzz' }));
   const path = wb.ooxml.listPassthroughs()[0];
-  assert.equal(found(wb.ooxml.getPassthrough(path)), path);
-  missing(wb.ooxml.getPassthrough(`/${path}`));
+  assert.equal(wb.ooxml.hasPassthrough(path), true);
+  assert.equal(wb.ooxml.hasPassthrough(`/${path}`), false);
   release(wb);
 });
 

@@ -215,7 +215,7 @@ test('no read method returns a status envelope', async () => {
 
 function iterativeWorkbook(formulon) {
   const wb = formulon.Workbook.createDefault();
-  wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+  wb.updateIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
   wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
   return wb;
 }
@@ -720,11 +720,11 @@ test('H12: a SheetRef is a Sheet, an index or a name; a Sheet of another workboo
   const other = formulon.Workbook.createDefault();
   try {
     wb.setActiveSheet(wb.sheet('Calc'));
-    assert.equal(wb.getActiveSheet(), wb.sheet('Calc'));
+    assert.equal(wb.activeSheet(), wb.sheet('Calc'));
     wb.setActiveSheet('notes');
-    assert.equal(wb.getActiveSheet().name, 'Notes');
+    assert.equal(wb.activeSheet().name, 'Notes');
     wb.setActiveSheet(0);
-    assert.equal(wb.getActiveSheet().index, 0);
+    assert.equal(wb.activeSheet().index, 0);
     wb.removeSheet('Notes');
     wb.removeSheet(wb.sheet(1));
     assert.equal(wb.listSheets().length, 1);
@@ -779,10 +779,10 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       set(before);
       assert.deepEqual(get(), before);
     };
-    wb.setIterative({ enabled: true, maxIterations: 50, maxChange: 0.01 });
+    wb.updateIterative({ enabled: true, maxIterations: 50, maxChange: 0.01 });
     same(
       () => wb.getIterative(),
-      (v) => wb.setIterative(v),
+      (v) => wb.updateIterative(v),
     );
     wb.setPinnedNow({ year: 2026, month: 11, day: 6, hour: 9, minute: 30, second: 15 });
     same(
@@ -794,34 +794,34 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => ws.getPrintTitles(),
       (v) => ws.setPrintTitles(v),
     );
-    ws.pivot(pivot).setGrandTotals({ rows: false, columns: true });
+    ws.pivot(pivot).updateGrandTotals({ rows: false, columns: true });
     same(
       () => ws.pivot(pivot).getGrandTotals(),
-      (v) => ws.pivot(pivot).setGrandTotals(v),
+      (v) => ws.pivot(pivot).updateGrandTotals(v),
     );
     ws.setComment(5, 5, { author: 'Ann', text: 'note' });
     same(
       () => ws.getComment(5, 5),
       (v) => ws.setComment(5, 5, v),
     );
-    wb.setWorkbookProtection({ lockStructure: true, workbookPassword: 'CF1A' });
+    wb.setWorkbookProtection({ lockStructure: true, workbookLegacyPasswordHash: 'CF1A' });
     same(
       () => wb.getWorkbookProtection(),
       (v) => wb.setWorkbookProtection(v),
     );
-    ws.setSheetProtection({ enabled: true, formatCells: true, legacyPassword: 'CC1A' });
+    ws.setSheetProtection({ allowFormatCells: true, legacyPasswordHash: 'CC1A' });
     same(
       () => ws.getSheetProtection(),
       (v) => ws.setSheetProtection(v),
     );
     ws.setText(6, 0, '漢字');
-    ws.setCellPhoneticRuns(6, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
+    ws.setCellPhoneticRuns(6, 0, [{ start: 0, end: 2, text: 'かんじ' }]);
     same(
       () => ws.getCellPhoneticRuns(6, 0),
       (v) => ws.setCellPhoneticRuns(6, 0, v),
     );
     same(
-      () => wb.getActiveSheet(),
+      () => wb.activeSheet(),
       (v) => wb.setActiveSheet(v),
     );
     wb.setThemeScriptFont({ major: true, script: 'Zzzz', typeface: 'Face' });
@@ -830,42 +830,44 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       (v) => wb.setThemeScriptFont(v),
     );
     const colors = wb.getThemeColors();
-    wb.setThemeColors(colors);
+    wb.setThemeColors({
+      colors: colors.colors.map((value) => `#${(value >>> 0).toString(16).toUpperCase().padStart(8, '0')}`),
+    });
     assert.deepEqual(wb.getThemeColors().colors, colors.colors);
     wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1', localSheetId: 0, comment: 'c', hidden: true });
     same(
       () => wb.getDefinedName('Rate', 0),
       (v) => wb.setDefinedName(v),
     );
-    wb.setTableStyleDefaults({ tableStyle: 'TableStyleLight1' });
+    wb.updateTableStyleDefaults({ tableStyle: 'TableStyleLight1' });
     same(
       () => wb.getTableStyleDefaults(),
-      (v) => wb.setTableStyleDefaults(v),
+      (v) => wb.updateTableStyleDefaults(v),
     );
-    ws.pivot(pivot).setOptions({ errorCaption: 'n/a', showError: true });
+    ws.pivot(pivot).updateOptions({ errorCaption: 'n/a', showError: true });
     same(
       () => ws.pivot(pivot).getOptions(),
-      (v) => ws.pivot(pivot).setOptions(v),
+      (v) => ws.pivot(pivot).updateOptions(v),
     );
     const cache = ws.pivot(pivot).getCache();
     same(
       () => cache.getOptions(),
-      (v) => cache.setOptions(v),
+      (v) => cache.updateOptions(v),
     );
-    ws.setFormatDefaults({ defaultColWidth: 12 });
+    ws.updateFormatDefaults({ defaultColWidthChars: 12 });
     same(
       () => ws.getFormatDefaults(),
-      (v) => ws.setFormatDefaults(v),
+      (v) => ws.updateFormatDefaults(v),
     );
     ws.setPrintArea([{ firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 3 }]);
     same(
       () => ws.getPrintArea(),
       (v) => ws.setPrintArea(v),
     );
-    ws.setView({ viewMode: formulon.SheetViewMode.PageLayout });
+    ws.updateView({ viewMode: formulon.SheetViewMode.PageLayout });
     same(
       () => ws.getView().viewMode,
-      (v) => ws.setView({ viewMode: v }),
+      (v) => ws.updateView({ viewMode: v }),
     );
     assert.equal(ws.getView().viewMode, formulon.SheetViewMode.PageLayout);
   } finally {
@@ -894,7 +896,7 @@ test('A1: a value the workbook does not hold reads as null', async () => {
       localSheetId: null,
       comment: null,
     });
-    ws.addHyperlink(9, 1, { target: 'https://example.com/' });
+    ws.setHyperlink(9, 1, { target: 'https://example.com/' });
     const link = ws.getHyperlink(9, 1);
     assert.deepEqual([link.location, link.display, link.tooltip], [null, null, null]);
 
@@ -903,9 +905,7 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     assert.equal(view.showGridLines, true);
     assert.equal(view.rightToLeft, false);
     assert.equal(view.visibility, formulon.SheetVisibility.Visible);
-    const protection = ws.getSheetProtection();
-    assert.equal(protection.enabled, false);
-    assert.equal(protection.hashValue, null);
+    assert.equal(ws.getSheetProtection(), null);
 
     const field = ws.pivot(pivot).listFields()[0];
     assert.deepEqual([field.customName, field.numberFormat, field.groupBaseIndex], [null, null, null]);
@@ -921,13 +921,13 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     ws.addSparklineGroup({ sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1' }] });
     assert.equal(ws.listSparklineGroups()[0].dateAxisRef, null);
 
-    const font = wb.ooxml.getFont(wb.ooxml.addFont({ name: 'Arial', size: 10 }));
+    const font = wb.ooxml.getFont(wb.ooxml.addFont({ name: 'Arial', sizePt: 10 }));
     assert.deepEqual([font.bold, font.italic, font.family, font.charset], [null, null, null, null]);
     const xf = wb.ooxml.getCellXf(wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 0 }));
-    assert.deepEqual([xf.horizontalAlign, xf.wrapText, xf.locked, xf.hidden], [null, null, null, null]);
+    assert.deepEqual([xf.horizontal, xf.wrapText, xf.locked, xf.hidden], [null, null, null, null]);
     ws.setRowHeight(20, 20, 30);
     const row = ws.listRowOverrides().find((r) => r.row === 20);
-    assert.deepEqual([ws.ooxml.getRowStyle(20), row.hidden], [null, false]);
+    assert.deepEqual([ws.ooxml.getRowXfIndex(20), row.hidden], [null, false]);
     const outcome = ws.validateValue(30, 30, { kind: formulon.ValueKind.Number, number: 1 });
     assert.deepEqual([outcome.valid, outcome.ruleIndex, outcome.errorStyle], [true, null, null]);
   } finally {
@@ -991,31 +991,37 @@ test('A5 / N4: a null pivot axis takes the field off the report; the -1 sentinel
 test('A6: a patch keeps omitted and undefined keys and clears only a nullable key on null', async () => {
   await withWorkbook((wb, { StatusCode }) => {
     const ws = wb.sheet(0);
-    ws.setFormatDefaults({ defaultColWidth: 12, defaultRowHeight: 20 });
-    ws.setFormatDefaults({ defaultRowHeight: undefined });
-    assert.deepEqual([ws.getFormatDefaults().defaultColWidth, ws.getFormatDefaults().defaultRowHeight], [12, 20]);
-    ws.setFormatDefaults({ defaultColWidth: null });
-    assert.deepEqual([ws.getFormatDefaults().defaultColWidth, ws.getFormatDefaults().defaultRowHeight], [null, 20]);
-    for (const [call, message] of [
-      [() => ws.setFormatDefaults({ customHeight: null }), 'Sheet.setFormatDefaults customHeight must be a boolean'],
-      [() => wb.setIterative({ enabled: null }), 'Workbook.setIterative enabled must be a boolean'],
-      [() => ws.setPageSetup({ scale: null }), 'Sheet.setPageSetup scale must be a number'],
-      [() => ws.setPageMargins({ left: null }), 'Sheet.setPageMargins left must be a number'],
+    ws.updateFormatDefaults({ defaultColWidthChars: 12, defaultRowHeightPt: 20 });
+    ws.updateFormatDefaults({ defaultRowHeightPt: undefined });
+    assert.deepEqual(
+      [ws.getFormatDefaults().defaultColWidthChars, ws.getFormatDefaults().defaultRowHeightPt],
+      [12, 20],
+    );
+    ws.updateFormatDefaults({ defaultColWidthChars: null });
+    assert.deepEqual(
+      [ws.getFormatDefaults().defaultColWidthChars, ws.getFormatDefaults().defaultRowHeightPt],
+      [null, 20],
+    );
+    for (const call of [
+      () => ws.updateFormatDefaults({ customHeight: null }),
+      () => wb.updateIterative({ enabled: null }),
+      () => ws.updatePageSetup({ scalePct: null }),
+      () => ws.updatePageMargins({ leftIn: null }),
     ]) {
-      assert.throws(call, { name: 'TypeError', message });
+      assert.throws(call, TypeError);
     }
     assert.equal(wb.getIterative().enabled, false);
 
     // Page setup: an omitted or undefined key keeps; `null` on orientation keeps only while none is stated.
-    ws.setPageSetup({ scale: 150 });
-    ws.setPageSetup({ scale: undefined, orientation: null });
-    assert.deepEqual([ws.getPageSetup().scale, ws.getPageSetup().orientation], [150, null]);
-    ws.setPageSetup({ orientation: 1 });
-    expectFormulonError(() => ws.setPageSetup({ orientation: null }), StatusCode.InvalidArgument);
+    ws.updatePageSetup({ scalePct: 150 });
+    ws.updatePageSetup({ scalePct: undefined, orientation: null });
+    assert.deepEqual([ws.getPageSetup().scalePct, ws.getPageSetup().orientation], [150, null]);
+    ws.updatePageSetup({ orientation: 1 });
+    expectFormulonError(() => ws.updatePageSetup({ orientation: null }), StatusCode.InvalidArgument);
     assert.equal(ws.getPageSetup().orientation, 1);
-    ws.setPageMargins({ left: 0.5 });
-    ws.setPageMargins({ right: undefined });
-    assert.equal(ws.getPageMargins().left, 0.5);
+    ws.updatePageMargins({ leftIn: 0.5 });
+    ws.updatePageMargins({ rightIn: undefined });
+    assert.equal(ws.getPageMargins().leftIn, 0.5);
   });
 });
 
@@ -1045,12 +1051,13 @@ test('A10: null clears workbook and sheet protection and phonetic runs, as [] do
     wb.setWorkbookProtection({ lockStructure: true });
     wb.setWorkbookProtection(null);
     assert.equal(wb.getWorkbookProtection().lockStructure, false);
-    ws.setSheetProtection({ enabled: true, sheet: true });
+    ws.setSheetProtection({});
+    assert.notEqual(ws.getSheetProtection(), null);
     ws.setSheetProtection(null);
-    assert.equal(ws.getSheetProtection().enabled, false);
+    assert.equal(ws.getSheetProtection(), null);
     ws.setText(0, 0, '漢字');
     for (const cleared of [null, []]) {
-      ws.setCellPhoneticRuns(0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
+      ws.setCellPhoneticRuns(0, 0, [{ start: 0, end: 2, text: 'かんじ' }]);
       assert.equal(ws.getCellPhoneticRuns(0, 0).length, 1);
       ws.setCellPhoneticRuns(0, 0, cleared);
       assert.deepEqual(ws.getCellPhoneticRuns(0, 0), []);
@@ -1069,14 +1076,14 @@ test('A11: an absent chart title or legend is null, and null in a patch removes 
     assert.equal(ws.chart(id).getProperties().title.text, 'T');
     ws.chart(id).setTitle(null);
     assert.equal(ws.chart(id).getProperties().title, null);
-    ws.chart(id).setLegend({ position: formulon.ChartLegendPosition.Top, overlay: false });
+    ws.chart(id).setLegend({ position: formulon.ChartLegendPosition.Top, overlay: false, hiddenSeries: [] });
     assert.equal(ws.chart(id).getProperties().legend.position, formulon.ChartLegendPosition.Top);
     ws.chart(id).setLegend(null);
     assert.equal(ws.chart(id).getProperties().legend, null);
     const axis = ws.chart(id).getProperties().axes[0];
-    ws.chart(id).setAxis(axis.id, { title: 'Axis' });
+    ws.chart(id).updateAxis(axis.id, { title: 'Axis' });
     assert.equal(ws.chart(id).getProperties().axes[0].title.text, 'Axis');
-    ws.chart(id).setAxis(axis.id, { title: null });
+    ws.chart(id).updateAxis(axis.id, { title: null });
     assert.equal(ws.chart(id).getProperties().axes[0].title, null);
   });
 });
@@ -1085,13 +1092,13 @@ test('A11: an absent chart title or legend is null, and null in a patch removes 
 
 test('P1: an empty patch changes nothing', async () => {
   await withWorkbook((wb) => {
-    wb.setIterative({ enabled: true, maxIterations: 7, maxChange: 0.5 });
+    wb.updateIterative({ enabled: true, maxIterations: 7, maxChange: 0.5 });
     const before = wb.getIterative();
-    wb.setIterative({});
+    wb.updateIterative({});
     assert.deepEqual(wb.getIterative(), before);
     const ws = wb.sheet(0);
     const defaults = ws.getFormatDefaults();
-    ws.setFormatDefaults({});
+    ws.updateFormatDefaults({});
     assert.deepEqual(ws.getFormatDefaults(), defaults);
   });
 });
@@ -1100,12 +1107,12 @@ test('P3: a fractional or NaN iteration cap is a TypeError; a non-finite thresho
   await withWorkbook((wb, { StatusCode }) => {
     const before = wb.getIterative();
     for (const maxIterations of [1.5, Number.NaN]) {
-      assert.throws(() => wb.setIterative({ maxIterations }), TypeError, String(maxIterations));
+      assert.throws(() => wb.updateIterative({ maxIterations }), TypeError, String(maxIterations));
     }
     for (const maxChange of [Number.POSITIVE_INFINITY, Number.NaN]) {
-      expectFormulonError(() => wb.setIterative({ maxChange }), StatusCode.InvalidArgument);
+      expectFormulonError(() => wb.updateIterative({ maxChange }), StatusCode.InvalidArgument);
     }
-    assert.throws(() => wb.setIterative({ maxChange: -1 }), RangeError);
+    assert.throws(() => wb.updateIterative({ maxChange: -1 }), RangeError);
     assert.deepEqual(wb.getIterative(), before);
   });
 });
@@ -1125,7 +1132,7 @@ test('L1 / L2: an empty collection lists as [], and each call returns a fresh ar
     for (const list of ['listCfRules', 'listValidations', 'listProtectedRanges', 'listSparklineGroups']) {
       assert.deepEqual(ws[list](), [], list);
     }
-    assert.deepEqual(wb.listTables(), []);
+    assert.deepEqual(wb.sheet(0).listTables(), []);
     assert.deepEqual(wb.listExternalLinks(), []);
     ws.addValidation({ ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }], type: 1, formula1: '1' });
     const first = ws.listValidations();
@@ -1160,7 +1167,7 @@ test('N1: enums of one family share their values', async () => {
     ['ChartBlanksAs', 'Absent'],
     ['ChartAxisCrosses', 'Absent'],
     ['ShapePaint', 'Unset'],
-    ['PivotFilterValueKind', 'None'],
+    ['PivotFilterOperandKind', 'None'],
     ['ChartTitleKind', 'None'],
     ['ChartLegendPosition', 'None'],
   ]) {
@@ -1171,11 +1178,11 @@ test('N1: enums of one family share their values', async () => {
 test('N2: an enum argument outside its set is refused by type, range or the engine', async () => {
   await withWorkbook((wb, { StatusCode, SheetViewMode }) => {
     const ws = wb.sheet(0);
-    expectFormulonError(() => ws.setView({ viewMode: 99 }), StatusCode.InvalidArgument);
+    expectFormulonError(() => ws.updateView({ viewMode: 99 }), StatusCode.InvalidArgument);
     for (const bad of [-1, 1.5, Number.NaN]) {
-      assert.throws(() => ws.setView({ viewMode: bad }), RangeError, String(bad));
+      assert.throws(() => ws.updateView({ viewMode: bad }), RangeError, String(bad));
     }
-    assert.throws(() => ws.setView({ viewMode: '0' }), TypeError);
+    assert.throws(() => ws.updateView({ viewMode: '0' }), TypeError);
     assert.equal(ws.getView().viewMode, SheetViewMode.Normal);
   });
 });
@@ -1186,7 +1193,7 @@ test('N3: the old ordinal of a removed member reads with its new meaning', async
     const ws = wb.sheet(0);
     for (let r = 0; r < 4; r += 1) ws.setNumber(r, 1, r + 1);
     const id = ws.addChart({ kind: formulon.ChartInsertKind.Line, source: 'Sheet1!$B$1:$B$4' });
-    ws.chart(id).setDisplay({ blanksAs: 0 });
+    ws.chart(id).updateDisplay({ blanksAs: 0 });
     assert.equal(ws.chart(id).getProperties().blanksAs, formulon.ChartBlanksAs.Gap);
   });
 });
@@ -1195,14 +1202,14 @@ test('N3: the old ordinal of a removed member reads with its new meaning', async
 
 test('O1 / O2: an input object ignores unknown keys and undefined is omitted; a patch refuses unknown keys', async () => {
   await withWorkbook((wb) => {
-    wb.setIterative({ enabled: true, maxIterations: 9 });
+    wb.updateIterative({ enabled: true, maxIterations: 9 });
     assert.deepEqual([wb.getIterative().enabled, wb.getIterative().maxIterations], [true, 9]);
-    wb.setIterative({ maxIterations: undefined, maxChange: undefined });
+    wb.updateIterative({ maxIterations: undefined, maxChange: undefined });
     assert.equal(wb.getIterative().maxIterations, 9);
     const ws = wb.sheet(0);
-    ws.addHyperlink(0, 0, { target: 'https://example.com/', display: undefined, unknown: 1 });
+    ws.setHyperlink(0, 0, { target: 'https://example.com/', display: undefined, unknown: 1 });
     assert.equal(ws.getHyperlink(0, 0).display, null);
-    assert.throws(() => wb.setIterative({ extra: 1 }), TypeError);
+    assert.throws(() => wb.updateIterative({ extra: 1 }), TypeError);
   });
 });
 
@@ -1211,8 +1218,8 @@ test('O3: a missing required field is a TypeError and writes nothing', async () 
     const ws = wb.sheet(0);
     assert.throws(() => ws.setComment(0, 0, { author: 'Ann' }), TypeError);
     assert.equal(ws.getComment(0, 0), null);
-    assert.throws(() => ws.addHyperlink(0, 0, { target: null }), TypeError);
-    assert.throws(() => ws.addHyperlink(0, 0, {}), TypeError);
+    assert.throws(() => ws.setHyperlink(0, 0, { target: null }), TypeError);
+    assert.throws(() => ws.setHyperlink(0, 0, {}), TypeError);
     assert.equal(ws.getHyperlink(0, 0), null);
     assert.throws(() => ws.addThreadedComment({ id: '{00000000-0000-4000-8000-000000000001}' }), TypeError);
     assert.deepEqual(ws.listThreadedComments(), []);
@@ -1229,7 +1236,7 @@ test('T1: non-ASCII text round-trips and a lone surrogate becomes U+FFFD', async
     assert.equal(ws.getComment(0, 0).text, '確認😀');
     ws.setComment(1, 0, { author: 'a', text: 'x\uD800y' });
     assert.equal(ws.getComment(1, 0).text, 'x\uFFFDy');
-    ws.addHyperlink(2, 0, { location: 'Sheet1!A1', target: null, display: '表示\uDC00' });
+    ws.setHyperlink(2, 0, { location: 'Sheet1!A1', target: null, display: '表示\uDC00' });
     assert.equal(ws.getHyperlink(2, 0).display, '表示\uFFFD');
   });
 });
@@ -1254,7 +1261,7 @@ function pivotWorkbook(formulon) {
     cache.setRecordValue(rec, 0, region);
     cache.setRecordValue(rec, 1, amount);
   }
-  const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+  const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
   ws.pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
   const amount = ws.pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
   ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });

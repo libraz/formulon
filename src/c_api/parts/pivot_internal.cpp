@@ -260,7 +260,7 @@ formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_values_as_t sh
   return static_cast<formulon::pivot::ShowValuesAs>(show_as);
 }
 
-formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_type_t t) {
+formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_kind_t t) {
   return static_cast<formulon::pivot::FilterType>(t);
 }
 

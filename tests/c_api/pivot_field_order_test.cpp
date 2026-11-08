@@ -32,7 +32,7 @@ fm_status_t BuildFieldOrderPivot(fm_workbook_t* wb, std::size_t* out_pivot_index
     fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
     spec.source_name = name;
     spec.axis = FM_PIVOT_AXIS_VALUE;
-    spec.subtotal_top = 1;
+    spec.subtotal_top = FM_TRISTATE_TRUE;
     std::size_t field_index = 0;
     if (const fm_status_t status = fm_sheet_add_pivot_field(wb, 0U, *out_pivot_index, &spec, &field_index);
         status != 0) {

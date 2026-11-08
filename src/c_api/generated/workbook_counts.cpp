@@ -29,12 +29,3 @@ extern "C" fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size
   *out_count = wb->workbook().sheet_count();
   return 0;
 }
-
-extern "C" fm_status_t fm_workbook_get_table_count(const fm_workbook_t* wb, size_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return null_argument();
-  }
-  *out_count = wb->workbook().tables().size();
-  return 0;
-}

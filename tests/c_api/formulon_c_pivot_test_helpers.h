@@ -27,8 +27,8 @@ struct WorkbookGuard {
 };
 
 struct PivotCellsGuard {
-  fm_pivot_cells_t* handle = nullptr;
-  ~PivotCellsGuard() { fm_pivot_cells_destroy(handle); }
+  fm_pivot_report_t* handle = nullptr;
+  ~PivotCellsGuard() { fm_pivot_report_destroy(handle); }
   PivotCellsGuard() = default;
   PivotCellsGuard(const PivotCellsGuard&) = delete;
   PivotCellsGuard& operator=(const PivotCellsGuard&) = delete;
@@ -105,22 +105,22 @@ template <typename Enum>
   return body;
 }
 
-[[maybe_unused]] inline std::vector<fm_pivot_cell_t> CollectCells(fm_pivot_cells_t* handle) {
-  const std::size_t n = count_of(fm_pivot_cells_get_cell_count, handle);
+[[maybe_unused]] inline std::vector<fm_pivot_cell_t> CollectCells(fm_pivot_report_t* handle) {
+  const std::size_t n = count_of(fm_pivot_report_get_cell_count, handle);
   std::vector<fm_pivot_cell_t> out(n, FM_STRUCT_INIT(fm_pivot_cell_t));
   for (std::size_t i = 0; i < n; ++i) {
-    EXPECT_EQ(fm_pivot_cells_get_cell_at(handle, i, &out[i]), 0);
+    EXPECT_EQ(fm_pivot_report_get_cell_at(handle, i, &out[i]), 0);
   }
   return out;
 }
 
-/// The layout's `(top, left, rows, cols)` extent read through `fm_pivot_cells_get_bounds`; an empty
+/// The layout's `(top, left, rows, cols)` extent read through `fm_pivot_report_get_bounds`; an empty
 /// layout reads as all zeros.
-[[maybe_unused]] inline fm_status_t PivotLayoutExtent(const fm_pivot_cells_t* cells, std::uint32_t* top,
+[[maybe_unused]] inline fm_status_t PivotLayoutExtent(const fm_pivot_report_t* cells, std::uint32_t* top,
                                                       std::uint32_t* left, std::uint32_t* rows, std::uint32_t* cols) {
   std::int32_t present = 0;
   fm_cell_rect_t rect{};
-  const fm_status_t rc = fm_pivot_cells_get_bounds(cells, &present, &rect);
+  const fm_status_t rc = fm_pivot_report_get_bounds(cells, &present, &rect);
   *top = rect.first_row;
   *left = rect.first_col;
   *rows = present != 0 ? rect.last_row - rect.first_row + 1U : 0U;
@@ -148,7 +148,7 @@ template <typename Enum>
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
   for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
-    if (cell.value.kind == FM_VAL_TEXT && cell.value.u.text != nullptr && text == cell.value.u.text) {
+    if (cell.value.kind == FM_VALUE_KIND_TEXT && cell.value.u.text != nullptr && text == cell.value.u.text) {
       return true;
     }
   }
@@ -225,7 +225,7 @@ template <typename Enum>
   region_spec.source_name = "Region";
   region_spec.custom_name = "";
   region_spec.axis = FM_PIVOT_AXIS_ROW;
-  region_spec.subtotal_top = 0;
+  region_spec.subtotal_top = FM_TRISTATE_FALSE;
   region_spec.number_format = "";
   std::size_t region_field = 99;
   st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &region_spec, &region_field);
@@ -245,7 +245,7 @@ template <typename Enum>
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
   amount_spec.axis = FM_PIVOT_AXIS_VALUE;
-  amount_spec.subtotal_top = 0;
+  amount_spec.subtotal_top = FM_TRISTATE_FALSE;
   amount_spec.number_format = "";
   std::size_t amount_field = 99;
   st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field);
@@ -262,7 +262,7 @@ template <typename Enum>
   fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
-  df_spec.aggregation = FM_PIVOT_AGG_SUM;
+  df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df_spec.number_format = "";
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   df_spec.show_as_base_field = -1;

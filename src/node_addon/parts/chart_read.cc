@@ -48,12 +48,12 @@ Napi::Value StringOrNull(Napi::Env env, const char* s) {
 }
 
 Napi::Value TriToJs(Napi::Env env, int32_t tri) {
-  return tri == FM_CHART_TRI_ABSENT ? env.Null() : Napi::Boolean::New(env, tri == FM_CHART_TRI_TRUE);
+  return tri == FM_TRISTATE_DEFAULT ? env.Null() : Napi::Boolean::New(env, tri == FM_TRISTATE_TRUE);
 }
 
 // A title of kind NONE is no title.
 Napi::Value TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
-  if (t.kind == FM_CHART_TITLE_NONE) {
+  if (t.kind == FM_CHART_TITLE_KIND_NONE) {
     return env.Null();
   }
   Napi::Object o = Napi::Object::New(env);
@@ -66,14 +66,14 @@ Napi::Value TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
 Napi::Object FillToJs(Napi::Env env, const fm_chart_fill_t& f) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("color", ColorSpecOrNull(env, f.color));
-  o.Set("transparency", NumberOrNull(env, f.transparency_pct));
+  o.Set("transparencyPct", NumberOrNull(env, f.transparency_pct));
   return o;
 }
 
 Napi::Object LineToJs(Napi::Env env, const fm_chart_line_t& l) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("color", ColorSpecOrNull(env, l.color));
-  o.Set("transparency", NumberOrNull(env, l.transparency_pct));
+  o.Set("transparencyPct", NumberOrNull(env, l.transparency_pct));
   o.Set("widthPt", NumberOrNull(env, l.width_pt));
   o.Set("dash", OptionalNumber(env, l.has_dash, l.dash));
   o.Set("none", JsBool(env, l.none));
@@ -83,7 +83,7 @@ Napi::Object LineToJs(Napi::Env env, const fm_chart_line_t& l) {
 Napi::Object MarkerToJs(Napi::Env env, const fm_chart_marker_t& m) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("symbol", JsNumber(env, m.symbol));
-  o.Set("size", OptionalNumber(env, m.has_size, m.size));
+  o.Set("sizePt", OptionalNumber(env, m.has_size_pt, m.size_pt));
   o.Set("fill", FillToJs(env, m.fill));
   o.Set("line", LineToJs(env, m.line));
   return o;
@@ -167,15 +167,14 @@ Napi::Object PlotToJs(Napi::Env env, const fm_chart_t* chart, size_t index, fm_s
     return o;
   }
   o.Set("type", JsNumber(env, p.type));
-  o.Set("chartexLayout",
-        p.chartex_layout != nullptr && p.chartex_layout[0] != '\0' ? JsString(env, p.chartex_layout) : env.Null());
-  o.Set("barDirection", p.bar_dir == FM_CHART_BAR_DIR_ABSENT ? env.Null() : JsNumber(env, p.bar_dir));
+  o.Set("extendedLayout", JsIndexOrNull(env, p.extended_layout));
+  o.Set("barDirection", p.bar_direction == FM_CHART_BAR_DIRECTION_ABSENT ? env.Null() : JsNumber(env, p.bar_direction));
   o.Set("grouping", OptionalNumber(env, p.has_grouping, p.grouping));
-  o.Set("varyColors", Napi::Boolean::New(env, p.vary_colors == FM_CHART_TRI_TRUE));
-  o.Set("gapWidth", OptionalNumber(env, p.has_gap_width, p.gap_width));
+  o.Set("varyColors", Napi::Boolean::New(env, p.vary_colors == FM_TRISTATE_TRUE));
+  o.Set("gapWidthPct", OptionalNumber(env, p.has_gap_width_pct, p.gap_width_pct));
   o.Set("overlap", OptionalNumber(env, p.has_overlap, p.overlap));
   o.Set("holeSize", OptionalNumber(env, p.has_hole_size, p.hole_size));
-  o.Set("firstSliceAngle", OptionalNumber(env, p.has_first_slice_angle, p.first_slice_angle));
+  o.Set("firstSliceAngleDeg", OptionalNumber(env, p.has_first_slice_angle_deg, p.first_slice_angle_deg));
   Napi::Array axis_ids = Napi::Array::New(env);
   for (size_t i = 0; i < p.axis_id_count && rc == 0; ++i) {
     uint32_t id = 0;
@@ -197,7 +196,7 @@ Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_t& a) {
   o.Set("id", JsNumber(env, a.id));
   o.Set("kind", JsNumber(env, a.kind));
   o.Set("position", JsNumber(env, a.position));
-  o.Set("deleted", JsBool(env, a.deleted));
+  o.Set("visible", JsBool(env, a.visible));
   o.Set("crossAxis", JsNumber(env, a.cross_axis));
   o.Set("crosses", JsIndexOrNull(env, a.crosses));
   o.Set("crossesAt", NumberOrNull(env, a.crosses_at));
@@ -212,7 +211,7 @@ Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_t& a) {
   o.Set("title", TitleToJs(env, a.title));
   o.Set("majorGridlines", JsBool(env, a.major_gridlines));
   o.Set("minorGridlines", JsBool(env, a.minor_gridlines));
-  o.Set("tickLabelPosition", StringOrNull(env, a.tick_label_pos));
+  o.Set("tickLabelPosition", StringOrNull(env, a.tick_label_position));
   return o;
 }
 
@@ -225,13 +224,13 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   o.Set("objectId", JsNumber(env, info.object_id));
   o.Set("name", JsString(env, info.name));
   o.Set("description", JsString(env, info.description));
-  o.Set("isChartex", JsBool(env, info.is_chartex));
+  o.Set("isExtended", JsBool(env, info.is_extended));
   o.Set("isPivotChart", JsBool(env, info.is_pivot_chart));
   o.Set("onChartsheet", JsBool(env, info.on_chartsheet));
   o.Set("title", TitleToJs(env, info.title));
   o.Set("autoTitleDeleted", TriToJs(env, info.auto_title_deleted));
 
-  if (info.legend_position == FM_CHART_LEGEND_NONE) {
+  if (info.legend_position == FM_CHART_LEGEND_POSITION_NONE) {
     o.Set("legend", env.Null());
   } else {
     Napi::Object legend = Napi::Object::New(env);
@@ -249,7 +248,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   }
 
   o.Set("blanksAs", JsIndexOrNull(env, info.blanks_as));
-  o.Set("plotVisibleOnly", TriToJs(env, info.plot_vis_only));
+  o.Set("plotVisibleOnly", TriToJs(env, info.plot_visible_only));
   o.Set("naAsBlank", TriToJs(env, info.na_as_blank));
   o.Set("date1904", JsBool(env, info.date1904));
   o.Set("style", OptionalNumber(env, info.has_style, info.style));
@@ -318,8 +317,8 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   o.Set("plotIndex", JsNumber(env, static_cast<double>(s.plot_index)));
   o.Set("index", JsNumber(env, s.idx));
   o.Set("name", StringOrNull(env, s.name));
-  o.Set("formatCode", JsString(env, s.format_code));
-  o.Set("xFormatCode", JsString(env, s.x_format_code));
+  o.Set("numberFormat", JsString(env, s.format_code));
+  o.Set("xNumberFormat", JsString(env, s.x_format_code));
   o.Set("filtered", JsBool(env, s.filtered));
   o.Set("values", CopyDoubles(env, pts.values, pts.count));
   o.Set("states", CopyBytes(env, pts.states, pts.count));
@@ -367,7 +366,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   for (size_t level = 0; level < info.category_level_count && rc == 0; ++level) {
     size_t count = 0;
     Napi::Array row = Napi::Array::New(env);
-    if (Step(rc, fm_chart_data_get_category_level_size(data, level, &count))) {
+    if (Step(rc, fm_chart_data_get_category_level_count(data, level, &count))) {
       for (size_t i = 0; i < count && rc == 0; ++i) {
         const char* label = nullptr;
         if (Step(rc, fm_chart_data_get_category_level_at(data, level, i, &label))) {
@@ -380,7 +379,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   categories.Set("labels", labels);
   categories.Set("levels", levels);
   categories.Set("values", numeric ? Napi::Value(values) : env.Null());
-  categories.Set("formatCode", JsString(env, info.category_format_code));
+  categories.Set("numberFormat", JsString(env, info.category_format_code));
   categories.Set("generated", JsBool(env, info.categories_generated));
   o.Set("categories", categories);
 
@@ -408,7 +407,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
     if (Step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       Napi::Object item = Napi::Object::New(env);
       item.Set("seriesIndex", JsNumber(env, u.series_index));
-      item.Set("source", JsString(env, u.source));
+      item.Set("source", JsNumber(env, u.source));
       item.Set("axisId", JsNumber(env, u.axis_id));
       unresolved.Set(static_cast<uint32_t>(i), item);
     }
@@ -473,12 +472,12 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   overrides.source = has_source ? source.c_str() : nullptr;
   const auto set = [&](const char* key, int32_t& op, int32_t& out, bool is_bool) {
     const Field f = Probe(reader, spec, key);
-    if (f.op == FM_CHART_PATCH_CLEAR) {
+    if (f.op == FM_CHART_PATCH_OP_CLEAR) {
       // `null` leaves the override unset, as `undefined` does.
       return;
     }
-    if (f.op == FM_CHART_PATCH_SET) {
-      op = FM_CHART_PATCH_SET;
+    if (f.op == FM_CHART_PATCH_OP_SET) {
+      op = FM_CHART_PATCH_OP_SET;
       out = is_bool ? (reader.Bool(f.value, key, false) ? 1 : 0) : reader.I32(f.value, key, 0);
     }
   };
@@ -486,7 +485,7 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   set("headerRow", overrides.header_row_op, overrides.header_row, true);
   set("headerColumn", overrides.header_column_op, overrides.header_column, true);
   set("blanksAs", overrides.blanks_as_op, overrides.blanks_as, false);
-  set("plotVisibleOnly", overrides.plot_vis_only_op, overrides.plot_vis_only, true);
+  set("plotVisibleOnly", overrides.plot_visible_only_op, overrides.plot_visible_only, true);
   set("naAsBlank", overrides.na_as_blank_op, overrides.na_as_blank, true);
   if (!reader.ok()) {
     return env.Undefined();

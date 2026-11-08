@@ -29,17 +29,15 @@ TEST(FormulonCApiStyles, DifferentialFormatGetterExposesCfDxfTable) {
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, 0, &out), 0);
   EXPECT_EQ(out.font_engaged, 1);
   EXPECT_EQ(out.font.bold, 1);
-  EXPECT_EQ(out.font.color.rgb, 0xFFFF0000U);
+  EXPECT_EQ(out.font.color.argb, 0xFFFF0000U);
   EXPECT_EQ(out.fill_engaged, 1);
   EXPECT_EQ(out.fill.pattern, 1U);
-  EXPECT_EQ(out.fill.fg.rgb, 0xFFFFFF00U);
+  EXPECT_EQ(out.fill.foreground.argb, 0xFFFFFF00U);
   EXPECT_EQ(out.border_engaged, 1);
   EXPECT_EQ(out.border.left.style, 1U);
-  EXPECT_EQ(out.border.left.color.rgb, 0xFF000000U);
-  EXPECT_EQ(out.num_fmt_engaged, 1);
-  EXPECT_EQ(out.num_fmt_id, 164U);
-  ASSERT_NE(out.num_fmt_code, nullptr);
-  EXPECT_STREQ(out.num_fmt_code, "0.00");
+  EXPECT_EQ(out.border.left.color.argb, 0xFF000000U);
+  ASSERT_NE(out.number_format, nullptr);
+  EXPECT_STREQ(out.number_format, "0.00");
 
   EXPECT_NE(fm_workbook_get_dxf(wb.handle, 1, &out), 0);
 }
@@ -51,15 +49,13 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
   fm_dxf_record_t dxf{};
   dxf.font_engaged = 1;
   dxf.font.name = "Arial";
-  dxf.font.size = 12.0;
+  dxf.font.size_pt = 12.0;
   dxf.font.bold = 1;
   dxf.font.color = RgbColor(0xFFFF0000U);
   dxf.fill_engaged = 1;
   dxf.fill.pattern = 1;
-  dxf.fill.fg = RgbColor(0xFFFFFF00U);
-  dxf.num_fmt_engaged = 1;
-  dxf.num_fmt_id = 164;
-  dxf.num_fmt_code = "0.00";
+  dxf.fill.foreground = RgbColor(0xFFFFFF00U);
+  dxf.number_format = "0.00";
 
   std::size_t a = 0xFFFFFFFFU;
   std::size_t b = 0xFFFFFFFFU;
@@ -76,14 +72,44 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
   EXPECT_EQ(out.font_engaged, 1);
   EXPECT_STREQ(out.font.name, "Arial");
   EXPECT_EQ(out.font.bold, 1);
-  EXPECT_EQ(out.font.color.rgb, 0xFFFF0000U);
+  EXPECT_EQ(out.font.color.argb, 0xFFFF0000U);
   EXPECT_EQ(out.fill_engaged, 1);
   EXPECT_EQ(out.fill.pattern, 1U);
-  EXPECT_EQ(out.fill.fg.rgb, 0xFFFFFF00U);
-  EXPECT_EQ(out.num_fmt_engaged, 1);
-  EXPECT_EQ(out.num_fmt_id, 164U);
-  ASSERT_NE(out.num_fmt_code, nullptr);
-  EXPECT_STREQ(out.num_fmt_code, "0.00");
+  EXPECT_EQ(out.fill.foreground.argb, 0xFFFFFF00U);
+  ASSERT_NE(out.number_format, nullptr);
+  EXPECT_STREQ(out.number_format, "0.00");
+}
+
+TEST(FormulonCApiStyles, DxfNumberFormatIsNullWhenTheDxfHasNone) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_dxf_record_t dxf{};
+  dxf.font_engaged = 1;
+  dxf.font.bold = 1;
+  dxf.font.has_bold = 1;
+  std::size_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
+  fm_dxf_record_t out{};
+  ASSERT_EQ(fm_workbook_get_dxf(wb.handle, index, &out), 0);
+  EXPECT_EQ(out.number_format, nullptr);
+}
+
+TEST(FormulonCApiStyles, DxfNumberFormatSurvivesSaveAndReload) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_dxf_record_t dxf{};
+  dxf.number_format = "0.000%";
+  std::size_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  fm_dxf_record_t out{};
+  ASSERT_EQ(fm_workbook_get_dxf(reloaded.handle, index, &out), 0);
+  ASSERT_NE(out.number_format, nullptr);
+  EXPECT_STREQ(out.number_format, "0.000%");
 }
 
 TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
@@ -93,7 +119,7 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   fm_dxf_record_t dxf{};
   dxf.font_engaged = 1;
   dxf.font.name = "Calibri";
-  dxf.font.size = 9.0;
+  dxf.font.size_pt = 9.0;
   dxf.font.color = RgbColor(0xFF112233U);
   dxf.font.vert_align = 1;  // superscript
   std::size_t index = 0xFFFFFFFFU;
@@ -199,7 +225,7 @@ TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle
   fm_dxf_record_t leave_bold_alone{};
   leave_bold_alone.font_engaged = 1;
   leave_bold_alone.font.name = "";
-  leave_bold_alone.font.size = 11.0;
+  leave_bold_alone.font.size_pt = 11.0;
   leave_bold_alone.font.color = RgbColor(0xFF000000U);
   std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &leave_bold_alone, &index), 0);
@@ -216,17 +242,17 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   fm_dxf_record_t dxf{};
   dxf.font_engaged = 1;
   dxf.font.name = "";
-  dxf.font.size = 11.0;
+  dxf.font.size_pt = 11.0;
   dxf.font.has_bold = 1;
   dxf.font.bold = 1;
   dxf.font.color = RgbColor(0xFF000000U);
-  ASSERT_EQ(dxf.font.has_size, 0);
+  ASSERT_EQ(dxf.font.has_size_pt, 0);
   std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
 
   fm_dxf_record_t loaded{};
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, index, &loaded), 0);
-  EXPECT_EQ(loaded.font.has_size, 0);
+  EXPECT_EQ(loaded.font.has_size_pt, 0);
 
   // The dxf is the only font-bearing entry that may omit the size.
   const std::string dxf_xml = formulon::io::write_styles(wb.handle->workbook().styles());
@@ -235,25 +261,25 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   EXPECT_EQ(dxf_xml.find("<sz", dxfs_pos), std::string::npos);
 
   // With the flag set the dxf writes its size.
-  dxf.font.has_size = 1;
-  dxf.font.size = 13.0;
+  dxf.font.has_size_pt = 1;
+  dxf.font.size_pt = 13.0;
   std::size_t sized = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &sized), 0);
   EXPECT_NE(sized, index);
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, sized, &loaded), 0);
-  EXPECT_EQ(loaded.font.has_size, 1);
+  EXPECT_EQ(loaded.font.has_size_pt, 1);
 
   // A cell font always keeps its size, whatever the flag says.
   fm_font_record_t cell{};
   cell.name = "Arial";
-  cell.size = 14.0;
+  cell.size_pt = 14.0;
   cell.color = RgbColor(0xFF000000U);
   std::size_t font_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &cell, &font_index), 0);
   fm_font_record_t font_out{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, font_index, &font_out), 0);
-  EXPECT_EQ(font_out.has_size, 1);
-  EXPECT_DOUBLE_EQ(font_out.size, 14.0);
+  EXPECT_EQ(font_out.has_size_pt, 1);
+  EXPECT_DOUBLE_EQ(font_out.size_pt, 14.0);
   const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
   const std::size_t fonts_end = xml.find("</fonts>");
   ASSERT_NE(fonts_end, std::string::npos);

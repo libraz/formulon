@@ -109,8 +109,8 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
   rule.formula1 = "50";
-  rule.dxf_id_engaged = 1;
-  rule.dxf_id = 1;
+  rule.dxf_index_engaged = 1;
+  rule.dxf_index = 1;
   rule.ranges = &sqref;
   rule.range_count = 1;
   std::size_t rule_index = 0;
@@ -122,7 +122,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
-  EXPECT_EQ(out.dxf_id_engaged, 0);
+  EXPECT_EQ(out.dxf_index_engaged, 0);
 
   // The record still feeds straight back in, which is what the disengage
   // buys: with the raw index it would be rejected. It goes in under a fresh
@@ -134,8 +134,8 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   // A resolvable index is still reported.
   SeedDxfs(wb.handle, 2);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
-  EXPECT_EQ(out.dxf_id_engaged, 1);
-  EXPECT_EQ(out.dxf_id, 1U);
+  EXPECT_EQ(out.dxf_index_engaged, 1);
+  EXPECT_EQ(out.dxf_index, 1U);
 }
 
 TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
@@ -324,8 +324,8 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
   rule.formula1 = "50";
-  rule.dxf_id_engaged = 1;
-  rule.dxf_id = 0;
+  rule.dxf_index_engaged = 1;
+  rule.dxf_index = 0;
   rule.ranges = &sqref;
   rule.range_count = 1;
 
@@ -340,8 +340,8 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   rule2.op_engaged = 1;
   rule2.op = 5;  // GreaterThan
   rule2.formula1 = "50";
-  rule2.dxf_id_engaged = 1;
-  rule2.dxf_id = 0;
+  rule2.dxf_index_engaged = 1;
+  rule2.dxf_index = 0;
   rule2.ranges = &sqref;
   rule2.range_count = 1;
 

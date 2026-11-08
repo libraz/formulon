@@ -6,7 +6,7 @@ export function registerSheetPivot(Module, test) {
   test('setIterative accepts knobs without crashing', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      wb.setIterative({ enabled: true, maxIterations: 50, maxChange: 0.001 });
+      wb.updateIterative({ enabled: true, maxIterations: 50, maxChange: 0.001 });
       // Set a fixed-point formula (sqrt(2) iteration). The engine may
       // surface NUMBER (converged) or ERROR depending on the recalc
       // path; we only assert that the call sequence doesn't crash and
@@ -138,7 +138,8 @@ export function registerSheetPivot(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       expectFailure(() => wb.getCellAt(99, 0), StatusCode.SheetIndexOutOfRange);
-      expectFailure(() => wb.getTable(0), StatusCode.IndexOutOfRange);
+      expectFailure(() => wb.getTable(0, 0), StatusCode.IndexOutOfRange);
+      expectFailure(() => wb.getTable(9, 0), StatusCode.SheetIndexOutOfRange);
     } finally {
       wb.delete();
     }

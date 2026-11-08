@@ -43,8 +43,6 @@ TEST_F(FormulonCApiRemoveMissingKey, SheetScopedKeys) {
   const fm_cell_rect_t rect{10, 10, 12, 12};
   ExpectNotFound(fm_sheet_remove_merge(wb(), 0, &rect), "merge");
   ExpectNotFound(fm_sheet_remove_threaded_comment(wb(), 0, kAbsentId), "threaded comment");
-  ExpectNotFound(fm_sheet_remove_row_break(wb(), 0, 7), "row break");
-  ExpectNotFound(fm_sheet_remove_column_break(wb(), 0, 7), "column break");
   ExpectNotFound(fm_sheet_remove_shape(wb(), 0, 42U), "shape");
   ExpectNotFound(fm_sheet_remove_slicer(wb(), 0, 42U), "slicer");
   ExpectNotFound(fm_sheet_remove_data_table(wb(), 0, 0, 0), "data table");
@@ -64,7 +62,7 @@ TEST_F(FormulonCApiRemoveMissingKey, ChartReadersOfAnAbsentId) {
 
 TEST_F(FormulonCApiRemoveMissingKey, AnAbsentSheetIsStillASheetIndexError) {
   EXPECT_EQ(fm_sheet_remove_hyperlink(wb(), 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_remove_row_break(wb(), 9, 7), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_break(wb(), 9, 7, nullptr), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_remove_data_table(wb(), 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
@@ -73,9 +71,12 @@ TEST_F(FormulonCApiRemoveMissingKey, APresentKeyRemovesOnceThenIsNotFound) {
   EXPECT_EQ(fm_workbook_remove_defined_name(wb(), "rate", -1), 0);
   ExpectNotFound(fm_workbook_remove_defined_name(wb(), "rate", -1), "defined name again");
 
-  ASSERT_EQ(fm_sheet_add_row_break(wb(), 0, 7, 1), 0);
-  EXPECT_EQ(fm_sheet_remove_row_break(wb(), 0, 7), 0);
-  ExpectNotFound(fm_sheet_remove_row_break(wb(), 0, 7), "row break again");
+  fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
+  link.rect = fm_cell_rect_t{3, 3, 3, 3};
+  link.target = "https://example.com/";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb(), 0, 3, 3, &link), 0);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb(), 0, 3, 3), 0);
+  ExpectNotFound(fm_sheet_remove_hyperlink(wb(), 0, 3, 3), "hyperlink again");
 
   const fm_cell_rect_t merged{0, 0, 1, 1};
   ASSERT_EQ(fm_sheet_add_merge(wb(), 0, &merged), 0);

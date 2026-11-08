@@ -75,25 +75,47 @@ void fill_comment(const formulon::CellComment& c, fm_comment_t* out) {
   out->text = c.text.c_str();
 }
 
+/// Reads of a tristate field never report DEFAULT.
+std::int32_t tristate_of(bool value) {
+  return value ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+}
+
+/// DEFAULT resolves to true, Excel's default for every tristate in this file's records.
+bool tristate_to_bool(std::int32_t value) {
+  return value != FM_TRISTATE_FALSE;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
 // Hyperlinks
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, const fm_hyperlink_t* hl) {
+extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
+                                              std::uint32_t col, const fm_hyperlink_t* hl) {
   clear_last_error();
-  if (hl == nullptr) {
-    return null_argument("hl");
-  }
-  if (auto rc = check_record_size(*hl); rc != 0) {
-    return rc;
+  if (hl != nullptr) {
+    if (auto rc = check_record_size(*hl); rc != 0) {
+      return rc;
+    }
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
+  auto& hls = wb->workbook().sheet(sheet_index).mutable_hyperlinks();
+  const auto anchored = [&](const formulon::Hyperlink& h) { return h.row == row && h.col == col; };
+  if (hl == nullptr) {
+    hls.erase(std::remove_if(hls.begin(), hls.end(), anchored), hls.end());
+    return 0;
+  }
   if (auto rc = check_sheet_rect(hl->rect); rc != 0) {
     return rc;
+  }
+  if (hl->rect.first_row != row || hl->rect.first_col != col) {
+    return formulon::c_api::parts::invalid_argument("hyperlink rectangle is not anchored at (row, col)");
   }
   if (auto rc = check_utf8({hl->target, hl->location, hl->display, hl->tooltip}); rc != 0) {
     return rc;
@@ -108,7 +130,14 @@ extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t she
   out.display = text_or_empty(hl->display);
   out.tooltip = text_or_empty(hl->tooltip);
   // rid stays empty; the writer mints a fresh rIdN on save.
-  wb->workbook().sheet(sheet_index).mutable_hyperlinks().push_back(std::move(out));
+  const auto existing = std::find_if(hls.begin(), hls.end(), anchored);
+  if (existing == hls.end()) {
+    hls.push_back(std::move(out));
+  } else {
+    *existing = std::move(out);
+    // A repeated anchor from a loaded file would otherwise survive the replacement.
+    hls.erase(std::remove_if(existing + 1, hls.end(), anchored), hls.end());
+  }
   return 0;
 }
 
@@ -552,10 +581,10 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   out->type = v.type;
   out->op = v.op;
   out->error_style = v.error_style;
-  out->allow_blank = v.allow_blank ? 1 : 0;
-  out->show_input_message = v.show_input_message ? 1 : 0;
-  out->show_error_message = v.show_error_message ? 1 : 0;
-  out->show_dropdown = v.show_dropdown ? 1 : 0;
+  out->allow_blank = tristate_of(v.allow_blank);
+  out->show_input_message = tristate_of(v.show_input_message);
+  out->show_error_message = tristate_of(v.show_error_message);
+  out->show_in_cell_dropdown = tristate_of(v.show_dropdown);
   const formulon::Workbook& book = wb->workbook();
   if (v.formula1.empty() && v.formula2.empty()) {
     out->formula1 = v.formula1.c_str();
@@ -606,10 +635,10 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
   out.type = v->type;
   out.op = v->op;
   out.error_style = v->error_style;
-  out.allow_blank = v->allow_blank != 0;
-  out.show_input_message = v->show_input_message != 0;
-  out.show_error_message = v->show_error_message != 0;
-  out.show_dropdown = v->show_dropdown != 0;
+  out.allow_blank = tristate_to_bool(v->allow_blank);
+  out.show_input_message = tristate_to_bool(v->show_input_message);
+  out.show_error_message = tristate_to_bool(v->show_error_message);
+  out.show_dropdown = tristate_to_bool(v->show_in_cell_dropdown);
   out.error_title = text_or_empty(v->error_title);
   out.error_message = text_or_empty(v->error_message);
   out.prompt_title = text_or_empty(v->prompt_title);
@@ -644,10 +673,82 @@ extern "C" fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, std::size_t
 // Sheet protection
 // ---------------------------------------------------------------------------
 
+namespace {
+
+using formulon::SheetProtection;
+
+/// One boolean `allow_*` field: the engine member holds the inverse (the OOXML "locked" meaning).
+struct AllowFlag {
+  bool SheetProtection::*locked;
+  std::int32_t fm_sheet_protection_t::*value;
+  std::int32_t fm_sheet_protection_patch_t::*patch_op;
+  std::int32_t fm_sheet_protection_patch_t::*patch_value;
+  bool is_select;  // fm_tristate_t instead of 0 / 1
+};
+
+#define FM_ALLOW_FLAG(field, member, select)                                                          \
+  {&SheetProtection::member, &fm_sheet_protection_t::field, &fm_sheet_protection_patch_t::field##_op, \
+   &fm_sheet_protection_patch_t::field, select}
+
+const AllowFlag kAllowFlags[] = {
+    FM_ALLOW_FLAG(allow_edit_objects, objects, false),
+    FM_ALLOW_FLAG(allow_edit_scenarios, scenarios, false),
+    FM_ALLOW_FLAG(allow_format_cells, format_cells, false),
+    FM_ALLOW_FLAG(allow_format_columns, format_columns, false),
+    FM_ALLOW_FLAG(allow_format_rows, format_rows, false),
+    FM_ALLOW_FLAG(allow_insert_columns, insert_columns, false),
+    FM_ALLOW_FLAG(allow_insert_rows, insert_rows, false),
+    FM_ALLOW_FLAG(allow_insert_hyperlinks, insert_hyperlinks, false),
+    FM_ALLOW_FLAG(allow_delete_columns, delete_columns, false),
+    FM_ALLOW_FLAG(allow_delete_rows, delete_rows, false),
+    FM_ALLOW_FLAG(allow_select_locked_cells, select_locked_cells, true),
+    FM_ALLOW_FLAG(allow_select_unlocked_cells, select_unlocked_cells, true),
+    FM_ALLOW_FLAG(allow_sort, sort, false),
+    FM_ALLOW_FLAG(allow_auto_filter, auto_filter, false),
+    FM_ALLOW_FLAG(allow_pivot_tables, pivot_tables, false),
+};
+
+#undef FM_ALLOW_FLAG
+
+bool flag_in_domain(const AllowFlag& flag, std::int32_t value) {
+  return value >= 0 && value <= (flag.is_select ? static_cast<std::int32_t>(FM_TRISTATE_TRUE) : 1);
+}
+
+/// Whether the flag value permits the action (DEFAULT permits, as Excel's select flags do).
+bool permits(const AllowFlag& flag, std::int32_t value) {
+  return flag.is_select ? value != FM_TRISTATE_FALSE : value != 0;
+}
+
+void apply_flag(SheetProtection& p, const AllowFlag& flag, std::int32_t value) {
+  p.*flag.locked = !permits(flag, value);
+}
+
+std::int32_t read_flag(const SheetProtection& p, const AllowFlag& flag) {
+  const bool allowed = !(p.*flag.locked);
+  return flag.is_select ? (allowed ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE) : (allowed ? 1 : 0);
+}
+
+SheetProtection protection_from_record(const fm_sheet_protection_t& in) {
+  SheetProtection p;
+  p.enabled = true;
+  p.sheet = true;
+  p.algorithm_name = text_or_empty(in.algorithm_name);
+  p.hash_value = text_or_empty(in.hash_value);
+  p.salt_value = text_or_empty(in.salt_value);
+  p.spin_count = in.spin_count;
+  p.legacy_password = text_or_empty(in.legacy_password_hash);
+  for (const AllowFlag& flag : kAllowFlags) {
+    apply_flag(p, flag, in.*flag.value);
+  }
+  return p;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                     fm_sheet_protection_t* out) {
+                                                     std::int32_t* out_present, fm_sheet_protection_t* out) {
   clear_last_error();
-  if (out == nullptr) {
+  if (out_present == nullptr || out == nullptr) {
     return null_argument();
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -656,70 +757,131 @@ extern "C" fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, st
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  const formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).protection();
-  out->enabled = p.enabled ? 1 : 0;
+  const SheetProtection& p = wb->workbook().sheet(sheet_index).protection();
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_sheet_protection_t{};
+  out->struct_size = struct_size;
+  if (!p.enabled) {
+    *out_present = 0;
+    return 0;
+  }
+  *out_present = 1;
   out->algorithm_name = p.algorithm_name.c_str();
   out->hash_value = p.hash_value.c_str();
   out->salt_value = p.salt_value.c_str();
   out->spin_count = p.spin_count;
-  out->legacy_password = p.legacy_password.c_str();
-  out->sheet = p.sheet ? 1 : 0;
-  out->objects = p.objects ? 1 : 0;
-  out->scenarios = p.scenarios ? 1 : 0;
-  out->format_cells = p.format_cells ? 1 : 0;
-  out->format_columns = p.format_columns ? 1 : 0;
-  out->format_rows = p.format_rows ? 1 : 0;
-  out->insert_columns = p.insert_columns ? 1 : 0;
-  out->insert_rows = p.insert_rows ? 1 : 0;
-  out->insert_hyperlinks = p.insert_hyperlinks ? 1 : 0;
-  out->delete_columns = p.delete_columns ? 1 : 0;
-  out->delete_rows = p.delete_rows ? 1 : 0;
-  out->select_locked_cells = p.select_locked_cells ? 1 : 0;
-  out->select_unlocked_cells = p.select_unlocked_cells ? 1 : 0;
-  out->sort = p.sort ? 1 : 0;
-  out->auto_filter = p.auto_filter ? 1 : 0;
-  out->pivot_tables = p.pivot_tables ? 1 : 0;
+  out->legacy_password_hash = p.legacy_password.c_str();
+  for (const AllowFlag& flag : kAllowFlags) {
+    out->*flag.value = read_flag(p, flag);
+  }
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, std::size_t sheet_index,
                                                      const fm_sheet_protection_t* in) {
   clear_last_error();
-  if (in == nullptr) {
-    return null_argument();
+  if (in != nullptr) {
+    if (auto rc = check_record_size(*in); rc != 0) {
+      return rc;
+    }
   }
-  if (auto rc = check_record_size(*in); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (in == nullptr) {
+    if (wb->workbook().sheet(sheet_index).protection().enabled) {
+      wb->workbook().sheet(sheet_index).mutable_protection() = SheetProtection{};
+    }
+    return 0;
+  }
+  if (auto rc = check_utf8({in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password_hash}); rc != 0) {
+    return rc;
+  }
+  for (const AllowFlag& flag : kAllowFlags) {
+    if (!flag_in_domain(flag, in->*flag.value)) {
+      return formulon::c_api::parts::invalid_argument("protection flag out of range");
+    }
+  }
+  wb->workbook().sheet(sheet_index).mutable_protection() = protection_from_record(*in);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_update_sheet_protection(fm_workbook_t* wb, std::size_t sheet_index,
+                                                        const fm_sheet_protection_patch_t* patch) {
+  clear_last_error();
+  if (patch == nullptr) {
+    return null_argument("patch");
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password}); rc != 0) {
-    return rc;
+  const auto op_ok = [](std::int32_t op) { return op >= FM_CHART_PATCH_OP_KEEP && op <= FM_CHART_PATCH_OP_SET; };
+  struct StringField {
+    std::int32_t op;
+    const char* value;
+    std::string SheetProtection::*member;
+  };
+  const StringField strings[] = {
+      {patch->algorithm_name_op, patch->algorithm_name, &SheetProtection::algorithm_name},
+      {patch->hash_value_op, patch->hash_value, &SheetProtection::hash_value},
+      {patch->salt_value_op, patch->salt_value, &SheetProtection::salt_value},
+      {patch->legacy_password_hash_op, patch->legacy_password_hash, &SheetProtection::legacy_password},
+  };
+  bool any_change = false;
+  for (const StringField& f : strings) {
+    if (!op_ok(f.op) || (f.op == FM_CHART_PATCH_OP_SET && f.value == nullptr)) {
+      return formulon::c_api::parts::invalid_argument("invalid protection patch string field");
+    }
+    if (f.op == FM_CHART_PATCH_OP_SET) {
+      if (auto rc = check_utf8(f.value, "patch string"); rc != 0) {
+        return rc;
+      }
+    }
+    any_change = any_change || f.op != FM_CHART_PATCH_OP_KEEP;
   }
-  formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).mutable_protection();
-  // Helper for pointer->string deep copy with NULL-as-empty semantics.
-  p.enabled = in->enabled != 0;
-  p.algorithm_name = text_or_empty(in->algorithm_name);
-  p.hash_value = text_or_empty(in->hash_value);
-  p.salt_value = text_or_empty(in->salt_value);
-  p.spin_count = in->spin_count;
-  p.legacy_password = text_or_empty(in->legacy_password);
-  p.sheet = in->sheet != 0;
-  p.objects = in->objects != 0;
-  p.scenarios = in->scenarios != 0;
-  p.format_cells = in->format_cells != 0;
-  p.format_columns = in->format_columns != 0;
-  p.format_rows = in->format_rows != 0;
-  p.insert_columns = in->insert_columns != 0;
-  p.insert_rows = in->insert_rows != 0;
-  p.insert_hyperlinks = in->insert_hyperlinks != 0;
-  p.delete_columns = in->delete_columns != 0;
-  p.delete_rows = in->delete_rows != 0;
-  p.select_locked_cells = in->select_locked_cells != 0;
-  p.select_unlocked_cells = in->select_unlocked_cells != 0;
-  p.sort = in->sort != 0;
-  p.auto_filter = in->auto_filter != 0;
-  p.pivot_tables = in->pivot_tables != 0;
+  if (!op_ok(patch->spin_count_op)) {
+    return formulon::c_api::parts::invalid_argument("invalid protection patch spin_count op");
+  }
+  any_change = any_change || patch->spin_count_op != FM_CHART_PATCH_OP_KEEP;
+  for (const AllowFlag& flag : kAllowFlags) {
+    const std::int32_t op = patch->*flag.patch_op;
+    if (!op_ok(op) || op == FM_CHART_PATCH_OP_CLEAR) {
+      return formulon::c_api::parts::invalid_argument("invalid protection patch flag op");
+    }
+    // A patch value is a plain 0 / 1; only the record's select flags carry a tristate.
+    if (op == FM_CHART_PATCH_OP_SET && patch->*flag.patch_value != 0 && patch->*flag.patch_value != 1) {
+      return formulon::c_api::parts::invalid_argument("protection flag out of range");
+    }
+    any_change = any_change || op != FM_CHART_PATCH_OP_KEEP;
+  }
+  if (!any_change) {
+    return 0;
+  }
+  SheetProtection p = wb->workbook().sheet(sheet_index).protection();
+  if (!p.enabled) {
+    p = protection_from_record(FM_STRUCT_INIT(fm_sheet_protection_t));
+  }
+  for (const StringField& f : strings) {
+    if (f.op == FM_CHART_PATCH_OP_SET) {
+      p.*f.member = f.value;
+    } else if (f.op == FM_CHART_PATCH_OP_CLEAR) {
+      (p.*f.member).clear();
+    }
+  }
+  if (patch->spin_count_op == FM_CHART_PATCH_OP_SET) {
+    p.spin_count = patch->spin_count;
+  } else if (patch->spin_count_op == FM_CHART_PATCH_OP_CLEAR) {
+    p.spin_count = 0;
+  }
+  for (const AllowFlag& flag : kAllowFlags) {
+    if (patch->*flag.patch_op == FM_CHART_PATCH_OP_SET) {
+      const std::int32_t value = patch->*flag.patch_value;
+      apply_flag(p, flag, flag.is_select ? (value != 0 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE) : value);
+    }
+  }
+  wb->workbook().sheet(sheet_index).mutable_protection() = std::move(p);
   return 0;
 }

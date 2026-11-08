@@ -75,7 +75,7 @@ TEST(FormulonCApiNaturalKey, RemovingADefinedNameRefreshesItsReaders) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_ERROR);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(v.u.error_code, static_cast<int32_t>(formulon::ErrorCode::Name));
 }
 
@@ -112,7 +112,7 @@ TEST(FormulonCApiNaturalKey, HyperlinkByAnchorCell) {
   fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
   link.rect = fm_cell_rect_t{1U, 1U, 2U, 3U};
   link.target = "https://example.com/";
-  ASSERT_EQ(fm_sheet_add_hyperlink(wb.handle, 0, &link), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, 1U, 1U, &link), 0);
 
   int32_t present = 0;
   fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
@@ -198,7 +198,7 @@ TEST(FormulonCApiNaturalKey, ThemeScriptFontAndPassthroughByKey) {
   ASSERT_EQ(present, 1);
   ASSERT_NE(typeface, nullptr);
   EXPECT_GT(std::strlen(typeface), 0U);
-  ASSERT_EQ(fm_workbook_get_passthrough(wb.handle, "xl/theme/theme1.xml", &present), 0);
+  ASSERT_EQ(fm_workbook_has_passthrough(wb.handle, "xl/theme/theme1.xml", &present), 0);
   EXPECT_EQ(present, 0);
 
   ASSERT_EQ(fm_workbook_set_theme_script_font(wb.handle, 0, "Zzzz", "Test Face"), 0);
@@ -216,11 +216,11 @@ TEST(FormulonCApiNaturalKey, ThemeScriptFontAndPassthroughByKey) {
   const char* path = nullptr;
   ASSERT_EQ(fm_workbook_get_passthrough_at(wb.handle, 0, &path), 0);
   const std::string first(path);
-  ASSERT_EQ(fm_workbook_get_passthrough(wb.handle, first.c_str(), &present), 0);
+  ASSERT_EQ(fm_workbook_has_passthrough(wb.handle, first.c_str(), &present), 0);
   EXPECT_EQ(present, 1);
-  ASSERT_EQ(fm_workbook_get_passthrough(wb.handle, ("/" + first).c_str(), &present), 0);
+  ASSERT_EQ(fm_workbook_has_passthrough(wb.handle, ("/" + first).c_str(), &present), 0);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(fm_workbook_get_passthrough(wb.handle, nullptr, &present), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_has_passthrough(wb.handle, nullptr, &present), kBindingNullPointer);
 }
 
 TEST(FormulonCApiNaturalKey, IndexKeyedAddsReturnTheirIndex) {
@@ -261,7 +261,7 @@ TEST(FormulonCApiNaturalKey, ARejectedAddLeavesItsOutIndexUntouched) {
   WorkbookGuard wb;
   CreateDefault(wb);
   std::size_t out = 99;
-  EXPECT_NE(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, 0, 0, 0, 1, &out), 0);
+  EXPECT_NE(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, 0, 0, 0, 1, &out), 0);
   EXPECT_EQ(out, 99U);
   EXPECT_NE(fm_sheet_add_pivot_field_item(wb.handle, 0, 0, 0, "East", 1, &out), 0);
   EXPECT_EQ(out, 99U);

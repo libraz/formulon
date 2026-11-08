@@ -890,10 +890,10 @@ class ApiConventionRuleTest(unittest.TestCase):
                 [("fm_workbook_get_zoom", "const-handle")],
             ),
             "buffer": (
-                "FM_API fm_status_t fm_sheet_match(const fm_workbook_t* wb, uint8_t* out_match, size_t cap,"
-                " size_t* out_len);\n",
-                "FM_API fm_status_t fm_sheet_match(const fm_workbook_t* wb, uint8_t* buf, size_t cap,"
-                " size_t* out_len);\n",
+                "FM_API fm_status_t fm_sheet_match(const fm_workbook_t* wb, uint8_t* out_match, size_t capacity,"
+                " size_t* out_count);\n",
+                "FM_API fm_status_t fm_sheet_match(const fm_workbook_t* wb, uint8_t* out, size_t capacity,"
+                " size_t* out_count);\n",
                 [("fm_sheet_match", "out_match")],
             ),
         }
@@ -2148,6 +2148,21 @@ class LedgerAddressArgsTest(unittest.TestCase):
         entries["column_width.set"]["span_args"] = [[0, "col", "span"]]
         entries["rows.insert"]["span_args"] = [[0, "row", "start_count"]]
         self.assertEqual(validate.check_address_args(entries, dts), [])
+
+    def test_a_scoped_op_is_read_from_the_class_of_its_scope(self) -> None:
+        validate = LedgerAddressArgsTest._validate_names_module()
+        dts = self.DTS.replace(
+            "export interface Sheet {\n", "export interface Sheet {\n  table(table: TableRef): Table;\n"
+        )
+        dts = "export interface Workbook {\n  table(name: string): Table;\n}\n" + dts
+        entries = self.entries()
+        entries["binding.table"] = {"kind": "op", "scope": "workbook", "js": "table"}
+        entries["binding.sheet_table"] = {"kind": "op", "scope": "sheet", "js": "table", "ref_args": [0, "table"]}
+        self.assertEqual(validate.check_address_args(entries, dts), [])
+        entries["binding.table"]["ref_args"] = [0, "table"]
+        problems = validate.check_address_args(entries, dts)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("binding.table", problems[0])
 
     def test_a_handle_op_is_read_from_its_class_in_the_handle_frame(self) -> None:
         validate = LedgerAddressArgsTest._validate_names_module()

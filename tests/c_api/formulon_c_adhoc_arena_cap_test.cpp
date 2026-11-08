@@ -53,7 +53,7 @@ TEST(AdhocEvalArenaCap, EvaluationStillSucceedsUnderTheCap) {
 
   fm_value_t scalar{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 1, "=A1*2", &scalar), 0);
-  EXPECT_EQ(scalar.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(scalar.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(scalar.u.number, 20.0);
 
   fm_value_array_t* array = nullptr;
@@ -67,6 +67,6 @@ TEST(AdhocEvalArenaCap, EvaluationStillSucceedsUnderTheCap) {
 
   fm_value_t fired{};
   ASSERT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 1, 0, 1, "=A1>5", &fired), 0);
-  EXPECT_EQ(fired.kind, FM_VAL_BOOL);
+  EXPECT_EQ(fired.kind, FM_VALUE_KIND_BOOL);
   EXPECT_EQ(fired.u.boolean, 1);
 }

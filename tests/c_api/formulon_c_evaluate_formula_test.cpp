@@ -50,7 +50,7 @@ TEST(EvaluateFormula, ScalarArithmeticAgainstCells) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 2, "=A1+B1", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 30.0);
 }
 
@@ -61,7 +61,7 @@ TEST(EvaluateFormula, LeadingEqualsOptional) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 2, "A1*2", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 20.0);
 }
 
@@ -73,12 +73,12 @@ TEST(EvaluateFormula, RowColumnAnchoredAtTarget) {
 
   fm_value_t r{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 4, 2, "=ROW()", &r), 0);
-  EXPECT_EQ(r.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(r.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(r.u.number, 5.0);
 
   fm_value_t c{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 4, 2, "=COLUMN()", &c), 0);
-  EXPECT_EQ(c.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(c.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(c.u.number, 3.0);
 }
 
@@ -91,7 +91,7 @@ TEST(EvaluateFormula, CrossSheetReference) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=Data!A1", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 99.0);
 }
 
@@ -102,7 +102,7 @@ TEST(EvaluateFormula, WorkbookScopedDefinedName) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TAX*100", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
 }
 
@@ -116,7 +116,7 @@ TEST(EvaluateFormula, ArrayResultReducesToTopLeft) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
@@ -128,7 +128,7 @@ TEST(EvaluateFormula, SingleOperatorEvaluates) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SINGLE(SEQUENCE(3))", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
@@ -145,7 +145,7 @@ TEST(EvaluateFormula, SelfReferenceReadsCachedValue) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=A1", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 7.0);
 }
 
@@ -164,11 +164,11 @@ TEST(EvaluateFormula, IsSideEffectFree) {
   // A1 is unchanged, and the anchor cell B1 was never written.
   fm_value_t a1{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &a1), 0);
-  EXPECT_EQ(a1.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(a1.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(a1.u.number, 10.0);
   fm_value_t b1{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &b1), 0);
-  EXPECT_EQ(b1.kind, FM_VAL_BLANK);
+  EXPECT_EQ(b1.kind, FM_VALUE_KIND_BLANK);
 }
 
 TEST(EvaluateFormula, NullArgumentsRejected) {
@@ -222,7 +222,7 @@ TEST(EvaluateFormulaArray, ColumnVectorPreservesAllCells) {
   for (uint32_t i = 0; i < 3U; ++i) {
     fm_value_t v{};
     ASSERT_EQ(fm_value_array_get_value_at(array.handle, i, &v), 0);
-    EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+    EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
     EXPECT_DOUBLE_EQ(v.u.number, static_cast<double>(i + 1U));
   }
 }
@@ -243,7 +243,7 @@ TEST(EvaluateFormulaArray, MatrixDimensionsAndRowMajorOrder) {
   for (uint32_t i = 0; i < 6U; ++i) {
     fm_value_t v{};
     ASSERT_EQ(fm_value_array_get_value_at(array.handle, i, &v), 0);
-    EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+    EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
     EXPECT_DOUBLE_EQ(v.u.number, static_cast<double>(i + 1U));
   }
 }
@@ -266,13 +266,13 @@ TEST(EvaluateFormulaArray, ExpandBlankPadProjectsToZeroAndNestedCountSkipsIt) {
   for (uint32_t index : generated) {
     fm_value_t cell{};
     ASSERT_EQ(fm_value_array_get_value_at(array.handle, index, &cell), 0);
-    ASSERT_EQ(cell.kind, FM_VAL_NUMBER) << "index=" << index;
+    ASSERT_EQ(cell.kind, FM_VALUE_KIND_NUMBER) << "index=" << index;
     EXPECT_DOUBLE_EQ(cell.u.number, 0.0) << "index=" << index;
   }
 
   fm_value_t count{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=COUNT(EXPAND({1,2;3,4},3,4,))", &count), 0);
-  ASSERT_EQ(count.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(count.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(count.u.number, 4.0);
 }
 
@@ -296,13 +296,13 @@ TEST(EvaluateFormulaArray, ForeignSpillPhantomSurfacesSpill) {
 
   fm_value_t result{};
   ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0, &result), 0);
-  ASSERT_EQ(result.kind, FM_VAL_ERROR);
+  ASSERT_EQ(result.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(result.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Spill));
 
   // The foreign spill and its phantom remain intact after the read-only call.
   fm_value_t phantom{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &phantom), 0);
-  ASSERT_EQ(phantom.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(phantom.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(phantom.u.number, 2.0);
 }
 
@@ -325,13 +325,13 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
 
   fm_value_t result{};
   ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0U, &result), 0);
-  ASSERT_EQ(result.kind, FM_VAL_ERROR);
+  ASSERT_EQ(result.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(result.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Spill));
 
   // The ad-hoc call does not write the anchor or alter the merge metadata.
   fm_value_t anchor{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0U, 0U, 0U, &anchor), 0);
-  EXPECT_EQ(anchor.kind, FM_VAL_BLANK);
+  EXPECT_EQ(anchor.kind, FM_VALUE_KIND_BLANK);
   std::size_t merges = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merges), 0);
   EXPECT_EQ(merges, 1U);
@@ -352,7 +352,7 @@ TEST(EvaluateFormulaArray, ScalarReportedAsOneByOne) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 3.0);
 }
 
@@ -373,11 +373,11 @@ TEST(EvaluateFormulaArray, TextCellsStayValidAfterEvaluation) {
 
   fm_value_t a{};
   ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0, &a), 0);
-  ASSERT_EQ(a.kind, FM_VAL_TEXT);
+  ASSERT_EQ(a.kind, FM_VALUE_KIND_TEXT);
   EXPECT_EQ(std::string(a.u.text), "1x");
   fm_value_t b{};
   ASSERT_EQ(fm_value_array_get_value_at(array.handle, 1, &b), 0);
-  ASSERT_EQ(b.kind, FM_VAL_TEXT);
+  ASSERT_EQ(b.kind, FM_VALUE_KIND_TEXT);
   EXPECT_EQ(std::string(b.u.text), "2x");
 }
 
@@ -389,7 +389,7 @@ TEST(EvaluateFormulaArray, ScalarApiStillReducesToTopLeft) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
@@ -468,7 +468,7 @@ TEST(EvaluateCfFormula, ExcelPredicateCoercion) {
   auto fires = [&](const char* formula) {
     fm_value_t v{};
     EXPECT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, formula, &v), 0);
-    EXPECT_EQ(v.kind, FM_VAL_BOOL);
+    EXPECT_EQ(v.kind, FM_VALUE_KIND_BOOL);
     return v.u.boolean != 0;
   };
 

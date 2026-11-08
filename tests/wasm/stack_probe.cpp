@@ -209,7 +209,7 @@ __attribute__((noinline)) std::size_t measure_evaluate(const std::string& formul
   paint_free_stack();
   const fm_status_t rc = fm_sheet_evaluate_formula(wb, 0, 1, 0, src.c_str(), &v);
   const std::size_t peak = peak_since_paint();
-  if (expected >= 0.0 && (rc != 0 || v.kind != FM_VAL_NUMBER || v.u.number != expected)) {
+  if (expected >= 0.0 && (rc != 0 || v.kind != FM_VALUE_KIND_NUMBER || v.u.number != expected)) {
     fail("a formula at a nesting limit did not evaluate to its value");
   }
   return peak;

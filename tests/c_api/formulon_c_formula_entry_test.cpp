@@ -166,10 +166,10 @@ TEST(FormulonCApiFormulaEntry, BracketNameWithoutBangIsAcceptedAsAName) {
     fm_value_t value{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, row, 0, &value), 0);
     if (row < 2U) {
-      ASSERT_EQ(value.kind, FM_VAL_ERROR);
+      ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR);
       EXPECT_EQ(value.u.error_code, 4);  // #NAME?
     } else {
-      ASSERT_EQ(value.kind, FM_VAL_BOOL);
+      ASSERT_EQ(value.kind, FM_VALUE_KIND_BOOL);
       EXPECT_EQ(value.u.boolean, 0);
     }
   }
@@ -388,12 +388,12 @@ TEST(FormulonCApiFormulaEntry, EnteredWhitespaceTakesTheStoredSpelling) {
   for (const auto& [r, expected] : {std::pair<std::uint32_t, double>{10, 3.0}, {11, 1.0}, {13, 3.0}, {14, 1.0}}) {
     fm_value_t value{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, r, 2, &value), 0);
-    ASSERT_EQ(value.kind, FM_VAL_NUMBER) << "row " << r;
+    ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER) << "row " << r;
     EXPECT_EQ(value.u.number, expected) << "row " << r;
   }
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 15, 2, &value), 0);
-  ASSERT_EQ(value.kind, FM_VAL_ERROR);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(value.u.error_code, 2);  // #VALUE!
 }
 
@@ -418,7 +418,7 @@ TEST(FormulonCApiFormulaEntry, LoadedUnparseableFormulaIsKeptVerbatim) {
     EXPECT_EQ(GetFormula(loaded.handle, row, 1), text);
     fm_value_t value{};
     ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, row, 1, &value), 0);
-    ASSERT_EQ(value.kind, FM_VAL_ERROR);
+    ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR);
     EXPECT_EQ(value.u.error_code, 4);  // #NAME?
     const char* r1c1 = nullptr;
     EXPECT_EQ(fm_sheet_get_formula_r1c1(loaded.handle, 0, row, 1, &r1c1), kParserUnexpectedToken);
@@ -442,7 +442,7 @@ TEST(FormulonCApiFormulaEntry, LoadedWrongArityFormulaKeepsEvaluatingButIsRefuse
   EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=ROWS()");
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 1, &value), 0);
-  EXPECT_EQ(value.kind, FM_VAL_ERROR);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(fm_sheet_set_formula(loaded.handle, 0, 0, 1, "=ROWS()"), kParserUnexpectedToken);
   EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=ROWS()");
 }

@@ -47,7 +47,7 @@ const box = (mod) => ({
   fillKind: mod.ShapePaint.Solid,
   fillColor: '#FF0000',
   lineKind: mod.ShapePaint.None,
-  rotation: 900000,
+  rotationDeg: 15,
 });
 
 test('shapes insert, list, update, remove and round-trip', async () => {
@@ -64,7 +64,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
     heightEmu: 0,
     lineKind: mod.ShapePaint.Solid,
     lineColor: '#00FF00',
-    lineWidthEmu: 19050,
+    lineWidthPt: 1.5,
   });
   assert.notEqual(rect, line);
 
@@ -80,16 +80,16 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(props[0].anchorKind, mod.AnchorKind.TwoCell);
   assert.equal(props[0].toCol, 4);
   assert.equal(props[0].fillKind, mod.ShapePaint.Solid);
-  assert.equal(props[0].fillColor.rgb, 0xffff0000);
+  assert.equal(props[0].fillColor.argb, 0xffff0000);
   assert.equal(props[0].lineKind, mod.ShapePaint.None);
-  assert.equal(props[0].rotation, 900000);
+  assert.equal(props[0].rotationDeg, 15);
   assert.equal(props[0].hidden, false);
   assert.equal(props[1].kind, mod.DrawingObjectKind.Connector);
   assert.equal(props[1].anchorKind, mod.AnchorKind.OneCell);
   assert.equal(props[1].fromColOffsetEmu, 500);
   assert.equal(props[1].widthEmu, 914400);
-  assert.equal(props[1].lineColor.rgb, 0xff00ff00);
-  assert.equal(props[1].lineWidthEmu, 19050);
+  assert.equal(props[1].lineColor.argb, 0xff00ff00);
+  assert.equal(props[1].lineWidthPt, 1.5);
 
   // An update changes the named fields only, and an anchor moves with a row insert.
   loaded.sheet(0).shape(rect.objectId).update({ name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
@@ -99,7 +99,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(moved.hidden, true);
   assert.equal(moved.fillKind, mod.ShapePaint.None);
   assert.equal(moved.presetGeometry, 'roundRect');
-  assert.equal(moved.rotation, 900000);
+  assert.equal(moved.rotationDeg, 15);
   assert.equal(moved.fromRow, 4);
   assert.equal(moved.toRow, 8);
 
@@ -133,9 +133,9 @@ test('shape arguments are validated', async () => {
 
 const sparklineGroup = (mod) => ({
   type: mod.SparklineType.Column,
-  colorSeries: { kind: 1, rgb: 0xff336699, theme: 0, tint: 0, indexed: 0 },
-  colorNegative: { kind: 2, rgb: 0, theme: 5, tint: -0.25, indexed: 0 },
-  colorLow: { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 12 },
+  colorSeries: { kind: 1, argb: 0xff336699, theme: 0, tint: 0, indexed: 0 },
+  colorNegative: { kind: 2, argb: 0, theme: 5, tint: -0.25, indexed: 0 },
+  colorLow: { kind: 3, argb: 0, theme: 0, tint: 0, indexed: 12 },
   markers: true,
   negative: true,
   displayXAxis: true,
@@ -161,7 +161,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(groups.length, 2);
   const [first, second] = groups;
   assert.equal(first.type, mod.SparklineType.Column);
-  assert.equal(first.colorSeries.rgb, 0xff336699);
+  assert.equal(first.colorSeries.argb, 0xff336699);
   assert.equal(first.colorNegative.theme, 5);
   assert.equal(first.colorNegative.tint, -0.25);
   assert.equal(first.colorLow.indexed, 12);

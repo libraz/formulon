@@ -2,7 +2,7 @@
   "fields": {
     "id": "unique case name",
     "before": "patches applied in order before the case, each `{ range, patch }`",
-    "range": "the range argument of setCellFormat / set_cell_format: an A1 cell, range, column span or row span",
+    "range": "the range argument of updateCellFormat / update_cell_format: an A1 cell, range, column span or row span",
     "patch": "the CellFormatPatch, keys in JS camelCase; Python converts every key to snake_case",
     "patch_from": "instead of `patch`: pass back the record getCellFormat / get_cell_format returns for this cell",
     "expect": "per cell, the CellFormat fields that must read back; a nested object compares only the keys it names",
@@ -12,7 +12,7 @@
     "throws": "the error each surface raises before anything changes: `TypeError`, `RangeError`, `ValueError`, `FormulonError:InvalidArgument`, `InvalidArgumentError`",
     "enums": "an enum field is written by member name (`Center`; Python upper-cases it: `CENTER`); a number is passed as is",
     "colors": "a colour is written `#RRGGBB` or `#AARRGGBB`; an expected colour is upper-case `#AARRGGBB`, compared with `<field>.rgb`",
-    "null": "null clears the attribute on a key whose read-record field is nullable (`font.bold`, `font.size`, `font.family`, ...); on any other key it is a TypeError"
+    "null": "null clears the attribute on a key whose read-record field is nullable (`font.bold`, `font.sizePt`, `font.family`, ...); on any other key it is a TypeError"
   },
   "cases": [
     {
@@ -35,8 +35,8 @@
     {
       "id": "font-name-and-size",
       "range": "B3",
-      "patch": { "font": { "name": "Arial", "size": 14 } },
-      "expect": { "B3": { "font": { "name": "Arial", "size": 14 } } },
+      "patch": { "font": { "name": "Arial", "sizePt": 14 } },
+      "expect": { "B3": { "font": { "name": "Arial", "sizePt": 14 } } },
       "idempotent": true
     },
     {
@@ -68,16 +68,16 @@
     {
       "id": "fill-color-implies-solid",
       "range": "A1",
-      "patch": { "fill": { "fg": "#FFFF00" } },
-      "expect": { "A1": { "fill": { "pattern": "Solid", "fg": "#FFFFFF00" } } },
+      "patch": { "fill": { "foreground": "#FFFF00" } },
+      "expect": { "A1": { "fill": { "pattern": "Solid", "foreground": "#FFFFFF00" } } },
       "unchanged": ["A2"],
       "idempotent": true
     },
     {
       "id": "fill-explicit-pattern-is-kept",
       "range": "A1",
-      "patch": { "fill": { "pattern": "DarkGrid", "fg": "#000000", "bg": "#FFFFFF" } },
-      "expect": { "A1": { "fill": { "pattern": "DarkGrid", "fg": "#FF000000", "bg": "#FFFFFFFF" } } }
+      "patch": { "fill": { "pattern": "DarkGrid", "foreground": "#000000", "background": "#FFFFFF" } },
+      "expect": { "A1": { "fill": { "pattern": "DarkGrid", "foreground": "#FF000000", "background": "#FFFFFFFF" } } }
     },
     {
       "id": "border-one-side",
@@ -179,22 +179,22 @@
       "range": "A1",
       "patch": { "font": { "bold": true } },
       "expect_xf": {
-        "A1": { "horizontalAlign": null, "verticalAlign": null, "wrapText": null, "justifyLastLine": null, "locked": null, "hidden": null }
+        "A1": { "horizontal": null, "vertical": null, "wrapText": null, "justifyLastLine": null, "locked": null, "hidden": null }
       }
     },
     {
       "id": "touched-alignment-states-only-its-fields",
       "range": "A1",
       "patch": { "alignment": { "horizontal": "Right" } },
-      "expect_xf": { "A1": { "horizontalAlign": "Right", "verticalAlign": null, "wrapText": null } }
+      "expect_xf": { "A1": { "horizontal": "Right", "vertical": null, "wrapText": null } }
     },
     {
       "id": "untouched-groups-are-kept",
-      "before": [{ "range": "A1", "patch": { "font": { "bold": true }, "fill": { "fg": "#00FF00" } } }],
+      "before": [{ "range": "A1", "patch": { "font": { "bold": true }, "fill": { "foreground": "#00FF00" } } }],
       "range": "A1",
       "patch": { "alignment": { "horizontal": "Center" } },
       "expect": {
-        "A1": { "font": { "bold": true }, "fill": { "pattern": "Solid", "fg": "#FF00FF00" }, "alignment": { "horizontal": "Center" } }
+        "A1": { "font": { "bold": true }, "fill": { "pattern": "Solid", "foreground": "#FF00FF00" }, "alignment": { "horizontal": "Center" } }
       }
     },
     {
@@ -208,8 +208,8 @@
     {
       "id": "column-span-formats-the-column",
       "range": "B:B",
-      "patch": { "fill": { "fg": "#FF0000" } },
-      "expect": { "B1": { "fill": { "pattern": "Solid" } }, "B1000": { "fill": { "fg": "#FFFF0000" } } },
+      "patch": { "fill": { "foreground": "#FF0000" } },
+      "expect": { "B1": { "fill": { "pattern": "Solid" } }, "B1000": { "fill": { "foreground": "#FFFF0000" } } },
       "unchanged": ["A5", "C5"]
     },
     {
@@ -227,7 +227,7 @@
           "patch": {
             "numberFormat": "0.000",
             "font": { "bold": true, "color": "#336699" },
-            "fill": { "fg": "#EEEEEE" },
+            "fill": { "foreground": "#EEEEEE" },
             "border": { "top": { "style": "Thick" } },
             "alignment": { "horizontal": "Right", "wrapText": true },
             "protection": { "locked": false }
@@ -240,7 +240,7 @@
         "C5": {
           "numberFormat": "0.000",
           "font": { "bold": true, "color": "#FF336699" },
-          "fill": { "pattern": "Solid", "fg": "#FFEEEEEE" },
+          "fill": { "pattern": "Solid", "foreground": "#FFEEEEEE" },
           "border": { "top": { "style": "Thick" } },
           "alignment": { "horizontal": "Right", "wrapText": true },
           "protection": { "locked": false }
@@ -328,13 +328,13 @@
     {
       "id": "malformed-color-is-type-error",
       "range": "A1",
-      "patch": { "fill": { "fg": "#12345" } },
+      "patch": { "fill": { "foreground": "#12345" } },
       "throws": { "js": "TypeError", "py": "TypeError" }
     },
     {
       "id": "negative-size-is-range-error",
       "range": "A1",
-      "patch": { "font": { "size": -1 } },
+      "patch": { "font": { "sizePt": -1 } },
       "throws": { "js": "RangeError", "py": "ValueError" }
     },
     {

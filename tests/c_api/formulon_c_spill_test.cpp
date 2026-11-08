@@ -81,11 +81,11 @@ TEST(FormulonCApiSpill, ExpandBlankPadSpillsZerosAndCountReadsTwelve) {
   // projected numeric-zero values for later grid reads.
   fm_value_t c1{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 2, &c1), 0);
-  ASSERT_EQ(c1.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(c1.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(c1.u.number, 0.0);
   fm_value_t d3{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 3, &d3), 0);
-  ASSERT_EQ(d3.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(d3.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(d3.u.number, 0.0);
 
   // A dependent spill reference reads the committed grid values, including
@@ -94,7 +94,7 @@ TEST(FormulonCApiSpill, ExpandBlankPadSpillsZerosAndCountReadsTwelve) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t count{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 5, &count), 0);
-  ASSERT_EQ(count.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(count.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(count.u.number, 12.0);
 }
 
@@ -110,14 +110,14 @@ TEST(FormulonCApiSpill, RawRangeSortSpillsBlankAsZeroAndCountReadsThree) {
 
   fm_value_t d3{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 3, &d3), 0);
-  ASSERT_EQ(d3.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(d3.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(d3.u.number, 0.0);
 
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 5, "=COUNT(D1#)"), 0);  // F1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t count{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 5, &count), 0);
-  ASSERT_EQ(count.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(count.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(count.u.number, 3.0);
 }
 
@@ -146,13 +146,13 @@ TEST(FormulonCApiSpill, CellEnumerationIncludesSpillPhantoms) {
     if (row == 1 && col == 3) {
       saw_d2 = true;
       EXPECT_EQ(formula, nullptr);
-      ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+      ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
       EXPECT_DOUBLE_EQ(value.u.number, 2.0);
     }
     if (row == 2 && col == 3) {
       saw_d3 = true;
       EXPECT_EQ(formula, nullptr);
-      ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+      ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
       EXPECT_DOUBLE_EQ(value.u.number, 3.0);
     }
   }
@@ -184,7 +184,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterMutation) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(row, 5U);
   EXPECT_EQ(col, 7U);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
 }
 
@@ -209,7 +209,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSpillMutation) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 3U);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
 }
 
@@ -321,7 +321,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetRemoval) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 1U);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
 }
 
@@ -346,7 +346,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetMove) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 1U);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
 }
 

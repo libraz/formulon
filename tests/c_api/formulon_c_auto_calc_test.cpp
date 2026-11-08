@@ -173,31 +173,31 @@ TEST(FormulonCApiAutoCalc, ReadAfterWriteSeesTheNewValue) {
   WorkbookGuard wb;
   MakePending(&wb, FM_CALC_MODE_AUTO);
   fm_value_t v = ValueAt(wb.handle, 1, 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 20.0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 3.0), 0);
   v = ValueAt(wb.handle, 1, 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 30.0);
 
   fm_value_t evaluated{};
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 4.0), 0);
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 5, 5, "=A2+1", &evaluated), 0);
-  ASSERT_EQ(evaluated.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(evaluated.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(evaluated.u.number, 41.0);
 }
 
 TEST(FormulonCApiAutoCalc, ManualReadsKeepTheCacheUntilRecalc) {
   WorkbookGuard wb;
   MakePending(&wb, FM_CALC_MODE_MANUAL);
-  EXPECT_EQ(ValueAt(wb.handle, 1, 0).kind, FM_VAL_BLANK);
+  EXPECT_EQ(ValueAt(wb.handle, 1, 0).kind, FM_VALUE_KIND_BLANK);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v = ValueAt(wb.handle, 1, 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 20.0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 3.0), 0);
   v = ValueAt(wb.handle, 1, 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 20.0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   EXPECT_EQ(ValueAt(wb.handle, 1, 0).u.number, 30.0);
@@ -232,10 +232,10 @@ TEST(FormulonCApiAutoCalc, SaveFollowsCalcOnSaveInManualMode) {
     ASSERT_EQ(fm_workbook_set_calc_mode(loaded.handle, FM_CALC_MODE_MANUAL), 0);
     const fm_value_t v = ValueAt(loaded.handle, 1, 0);
     if (c.computed) {
-      ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+      ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
       EXPECT_EQ(v.u.number, 20.0);
     } else {
-      EXPECT_FALSE(v.kind == FM_VAL_NUMBER && v.u.number == 20.0);
+      EXPECT_FALSE(v.kind == FM_VALUE_KIND_NUMBER && v.u.number == 20.0);
     }
   }
 }
@@ -278,7 +278,7 @@ TEST(FormulonCApiAutoCalc, LoadedWorkbookKeepsItsCacheInManualMode) {
   ASSERT_EQ(fm_workbook_set_calc_mode(manual.handle, FM_CALC_MODE_MANUAL), 0);
   ASSERT_EQ(fm_sheet_set_number(manual.handle, 0, 0, 0, 5.0), 0);
   const fm_value_t v = ValueAt(manual.handle, 1, 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 20.0);
 }
 
@@ -299,7 +299,7 @@ TEST(FormulonCApiAutoCalc, ReadFromAProgressCallbackIsReentrant) {
   patch.enabled = 1;
   patch.max_iterations = 2;
   patch.max_change = 0.001;
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, &patch), 0);
+  ASSERT_EQ(fm_workbook_update_iterative(wb.handle, &patch), 0);
 
   ReentryProbe probe;
   probe.wb = wb.handle;

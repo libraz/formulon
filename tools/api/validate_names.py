@@ -13,7 +13,8 @@ collections carry `access` (and `plural`, or `exempt` with a reason);
 `enum_families` and `enum_distinct` name existing enum entries. An op's
 `cell_args` / `rect_args` equal the `(row, col)` pairs and `CellRect` arguments
 of its first signature in src/wasm/formulon.d.ts, and an op's or list's
-`ref_args` its `*Ref` argument; an op whose first signature takes a row or
+`ref_args` its `*Ref` argument (`ref_exempt: {params: [name, ...], reason}` keeps
+the named arguments off `*Ref`); an op whose first signature takes a row or
 column span (`(first, last)` or `(row | col, count)`) carries `span_args`. The
 positions of an op with `handle:` are those of the handle method, checked
 against `interface <handle.class>`. `patch: true` names its getter's record in
@@ -87,9 +88,9 @@ FIELDS = frozenset(
     {
         "kind", "scope", "noun", "qualifies", "record", "role", "from", "c", "js", "py", "enum", "returns",
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
-        "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "patch", "patch_record",
-        "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved", "color",
-        "namespace", "a1_exempt", "add_returns", "clearable",
+        "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "ref_exempt", "patch",
+        "patch_record", "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved",
+        "color", "namespace", "a1_exempt", "add_returns", "clearable",
     }
 )  # fmt: skip
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
@@ -304,6 +305,18 @@ def _address_and_patch_schema(where: str, entry: dict) -> List[str]:
             problems.append(f"{where}: ref_args belong to an op or a list")
         if not (isinstance(ref, list) and len(ref) == 2 and _index(ref[0]) and ref[1] in JS_REF_KINDS.values()):
             problems.append(f"{where}: ref_args is `[position, kind]`, kind one of {sorted(JS_REF_KINDS.values())}")
+    if "ref_exempt" in entry:
+        exempt = entry["ref_exempt"]
+        if entry.get("kind") != "op":
+            problems.append(f"{where}: ref_exempt belongs to an op")
+        if (
+            not isinstance(exempt, dict)
+            or set(exempt) != {"params", "reason"}
+            or not _names_list(exempt["params"])
+            or not isinstance(exempt["reason"], str)
+            or not exempt["reason"].strip()
+        ):
+            problems.append(f"{where}: ref_exempt is `{{params: [name, ...], reason}}`")
     fields = [f for f in ("cell_args", "rect_args", "patch", "patch_record", "patch_reason") if f in entry]
     if fields and entry.get("kind") != "op":
         problems.append(f"{where}: {', '.join(fields)} belong to an op")
@@ -582,7 +595,7 @@ def check_chains(
                 if was != target:
                     renamed_from[(space, was)] = key
     for (space, name), keys in sorted(new.items()):
-        if len(keys) > 1:
+        if len(set(keys)) > 1:
             problems.append(f"{space} name {name} is the new name of several entries: {', '.join(keys)}")
         owner = renamed_from.get((space, name))
         if owner is not None and owner not in keys:
@@ -765,9 +778,11 @@ def check_address_args(
 ) -> List[str]:
     """Each op's `cell_args` / `rect_args` / `span_args`, and each op's or list's `ref_args`, equal what the
     first signature of its JS member declares; an op with `handle:` is read from `interface <handle.class>`,
-    whose methods omit the arguments the handle supplies. An op whose first signature takes a row or column span
-    without `span_args` is reported."""
-    pool = JsSurface(dts_text).callables()
+    whose methods omit the arguments the handle supplies, any other op from the class of its scope first. An op
+    whose first signature takes a row or column span without `span_args` is reported."""
+    surface = JsSurface(dts_text)
+    pool = surface.callables()
+    scope_classes = {"workbook": "Workbook", "sheet": "Sheet"}
     problems: List[str] = []
     for key, entry in sorted(entries.items()):
         kind = entry.get("kind") if isinstance(entry, dict) else None
@@ -778,7 +793,9 @@ def check_address_args(
             members = _handle_members(dts_text, entry, collections or {})
         else:
             js = entry.get("js")
-            members = [(WASM_DTS.name, pool.get(js) if isinstance(js, str) else None)]
+            cls = scope_classes.get(entry.get("scope"))
+            member = surface.interface_members(cls).get(js) if cls and isinstance(js, str) else None
+            members = [(WASM_DTS.name, member or (pool.get(js) if isinstance(js, str) else None))]
         for owner, member in members:
             if member is None:
                 for field in fields:

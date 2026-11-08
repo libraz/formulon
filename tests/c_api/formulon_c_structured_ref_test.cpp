@@ -1,7 +1,7 @@
 // C ABI tests for structured references as the formula bar spells them: the
 // getters return the display form for the formula's cell, the setters bind
 // that form back to the stored one, and a table column renames through
-// `fm_workbook_rename_table_column` or by writing its header cell.
+// `fm_sheet_rename_table_column` or by writing its header cell.
 
 #include <cstddef>
 #include <cstdint>
@@ -58,8 +58,8 @@ void BuildSales(WorkbookGuard& wb, const char* profile = nullptr) {
     }
   }
   std::size_t index = 0;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 4, 4}), "tblSales", "tblSales", columns,
-                                  5, "", 1, 1, &index),
+  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 4, 4}), "tblSales", columns, 5, "", 1, 1,
+                               &index),
             0)
       << fm_get_last_error_message();
 }
@@ -119,20 +119,20 @@ std::string Stored(const WorkbookGuard& wb, std::size_t sheet, std::uint32_t row
 
 std::string ColumnName(const WorkbookGuard& wb, std::size_t column) {
   fm_table_column_info_t info = FM_STRUCT_INIT(fm_table_column_info_t);
-  EXPECT_EQ(fm_workbook_get_table_column(wb.handle, 0, column, &info), 0);
+  EXPECT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, column, &info), 0);
   return info.name != nullptr ? info.name : "";
 }
 
 std::string CellText(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t col) {
   fm_value_t value{};
   EXPECT_EQ(fm_sheet_get_value(wb.handle, 0, row, col, &value), 0);
-  EXPECT_EQ(value.kind, FM_VAL_TEXT);
-  return value.kind == FM_VAL_TEXT ? value.u.text : "";
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_TEXT);
+  return value.kind == FM_VALUE_KIND_TEXT ? value.u.text : "";
 }
 
 std::string Rename(const WorkbookGuard& wb, std::size_t column, const char* name) {
   const char* out = nullptr;
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, column, name, &out), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 0, column, name, &out), 0) << fm_get_last_error_message();
   return out != nullptr ? out : "";
 }
 
@@ -224,15 +224,15 @@ TEST(FormulonCApiStructuredRef, ArrayFormulaReadsAtItsAnchor) {
 TEST(FormulonCApiStructuredRef, TotalsRowShowsTheInsideForm) {
   WorkbookGuard wb;
   BuildSales(wb);
-  ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 0, "sum", nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, "sum", nullptr, nullptr), 0);
   EXPECT_EQ(Stored(wb, 0, 4, 0), "=SUBTOTAL(109,tblSales[Qty])");
   EXPECT_EQ(Formula(wb, 0, 4, 0), "=SUBTOTAL(109,[Qty])");
 
   // A custom formula entered in the display form binds at the totals cell.
-  ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 3, "custom", nullptr, "=SUM([Price])*2"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 3, "custom", nullptr, "=SUM([Price])*2"), 0)
       << fm_get_last_error_message();
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_workbook_get_table_column(wb.handle, 0, 3, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 3, &column), 0);
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Price])*2");
   EXPECT_EQ(wb.handle->workbook().tables()[0].columns[3].totals_row_formula, "SUM(tblSales[Price])*2");
   EXPECT_EQ(Stored(wb, 0, 4, 3), "=SUM(tblSales[Price])*2");
@@ -264,7 +264,7 @@ TEST(FormulonCApiStructuredRef, DisplayFormSetsBackToTheStoredForm) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, kOtherSheet, 1, 1, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 3.0);
 }
 
@@ -286,10 +286,10 @@ TEST(FormulonCApiStructuredRef, EvaluateFormulaBindsAtItsCell) {
   fm_value_t v{};
   // Row 3 holds Qty 3.
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 2, kInsideCol, "=[@Qty]*10", &v), 0) << fm_get_last_error_message();
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 30.0);
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, kOutsideRow, kOutsideCol, "=ROWS(tblSales)", &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 3.0);
 }
 
@@ -297,12 +297,13 @@ TEST(FormulonCApiStructuredRef, RenameColumnRefusesBadArguments) {
   WorkbookGuard wb;
   BuildSales(wb);
   const char* out = nullptr;
-  EXPECT_EQ(fm_workbook_rename_table_column(nullptr, 0, 0, "X", &out), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 0, nullptr, &out), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 0, "X", nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 1, 0, "X", &out), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 5, "X", &out), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 0, "\xC3\x28", &out), kBindingUtf8EncodingError);
+  EXPECT_EQ(fm_sheet_rename_table_column(nullptr, 0, 0, 0, "X", &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 0, 0, nullptr, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 0, 0, "X", nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 1, 0, "X", &out), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 0, 5, "X", &out), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_rename_table_column(wb.handle, 9, 0, 0, "X", &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 0, 0, "\xC3\x28", &out), kBindingUtf8EncodingError);
   EXPECT_EQ(ColumnName(wb, 0), "Qty");
 }
 
@@ -313,7 +314,7 @@ TEST(FormulonCApiStructuredRef, RenameColumnRewritesEveryReference) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, kInsideCol, "=SUM(tblSales[[#This Row],[Qty]:[Price]])"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, kOtherSheet, 1, 1, "=SUM(tblSales[Qty])"), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "NmQ", "=tblSales[Qty]"), 0);
-  ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 0, "sum", nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, "sum", nullptr, nullptr), 0);
 
   EXPECT_EQ(Rename(wb, 0, "Amount"), "Amount");
   EXPECT_EQ(ColumnName(wb, 0), "Amount");
@@ -343,7 +344,7 @@ TEST(FormulonCApiStructuredRef, RenamedColumnSavesInExcelsStoredForm) {
   WorkbookGuard wb;
   BuildSales(wb);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kInsideRow, kInsideCol, "=[@Qty]"), 0);
-  ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 0, "custom", nullptr, "=SUBTOTAL(109,[Qty])"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, "custom", nullptr, "=SUBTOTAL(109,[Qty])"), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(Rename(wb, 0, "Amount"), "Amount");
 
@@ -430,9 +431,9 @@ TEST(FormulonCApiStructuredRef, HeaderCellValueSettersRenameTheColumn) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, kOutsideCol, 2024.0), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, kOutsideCol, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(ColumnName(wb, 0), "Amount");
 }
 

@@ -55,7 +55,7 @@ test('dispose() from the iterative progress callback is refused the same way', a
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+    wb.updateIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     let caught;
     wb.setIterativeProgress(() => {
@@ -107,7 +107,7 @@ test('a callback or sink that is not a function throws TypeError and keeps the i
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+    wb.updateIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     let calls = 0;
     wb.setIterativeProgress(() => {
@@ -141,7 +141,7 @@ test('a missing required argument throws TypeError and commits nothing', async (
     assert.equal(wb.listDefinedNames().length, 1);
     assert.deepEqual(wb.listDefinedNames()[0], nameBefore);
 
-    assert.throws(() => wb.setIterative(), TypeError);
+    assert.throws(() => wb.updateIterative(), TypeError);
     assert.equal(wb.getIterative().enabled, false);
   } finally {
     wb.dispose();
@@ -152,7 +152,7 @@ test('a primitive or null where an object is declared throws TypeError and chang
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.sheet(0).setSheetProtection({ enabled: true, sheet: true });
+    wb.sheet(0).setSheetProtection({});
     const protectionBefore = wb.sheet(0).getSheetProtection();
     assert.throws(() => wb.sheet(0).setSheetProtection('x'), TypeError);
     assert.throws(() => wb.sheet(0).setSheetProtection(5), TypeError);
@@ -167,7 +167,7 @@ test('a primitive or null where an object is declared throws TypeError and chang
     assert.throws(() => wb.sheet(0).recalcViewport(5), TypeError);
     assert.throws(() => wb.sheet(0).getCellRectPt(null, 0), TypeError);
     assert.throws(() => wb.sheet(0).setCellPhoneticProperties(0, 0, 'x'), TypeError);
-    assert.throws(() => wb.sheet(0).restoreRangeStyle(null), TypeError);
+    assert.throws(() => wb.sheet(0).ooxml.restoreRangeXfs(null), TypeError);
   } finally {
     wb.dispose();
   }
@@ -179,10 +179,10 @@ test('an argument the binding cannot represent throws TypeError and changes noth
   try {
     for (const [label, call] of [
       ['setThemeColors([])', () => wb.setThemeColors([])],
-      ['restoreRangeStyle(0, {})', () => wb.sheet(0).restoreRangeStyle({})],
+      ['restoreRangeXfs(0, {})', () => wb.sheet(0).ooxml.restoreRangeXfs({})],
       [
-        'remapRangeStyle mismatched lengths',
-        () => wb.sheet(0).ooxml.remapRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
+        'remapRangeXfs mismatched lengths',
+        () => wb.sheet(0).ooxml.remapRangeXfs({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
       ],
       ['getImageInfo({})', () => mod.getImageInfo({})],
     ]) {
@@ -229,7 +229,7 @@ test('every method called from the iterative progress callback throws and change
   try {
     wb.addSheet('Second');
     wb.sheet(1).setNumber(5, 5, 42);
-    wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+    wb.updateIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     const attempts = {
       setFormula: () => wb.sheet(1).setFormula(0, 0, '=1'),

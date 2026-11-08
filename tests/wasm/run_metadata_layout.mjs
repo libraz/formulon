@@ -50,15 +50,15 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('addHyperlink + getHyperlinks round-trip', () => {
+  test('setHyperlink + listHyperlinks round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
       assert.equal(wb.listHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
-      wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '');
-      wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '');
-      wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1');
-      wb.addHyperlinkRange(
+      wb.setHyperlink(0, 1, 2, 'https://example.com/', '', '', '');
+      wb.setHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '');
+      wb.setHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1');
+      wb.setHyperlinkRange(
         0,
         { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
         'https://example.com/range',
@@ -93,7 +93,7 @@ export function registerMetadataLayout(Module, test) {
         },
       );
       // Sheet-out-of-range is rejected.
-      expectFailure(() => wb.addHyperlink(999, 0, 0, 'https://x/', '', '', ''));
+      expectFailure(() => wb.setHyperlink(999, 0, 0, 'https://x/', '', '', ''));
       // clearHyperlinks drops everything.
       wb.clearHyperlinks(0);
       assert.equal(wb.listHyperlinks(0).length, 0);
@@ -211,7 +211,7 @@ export function registerMetadataLayout(Module, test) {
 
       const a = list[0];
       assert.equal(a.type, 3);
-      assert.equal(a.op, 0);
+      assert.equal(a.operator, 0);
       assert.equal(a.errorStyle, 1);
       // Booleans must arrive as JS booleans, not 0/1.
       assert.equal(typeof a.allowBlank, 'boolean');
@@ -279,13 +279,13 @@ export function registerMetadataLayout(Module, test) {
       const columns = wb.listColumnOverrides(0);
       assert.ok(Array.isArray(columns));
       assert.equal(columns[0].first, 2);
-      assert.equal(columns[0].width, 18);
+      assert.equal(columns[0].widthChars, 18);
 
       wb.setRowHeight(0, 3, 3, 22);
       const rows = wb.listRowOverrides(0);
       assert.ok(Array.isArray(rows));
       assert.equal(rows[0].row, 3);
-      assert.equal(rows[0].height, 22);
+      assert.equal(rows[0].heightPt, 22);
     } finally {
       wb.delete();
     }
@@ -369,29 +369,29 @@ export function registerMetadataLayout(Module, test) {
   test('typed print patches throw on lossy numbers before changing the page setup', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      wb.setPageSetup(0, { orientation: 1, scale: 125 });
+      wb.updatePageSetup(0, { orientation: 1, scalePct: 125 });
       const expectRejected = (patch, field) => {
-        assert.throws(() => wb.setPageSetup(0, patch), {
+        assert.throws(() => wb.updatePageSetup(0, patch), {
           name: 'RangeError',
-          message: new RegExp(`setPageSetup.*\`${field}\``),
+          message: new RegExp(`updatePageSetup.*\`${field}\``),
         });
         const setup = wb.getPageSetup(0);
         assert.equal(setup.orientation, 1);
-        assert.equal(setup.scale, 125);
+        assert.equal(setup.scalePct, 125);
       };
 
-      expectRejected({ scale: 2 ** 32 + 100 }, 'pageSetup.scale');
-      expectRejected({ scale: 100.5 }, 'pageSetup.scale');
-      expectRejected({ scale: Number.NaN }, 'pageSetup.scale');
-      expectRejected({ scale: Number.POSITIVE_INFINITY }, 'pageSetup.scale');
+      expectRejected({ scalePct: 2 ** 32 + 100 }, 'pageSetup.scalePct');
+      expectRejected({ scalePct: 100.5 }, 'pageSetup.scalePct');
+      expectRejected({ scalePct: Number.NaN }, 'pageSetup.scalePct');
+      expectRejected({ scalePct: Number.POSITIVE_INFINITY }, 'pageSetup.scalePct');
       expectRejected({ orientation: 1.5 }, 'pageSetup.orientation');
 
       // Nullish values keep the old patch meaning: the attribute is omitted
       // from this update and the prior value remains in force.
-      wb.setPageSetup(0, { scale: null, orientation: undefined });
+      wb.updatePageSetup(0, { scalePct: null, orientation: undefined });
       const unchanged = wb.getPageSetup(0);
       assert.equal(unchanged.orientation, 1);
-      assert.equal(unchanged.scale, 125);
+      assert.equal(unchanged.scalePct, 125);
     } finally {
       wb.delete();
     }
@@ -400,27 +400,27 @@ export function registerMetadataLayout(Module, test) {
   test('typed print patches throw on coercion and preserve header/footer fields', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      wb.setPrintOptions(0, { gridLines: true });
+      wb.updatePrintOptions(0, { gridLines: true });
       const throwingOptions = {};
       Object.defineProperty(throwingOptions, 'gridLines', {
         get() {
           throw new Error('print-options getter');
         },
       });
-      assert.throws(() => wb.setPrintOptions(0, throwingOptions), /print-options getter/);
+      assert.throws(() => wb.updatePrintOptions(0, throwingOptions), /print-options getter/);
       assert.match(wb.getPrintOptionsXml(0), /gridLines="true"/);
 
-      wb.setPageMargins(0, { left: 0.5 });
-      assert.throws(() => wb.setPageMargins(0, { left: '0.75' }), {
+      wb.updatePageMargins(0, { leftIn: 0.5 });
+      assert.throws(() => wb.updatePageMargins(0, { leftIn: '0.75' }), {
         name: 'TypeError',
-        message: /setPageMargins.*left/,
+        message: /updatePageMargins.*leftIn/,
       });
-      assert.equal(wb.getPageMargins(0).left, 0.5);
+      assert.equal(wb.getPageMargins(0).leftIn, 0.5);
 
-      wb.setHeaderFooter(0, { oddHeader: 'before' });
-      assert.throws(() => wb.setHeaderFooter(0, { oddHeader: 42 }), {
+      wb.updateHeaderFooter(0, { oddHeader: 'before' });
+      assert.throws(() => wb.updateHeaderFooter(0, { oddHeader: 42 }), {
         name: 'TypeError',
-        message: /setHeaderFooter.*oddHeader/,
+        message: /updateHeaderFooter.*oddHeader/,
       });
       assert.match(wb.getHeaderFooterXml(0), /before/);
     } finally {
@@ -431,7 +431,7 @@ export function registerMetadataLayout(Module, test) {
   test('header/footer getter failures are rethrown before any mutation', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      wb.setHeaderFooter(0, { oddHeader: 'before' });
+      wb.updateHeaderFooter(0, { oddHeader: 'before' });
       const lateFailure = { oddHeader: 'after' };
       Object.defineProperty(lateFailure, 'alignWithMargins', {
         get() {
@@ -439,7 +439,7 @@ export function registerMetadataLayout(Module, test) {
         },
       });
 
-      assert.throws(() => wb.setHeaderFooter(0, lateFailure), /late header getter/);
+      assert.throws(() => wb.updateHeaderFooter(0, lateFailure), /late header getter/);
       assert.match(wb.getHeaderFooterXml(0), /before/);
       assert.doesNotMatch(wb.getHeaderFooterXml(0), /after/);
     } finally {
@@ -491,7 +491,7 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(typeof initial.maxIterations, 'number');
       assert.equal(typeof initial.maxChange, 'number');
 
-      wb.setIterative({ enabled: true, maxIterations: 42, maxChange: 0.25 });
+      wb.updateIterative({ enabled: true, maxIterations: 42, maxChange: 0.25 });
       const enabled = wb.getIterative();
       assert.equal(enabled.enabled, true);
       assert.equal(enabled.maxIterations, 42);
@@ -499,7 +499,7 @@ export function registerMetadataLayout(Module, test) {
 
       // The cap and threshold survive switching iteration back off, which is
       // what lets a host render the dialog with the stored values.
-      wb.setIterative({ enabled: false });
+      wb.updateIterative({ enabled: false });
       const disabled = wb.getIterative();
       assert.equal(disabled.enabled, false);
       assert.equal(disabled.maxIterations, 42);
@@ -509,7 +509,7 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('addValidation defaults allowBlank to false', () => {
+  test('addValidation defaults allowBlank to true', () => {
     const wb = Module.Workbook.createDefault();
     try {
       wb.addValidation(0, {
@@ -522,18 +522,18 @@ export function registerMetadataLayout(Module, test) {
         (i) => wb.getValidation(0, i),
       );
       assert.equal(list.length, 1);
-      assert.equal(list[0].allowBlank, false);
+      assert.equal(list[0].allowBlank, true);
     } finally {
       wb.delete();
     }
   });
 
-  test('getCellStyleXf reports xfId alongside the cell-format fields', () => {
+  test('getCellStyleXf reports styleXfIndex alongside the cell-format fields', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const read = wb.getCellStyleXf(0);
       // A named-style xf is its own parent, so it never inherits one.
-      assert.equal(read.xfId, 0);
+      assert.equal(read.styleXfIndex, 0);
       // The record shape matches `getCellXf`, which the documented
       // read / edit / addCellStyleXf round-trip depends on.
       const cellXf = wb.getCellXf(0);

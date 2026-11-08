@@ -75,7 +75,7 @@ function addCache(wb, sheetName = 'Sheet1', ref = 'A1:B3') {
 }
 
 function addPivot(sheet, cache, name, anchorRow, anchorCol) {
-  const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchorRow, anchorCol });
+  const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchor: { row: anchorRow, col: anchorCol } });
   pivot.addField({ sourceName: 'Region', axis: 0 });
   const amount = pivot.addField({ sourceName: 'Amount', axis: 2 });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
@@ -83,8 +83,8 @@ function addPivot(sheet, cache, name, anchorRow, anchorCol) {
 }
 
 function addTable(wb, name, firstCol, sheet = 0) {
-  return wb.addTable({
-    range: { sheet, rect: { firstRow: 10, firstCol, lastRow: 12, lastCol: firstCol + 1 } },
+  return wb.sheet(sheet).addTable({
+    range: { firstRow: 10, firstCol, lastRow: 12, lastCol: firstCol + 1 },
     name,
     columns: ['A', 'B'],
   });
@@ -107,10 +107,10 @@ test(
   withBook((wb, mod) => {
     const ws = wb.sheet(0);
     const table = addTable(wb, 'Sales', 5);
-    assert.equal(wb.table(0), table);
+    assert.equal(ws.table(0), table);
     assert.equal(wb.table('Sales'), table);
-    assert.equal(wb.table(table), table);
-    assert.equal(wb.listTables()[0], table);
+    assert.equal(ws.table(table), table);
+    assert.equal(ws.listTables()[0], table);
 
     const cache = addCache(wb);
     assert.equal(wb.pivotCache(cache.cacheId), cache);
@@ -148,10 +148,10 @@ test(
     const first = addTable(wb, 'Sales', 5);
     const second = addTable(wb, 'Costs', 8);
     assert.equal(second.index, 1);
-    wb.removeTable(first);
+    ws.removeTable(first);
     assert.equal(second.index, 0);
     assert.equal(second.name, 'Costs');
-    assert.equal(wb.table(0), second);
+    assert.equal(ws.table(0), second);
     assert.equal(second.getProperties().name, 'Costs');
 
     const cache = addCache(wb);
@@ -171,7 +171,7 @@ test(
   withBook((wb, mod) => {
     const ws = wb.sheet(0);
     const table = addTable(wb, 'Sales', 5);
-    wb.removeTable(table);
+    ws.removeTable(table);
     assert.throws(() => table.getProperties(), notFound(mod));
 
     const cache = addCache(wb);
@@ -295,9 +295,10 @@ test(
     assert.equal(ws.pivot('Q'), pivot);
 
     const table = addTable(wb, 'Sales', 5);
-    table.update({ displayName: 'Revenue' });
-    assert.equal(table.displayName, 'Revenue');
+    table.rename('Revenue');
+    assert.equal(table.name, 'Revenue');
     assert.equal(wb.table('Revenue'), table);
+    assert.equal('displayName' in table, false);
 
     ws.rename('Data');
     assert.equal(ws.name, 'Data');
@@ -366,8 +367,8 @@ test(
       const foreignPicture = other.sheet(0).addPicture(makePng(2));
       addTable(wb, 'Sales', 5);
       addCache(wb);
-      assert.throws(() => wb.table(foreignTable), invalidArgument(mod));
-      assert.throws(() => wb.removeTable(foreignTable), invalidArgument(mod));
+      assert.throws(() => ws.table(foreignTable), invalidArgument(mod));
+      assert.throws(() => ws.removeTable(foreignTable), invalidArgument(mod));
       assert.throws(() => wb.pivotCache(foreignCache), invalidArgument(mod));
       assert.throws(() => wb.removePivotCache(foreignCache), invalidArgument(mod));
       assert.throws(() => ws.pivot(foreignPivot), invalidArgument(mod));
@@ -375,7 +376,7 @@ test(
       assert.throws(() => ws.drawing(foreignPicture), invalidArgument(mod));
       assert.throws(() => ws.picture(foreignPicture), invalidArgument(mod));
       assert.throws(() => ws.removeDrawing(foreignPicture), invalidArgument(mod));
-      assert.equal(wb.listTables().length, 1);
+      assert.equal(ws.listTables().length, 1);
     } finally {
       other.dispose();
     }
@@ -411,11 +412,11 @@ test(
     const doomed = wb.addSheet('Doomed');
     wb.removeSheet(doomed);
     assert.equal(wb.table('Target'), target);
-    wb.removeTable(before);
+    ws.removeTable(before);
     assert.equal(target.index, 0);
     assert.equal(target.name, 'Target');
-    assert.equal(wb.table(0), target);
-    assert.equal(wb.listTables()[0], target);
+    assert.equal(ws.table(0), target);
+    assert.equal(ws.listTables()[0], target);
     assert.equal(target.getProperties().range.rect.firstCol, 8);
   }),
 );

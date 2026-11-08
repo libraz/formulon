@@ -224,7 +224,7 @@ extern "C" fm_status_t fm_value_array_get_value_at(const fm_value_array_t* array
   const formulon::Value& cell = array->cells[index];
   if (cell.kind() == formulon::ValueKind::Text) {
     // The handle owns the NUL-terminated bytes behind every text cell.
-    out->kind = FM_VAL_TEXT;
+    out->kind = FM_VALUE_KIND_TEXT;
     out->u.text = cell.as_text().data();
     return 0;
   }
@@ -266,7 +266,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, siz
     return arena_exhausted_error();
   }
   *out = fm_value_t{};
-  out->kind = FM_VAL_BOOL;
+  out->kind = FM_VALUE_KIND_BOOL;
   out->u.boolean = fired ? 1 : 0;
   return 0;
 }

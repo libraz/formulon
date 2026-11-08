@@ -143,10 +143,22 @@ _HEADER_FOOTER_FIELDS = (
 )
 
 
+# Case keys that name a quantity without its unit map to the binding's unit-suffixed keyword.
+_KEYWORD_OF = {
+    "scale": "scale_pct",
+    "left": "left_in",
+    "right": "right_in",
+    "top": "top_in",
+    "bottom": "bottom_in",
+    "header": "header_in",
+    "footer": "footer_in",
+}
+
+
 def _stated(block: Dict[str, Any], fields: Tuple[str, ...]) -> Dict[str, Any]:
     """The fields `block` states, as keyword arguments; an omitted field keeps the workbook's setting."""
 
-    return {name: block[name] for name in fields if block.get(name) is not None}
+    return {_KEYWORD_OF.get(name, name): block[name] for name in fields if block.get(name) is not None}
 
 
 def _title_span(text: Optional[str], *, module: Any, rows: bool) -> Any:
@@ -179,19 +191,19 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any], module: Any
             # A case states Excel's `XlPageOrientation` (1 = portrait, 2 = landscape), the value the capture reads back.
             landscape = int(fields["orientation"]) == 2
             fields["orientation"] = module.PageOrientation.LANDSCAPE if landscape else module.PageOrientation.PORTRAIT
-        wb.sheet(sheet).set_page_setup(**fields)
+        wb.sheet(sheet).update_page_setup(**fields)
 
     margins = spec.get("page_margins")
     if isinstance(margins, dict):
-        wb.sheet(sheet).set_page_margins(**_stated(margins, _PAGE_MARGIN_FIELDS))
+        wb.sheet(sheet).update_page_margins(**_stated(margins, _PAGE_MARGIN_FIELDS))
 
     options = spec.get("print_options")
     if isinstance(options, dict):
-        wb.sheet(sheet).set_print_options(**_stated(options, _PRINT_OPTION_FIELDS))
+        wb.sheet(sheet).update_print_options(**_stated(options, _PRINT_OPTION_FIELDS))
 
     header_footer = spec.get("header_footer")
     if isinstance(header_footer, dict):
-        wb.sheet(sheet).set_header_footer(**_stated(header_footer, _HEADER_FOOTER_FIELDS))
+        wb.sheet(sheet).update_header_footer(**_stated(header_footer, _HEADER_FOOTER_FIELDS))
 
     print_area = spec.get("print_area")
     if isinstance(print_area, str) and print_area:
@@ -213,9 +225,11 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any], module: Any
     for row in spec.get("row_breaks") or []:
         # Case rows are 1-based, matching every other A1-shaped field in
         # the schema; the API takes a zero-based row.
-        wb.sheet(sheet).add_row_break(int(row) - 1)
+        index = int(row) - 1
+        wb.sheet(sheet).set_row_break(index, module.RowBreak(row=index, manual=True))
     for col_key in spec.get("col_breaks") or []:
-        wb.sheet(sheet).add_column_break(_column_index(str(col_key)))
+        index = _column_index(str(col_key))
+        wb.sheet(sheet).set_column_break(index, module.ColumnBreak(col=index, manual=True))
 
 
 def author_case(case: Dict[str, Any], *, module: Any) -> bytes:

@@ -88,9 +88,9 @@ function pivotWorkbook(wb, formulon) {
     cache.setRecordValue(rec, 0, region);
     cache.setRecordValue(rec, 1, amount);
   }
-  const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+  const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
   ws.pivot(pivot).addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amountField = ws.pivot(pivot).addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Data });
+  const amountField = ws.pivot(pivot).addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Value });
   ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amountField, aggregation: 0 });
   return { cache, cacheId: cache.cacheId, pivot };
 }
@@ -98,8 +98,8 @@ function pivotWorkbook(wb, formulon) {
 // One entry per JSON method. `args` is the coordinate form; the A1 form is derived from the JSON
 // positions. `setup` may return context for `args`.
 const CELL_METHODS = {
-  'Sheet.addHyperlink': { args: () => [CELL_ROW, CELL_COL, HYPERLINK] },
-  'Sheet.clearCellXfIndex': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.setHyperlink': { args: () => [CELL_ROW, CELL_COL, HYPERLINK] },
+  'Sheet.resetCellXfIndex': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.evaluateCfFormula': { args: () => [CELL_ROW, CELL_COL, 0, 0, '=TRUE'] },
   'Sheet.evaluateFormula': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
   'Sheet.evaluateFormulaArray': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
@@ -137,8 +137,8 @@ const CELL_METHODS = {
   },
   'Sheet.setBool': { args: () => [CELL_ROW, CELL_COL, true], mutates: true },
   'Sheet.setCellPhonetic': { args: () => [CELL_ROW, CELL_COL, 'kana'], mutates: true },
-  'Sheet.setCellPhoneticProperties': { args: () => [CELL_ROW, CELL_COL, { fontId: 0, type: 2, alignment: 1 }] },
-  'Sheet.setCellPhoneticRuns': { args: () => [CELL_ROW, CELL_COL, [{ sb: 0, eb: 1, text: 'x' }]] },
+  'Sheet.setCellPhoneticProperties': { args: () => [CELL_ROW, CELL_COL, { fontIndex: 0, type: 2, alignment: 1 }] },
+  'Sheet.setCellPhoneticRuns': { args: () => [CELL_ROW, CELL_COL, [{ start: 0, end: 1, text: 'x' }]] },
   'Sheet.setCellShowPhonetic': { args: () => [CELL_ROW, CELL_COL, true] },
   'Sheet.setCellXfIndex': { args: () => [CELL_ROW, CELL_COL, 0] },
   'Sheet.setComment': { args: () => [CELL_ROW, CELL_COL, { author: 'A', text: 'note' }], mutates: true },
@@ -154,8 +154,8 @@ const CELL_METHODS = {
   'Sheet.validateValue': { args: (f) => [CELL_ROW, CELL_COL, { kind: f.ValueKind.Number, number: 1 }] },
   // Methods whose cell form moved elsewhere in the same surface revision.
   'Sheet.addPivot': { skip: 'takes a PivotInput record' },
-  'Sheet.setPaneTopLeft': { skip: 'folded into setView' },
-  'Sheet.setTopLeft': { skip: 'folded into setView' },
+  'Sheet.setPaneTopLeft': { skip: 'folded into updateView' },
+  'Sheet.setTopLeft': { skip: 'folded into updateView' },
 };
 
 const READERS = [
@@ -209,7 +209,7 @@ function snapshot(ws) {
   }
   out.push(attempt(() => ws.getMergesInRange(rect(0, 0, 9, 9))));
   out.push(attempt(() => ws.getPrintArea()));
-  out.push(attempt(() => ws.ooxml.getRangeStyleBases(rect(0, 0, 9, 9))));
+  out.push(attempt(() => ws.ooxml.getRangeXfBases(rect(0, 0, 9, 9))));
   out.push(attempt(() => ws.listHyperlinks()));
   return out;
 }
@@ -374,26 +374,25 @@ test('edge: setFormula accepts text with or without the leading equals sign', as
 
 const R = rect(1, 1, 2, 2);
 const RECT_METHODS = {
-  'Sheet.addHyperlinkRange': { args: (r) => [r, HYPERLINK], mutates: true },
+  'Sheet.setHyperlinkRange': { args: (r) => [r, HYPERLINK], mutates: true },
   'Sheet.addMerge': { args: (r) => [r], mutates: true },
   'Sheet.evaluateCfRange': { args: (r) => [r, 45000] },
   'Sheet.getCellRectPt': { args: (r, f) => [r, f.GeometryMode.Display] },
   'Sheet.getCellsInRange': { args: (r) => [r] },
   'Sheet.getMergesInRange': { args: (r) => [r] },
-  'Sheet.getRangeStyleBases': { args: (r) => [r] },
-  'Sheet.getRangeStyleBasesExcluding': { args: (r) => [r, [], []] },
+  'Sheet.getRangeXfBases': { args: (r) => [r] },
+  'Sheet.getRangeXfBasesExcluding': { args: (r) => [r, [], []] },
   'Sheet.getTypedValues': { args: (r) => [r] },
   'Sheet.getValues': { args: (r) => [r] },
   'Sheet.iterRows': { args: (r) => [r] },
   'Sheet.listCells': { args: (r) => [r], pre: (ws) => ws.setNumber(2, 2, 9) },
   'Sheet.recalcViewport': { args: (r) => [r] },
-  'Sheet.remapRangeStyle': { args: (r) => [r, [0], [0]] },
+  'Sheet.remapRangeXfs': { args: (r) => [r, [0], [0]] },
   'Sheet.removeMerge': { args: (r) => [r], pre: (ws) => ws.addMerge(R) },
-  'Pivot.setAnchor': { args: (r) => [r], pivot: true },
-  'Sheet.setCellFormat': { args: (r) => [r, { font: { bold: true } }], mutates: true },
+  'Sheet.updateCellFormat': { args: (r) => [r, { font: { bold: true } }], mutates: true },
   'Sheet.setPrintArea': { args: (r) => [[r]], mutates: true },
   'Sheet.setRangeXfIndex': { args: (r) => [r, 0] },
-  'Sheet.snapshotRangeStyle': { args: (r) => [r] },
+  'Sheet.snapshotRangeXfs': { args: (r) => [r] },
 };
 
 test('criterion 2: the JSON rect set is non-empty and every method has an argument-table entry', () => {
@@ -425,8 +424,7 @@ for (const [name, positions] of Object.entries(ADDRESS.rect_args)) {
         const before = snapshot(ws);
         const [obj, method] = target(ws, ctx, name);
         const result = attempt(() => obj[method](...args));
-        const extra = name === 'Pivot.setAnchor' ? attempt(() => ws.pivot(ctx.pivot).getLayout()) : null;
-        return { result, before, after: [snapshot(ws), extra] };
+        return { result, before, after: [snapshot(ws)] };
       });
     const rectRun = await run(false);
     const strRun = await run(true);
@@ -620,7 +618,7 @@ test('criterion 4: setValues over a data-table body throws and keeps the cells w
     ws.setNumber(0, 0, 1);
     ws.setNumber(1, 0, 2);
     ws.setNumber(2, 0, 3);
-    ws.addDataTable({ rect: rect(1, 1, 2, 1), colInput: { row: 0, col: 0 } });
+    ws.addDataTable({ rect: rect(1, 1, 2, 1), columnInput: { row: 0, col: 0 } });
     assert.notEqual(ws.getDataTable(1, 1), null);
     assert.throws(
       () => ws.setValues('A2', [[7, 8]]),
@@ -721,7 +719,7 @@ test('criterion 5: hasDirtyCells inside an iteration progress callback is a reen
   const f = await getFormulon();
   const wb = f.Workbook.createDefault();
   try {
-    wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+    wb.updateIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     let raised = null;
     wb.setIterativeProgress(() => {
@@ -816,63 +814,63 @@ test('criterion 6: listPivots, listPivotFieldItems and the pivot cache lists des
 
 // ---- Criterion 7: partial updates ---------------------------------------------
 
-test('criterion 7: setView changes only the keys given', async () => {
+test('criterion 7: updateView changes only the keys given', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const before = plain(ws.getView());
-    ws.setView({});
+    ws.updateView({});
     assert.deepEqual(plain(ws.getView()), before);
-    ws.setView({ showGridLines: false });
+    ws.updateView({ showGridLines: false });
     assert.deepEqual(plain(ws.getView()), { ...before, showGridLines: false });
-    assert.throws(() => ws.setView({ zoomScale: null }), TYPE_ERROR);
+    assert.throws(() => ws.updateView({ zoomPct: null }), TYPE_ERROR);
     assert.deepEqual(plain(ws.getView()), { ...before, showGridLines: false });
     void f;
   });
 });
 
-test('criterion 7: setView merges freeze rows and columns from the current view', async () => {
+test('criterion 7: updateView merges freeze rows and columns from the current view', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    ws.setView({ freezeRows: 0, freezeCols: 1 });
-    ws.setView({ freezeRows: 2 });
+    ws.updateView({ freezeRows: 0, freezeCols: 1 });
+    ws.updateView({ freezeRows: 2 });
     const view = ws.getView();
     assert.equal(view.freezeRows, 2);
     assert.equal(view.freezeCols, 1);
   });
 });
 
-test('criterion 7: setView rejects a freeze together with a split', async () => {
+test('criterion 7: updateView rejects a freeze together with a split', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     const before = plain(ws.getView());
-    assert.throws(() => ws.setView({ freezeRows: 1, splitX: 100 }), TYPE_ERROR);
+    assert.throws(() => ws.updateView({ freezeRows: 1, splitXTwips: 100 }), TYPE_ERROR);
     assert.deepEqual(plain(ws.getView()), before);
   });
 });
 
-test('criterion 7: setView checks paneTopLeft against the merged state', async () => {
+test('criterion 7: updateView checks paneTopLeft against the merged state', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    ws.setView({ freezeRows: 1, paneTopLeftRow: 3 });
+    ws.updateView({ freezeRows: 1, paneTopLeftRow: 3 });
     const view = ws.getView();
     assert.equal(view.freezeRows, 1);
     assert.equal(view.paneTopLeftRow, 3);
   });
 });
 
-test('criterion 7: setView refuses to hide the only visible sheet and changes nothing', async () => {
+test('criterion 7: updateView refuses to hide the only visible sheet and changes nothing', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const before = plain(ws.getView());
     assert.throws(
-      () => ws.setView({ visibility: f.SheetVisibility.Hidden, showGridLines: false }),
+      () => ws.updateView({ visibility: f.SheetVisibility.Hidden, showGridLines: false }),
       (e) => e.name === 'FormulonError',
     );
     assert.deepEqual(plain(ws.getView()), before);
   });
 });
 
-test('criterion 7: setView replaces the per-field view setters', async () => {
+test('criterion 7: updateView replaces the per-field view setters', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     const gone = [
@@ -892,9 +890,9 @@ test('criterion 7: setView replaces the per-field view setters', async () => {
       'setViewMode',
     ];
     for (const name of gone) assert.equal(name in ws, false, name);
-    ws.setView({ zoomScale: 150, viewMode: 2, rightToLeft: true });
+    ws.updateView({ zoomPct: 150, viewMode: 2, rightToLeft: true });
     const view = ws.getView();
-    assert.equal(view.zoomScale, 150);
+    assert.equal(view.zoomPct, 150);
     assert.equal(view.viewMode, 2);
     assert.equal(view.rightToLeft, true);
   });
@@ -918,29 +916,35 @@ function chartWorkbook(wb, f) {
   return { ws, id };
 }
 
-test('criterion 7: setChartLegend keeps the keys it omits', async () => {
+test('criterion 7: updateLegend keeps the keys it omits and setLegend replaces the whole legend', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
     ws.chart(id).setLegend({ position: f.ChartLegendPosition.Bottom, overlay: true, hiddenSeries: [1] });
-    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Right });
+    ws.chart(id).updateLegend({ position: f.ChartLegendPosition.Right });
     const legend = plain(ws.chart(id).getProperties().legend);
     assert.deepEqual(legend, { position: f.ChartLegendPosition.Right, overlay: true, hiddenSeries: [1] });
+    ws.chart(id).setLegend({ position: f.ChartLegendPosition.Top, overlay: false, hiddenSeries: [] });
+    assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
+      position: f.ChartLegendPosition.Top,
+      overlay: false,
+      hiddenSeries: [],
+    });
   });
 });
 
-test('criterion 7: setChartLegend with null removes the legend; a patch on no legend creates one', async () => {
+test('criterion 7: setLegend with null removes the legend; updateLegend on no legend creates one', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
     ws.chart(id).setLegend(null);
     assert.equal(ws.chart(id).getProperties().legend, null);
-    ws.chart(id).setLegend({ overlay: true });
+    ws.chart(id).updateLegend({ overlay: true });
     assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
       position: f.ChartLegendPosition.Right,
       overlay: true,
       hiddenSeries: [],
     });
     ws.chart(id).setLegend(null);
-    ws.chart(id).setLegend({});
+    ws.chart(id).updateLegend({});
     assert.deepEqual(plain(ws.chart(id).getProperties().legend), {
       position: f.ChartLegendPosition.Right,
       overlay: false,
@@ -949,20 +953,20 @@ test('criterion 7: setChartLegend with null removes the legend; a patch on no le
   });
 });
 
-test('criterion 7: setChartLegend rejects null for keys that cannot be cleared', async () => {
+test('criterion 7: updateLegend rejects null for keys that cannot be cleared', async () => {
   await withWorkbook((wb, f) => {
     const { ws, id } = chartWorkbook(wb, f);
-    assert.throws(() => ws.chart(id).setLegend({ position: null }), TYPE_ERROR);
-    assert.throws(() => ws.chart(id).setLegend({ hiddenSeries: null }), TYPE_ERROR);
+    assert.throws(() => ws.chart(id).updateLegend({ position: null }), TYPE_ERROR);
+    assert.throws(() => ws.chart(id).updateLegend({ hiddenSeries: null }), TYPE_ERROR);
   });
 });
 
-test('criterion 7: setHeaderFooter clears a text key given as null or the empty string', async () => {
+test('criterion 7: updateHeaderFooter clears a text key given as null or the empty string', async () => {
   for (const cleared of [null, '']) {
     await withWorkbook((wb) => {
       const ws = wb.sheet(0);
-      ws.setHeaderFooter({ oddHeader: '&CTitle', oddFooter: '&RPage' });
-      ws.setHeaderFooter({ oddHeader: cleared });
+      ws.updateHeaderFooter({ oddHeader: '&CTitle', oddFooter: '&RPage' });
+      ws.updateHeaderFooter({ oddHeader: cleared });
       const xml = ws.ooxml.getHeaderFooterXml() ?? '';
       assert.doesNotMatch(xml, /<oddHeader>/, String(cleared));
       assert.match(xml, /<oddFooter>&amp;RPage<\/oddFooter>/);
@@ -970,12 +974,12 @@ test('criterion 7: setHeaderFooter clears a text key given as null or the empty 
   }
 });
 
-test('criterion 7: setPrintOptions rejects null', async () => {
+test('criterion 7: updatePrintOptions rejects null', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    assert.throws(() => ws.setPrintOptions({ gridLines: null }), TYPE_ERROR);
-    ws.setPrintOptions({ gridLines: true });
-    ws.setPrintOptions({ horizontalCentered: true });
+    assert.throws(() => ws.updatePrintOptions({ gridLines: null }), TYPE_ERROR);
+    ws.updatePrintOptions({ gridLines: true });
+    ws.updatePrintOptions({ horizontalCentered: true });
     const xml = ws.ooxml.getPrintOptionsXml() ?? '';
     assert.match(xml, /gridLines="(1|true)"/);
     assert.match(xml, /horizontalCentered="(1|true)"/);
@@ -994,7 +998,7 @@ test('criterion 7: updatePivotField clears customName with null and ignores reco
     assert.equal(ws.pivot(pivot).listFields()[0].customName, null);
     // `axis` is a field of the getter's record the patch cannot set: ignored, not applied.
     const axis = ws.pivot(pivot).listFields()[0].axis;
-    ws.pivot(pivot).updateField(0, { axis: axis === f.PivotAxis.Row ? f.PivotAxis.Column : f.PivotAxis.Row });
+    ws.pivot(pivot).updateField(0, { axis: axis === f.PivotAxis.Row ? f.PivotAxis.Col : f.PivotAxis.Row });
     assert.equal(ws.pivot(pivot).listFields()[0].axis, axis);
   });
 });
@@ -1006,46 +1010,46 @@ test('criterion 7: every patch setter rejects a key that is neither in its patch
     const bogus = { bogus: 1 };
     const chart = ws.addChart({ kind: f.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3' });
     const calls = {
-      setIterative: () => wb.setIterative(bogus),
-      setPivotCacheOptions: () => wb.pivotCache(cacheId).setOptions(bogus),
-      setTableStyleDefaults: () => wb.setTableStyleDefaults(bogus),
-      setPageSetup: () => ws.setPageSetup(bogus),
-      setPageMargins: () => ws.setPageMargins(bogus),
-      setPrintOptions: () => ws.setPrintOptions(bogus),
-      setHeaderFooter: () => ws.setHeaderFooter(bogus),
-      setFormatDefaults: () => ws.setFormatDefaults(bogus),
-      setView: () => ws.setView(bogus),
-      setPivotGrandTotals: () => ws.pivot(pivot).setGrandTotals(bogus),
-      setPivotStyleInfo: () => ws.pivot(pivot).setStyleInfo(bogus),
-      setPivotOptions: () => ws.pivot(pivot).setOptions(bogus),
+      updateIterative: () => wb.updateIterative(bogus),
+      updatePivotCacheOptions: () => wb.pivotCache(cacheId).updateOptions(bogus),
+      updateTableStyleDefaults: () => wb.updateTableStyleDefaults(bogus),
+      updatePageSetup: () => ws.updatePageSetup(bogus),
+      updatePageMargins: () => ws.updatePageMargins(bogus),
+      updatePrintOptions: () => ws.updatePrintOptions(bogus),
+      updateHeaderFooter: () => ws.updateHeaderFooter(bogus),
+      updateFormatDefaults: () => ws.updateFormatDefaults(bogus),
+      updateView: () => ws.updateView(bogus),
+      updatePivotGrandTotals: () => ws.pivot(pivot).updateGrandTotals(bogus),
+      updatePivotStyleOptions: () => ws.pivot(pivot).updateStyleOptions(bogus),
+      updatePivotOptions: () => ws.pivot(pivot).updateOptions(bogus),
       updatePivotField: () => ws.pivot(pivot).updateField(0, bogus),
-      updatePivotItem: () => ws.pivot(pivot).updateItem(0, 0, bogus),
-      setChartLegend: () => chart.setLegend(bogus),
+      updatePivotFieldItem: () => ws.pivot(pivot).updateFieldItem(0, 0, bogus),
+      updateChartLegend: () => chart.updateLegend(bogus),
       updateThreadedComment: () => ws.updateThreadedComment('{00000000-0000-4000-8000-000000000001}', bogus),
     };
     for (const [name, call] of Object.entries(calls)) {
       assert.throws(call, (e) => TYPE_ERROR(e) && /has no field bogus/.test(e.message), name);
     }
     // An `undefined` value is an omitted key; a getter record passes back whole.
-    ws.setPageMargins({ bogus: undefined, left: 1 });
-    assert.equal(ws.getPageMargins().left, 1);
+    ws.updatePageMargins({ bogus: undefined, leftIn: 1 });
+    assert.equal(ws.getPageMargins().leftIn, 1);
     const fieldBefore = ws.pivot(pivot).listFields()[0];
     ws.pivot(pivot).updateField(0, fieldBefore);
     assert.deepEqual(ws.pivot(pivot).listFields()[0], fieldBefore);
   });
 });
 
-test('criterion 7: updatePivotItem changes the keys given and the per-field setters are gone', async () => {
+test('criterion 7: updatePivotFieldItem changes the keys given and the per-field setters are gone', async () => {
   await withWorkbook((wb, f) => {
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
     wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
     ws.pivot(pivot).addFieldItem(0, 'East');
-    ws.pivot(pivot).updateItem(0, 0, { caption: 'Eastern', visible: false });
+    ws.pivot(pivot).updateFieldItem(0, 0, { caption: 'Eastern', visible: false });
     const item = ws.pivot(pivot).getFieldItem(0, 0);
     assert.equal(item.caption, 'Eastern');
     assert.equal(item.visible, false);
-    ws.pivot(pivot).updateItem(0, 0, { caption: null });
+    ws.pivot(pivot).updateFieldItem(0, 0, { caption: null });
     assert.equal(ws.pivot(pivot).getFieldItem(0, 0).caption, null);
     for (const name of [
       'setPivotFieldCustomName',
@@ -1066,45 +1070,49 @@ test('criterion 7: updatePivotItem changes the keys given and the per-field sett
 
 // ---- Criterion 8: number-or-name references ------------------------------------
 
-function tableWorkbook(wb, name, displayName) {
+function tableWorkbook(wb, name) {
   const ws = wb.sheet(0);
   ws.setText(0, 0, 'A');
   ws.setText(0, 1, 'B');
-  return wb.addTable({
-    range: { sheet: 0, rect: rect(0, 0, 2, 1) },
+  return ws.addTable({
+    range: rect(0, 0, 2, 1),
     name,
-    displayName,
     columns: ['A', 'B'],
   });
 }
 
-test('criterion 8: removeTable resolves a displayName, a string that reads as a number included, and a number', async () => {
+test('criterion 8: Sheet.removeTable resolves a name, a numeric string and a position', async () => {
   await withWorkbook((wb, f) => {
-    tableWorkbook(wb, 'Sales', 'Sales');
-    expectCode(() => wb.removeTable('Missing'), f.StatusCode.NotFound);
-    expectCode(() => wb.removeTable(99), f.StatusCode.IndexOutOfRange);
-    assert.throws(() => wb.removeTable(true), TYPE_ERROR);
-    assert.equal(wb.listTables().length, 1);
-    wb.removeTable('Sales');
-    assert.equal(wb.listTables().length, 0);
+    tableWorkbook(wb, 'Sales');
+    const ws = wb.sheet(0);
+    expectCode(() => ws.removeTable('Missing'), f.StatusCode.NotFound);
+    expectCode(() => ws.removeTable(99), f.StatusCode.IndexOutOfRange);
+    assert.throws(() => ws.removeTable(true), TYPE_ERROR);
+    assert.equal(ws.listTables().length, 1);
+    ws.removeTable('Sales');
+    assert.equal(ws.listTables().length, 0);
   });
   await withWorkbook((wb, f) => {
-    tableWorkbook(wb, 'Sales', 'Sales');
-    expectCode(() => wb.removeTable('0'), f.StatusCode.NotFound);
-    assert.equal(wb.listTables().length, 1);
+    tableWorkbook(wb, 'Sales');
+    expectCode(() => wb.sheet(0).removeTable('0'), f.StatusCode.NotFound);
+    assert.equal(wb.sheet(0).listTables().length, 1);
   });
   await withWorkbook((wb) => {
-    tableWorkbook(wb, 'Sales', 'Sales');
-    wb.removeTable(0);
-    assert.equal(wb.listTables().length, 0);
+    tableWorkbook(wb, 'Sales');
+    wb.sheet(0).removeTable(0);
+    assert.equal(wb.sheet(0).listTables().length, 0);
   });
 });
 
-test('criterion 8: a table is found by displayName when name differs', async () => {
+test('criterion 8: a table has one name, which Sheet.table and Workbook.table both find', async () => {
   await withWorkbook((wb) => {
-    tableWorkbook(wb, 'InternalName', 'Shown');
-    wb.removeTable('Shown');
-    assert.equal(wb.listTables().length, 0);
+    const table = tableWorkbook(wb, 'InternalName');
+    assert.equal(table.name, 'InternalName');
+    assert.equal(wb.table('InternalName'), table);
+    assert.equal(wb.sheet(0).table('internalname'), table);
+    assert.equal('displayName' in table.getProperties(), false);
+    wb.sheet(0).removeTable('InternalName');
+    assert.equal(wb.sheet(0).listTables().length, 0);
   });
 });
 
@@ -1144,7 +1152,7 @@ test('criterion 8: removePivot resolves a name and takes the first of two equal 
   await withWorkbook((wb, f) => {
     const { cache } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    const second = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 10 });
+    const second = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 10 } });
     assert.equal(second.index, 1);
     ws.removePivot('Pivot1');
     const left = ws.listPivots();
@@ -1362,10 +1370,10 @@ test('criterion 13: setPivotFieldSort and addPivotFieldItem take an options obje
   });
 });
 
-test('criterion 13: setIterative validates maxChange and maxIterations up front', async () => {
+test('criterion 13: updateIterative validates maxChange and maxIterations up front', async () => {
   await withWorkbook((wb) => {
-    assert.throws(() => wb.setIterative({ maxChange: -1 }), RangeError);
-    assert.throws(() => wb.setIterative({ maxIterations: 1.5 }), TYPE_ERROR);
+    assert.throws(() => wb.updateIterative({ maxChange: -1 }), RangeError);
+    assert.throws(() => wb.updateIterative({ maxIterations: 1.5 }), TYPE_ERROR);
   });
 });
 

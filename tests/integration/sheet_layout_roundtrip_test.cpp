@@ -206,7 +206,7 @@ TEST(SheetVisibility, ShowingAVeryHiddenSheetClearsTheState) {
   src.sheet(0).mutable_view().set_visibility(SheetVisibility::kVeryHidden);
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);
 
-  EXPECT_EQ(StateAfterSettingVisibility(bytes, FM_SHEET_VISIBLE), "");
+  EXPECT_EQ(StateAfterSettingVisibility(bytes, FM_SHEET_VISIBILITY_VISIBLE), "");
 }
 
 TEST(SheetLayoutRoundTrip, ReShowingSheetRemovesLegacySheetPrTabHidden) {

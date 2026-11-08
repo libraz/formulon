@@ -24,6 +24,7 @@ import { registerMetadataLayout } from './run_metadata_layout.mjs';
 import { registerPivotRegressions } from './run_pivot_regressions.mjs';
 import { registerPositional } from './run_positional.mjs';
 import { registerSheetPivot } from './run_sheet_pivot.mjs';
+import { registerSheetScope } from './run_sheet_scope.mjs';
 import { registerSparseRows } from './run_sparse_rows.mjs';
 import { registerStyles } from './run_styles.mjs';
 import { registerSurfaceRecalc } from './run_surface_recalc.mjs';
@@ -120,6 +121,7 @@ async function run() {
   registerLayoutValidation(Module, test);
   registerDrawing(Module, test);
   registerSparseRows(Module, test);
+  registerSheetScope(Module, test);
   registerAdoption(factory, test);
 
   // ---- Run --------------------------------------------------------------

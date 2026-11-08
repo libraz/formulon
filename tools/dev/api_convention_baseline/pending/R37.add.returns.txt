@@ -7,13 +7,11 @@ ledger	cell_xf.add	add_returns	`add_returns` is missing; its collection is addre
 ledger	cf_rule.add	add_returns	`add_returns` is missing; its collection is addressed by index
 ledger	chart.add	add_returns	`add_returns` is missing; its collection is addressed by handle
 ledger	chart_series.add	add_returns	`add_returns` is missing
-ledger	column_break.add	add_returns	`add_returns` is missing; its collection is addressed by key
 ledger	data_table.add	add_returns	`add_returns` is missing; its collection is addressed by key
 ledger	dxf.add	add_returns	`add_returns` is missing; its collection is addressed by index
 ledger	fill.add	add_returns	`add_returns` is missing; its collection is addressed by index
 ledger	font.add	add_returns	`add_returns` is missing; its collection is addressed by index
 ledger	hyperlink.add	add_returns	`add_returns` is missing; its collection is addressed by key
-ledger	hyperlink.add_range	add_returns	`add_returns` is missing
 ledger	merge.add	add_returns	`add_returns` is missing; its collection is addressed by key
 ledger	num_fmt.add	add_returns	`add_returns` is missing; its collection is addressed by key
 ledger	person.add	add_returns	`add_returns` is missing; its collection is addressed by key
@@ -36,7 +34,6 @@ ledger	pivot_field_item.add_at	add_returns	`add_returns` is missing; its collect
 ledger	pivot_field_subtotal_fn.add	add_returns	`add_returns` is missing
 ledger	pivot_filter.add	add_returns	`add_returns` is missing; its collection is addressed by index
 ledger	protected_range.add	add_returns	`add_returns` is missing; its collection is addressed by index
-ledger	row_break.add	add_returns	`add_returns` is missing; its collection is addressed by key
 ledger	shape.add	add_returns	`add_returns` is missing; its collection is addressed by handle
 ledger	sheet.add	add_returns	`add_returns` is missing; its collection is addressed by handle
 ledger	slicer.add	add_returns	`add_returns` is missing; its collection is addressed by handle

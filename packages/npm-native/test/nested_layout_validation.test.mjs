@@ -40,8 +40,8 @@ test('sheet protection stops at a throwing nested getter before native mutation'
   const wb = addon.Workbook.createDefault();
   try {
     const before = protectionSnapshot(wb);
-    const spec = { enabled: true, algorithmName: 'SHA-512' };
-    Object.defineProperty(spec, 'formatRows', {
+    const spec = { algorithmName: 'SHA-512' };
+    Object.defineProperty(spec, 'allowFormatRows', {
       enumerable: true,
       get() {
         throw new Error('protection getter');
@@ -58,14 +58,14 @@ test('sheet format defaults stops at a throwing nested getter before native muta
   const wb = addon.Workbook.createDefault();
   try {
     const before = wb.getFormatDefaults(0);
-    const spec = { defaultColWidth: 12.5 };
-    Object.defineProperty(spec, 'defaultRowHeight', {
+    const spec = { defaultColWidthChars: 12.5 };
+    Object.defineProperty(spec, 'defaultRowHeightPt', {
       enumerable: true,
       get() {
         throw new Error('format getter');
       },
     });
-    assert.throws(() => wb.setFormatDefaults(0, spec), /format getter/);
+    assert.throws(() => wb.updateFormatDefaults(0, spec), /format getter/);
     assert.deepEqual(wb.getFormatDefaults(0), before);
   } finally {
     wb.dispose();

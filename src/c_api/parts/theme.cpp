@@ -199,7 +199,7 @@ extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int3
   return finish_status(wb->workbook().set_theme_script_font(major != 0, script, typeface));
 }
 
-extern "C" fm_status_t fm_workbook_clear_theme(fm_workbook_t* wb) {
+extern "C" fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument();
@@ -224,7 +224,7 @@ extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const 
   }
   formulon::ColorSpec model;
   model.kind = static_cast<formulon::ColorSpec::Kind>(spec->kind);
-  model.rgb = spec->rgb;
+  model.rgb = spec->argb;
   model.theme = spec->theme;
   model.indexed = spec->indexed;
   if (model.kind == formulon::ColorSpec::Kind::kTheme) {

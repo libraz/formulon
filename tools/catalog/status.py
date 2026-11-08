@@ -55,7 +55,7 @@ LAZY_ENTRY_RE = re.compile(r'\{\s*"([A-Z_][A-Z0-9_.]*)"\s*,\s*&eval_')
 # future additions are picked up without edits here.
 SPECIAL_FORMS_BLOCK_RE = re.compile(r"kSpecialForms\s*\[\s*\]\s*=\s*\{(.*?)\n\s*\};", re.DOTALL)
 SPECIAL_FORMS_NAME_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,')
-C_API_AVAILABILITY_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*FM_FUNCTION_([A-Z_]+)\s*\}')
+C_API_AVAILABILITY_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*FM_FUNCTION_AVAILABILITY_([A-Z_]+)\s*\}')
 
 
 # ---- ANSI helpers --------------------------------------------------------

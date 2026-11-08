@@ -110,8 +110,8 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
   item.set("priority", rule.priority);
   item.set("stopIfTrue", rule.stop_if_true != 0);
   item.set("ranges", cell_rects_to_val(rule.ranges, rule.range_count));
-  if (rule.dxf_id_engaged != 0) {
-    item.set("dxfId", rule.dxf_id);
+  if (rule.dxf_index_engaged != 0) {
+    item.set("dxfIndex", rule.dxf_index);
   }
   if (rule.formula1 != nullptr) {
     item.set("formula1", std::string(rule.formula1));
@@ -120,7 +120,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
     item.set("formula2", std::string(rule.formula2));
   }
   if (rule.op_engaged != 0) {
-    item.set("op", static_cast<uint32_t>(rule.op));
+    item.set("operator", static_cast<uint32_t>(rule.op));
   }
   if (rule.rank_engaged != 0) {
     item.set("rank", rule.rank);
@@ -209,7 +209,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
       for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
         emscripten::val icon = emscripten::val::object();
         js_set_cstr(icon, "iconSet", rule.icon_set_icons[j].icon_set);
-        icon.set("iconId", rule.icon_set_icons[j].icon_id);
+        icon.set("iconIndex", rule.icon_set_icons[j].icon_index);
         icons.set(j, icon);
       }
       icon_set.set("icons", icons);
@@ -272,19 +272,19 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   rule.type = reader.u8(v, "type", 0U, "rule.type");
   rule.priority = reader.i32(v, "priority", 0, "rule.priority");
   rule.stop_if_true = reader.boolean(v, "stopIfTrue", false, "rule.stopIfTrue") ? 1 : 0;
-  const emscripten::val dxf_id = reader.value(v, "dxfId", "rule.dxfId");
-  if (js_value_present(dxf_id)) {
-    rule.dxf_id_engaged = 1;
-    rule.dxf_id = reader.u32_value(dxf_id, 0U, "rule.dxfId");
+  const emscripten::val dxf_index = reader.value(v, "dxfIndex", "rule.dxfIndex");
+  if (js_value_present(dxf_index)) {
+    rule.dxf_index_engaged = 1;
+    rule.dxf_index = reader.u32_value(dxf_index, 0U, "rule.dxfIndex");
   }
   rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.range_count = ranges_buf.size();
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
-  const emscripten::val op = reader.value(v, "op", "rule.op");
+  const emscripten::val op = reader.value(v, "operator", "rule.operator");
   if (js_value_present(op)) {
     rule.op_engaged = 1;
-    rule.op = reader.u8_value(op, 0U, "rule.op");
+    rule.op = reader.u8_value(op, 0U, "rule.operator");
   }
   const emscripten::val rank = reader.value(v, "rank", "rule.rank");
   if (js_value_present(rank)) {
@@ -407,7 +407,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
         const emscripten::val icon = reader.array_element(icons, i, "iconSet.icons[]");
         icon_set_icons.push_back(
             fm_cf_icon_t{cfvo_strings.emplace(reader.string(icon, "iconSet", "iconSet.icons[].iconSet")),
-                         reader.i32(icon, "iconId", 0, "iconSet.icons[].iconId")});
+                         reader.i32(icon, "iconIndex", 0, "iconSet.icons[].iconIndex")});
       }
       rule.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
       rule.icon_set_icon_count = static_cast<uint32_t>(icon_set_icons.size());

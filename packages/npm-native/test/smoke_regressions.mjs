@@ -6,7 +6,7 @@ test('a nested recalc from the iterative progress callback throws on serial and 
   const runOuterRecalc = (recalcOuter) => {
     const wb = mod.Workbook.createDefault();
     try {
-      wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+      wb.updateIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
       wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
       let calls = 0;
       let nested;
@@ -42,7 +42,7 @@ test('a throwing iterative progress callback aborts the solve and its exception 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+    wb.updateIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     let calls = 0;
     const thrown = new Error('callback failure');
@@ -163,8 +163,8 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
       [1, 1, 1],
     );
     assert.equal(byType.get(2).colorScale.colors.length, 3);
-    assert.equal(byType.get(2).colorScale.colors[2].rgb, 0xff63be7b);
-    assert.equal(byType.get(3).dataBar.fill.rgb, 0xff0070c0);
+    assert.equal(byType.get(2).colorScale.colors[2].argb, 0xff63be7b);
+    assert.equal(byType.get(3).dataBar.fill.argb, 0xff0070c0);
 
     const saved = wb.save();
     bytes = saved;
@@ -182,7 +182,7 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   }
 });
 
-test('getIterative reads back what setIterative stored', async () => {
+test('getIterative reads back what updateIterative stored', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
@@ -191,7 +191,7 @@ test('getIterative reads back what setIterative stored', async () => {
     assert.equal(typeof initial.maxIterations, 'number');
     assert.equal(typeof initial.maxChange, 'number');
 
-    wb.setIterative({ enabled: true, maxIterations: 42, maxChange: 0.25 });
+    wb.updateIterative({ enabled: true, maxIterations: 42, maxChange: 0.25 });
     const enabled = wb.getIterative();
     assert.equal(enabled.enabled, true);
     assert.equal(enabled.maxIterations, 42);
@@ -199,7 +199,7 @@ test('getIterative reads back what setIterative stored', async () => {
 
     // The cap and threshold survive switching iteration back off, which is
     // what lets a host render the dialog with the stored values.
-    wb.setIterative({ enabled: false, maxIterations: 42, maxChange: 0.25 });
+    wb.updateIterative({ enabled: false, maxIterations: 42, maxChange: 0.25 });
     const disabled = wb.getIterative();
     assert.equal(disabled.enabled, false);
     assert.equal(disabled.maxIterations, 42);
@@ -209,7 +209,7 @@ test('getIterative reads back what setIterative stored', async () => {
   }
 });
 
-test('addValidation defaults allowBlank to false', async () => {
+test('addValidation defaults every omitted boolean to true and keeps an explicit false', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
@@ -218,21 +218,33 @@ test('addValidation defaults allowBlank to false', async () => {
       type: 3,
       formula1: '"a,b"',
     });
+    wb.sheet(0).addValidation({
+      ranges: [{ firstRow: 1, firstCol: 0, lastRow: 1, lastCol: 0 }],
+      type: 3,
+      allowBlank: false,
+      showInputMessage: false,
+      showErrorMessage: false,
+      showInCellDropdown: false,
+      formula1: '"a,b"',
+    });
     const list = wb.sheet(0).listValidations();
-    assert.equal(list.length, 1);
-    assert.equal(list[0].allowBlank, false);
+    assert.equal(list.length, 2);
+    for (const key of ['allowBlank', 'showInputMessage', 'showErrorMessage', 'showInCellDropdown']) {
+      assert.equal(list[0][key], true, key);
+      assert.equal(list[1][key], false, key);
+    }
   } finally {
     wb.dispose();
   }
 });
 
-test('getCellStyleXf reports xfId alongside the cell-format fields', async () => {
+test('getCellStyleXf reports styleXfIndex alongside the cell-format fields', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
     const read = wb.ooxml.getCellStyleXf(0);
     // A named-style xf is its own parent, so it never inherits one.
-    assert.equal(read.xfId, 0);
+    assert.equal(read.styleXfIndex, 0);
     // The record shape matches `getCellXf`, which the documented
     // read / edit / addCellStyleXf round-trip depends on.
     const cellXf = wb.ooxml.getCellXf(0);
@@ -263,7 +275,7 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     cache.setRecordValue(second, region, null);
     cache.setRecordValue(second, amount, 200);
 
-    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 0 });
+    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId: cache.cacheId, anchor: { row: 0, col: 0 } });
     const regionField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
     const amountField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
     wb.sheet(0).pivot(pivot).setRowFieldOrder([regionField]);
@@ -286,7 +298,7 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     assert.equal(sumDataCells(), 300);
 
     wb.sheet(0).pivot(pivot).addFieldItem(regionField, 'North');
-    wb.sheet(0).pivot(pivot).addFieldSharedItem(regionField, 1, { visible: false });
+    wb.sheet(0).pivot(pivot).addFieldItem(regionField, { cacheIndex: 1 }, { visible: false });
     assert.equal(sumDataCells(), 100);
   } finally {
     wb.dispose();
@@ -414,7 +426,7 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
     assert.throws(
-      () => wb.sheet(0).setView({ visibility: mod.SheetVisibility.Hidden }),
+      () => wb.sheet(0).updateView({ visibility: mod.SheetVisibility.Hidden }),
       (e) => isFormulonError(e, 2),
     );
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
@@ -427,26 +439,26 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
     // A second sheet lets the first one change state, but removing the first
     // while the second is hidden would leave no visible sheet.
     wb.addSheet('Second');
-    wb.sheet(1).setView({ visibility: mod.SheetVisibility.Hidden });
+    wb.sheet(1).updateView({ visibility: mod.SheetVisibility.Hidden });
     assert.throws(
       () => wb.removeSheet(0),
       (e) => isFormulonError(e, 2),
     );
     assert.equal(wb.listSheets().length, 2);
-    wb.sheet(1).setView({ visibility: mod.SheetVisibility.Visible });
+    wb.sheet(1).updateView({ visibility: mod.SheetVisibility.Visible });
 
-    wb.sheet(0).setView({ visibility: mod.SheetVisibility.VeryHidden });
+    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.VeryHidden });
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
 
     // Demotion and showing are explicit states too.
-    wb.sheet(0).setView({ visibility: mod.SheetVisibility.Hidden });
+    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.Hidden });
     assert.equal(read().visibility, mod.SheetVisibility.Hidden);
-    wb.sheet(0).setView({ visibility: mod.SheetVisibility.Visible });
+    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.Visible });
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
 
     // An unknown ordinal is refused and leaves the sheet alone.
-    wb.sheet(0).setView({ visibility: mod.SheetVisibility.VeryHidden });
-    assert.throws(() => wb.sheet(0).setView({ visibility: 3 }), isFormulonError);
+    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.VeryHidden });
+    assert.throws(() => wb.sheet(0).updateView({ visibility: 3 }), isFormulonError);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
   } finally {
     wb.dispose();

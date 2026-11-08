@@ -281,7 +281,7 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
 }
 
 extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                             uint32_t col, uint32_t font_id, uint32_t type,
+                                                             uint32_t col, size_t font_index, uint32_t type,
                                                              uint32_t alignment) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
@@ -300,16 +300,16 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
   if (alignment > kMaxOrdinal) {
     return invalid_argument("alignment out of range", "alignment=" + std::to_string(alignment));
   }
-  constexpr uint32_t kMaxFontId = 0xFFFFU;
-  if (font_id > kMaxFontId) {
-    return invalid_argument("font_id out of range", "font_id=" + std::to_string(font_id));
+  constexpr size_t kMaxFontIndex = 0xFFFFU;
+  if (font_index > kMaxFontIndex) {
+    return invalid_argument("font_index out of range", "font_index=" + std::to_string(font_index));
   }
 
   wb->workbook()
       .sheet(sheet_index)
       .set_cell_phonetic_props(
           row, col,
-          formulon::PhoneticProperties{static_cast<std::uint16_t>(font_id), static_cast<std::uint8_t>(type),
+          formulon::PhoneticProperties{static_cast<std::uint16_t>(font_index), static_cast<std::uint8_t>(type),
                                        static_cast<std::uint8_t>(alignment)});
   wb->workbook().mark_cell_dependents_dirty(sheet_index, row, col);
   return 0;
@@ -485,7 +485,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run(const fm_workbook_t* wb, s
 }
 
 extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                             uint32_t col, uint32_t* out_font_id, uint32_t* out_type,
+                                                             uint32_t col, size_t* out_font_index, uint32_t* out_type,
                                                              uint32_t* out_alignment) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
@@ -496,8 +496,8 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t
   // run-count reader: "no annotation" and "no cell" are the same answer to
   // a host walking a range.
   const formulon::PhoneticProperties props = cell == nullptr ? formulon::PhoneticProperties{} : cell->phonetic_props;
-  if (out_font_id != nullptr) {
-    *out_font_id = props.font_id;
+  if (out_font_index != nullptr) {
+    *out_font_index = props.font_id;
   }
   if (out_type != nullptr) {
     *out_type = props.type;

@@ -122,14 +122,14 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
 test('iterative caps use the signed int32 contract', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    wb.setIterative({ enabled: true, maxIterations: 2 ** 31 - 1, maxChange: 0.1 });
-    wb.setIterative({ enabled: false, maxIterations: 0 });
+    wb.updateIterative({ enabled: true, maxIterations: 2 ** 31 - 1, maxChange: 0.1 });
+    wb.updateIterative({ enabled: false, maxIterations: 0 });
     assert.equal(wb.getIterative().maxIterations, 1, 'a zero cap is the native clamp of 1');
     for (const value of [2 ** 31, -1]) {
-      assert.throws(() => wb.setIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
+      assert.throws(() => wb.updateIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
     }
     for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, '5', null]) {
-      assert.throws(() => wb.setIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
+      assert.throws(() => wb.updateIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
     }
     assert.equal(wb.getIterative().maxIterations, 1);
   } finally {
@@ -145,7 +145,7 @@ test('sheet, structural, enum, and read positions reject non-number primitives',
     assert.throws(() => wb.setCalcMode(1.5), RangeError);
     assert.throws(() => wb.getValue(Symbol('sheet'), 0, 0), TypeError);
     assert.throws(() => addon.localizeFunctionName('SUM', 1), TypeError);
-    assert.throws(() => wb.resolveColor({ kind: 1, rgb: 0 }, 2 ** 31), RangeError);
+    assert.throws(() => wb.resolveColor({ kind: 1, argb: 0 }, 2 ** 31), RangeError);
     assert.throws(
       () => wb.getCellsInRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Symbol('cursor')),
       TypeError,
@@ -178,9 +178,9 @@ test('paging cursor and limit reject values outside native integer ranges', () =
 test('missing required positional arguments are rejected; optional ones keep their defaults', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.throws(() => wb.setIterative(), TypeError);
+    assert.throws(() => wb.updateIterative(), TypeError);
     assert.throws(() => wb.setVisibility(0), TypeError);
-    assert.equal(wb.getIterative().maxIterations, 100, 'the rejected setIterative must not store a cap');
+    assert.equal(wb.getIterative().maxIterations, 100, 'the rejected updateIterative must not store a cap');
     addon.getFunctionMetadata('SUM');
     const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, undefined, undefined));

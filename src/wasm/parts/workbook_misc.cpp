@@ -60,7 +60,7 @@ emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t ro
       break;
     }
     emscripten::val item = emscripten::val::object();
-    item.set("sheet", n.sheet);
+    item.set("sheet", n.sheet_index);
     item.set("row", n.row);
     item.set("col", n.col);
     arr.set(static_cast<uint32_t>(i), item);
@@ -101,7 +101,7 @@ emscripten::val function_metadata(const std::string& name) {
   }
   o.set("availability", static_cast<uint32_t>(md.availability));
   if (md.signature_template != nullptr) {
-    o.set("signatureTemplate", std::string(md.signature_template));
+    o.set("signature", std::string(md.signature_template));
   }
   if (md.description != nullptr) {
     o.set("description", std::string(md.description));

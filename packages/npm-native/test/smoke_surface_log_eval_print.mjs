@@ -1,8 +1,8 @@
 import test from 'node:test';
 import { assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readFile } from './smoke_support.mjs';
 
-const rgb = (value) => ({ kind: 1, rgb: value, theme: 0, tint: 0, indexed: 0 });
-const NO_COLOR = { kind: 0, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+const rgb = (value) => ({ kind: 1, argb: value, theme: 0, tint: 0, indexed: 0 });
+const NO_COLOR = { kind: 0, argb: 0, theme: 0, tint: 0, indexed: 0 };
 
 test('the Formulon object exposes Workbook + evaluateFormula + getVersion', async () => {
   const mod = await getModule();
@@ -315,9 +315,10 @@ test('paginate exposes page geometry', async () => {
   assert.ok(result.pageCount >= 2, `pageCount: ${result.pageCount}`);
   assert.deepEqual(result.printArea, []);
   assert.ok(result.rowBreaks.length > 0);
+  const breakRows = result.rowBreaks.map((b) => b.row);
   assert.deepEqual(
-    result.rowBreaks,
-    [...new Set(result.rowBreaks)].sort((a, b) => a - b),
+    breakRows,
+    [...new Set(breakRows)].sort((a, b) => a - b),
   );
   assert.deepEqual(result.columnBreaks, []);
 });
@@ -343,15 +344,15 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
   wb.sheet(0).ooxml.setPageSetupXml(null);
   assert.equal(wb.sheet(0).ooxml.getPageSetupXml(), null);
   const cleared = wb.sheet(0).getPageSetup();
-  assert.equal(cleared.scale, 100);
-  assert.equal(cleared.scaleStated, false);
+  assert.equal(cleared.scalePct, 100);
+  assert.equal(cleared.scalePctStated, false);
 });
 
 test('print settings: typed patch touches only the keys it states', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).ooxml.setPageSetupXml('<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>');
-  wb.sheet(0).setPageSetup({ orientation: mod.PageOrientation.Landscape });
+  wb.sheet(0).updatePageSetup({ orientation: mod.PageOrientation.Landscape });
 
   const xml = wb.sheet(0).ooxml.getPageSetupXml();
   assert.match(xml, /orientation="landscape"/);
@@ -365,27 +366,27 @@ test('print settings: typed patch touches only the keys it states', async () => 
   assert.equal(read.paperSize, 9);
   assert.equal(read.orientationStated, true);
 
-  wb.sheet(0).setPageMargins({ left: 0.25, top: 1.5 });
+  wb.sheet(0).updatePageMargins({ leftIn: 0.25, topIn: 1.5 });
   const margins = wb.sheet(0).getPageMargins();
-  assert.equal(margins.left, 0.25);
-  assert.equal(margins.leftStated, true);
+  assert.equal(margins.leftIn, 0.25);
+  assert.equal(margins.leftInStated, true);
   // An unstated margin reports the OOXML default with its flag clear.
-  assert.equal(margins.right, 0.7);
-  assert.equal(margins.rightStated, false);
+  assert.equal(margins.rightIn, 0.7);
+  assert.equal(margins.rightInStated, false);
 });
 
 test('print settings: fitToPage keeps the rest of sheetPr', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).ooxml.setSheetPrXml('<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>');
-  wb.sheet(0).setPageSetup({ fitToPage: true });
+  wb.sheet(0).updatePageSetup({ fitToPage: true });
   const xml = wb.sheet(0).ooxml.getSheetPrXml();
   assert.match(xml, /codeName="Sheet1"/);
   assert.match(xml, /<tabColor rgb="FFFF0000"\/>/);
   assert.match(xml, /fitToPage="true"/);
   assert.equal(wb.sheet(0).getPageSetup().fitToPage, true);
   // fitToPage: false removes the attribute and the stated flag reads false.
-  wb.sheet(0).setPageSetup({ fitToPage: false });
+  wb.sheet(0).updatePageSetup({ fitToPage: false });
   assert.doesNotMatch(wb.sheet(0).ooxml.getSheetPrXml(), /fitToPage/);
   assert.equal(wb.sheet(0).getPageSetup().fitToPage, false);
   assert.equal(wb.sheet(0).getPageSetup().fitToPageStated, false);
@@ -394,7 +395,7 @@ test('print settings: fitToPage keeps the rest of sheetPr', async () => {
 test('print settings: header/footer sections take decoded text', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setHeaderFooter({ oddHeader: '&C\u5e33\u7968', oddFooter: '&R&P / &N' });
+  wb.sheet(0).updateHeaderFooter({ oddHeader: '&C\u5e33\u7968', oddFooter: '&R&P / &N' });
   // The codes reach the file escaped; a parser hands back `&C...`.
   assert.equal(
     wb.sheet(0).ooxml.getHeaderFooterXml(),
@@ -402,12 +403,12 @@ test('print settings: header/footer sections take decoded text', async () => {
   );
 
   // Omitting a key leaves that section alone; an empty string or null clears it.
-  wb.sheet(0).setHeaderFooter({ oddFooter: '' });
+  wb.sheet(0).updateHeaderFooter({ oddFooter: '' });
   assert.equal(
     wb.sheet(0).ooxml.getHeaderFooterXml(),
     '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>',
   );
-  wb.sheet(0).setHeaderFooter({ oddHeader: null });
+  wb.sheet(0).updateHeaderFooter({ oddHeader: null });
   assert.doesNotMatch(wb.sheet(0).ooxml.getHeaderFooterXml() ?? '', /oddHeader|oddFooter/);
 });
 
@@ -432,19 +433,40 @@ test('print settings: print area, titles and manual breaks', async () => {
   wb.sheet(0).setPrintTitles(null);
   assert.equal(wb.sheet(0).getPrintTitles(), null);
 
-  wb.sheet(0).addRowBreak(40, true);
-  wb.sheet(0).addRowBreak(10, true);
+  wb.sheet(0).setRowBreak(40, { manual: true });
+  wb.sheet(0).setRowBreak(10, { manual: true });
   const breaks = wb.sheet(0).listRowBreaks();
-  // Kept sorted by index regardless of insertion order.
+  // Kept sorted by row regardless of insertion order.
   assert.deepEqual(
-    breaks.map((b) => b.id),
+    breaks.map((b) => b.row),
     [10, 40],
   );
-  assert.equal(breaks[0].max, 16383);
+  assert.equal(breaks[0].first, 0);
+  assert.equal(breaks[0].last, 16383);
   assert.equal(breaks[0].manual, true);
 
-  wb.sheet(0).removeRowBreak(10);
+  // A set on an existing row replaces its span and flag; null removes it, and removing an absent break is a no-op.
+  wb.sheet(0).setRowBreak(10, { first: 2, last: 5, manual: false });
+  const replaced = wb.sheet(0).listRowBreaks();
+  assert.equal(replaced.length, 2);
+  assert.deepEqual(
+    { row: replaced[0].row, first: replaced[0].first, last: replaced[0].last, manual: replaced[0].manual },
+    { row: 10, first: 2, last: 5, manual: false },
+  );
+  wb.sheet(0).setRowBreak(10, null);
   assert.equal(wb.sheet(0).listRowBreaks().length, 1);
+  wb.sheet(0).setRowBreak(10, null);
+  assert.equal(wb.sheet(0).listRowBreaks().length, 1);
+
+  wb.sheet(0).setColumnBreak(3, { first: 0, last: 99 });
+  const columnBreaks = wb.sheet(0).listColumnBreaks();
+  assert.deepEqual(
+    columnBreaks.map((b) => [b.col, b.first, b.last, b.manual]),
+    [[3, 0, 99, true]],
+  );
+  wb.sheet(0).setColumnBreak(3, null);
+  assert.equal(wb.sheet(0).listColumnBreaks().length, 0);
+
   wb.sheet(0).clearBreaks();
   assert.equal(wb.sheet(0).listRowBreaks().length, 0);
 });
@@ -458,7 +480,7 @@ test('print settings: a change is visible to paginate without a save cycle', asy
     }
   }
   const portrait = wb.sheet(0).getPagination().pageCount;
-  wb.sheet(0).setPageSetup({ orientation: mod.PageOrientation.Landscape });
+  wb.sheet(0).updatePageSetup({ orientation: mod.PageOrientation.Landscape });
   assert.notEqual(wb.sheet(0).getPagination().pageCount, portrait);
 });
 

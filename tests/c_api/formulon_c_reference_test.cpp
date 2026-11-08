@@ -42,7 +42,7 @@ void ExpectNotReference(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0) {
   EXPECT_EQ(out.valid, 0) << text;
   fm_parse_error_t error = FM_STRUCT_INIT(fm_parse_error_t);
   ASSERT_EQ(fm_get_last_parse_error(&error), 0) << text;
-  EXPECT_EQ(error.code, FM_PARSE_ERROR_INVALID_REFERENCE) << text;
+  EXPECT_EQ(error.code, FM_PARSE_ERROR_CODE_INVALID_REFERENCE) << text;
   EXPECT_EQ(error.start, 0U) << text;
   EXPECT_EQ(error.end, static_cast<uint32_t>(std::string(text).size())) << text;
 }

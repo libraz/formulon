@@ -1,5 +1,5 @@
 // Runs the shared conformance tables of tools/api against the staged native package:
-// cell_format_cases.json (setCellFormat / getCellFormat) and to_native_cases.json (toNative).
+// cell_format_cases.json (updateCellFormat / getCellFormat) and to_native_cases.json (toNative).
 // An empty table fails.
 
 import { readFileSync } from 'node:fs';
@@ -32,10 +32,10 @@ const ENUM_KEYS = new Map([
 ]);
 // The same keys on a CellXf read through getCellXf.
 const XF_ENUM_KEYS = new Map([
-  ['horizontalAlign', 'HorizontalAlign'],
-  ['verticalAlign', 'VerticalAlign'],
+  ['horizontal', 'HorizontalAlign'],
+  ['vertical', 'VerticalAlign'],
 ]);
-const COLOR_KEYS = new Set(['color', 'fg', 'bg']);
+const COLOR_KEYS = new Set(['color', 'foreground', 'background']);
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -66,7 +66,7 @@ function assertReads(mod, actual, expected, label, trail = [], table = ENUM_KEYS
     const dotted = [...trail, key].join('.');
     const got = actual[key];
     if (COLOR_KEYS.has(key) && typeof want === 'string') {
-      assert.equal(got.rgb >>> 0, argb(want), where);
+      assert.equal(got.argb >>> 0, argb(want), where);
     } else if (table.has(dotted) && typeof want === 'string') {
       assert.equal(got, mod[table.get(dotted)][want], where);
     } else if (isPlainObject(want)) {
@@ -103,7 +103,7 @@ for (const spec of FORMAT_TABLE.cases) {
     const mod = await getModule();
     const { wb, ws } = buildSheet(mod);
     try {
-      for (const step of spec.before ?? []) ws.setCellFormat(step.range, toInput(mod, step.patch));
+      for (const step of spec.before ?? []) ws.updateCellFormat(step.range, toInput(mod, step.patch));
 
       const patch = spec.patch_from ? ws.getCellFormat(spec.patch_from) : toInput(mod, spec.patch);
       const watched = spec.unchanged ?? [];
@@ -112,26 +112,26 @@ for (const spec of FORMAT_TABLE.cases) {
       const xfCount = wb.ooxml.listCellXfs().length;
 
       if (spec.throws) {
-        assert.throws(() => ws.setCellFormat(spec.range, patch), expectedThrow(mod, spec.throws));
+        assert.throws(() => ws.updateCellFormat(spec.range, patch), expectedThrow(mod, spec.throws));
         assert.equal(wb.ooxml.listCellXfs().length, xfCount, 'a refused patch adds no XF');
         assert.deepEqual(snapshot(), beforeCells, 'a refused patch changes nothing');
         return;
       }
 
-      ws.setCellFormat(spec.range, patch);
+      ws.updateCellFormat(spec.range, patch);
 
       for (const [cell, expected] of Object.entries(spec.expect ?? {})) {
         assertReads(mod, ws.getCellFormat(cell), expected, `${spec.id} ${cell}`);
       }
       for (const [cell, expected] of Object.entries(spec.expect_xf ?? {})) {
-        const xf = wb.ooxml.getCellXf(ws.getEffectiveStyle(cell).xfIndex);
+        const xf = wb.ooxml.getCellXf(ws.ooxml.getEffectiveStyle(cell).xfIndex);
         assertReads(mod, xf, expected, `${spec.id} ${cell} xf`, [], XF_ENUM_KEYS);
       }
       assert.deepEqual(snapshot(), beforeCells, 'cells outside the range keep their format');
 
       if (spec.idempotent) {
         const count = wb.ooxml.listCellXfs().length;
-        ws.setCellFormat(spec.range, patch);
+        ws.updateCellFormat(spec.range, patch);
         assert.equal(wb.ooxml.listCellXfs().length, count, 'applying the patch twice adds no XF');
       }
     } finally {

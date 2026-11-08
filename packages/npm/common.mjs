@@ -59,13 +59,13 @@ export const PivotShowValuesAs = Object.freeze({
 export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
 export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
 export const PIVOT_VALUES_FIELD = -2;
-export const PivotFilterType = Object.freeze({
-  ValueTop10: 0,
+export const PivotFilterKind = Object.freeze({
+  ValueTopCount: 0,
   ValueGreaterThan: 1,
   ValueBetween: 2,
   LabelContains: 3,
   LabelBeginsWith: 4,
-  LabelDate: 5,
+  DateBetween: 5,
   ValueEqual: 6,
   ValueNotEqual: 7,
   ValueGreaterThanOrEqual: 8,
@@ -141,7 +141,7 @@ export const PivotDatePeriod = Object.freeze({
 export const PivotCalendar = Object.freeze({ Gregorian: 0, Japanese: 1 });
 export const PivotSortOrder = Object.freeze({ Descending: 0, Ascending: 1, Manual: 2 });
 export const PivotReportLayout = Object.freeze({ Compact: 0, Tabular: 1, Outline: 2 });
-export const PivotFilterValueKind = Object.freeze({ Int: 0, Double: 1, Text: 2 });
+export const PivotFilterOperandKind = Object.freeze({ Int: 0, Double: 1, Text: 2 });
 export const CfMatchKind = Object.freeze({ DifferentialFormat: 0, ColorScale: 1, DataBar: 2, IconSet: 3 });
 export const CfDataBarDirection = Object.freeze({ Context: 0, LeftToRight: 1, RightToLeft: 2 });
 export const CfDataBarAxisPosition = Object.freeze({ Automatic: 0, Middle: 1, None: 2 });
@@ -490,7 +490,27 @@ export const ChartPlotType = Object.freeze({
   Stock: 13,
   Surface: 14,
   Surface3D: 15,
-  Chartex: 16,
+  Extended: 16,
+});
+export const ChartExtendedLayout = Object.freeze({
+  BoxWhisker: 0,
+  ClusteredColumn: 1,
+  Funnel: 2,
+  ParetoLine: 3,
+  RegionMap: 4,
+  Sunburst: 5,
+  Treemap: 6,
+  Waterfall: 7,
+});
+export const ChartRole = Object.freeze({
+  Name: 0,
+  Categories: 1,
+  Values: 2,
+  X: 3,
+  Y: 4,
+  Size: 5,
+  Title: 6,
+  AxisTitle: 7,
 });
 export const ChartInsertKind = Object.freeze({ Column: 0, Bar: 1, Line: 2, Area: 3, Pie: 4, Scatter: 5, Doughnut: 6 });
 export const ChartGrouping = Object.freeze({ Clustered: 0, Stacked: 1, PercentStacked: 2, Standard: 3 });
@@ -657,15 +677,15 @@ export const StatusCode = Object.freeze({
  * `getFunctionMetadata()` result.
  *
  * This is a pure, side-effect-free helper: it does not touch the engine.
- * The engine returns `signatureTemplate` / `description` as
+ * The engine returns `signature` / `description` as
  * `undefined`; a host injects display metadata (see
  * `docs/function-metadata-schema.md`) and merges it here at display time.
  * The metadata is display-only and never affects formula parsing or
  * evaluation.
  *
  * Field precedence (first non-nullish wins):
- *   - signatureTemplate: `entry.localized[locale].signature` ->
- *     `entry.signature` -> `base.signatureTemplate`
+ *   - signature: `entry.localized[locale].signature` ->
+ *     `entry.signature` -> `base.signature`
  *   - description: `entry.localized[locale].description` ->
  *     `entry.description` -> `base.description`
  *   - localizedName: `entry.aliases[locale]` -> `base.name`
@@ -685,11 +705,11 @@ export function mergeFunctionMetadata(base, entry, locale) {
     return base;
   }
   const localized = (entry.localized && entry.localized[locale]) || {};
-  const signatureTemplate = localized.signature ?? entry.signature ?? base.signatureTemplate;
+  const signature = localized.signature ?? entry.signature ?? base.signature;
   const description = localized.description ?? entry.description ?? base.description;
   const aliasName = entry.aliases && entry.aliases[locale];
   const localizedName = aliasName ?? base.name;
-  return { ...base, signatureTemplate, description, localizedName };
+  return { ...base, signature, description, localizedName };
 }
 
 /**
@@ -795,12 +815,12 @@ export const FORMULON_MEMBERS = Object.freeze([
   'PivotAxis',
   'PivotAggregation',
   'PivotShowValuesAs',
-  'PivotFilterType',
+  'PivotFilterKind',
   'PivotDatePeriod',
   'PivotCalendar',
   'PivotSortOrder',
   'PivotReportLayout',
-  'PivotFilterValueKind',
+  'PivotFilterOperandKind',
   'CfMatchKind',
   'CfRuleType',
   'CfOperator',
@@ -838,6 +858,8 @@ export const FORMULON_MEMBERS = Object.freeze([
   'SparklineAxisType',
   'SparklineEmptyCells',
   'ChartPlotType',
+  'ChartExtendedLayout',
+  'ChartRole',
   'ChartInsertKind',
   'ChartGrouping',
   'ChartBlanksAs',
@@ -1075,20 +1097,20 @@ export async function loadFormulon(factory, options, shared, registry) {
 // <facade-tables>
 const WORKBOOK_METHODS = Object.freeze([
   '[Symbol.iterator]',
+  'activeSheet',
   'addPerson',
   'addPivotCache',
   'addSheet',
-  'addTable',
-  'clearTheme',
   'copySheet',
   'dispose',
   'disposed',
   'formatReference',
   'formatValue',
-  'getActiveSheet',
   'getCalcMode',
   'getCalcOnSave',
+  'getCellStyle',
   'getDate1904',
+  'getDefaultFont',
   'getDefinedName',
   'getDiagnostics',
   'getFileName',
@@ -1106,76 +1128,73 @@ const WORKBOOK_METHODS = Object.freeze([
   'getThemeScriptFont',
   'getWorkbookProtection',
   'hasDirtyCells',
+  'listCellStyles',
   'listDefinedNames',
   'listExternalLinks',
   'listPeople',
   'listPivotCaches',
   'listSheets',
   'listTableStyles',
-  'listTables',
   'ooxml',
   'parseReference',
   'pivotCache',
   'recalc',
   'recalcDataTables',
   'recalcParallel',
+  'removeCellStyle',
   'removeDefinedName',
   'removePerson',
   'removePivotCache',
   'removeSheet',
-  'removeTable',
   'removeTableStyle',
+  'resetTheme',
   'resolveColor',
   'save',
   'saveWithDiagnostics',
   'setActiveSheet',
   'setCalcMode',
   'setCalcOnSave',
+  'setCellStyle',
   'setDate1904',
   'setDefaultFont',
   'setDefinedName',
   'setFileName',
   'setFullPrecision',
-  'setIterative',
   'setIterativeProgress',
   'setPinnedNow',
   'setProfileId',
   'setRefMode',
   'setTableStyle',
-  'setTableStyleDefaults',
   'setThemeColors',
   'setThemeFonts',
   'setThemeScriptFont',
   'setWorkbookProtection',
   'sheet',
   'table',
+  'updateIterative',
+  'updateTableStyleDefaults',
 ]);
 const SHEET_METHODS = Object.freeze([
   'addCfRule',
   'addChart',
-  'addColumnBreak',
   'addDataTable',
-  'addHyperlink',
-  'addHyperlinkRange',
   'addMerge',
   'addPicture',
   'addPivot',
   'addProtectedRange',
-  'addRowBreak',
   'addShape',
   'addSlicer',
   'addSparklineGroup',
+  'addTable',
   'addThreadedComment',
   'addValidation',
   'applyAutoFilter',
   'chart',
-  'clearAutoFilter',
+  'clearAutoFilterCriteria',
   'clearBreaks',
   'clearCfRules',
-  'clearColumnWidth',
   'clearHyperlinks',
   'clearMerges',
-  'clearRowHeight',
   'clearValidations',
   'convertColumnCharsToPt',
   'convertColumnPtToChars',
@@ -1205,7 +1224,6 @@ const SHEET_METHODS = Object.freeze([
   'getDate',
   'getDependents',
   'getDisplayText',
-  'getEffectiveStyle',
   'getFormatDefaults',
   'getFormula',
   'getFormulaR1C1',
@@ -1254,14 +1272,13 @@ const SHEET_METHODS = Object.freeze([
   'listShapes',
   'listSlicers',
   'listSparklineGroups',
+  'listTables',
   'listThreadedComments',
   'listValidations',
   'picture',
   'pivot',
   'recalcViewport',
-  'removeAutoFilter',
   'removeCfRule',
-  'removeColumnBreak',
   'removeComment',
   'removeDataTable',
   'removeDrawing',
@@ -1269,21 +1286,22 @@ const SHEET_METHODS = Object.freeze([
   'removeMerge',
   'removePivot',
   'removeProtectedRange',
-  'removeRowBreak',
   'removeSparklineGroup',
+  'removeTable',
   'removeThreadedComment',
   'removeValidation',
+  'resetColumnWidth',
+  'resetRowHeight',
   'restoreDrawing',
-  'restoreRangeStyle',
   'setArrayFormula',
   'setAutoFilter',
   'setBlank',
   'setBool',
-  'setCellFormat',
   'setCellPhonetic',
   'setCellPhoneticProperties',
   'setCellPhoneticRuns',
   'setCellShowPhonetic',
+  'setColumnBreak',
   'setColumnCollapsed',
   'setColumnHidden',
   'setColumnOutline',
@@ -1291,16 +1309,14 @@ const SHEET_METHODS = Object.freeze([
   'setComment',
   'setCommentVisible',
   'setError',
-  'setFormatDefaults',
   'setFormula',
-  'setHeaderFooter',
+  'setHyperlink',
+  'setHyperlinkRange',
   'setNumber',
-  'setPageMargins',
-  'setPageSetup',
   'setPrintArea',
-  'setPrintOptions',
   'setPrintTitles',
   'setRowAutoHeight',
+  'setRowBreak',
   'setRowCollapsed',
   'setRowHeight',
   'setRowHidden',
@@ -1311,13 +1327,20 @@ const SHEET_METHODS = Object.freeze([
   'setText',
   'setValue',
   'setValues',
-  'setView',
   'shape',
   'slicer',
-  'snapshotRangeStyle',
+  'table',
+  'updateCellFormat',
+  'updateFormatDefaults',
+  'updateHeaderFooter',
+  'updatePageMargins',
+  'updatePageSetup',
+  'updatePrintOptions',
   'updateProtectedRange',
+  'updateSheetProtection',
   'updateSparklineGroup',
   'updateThreadedComment',
+  'updateView',
   'validateValue',
 ]);
 const OOXML_WORKBOOK_METHODS = Object.freeze([
@@ -1327,54 +1350,53 @@ const OOXML_WORKBOOK_METHODS = Object.freeze([
   'addDxf',
   'addFill',
   'addFont',
-  'addNumFmt',
+  'addNumberFormat',
   'getBorder',
-  'getCellStyle',
   'getCellStyleXf',
   'getCellXf',
   'getDxf',
   'getFill',
   'getFont',
-  'getNumFmtString',
-  'getPassthrough',
+  'getNumberFormat',
+  'hasPassthrough',
   'listBorders',
   'listCellStyleXfs',
-  'listCellStyles',
   'listCellXfs',
   'listDxfs',
   'listFills',
   'listFonts',
   'listPassthroughs',
-  'removeCellStyle',
-  'setCellStyle',
   'setFont',
 ]);
 const OOXML_SHEET_METHODS = Object.freeze([
-  'clearCellXfIndex',
-  'clearColumnStyle',
-  'clearRowStyle',
   'getAutoFilterXml',
   'getCellXfIndex',
-  'getColumnStyle',
+  'getColumnXfIndex',
+  'getEffectiveStyle',
   'getHeaderFooterXml',
   'getPageMarginsXml',
   'getPageSetupXml',
   'getPrintOptionsXml',
-  'getRangeStyleBases',
-  'getRangeStyleBasesExcluding',
-  'getRowStyle',
+  'getRangeXfBases',
+  'getRangeXfBasesExcluding',
+  'getRowXfIndex',
   'getSheetPrXml',
-  'remapRangeStyle',
+  'remapRangeXfs',
+  'resetCellXfIndex',
+  'resetColumnXfIndex',
+  'resetRowXfIndex',
+  'restoreRangeXfs',
   'setAutoFilterXml',
   'setCellXfIndex',
-  'setColumnStyle',
+  'setColumnXfIndex',
   'setHeaderFooterXml',
   'setPageMarginsXml',
   'setPageSetupXml',
   'setPrintOptionsXml',
   'setRangeXfIndex',
-  'setRowStyle',
+  'setRowXfIndex',
   'setSheetPrXml',
+  'snapshotRangeXfs',
 ]);
 const SHEET_STRUCTURE_OPS = Object.freeze([
   'Pivot.showDetails',
@@ -1404,9 +1426,9 @@ const LIST_FAMILIES = Object.freeze({
 });
 const HANDWRITTEN = Object.freeze([
   '[Symbol.iterator]',
+  'activeSheet',
+  'addCfRule',
   'addDataTable',
-  'addHyperlink',
-  'addHyperlinkRange',
   'addPicture',
   'addSheet',
   'chart',
@@ -1414,13 +1436,13 @@ const HANDWRITTEN = Object.freeze([
   'drawing',
   'evaluateTypedFormula',
   'evaluateTypedFormulaArray',
-  'getActiveSheet',
   'getCellFormat',
   'getCellPhoneticRuns',
-  'getColumnStyle',
+  'getColumnXfIndex',
   'getDate',
+  'getDefaultFont',
   'getFormula',
-  'getRowStyle',
+  'getRowXfIndex',
   'getThemeColors',
   'getThemeFonts',
   'getTypedValue',
@@ -1445,21 +1467,23 @@ const HANDWRITTEN = Object.freeze([
   'removeSheet',
   'setActiveSheet',
   'setArrayFormula',
-  'setCellFormat',
   'setComment',
   'setFormula',
+  'setHyperlink',
+  'setHyperlinkRange',
   'setPinnedNow',
   'setThemeColors',
   'setThemeScriptFont',
   'setValue',
   'setValues',
-  'setView',
   'shape',
   'slicer',
   'table',
+  'updateCellFormat',
   'updateProtectedRange',
   'updateSparklineGroup',
   'updateThreadedComment',
+  'updateView',
 ]);
 const HANDLE_FORWARDERS = Object.freeze({
   'Chart.addSeries': 'addChartSeries',
@@ -1469,20 +1493,22 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Chart.removeSeries': 'removeChartSeries',
   'Chart.rename': 'setDrawingName',
   'Chart.setAnchor': 'setDrawingAnchor',
-  'Chart.setAxis': 'setChartAxis',
-  'Chart.setDisplay': 'setChartDisplay',
   'Chart.setFilter': 'setChartFilter',
   'Chart.setLegend': 'setChartLegend',
-  'Chart.setPlot': 'setChartPlot',
-  'Chart.setPoint': 'setChartPoint',
-  'Chart.setSeries': 'setChartSeries',
+  'Chart.setPoint': null,
   'Chart.setSource': null,
   'Chart.setTitle': 'setChartTitle',
   'Chart.setType': 'setChartType',
   'Chart.setZOrder': 'setDrawingZOrder',
   'Chart.snapshot': 'snapshotDrawing',
+  'Chart.updateAxis': 'updateChartAxis',
+  'Chart.updateDisplay': 'updateChartDisplay',
+  'Chart.updateLegend': 'updateChartLegend',
+  'Chart.updatePlot': 'updateChartPlot',
+  'Chart.updatePoint': 'updateChartPoint',
+  'Chart.updateSeries': 'updateChartSeries',
   'Drawing.getDrawingProperties': 'getDrawingObject',
-  'Picture.getProperties': 'getImage',
+  'Picture.getProperties': 'getPicture',
   'Picture.rename': 'setDrawingName',
   'Picture.setAnchor': 'setDrawingAnchor',
   'Picture.setZOrder': 'setDrawingZOrder',
@@ -1490,13 +1516,12 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.addDataField': 'addPivotDataField',
   'Pivot.addField': 'addPivotField',
   'Pivot.addFieldItem': 'addPivotFieldItem',
-  'Pivot.addFieldSharedItem': null,
-  'Pivot.addFieldSubtotalFn': 'addPivotFieldSubtotalFn',
+  'Pivot.addFieldSubtotalFunction': 'addPivotFieldSubtotalFunction',
   'Pivot.addFilter': 'addPivotFilter',
   'Pivot.clearDataFields': 'clearPivotDataFields',
   'Pivot.clearFieldDateGroup': 'clearPivotFieldDateGroup',
   'Pivot.clearFieldItems': 'clearPivotFieldItems',
-  'Pivot.clearFieldSubtotalFns': 'clearPivotFieldSubtotalFns',
+  'Pivot.clearFieldSubtotalFunctions': 'clearPivotFieldSubtotalFunctions',
   'Pivot.clearFields': 'clearPivotFields',
   'Pivot.clearFilters': 'clearPivotFilters',
   'Pivot.getCache': 'getPivotCacheId',
@@ -1509,7 +1534,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.getProperties': null,
   'Pivot.getReportLayout': 'getPivotReportLayout',
   'Pivot.getRowFieldOrder': 'getPivotRowFieldOrder',
-  'Pivot.getStyleInfo': 'getPivotStyleInfo',
+  'Pivot.getStyleOptions': 'getPivotStyleOptions',
   'Pivot.isProjectionPending': 'isPivotProjectionPending',
   'Pivot.listDataFields': null,
   'Pivot.listFieldItems': null,
@@ -1517,7 +1542,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.listFilters': null,
   'Pivot.project': 'projectPivot',
   'Pivot.removeFilter': 'removePivotFilter',
-  'Pivot.rename': 'setPivotName',
+  'Pivot.rename': 'renamePivot',
   'Pivot.setAnchor': 'setPivotAnchor',
   'Pivot.setColumnFieldOrder': 'setPivotColumnFieldOrder',
   'Pivot.setDataField': 'setPivotDataField',
@@ -1525,14 +1550,14 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.setFieldDateGroup': null,
   'Pivot.setFieldShowDetail': 'setPivotFieldShowDetail',
   'Pivot.setFieldSort': 'setPivotFieldSort',
-  'Pivot.setGrandTotals': null,
-  'Pivot.setOptions': 'setPivotOptions',
   'Pivot.setReportLayout': 'setPivotReportLayout',
   'Pivot.setRowFieldOrder': 'setPivotRowFieldOrder',
-  'Pivot.setStyleInfo': 'setPivotStyleInfo',
   'Pivot.showDetails': null,
   'Pivot.updateField': null,
-  'Pivot.updateItem': null,
+  'Pivot.updateFieldItem': null,
+  'Pivot.updateGrandTotals': null,
+  'Pivot.updateOptions': 'updatePivotOptions',
+  'Pivot.updateStyleOptions': 'updatePivotStyleOptions',
   'PivotCache.addCalculatedField': 'addPivotCacheCalculatedField',
   'PivotCache.addCalculatedItem': 'addPivotCacheCalculatedItem',
   'PivotCache.addField': 'addPivotCacheField',
@@ -1552,9 +1577,9 @@ const HANDLE_FORWARDERS = Object.freeze({
   'PivotCache.removeCalculatedItem': 'removePivotCacheCalculatedItem',
   'PivotCache.setCalculatedFieldFormula': 'setPivotCacheCalculatedFieldFormula',
   'PivotCache.setCalculatedItemFormula': 'setPivotCacheCalculatedItemFormula',
-  'PivotCache.setOptions': 'setPivotCacheOptions',
   'PivotCache.setRecordValue': null,
   'PivotCache.setWorksheetSource': null,
+  'PivotCache.updateOptions': 'updatePivotCacheOptions',
   'Shape.getProperties': 'getShape',
   'Shape.rename': 'setDrawingName',
   'Shape.setZOrder': 'setDrawingZOrder',
@@ -1566,23 +1591,23 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Slicer.setZOrder': 'setDrawingZOrder',
   'Slicer.update': null,
   'Table.applyAutoFilter': 'applyTableAutoFilter',
-  'Table.clearAutoFilter': 'clearTableAutoFilter',
+  'Table.clearAutoFilterCriteria': 'clearTableAutoFilterCriteria',
   'Table.evaluateAutoFilter': 'evaluateTableAutoFilter',
   'Table.getAutoFilter': 'getTableAutoFilter',
   'Table.getProperties': 'getTable',
-  'Table.removeAutoFilter': 'removeTableAutoFilter',
+  'Table.getStyleOptions': 'getTableStyleOptions',
+  'Table.rename': null,
   'Table.renameColumn': 'renameTableColumn',
   'Table.setAutoFilter': 'setTableAutoFilter',
   'Table.setColumnTotals': 'setTableColumnTotals',
   'Table.update': null,
+  'Table.updateStyleOptions': 'updateTableStyleOptions',
 });
 const HANDLE_PROPERTIES = Object.freeze({
   'Pivot.name': 'getPivotName',
 });
 const CELL_ARGS = Object.freeze({
   'Pivot.showDetails': [[0, 1]],
-  'Sheet.addHyperlink': [[0, 1]],
-  'Sheet.clearCellXfIndex': [[0, 1]],
   'Sheet.evaluateCfFormula': [
     [0, 1],
     [2, 3],
@@ -1616,6 +1641,7 @@ const CELL_ARGS = Object.freeze({
   'Sheet.removeComment': [[0, 1]],
   'Sheet.removeDataTable': [[0, 1]],
   'Sheet.removeHyperlink': [[0, 1]],
+  'Sheet.resetCellXfIndex': [[0, 1]],
   'Sheet.setBlank': [[0, 1]],
   'Sheet.setBool': [[0, 1]],
   'Sheet.setCellPhonetic': [[0, 1]],
@@ -1627,6 +1653,7 @@ const CELL_ARGS = Object.freeze({
   'Sheet.setCommentVisible': [[0, 1]],
   'Sheet.setError': [[0, 1]],
   'Sheet.setFormula': [[0, 1]],
+  'Sheet.setHyperlink': [[0, 1]],
   'Sheet.setNumber': [[0, 1]],
   'Sheet.setText': [[0, 1]],
   'Sheet.setValue': [[0, 1]],
@@ -1634,62 +1661,166 @@ const CELL_ARGS = Object.freeze({
   'Sheet.validateValue': [[0, 1]],
 });
 const RECT_ARGS = Object.freeze({
-  'Pivot.setAnchor': [0],
-  'Sheet.addHyperlinkRange': [0],
   'Sheet.addMerge': [0],
   'Sheet.evaluateCfRange': [0],
   'Sheet.getCellRectPt': [0],
   'Sheet.getCellsInRange': [0],
   'Sheet.getMergesInRange': [0],
-  'Sheet.getRangeStyleBases': [0],
-  'Sheet.getRangeStyleBasesExcluding': [0],
+  'Sheet.getRangeXfBases': [0],
+  'Sheet.getRangeXfBasesExcluding': [0],
   'Sheet.getTypedValues': [0],
   'Sheet.getValues': [0],
   'Sheet.iterRows': [0],
   'Sheet.listCells': [0],
   'Sheet.recalcViewport': [0],
-  'Sheet.remapRangeStyle': [0],
+  'Sheet.remapRangeXfs': [0],
   'Sheet.removeMerge': [0],
-  'Sheet.setCellFormat': [0],
+  'Sheet.setHyperlinkRange': [0],
   'Sheet.setPrintArea': [0],
   'Sheet.setRangeXfIndex': [0],
-  'Sheet.snapshotRangeStyle': [0],
+  'Sheet.snapshotRangeXfs': [0],
+  'Sheet.updateCellFormat': [0],
 });
 const SPAN_ARGS = Object.freeze({
-  'Sheet.clearColumnStyle': [[0, 'col', 'span']],
-  'Sheet.clearColumnWidth': [[0, 'col', 'span']],
-  'Sheet.clearRowHeight': [[0, 'row', 'span']],
-  'Sheet.clearRowStyle': [[0, 'row', 'span']],
   'Sheet.deleteColumns': [[0, 'col', 'start_count']],
   'Sheet.deleteRows': [[0, 'row', 'start_count']],
   'Sheet.insertColumns': [[0, 'col', 'start_count']],
   'Sheet.insertRows': [[0, 'row', 'start_count']],
+  'Sheet.resetColumnWidth': [[0, 'col', 'span']],
+  'Sheet.resetColumnXfIndex': [[0, 'col', 'span']],
+  'Sheet.resetRowHeight': [[0, 'row', 'span']],
+  'Sheet.resetRowXfIndex': [[0, 'row', 'span']],
   'Sheet.setColumnCollapsed': [[0, 'col', 'span']],
   'Sheet.setColumnHidden': [[0, 'col', 'span']],
   'Sheet.setColumnOutline': [[0, 'col', 'span']],
-  'Sheet.setColumnStyle': [[0, 'col', 'span']],
   'Sheet.setColumnWidth': [[0, 'col', 'span']],
+  'Sheet.setColumnXfIndex': [[0, 'col', 'span']],
   'Sheet.setRowAutoHeight': [[0, 'row', 'span']],
   'Sheet.setRowCollapsed': [[0, 'row', 'span']],
   'Sheet.setRowHeight': [[0, 'row', 'span']],
   'Sheet.setRowHidden': [[0, 'row', 'span']],
   'Sheet.setRowOutline': [[0, 'row', 'span']],
-  'Sheet.setRowStyle': [[0, 'row', 'span']],
+  'Sheet.setRowXfIndex': [[0, 'row', 'span']],
 });
 const REF_ARGS = Object.freeze({
-  'Sheet.addSlicer': [0, 'table'],
   'Sheet.pivot': [0, 'pivot'],
   'Sheet.removeCfRule': [0, 'cfRule'],
   'Sheet.removePivot': [0, 'pivot'],
   'Sheet.removeProtectedRange': [0, 'protectedRange'],
+  'Sheet.removeTable': [0, 'table'],
+  'Sheet.table': [0, 'table'],
   'Sheet.updateProtectedRange': [0, 'protectedRange'],
-  'Workbook.removeTable': [0, 'table'],
-  'Workbook.table': [0, 'table'],
 });
 const PATCH_KEYS = Object.freeze({
-  'Chart.setLegend': [0, ['hiddenSeries', 'overlay', 'position']],
-  'Pivot.setGrandTotals': [0, ['columns', 'rows']],
-  'Pivot.setOptions': [
+  'Chart.updateAxis': [
+    1,
+    [
+      'crossAxis',
+      'crosses',
+      'crossesAt',
+      'id',
+      'kind',
+      'logBase',
+      'majorGridlines',
+      'majorUnit',
+      'max',
+      'min',
+      'minorGridlines',
+      'minorUnit',
+      'numberFormat',
+      'position',
+      'reversed',
+      'sourceLinked',
+      'tickLabelPosition',
+      'title',
+      'visible',
+    ],
+  ],
+  'Chart.updateDisplay': [
+    0,
+    [
+      'autoTitleDeleted',
+      'axes',
+      'blanksAs',
+      'date1904',
+      'description',
+      'hiddenCategories',
+      'isExtended',
+      'isPivotChart',
+      'legend',
+      'naAsBlank',
+      'name',
+      'objectId',
+      'onChartsheet',
+      'plotVisibleOnly',
+      'plots',
+      'source',
+      'style',
+      'title',
+    ],
+  ],
+  'Chart.updateLegend': [0, ['hiddenSeries', 'overlay', 'position']],
+  'Chart.updatePlot': [
+    1,
+    [
+      'axisIds',
+      'barDirection',
+      'extendedLayout',
+      'firstSliceAngleDeg',
+      'gapWidthPct',
+      'grouping',
+      'holeSize',
+      'overlap',
+      'series',
+      'type',
+      'varyColors',
+    ],
+  ],
+  'Chart.updatePoint': [3, ['fill', 'index', 'line', 'marker']],
+  'Chart.updateSeries': [
+    2,
+    [
+      'categories',
+      'fill',
+      'filtered',
+      'index',
+      'labels',
+      'line',
+      'marker',
+      'name',
+      'order',
+      'points',
+      'size',
+      'smooth',
+      'values',
+      'x',
+      'y',
+    ],
+  ],
+  'Pivot.updateField': [
+    1,
+    [
+      'axis',
+      'cacheFieldIndex',
+      'customName',
+      'dateCalendar',
+      'datePeriods',
+      'defaultSubtotal',
+      'fillDownLabels',
+      'groupBaseIndex',
+      'insertBlankRow',
+      'numberFormat',
+      'showAll',
+      'sortByField',
+      'sortOrder',
+      'sourceName',
+      'subtotalFunctions',
+      'subtotalTop',
+    ],
+  ],
+  'Pivot.updateFieldItem': [2, ['cacheIndex', 'caption', 'name', 'showDetail', 'visible']],
+  'Pivot.updateGrandTotals': [0, ['columns', 'rows']],
+  'Pivot.updateOptions': [
     0,
     [
       'altText',
@@ -1713,40 +1844,18 @@ const PATCH_KEYS = Object.freeze({
       'showDataDropDown',
       'showDataTips',
       'showDrill',
-      'showEmptyCol',
+      'showEmptyColumn',
       'showEmptyRow',
       'showError',
       'showHeaders',
       'showMissing',
     ],
   ],
-  'Pivot.setStyleInfo': [
+  'Pivot.updateStyleOptions': [
     0,
-    ['name', 'showColHeaders', 'showColStripes', 'showLastColumn', 'showRowHeaders', 'showRowStripes'],
+    ['showColumnHeaders', 'showColumnStripes', 'showLastColumn', 'showRowHeaders', 'showRowStripes', 'styleName'],
   ],
-  'Pivot.updateField': [
-    1,
-    [
-      'axis',
-      'cacheFieldIndex',
-      'customName',
-      'dateCalendar',
-      'datePeriods',
-      'defaultSubtotal',
-      'fillDownLabels',
-      'groupBaseIndex',
-      'insertBlankRow',
-      'numberFormat',
-      'showAll',
-      'sortByField',
-      'sortOrder',
-      'sourceName',
-      'subtotalFns',
-      'subtotalTop',
-    ],
-  ],
-  'Pivot.updateItem': [2, ['cacheIndex', 'caption', 'name', 'showDetail', 'visible']],
-  'PivotCache.setOptions': [0, ['missingItemsLimit', 'refreshOnLoad', 'saveData']],
+  'PivotCache.updateOptions': [0, ['missingItemsLimit', 'refreshOnLoad', 'saveData']],
   'Shape.update': [
     0,
     [
@@ -1763,11 +1872,11 @@ const PATCH_KEYS = Object.freeze({
       'kind',
       'lineColor',
       'lineKind',
-      'lineWidthEmu',
+      'lineWidthPt',
       'name',
       'objectId',
       'presetGeometry',
-      'rotation',
+      'rotationDeg',
       'text',
       'textBox',
       'toCol',
@@ -1777,20 +1886,20 @@ const PATCH_KEYS = Object.freeze({
       'widthEmu',
     ],
   ],
-  'Sheet.setCellFormat': [1, ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection']],
-  'Sheet.setFormatDefaults': [
+  'Sheet.updateCellFormat': [1, ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection', 'source']],
+  'Sheet.updateFormatDefaults': [
     0,
     [
-      'baseColWidth',
+      'baseColWidthChars',
       'customHeight',
-      'defaultColWidth',
-      'defaultRowHeight',
-      'effectiveDefaultColWidth',
-      'effectiveDefaultRowHeight',
+      'defaultColWidthChars',
+      'defaultRowHeightPt',
+      'effectiveDefaultColWidthChars',
+      'effectiveDefaultRowHeightPt',
       'zeroHeight',
     ],
   ],
-  'Sheet.setHeaderFooter': [
+  'Sheet.updateHeaderFooter': [
     0,
     [
       'alignWithMargins',
@@ -1809,24 +1918,24 @@ const PATCH_KEYS = Object.freeze({
       'scaleWithDocStated',
     ],
   ],
-  'Sheet.setPageMargins': [
+  'Sheet.updatePageMargins': [
     0,
     [
-      'bottom',
-      'bottomStated',
-      'footer',
-      'footerStated',
-      'header',
-      'headerStated',
-      'left',
-      'leftStated',
-      'right',
-      'rightStated',
-      'top',
-      'topStated',
+      'bottomIn',
+      'bottomInStated',
+      'footerIn',
+      'footerInStated',
+      'headerIn',
+      'headerInStated',
+      'leftIn',
+      'leftInStated',
+      'rightIn',
+      'rightInStated',
+      'topIn',
+      'topInStated',
     ],
   ],
-  'Sheet.setPageSetup': [
+  'Sheet.updatePageSetup': [
     0,
     [
       'fitToHeight',
@@ -1839,11 +1948,11 @@ const PATCH_KEYS = Object.freeze({
       'orientationStated',
       'paperSize',
       'paperSizeStated',
-      'scale',
-      'scaleStated',
+      'scalePct',
+      'scalePctStated',
     ],
   ],
-  'Sheet.setPrintOptions': [
+  'Sheet.updatePrintOptions': [
     0,
     [
       'gridLines',
@@ -1856,32 +1965,43 @@ const PATCH_KEYS = Object.freeze({
       'verticalCenteredStated',
     ],
   ],
-  'Sheet.setView': [
-    0,
-    [
-      'freezeCols',
-      'freezeRows',
-      'paneTopLeftCol',
-      'paneTopLeftRow',
-      'rightToLeft',
-      'showFormulas',
-      'showGridLines',
-      'showOutlineSymbols',
-      'showRowColHeaders',
-      'showZeros',
-      'splitX',
-      'splitY',
-      'tabSelected',
-      'topLeftCol',
-      'topLeftRow',
-      'viewMode',
-      'visibility',
-      'zoomScale',
-    ],
-  ],
   'Sheet.updateProtectedRange': [
     1,
-    ['algorithmName', 'hashValue', 'name', 'password', 'ranges', 'saltValue', 'securityDescriptor', 'spinCount'],
+    [
+      'algorithmName',
+      'hashValue',
+      'legacyPasswordHash',
+      'name',
+      'ranges',
+      'saltValue',
+      'securityDescriptor',
+      'spinCount',
+    ],
+  ],
+  'Sheet.updateSheetProtection': [
+    0,
+    [
+      'algorithmName',
+      'allowAutoFilter',
+      'allowDeleteColumns',
+      'allowDeleteRows',
+      'allowEditObjects',
+      'allowEditScenarios',
+      'allowFormatCells',
+      'allowFormatColumns',
+      'allowFormatRows',
+      'allowInsertColumns',
+      'allowInsertHyperlinks',
+      'allowInsertRows',
+      'allowPivotTables',
+      'allowSelectLockedCells',
+      'allowSelectUnlockedCells',
+      'allowSort',
+      'hashValue',
+      'legacyPasswordHash',
+      'saltValue',
+      'spinCount',
+    ],
   ],
   'Sheet.updateSparklineGroup': [
     1,
@@ -1918,6 +2038,29 @@ const PATCH_KEYS = Object.freeze({
     1,
     ['col', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'row', 'text'],
   ],
+  'Sheet.updateView': [
+    0,
+    [
+      'freezeCols',
+      'freezeRows',
+      'paneTopLeftCol',
+      'paneTopLeftRow',
+      'rightToLeft',
+      'showFormulas',
+      'showGridLines',
+      'showOutlineSymbols',
+      'showRowColHeaders',
+      'showZeros',
+      'splitXTwips',
+      'splitYTwips',
+      'tabSelected',
+      'topLeftCol',
+      'topLeftRow',
+      'viewMode',
+      'visibility',
+      'zoomPct',
+    ],
+  ],
   'Slicer.update': [
     0,
     [
@@ -1943,27 +2086,16 @@ const PATCH_KEYS = Object.freeze({
       'toRowOffsetEmu',
     ],
   ],
-  'Table.update': [
+  'Table.update': [0, ['columns', 'headerRow', 'name', 'range', 'totalsRow']],
+  'Table.updateStyleOptions': [
     0,
-    [
-      'columns',
-      'displayName',
-      'headerRow',
-      'name',
-      'range',
-      'showColumnStripes',
-      'showFirstColumn',
-      'showLastColumn',
-      'showRowStripes',
-      'styleName',
-      'totalsRow',
-    ],
+    ['showColumnStripes', 'showFirstColumn', 'showLastColumn', 'showRowStripes', 'styleName'],
   ],
-  'Workbook.setIterative': [0, ['enabled', 'maxChange', 'maxIterations']],
-  'Workbook.setTableStyleDefaults': [0, ['pivotStyle', 'tableStyle']],
+  'Workbook.updateIterative': [0, ['enabled', 'maxChange', 'maxIterations']],
+  'Workbook.updateTableStyleDefaults': [0, ['pivotStyle', 'tableStyle']],
 });
 const PATCH_NESTED_KEYS = Object.freeze({
-  'Sheet.setCellFormat': {
+  'Sheet.updateCellFormat': {
     alignment: [
       'horizontal',
       'indent',
@@ -1981,7 +2113,7 @@ const PATCH_NESTED_KEYS = Object.freeze({
     'border.left': ['color', 'style'],
     'border.right': ['color', 'style'],
     'border.top': ['color', 'style'],
-    fill: ['bg', 'fg', 'gradient', 'pattern'],
+    fill: ['background', 'foreground', 'gradient', 'pattern'],
     font: [
       'bold',
       'charset',
@@ -1994,7 +2126,7 @@ const PATCH_NESTED_KEYS = Object.freeze({
       'outline',
       'scheme',
       'shadow',
-      'size',
+      'sizePt',
       'strike',
       'underline',
       'vertAlign',
@@ -2016,8 +2148,7 @@ const RECORD_RANGE_FIELDS = Object.freeze({
   PivotInput: { anchor: 'CellAddress' },
   ReferenceRangeInput: { rect: 'CellRect' },
   SheetSelectionInput: { active: 'CellAddress', ranges: 'CellRect[]' },
-  TableInput: { range: 'SheetRect' },
-  TablePatch: { range: 'SheetRect' },
+  TableInput: { range: 'CellRect' },
 });
 // </record-range-fields>
 // <method-signatures> generated by tools/codegen/gen_facade_tables.py; do not edit
@@ -2029,18 +2160,20 @@ const METHOD_ARITY = Object.freeze({
   'Chart.removeSeries': 2,
   'Chart.rename': 1,
   'Chart.setAnchor': 1,
-  'Chart.setAxis': 2,
-  'Chart.setDisplay': 1,
   'Chart.setFilter': 2,
   'Chart.setLegend': 1,
-  'Chart.setPlot': 2,
   'Chart.setPoint': 4,
-  'Chart.setSeries': 3,
   'Chart.setSource': 1,
   'Chart.setTitle': 1,
   'Chart.setType': 3,
   'Chart.setZOrder': 1,
   'Chart.snapshot': 0,
+  'Chart.updateAxis': 2,
+  'Chart.updateDisplay': 1,
+  'Chart.updateLegend': 1,
+  'Chart.updatePlot': 2,
+  'Chart.updatePoint': 4,
+  'Chart.updateSeries': 3,
   'Drawing.getDrawingProperties': 0,
   'Picture.getProperties': 0,
   'Picture.rename': 1,
@@ -2050,13 +2183,12 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.addDataField': 1,
   'Pivot.addField': 1,
   'Pivot.addFieldItem': 3,
-  'Pivot.addFieldSharedItem': 3,
-  'Pivot.addFieldSubtotalFn': 2,
+  'Pivot.addFieldSubtotalFunction': 2,
   'Pivot.addFilter': 1,
   'Pivot.clearDataFields': 0,
   'Pivot.clearFieldDateGroup': 1,
   'Pivot.clearFieldItems': 1,
-  'Pivot.clearFieldSubtotalFns': 1,
+  'Pivot.clearFieldSubtotalFunctions': 1,
   'Pivot.clearFields': 0,
   'Pivot.clearFilters': 0,
   'Pivot.getCache': 0,
@@ -2069,7 +2201,7 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.getProperties': 0,
   'Pivot.getReportLayout': 0,
   'Pivot.getRowFieldOrder': 0,
-  'Pivot.getStyleInfo': 0,
+  'Pivot.getStyleOptions': 0,
   'Pivot.isProjectionPending': 0,
   'Pivot.listDataFields': 0,
   'Pivot.listFieldItems': 1,
@@ -2085,14 +2217,14 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.setFieldDateGroup': 2,
   'Pivot.setFieldShowDetail': 2,
   'Pivot.setFieldSort': 3,
-  'Pivot.setGrandTotals': 1,
-  'Pivot.setOptions': 1,
   'Pivot.setReportLayout': 1,
   'Pivot.setRowFieldOrder': 1,
-  'Pivot.setStyleInfo': 1,
   'Pivot.showDetails': 2,
   'Pivot.updateField': 2,
-  'Pivot.updateItem': 3,
+  'Pivot.updateFieldItem': 3,
+  'Pivot.updateGrandTotals': 1,
+  'Pivot.updateOptions': 1,
+  'Pivot.updateStyleOptions': 1,
   'PivotCache.addCalculatedField': 2,
   'PivotCache.addCalculatedItem': 3,
   'PivotCache.addField': 1,
@@ -2112,9 +2244,9 @@ const METHOD_ARITY = Object.freeze({
   'PivotCache.removeCalculatedItem': 1,
   'PivotCache.setCalculatedFieldFormula': 2,
   'PivotCache.setCalculatedItemFormula': 2,
-  'PivotCache.setOptions': 1,
   'PivotCache.setRecordValue': 4,
   'PivotCache.setWorksheetSource': 1,
+  'PivotCache.updateOptions': 1,
   'Shape.getProperties': 0,
   'Shape.rename': 1,
   'Shape.setZOrder': 1,
@@ -2122,32 +2254,24 @@ const METHOD_ARITY = Object.freeze({
   'Shape.update': 1,
   'Sheet.addCfRule': 1,
   'Sheet.addChart': 1,
-  'Sheet.addColumnBreak': 2,
   'Sheet.addDataTable': 1,
-  'Sheet.addHyperlink': 3,
-  'Sheet.addHyperlinkRange': 2,
   'Sheet.addMerge': 1,
   'Sheet.addPicture': 2,
   'Sheet.addPivot': 1,
   'Sheet.addProtectedRange': 1,
-  'Sheet.addRowBreak': 2,
   'Sheet.addShape': 1,
   'Sheet.addSlicer': 3,
   'Sheet.addSparklineGroup': 1,
+  'Sheet.addTable': 1,
   'Sheet.addThreadedComment': 1,
   'Sheet.addValidation': 1,
   'Sheet.applyAutoFilter': 0,
   'Sheet.chart': 1,
-  'Sheet.clearAutoFilter': 0,
+  'Sheet.clearAutoFilterCriteria': 0,
   'Sheet.clearBreaks': 0,
-  'Sheet.clearCellXfIndex': 2,
   'Sheet.clearCfRules': 0,
-  'Sheet.clearColumnStyle': 2,
-  'Sheet.clearColumnWidth': 2,
   'Sheet.clearHyperlinks': 0,
   'Sheet.clearMerges': 0,
-  'Sheet.clearRowHeight': 2,
-  'Sheet.clearRowStyle': 2,
   'Sheet.clearValidations': 0,
   'Sheet.convertColumnCharsToPt': 2,
   'Sheet.convertColumnPtToChars': 2,
@@ -2172,8 +2296,8 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getCellShowPhonetic': 2,
   'Sheet.getCellXfIndex': 2,
   'Sheet.getCellsInRange': 3,
-  'Sheet.getColumnStyle': 1,
   'Sheet.getColumnWidthPt': 2,
+  'Sheet.getColumnXfIndex': 1,
   'Sheet.getComment': 2,
   'Sheet.getCommentVisible': 2,
   'Sheet.getDataTable': 2,
@@ -2200,10 +2324,10 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getPrintOptions': 0,
   'Sheet.getPrintOptionsXml': 0,
   'Sheet.getPrintTitles': 0,
-  'Sheet.getRangeStyleBases': 1,
-  'Sheet.getRangeStyleBasesExcluding': 3,
+  'Sheet.getRangeXfBases': 1,
+  'Sheet.getRangeXfBasesExcluding': 3,
   'Sheet.getRowHeightPt': 1,
-  'Sheet.getRowStyle': 1,
+  'Sheet.getRowXfIndex': 1,
   'Sheet.getSelection': 0,
   'Sheet.getSheetPrXml': 0,
   'Sheet.getSheetProtection': 0,
@@ -2237,16 +2361,15 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.listShapes': 0,
   'Sheet.listSlicers': 0,
   'Sheet.listSparklineGroups': 0,
+  'Sheet.listTables': 0,
   'Sheet.listThreadedComments': 0,
   'Sheet.listValidations': 0,
   'Sheet.move': 1,
   'Sheet.picture': 1,
   'Sheet.pivot': 1,
   'Sheet.recalcViewport': 1,
-  'Sheet.remapRangeStyle': 3,
-  'Sheet.removeAutoFilter': 0,
+  'Sheet.remapRangeXfs': 3,
   'Sheet.removeCfRule': 1,
-  'Sheet.removeColumnBreak': 1,
   'Sheet.removeComment': 2,
   'Sheet.removeDataTable': 2,
   'Sheet.removeDrawing': 1,
@@ -2254,52 +2377,55 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.removeMerge': 1,
   'Sheet.removePivot': 1,
   'Sheet.removeProtectedRange': 1,
-  'Sheet.removeRowBreak': 1,
   'Sheet.removeSparklineGroup': 1,
+  'Sheet.removeTable': 1,
   'Sheet.removeThreadedComment': 1,
   'Sheet.removeValidation': 1,
   'Sheet.rename': 1,
+  'Sheet.resetCellXfIndex': 2,
+  'Sheet.resetColumnWidth': 2,
+  'Sheet.resetColumnXfIndex': 2,
+  'Sheet.resetRowHeight': 2,
+  'Sheet.resetRowXfIndex': 2,
   'Sheet.restoreDrawing': 2,
-  'Sheet.restoreRangeStyle': 1,
+  'Sheet.restoreRangeXfs': 1,
   'Sheet.setArrayFormula': 1,
   'Sheet.setAutoFilter': 1,
   'Sheet.setAutoFilterXml': 1,
   'Sheet.setBlank': 2,
   'Sheet.setBool': 3,
-  'Sheet.setCellFormat': 2,
   'Sheet.setCellPhonetic': 3,
   'Sheet.setCellPhoneticProperties': 3,
   'Sheet.setCellPhoneticRuns': 3,
   'Sheet.setCellShowPhonetic': 3,
   'Sheet.setCellXfIndex': 3,
+  'Sheet.setColumnBreak': 2,
   'Sheet.setColumnCollapsed': 3,
   'Sheet.setColumnHidden': 3,
   'Sheet.setColumnOutline': 3,
-  'Sheet.setColumnStyle': 3,
   'Sheet.setColumnWidth': 3,
+  'Sheet.setColumnXfIndex': 3,
   'Sheet.setComment': 3,
   'Sheet.setCommentVisible': 3,
   'Sheet.setError': 3,
-  'Sheet.setFormatDefaults': 1,
   'Sheet.setFormula': 3,
-  'Sheet.setHeaderFooter': 1,
   'Sheet.setHeaderFooterXml': 1,
+  'Sheet.setHyperlink': 3,
+  'Sheet.setHyperlinkRange': 2,
   'Sheet.setNumber': 3,
-  'Sheet.setPageMargins': 1,
   'Sheet.setPageMarginsXml': 1,
-  'Sheet.setPageSetup': 1,
   'Sheet.setPageSetupXml': 1,
   'Sheet.setPrintArea': 1,
-  'Sheet.setPrintOptions': 1,
   'Sheet.setPrintOptionsXml': 1,
   'Sheet.setPrintTitles': 1,
   'Sheet.setRangeXfIndex': 2,
   'Sheet.setRowAutoHeight': 3,
+  'Sheet.setRowBreak': 2,
   'Sheet.setRowCollapsed': 3,
   'Sheet.setRowHeight': 3,
   'Sheet.setRowHidden': 3,
   'Sheet.setRowOutline': 3,
-  'Sheet.setRowStyle': 3,
+  'Sheet.setRowXfIndex': 3,
   'Sheet.setSelection': 1,
   'Sheet.setSheetPrXml': 1,
   'Sheet.setSheetProtection': 1,
@@ -2307,46 +2433,54 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.setText': 3,
   'Sheet.setValue': 3,
   'Sheet.setValues': 3,
-  'Sheet.setView': 1,
   'Sheet.shape': 1,
   'Sheet.slicer': 1,
-  'Sheet.snapshotRangeStyle': 1,
+  'Sheet.snapshotRangeXfs': 1,
+  'Sheet.table': 1,
+  'Sheet.updateCellFormat': 2,
+  'Sheet.updateFormatDefaults': 1,
+  'Sheet.updateHeaderFooter': 1,
+  'Sheet.updatePageMargins': 1,
+  'Sheet.updatePageSetup': 1,
+  'Sheet.updatePrintOptions': 1,
   'Sheet.updateProtectedRange': 2,
+  'Sheet.updateSheetProtection': 1,
   'Sheet.updateSparklineGroup': 2,
   'Sheet.updateThreadedComment': 2,
+  'Sheet.updateView': 1,
   'Sheet.validateValue': 3,
   'Slicer.getProperties': 0,
   'Slicer.setZOrder': 1,
   'Slicer.update': 1,
   'Table.applyAutoFilter': 0,
-  'Table.clearAutoFilter': 0,
+  'Table.clearAutoFilterCriteria': 0,
   'Table.evaluateAutoFilter': 0,
   'Table.getAutoFilter': 0,
   'Table.getProperties': 0,
-  'Table.removeAutoFilter': 0,
+  'Table.getStyleOptions': 0,
+  'Table.rename': 1,
   'Table.renameColumn': 2,
   'Table.setAutoFilter': 1,
   'Table.setColumnTotals': 2,
   'Table.update': 1,
+  'Table.updateStyleOptions': 1,
   'Workbook.[Symbol.dispose]': 0,
   'Workbook.[Symbol.iterator]': 0,
+  'Workbook.activeSheet': 0,
   'Workbook.addBorder': 1,
   'Workbook.addCellStyleXf': 1,
   'Workbook.addCellXf': 1,
   'Workbook.addDxf': 1,
   'Workbook.addFill': 1,
   'Workbook.addFont': 1,
-  'Workbook.addNumFmt': 1,
+  'Workbook.addNumberFormat': 1,
   'Workbook.addPerson': 1,
   'Workbook.addPivotCache': 1,
   'Workbook.addSheet': 1,
-  'Workbook.addTable': 1,
-  'Workbook.clearTheme': 0,
   'Workbook.copySheet': 3,
   'Workbook.dispose': 0,
   'Workbook.formatReference': 2,
   'Workbook.formatValue': 2,
-  'Workbook.getActiveSheet': 0,
   'Workbook.getBorder': 1,
   'Workbook.getCalcMode': 0,
   'Workbook.getCalcOnSave': 0,
@@ -2354,6 +2488,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.getCellStyleXf': 1,
   'Workbook.getCellXf': 1,
   'Workbook.getDate1904': 0,
+  'Workbook.getDefaultFont': 0,
   'Workbook.getDefinedName': 2,
   'Workbook.getDiagnostics': 0,
   'Workbook.getDxf': 1,
@@ -2363,8 +2498,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.getFullPrecision': 0,
   'Workbook.getIterative': 0,
   'Workbook.getMemoryUsage': 0,
-  'Workbook.getNumFmtString': 1,
-  'Workbook.getPassthrough': 1,
+  'Workbook.getNumberFormat': 1,
   'Workbook.getPerson': 1,
   'Workbook.getPinnedNow': 0,
   'Workbook.getProfileId': 0,
@@ -2376,6 +2510,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.getThemeScriptFont': 1,
   'Workbook.getWorkbookProtection': 0,
   'Workbook.hasDirtyCells': 0,
+  'Workbook.hasPassthrough': 1,
   'Workbook.listBorders': 0,
   'Workbook.listCellStyleXfs': 0,
   'Workbook.listCellStyles': 0,
@@ -2390,7 +2525,6 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.listPivotCaches': 0,
   'Workbook.listSheets': 0,
   'Workbook.listTableStyles': 0,
-  'Workbook.listTables': 0,
   'Workbook.parseReference': 2,
   'Workbook.pivotCache': 1,
   'Workbook.recalc': 0,
@@ -2401,8 +2535,8 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.removePerson': 1,
   'Workbook.removePivotCache': 1,
   'Workbook.removeSheet': 1,
-  'Workbook.removeTable': 1,
   'Workbook.removeTableStyle': 1,
+  'Workbook.resetTheme': 0,
   'Workbook.resolveColor': 2,
   'Workbook.save': 1,
   'Workbook.saveWithDiagnostics': 1,
@@ -2416,31 +2550,31 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.setFileName': 1,
   'Workbook.setFont': 2,
   'Workbook.setFullPrecision': 1,
-  'Workbook.setIterative': 1,
   'Workbook.setIterativeProgress': 1,
   'Workbook.setPinnedNow': 1,
   'Workbook.setProfileId': 1,
   'Workbook.setRefMode': 1,
   'Workbook.setTableStyle': 1,
-  'Workbook.setTableStyleDefaults': 1,
   'Workbook.setThemeColors': 1,
   'Workbook.setThemeFonts': 1,
   'Workbook.setThemeScriptFont': 1,
   'Workbook.setWorkbookProtection': 1,
   'Workbook.sheet': 1,
   'Workbook.table': 1,
+  'Workbook.updateIterative': 1,
+  'Workbook.updateTableStyleDefaults': 1,
 });
 const TYPED_ARGS = Object.freeze({
+  'Pivot.setAnchor': [[0, 'CellAddress']],
   'Sheet.addCfRule': [[0, 'ConditionalFormatInput']],
   'Sheet.addDataTable': [[0, 'DataTableInput']],
   'Sheet.addPivot': [[0, 'PivotInput']],
+  'Sheet.addTable': [[0, 'TableInput']],
   'Sheet.addValidation': [[0, 'DataValidationInput']],
   'Sheet.setAutoFilter': [[0, 'AutoFilterInput']],
   'Sheet.setPrintArea': [[0, 'CellRect[]']],
   'Sheet.setSelection': [[0, 'SheetSelectionInput']],
   'Table.setAutoFilter': [[0, 'AutoFilterInput']],
-  'Table.update': [[0, 'TablePatch']],
-  'Workbook.addTable': [[0, 'TableInput']],
   'Workbook.formatReference': [[0, 'ReferenceRangeInput']],
 });
 const DEFAULT_ARGS = Object.freeze({
@@ -2466,7 +2600,6 @@ const ABSENT_ARGS = Object.freeze({
   'Sheet.setPrintArea': [0, []],
   'Sheet.setPrintOptionsXml': [0, ''],
   'Sheet.setSheetPrXml': [0, ''],
-  'Sheet.setSheetProtection': [0, {}],
   'Pivot.setFieldAxis': [1, -1],
 });
 
@@ -2478,16 +2611,17 @@ const bools = (...fields) => Object.fromEntries(fields.map((f) => [f, 'boolean']
 const numbers = (...fields) => Object.fromEntries(fields.map((f) => [f, 'number']));
 const strings = (...fields) => Object.fromEntries(fields.map((f) => [f, 'string']));
 const objects = (...fields) => Object.fromEntries(fields.map((f) => [f, 'object']));
+const LEGEND_FIELDS = Object.freeze({ position: 'number', overlay: 'boolean', hiddenSeries: 'array' });
 const PATCH_FIELDS = Object.freeze({
-  'Workbook.setIterative': { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') },
-  'PivotCache.setOptions': bools('saveData', 'refreshOnLoad'),
-  'Sheet.setView': {
+  'Workbook.updateIterative': { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') },
+  'PivotCache.updateOptions': bools('saveData', 'refreshOnLoad'),
+  'Sheet.updateView': {
     ...numbers(
-      'zoomScale',
+      'zoomPct',
       'freezeRows',
       'freezeCols',
-      'splitX',
-      'splitY',
+      'splitXTwips',
+      'splitYTwips',
       'topLeftRow',
       'topLeftCol',
       'paneTopLeftRow',
@@ -2505,15 +2639,38 @@ const PATCH_FIELDS = Object.freeze({
       'tabSelected',
     ),
   },
-  'Sheet.setPrintOptions': bools('gridLines', 'headings', 'horizontalCentered', 'verticalCentered'),
-  'Sheet.setHeaderFooter': bools('differentOddEven', 'differentFirst', 'scaleWithDoc', 'alignWithMargins'),
-  'Sheet.setPageSetup': { ...numbers('paperSize', 'scale', 'fitToWidth', 'fitToHeight'), ...bools('fitToPage') },
-  'Sheet.setPageMargins': numbers('left', 'right', 'top', 'bottom', 'header', 'footer'),
-  'Sheet.setFormatDefaults': { ...numbers('baseColWidth'), ...bools('customHeight', 'zeroHeight') },
+  'Sheet.updatePrintOptions': bools('gridLines', 'headings', 'horizontalCentered', 'verticalCentered'),
+  'Sheet.updateHeaderFooter': bools('differentOddEven', 'differentFirst', 'scaleWithDoc', 'alignWithMargins'),
+  'Sheet.updatePageSetup': { ...numbers('paperSize', 'scalePct', 'fitToWidth', 'fitToHeight'), ...bools('fitToPage') },
+  'Sheet.updatePageMargins': numbers('leftIn', 'rightIn', 'topIn', 'bottomIn', 'headerIn', 'footerIn'),
+  'Sheet.updateFormatDefaults': { ...numbers('baseColWidthChars'), ...bools('customHeight', 'zeroHeight') },
+  'Sheet.updateSheetProtection': bools(
+    'allowEditObjects',
+    'allowEditScenarios',
+    'allowFormatCells',
+    'allowFormatColumns',
+    'allowFormatRows',
+    'allowInsertColumns',
+    'allowInsertRows',
+    'allowInsertHyperlinks',
+    'allowDeleteColumns',
+    'allowDeleteRows',
+    'allowSelectLockedCells',
+    'allowSelectUnlockedCells',
+    'allowSort',
+    'allowAutoFilter',
+    'allowPivotTables',
+  ),
   'Pivot.updateField': bools('defaultSubtotal', 'insertBlankRow', 'fillDownLabels', 'showAll', 'subtotalTop'),
-  'Pivot.updateItem': bools('visible', 'showDetail'),
-  'Pivot.setStyleInfo': bools('showRowHeaders', 'showColHeaders', 'showRowStripes', 'showColStripes', 'showLastColumn'),
-  'Pivot.setOptions': {
+  'Pivot.updateFieldItem': bools('visible', 'showDetail'),
+  'Pivot.updateStyleOptions': bools(
+    'showRowHeaders',
+    'showColumnHeaders',
+    'showRowStripes',
+    'showColumnStripes',
+    'showLastColumn',
+  ),
+  'Pivot.updateOptions': {
     ...bools(
       'showError',
       'showMissing',
@@ -2522,7 +2679,7 @@ const PATCH_FIELDS = Object.freeze({
       'showDataTips',
       'gridDropZones',
       'showEmptyRow',
-      'showEmptyCol',
+      'showEmptyColumn',
       'showDataDropDown',
       'printDrill',
       'fieldPrintTitles',
@@ -2537,12 +2694,11 @@ const PATCH_FIELDS = Object.freeze({
     ),
     ...numbers('indent', 'pageWrap'),
   },
-  'Chart.setLegend': { position: 'number', overlay: 'boolean', hiddenSeries: 'array' },
-  // `range` takes a `SheetRect` or an A1 string, checked by `tableRange`.
-  'Table.update': {
-    ...strings('name', 'displayName'),
-    ...bools('showFirstColumn', 'showLastColumn', 'showRowStripes', 'showColumnStripes', 'headerRow', 'totalsRow'),
-  },
+  'Chart.setLegend': LEGEND_FIELDS,
+  'Chart.updateLegend': LEGEND_FIELDS,
+  // `range` takes a `CellRect`, a `SheetRect` or an A1 string, checked by `tableRange`.
+  'Table.update': bools('headerRow', 'totalsRow'),
+  'Table.updateStyleOptions': bools('showFirstColumn', 'showLastColumn', 'showRowStripes', 'showColumnStripes'),
   'Shape.update': {
     ...strings('name', 'presetGeometry', 'text'),
     ...bools('textBox', 'hidden'),
@@ -2559,8 +2715,8 @@ const PATCH_FIELDS = Object.freeze({
       'toColOffsetEmu',
       'widthEmu',
       'heightEmu',
-      'lineWidthEmu',
-      'rotation',
+      'lineWidthPt',
+      'rotationDeg',
     ),
     ...objects('fillColor', 'lineColor'),
   },
@@ -2597,7 +2753,7 @@ const PATCH_FIELDS = Object.freeze({
     sparklines: 'array',
   },
   'Sheet.updateProtectedRange': {
-    ...strings('name', 'password', 'algorithmName', 'hashValue', 'saltValue', 'securityDescriptor'),
+    ...strings('name', 'algorithmName', 'hashValue', 'saltValue', 'securityDescriptor'),
     spinCount: 'number',
     ranges: 'array',
   },
@@ -2610,7 +2766,7 @@ const PATCH_NULLABLE = Object.freeze({
   'Shape.update': { ...numbers('fillKind', 'lineKind'), ...objects('fillColor', 'lineColor') },
   'Slicer.update': strings('style'),
   'Sheet.updateSparklineGroup': { ...numbers('manualMin', 'manualMax'), ...strings('dateAxisRef') },
-  'Sheet.updateProtectedRange': {},
+  'Sheet.updateProtectedRange': strings('legacyPasswordHash'),
 });
 
 // The anchor keys of a drawing patch, which apply only together with the trigger key that carries the anchor.
@@ -2657,7 +2813,7 @@ function checkShapePaint(where, spec) {
   }
 }
 
-const COLOR_KEYS = Object.freeze(['indexed', 'kind', 'rgb', 'theme', 'tint']);
+const COLOR_KEYS = Object.freeze(['argb', 'indexed', 'kind', 'theme', 'tint']);
 const SPARKLINE_KEYS = Object.freeze(['formula', 'location']);
 
 /**
@@ -2683,8 +2839,8 @@ function checkSparklinePatch(where, patch) {
 }
 
 /**
- * A `TablePatch.range` as the table's new `CellRect`: an A1 string, unqualified or naming the table's sheet, or
- * a `SheetRect` on that sheet. Another sheet is `InvalidArgument`.
+ * A `TablePatch.range` as the table's new `CellRect`: an A1 string, unqualified or naming the table's sheet, a
+ * `CellRect`, or a `SheetRect` on that sheet. Another sheet is `InvalidArgument`.
  */
 function tableRange(raw, sheet, range, where) {
   let onSheet;
@@ -2700,11 +2856,14 @@ function tableRange(raw, sheet, range, where) {
     }
     onSheet = ref.sheetName === null ? sheet : raw.getSheetIndex(ref.sheetName);
     rect = ref.rect;
+  } else if (isObject(range) && range.rect === undefined) {
+    onSheet = sheet;
+    rect = range;
   } else if (isObject(range)) {
     onSheet = requireIndex(range.sheet, `${where} range.sheet`);
     rect = requireObject(range.rect, `${where} range.rect`);
   } else {
-    throw new TypeError(`${where} range must be a SheetRect or an A1 string`);
+    throw new TypeError(`${where} range must be a CellRect, a SheetRect or an A1 string`);
   }
   if (onSheet !== sheet) {
     throw new FormulonError(
@@ -2718,14 +2877,14 @@ function tableRange(raw, sheet, range, where) {
 
 // How a string key of each `*Ref` kind is matched: the element count, the key
 // of element `i`, the wording of the errors, and the handle class that also
-// names an element. Tables are workbook-wide.
+// names an element.
 const REF_KINDS = Object.freeze({
   table: {
-    noun: 'table displayName',
+    noun: 'table name',
     handle: 'Table',
     context: 'table_name',
-    count: (raw) => raw.getTableCount(),
-    key: (raw, _sheet, i) => raw.getTable(i).displayName,
+    count: (raw, sheet) => raw.getTableCount(sheet),
+    key: (raw, sheet, i) => raw.getTable(sheet, i).name,
   },
   pivot: {
     noun: 'pivot name',
@@ -3023,6 +3182,11 @@ function normalizeRecordRanges(raw, record, type, sheet, label) {
   let out = record;
   for (const [field, kind] of Object.entries(schema)) {
     const value = record[field];
+    if (kind === 'CellAddress') {
+      for (const key of [`${field}Row`, `${field}Col`]) {
+        if (record[key] !== undefined) throw new TypeError(`${label.trimEnd()} has no field ${key}`);
+      }
+    }
     const next = normalizeAddress(raw, kind, value, sheet, label.endsWith(' ') ? label + field : `${label}.${field}`);
     if (kind === 'CellAddress' && isObject(next)) {
       if (out === record) out = readableCopy(record);
@@ -3161,11 +3325,12 @@ function withoutUnstated(patch, read) {
  * Throws `TypeError: <where> argument <n> has no field <path>` for a key that
  * neither the patch type of `where` (`Class.method`) nor its getter's record
  * declares (`PATCH_KEYS`), and, at each path `PATCH_NESTED_KEYS` lists, for a
- * key of the object there outside its list; `undefined` is ignored.
+ * key of the object there outside its list; `undefined` is ignored. `source` names the table entry when
+ * `where` words the error for a method whose record is the entry's twin.
  */
-function refuseUnknownKeys(where, patch) {
-  const [position, keys] = PATCH_KEYS[where];
-  const nested = PATCH_NESTED_KEYS[where] ?? {};
+function refuseUnknownKeys(where, patch, source = where) {
+  const [position, keys] = PATCH_KEYS[source];
+  const nested = PATCH_NESTED_KEYS[source] ?? {};
   const visit = (value, accepted, prefix) => {
     for (const [key, item] of Object.entries(value)) {
       if (item === undefined) continue;
@@ -3182,9 +3347,9 @@ function refuseUnknownKeys(where, patch) {
  * are in `PATCH_KEYS`, where a field of `fields` refuses `null`, one of
  * `nullable` takes `null`, and each typed value has its type.
  */
-function checkPatch(where, patch, fields, nullable = {}) {
-  requireObject(patch, `${where} argument ${PATCH_KEYS[where][0] + 1}`);
-  refuseUnknownKeys(where, patch);
+function checkPatch(where, patch, fields, nullable = {}, source = where) {
+  requireObject(patch, `${where} argument ${PATCH_KEYS[source][0] + 1}`);
+  refuseUnknownKeys(where, patch, source);
   for (const [key, value] of Object.entries(patch)) {
     const type = fields[key] ?? nullable[key];
     if (value === undefined || type === undefined) continue;
@@ -3349,10 +3514,20 @@ function serialDate(runtime, serial, date1904) {
 }
 
 // Record keys whose value is a `ColorInput`; a colour string there becomes a `Color`.
+const CHART_SOURCE_KEYS = new Set(['name', 'categories', 'values', 'x', 'y', 'size']);
+
+/** The reference text of a `ChartDataSource` record (a series reference key); a literal source has no text form. */
+function chartSourceText(source, path) {
+  if (source.kind === ChartSourceKind.Literal) {
+    throw new FormulonError(StatusCode.InvalidArgument, `${path} cannot be set from a literal source`, `path=${path}`);
+  }
+  return source.kind === ChartSourceKind.Ref ? source.formula : '';
+}
+
 const COLOR_INPUT_KEYS = new Set([
   'color',
-  'fg',
-  'bg',
+  'foreground',
+  'background',
   'colors',
   'fill',
   'negativeFill',
@@ -3394,6 +3569,8 @@ function colorInputs(value, label) {
     let next;
     if (COLOR_INPUT_KEYS.has(key) && typeof item === 'string') next = formatColor(item, path);
     else if (key === 'colors' && Array.isArray(item)) next = item.map((c, i) => asColor(c, `${path}[${i}]`));
+    else if (CHART_SOURCE_KEYS.has(key) && isObject(item) && typeof item.kind === 'number' && 'formula' in item)
+      next = chartSourceText(item, path);
     else next = colorInputs(item, path);
     if (next !== item && !(Array.isArray(next) && next.every((c, i) => c === item[i]))) {
       if (out === value) out = { ...value };
@@ -3434,7 +3611,7 @@ function requireValueField(value, field, type) {
 }
 
 // ---------------------------------------------------------------------------
-// Cell formats: `Sheet.getCellFormat` / `Sheet.setCellFormat` over the style
+// Cell formats: `Sheet.getCellFormat` / `Sheet.updateCellFormat` over the style
 // records. tools/api/cell_format_cases.json pins the behaviour for the JS and
 // Python facades alike.
 // ---------------------------------------------------------------------------
@@ -3450,7 +3627,7 @@ const FORMAT_SIDE = Object.freeze({ kind: 'side' });
 const FORMAT_FIELDS = Object.freeze({
   font: {
     name: { kind: 'string' },
-    size: { kind: 'size', nullable: true },
+    sizePt: { kind: 'size', nullable: true },
     bold: FORMAT_FLAG,
     italic: FORMAT_FLAG,
     strike: FORMAT_FLAG,
@@ -3467,8 +3644,8 @@ const FORMAT_FIELDS = Object.freeze({
   },
   fill: {
     pattern: enumField(FillPattern),
-    fg: FORMAT_COLOR,
-    bg: FORMAT_COLOR,
+    foreground: FORMAT_COLOR,
+    background: FORMAT_COLOR,
     gradient: { kind: 'object' },
   },
   border: {
@@ -3497,8 +3674,8 @@ const FORMAT_FIELDS = Object.freeze({
 
 // The `CellXfInput` field each alignment key writes, and the presence flag it sets when it has one.
 const ALIGNMENT_XF = Object.freeze({
-  horizontal: ['horizontalAlign', 'hasHorizontalAlign'],
-  vertical: ['verticalAlign', 'hasVerticalAlign'],
+  horizontal: ['horizontal', 'hasHorizontal'],
+  vertical: ['vertical', 'hasVertical'],
   wrapText: ['wrapText', 'hasWrapText'],
   justifyLastLine: ['justifyLastLine', 'hasJustifyLastLine'],
   shrinkToFit: ['shrinkToFit'],
@@ -3535,7 +3712,7 @@ function formatColor(value, label) {
   if (typeof value === 'string') {
     if (!COLOR_TEXT.test(value)) throw new TypeError(`${label} must be "#RRGGBB" or "#AARRGGBB"`);
     const hex = value.length === 7 ? `FF${value.slice(1)}` : value.slice(1);
-    return { kind: ColorKind.Rgb, rgb: Number.parseInt(hex, 16), theme: 0, tint: 0, indexed: 0 };
+    return { kind: ColorKind.Rgb, argb: Number.parseInt(hex, 16), theme: 0, tint: 0, indexed: 0 };
   }
   if (!isObject(value)) throw new TypeError(`${label} must be a colour string or a Color`);
   const kind = formatCount(value.kind, `${label}.kind`);
@@ -3593,12 +3770,12 @@ function formatGroup(group, value, label) {
 
 /** Checks a whole `CellFormatPatch` before anything is written; the result holds only its given keys. */
 function checkCellFormatPatch(patch) {
-  const where = 'Sheet.setCellFormat';
+  const where = 'Sheet.updateCellFormat';
   requireObject(patch, `${where} argument 2`);
   refuseUnknownKeys(where, patch);
   const out = {};
   for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) continue;
+    if (value === undefined || key === 'source') continue;
     if (key === 'numberFormat') {
       requireString(value, `${where} numberFormat`);
       if (value === '') {
@@ -3622,8 +3799,8 @@ function mergeFill(current, patch) {
   const out = { ...current };
   if (patch.gradient === undefined) delete out.gradient;
   else out.gradient = patch.gradient;
-  for (const key of ['pattern', 'fg', 'bg']) if (patch[key] !== undefined) out[key] = patch[key];
-  const colored = patch.fg !== undefined || patch.bg !== undefined;
+  for (const key of ['pattern', 'foreground', 'background']) if (patch[key] !== undefined) out[key] = patch[key];
+  const colored = patch.foreground !== undefined || patch.background !== undefined;
   if (colored && patch.pattern === undefined && out.pattern === FillPattern.None) out.pattern = FillPattern.Solid;
   return out;
 }
@@ -3649,10 +3826,10 @@ function cellXfInput(xf) {
     fillIndex: xf.fillIndex,
     borderIndex: xf.borderIndex,
     numFmtId: xf.numFmtId,
-    horizontalAlign: xf.horizontalAlign ?? HorizontalAlign.General,
-    hasHorizontalAlign: present(xf.horizontalAlign),
-    verticalAlign: xf.verticalAlign ?? VerticalAlign.Bottom,
-    hasVerticalAlign: present(xf.verticalAlign),
+    horizontal: xf.horizontal ?? HorizontalAlign.General,
+    hasHorizontal: present(xf.horizontal),
+    vertical: xf.vertical ?? VerticalAlign.Bottom,
+    hasVertical: present(xf.vertical),
     wrapText: xf.wrapText ?? false,
     hasWrapText: present(xf.wrapText),
     justifyLastLine: xf.justifyLastLine ?? false,
@@ -3669,10 +3846,10 @@ function cellXfInput(xf) {
     hidden: xf.hidden ?? false,
   };
   for (const key of OPTIONAL_XF_FIELDS) if (present(xf[key])) input[key] = xf[key];
-  if (present(xf.xfId)) input.xfId = xf.xfId;
+  if (present(xf.styleXfIndex)) input.styleXfIndex = xf.styleXfIndex;
   input.hasAlignment =
-    input.hasHorizontalAlign ||
-    input.hasVerticalAlign ||
+    input.hasHorizontal ||
+    input.hasVertical ||
     input.hasWrapText ||
     input.hasJustifyLastLine ||
     OPTIONAL_XF_FIELDS.some((key) => key in input);
@@ -3705,17 +3882,18 @@ function patchedXf(raw, xf, patch, numFmtId) {
   return input;
 }
 
-/** The `CellFormat` of the cell XF record `xf`. */
-function cellFormatOf(raw, xf) {
-  const code = xf.numFmtId === 0 ? null : raw.getNumFmtString(xf.numFmtId);
+/** The `CellFormat` of the cell XF record `xf`, the effective XF read from layer `source`. */
+function cellFormatOf(raw, xf, source) {
+  const code = xf.numFmtId === 0 ? null : raw.getNumberFormat(xf.numFmtId);
   return {
+    source,
     numberFormat: code ?? 'General',
     font: raw.getFont(xf.fontIndex),
     fill: raw.getFill(xf.fillIndex),
     border: raw.getBorder(xf.borderIndex),
     alignment: {
-      horizontal: xf.horizontalAlign ?? HorizontalAlign.General,
-      vertical: xf.verticalAlign ?? VerticalAlign.Bottom,
+      horizontal: xf.horizontal ?? HorizontalAlign.General,
+      vertical: xf.vertical ?? VerticalAlign.Bottom,
       wrapText: xf.wrapText ?? false,
       shrinkToFit: xf.shrinkToFit ?? false,
       indent: xf.indent ?? 0,
@@ -3799,58 +3977,63 @@ function makeFacade(Raw, registry, runtime) {
   let ooxmlState;
 
   class Table {
-    #workbook;
+    #sheet;
     #id;
 
-    constructor(key, workbook, id) {
-      if (key !== token) throw new TypeError('Table has no public constructor; use Workbook.table');
-      this.#workbook = workbook;
+    constructor(key, sheet, id) {
+      if (key !== token) throw new TypeError('Table has no public constructor; use Sheet.table or Workbook.table');
+      this.#sheet = sheet;
       this.#id = id;
     }
 
     static {
       tableState = {
-        create: (workbook, id) => new Table(token, workbook, id),
+        create: (sheet, id) => new Table(token, sheet, id),
         locate: (table) => table.#locate(),
       };
     }
 
-    // The raw workbook and the table's current index.
+    // The raw workbook, the sheet's current index and the table's current index on it.
     #locate() {
-      const raw = liveRaw(this.#workbook);
-      return [raw, resolveRuntimeId(() => raw.resolveTableRuntimeId(this.#id), 'the table was removed')];
+      const sheet = sheetIndex(this.#sheet);
+      const raw = rawOf(this.#sheet.workbook);
+      const at = resolveRuntimeId(() => raw.resolveTableRuntimeId(this.#id), 'the table was removed');
+      return [raw, sheet, at.index];
     }
 
     get workbook() {
-      return this.#workbook;
+      return this.#sheet.workbook;
+    }
+
+    get sheet() {
+      return this.#sheet;
     }
 
     get index() {
-      return this.#locate()[1];
+      return this.#locate()[2];
     }
 
     get name() {
-      const [raw, index] = this.#locate();
-      return raw.getTable(index).name;
+      const [raw, sheet, index] = this.#locate();
+      return raw.getTable(sheet, index).name;
     }
 
-    get displayName() {
-      const [raw, index] = this.#locate();
-      return raw.getTable(index).displayName;
-    }
-
-    // `range` reaches the raw method as its `rect`; a `styleName` of `null` as the empty name that removes it.
+    // `range` reaches the raw method as its `rect`; `name` and `columns` of a read record are ignored.
     update(patch) {
       const where = 'Table.update';
       const fields = PATCH_FIELDS[where];
-      const nullable = { styleName: 'string' };
-      checkPatch(where, patch, fields, nullable);
-      if (patch.range === null) throw new TypeError(`${where} range must be a SheetRect or an A1 string`);
-      const [raw, index] = this.#locate();
-      const input = appliedFields(patch, fields, nullable);
-      if (input.styleName === null) input.styleName = '';
-      if (patch.range !== undefined) input.rect = tableRange(raw, raw.getTable(index).range.sheet, patch.range, where);
-      raw.updateTable(index, input);
+      checkPatch(where, patch, fields);
+      if (patch.range === null) throw new TypeError(`${where} range must be a CellRect, a SheetRect or an A1 string`);
+      const [raw, sheet, index] = this.#locate();
+      const input = appliedFields(patch, fields);
+      if (patch.range !== undefined) input.rect = tableRange(raw, sheet, patch.range, where);
+      raw.updateTable(sheet, index, input);
+    }
+
+    rename(name) {
+      requireString(name, 'Table.rename argument 1');
+      const [raw, sheet, index] = this.#locate();
+      raw.renameTable(sheet, index, name);
     }
   }
 
@@ -3919,8 +4102,8 @@ function makeFacade(Raw, registry, runtime) {
       }
     }
 
-    updateItem(field, item, patch) {
-      const where = 'Pivot.updateItem';
+    updateFieldItem(field, item, patch) {
+      const where = 'Pivot.updateFieldItem';
       checkPatch(where, patch, PATCH_FIELDS[where], { caption: 'string' });
       const [raw, sheet, pivot] = this.#locate();
       const setters = [
@@ -3933,17 +4116,17 @@ function makeFacade(Raw, registry, runtime) {
       }
     }
 
-    setStyleInfo(patch) {
-      const where = 'Pivot.setStyleInfo';
+    updateStyleOptions(patch) {
+      const where = 'Pivot.updateStyleOptions';
       const fields = PATCH_FIELDS[where];
-      checkPatch(where, patch, fields, { name: 'string' });
+      checkPatch(where, patch, fields, { styleName: 'string' });
       const [raw, sheet, pivot] = this.#locate();
-      const current = raw.getPivotStyleInfo(sheet, pivot) ?? {};
+      const current = raw.getPivotStyleOptions(sheet, pivot) ?? {};
       const info = {};
-      const name = patch.name === undefined ? current.name || undefined : (patch.name ?? undefined);
-      if (name !== undefined) info.name = name;
+      const styleName = patch.styleName === undefined ? current.styleName || undefined : (patch.styleName ?? undefined);
+      if (styleName !== undefined) info.styleName = styleName;
       for (const key of Object.keys(fields)) info[key] = patch[key] ?? current[key] ?? false;
-      raw.setPivotStyleInfo(sheet, pivot, info);
+      raw.updatePivotStyleOptions(sheet, pivot, info);
     }
 
     setFieldSort(field, order, options) {
@@ -3957,30 +4140,30 @@ function makeFacade(Raw, registry, runtime) {
       raw.setPivotFieldSort(sheet, pivot, field, order, byField);
     }
 
-    addFieldItem(field, name, options) {
+    // `item` is a new item's name, or `{ cacheIndex }` to bring in the cache's shared item at that position.
+    addFieldItem(field, item, options) {
       const where = 'Pivot.addFieldItem';
       let visible = true;
       if (options !== undefined && options !== null) {
         requireObject(options, `${where} argument 3`);
         if (options.visible !== undefined) visible = requireBoolean(options.visible, `${where} visible`);
       }
-      const [raw, sheet, pivot] = this.#locate();
-      return raw.addPivotFieldItem(sheet, pivot, field, name, visible);
-    }
-
-    addFieldSharedItem(field, cacheIndex, options) {
-      const where = 'Pivot.addFieldSharedItem';
-      let visible = true;
-      if (options !== undefined && options !== null) {
-        requireObject(options, `${where} argument 3`);
-        if (options.visible !== undefined) visible = requireBoolean(options.visible, `${where} visible`);
+      if (typeof item !== 'string') {
+        requireObject(item, `${where} argument 2`);
+        for (const [key, value] of Object.entries(item)) {
+          if (value !== undefined && key !== 'cacheIndex') {
+            throw new TypeError(`${where} argument 2 has no field ${key}`);
+          }
+        }
+        requireIndex(item.cacheIndex, `${where} cacheIndex`);
+        item = { cacheIndex: item.cacheIndex };
       }
       const [raw, sheet, pivot] = this.#locate();
-      return raw.addPivotFieldSharedItem(sheet, pivot, field, cacheIndex, visible);
+      return raw.addPivotFieldItem(sheet, pivot, field, item, visible);
     }
 
-    setGrandTotals(patch) {
-      const where = 'Pivot.setGrandTotals';
+    updateGrandTotals(patch) {
+      const where = 'Pivot.updateGrandTotals';
       requireObject(patch, `${where} argument 1`);
       refuseUnknownKeys(where, patch);
       const [raw, sheet, pivot] = this.#locate();
@@ -3988,7 +4171,7 @@ function makeFacade(Raw, registry, runtime) {
         patch.rows === undefined || patch.columns === undefined ? raw.getPivotGrandTotals(sheet, pivot) : {};
       const rows = patchField(patch, 'rows', current.rows, requireBoolean, where);
       const columns = patchField(patch, 'columns', current.columns, requireBoolean, where);
-      raw.setPivotGrandTotals(sheet, pivot, rows, columns);
+      raw.updatePivotGrandTotals(sheet, pivot, rows, columns);
     }
 
     setFieldDateGroup(field, group) {
@@ -4139,19 +4322,31 @@ function makeFacade(Raw, registry, runtime) {
   class Picture extends Drawing {}
 
   class Chart extends Drawing {
-    setLegend(patch) {
+    // The record replaces the legend, a key it leaves out taking Excel's default; `null` removes the legend.
+    setLegend(legend) {
       const where = 'Chart.setLegend';
       const [raw, sheet, id] = drawingState.locate(this);
-      if (patch === null) return raw.setChartLegend(sheet, id, -1, false);
-      checkPatch(where, patch, PATCH_FIELDS[where]);
-      const current = raw.getChart(sheet, id)?.legend ?? DEFAULT_LEGEND;
-      raw.setChartLegend(
-        sheet,
-        id,
-        patch.position ?? current.position,
-        patch.overlay ?? current.overlay,
-        patch.hiddenSeries ?? current.hiddenSeries,
-      );
+      if (legend === null) return raw.setChartLegend(sheet, id, null);
+      checkPatch(where, legend, PATCH_FIELDS[where], {}, 'Chart.updateLegend');
+      raw.setChartLegend(sheet, id, {
+        position: legend.position ?? DEFAULT_LEGEND.position,
+        overlay: legend.overlay ?? DEFAULT_LEGEND.overlay,
+        hiddenSeries: legend.hiddenSeries ?? DEFAULT_LEGEND.hiddenSeries,
+      });
+    }
+
+    // The record replaces the point's formatting (its `index` is ignored); `null` removes the formatting.
+    setPoint(plot, seriesIndex, pointIndex, point) {
+      const where = 'Chart.setPoint';
+      const [raw, sheet, id] = drawingState.locate(this);
+      if (point === null) return raw.setChartPoint(sheet, id, plot, seriesIndex, pointIndex, null);
+      requireObject(point, `${where} argument 4`);
+      for (const [key, value] of Object.entries(point)) {
+        if (value !== undefined && !['index', 'fill', 'line', 'marker'].includes(key)) {
+          throw new TypeError(`${where} argument 4 has no field ${key}`);
+        }
+      }
+      raw.setChartPoint(sheet, id, plot, seriesIndex, pointIndex, colorInputs(point, `${where} argument 4`));
     }
 
     setSource(source) {
@@ -4214,13 +4409,12 @@ function makeFacade(Raw, registry, runtime) {
     return raw.getSlicer(sheet, record.objectId) === null ? Drawing : Slicer;
   }
 
-  // The current index of a `TableRef` / `PivotRef` handle `value` passed to a method of `self`; undefined for
-  // anything else.
+  // The current index of a `TableRef` / `PivotRef` handle `value` passed to a method of the sheet `self`;
+  // undefined for anything else.
   function handleIndex(self, kind, value, label) {
     if (kind === 'table' && value instanceof Table) {
-      const workbook = self instanceof Workbook ? self : self.workbook;
-      if (value.workbook !== workbook) {
-        throw new FormulonError(StatusCode.InvalidArgument, `${label} is a Table of another workbook`, '');
+      if (value.sheet !== self) {
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} is a Table of another sheet`, '');
       }
       return value.index;
     }
@@ -4238,6 +4432,7 @@ function makeFacade(Raw, registry, runtime) {
     #position;
     #name;
     #pivots = new Map();
+    #tables = new Map();
     #drawings = new Map();
     #ooxml;
 
@@ -4265,6 +4460,7 @@ function makeFacade(Raw, registry, runtime) {
         place: (sheet, position) => {
           sheet.#position = position;
         },
+        tableHandleAt: (sheet, index) => sheet.#tableAt(rawOf(sheet.#workbook), sheet.#current(), index),
       };
     }
 
@@ -4437,13 +4633,13 @@ function makeFacade(Raw, registry, runtime) {
     listColumnOverrides() {
       return rawOf(this.#workbook)
         .listColumnOverrides(this.#current())
-        .map(({ styleXf, ...layout }) => layout);
+        .map(({ xfIndex, ...layout }) => layout);
     }
 
     listRowOverrides() {
       return rawOf(this.#workbook)
         .listRowOverrides(this.#current())
-        .map(({ styleXf, ...layout }) => layout);
+        .map(({ xfIndex, ...layout }) => layout);
     }
 
     // Each row is written in order; a failure leaves the cells before it written and names its cell.
@@ -4484,22 +4680,97 @@ function makeFacade(Raw, registry, runtime) {
 
     getCellFormat(row, col) {
       const raw = rawOf(this.#workbook);
-      const { xfIndex } = raw.getEffectiveStyle(this.#current(), row, col);
-      return cellFormatOf(raw, raw.getCellXf(xfIndex));
+      const { xfIndex, source } = raw.getEffectiveStyle(this.#current(), row, col);
+      return cellFormatOf(raw, raw.getCellXf(xfIndex), source);
     }
 
     // Every argument is checked first; the sheet changes only in the final remap.
-    setCellFormat(range, patch) {
+    updateCellFormat(range, patch) {
       const checked = checkCellFormatPatch(patch);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      const bases = raw.getRangeStyleBases(sheet, range);
+      const bases = raw.getRangeXfBases(sheet, range);
       if (Object.keys(checked).length === 0) return;
       let numFmtId;
       if (checked.numberFormat === 'General') numFmtId = 0;
-      else if (checked.numberFormat !== undefined) numFmtId = raw.addNumFmt(checked.numberFormat);
+      else if (checked.numberFormat !== undefined) numFmtId = raw.addNumberFormat(checked.numberFormat);
       const xfs = bases.map((base) => raw.addCellXf(patchedXf(raw, raw.getCellXf(base), checked, numFmtId)));
-      raw.remapRangeStyle(sheet, range, bases, xfs);
+      raw.remapRangeXfs(sheet, range, bases, xfs);
+    }
+
+    // The handle of the table at sheet-local `index` on the sheet `sheet` is.
+    #tableAt(raw, sheet, index) {
+      const id = raw.getTableRuntimeId(sheet, index);
+      let table = this.#tables.get(id);
+      if (table === undefined) {
+        table = tableState.create(this, id);
+        this.#tables.set(id, table);
+      }
+      return table;
+    }
+
+    listTables() {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const n = raw.getTableCount(sheet);
+      const tables = [];
+      for (let i = 0; i < n; i++) tables.push(this.#tableAt(raw, sheet, i));
+      return tables;
+    }
+
+    // A position, a name matched case-insensitively among this sheet's tables, or the sheet's own handle.
+    table(ref) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const named = (kind, value, label) => handleIndex(this, kind, value, label);
+      const [index] = resolveRef(raw, sheet, 'Sheet.table', [0, 'table'], [ref], named);
+      requireIndex(index, 'Sheet.table argument 1');
+      if (index >= raw.getTableCount(sheet)) {
+        throw new FormulonError(
+          StatusCode.IndexOutOfRange,
+          `table index ${index} is out of range`,
+          `table_index=${index}`,
+        );
+      }
+      return this.#tableAt(raw, sheet, index);
+    }
+
+    // Omitted `columns` reach the raw method empty, which takes the names from the header cells.
+    addTable(input) {
+      requireObject(input, 'Sheet.addTable argument 1');
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      if (typeof input.name === 'string' && namesACell(raw, input.name)) {
+        throw new FormulonError(
+          StatusCode.InvalidArgument,
+          `invalid table name: ${JSON.stringify(input.name)} is a cell address`,
+          `name=${input.name}`,
+        );
+      }
+      const spec = input.columns === undefined ? { ...input, columns: [] } : input;
+      return this.#tableAt(raw, sheet, raw.addTable(sheet, spec));
+    }
+
+    // An inline `format` is registered as a new differential format and reaches the raw method as its `dxfIndex`.
+    addCfRule(input) {
+      const where = 'Sheet.addCfRule';
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      input = colorInputs(input, `${where} argument 1`);
+      if (isObject(input) && input.format !== undefined) {
+        if (input.dxfIndex !== undefined) throw new TypeError(`${where} takes format or dxfIndex, not both`);
+        const format = requireObject(input.format, `${where} format`);
+        for (const [key, value] of Object.entries(format)) {
+          if (value !== undefined && !DXF_INPUT_KEYS.includes(key)) {
+            throw new TypeError(`${where} argument 1 has no field format.${key}`);
+          }
+        }
+        const spec = readableCopy(input);
+        delete spec.format;
+        spec.dxfIndex = raw.addDxf(format);
+        input = spec;
+      }
+      return raw.addCfRule(sheet, input);
     }
 
     // The handle of the pivot at `index` on the sheet `sheet` is.
@@ -4545,8 +4816,8 @@ function makeFacade(Raw, registry, runtime) {
         sheet,
         requireString(input.name, `${where} name`),
         requireNumber(input.cacheId, `${where} cacheId`),
-        requireNumber(input.anchorRow, `${where} anchorRow`),
-        requireNumber(input.anchorCol, `${where} anchorCol`),
+        requireNumber(input.anchorRow, `${where} anchor`),
+        requireNumber(input.anchorCol, `${where} anchor`),
       );
       return this.#pivotAt(raw, sheet, index);
     }
@@ -4682,10 +4953,32 @@ function makeFacade(Raw, registry, runtime) {
       return this.#added(raw, sheet, raw.addShape(sheet, spec));
     }
 
+    // The table may live on another sheet, so the raw call takes its sheet and its sheet-local index.
     addSlicer(table, column, spec) {
+      const where = 'Sheet.addSlicer';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      return this.#added(raw, sheet, raw.addSlicer(sheet, table, column, spec));
+      let tableSheet;
+      let tableIndex;
+      if (typeof table === 'string') {
+        const found = raw.findTable(table);
+        if (found === null) {
+          throw new FormulonError(
+            StatusCode.NotFound,
+            `no table has the table name ${JSON.stringify(table)}`,
+            `table_name=${table}`,
+          );
+        }
+        ({ sheet: tableSheet, index: tableIndex } = found);
+      } else if (table instanceof Table) {
+        if (table.workbook !== this.#workbook) {
+          throw new FormulonError(StatusCode.InvalidArgument, `${where} argument 1 is a Table of another workbook`, '');
+        }
+        [, tableSheet, tableIndex] = tableState.locate(table);
+      } else {
+        throw new TypeError(`${where} argument 1 must be a table name or a Table`);
+      }
+      return this.#added(raw, sheet, raw.addSlicer(sheet, tableSheet, tableIndex, column, spec));
     }
 
     restoreDrawing(bytes, opts) {
@@ -4714,13 +5007,13 @@ function makeFacade(Raw, registry, runtime) {
     // Freeze or split, pane origin, scroll origin, display flags, zoom, view
     // mode, direction, tab selection, then visibility. Only the two refusals
     // checked up front leave the view untouched.
-    setView(patch) {
-      const where = 'Sheet.setView';
+    updateView(patch) {
+      const where = 'Sheet.updateView';
       const fields = PATCH_FIELDS[where];
       checkPatch(where, patch, fields);
       const given = (key) => patch[key] !== undefined;
       const nonZero = (...keys) => keys.some((key) => given(key) && patch[key] !== 0);
-      if (nonZero('freezeRows', 'freezeCols') && nonZero('splitX', 'splitY')) {
+      if (nonZero('freezeRows', 'freezeCols') && nonZero('splitXTwips', 'splitYTwips')) {
         throw new TypeError(`${where} cannot freeze and split the view at once`);
       }
       if (!Object.keys(fields).some(given)) return;
@@ -4730,13 +5023,13 @@ function makeFacade(Raw, registry, runtime) {
       const merged = { ...view };
       for (const key of Object.keys(fields)) if (given(key)) merged[key] = patch[key];
       const freeze = merged.freezeRows !== view.freezeRows || merged.freezeCols !== view.freezeCols;
-      const split = merged.splitX !== view.splitX || merged.splitY !== view.splitY;
+      const split = merged.splitXTwips !== view.splitXTwips || merged.splitYTwips !== view.splitYTwips;
       // The panes once applied: a freeze replaces a split and a split a freeze.
-      let panes = [view.freezeRows, view.freezeCols, view.splitX, view.splitY];
+      let panes = [view.freezeRows, view.freezeCols, view.splitXTwips, view.splitYTwips];
       if (freeze) panes = [merged.freezeRows, merged.freezeCols, 0, 0];
       if (split) {
-        const cleared = merged.splitX === 0 && merged.splitY === 0;
-        panes = cleared ? [panes[0], panes[1], 0, 0] : [0, 0, merged.splitX, merged.splitY];
+        const cleared = merged.splitXTwips === 0 && merged.splitYTwips === 0;
+        panes = cleared ? [panes[0], panes[1], 0, 0] : [0, 0, merged.splitXTwips, merged.splitYTwips];
       }
       // The origin a view without panes reads (0, 0) passes back unrefused.
       if (nonZero('paneTopLeftRow', 'paneTopLeftCol') && panes.every((n) => n === 0)) {
@@ -4761,7 +5054,7 @@ function makeFacade(Raw, registry, runtime) {
         }
       }
       if (freeze) raw.setFreeze(sheet, merged.freezeRows, merged.freezeCols);
-      if (split) raw.setSplit(sheet, merged.splitX, merged.splitY);
+      if (split) raw.setSplit(sheet, merged.splitXTwips, merged.splitYTwips);
       // Changing the panes resets their origins, so partners are read afresh.
       const current = freeze || split ? raw.getView(sheet) : view;
       if (given('paneTopLeftRow') || given('paneTopLeftCol')) {
@@ -4780,7 +5073,7 @@ function makeFacade(Raw, registry, runtime) {
         ['showZeros', 'setShowZeros'],
         ['showFormulas', 'setShowFormulas'],
         ['showOutlineSymbols', 'setShowOutlineSymbols'],
-        ['zoomScale', 'setZoom'],
+        ['zoomPct', 'setZoom'],
         ['viewMode', 'setViewMode'],
         ['rightToLeft', 'setRightToLeft'],
         ['tabSelected', 'setTabSelected'],
@@ -4789,20 +5082,20 @@ function makeFacade(Raw, registry, runtime) {
       for (const [key, setter] of singles) if (given(key)) raw[setter](sheet, patch[key]);
     }
 
-    setPrintOptions(patch) {
-      const where = 'Sheet.setPrintOptions';
+    updatePrintOptions(patch) {
+      const where = 'Sheet.updatePrintOptions';
       checkPatch(where, patch, PATCH_FIELDS[where]);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      raw.setPrintOptions(
+      raw.updatePrintOptions(
         sheet,
         withoutUnstated(patch, () => raw.getPrintOptions(sheet)),
       );
     }
 
     // The C layer has no third state for a section: `null` and `''` both clear it.
-    setHeaderFooter(patch) {
-      const where = 'Sheet.setHeaderFooter';
+    updateHeaderFooter(patch) {
+      const where = 'Sheet.updateHeaderFooter';
       const sections = ['oddHeader', 'oddFooter', 'evenHeader', 'evenFooter', 'firstHeader', 'firstFooter'];
       const nullable = Object.fromEntries(sections.map((key) => [key, 'string']));
       checkPatch(where, patch, PATCH_FIELDS[where], nullable);
@@ -4810,7 +5103,7 @@ function makeFacade(Raw, registry, runtime) {
       const sheet = this.#current();
       const input = { ...withoutUnstated(patch, () => raw.getHeaderFooter(sheet)) };
       for (const key of sections) if (input[key] === null) input[key] = '';
-      raw.setHeaderFooter(sheet, input);
+      raw.updateHeaderFooter(sheet, input);
     }
 
     getPrintArea() {
@@ -4890,7 +5183,7 @@ function makeFacade(Raw, registry, runtime) {
       requireObject(input, `${where} argument 1`);
       const raw = rawOf(this.#workbook);
       const spec = { rect: typeof input.rect === 'string' ? rangeAddress(raw, input.rect) : input.rect };
-      for (const key of ['rowInput', 'colInput']) {
+      for (const key of ['rowInput', 'columnInput']) {
         const cell = input[key];
         if (typeof cell === 'string') {
           const { firstRow, firstCol } = cellAddress(raw, cell);
@@ -4944,11 +5237,11 @@ function makeFacade(Raw, registry, runtime) {
       if (raw.getCellXf(xfIndex).numFmtId !== 0) return;
       const rect = { firstRow: row, firstCol: col, lastRow: row, lastCol: col };
       const patch = { numberFormat: timed ? DATE_TIME_FORMAT : DATE_FORMAT };
-      const bases = raw.getRangeStyleBases(sheet, rect);
+      const bases = raw.getRangeXfBases(sheet, rect);
       const xfs = bases.map((base) =>
         raw.addCellXf(patchedXf(raw, raw.getCellXf(base), patch, BUILTIN_NUM_FMT_IDS[patch.numberFormat])),
       );
-      raw.remapRangeStyle(sheet, rect, bases, xfs);
+      raw.remapRangeXfs(sheet, rect, bases, xfs);
     }
 
     setComment(row, col, comment) {
@@ -4959,16 +5252,57 @@ function makeFacade(Raw, registry, runtime) {
       rawOf(this.#workbook).setComment(this.#current(), row, col, author, text);
     }
 
-    addHyperlink(row, col, link) {
-      rawOf(this.#workbook).addHyperlink(this.#current(), row, col, ...hyperlinkArgs(link, 'Sheet.addHyperlink', 3));
+    // `null` removes the hyperlink anchored at the cell and does nothing when there is none.
+    setHyperlink(row, col, link) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      if (link === null) return removeHyperlinkIfAny(raw, sheet, row, col);
+      raw.setHyperlink(sheet, row, col, ...hyperlinkArgs(link, 'Sheet.setHyperlink', 3));
     }
 
-    addHyperlinkRange(range, link) {
-      rawOf(this.#workbook).addHyperlinkRange(
-        this.#current(),
-        range,
-        ...hyperlinkArgs(link, 'Sheet.addHyperlinkRange', 2),
-      );
+    // `null` removes the hyperlink anchored at the range's top-left cell.
+    setHyperlinkRange(range, link) {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      if (link === null) return removeHyperlinkIfAny(raw, sheet, range.firstRow, range.firstCol);
+      raw.setHyperlinkRange(sheet, range, ...hyperlinkArgs(link, 'Sheet.setHyperlinkRange', 2));
+    }
+
+    setRowBreak(row, input) {
+      this.#setBreak('Sheet.setRowBreak', 'setRowBreak', 'row', row, input);
+    }
+
+    setColumnBreak(col, input) {
+      this.#setBreak('Sheet.setColumnBreak', 'setColumnBreak', 'col', col, input);
+    }
+
+    // `input` is a `PageBreakInput` or the `RowBreak` / `ColumnBreak` read back, whose `key` is ignored; `null`
+    // removes the break.
+    #setBreak(where, rawName, key, position, input) {
+      let record = null;
+      if (input !== null) {
+        requireObject(input, `${where} argument 2`);
+        for (const [name, value] of Object.entries(input)) {
+          if (value !== undefined && ![key, 'first', 'last', 'manual'].includes(name)) {
+            throw new TypeError(`${where} argument 2 has no field ${name}`);
+          }
+        }
+        record = { ...input };
+        delete record[key];
+      }
+      rawOf(this.#workbook)[rawName](this.#current(), position, record);
+    }
+
+    // `null` removes the protection; a record sets the whole protection.
+    setSheetProtection(protection) {
+      const where = 'Sheet.setSheetProtection';
+      const source = 'Sheet.updateSheetProtection';
+      if (protection !== null) {
+        const fields = { ...PATCH_FIELDS[source], spinCount: 'number' };
+        const nullable = strings('algorithmName', 'hashValue', 'saltValue', 'legacyPasswordHash');
+        checkPatch(where, protection, fields, nullable, source);
+      }
+      rawOf(this.#workbook).setSheetProtection(this.#current(), protection);
     }
 
     // Only the keys the patch gives reach the engine; a record's other fields are ignored.
@@ -4996,8 +5330,8 @@ function makeFacade(Raw, registry, runtime) {
       rawOf(this.#workbook).setArrayFormula(this.#current(), rect, formula);
     }
 
-    setPageSetup(setup) {
-      const where = 'Sheet.setPageSetup';
+    updatePageSetup(setup) {
+      const where = 'Sheet.updatePageSetup';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       checkForwardedPatch(where, setup, PATCH_FIELDS[where]);
@@ -5012,7 +5346,7 @@ function makeFacade(Raw, registry, runtime) {
         }
         setup = { ...setup, orientation: undefined };
       }
-      raw.setPageSetup(
+      raw.updatePageSetup(
         sheet,
         withoutUnstated(setup, () => raw.getPageSetup(sheet)),
       );
@@ -5025,6 +5359,15 @@ function makeFacade(Raw, registry, runtime) {
       const runs = [];
       for (let i = 0; i < count; i++) runs.push(raw.getCellPhoneticRun(sheet, row, col, i));
       return runs;
+    }
+  }
+
+  // `removeHyperlink` answers `NotFound` for a cell without a hyperlink, which `setHyperlink(..., null)` does not.
+  function removeHyperlinkIfAny(raw, sheet, row, col) {
+    try {
+      raw.removeHyperlink(sheet, row, col);
+    } catch (e) {
+      if (!(e?.name === 'FormulonError' && e.code === StatusCode.NotFound)) throw e;
     }
   }
 
@@ -5044,7 +5387,6 @@ function makeFacade(Raw, registry, runtime) {
   class Workbook {
     #handle;
     #sheets;
-    #tables = new Map();
     #pivotCaches = new Map();
     #disposed = false;
     #deleted = false;
@@ -5201,9 +5543,9 @@ function makeFacade(Raw, registry, runtime) {
       return [...this.#sheets];
     }
 
-    getActiveSheet() {
+    activeSheet() {
       this.#alive();
-      return this.#sheets[this.#raw.getActiveSheet()];
+      return this.#sheets[this.#raw.activeSheet()];
     }
 
     setActiveSheet(sheet) {
@@ -5230,56 +5572,19 @@ function makeFacade(Raw, registry, runtime) {
       this.#renumber();
     }
 
-    // The handle of the table at workbook-wide `index`.
-    #tableAt(index) {
-      const id = this.#raw.getTableRuntimeId(index);
-      let table = this.#tables.get(id);
-      if (table === undefined) {
-        table = tableState.create(this, id);
-        this.#tables.set(id, table);
-      }
-      return table;
-    }
-
-    listTables() {
+    // The one workbook-wide table lookup: tables are added, listed and removed on their `Sheet`.
+    table(name) {
+      requireString(name, 'Workbook.table name');
       this.#alive();
-      const n = this.#raw.getTableCount();
-      const tables = [];
-      for (let i = 0; i < n; i++) tables.push(this.#tableAt(i));
-      return tables;
-    }
-
-    table(index) {
-      requireIndex(index, 'Workbook.table argument 1');
-      this.#alive();
-      if (index >= this.#raw.getTableCount()) {
+      const found = this.#raw.findTable(name);
+      if (found === null) {
         throw new FormulonError(
-          StatusCode.IndexOutOfRange,
-          `table index ${index} is out of range`,
-          `table_index=${index}`,
+          StatusCode.NotFound,
+          `no table has the table name ${JSON.stringify(name)}`,
+          `table_name=${name}`,
         );
       }
-      return this.#tableAt(index);
-    }
-
-    // Omitted `columns` reach the raw method empty, which takes the names from the header cells.
-    addTable(input) {
-      requireObject(input, 'Workbook.addTable argument 1');
-      for (const [field, context] of [
-        ['name', 'name'],
-        ['displayName', 'display_name'],
-      ]) {
-        const text = input[field];
-        if (typeof text === 'string' && namesACell(this.#raw, text)) {
-          throw new FormulonError(
-            StatusCode.InvalidArgument,
-            `invalid table ${field}: ${JSON.stringify(text)} is a cell address`,
-            `${context}=${text}`,
-          );
-        }
-      }
-      const spec = input.columns === undefined ? { ...input, columns: [] } : input;
-      return this.#tableAt(this.#raw.addTable(spec));
+      return sheetState.tableHandleAt(this.#sheets[found.sheet], found.index);
     }
 
     // The handle of the pivot cache `cacheId`, whether or not the workbook has it now.
@@ -5328,7 +5633,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     setPinnedNow(time) {
-      if (time === null) return this.#raw.clearPinnedNow();
+      if (time === null) return this.#raw.setPinnedNow(null);
       const where = 'Workbook.setPinnedNow';
       if (time instanceof Date) {
         if (Number.isNaN(time.getTime())) throw new RangeError(`${where} argument 1 is an invalid Date`);
@@ -5357,7 +5662,12 @@ function makeFacade(Raw, registry, runtime) {
     setThemeColors(colors) {
       const where = 'Workbook.setThemeColors';
       requireObject(colors, `${where} argument 1`);
-      this.#raw.setThemeColors(requireArray(colors.colors, `${where} colors`));
+      const input = colorInputs(colors, `${where} argument 1`);
+      this.#raw.setThemeColors(requireArray(input.colors, `${where} colors`));
+    }
+
+    getDefaultFont() {
+      return this.#raw.getDefaultFont();
     }
 
     setThemeScriptFont(font) {
@@ -5399,8 +5709,8 @@ function makeFacade(Raw, registry, runtime) {
       return this.#raw.setDefinedName({ ...fields, localSheetId: this.#resolve(scope, 'setDefinedName', 'scope') });
     }
 
-    setIterative(patch) {
-      const where = 'Workbook.setIterative';
+    updateIterative(patch) {
+      const where = 'Workbook.updateIterative';
       checkForwardedPatch(where, patch, PATCH_FIELDS[where]);
       if (isObject(patch)) {
         const { maxIterations, maxChange } = patch;
@@ -5410,9 +5720,11 @@ function makeFacade(Raw, registry, runtime) {
         if (typeof maxChange === 'number' && maxChange < 0)
           throw new RangeError(`${where} maxChange must not be negative`);
       }
-      this.#raw.setIterative(patch);
+      this.#raw.updateIterative(patch);
     }
   }
+
+  const DXF_INPUT_KEYS = Object.freeze(['font', 'fill', 'border', 'numberFormat', 'alignment', 'protection']);
 
   class WorkbookOoxml {
     #workbook;
@@ -5420,6 +5732,17 @@ function makeFacade(Raw, registry, runtime) {
     constructor(key, workbook) {
       if (key !== token) throw new TypeError('WorkbookOoxml has no public constructor; use Workbook.ooxml');
       this.#workbook = workbook;
+    }
+
+    addDxf(input) {
+      const where = 'Workbook.addDxf';
+      requireObject(input, `${where} argument 1`);
+      for (const [key, value] of Object.entries(input)) {
+        if (value !== undefined && !DXF_INPUT_KEYS.includes(key)) {
+          throw new TypeError(`${where} argument 1 has no field ${key}`);
+        }
+      }
+      return rawOf(this.#workbook).addDxf(colorInputs(input, `${where} argument 1`));
     }
 
     static {
@@ -5440,18 +5763,18 @@ function makeFacade(Raw, registry, runtime) {
       ooxmlState = { ...ooxmlState, sheetOf: (ooxml) => ooxml.#sheet };
     }
 
-    getColumnStyle(col) {
-      requireIndex(col, 'Sheet.getColumnStyle argument 1');
+    getColumnXfIndex(col) {
+      requireIndex(col, 'Sheet.getColumnXfIndex argument 1');
       const raw = rawOf(this.#sheet.workbook);
       const span = raw.listColumnOverrides(sheetIndex(this.#sheet)).find((c) => c.first <= col && col <= c.last);
-      return span?.styleXf ?? null;
+      return span?.xfIndex ?? null;
     }
 
-    getRowStyle(row) {
-      requireIndex(row, 'Sheet.getRowStyle argument 1');
+    getRowXfIndex(row) {
+      requireIndex(row, 'Sheet.getRowXfIndex argument 1');
       const raw = rawOf(this.#sheet.workbook);
       const override = raw.listRowOverrides(sheetIndex(this.#sheet)).find((r) => r.row === row);
-      return override?.styleXf ?? null;
+      return override?.xfIndex ?? null;
     }
   }
 
@@ -5463,8 +5786,8 @@ function makeFacade(Raw, registry, runtime) {
 
   const sheetCall = (self, name, args) => rawOf(self.workbook)[name](sheetIndex(self), ...args);
   const tableCall = (self, name, args) => {
-    const [raw, index] = tableState.locate(self);
-    return raw[name](index, ...args);
+    const [raw, sheet, index] = tableState.locate(self);
+    return raw[name](sheet, index, ...args);
   };
   const pivotCall = (self, name, args) => {
     const [raw, sheet, index] = pivotState.locate(self);
@@ -5536,15 +5859,11 @@ function makeFacade(Raw, registry, runtime) {
     }
   }
 
-  const tableSheet = (self) => {
-    const [raw, index] = tableState.locate(self);
-    return raw.getTable(index).range.sheet;
-  };
   const argumentForms = [
     ['Workbook', Workbook, rawOf, () => undefined],
     ['Sheet', Sheet, (self) => rawOf(self.workbook), sheetIndex],
     ['Pivot', Pivot, (self) => rawOf(self.sheet.workbook), (self) => sheetIndex(self.sheet)],
-    ['Table', Table, (self) => tableState.locate(self)[0], tableSheet],
+    ['Table', Table, (self) => tableState.locate(self)[0], (self) => tableState.locate(self)[1]],
     [
       'Sheet',
       SheetOoxml,
@@ -5561,7 +5880,7 @@ function makeFacade(Raw, registry, runtime) {
   const guardedClasses = [
     [Workbook, (self) => self],
     [Sheet, workbookOfSheet],
-    [Table, workbookOfSheet],
+    [Table, (self) => self.workbook],
     [PivotCache, workbookOfSheet],
     [Pivot, (self) => self.sheet.workbook],
     [Drawing, (self) => self.sheet.workbook],
@@ -5733,7 +6052,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
       const fields = PATCH_FIELDS[where];
       // A patch that carries `*Stated` keys passes back the record its `get*` twin reads.
       const stated = keys.some((key) => key.endsWith('Stated'));
-      const reader = rawName.replace(/^set/, 'get');
+      const reader = rawName.replace(/^(?:set|update)/, 'get');
       defineMethod(
         proto,
         name,

@@ -62,10 +62,10 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   ASSERT_EQ(match_count, 1U);
   fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
-  EXPECT_EQ(m.kind, FM_CF_DIFFERENTIAL_FORMAT);
+  EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(m.priority, 1);
-  EXPECT_EQ(m.dxf_id_engaged, 1);
-  EXPECT_EQ(m.dxf_id, 7U);
+  EXPECT_EQ(m.dxf_index_engaged, 1);
+  EXPECT_EQ(m.dxf_index, 7U);
 
   // Second matched cell: A3 (row=2).
   ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, 1, &row, &col, &match_count), 0);
@@ -73,8 +73,8 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   EXPECT_EQ(col, 0U);
   ASSERT_EQ(match_count, 1U);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 1, 0, &m), 0);
-  EXPECT_EQ(m.kind, FM_CF_DIFFERENTIAL_FORMAT);
-  EXPECT_EQ(m.dxf_id, 7U);
+  EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
+  EXPECT_EQ(m.dxf_index, 7U);
 }
 
 TEST(FormulonCApiCf, EvaluateRangeRejectsRequestPastViewportCeiling) {
@@ -128,8 +128,8 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
   ASSERT_EQ(match_count, 1U);
   fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
-  EXPECT_EQ(m.dxf_id_engaged, 1);
-  EXPECT_EQ(m.dxf_id, 7U);
+  EXPECT_EQ(m.dxf_index_engaged, 1);
+  EXPECT_EQ(m.dxf_index, 7U);
 }
 
 TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {
@@ -181,7 +181,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {
     ASSERT_EQ(match_count, 1U) << "i=" << i;
     fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
     ASSERT_EQ(fm_cf_results_get_match_at(results.handle, i, 0, &m), 0) << "i=" << i;
-    EXPECT_EQ(m.kind, FM_CF_COLOR_SCALE) << "i=" << i;
+    EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_COLOR_SCALE) << "i=" << i;
     const auto& [er, eg, eb] = expected[i];
     EXPECT_NEAR(static_cast<int>(CfR(m.color)), static_cast<int>(er), 1) << "i=" << i;
     EXPECT_NEAR(static_cast<int>(CfG(m.color)), static_cast<int>(eg), 1) << "i=" << i;
@@ -264,8 +264,8 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "AND(A1>10,Sheet2!A1=5)";
-  rule.dxf_id_engaged = 1;
-  rule.dxf_id = 3;
+  rule.dxf_index_engaged = 1;
+  rule.dxf_index = 3;
   rule.ranges = &sqref;
   rule.range_count = 1;
   std::size_t rule_index = 0;
@@ -281,9 +281,9 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
 
   fm_cf_match_t match = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
-  EXPECT_EQ(match.kind, FM_CF_DIFFERENTIAL_FORMAT);
-  EXPECT_EQ(match.dxf_id_engaged, 1);
-  EXPECT_EQ(match.dxf_id, 3U);
+  EXPECT_EQ(match.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
+  EXPECT_EQ(match.dxf_index_engaged, 1);
+  EXPECT_EQ(match.dxf_index, 3U);
 }
 
 TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
@@ -298,8 +298,8 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "A1>10";
-  rule.dxf_id_engaged = 1;
-  rule.dxf_id = 4;
+  rule.dxf_index_engaged = 1;
+  rule.dxf_index = 4;
   rule.ranges = &sqref;
   rule.range_count = 1;
   std::size_t rule_index = 0;
@@ -317,9 +317,9 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
 
   fm_cf_match_t match = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
-  EXPECT_EQ(match.kind, FM_CF_DIFFERENTIAL_FORMAT);
-  EXPECT_EQ(match.dxf_id_engaged, 1);
-  EXPECT_EQ(match.dxf_id, 4U);
+  EXPECT_EQ(match.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
+  EXPECT_EQ(match.dxf_index_engaged, 1);
+  EXPECT_EQ(match.dxf_index, 4U);
 }
 
 namespace {
@@ -337,7 +337,7 @@ std::uint32_t ResolvedArgb(const formulon::Workbook& wb, const formulon::cf::Col
 }
 
 std::uint32_t PackArgb(const fm_color_spec_t& c) {
-  return c.rgb;
+  return c.argb;
 }
 
 WorkbookGuard ThemeColorWorkbook() {
@@ -429,7 +429,7 @@ TEST(FormulonCApiCf, ThemeColorDataBarEvaluatedPayloadIsResolvedNotBlack) {
   fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
   ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count), 0);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
-  EXPECT_EQ(m.kind, FM_CF_DATA_BAR);
+  EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DATA_BAR);
   EXPECT_EQ(PackArgb(m.bar_fill), expected);
 }
 
@@ -445,12 +445,12 @@ TEST(FormulonCApiCf, ThemeColorRuleReadbackReportsTheThemeSelector) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &rule), 0) << fm_get_last_error_message();
   ASSERT_GE(rule.color_scale_count, 2U);
-  EXPECT_EQ(rule.color_scale_colors[0].kind, kFmColorTheme);
+  EXPECT_EQ(rule.color_scale_colors[0].kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(rule.color_scale_colors[0].theme, scale_low.theme);
   EXPECT_DOUBLE_EQ(rule.color_scale_colors[0].tint, scale_low.tint);
 
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &rule), 0) << fm_get_last_error_message();
-  EXPECT_EQ(rule.data_bar_fill.kind, kFmColorTheme);
+  EXPECT_EQ(rule.data_bar_fill.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(rule.data_bar_fill.theme, bar_fill.theme);
   EXPECT_DOUBLE_EQ(rule.data_bar_fill.tint, bar_fill.tint);
 }

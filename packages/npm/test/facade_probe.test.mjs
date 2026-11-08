@@ -115,7 +115,7 @@ function makeRaw(surface) {
       this.checkSheet(i);
       this.names[i] = name;
     }
-    getActiveSheet() {
+    activeSheet() {
       this.alive();
       return this.active;
     }
@@ -143,9 +143,9 @@ function makeRaw(surface) {
       this.alive();
       return { ...this.grandTotals };
     }
-    setPivotGrandTotals(sheet, pivotIndex, rows, columns) {
+    updatePivotGrandTotals(sheet, pivotIndex, rows, columns) {
       this.alive();
-      this.log.push(['setPivotGrandTotals', [sheet, pivotIndex, rows, columns]]);
+      this.log.push(['updatePivotGrandTotals', [sheet, pivotIndex, rows, columns]]);
       this.grandTotals = { rows, columns };
     }
     getThreadedComment(_sheet, id) {
@@ -345,7 +345,7 @@ test('H12: SheetRef accepts a Sheet, an index or a name; a foreign Sheet is a Ty
   wb.removeSheet(2);
   assertInSync(wb, raw);
   wb.setActiveSheet('Calc');
-  assert.equal(wb.getActiveSheet(), wb.sheet('Calc'));
+  assert.equal(wb.activeSheet(), wb.sheet('Calc'));
   assert.equal(raw.active, 1);
   const other = Workbook.createDefault();
   assert.throws(() => wb.removeSheet(other.sheet(0)), TypeError);
@@ -381,11 +381,11 @@ test('A6: a patch leaves omitted and undefined keys unchanged, and refuses null 
   const { wb, raw } = loaded();
   const ws = wb.sheet('Calc');
   const pivot = ws.pivot(0);
-  pivot.setGrandTotals({ columns: true });
-  assert.deepEqual(raw.log.at(-1), ['setPivotGrandTotals', [1, 0, true, true]]);
-  pivot.setGrandTotals({ rows: false, columns: undefined });
-  assert.deepEqual(raw.log.at(-1), ['setPivotGrandTotals', [1, 0, false, true]]);
-  assert.throws(() => pivot.setGrandTotals({ rows: null }), TypeError);
+  pivot.updateGrandTotals({ columns: true });
+  assert.deepEqual(raw.log.at(-1), ['updatePivotGrandTotals', [1, 0, true, true]]);
+  pivot.updateGrandTotals({ rows: false, columns: undefined });
+  assert.deepEqual(raw.log.at(-1), ['updatePivotGrandTotals', [1, 0, false, true]]);
+  assert.throws(() => pivot.updateGrandTotals({ rows: null }), TypeError);
   ws.updateThreadedComment('c1', { text: 'new' });
   assert.deepEqual(raw.log.at(-1), ['updateThreadedComment', [1, 'c1', { text: 'new' }]]);
   ws.updateThreadedComment('c1', { done: true });

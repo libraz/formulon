@@ -84,7 +84,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 0, 0)],
                     type=1,
-                    op=5,
+                    operator=5,
                     formula1="10",
                 ),
             )

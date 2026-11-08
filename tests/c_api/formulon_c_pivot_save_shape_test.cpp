@@ -63,7 +63,7 @@ void BuildHostPivot(fm_workbook_t* wb) {
     spec.source_name = headers[i];
     spec.custom_name = "";
     spec.axis = axes[i];
-    spec.subtotal_top = 1;
+    spec.subtotal_top = FM_TRISTATE_TRUE;
     spec.number_format = "";
     std::size_t field = 99;
     ASSERT_EQ(fm_sheet_add_pivot_field(wb, 0, pivot, &spec, &field), 0) << fm_get_last_error_message();
@@ -81,7 +81,7 @@ void BuildHostPivot(fm_workbook_t* wb) {
     fm_pivot_data_field_spec_t df = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
     df.name = value.name;
     df.field_index = value.field;
-    df.aggregation = FM_PIVOT_AGG_SUM;
+    df.aggregation = FM_PIVOT_AGGREGATION_SUM;
     df.number_format = "";
     df.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
     df.show_as_base_field = -1;
@@ -111,9 +111,9 @@ std::vector<Cell> ProjectedCells(fm_workbook_t* wb) {
   std::vector<Cell> out;
   for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
     Cell cell{c.row, c.col, c.kind, c.value.kind, {}, 0.0};
-    if (c.value.kind == FM_VAL_TEXT && c.value.u.text != nullptr) {
+    if (c.value.kind == FM_VALUE_KIND_TEXT && c.value.u.text != nullptr) {
       cell.text = c.value.u.text;
-    } else if (c.value.kind == FM_VAL_NUMBER) {
+    } else if (c.value.kind == FM_VALUE_KIND_NUMBER) {
       cell.number = c.value.u.number;
     }
     out.push_back(std::move(cell));
@@ -200,13 +200,13 @@ fm_value_t SheetValue(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
 
 void ExpectSheetNumber(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, double expected) {
   const fm_value_t value = SheetValue(wb, row, col);
-  ASSERT_EQ(value.kind, FM_VAL_NUMBER) << "row=" << row << " col=" << col;
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER) << "row=" << row << " col=" << col;
   EXPECT_DOUBLE_EQ(value.u.number, expected) << "row=" << row << " col=" << col;
 }
 
 void ExpectSheetText(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, const std::string& expected) {
   const fm_value_t value = SheetValue(wb, row, col);
-  ASSERT_EQ(value.kind, FM_VAL_TEXT) << "row=" << row << " col=" << col;
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_TEXT) << "row=" << row << " col=" << col;
   EXPECT_EQ(std::string(value.u.text), expected) << "row=" << row << " col=" << col;
 }
 
@@ -225,7 +225,7 @@ bool LayoutHasNumber(fm_workbook_t* wb, double number) {
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0U, 0U, &projected.handle), 0) << fm_get_last_error_message();
   for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
-    if (cell.value.kind == FM_VAL_NUMBER && cell.value.u.number == number) {
+    if (cell.value.kind == FM_VALUE_KIND_NUMBER && cell.value.u.number == number) {
       return true;
     }
   }
@@ -255,7 +255,7 @@ TEST(FormulonCApiPivotSaveShape, ApiPivotReportIsInTheCellsAndFormulasReadIt) {
   ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0U, 0U, 0U, 1U, 0), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ExpectSheetNumber(wb.handle, 2U, kValueCol, 400.0);
-  EXPECT_EQ(SheetValue(wb.handle, 3U, kValueCol).kind, FM_VAL_BLANK);
+  EXPECT_EQ(SheetValue(wb.handle, 3U, kValueCol).kind, FM_VALUE_KIND_BLANK);
   ExpectSheetNumber(wb.handle, 9U, 0U, 800.0);
 
   // The saved file holds the cells.
@@ -266,7 +266,7 @@ TEST(FormulonCApiPivotSaveShape, ApiPivotReportIsInTheCellsAndFormulasReadIt) {
   ExpectSheetText(loaded.handle, 1U, kLabelCol, "North");
   ExpectSheetNumber(loaded.handle, 1U, kValueCol, 400.0);
   ExpectSheetNumber(loaded.handle, 2U, kValueCol, 400.0);
-  EXPECT_EQ(SheetValue(loaded.handle, 3U, kValueCol).kind, FM_VAL_BLANK);
+  EXPECT_EQ(SheetValue(loaded.handle, 3U, kValueCol).kind, FM_VALUE_KIND_BLANK);
 }
 
 TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
@@ -280,7 +280,7 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   spec.name = "Count of Amount";
   spec.field_index = 1U;
-  spec.aggregation = FM_PIVOT_AGG_COUNT;
+  spec.aggregation = FM_PIVOT_AGGREGATION_COUNT;
   spec.number_format = "";
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   spec.show_as_base_field = -1;
@@ -294,7 +294,7 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   std::size_t data_fields = 0;
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0U, 0U, &data_fields), 0);
   EXPECT_EQ(data_fields, 1U);
-  EXPECT_EQ(SheetValue(wb.handle, 0U, 5U).kind, FM_VAL_BLANK);
+  EXPECT_EQ(SheetValue(wb.handle, 0U, 5U).kind, FM_VALUE_KIND_BLANK);
   ExpectSheetNumber(wb.handle, 3U, kValueCol, 1000.0);
   std::size_t merges = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merges), 0);
@@ -307,7 +307,7 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   options.grid_drop_zones = 1;
   ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U})), 0)
       << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, 0U, &options), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_update_pivot_options(wb.handle, 0U, 0U, &options), kPreconditionFailed);
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, 0U, &options), 0);
   EXPECT_EQ(options.grid_drop_zones, 0);
 }
@@ -344,8 +344,8 @@ TEST(FormulonCApiPivotSaveShape, RemovingAPivotClearsItsReport) {
   ASSERT_EQ(fm_sheet_remove_pivot(wb.handle, 0U, 0U), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   for (std::uint32_t row = 0; row < 4U; ++row) {
-    EXPECT_EQ(SheetValue(wb.handle, row, kLabelCol).kind, FM_VAL_BLANK) << row;
-    EXPECT_EQ(SheetValue(wb.handle, row, kValueCol).kind, FM_VAL_BLANK) << row;
+    EXPECT_EQ(SheetValue(wb.handle, row, kLabelCol).kind, FM_VALUE_KIND_BLANK) << row;
+    EXPECT_EQ(SheetValue(wb.handle, row, kValueCol).kind, FM_VALUE_KIND_BLANK) << row;
   }
   ExpectSheetNumber(wb.handle, 9U, 0U, 0.0);
 }
@@ -376,7 +376,7 @@ TEST(FormulonCApiPivotSaveShape, CacheEditLeavesTheReportPendingUntilProjected) 
   // So does the next table edit.
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 1U, 1U, 200.0), 0);
   EXPECT_EQ(Pending(wb.handle), 1);
-  ASSERT_EQ(fm_sheet_set_pivot_name(wb.handle, 0U, 0U, "Renamed"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_rename_pivot(wb.handle, 0U, 0U, "Renamed"), 0) << fm_get_last_error_message();
   EXPECT_EQ(Pending(wb.handle), 0);
   ExpectSheetNumber(wb.handle, 2U, kValueCol, 600.0);
 }
@@ -409,7 +409,7 @@ TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {
   fm_pivot_cache_options_t options = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id, &options), 0);
   options.save_data = 0;
-  ASSERT_EQ(fm_workbook_set_pivot_cache_options(wb.handle, cache_id, &options), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, &options), 0) << fm_get_last_error_message();
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
 

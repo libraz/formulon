@@ -13,7 +13,7 @@ namespace detail {
 
 /// A patch field: absent keeps, `null` clears, anything else sets `value`.
 struct Field {
-  int32_t op = FM_CHART_PATCH_KEEP;
+  int32_t op = FM_CHART_PATCH_OP_KEEP;
   Napi::Value value;
 };
 

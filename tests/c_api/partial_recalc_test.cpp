@@ -77,11 +77,11 @@ TEST(FormulonCApiPartialRecalc, RecomputesOnlyClosure) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 6.0);
   // C1 was not in the closure: still blank.
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 2, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BLANK);
 }
 
 TEST(FormulonCApiPartialRecalc, NullArgumentsRejected) {
@@ -119,7 +119,7 @@ TEST(FormulonCApiPartialRecalc, SheetIndexPastTheLastSheetRejected) {
   // B1 stayed dirty rather than being reported as recomputed.
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_BLANK);
 
   // The last valid sheet index still works.
   uint32_t recomputed = 0;
@@ -140,7 +140,7 @@ TEST(FormulonCApiPartialRecalc, OutCountOptional) {
   EXPECT_EQ(fm_sheet_recalc_viewport(wb.handle, 0, &vp, nullptr), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 42.0);
 }
 
@@ -159,7 +159,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressContinueRunsToConvergence) {
   // Cell should converge near 10.
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_NEAR(v.u.number, 10.0, 0.01);
 }
 
@@ -179,7 +179,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressAbortStopsEarly) {
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   // Partial (not converged, not error).
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
 }
 
 TEST(FormulonCApiPartialRecalc, IterativeProgressNullArgumentRejected) {
@@ -217,6 +217,6 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressClearedByNullCallback) {
   EXPECT_EQ(g_callback_invocations.load(), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_NEAR(v.u.number, 10.0, 0.01);
 }

@@ -19,5 +19,5 @@ inline fm_status_t SetDefinedName(fm_workbook_t* wb, const char* name, const cha
 inline fm_status_t SetIterative(fm_workbook_t* wb, std::int32_t enabled, std::int32_t max_iterations,
                                 double max_change) {
   const fm_iterative_settings_patch_t patch{sizeof(fm_iterative_settings_patch_t), enabled, max_iterations, max_change};
-  return fm_workbook_set_iterative(wb, &patch);
+  return fm_workbook_update_iterative(wb, &patch);
 }

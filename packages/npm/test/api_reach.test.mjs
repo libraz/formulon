@@ -52,7 +52,7 @@ function expectCode(fn, code, label) {
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const readJson = (relative) => JSON.parse(readFileSync(path.join(repoRoot, relative), 'utf8'));
 
-// ---- setCellFormat / getCellFormat: tools/api/cell_format_cases.json ---------------
+// ---- updateCellFormat / getCellFormat: tools/api/cell_format_cases.json ---------------
 
 const FORMAT_CASES = readJson('tools/api/cell_format_cases.json').cases;
 
@@ -65,8 +65,6 @@ const ENUM_KEYS = {
   horizontal: 'HorizontalAlign',
   vertical: 'VerticalAlign',
   readingOrder: 'ReadingOrder',
-  horizontalAlign: 'HorizontalAlign',
-  verticalAlign: 'VerticalAlign',
 };
 
 // Replaces enum member names in a patch by their values; colours and other strings stay.
@@ -85,13 +83,13 @@ function resolveEnums(value, formulon, key) {
 
 const argbText = (rgb) => `#${(rgb >>> 0).toString(16).toUpperCase().padStart(8, '0')}`;
 
-// Checks that `actual` holds every key `expected` names; `#AARRGGBB` text is compared with `.rgb`.
+// Checks that `actual` holds every key `expected` names; `#AARRGGBB` text is compared with `.argb`.
 function assertSubset(actual, expected, label) {
   if (expected !== null && typeof expected === 'object') {
     assert.ok(actual !== null && typeof actual === 'object', `${label}: expected an object, got ${actual}`);
     for (const [k, v] of Object.entries(expected)) assertSubset(actual[k], v, `${label}.${k}`);
   } else if (typeof expected === 'string' && /^#[0-9A-F]{8}$/.test(expected)) {
-    assert.equal(argbText(actual.rgb), expected, label);
+    assert.equal(argbText(actual.argb), expected, label);
   } else {
     assert.equal(actual, expected, label);
   }
@@ -117,7 +115,7 @@ for (const c of FORMAT_CASES) {
   test(`cell format case: ${c.id}`, async () => {
     await withWorkbook((wb, formulon) => {
       const ws = wb.sheet(0);
-      for (const step of c.before ?? []) ws.setCellFormat(step.range, resolveEnums(step.patch, formulon));
+      for (const step of c.before ?? []) ws.updateCellFormat(step.range, resolveEnums(step.patch, formulon));
       const patch = 'patch_from' in c ? ws.getCellFormat(c.patch_from) : resolveEnums(c.patch, formulon);
       const cells = new Set([...(c.unchanged ?? []), ...Object.keys(c.expect ?? {}), 'A1']);
       const snapshot = () => new Map([...cells].map((cell) => [cell, plain(ws.getCellFormat(cell))]));
@@ -125,20 +123,20 @@ for (const c of FORMAT_CASES) {
       const xfCount = ws.workbook.ooxml.listCellXfs().length;
 
       if (c.throws) {
-        assertThrowsLike(() => ws.setCellFormat(c.range, patch), c.throws, formulon, c.id);
+        assertThrowsLike(() => ws.updateCellFormat(c.range, patch), c.throws, formulon, c.id);
         // The failing call changed nothing.
         assert.deepEqual(snapshot(), before, 'a failed call changed a cell');
         assert.equal(wb.ooxml.listCellXfs().length, xfCount, 'a failed call added a cell format');
         return;
       }
 
-      ws.setCellFormat(c.range, patch);
+      ws.updateCellFormat(c.range, patch);
       const after = snapshot();
       for (const [cell, fmt] of Object.entries(c.expect ?? {})) {
         assertSubset(resolveEnums(ws.getCellFormat(cell), formulon), resolveEnums(fmt, formulon), `${c.id} ${cell}`);
       }
       for (const [cell, fields] of Object.entries(c.expect_xf ?? {})) {
-        const xf = wb.ooxml.getCellXf(ws.getEffectiveStyle(cell).xfIndex);
+        const xf = wb.ooxml.getCellXf(ws.ooxml.getEffectiveStyle(cell).xfIndex);
         for (const [field, want] of Object.entries(resolveEnums(fields, formulon))) {
           assert.equal(xf[field], want, `${c.id} ${cell} xf.${field}`);
         }
@@ -146,7 +144,7 @@ for (const c of FORMAT_CASES) {
       for (const cell of c.unchanged ?? []) assert.deepEqual(after.get(cell), before.get(cell), `${cell} changed`);
       if (c.idempotent) {
         const count = wb.ooxml.listCellXfs().length;
-        ws.setCellFormat(c.range, patch);
+        ws.updateCellFormat(c.range, patch);
         assert.equal(wb.ooxml.listCellXfs().length, count, 'a second application added a cell format');
       }
     });
@@ -221,17 +219,17 @@ const SPAN_METHODS = {
   'Sheet.setColumnHidden': { rest: () => [true], mutates: true },
   'Sheet.setColumnOutline': { rest: () => [2], mutates: true },
   'Sheet.setColumnCollapsed': { rest: () => [true], mutates: true },
-  'Sheet.setColumnStyle': { rest: (ws) => [xfOf(ws)], mutates: true },
-  'Sheet.clearColumnStyle': { rest: () => [], pre: (ws) => ws.ooxml.setColumnStyle(1, 3, xfOf(ws)), mutates: true },
-  'Sheet.clearColumnWidth': { rest: () => [], pre: (ws) => ws.setColumnWidth(1, 3, 12), mutates: true },
+  'Sheet.setColumnXfIndex': { rest: (ws) => [xfOf(ws)], mutates: true },
+  'Sheet.resetColumnXfIndex': { rest: () => [], pre: (ws) => ws.ooxml.setColumnXfIndex(1, 3, xfOf(ws)), mutates: true },
+  'Sheet.resetColumnWidth': { rest: () => [], pre: (ws) => ws.setColumnWidth(1, 3, 12), mutates: true },
   'Sheet.setRowHeight': { rest: () => [30], mutates: true },
   'Sheet.setRowAutoHeight': { rest: () => [30], mutates: true },
   'Sheet.setRowHidden': { rest: () => [true], mutates: true },
   'Sheet.setRowOutline': { rest: () => [2], mutates: true },
   'Sheet.setRowCollapsed': { rest: () => [true], mutates: true },
-  'Sheet.setRowStyle': { rest: (ws) => [xfOf(ws)], mutates: true },
-  'Sheet.clearRowStyle': { rest: () => [], pre: (ws) => ws.ooxml.setRowStyle(2, 4, xfOf(ws)), mutates: true },
-  'Sheet.clearRowHeight': { rest: () => [], pre: (ws) => ws.setRowHeight(2, 4, 30), mutates: true },
+  'Sheet.setRowXfIndex': { rest: (ws) => [xfOf(ws)], mutates: true },
+  'Sheet.resetRowXfIndex': { rest: () => [], pre: (ws) => ws.ooxml.setRowXfIndex(2, 4, xfOf(ws)), mutates: true },
+  'Sheet.resetRowHeight': { rest: () => [], pre: (ws) => ws.setRowHeight(2, 4, 30), mutates: true },
   'Sheet.insertRows': { rest: () => [], mutates: true },
   'Sheet.deleteRows': { rest: () => [], mutates: true },
   'Sheet.insertColumns': { rest: () => [], mutates: true },

@@ -101,6 +101,11 @@ def _is_int_call(node: ast.AST) -> bool:
 # `ResolverGuardTests`), so the names a call site unpacks from one are guarded.
 _GUARDED_RESOLVERS = {"_at", "_call"}
 
+# Module-level encoders that only ever return literal integers, and the patch
+# operation constants (`BoundedEncoderTests` verifies both).
+_BOUNDED_ENCODERS = {"_tristate", "_tristate_default"}
+_PATCH_OP_CONSTANTS = {"_PATCH_SET", "_PATCH_CLEAR"}
+
 
 def _is_guarded(node: ast.AST, known: "frozenset[str]" = frozenset()) -> bool:
     """True when ``node`` cannot reach WASM with an out-of-range value.
@@ -110,7 +115,7 @@ def _is_guarded(node: ast.AST, known: "frozenset[str]" = frozenset()) -> bool:
     if _is_literal_int(node):
         return True
     if isinstance(node, ast.Name):
-        return node.id in known
+        return node.id in known or node.id in _PATCH_OP_CONSTANTS
     if isinstance(node, ast.IfExp):
         return _is_guarded(node.body, known) and _is_guarded(node.orelse, known)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and f"{node.func.id}()" in known:
@@ -118,8 +123,11 @@ def _is_guarded(node: ast.AST, known: "frozenset[str]" = frozenset()) -> bool:
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id in ("_uint", "_sint", "_flag")
+        and node.func.id in ("_uint", "_sint", "_flag", *_BOUNDED_ENCODERS)
         and not (node.args and _is_int_call(node.args[0]))
+    ) or (
+        # `_ArgScope.cstr` hands back a pointer into the scope, not a caller's integer.
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "cstr"
     )
 
 
@@ -150,6 +158,16 @@ class _Facts:
             if isinstance(node, ast.Assign):
                 if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
                     assigned.setdefault(node.targets[0].id, []).append(node.value)
+                    continue
+                target = node.targets[0] if len(node.targets) == 1 else None
+                if (
+                    isinstance(target, ast.Tuple)
+                    and isinstance(node.value, ast.Tuple)
+                    and len(target.elts) == len(node.value.elts)
+                    and all(isinstance(e, ast.Name) for e in target.elts)
+                ):
+                    for elt, value in zip(target.elts, node.value.elts):
+                        assigned.setdefault(elt.id, []).append(value)
                     continue
                 target = node.targets[0] if len(node.targets) == 1 else None
                 if (
@@ -491,6 +509,25 @@ class ArgumentSweepTests(unittest.TestCase):
             "integer arguments reach WASM without a _uint/_sint range check:\n  " + "\n  ".join(findings),
         )
 
+    def test_bounded_encoders_return_only_literal_integers(self) -> None:
+        helpers = _package_helpers()
+        for name in sorted(_BOUNDED_ENCODERS):
+            returns = [r.value for r in ast.walk(helpers[name]) if isinstance(r, ast.Return) and r.value is not None]
+            self.assertTrue(returns, name)
+            for value in returns:
+                arms = [value.body, value.orelse] if isinstance(value, ast.IfExp) else [value]
+                self.assertTrue(all(_is_literal_int(v) for v in arms), f"{name} returns {ast.unparse(value)}")
+        source = (_PKG_ROOT / "formulon" / "_workbook.py").read_text(encoding="utf-8")
+        constants = {
+            t.id: n.value.value
+            for n in ast.parse(source).body
+            if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, int)
+            for t in n.targets
+            if isinstance(t, ast.Name)
+        }
+        for name in _PATCH_OP_CONSTANTS:
+            self.assertIn(name, constants)
+
     def test_sweep_actually_inspects_call_sites(self) -> None:
         # Guards the guard: a header-parsing or AST-walking regression would
         # otherwise make the sweep above vacuously pass.
@@ -641,10 +678,10 @@ class IndexRangeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 wb.sheet(0).get_value(1.5, 0)
             with self.assertRaises(ValueError):
-                wb.sheet(0).add_hyperlink(1.5, 0, target="https://example.test")
+                wb.sheet(0).set_hyperlink(1.5, 0, formulon.HyperlinkInput(target="https://example.test"))
             # Integral real-valued inputs remain compatible with the old
             # ``int(value)`` conversion used by this binding.
-            wb.set_iterative(enabled=True, max_iterations=100.0, max_change=0.001)
+            wb.update_iterative(enabled=True, max_iterations=100.0, max_change=0.001)
 
     def test_wrapping_row_does_not_overwrite_the_aliased_cell(self) -> None:
         with Workbook.create_default() as wb:
@@ -707,7 +744,7 @@ class IndexRangeTests(unittest.TestCase):
         # ``struct.error`` that no caller guarding on ``ValueError`` sees.
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
-                wb.sheet(0).add_hyperlink(2**32 + 5, 0, target="http://example.invalid")
+                wb.sheet(0).set_hyperlink(2**32 + 5, 0, formulon.HyperlinkInput(target="http://example.invalid"))
             self.assertIn("row", str(ctx.exception))
 
             with self.assertRaises(ValueError) as ctx:
@@ -719,7 +756,7 @@ class IndexRangeTests(unittest.TestCase):
         # ``struct.pack`` is the only thing that used to notice.
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
-                wb.ooxml.add_font(formulon.Font(name="Calibri", size=11.0, underline=256))
+                wb.ooxml.add_font(formulon.Font(name="Calibri", size_pt=11.0, underline=256))
             self.assertIn("underline", str(ctx.exception))
 
     def test_in_range_extremes_still_reach_the_engine(self) -> None:

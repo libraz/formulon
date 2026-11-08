@@ -12,7 +12,7 @@ from formulon import (
     ColorKind,
     ConditionalFormatInput,
     DefinedNameInput,
-    DifferentialFormat,
+    DxfInput,
     Fill,
     Font,
     FormulonError,
@@ -64,8 +64,8 @@ class SheetViewFlagTests(unittest.TestCase):
             view = wb.sheet(0).get_view()
             self.assertFalse(view.show_formulas)
             self.assertTrue(view.show_outline_symbols)
-            wb.sheet(0).set_view(show_formulas=True)
-            wb.sheet(0).set_view(show_outline_symbols=False)
+            wb.sheet(0).update_view(show_formulas=True)
+            wb.sheet(0).update_view(show_outline_symbols=False)
             with Workbook.load(wb.save()) as reloaded:
                 view = reloaded.sheet(0).get_view()
                 self.assertTrue(view.show_formulas)
@@ -76,8 +76,8 @@ class FontToggleTests(unittest.TestCase):
     def test_toggles_round_trip_and_dedup(self) -> None:
         record = Font(
             name="Arial",
-            size=12.0,
-            color=Color(ColorKind.RGB, rgb=0xFF000000),
+            size_pt=12.0,
+            color=Color(ColorKind.RGB, argb=0xFF000000),
             outline=True,
             shadow=False,
             condense=True,
@@ -104,7 +104,7 @@ class GradientFillTests(unittest.TestCase):
                 top=0.25,
                 bottom=0.75,
                 stops=[
-                    GradientStop(0.0, Color(kind=1, rgb=0xFFFF0000)),
+                    GradientStop(0.0, Color(kind=1, argb=0xFFFF0000)),
                     GradientStop(1.0, Color(kind=2, theme=4, tint=0.5)),
                 ],
             )
@@ -120,14 +120,14 @@ class GradientFillTests(unittest.TestCase):
             self.assertEqual(back.gradient.type, 1)
             self.assertEqual((back.gradient.left, back.gradient.top, back.gradient.bottom), (0.5, 0.25, 0.75))
             self.assertEqual(len(back.gradient.stops), 2)
-            self.assertEqual(back.gradient.stops[0].color, Color(kind=1, rgb=0xFFFF0000))
+            self.assertEqual(back.gradient.stops[0].color, Color(kind=1, argb=0xFFFF0000))
             self.assertEqual(back.gradient.stops[1].color.theme, 4)
             self.assertIsNone(wb.ooxml.get_fill(0).gradient)
 
     def test_survives_save_load_in_cells_and_dxfs(self) -> None:
         with Workbook.create_default() as wb:
             fill_index = wb.ooxml.add_fill(self._fill())
-            dxf_index = wb.ooxml.add_dxf(DifferentialFormat(fill=self._fill()))
+            dxf_index = wb.ooxml.add_dxf(DxfInput(fill=self._fill()))
             with Workbook.load(wb.save()) as reloaded:
                 gradient = reloaded.ooxml.get_fill(fill_index).gradient
                 assert gradient is not None
@@ -223,18 +223,18 @@ class FormatDefaultFlagTests(unittest.TestCase):
             defaults = wb.sheet(0).get_format_defaults()
             self.assertFalse(defaults.custom_height)
             self.assertFalse(defaults.zero_height)
-            wb.sheet(0).set_format_defaults(default_row_height=18.0, custom_height=True, zero_height=True)
+            wb.sheet(0).update_format_defaults(default_row_height_pt=18.0, custom_height=True, zero_height=True)
             with Workbook.load(wb.save()) as reloaded:
                 back = reloaded.sheet(0).get_format_defaults()
                 self.assertTrue(back.custom_height)
                 self.assertTrue(back.zero_height)
-                self.assertEqual(back.default_row_height, 18.0)
-                reloaded.sheet(0).set_format_defaults(default_row_height=20.0)
+                self.assertEqual(back.default_row_height_pt, 18.0)
+                reloaded.sheet(0).update_format_defaults(default_row_height_pt=20.0)
                 kept = reloaded.sheet(0).get_format_defaults()
                 self.assertTrue(kept.custom_height)
                 self.assertTrue(kept.zero_height)
-                self.assertEqual(kept.default_row_height, 20.0)
-                reloaded.sheet(0).set_format_defaults(custom_height=False, zero_height=False)
+                self.assertEqual(kept.default_row_height_pt, 20.0)
+                reloaded.sheet(0).update_format_defaults(custom_height=False, zero_height=False)
                 cleared = reloaded.sheet(0).get_format_defaults()
                 self.assertFalse(cleared.custom_height)
                 self.assertFalse(cleared.zero_height)

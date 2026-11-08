@@ -75,7 +75,7 @@ double Evaluate(bool date1904, double a1, const std::string& formula) {
   EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, a1), 0);
   fm_value_t v{};
   EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 1, formula.c_str(), &v), 0) << formula;
-  EXPECT_EQ(v.kind, FM_VAL_NUMBER) << formula;
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER) << formula;
   return v.u.number;
 }
 

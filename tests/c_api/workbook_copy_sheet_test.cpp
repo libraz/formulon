@@ -69,7 +69,7 @@ TEST(CApiCopySheet, SingleSheetAutomaticName) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 1, 0, 1, &value), 0);
-  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(value.u.number, 10.0);
 }
 
@@ -163,7 +163,7 @@ TEST(CApiCopySheet, VeryHiddenSourceRefused) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 2, nullptr, Code(FormulonErrorCode::kPreconditionFailed));
 }
 
@@ -176,8 +176,8 @@ TEST(CApiCopySheet, SlicerSourceRefusedWithoutChange) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 10.0), 0);
   const char* columns[] = {"Product", "Amount"};
   std::size_t table = 99U;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", "Sales", columns, 2,
-                                  "TableStyleMedium2", 1, 0, &table),
+  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", columns, 2,
+                               "TableStyleMedium2", 1, 0, &table),
             0);
   fm_slicer_t spec = FM_STRUCT_INIT(fm_slicer_t);
   spec.fields = FM_SLICER_FIELD_ANCHOR;
@@ -186,6 +186,6 @@ TEST(CApiCopySheet, SlicerSourceRefusedWithoutChange) {
   spec.to_row = 14;
   spec.to_col = 5;
   std::uint32_t id = 0;
-  ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 1, nullptr, Code(FormulonErrorCode::kNotImplemented));
 }

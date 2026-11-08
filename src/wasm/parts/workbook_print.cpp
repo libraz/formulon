@@ -60,17 +60,34 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
   }
   emscripten::val items = emscripten::val::array();
   for (size_t i = 0; i < count; ++i) {
-    fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
-    const fm_status_t rc =
-        rows ? fm_sheet_get_row_break_at(handle, sheet, i, &brk) : fm_sheet_get_column_break_at(handle, sheet, i, &brk);
+    uint32_t position = 0;
+    uint32_t first = 0;
+    uint32_t last = 0;
+    int32_t manual = 0;
+    fm_status_t rc = 0;
+    if (rows) {
+      fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+      rc = fm_sheet_get_row_break_at(handle, sheet, i, &brk);
+      position = brk.row;
+      first = brk.first;
+      last = brk.last;
+      manual = brk.manual;
+    } else {
+      fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+      rc = fm_sheet_get_column_break_at(handle, sheet, i, &brk);
+      position = brk.col;
+      first = brk.first;
+      last = brk.last;
+      manual = brk.manual;
+    }
     if (!succeeded(rc)) {
       return emscripten::val::undefined();
     }
     emscripten::val entry = emscripten::val::object();
-    entry.set("id", brk.id);
-    entry.set("min", brk.min);
-    entry.set("max", brk.max);
-    entry.set("manual", brk.manual != 0);
+    entry.set(rows ? "row" : "col", position);
+    entry.set("first", first);
+    entry.set("last", last);
+    entry.set("manual", manual != 0);
     items.call<void>("push", entry);
   }
   return items;
@@ -202,7 +219,7 @@ void JsWorkbook::setSheetPrintTitles(uint32_t sheet, emscripten::val titles) {
   }
   const emscripten::val columns = reader.value(titles, "columns", "columns");
   if (reader.ok() && js_value_present(columns) && reader.require_object(columns, "columns")) {
-    in.has_cols = 1;
+    in.has_columns = 1;
     in.first_col = reader.required_u32(columns, "first", "columns.first");
     in.last_col = reader.required_u32(columns, "last", "columns.last");
   }
@@ -214,21 +231,46 @@ void JsWorkbook::setSheetPrintTitles(uint32_t sheet, emscripten::val titles) {
 
 // ---- Manual page breaks -------------------------------------------------
 
-void JsWorkbook::addSheetRowBreak(uint32_t sheet, uint32_t row, bool manual) {
-  succeeded(handle_ != nullptr ? fm_sheet_add_row_break(handle_, sheet, row, manual ? 1 : 0) : kBindingInvalidHandle);
+// `null` removes the break; a record `{ first?, last?, manual? }` upserts it. Both span ends omitted (or 0)
+// cover the whole sheet, and `manual` defaults to true.
+void JsWorkbook::setSheetRowBreak(uint32_t sheet, uint32_t row, emscripten::val input) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (input.isNull()) {
+    succeeded(fm_sheet_set_row_break(handle_, sheet, row, nullptr));
+    return;
+  }
+  JsNarrowNumericReader reader("setRowBreak");
+  fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+  brk.first = reader.u32(input, "first", 0U, "break.first");
+  brk.last = reader.u32(input, "last", 0U, "break.last");
+  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? 1 : 0;
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_set_row_break(handle_, sheet, row, &brk));
 }
 
-void JsWorkbook::addSheetColBreak(uint32_t sheet, uint32_t col, bool manual) {
-  succeeded(handle_ != nullptr ? fm_sheet_add_column_break(handle_, sheet, col, manual ? 1 : 0)
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::removeSheetRowBreak(uint32_t sheet, uint32_t row) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_row_break(handle_, sheet, row) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::removeSheetColBreak(uint32_t sheet, uint32_t col) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_column_break(handle_, sheet, col) : kBindingInvalidHandle);
+void JsWorkbook::setSheetColBreak(uint32_t sheet, uint32_t col, emscripten::val input) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (input.isNull()) {
+    succeeded(fm_sheet_set_column_break(handle_, sheet, col, nullptr));
+    return;
+  }
+  JsNarrowNumericReader reader("setColumnBreak");
+  fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+  brk.first = reader.u32(input, "first", 0U, "break.first");
+  brk.last = reader.u32(input, "last", 0U, "break.last");
+  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? 1 : 0;
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_set_column_break(handle_, sheet, col, &brk));
 }
 
 void JsWorkbook::clearSheetBreaks(uint32_t sheet) {
@@ -250,7 +292,7 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setPageSetup");
+  JsNarrowNumericReader reader("updatePageSetup");
   fm_page_setup_t out = FM_STRUCT_INIT(fm_page_setup_t);
   const emscripten::val orientation = reader.value(setup, "orientation", "pageSetup.orientation");
   out.orientation_engaged = js_value_present(orientation) ? 1 : 0;
@@ -258,9 +300,9 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   const emscripten::val paper_size = reader.value(setup, "paperSize", "pageSetup.paperSize");
   out.paper_size_engaged = js_value_present(paper_size) ? 1 : 0;
   out.paper_size = reader.u32_value(paper_size, 0U, "pageSetup.paperSize");
-  const emscripten::val scale = reader.value(setup, "scale", "pageSetup.scale");
-  out.scale_engaged = js_value_present(scale) ? 1 : 0;
-  out.scale = reader.u32_value(scale, 0U, "pageSetup.scale");
+  const emscripten::val scale = reader.value(setup, "scalePct", "pageSetup.scalePct");
+  out.scale_pct_engaged = js_value_present(scale) ? 1 : 0;
+  out.scale_pct = reader.u32_value(scale, 0U, "pageSetup.scalePct");
   const emscripten::val fit_to_width = reader.value(setup, "fitToWidth", "pageSetup.fitToWidth");
   out.fit_to_width_engaged = js_value_present(fit_to_width) ? 1 : 0;
   out.fit_to_width = reader.u32_value(fit_to_width, 0U, "pageSetup.fitToWidth");
@@ -273,7 +315,7 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_set_page_setup(handle_, sheet, &out));
+  succeeded(fm_sheet_update_page_setup(handle_, sheet, &out));
 }
 
 void JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
@@ -281,30 +323,30 @@ void JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setPageMargins");
+  JsNarrowNumericReader reader("updatePageMargins");
   fm_page_margins_t out = FM_STRUCT_INIT(fm_page_margins_t);
-  const emscripten::val left = reader.value(margins, "left", "pageMargins.left");
-  out.left_engaged = js_value_present(left) ? 1 : 0;
-  out.left = reader.number_value(left, 0.0, "pageMargins.left");
-  const emscripten::val right = reader.value(margins, "right", "pageMargins.right");
-  out.right_engaged = js_value_present(right) ? 1 : 0;
-  out.right = reader.number_value(right, 0.0, "pageMargins.right");
-  const emscripten::val top = reader.value(margins, "top", "pageMargins.top");
-  out.top_engaged = js_value_present(top) ? 1 : 0;
-  out.top = reader.number_value(top, 0.0, "pageMargins.top");
-  const emscripten::val bottom = reader.value(margins, "bottom", "pageMargins.bottom");
-  out.bottom_engaged = js_value_present(bottom) ? 1 : 0;
-  out.bottom = reader.number_value(bottom, 0.0, "pageMargins.bottom");
-  const emscripten::val header = reader.value(margins, "header", "pageMargins.header");
-  out.header_engaged = js_value_present(header) ? 1 : 0;
-  out.header = reader.number_value(header, 0.0, "pageMargins.header");
-  const emscripten::val footer = reader.value(margins, "footer", "pageMargins.footer");
-  out.footer_engaged = js_value_present(footer) ? 1 : 0;
-  out.footer = reader.number_value(footer, 0.0, "pageMargins.footer");
+  const emscripten::val left = reader.value(margins, "leftIn", "pageMargins.leftIn");
+  out.left_in_engaged = js_value_present(left) ? 1 : 0;
+  out.left_in = reader.number_value(left, 0.0, "pageMargins.leftIn");
+  const emscripten::val right = reader.value(margins, "rightIn", "pageMargins.rightIn");
+  out.right_in_engaged = js_value_present(right) ? 1 : 0;
+  out.right_in = reader.number_value(right, 0.0, "pageMargins.rightIn");
+  const emscripten::val top = reader.value(margins, "topIn", "pageMargins.topIn");
+  out.top_in_engaged = js_value_present(top) ? 1 : 0;
+  out.top_in = reader.number_value(top, 0.0, "pageMargins.topIn");
+  const emscripten::val bottom = reader.value(margins, "bottomIn", "pageMargins.bottomIn");
+  out.bottom_in_engaged = js_value_present(bottom) ? 1 : 0;
+  out.bottom_in = reader.number_value(bottom, 0.0, "pageMargins.bottomIn");
+  const emscripten::val header = reader.value(margins, "headerIn", "pageMargins.headerIn");
+  out.header_in_engaged = js_value_present(header) ? 1 : 0;
+  out.header_in = reader.number_value(header, 0.0, "pageMargins.headerIn");
+  const emscripten::val footer = reader.value(margins, "footerIn", "pageMargins.footerIn");
+  out.footer_in_engaged = js_value_present(footer) ? 1 : 0;
+  out.footer_in = reader.number_value(footer, 0.0, "pageMargins.footerIn");
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_set_page_margins(handle_, sheet, &out));
+  succeeded(fm_sheet_update_page_margins(handle_, sheet, &out));
 }
 
 void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
@@ -312,7 +354,7 @@ void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setPrintOptions");
+  JsNarrowNumericReader reader("updatePrintOptions");
   fm_print_options_t out = FM_STRUCT_INIT(fm_print_options_t);
   const emscripten::val grid_lines = reader.value(options, "gridLines", "printOptions.gridLines");
   out.grid_lines_engaged = js_value_present(grid_lines) ? 1 : 0;
@@ -330,7 +372,7 @@ void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_set_print_options(handle_, sheet, &out));
+  succeeded(fm_sheet_update_print_options(handle_, sheet, &out));
 }
 
 void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFooter) {
@@ -346,7 +388,7 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   std::string even_footer;
   std::string first_header;
   std::string first_footer;
-  JsNarrowNumericReader reader("setHeaderFooter");
+  JsNarrowNumericReader reader("updateHeaderFooter");
   fm_header_footer_t out = FM_STRUCT_INIT(fm_header_footer_t);
   const emscripten::val odd_header_value = reader.value(headerFooter, "oddHeader", "headerFooter.oddHeader");
   out.odd_header = reader.optional_string_value(odd_header_value, odd_header, "headerFooter.oddHeader");
@@ -377,7 +419,7 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_set_header_footer(handle_, sheet, &out));
+  succeeded(fm_sheet_update_header_footer(handle_, sheet, &out));
 }
 
 emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
@@ -388,7 +430,7 @@ emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
   emscripten::val out = emscripten::val::object();
   js_set_present_or_null(out, "orientation", setup.orientation_engaged, setup.orientation);
   out.set("paperSize", setup.paper_size);
-  out.set("scale", setup.scale);
+  out.set("scalePct", setup.scale_pct);
   out.set("fitToWidth", setup.fit_to_width);
   out.set("fitToHeight", setup.fit_to_height);
   out.set("fitToPage", setup.fit_to_page != 0);
@@ -396,7 +438,7 @@ emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
   // so these are the only way to tell an explicit value from a default.
   out.set("orientationStated", setup.orientation_engaged != 0);
   out.set("paperSizeStated", setup.paper_size_engaged != 0);
-  out.set("scaleStated", setup.scale_engaged != 0);
+  out.set("scalePctStated", setup.scale_pct_engaged != 0);
   out.set("fitToWidthStated", setup.fit_to_width_engaged != 0);
   out.set("fitToHeightStated", setup.fit_to_height_engaged != 0);
   out.set("fitToPageStated", setup.fit_to_page_engaged != 0);
@@ -409,18 +451,18 @@ emscripten::val JsWorkbook::getSheetPageMargins(uint32_t sheet) const {
     return emscripten::val::undefined();
   }
   emscripten::val out = emscripten::val::object();
-  out.set("left", margins.left);
-  out.set("right", margins.right);
-  out.set("top", margins.top);
-  out.set("bottom", margins.bottom);
-  out.set("header", margins.header);
-  out.set("footer", margins.footer);
-  out.set("leftStated", margins.left_engaged != 0);
-  out.set("rightStated", margins.right_engaged != 0);
-  out.set("topStated", margins.top_engaged != 0);
-  out.set("bottomStated", margins.bottom_engaged != 0);
-  out.set("headerStated", margins.header_engaged != 0);
-  out.set("footerStated", margins.footer_engaged != 0);
+  out.set("leftIn", margins.left_in);
+  out.set("rightIn", margins.right_in);
+  out.set("topIn", margins.top_in);
+  out.set("bottomIn", margins.bottom_in);
+  out.set("headerIn", margins.header_in);
+  out.set("footerIn", margins.footer_in);
+  out.set("leftInStated", margins.left_in_engaged != 0);
+  out.set("rightInStated", margins.right_in_engaged != 0);
+  out.set("topInStated", margins.top_in_engaged != 0);
+  out.set("bottomInStated", margins.bottom_in_engaged != 0);
+  out.set("headerInStated", margins.header_in_engaged != 0);
+  out.set("footerInStated", margins.footer_in_engaged != 0);
   return out;
 }
 

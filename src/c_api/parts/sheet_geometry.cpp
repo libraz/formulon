@@ -32,7 +32,7 @@ fm_status_t check_geometry_args(const fm_workbook_t* wb, size_t sheet_index, int
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return check_enum_domain(mode, 0, FM_GEOMETRY_PRINT, "mode");
+  return check_enum_domain(mode, 0, FM_GEOMETRY_MODE_PRINT, "mode");
 }
 
 formulon::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode) {
@@ -72,9 +72,9 @@ extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t
   out->struct_size = struct_size;
   out->x = formulon::print::column_offset_pt(sheet, first_col, model);
   out->y = y;
-  out->width = width;
-  out->height = first_row == last_row ? formulon::print::effective_row_height_pt(sheet, first_row)
-                                      : formulon::print::row_offset_pt(sheet, last_row + 1U) - y;
+  out->width_pt = width;
+  out->height_pt = first_row == last_row ? formulon::print::effective_row_height_pt(sheet, first_row)
+                                         : formulon::print::row_offset_pt(sheet, last_row + 1U) - y;
   return 0;
 }
 
@@ -126,7 +126,7 @@ extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t 
   out->struct_size = struct_size;
   out->points_per_char = model.points_per_char;
   out->padding_pt = model.padding_pt;
-  out->normal_font_size = model.normal_font_size;
+  out->normal_font_size_pt = model.normal_font_size;
   out->calibrated = model.calibrated ? 1 : 0;
   out->normal_font_name = publish_scratch(wb, model.normal_font_name);
   out->platform = model.platform;

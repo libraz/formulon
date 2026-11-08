@@ -2,7 +2,7 @@
 // C ABI - PivotTable layout projection.
 //
 // Walks the cached `PivotTable` evaluator output and projects it onto a
-// flat `fm_pivot_cells_t` buffer for the bindings to render. The
+// flat `fm_pivot_report_t` buffer for the bindings to render. The
 // opaque results handle owns its text store so it can hand out stable
 // `c_str()` pointers for field names / number formats.
 
@@ -58,23 +58,23 @@ namespace {
 fm_pivot_cell_kind_t pivot_cell_kind_to_fm(formulon::pivot::PivotCellKind kind) {
   switch (kind) {
     case formulon::pivot::PivotCellKind::Header:
-      return FM_PIVOT_CELL_HEADER;
+      return FM_PIVOT_CELL_KIND_HEADER;
     case formulon::pivot::PivotCellKind::RowLabel:
-      return FM_PIVOT_CELL_ROW_LABEL;
+      return FM_PIVOT_CELL_KIND_ROW_LABEL;
     case formulon::pivot::PivotCellKind::ColLabel:
-      return FM_PIVOT_CELL_COL_LABEL;
+      return FM_PIVOT_CELL_KIND_COLUMN_LABEL;
     case formulon::pivot::PivotCellKind::Data:
-      return FM_PIVOT_CELL_DATA;
+      return FM_PIVOT_CELL_KIND_DATA;
     case formulon::pivot::PivotCellKind::RowSubtotal:
-      return FM_PIVOT_CELL_ROW_SUBTOTAL;
+      return FM_PIVOT_CELL_KIND_ROW_SUBTOTAL;
     case formulon::pivot::PivotCellKind::ColSubtotal:
-      return FM_PIVOT_CELL_COL_SUBTOTAL;
+      return FM_PIVOT_CELL_KIND_COLUMN_SUBTOTAL;
     case formulon::pivot::PivotCellKind::GrandTotal:
-      return FM_PIVOT_CELL_GRAND_TOTAL;
+      return FM_PIVOT_CELL_KIND_GRAND_TOTAL;
     case formulon::pivot::PivotCellKind::Blank:
-      return FM_PIVOT_CELL_BLANK;
+      return FM_PIVOT_CELL_KIND_BLANK;
   }
-  return FM_PIVOT_CELL_BLANK;
+  return FM_PIVOT_CELL_KIND_BLANK;
 }
 
 }  // namespace
@@ -83,7 +83,7 @@ fm_pivot_cell_kind_t pivot_cell_kind_to_fm(formulon::pivot::PivotCellKind kind) 
 // `src/c_api/generated/sheet_counts.cpp`).
 
 extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                 std::size_t pivot_index, fm_pivot_cells_t** out) {
+                                                 std::size_t pivot_index, fm_pivot_report_t** out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument();
@@ -132,7 +132,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
     return set_last_error(layout_or.error());
   }
 
-  auto handle = std::unique_ptr<fm_pivot_cells_t>(new fm_pivot_cells_t{});
+  auto handle = std::unique_ptr<fm_pivot_report_t>(new fm_pivot_report_t{});
   const formulon::pivot::PivotCells& projected = layout_or.value();
   handle->top = projected.top;
   handle->left = projected.left;
@@ -161,11 +161,11 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
   return 0;
 }
 
-extern "C" void fm_pivot_cells_destroy(fm_pivot_cells_t* cells) {
+extern "C" void fm_pivot_report_destroy(fm_pivot_report_t* cells) {
   delete cells;
 }
 
-extern "C" fm_status_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cells, std::size_t* out_count) {
+extern "C" fm_status_t fm_pivot_report_get_cell_count(const fm_pivot_report_t* cells, std::size_t* out_count) {
   clear_last_error();
   if (cells == nullptr || out_count == nullptr) {
     return null_argument();
@@ -174,8 +174,8 @@ extern "C" fm_status_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cel
   return 0;
 }
 
-extern "C" fm_status_t fm_pivot_cells_get_bounds(const fm_pivot_cells_t* cells, std::int32_t* out_present,
-                                                 fm_cell_rect_t* out_rect) {
+extern "C" fm_status_t fm_pivot_report_get_bounds(const fm_pivot_report_t* cells, std::int32_t* out_present,
+                                                  fm_cell_rect_t* out_rect) {
   clear_last_error();
   if (cells == nullptr || out_present == nullptr || out_rect == nullptr) {
     return null_argument();
@@ -190,8 +190,8 @@ extern "C" fm_status_t fm_pivot_cells_get_bounds(const fm_pivot_cells_t* cells, 
   return 0;
 }
 
-extern "C" fm_status_t fm_pivot_cells_get_cell_at(const fm_pivot_cells_t* cells, std::size_t idx,
-                                                  fm_pivot_cell_t* out) {
+extern "C" fm_status_t fm_pivot_report_get_cell_at(const fm_pivot_report_t* cells, std::size_t idx,
+                                                   fm_pivot_cell_t* out) {
   clear_last_error();
   if (cells == nullptr || out == nullptr) {
     return null_argument();

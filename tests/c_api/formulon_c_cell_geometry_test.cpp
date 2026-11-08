@@ -52,6 +52,12 @@ struct RangeGuard {
   RangeGuard& operator=(const RangeGuard&) = delete;
 };
 
+fm_status_t SetWholeRowBreak(fm_workbook_t* wb, uint32_t row) {
+  fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+  brk.manual = 1;
+  return fm_sheet_set_row_break(wb, 0, row, &brk);
+}
+
 struct PaginationGuard {
   fm_pagination_t* handle = nullptr;
   ~PaginationGuard() { fm_pagination_destroy(handle); }
@@ -65,7 +71,7 @@ struct SeenCell {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::string formula;  // empty when the cell holds no formula
-  int32_t kind = FM_VAL_BLANK;
+  int32_t kind = FM_VALUE_KIND_BLANK;
   double number = 0.0;
   std::string text;
 
@@ -94,9 +100,9 @@ std::uint64_t FetchPage(fm_workbook_t* wb, std::uint32_t first_row, std::uint32_
     EXPECT_EQ(fm_cell_range_get_cell_at(page.handle, i, &cell.row, &cell.col, &formula, &value), 0);
     cell.formula = formula == nullptr ? "" : formula;
     cell.kind = value.kind;
-    if (value.kind == FM_VAL_NUMBER) {
+    if (value.kind == FM_VALUE_KIND_NUMBER) {
       cell.number = value.u.number;
-    } else if (value.kind == FM_VAL_TEXT) {
+    } else if (value.kind == FM_VALUE_KIND_TEXT) {
       cell.text = value.u.text;
     }
     out->push_back(cell);
@@ -128,16 +134,16 @@ TEST(FormulonCApiCellGeometry, WidthModelReportsCalibratedCalibri) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_width_model_t display = FM_STRUCT_INIT(fm_width_model_t);
-  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_DISPLAY, &display), 0);
+  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, &display), 0);
   EXPECT_DOUBLE_EQ(display.points_per_char, 5.25);
   EXPECT_DOUBLE_EQ(display.padding_pt, 3.75);
   EXPECT_EQ(display.calibrated, 1);
   EXPECT_STREQ(display.normal_font_name, "Calibri");
-  EXPECT_DOUBLE_EQ(display.normal_font_size, 11.0);
+  EXPECT_DOUBLE_EQ(display.normal_font_size_pt, 11.0);
   EXPECT_STREQ(display.platform, "win");
 
   fm_width_model_t print = FM_STRUCT_INIT(fm_width_model_t);
-  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_PRINT, &print), 0);
+  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_PRINT, &print), 0);
   EXPECT_DOUBLE_EQ(print.points_per_char, 39.0 / 7.0);
   EXPECT_DOUBLE_EQ(print.padding_pt, 27.0 / 7.0);
 
@@ -150,19 +156,19 @@ TEST(FormulonCApiCellGeometry, CharsAndPointsConvertBothWays) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   double pt = 0.0;
   // Stored width 10 is Truncate((2560 + 18) / 256 * 7) = 70 px.
-  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_DISPLAY, 10.0, &pt), 0);
+  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, 10.0, &pt), 0);
   EXPECT_DOUBLE_EQ(pt, 70.0 * 0.75);
   double chars = 0.0;
-  ASSERT_EQ(fm_sheet_convert_column_pt_to_chars(wb.handle, 0, FM_GEOMETRY_DISPLAY, pt, &chars), 0);
+  ASSERT_EQ(fm_sheet_convert_column_pt_to_chars(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, pt, &chars), 0);
   EXPECT_DOUBLE_EQ(chars, 10.0);
-  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_PRINT, 0.0, &pt), 0);
+  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_MODE_PRINT, 0.0, &pt), 0);
   EXPECT_EQ(pt, 0.0);
 
-  EXPECT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_DISPLAY, -1.0, &pt), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_convert_column_pt_to_chars(wb.handle, 0, FM_GEOMETRY_DISPLAY,
+  EXPECT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, -1.0, &pt), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_convert_column_pt_to_chars(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY,
                                                 std::numeric_limits<double>::infinity(), &chars),
             kInvalidArgument);
-  EXPECT_NE(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_DISPLAY, 1.0, nullptr), 0);
+  EXPECT_NE(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, 1.0, nullptr), 0);
 }
 
 TEST(FormulonCApiCellGeometry, TrackSizesFollowOverridesAndHiddenState) {
@@ -174,9 +180,9 @@ TEST(FormulonCApiCellGeometry, TrackSizesFollowOverridesAndHiddenState) {
   ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 2U, 2U, 1), 0);
 
   double width = 0.0;
-  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_DISPLAY, &width), 0);
+  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_MODE_DISPLAY, &width), 0);
   EXPECT_DOUBLE_EQ(width, 140.0 * 0.75);  // Stored width 20 is 140 px.
-  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 2U, FM_GEOMETRY_DISPLAY, &width), 0);
+  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 2U, FM_GEOMETRY_MODE_DISPLAY, &width), 0);
   EXPECT_EQ(width, 0.0);
   double height = 0.0;
   ASSERT_EQ(fm_sheet_get_row_height_pt(wb.handle, 0, 1U, &height), 0);
@@ -184,7 +190,7 @@ TEST(FormulonCApiCellGeometry, TrackSizesFollowOverridesAndHiddenState) {
   ASSERT_EQ(fm_sheet_get_row_height_pt(wb.handle, 0, 2U, &height), 0);
   EXPECT_EQ(height, 0.0);
 
-  EXPECT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 16384U, FM_GEOMETRY_DISPLAY, &width), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 16384U, FM_GEOMETRY_MODE_DISPLAY, &width), kInvalidArgument);
   EXPECT_EQ(fm_sheet_get_row_height_pt(wb.handle, 0, 1048576U, &height), kInvalidArgument);
 }
 
@@ -199,51 +205,52 @@ TEST(FormulonCApiCellGeometry, CellRectSpansRangeAndSkipsHiddenTracks) {
   double col_b = 0.0;
   double row_1 = 0.0;
   double row_3 = 0.0;
-  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 0U, FM_GEOMETRY_DISPLAY, &col_a), 0);
-  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_DISPLAY, &col_b), 0);
+  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 0U, FM_GEOMETRY_MODE_DISPLAY, &col_a), 0);
+  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_MODE_DISPLAY, &col_b), 0);
   ASSERT_EQ(fm_sheet_get_row_height_pt(wb.handle, 0, 0U, &row_1), 0);
   ASSERT_EQ(fm_sheet_get_row_height_pt(wb.handle, 0, 2U, &row_3), 0);
 
   // B2:C3 -- column C is hidden and contributes nothing.
   fm_rect_pt_t rect = FM_STRUCT_INIT(fm_rect_pt_t);
-  ASSERT_EQ(
-      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 2U, 2U}), FM_GEOMETRY_DISPLAY, &rect),
-      0);
+  ASSERT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 2U, 2U}),
+                                      FM_GEOMETRY_MODE_DISPLAY, &rect),
+            0);
   EXPECT_DOUBLE_EQ(rect.x, col_a);
   EXPECT_DOUBLE_EQ(rect.y, row_1);
-  EXPECT_DOUBLE_EQ(rect.width, col_b);
-  EXPECT_DOUBLE_EQ(rect.height, 30.0 + row_3);
+  EXPECT_DOUBLE_EQ(rect.width_pt, col_b);
+  EXPECT_DOUBLE_EQ(rect.height_pt, 30.0 + row_3);
 
   // A single cell agrees with the per-track getters exactly.
-  ASSERT_EQ(
-      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 1U, 1U}), FM_GEOMETRY_PRINT, &rect), 0);
+  ASSERT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 1U, 1U}), FM_GEOMETRY_MODE_PRINT,
+                                      &rect),
+            0);
   double col_b_print = 0.0;
-  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_PRINT, &col_b_print), 0);
-  EXPECT_EQ(rect.width, col_b_print);
-  EXPECT_EQ(rect.height, 30.0);
+  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_MODE_PRINT, &col_b_print), 0);
+  EXPECT_EQ(rect.width_pt, col_b_print);
+  EXPECT_EQ(rect.height_pt, 30.0);
 
-  EXPECT_EQ(
-      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{2U, 0U, 1U, 0U}), FM_GEOMETRY_DISPLAY, &rect),
-      kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{2U, 0U, 1U, 0U}),
+                                      FM_GEOMETRY_MODE_DISPLAY, &rect),
+            kInvalidArgument);
   EXPECT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), 7, &rect),
             kInvalidArgument);
-  EXPECT_NE(
-      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), FM_GEOMETRY_DISPLAY, nullptr),
-      0);
+  EXPECT_NE(fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}),
+                                      FM_GEOMETRY_MODE_DISPLAY, nullptr),
+            0);
 }
 
 TEST(FormulonCApiCellGeometry, DefaultsDriveUnoverriddenTracks) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sheet_format_defaults_t defaults = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  defaults.default_col_width = 12.0;
-  defaults.default_row_height = 21.0;
-  defaults.base_col_width = 8.0;
-  defaults.has_default_col_width = 1;
-  defaults.has_default_row_height = 1;
-  ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &defaults), 0);
+  defaults.default_column_width_chars = 12.0;
+  defaults.default_row_height_pt = 21.0;
+  defaults.base_column_width_chars = 8.0;
+  defaults.has_default_column_width_chars = 1;
+  defaults.has_default_row_height_pt = 1;
+  ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &defaults), 0);
   double width = 0.0;
-  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 5U, FM_GEOMETRY_DISPLAY, &width), 0);
+  ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 5U, FM_GEOMETRY_MODE_DISPLAY, &width), 0);
   EXPECT_DOUBLE_EQ(width, 84.0 * 0.75);  // Stored width 12 is 84 px.
   double height = 0.0;
   ASSERT_EQ(fm_sheet_get_row_height_pt(wb.handle, 0, 5U, &height), 0);
@@ -269,7 +276,7 @@ TEST(FormulonCApiCellRange, EnumeratesPopulatedCellsInRowMajorOrder) {
       {0U, 0U}, {0U, 3U}, {2U, 1U}, {2U, 2U}, {4U, 4U}, {5U, 4U}, {6U, 4U}, {900U, 7U}, {50000U, 100U}};
   EXPECT_EQ(coords, expected);
 
-  EXPECT_EQ(cells[1].kind, FM_VAL_TEXT);
+  EXPECT_EQ(cells[1].kind, FM_VALUE_KIND_TEXT);
   EXPECT_EQ(cells[1].text, "head");
   EXPECT_EQ(cells[3].formula, "=A1+B3");
   EXPECT_EQ(cells[3].number, 3.0);
@@ -452,24 +459,25 @@ TEST(FormulonCApiPaginationDetail, ReportsPaperMarginsScaleAndTitles) {
 
   fm_margins_pt_t margins = FM_STRUCT_INIT(fm_margins_pt_t);
   ASSERT_EQ(fm_pagination_get_margins(p.handle, &margins), 0);
-  EXPECT_DOUBLE_EQ(margins.left, 0.7 * 72.0);
-  EXPECT_DOUBLE_EQ(margins.top, 0.75 * 72.0);
+  // Margins are reported in inches, as `<pageMargins>` states them.
+  EXPECT_DOUBLE_EQ(margins.left_in, 0.7);
+  EXPECT_DOUBLE_EQ(margins.top_in, 0.75);
 
   fm_rect_pt_t printable = FM_STRUCT_INIT(fm_rect_pt_t);
   ASSERT_EQ(fm_pagination_get_printable(p.handle, &printable), 0);
-  EXPECT_DOUBLE_EQ(printable.x, margins.left);
-  EXPECT_GT(printable.width, 0.0);
+  EXPECT_DOUBLE_EQ(printable.x, margins.left_in * 72.0);
+  EXPECT_GT(printable.width_pt, 0.0);
 
-  double scale = 0.0;
-  ASSERT_EQ(fm_pagination_get_scale(p.handle, &scale), 0);
-  EXPECT_EQ(scale, 1.0);
+  double scale_pct = 0.0;
+  ASSERT_EQ(fm_pagination_get_scale(p.handle, &scale_pct), 0);
+  EXPECT_EQ(scale_pct, 100.0);
 
   fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   ASSERT_EQ(fm_pagination_get_print_titles(p.handle, &titles), 0);
   EXPECT_EQ(titles.has_rows, 1);
   EXPECT_EQ(titles.first_row, 0U);
   EXPECT_EQ(titles.last_row, 0U);
-  EXPECT_EQ(titles.has_cols, 0);
+  EXPECT_EQ(titles.has_columns, 0);
 
   EXPECT_NE(fm_pagination_get_paper(nullptr, &paper), 0);
   EXPECT_NE(fm_pagination_get_margins(p.handle, nullptr), 0);
@@ -523,7 +531,7 @@ TEST(FormulonCApiPaginationDetail, ManualBreaksAreFlagged) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
-  ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 10U, 1), 0);
+  ASSERT_EQ(SetWholeRowBreak(wb.handle, 10U), 0);
 
   PaginationGuard p;
   ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &p.handle), 0);
@@ -550,4 +558,37 @@ TEST(FormulonCApiPaginationDetail, ManualBreaksAreFlagged) {
   EXPECT_EQ(fm_pagination_is_row_break_manual(p.handle, h_count, &manual), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_pagination_is_column_break_manual(p.handle, v_count, &manual), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_pagination_is_column_break_manual(nullptr, 0, &manual), 0);
+}
+
+TEST(FormulonCApiPaginationDetail, ScaleIsAPercentageAndMarginsAreInches) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
+  setup.scale_pct_engaged = 1;
+  setup.scale_pct = 50U;
+  ASSERT_EQ(fm_sheet_update_page_setup(wb.handle, 0, &setup), 0);
+  fm_page_margins_t margins_patch = FM_STRUCT_INIT(fm_page_margins_t);
+  margins_patch.left_in_engaged = 1;
+  margins_patch.left_in = 0.5;
+  margins_patch.header_in_engaged = 1;
+  margins_patch.header_in = 0.25;
+  ASSERT_EQ(fm_sheet_update_page_margins(wb.handle, 0, &margins_patch), 0);
+
+  PaginationGuard p;
+  ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &p.handle), 0);
+  double scale_pct = 0.0;
+  ASSERT_EQ(fm_pagination_get_scale(p.handle, &scale_pct), 0);
+  EXPECT_DOUBLE_EQ(scale_pct, 50.0);
+
+  fm_margins_pt_t margins = FM_STRUCT_INIT(fm_margins_pt_t);
+  ASSERT_EQ(fm_pagination_get_margins(p.handle, &margins), 0);
+  EXPECT_DOUBLE_EQ(margins.left_in, 0.5);
+  EXPECT_DOUBLE_EQ(margins.header_in, 0.25);
+  // An untouched margin keeps the OOXML default, still in inches.
+  EXPECT_DOUBLE_EQ(margins.right_in, 0.7);
+
+  fm_rect_pt_t printable = FM_STRUCT_INIT(fm_rect_pt_t);
+  ASSERT_EQ(fm_pagination_get_printable(p.handle, &printable), 0);
+  EXPECT_DOUBLE_EQ(printable.x, 0.5 * 72.0);
 }

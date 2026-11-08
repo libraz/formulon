@@ -42,10 +42,10 @@ inline fm_drawing_anchor_t PullDrawingAnchor(CheckedSpecReader& reader, const Na
 /// Reads an `ImageInsertInput` (`name`, `description`, nested `anchor`) out
 /// of `input`; an absent `input` is all defaults. The stores own the
 /// returned strings.
-inline fm_image_insert_t PullImageInsert(CheckedSpecReader& reader, const Napi::Value& input,
-                                         int32_t default_anchor_kind, std::string& name_store,
-                                         std::string& description_store) {
-  fm_image_insert_t ins{};
+inline fm_picture_insert_spec_t PullImageInsert(CheckedSpecReader& reader, const Napi::Value& input,
+                                                int32_t default_anchor_kind, std::string& name_store,
+                                                std::string& description_store) {
+  fm_picture_insert_spec_t ins{};
   Napi::Object options = Napi::Object::New(input.Env());
   (void)reader.Object(input, "input", &options);
   ins.name = reader.String(options, "name", &name_store) ? name_store.c_str() : nullptr;
@@ -143,7 +143,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// nothing. See `fm_workbook_set_pinned_now` for the accepted ranges.
   Napi::Value PinnedNow(const Napi::CallbackInfo& info);
   Napi::Value SetPinnedNow(const Napi::CallbackInfo& info);
-  Napi::Value ClearPinnedNow(const Napi::CallbackInfo& info);
   /// New workbooks default to win-365-en_US. The getter returns one of the
   /// 28 ids {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,
   /// es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}.
@@ -205,17 +204,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetPrintArea(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPrintTitles(const Napi::CallbackInfo& info);
   Napi::Value SetSheetPrintTitles(const Napi::CallbackInfo& info);
-  Napi::Value AddSheetRowBreak(const Napi::CallbackInfo& info);
-  Napi::Value AddSheetColBreak(const Napi::CallbackInfo& info);
-  Napi::Value RemoveSheetRowBreak(const Napi::CallbackInfo& info);
-  Napi::Value RemoveSheetColBreak(const Napi::CallbackInfo& info);
+  Napi::Value SetRowBreak(const Napi::CallbackInfo& info);
+  Napi::Value SetColumnBreak(const Napi::CallbackInfo& info);
   Napi::Value ClearSheetBreaks(const Napi::CallbackInfo& info);
   Napi::Value GetSheetRowBreaks(const Napi::CallbackInfo& info);
   Napi::Value GetSheetColBreaks(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetPageSetup(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetPageMargins(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetPrintOptions(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetHeaderFooter(const Napi::CallbackInfo& info);
+  Napi::Value UpdateSheetPageSetup(const Napi::CallbackInfo& info);
+  Napi::Value UpdateSheetPageMargins(const Napi::CallbackInfo& info);
+  Napi::Value UpdateSheetPrintOptions(const Napi::CallbackInfo& info);
+  Napi::Value UpdateSheetHeaderFooter(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPageSetup(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPageMargins(const Napi::CallbackInfo& info);
   Napi::Value GetSheetPrintOptions(const Napi::CallbackInfo& info);
@@ -242,13 +239,17 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value TableAt(const Napi::CallbackInfo& info);
   Napi::Value TableRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value ResolveTableRuntimeId(const Napi::CallbackInfo& info);
+  Napi::Value FindTable(const Napi::CallbackInfo& info);
+  Napi::Value GetTableStyleOptions(const Napi::CallbackInfo& info);
+  Napi::Value UpdateTableStyleOptions(const Napi::CallbackInfo& info);
+  Napi::Value RenameTable(const Napi::CallbackInfo& info);
   Napi::Value CreateTable(const Napi::CallbackInfo& info);
   Napi::Value UpdateTable(const Napi::CallbackInfo& info);
   Napi::Value RemoveTable(const Napi::CallbackInfo& info);
   Napi::Value SetTableColumnTotals(const Napi::CallbackInfo& info);
   Napi::Value RenameTableColumn(const Napi::CallbackInfo& info);
   Napi::Value ListPassthroughs(const Napi::CallbackInfo& info);
-  Napi::Value GetPassthrough(const Napi::CallbackInfo& info);
+  Napi::Value HasPassthrough(const Napi::CallbackInfo& info);
   Napi::Value PivotCount(const Napi::CallbackInfo& info);
   Napi::Value PivotLayout(const Napi::CallbackInfo& info);
 
@@ -285,10 +286,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // PivotTable mutation.
   Napi::Value PivotCreate(const Napi::CallbackInfo& info);
   Napi::Value PivotRemove(const Napi::CallbackInfo& info);
-  Napi::Value PivotSetName(const Napi::CallbackInfo& info);
+  Napi::Value PivotRename(const Napi::CallbackInfo& info);
   Napi::Value PivotSetAnchor(const Napi::CallbackInfo& info);
-  Napi::Value PivotSetGrandTotals(const Napi::CallbackInfo& info);
-  Napi::Value PivotSetStyleInfo(const Napi::CallbackInfo& info);
+  Napi::Value PivotUpdateGrandTotals(const Napi::CallbackInfo& info);
+  Napi::Value PivotUpdateStyleOptions(const Napi::CallbackInfo& info);
   Napi::Value PivotGetLayout(const Napi::CallbackInfo& info);
   Napi::Value PivotSetLayout(const Napi::CallbackInfo& info);
   /// Definition read-back; works for pivots created in-session and loaded
@@ -298,7 +299,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value ResolvePivotRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value PivotGetGrandTotals(const Napi::CallbackInfo& info);
-  Napi::Value PivotGetStyleInfo(const Napi::CallbackInfo& info);
+  Napi::Value PivotGetStyleOptions(const Napi::CallbackInfo& info);
   Napi::Value PivotRowFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotColFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldCount(const Napi::CallbackInfo& info);
@@ -314,7 +315,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// Appends a manual-filter item addressed by its position in the bound
   /// cache field's shared items. The only form that can express the blank
   /// item, which has no label of its own and is matched by its binding.
-  Napi::Value PivotFieldAddItemAt(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearItems(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetItemVisible(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDefaultSubtotal(const Napi::CallbackInfo& info);
@@ -324,9 +324,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldSetItemShowDetail(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetItemCaption(const Napi::CallbackInfo& info);
   Napi::Value PivotGetOptions(const Napi::CallbackInfo& info);
-  Napi::Value PivotSetOptions(const Napi::CallbackInfo& info);
+  Napi::Value PivotUpdateOptions(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheGetOptions(const Napi::CallbackInfo& info);
-  Napi::Value PivotCacheSetOptions(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheUpdateOptions(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheCalculatedFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheCalculatedFieldSetFormula(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheCalculatedFieldRemove(const Napi::CallbackInfo& info);
@@ -343,8 +343,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotProject(const Napi::CallbackInfo& info);
   Napi::Value PivotProjectionPending(const Napi::CallbackInfo& info);
   Napi::Value PivotShowDetails(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldAddSubtotalFunction(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldClearSubtotalFunctions(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearDateGroup(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetNumberFormat(const Napi::CallbackInfo& info);
@@ -384,6 +384,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetSheetView(const Napi::CallbackInfo& info);
   Napi::Value GetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetProtection(const Napi::CallbackInfo& info);
+  Napi::Value UpdateSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetZoom(const Napi::CallbackInfo& info);
   Napi::Value SetSheetFreeze(const Napi::CallbackInfo& info);
   /// States the whole tab visibility, including `veryHidden`, which the
@@ -419,7 +420,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ClearColumnWidth(const Napi::CallbackInfo& info);
   Napi::Value ClearColumnStyle(const Napi::CallbackInfo& info);
   Napi::Value GetSheetFormatDefaults(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetFormatDefaults(const Napi::CallbackInfo& info);
+  Napi::Value UpdateSheetFormatDefaults(const Napi::CallbackInfo& info);
   Napi::Value GetCellRectPt(const Napi::CallbackInfo& info);
   Napi::Value GetColumnWidthPt(const Napi::CallbackInfo& info);
   Napi::Value GetRowHeightPt(const Napi::CallbackInfo& info);
@@ -451,6 +452,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddFont(const Napi::CallbackInfo& info);
   Napi::Value SetFont(const Napi::CallbackInfo& info);
   Napi::Value SetDefaultFont(const Napi::CallbackInfo& info);
+  Napi::Value GetDefaultFont(const Napi::CallbackInfo& info);
   Napi::Value AddFill(const Napi::CallbackInfo& info);
   Napi::Value AddBorder(const Napi::CallbackInfo& info);
   Napi::Value AddNumFmt(const Napi::CallbackInfo& info);
@@ -508,8 +510,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddProtectedRange(const Napi::CallbackInfo& info);
   Napi::Value UpdateProtectedRange(const Napi::CallbackInfo& info);
   Napi::Value RemoveProtectedRange(const Napi::CallbackInfo& info);
-  Napi::Value AddHyperlink(const Napi::CallbackInfo& info);
-  Napi::Value AddHyperlinkRange(const Napi::CallbackInfo& info);
+  Napi::Value SetHyperlink(const Napi::CallbackInfo& info);
+  Napi::Value SetHyperlinkRange(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlink(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlink(const Napi::CallbackInfo& info);
@@ -532,13 +534,11 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Typed AutoFilter, sheet and table scoped.
   Napi::Value GetAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value SetAutoFilter(const Napi::CallbackInfo& info);
-  Napi::Value RemoveAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value ApplyAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value ClearAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value EvaluateAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value GetTableAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value SetTableAutoFilter(const Napi::CallbackInfo& info);
-  Napi::Value RemoveTableAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value ApplyTableAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value ClearTableAutoFilter(const Napi::CallbackInfo& info);
   Napi::Value EvaluateTableAutoFilter(const Napi::CallbackInfo& info);
@@ -595,10 +595,12 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetChartType(const Napi::CallbackInfo& info);
   Napi::Value SetChartTitle(const Napi::CallbackInfo& info);
   Napi::Value SetChartLegend(const Napi::CallbackInfo& info);
+  Napi::Value UpdateChartLegend(const Napi::CallbackInfo& info);
   Napi::Value SetChartAxis(const Napi::CallbackInfo& info);
   Napi::Value SetChartDisplay(const Napi::CallbackInfo& info);
   Napi::Value SetChartSeries(const Napi::CallbackInfo& info);
   Napi::Value SetChartPoint(const Napi::CallbackInfo& info);
+  Napi::Value UpdateChartPoint(const Napi::CallbackInfo& info);
   Napi::Value SetChartPlot(const Napi::CallbackInfo& info);
   Napi::Value SetChartFilter(const Napi::CallbackInfo& info);
   Napi::Value AddChartSeries(const Napi::CallbackInfo& info);

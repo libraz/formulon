@@ -20,6 +20,7 @@ from ._workbook import CellAddress, CellRect, Color, ColorKind, SheetRect, Workb
 
 __all__ = [
     "RECORD_RANGE_FIELDS",
+    "cell_rect",
     "color_input",
     "date_serial",
     "normalize_record_ranges",
@@ -33,8 +34,10 @@ RECORD_RANGE_FIELDS = {
     "AutoFilterSortCondition": {"ref": "CellRect"},
     "AutoFilterSortState": {"ref": "CellRect", "conditions": "AutoFilterSortCondition[]"},
     "ConditionalFormatInput": {"ranges": "CellRect[]"},
+    "DataTableInput": {"rect": "CellRect"},
     "DataValidationInput": {"ranges": "CellRect[]"},
     "PivotInput": {"anchor": "CellAddress"},
+    "TableInput": {"range": "CellRect"},
 }
 # </record-range-fields>
 
@@ -56,7 +59,7 @@ def color_input(value: Any, label: str) -> Color:
         if not _COLOR_TEXT.fullmatch(value):
             raise TypeError(f'formulon: {label} must be "#RRGGBB" or "#AARRGGBB", got {value!r}')
         digits = value[1:] if len(value) == 9 else "FF" + value[1:]
-        return Color(kind=ColorKind.RGB, rgb=int(digits, 16))
+        return Color(kind=ColorKind.RGB, argb=int(digits, 16))
     if not isinstance(value, Color):
         raise TypeError(f"formulon: {label} must be a colour string or a Color, got {type(value).__name__}")
     return value
@@ -78,7 +81,8 @@ def _parse(workbook: Workbook, text: str) -> Tuple[Optional[str], CellRect]:
     return ref.sheet_name, ref.rect
 
 
-def _cell_rect(workbook: Workbook, value: Any, label: str) -> CellRect:
+def cell_rect(workbook: Workbook, value: Any, label: str) -> CellRect:
+    """A ``CellRect`` or its unqualified A1 text; a sheet-qualified range is an ``InvalidArgumentError``."""
     if isinstance(value, CellRect):
         return value
     if not isinstance(value, str):
@@ -108,7 +112,7 @@ def _cell_address(workbook: Workbook, value: Any, label: str) -> CellAddress:
         return value
     if not isinstance(value, str):
         raise TypeError(f"formulon: {label} must be a CellAddress or an A1 string, got {type(value).__name__}")
-    rect = _cell_rect(workbook, value, label)
+    rect = cell_rect(workbook, value, label)
     if rect.first_row != rect.last_row or rect.first_col != rect.last_col:
         raise _invalid(f"{label}: {value!r} is not a single cell")
     return CellAddress(row=rect.first_row, col=rect.first_col)
@@ -124,7 +128,7 @@ def _normalize_field(workbook: Workbook, kind: str, value: Any, sheet: Optional[
             raise TypeError(f"formulon: {label} must be a list or one A1 string, got {type(value).__name__}")
         return [_normalize_field(workbook, element, item, sheet, f"{label}[{i}]") for i, item in enumerate(items)]
     if kind == "CellRect":
-        return _cell_rect(workbook, value, label)
+        return cell_rect(workbook, value, label)
     if kind == "SheetRect":
         return sheet_rect(workbook, value, sheet, label)
     if kind == "CellAddress":

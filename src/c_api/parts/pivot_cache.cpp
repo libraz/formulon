@@ -727,8 +727,8 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_options(const fm_workbook_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_pivot_cache_options(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                           const fm_pivot_cache_options_t* options) {
+extern "C" fm_status_t fm_workbook_update_pivot_cache_options(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                              const fm_pivot_cache_options_t* options) {
   clear_last_error();
   if (wb == nullptr || options == nullptr) {
     return null_argument();

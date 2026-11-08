@@ -120,7 +120,7 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, const fm_iterative_settings_patch_t* patch) {
+extern "C" fm_status_t fm_workbook_update_iterative(fm_workbook_t* wb, const fm_iterative_settings_patch_t* patch) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");
@@ -305,8 +305,12 @@ extern "C" fm_status_t fm_workbook_get_pinned_now(const fm_workbook_t* wb, fm_ci
 
 extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_time_t* now) {
   clear_last_error();
-  if (wb == nullptr || now == nullptr) {
+  if (wb == nullptr) {
     return null_argument();
+  }
+  if (now == nullptr) {
+    wb->workbook().clear_pinned_now();
+    return 0;
   }
   // Validated rather than normalised: `days_from_civil` would happily roll
   // month 13 into the next January, and a pin that silently moved would make
@@ -323,15 +327,6 @@ extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_ci
   wb->workbook().set_pinned_now(formulon::date_time::CivilTime{
       {now->year, static_cast<unsigned>(now->month), static_cast<unsigned>(now->day)},
       {static_cast<unsigned>(now->hour), static_cast<unsigned>(now->minute), static_cast<unsigned>(now->second)}});
-  return 0;
-}
-
-extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
-  clear_last_error();
-  if (wb == nullptr) {
-    return null_argument("wb");
-  }
-  wb->workbook().clear_pinned_now();
   return 0;
 }
 

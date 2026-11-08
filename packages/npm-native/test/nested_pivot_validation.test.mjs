@@ -16,7 +16,7 @@ function makePivot(Workbook) {
     cache.setRecordValue(record, 0, region);
     cache.setRecordValue(record, 1, amount);
   }
-  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchorRow: 0, anchorCol: 4 });
+  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
   const region = pivot.addField({ sourceName: 'Region', axis: 0 });
   const amount = pivot.addField({ sourceName: 'Amount', axis: 2 });
   pivot.setRowFieldOrder([region]);

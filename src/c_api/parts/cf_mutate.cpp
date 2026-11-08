@@ -105,7 +105,7 @@ fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat
 // than one visual payload cannot invalidate a pointer already written
 // into `*out`.
 // A theme / indexed / auto colour keeps its kind; a literal one reads as
-// `kFmColorRgb`, or `kFmColorNone` when all four channels are zero.
+// `FM_COLOR_KIND_RGB`, or `FM_COLOR_KIND_NONE` when all four channels are zero.
 fm_color_spec_t cf_color_to_c(const formulon::cf::Color& color) {
   if (color.is_symbolic()) {
     return color_spec_to_c(color.spec);
@@ -149,8 +149,8 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   // path the ABI offers - get a rule, remove it, add the amended record
   // back - since `fm_sheet_add_cf_rule` refuses the same index.
   if (rule.dxf_id.has_value() && static_cast<std::size_t>(*rule.dxf_id) < dxf_count) {
-    out->dxf_id_engaged = 1;
-    out->dxf_id = *rule.dxf_id;
+    out->dxf_index_engaged = 1;
+    out->dxf_index = *rule.dxf_id;
   }
   // `cf::CFCellRange` and `fm_cell_rect_t` are layout-identical (see the
   // static_asserts above), so the block's ranges copy across as one memcpy.
@@ -260,7 +260,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   }
 }
 
-// Inverse of `cf_color_to_c`: `kFmColorNone` is the literal colour with all
+// Inverse of `cf_color_to_c`: `FM_COLOR_KIND_NONE` is the literal colour with all
 // four channels zero. The kind is checked by `check_payload_colors`.
 formulon::cf::Color cf_color_from_c(const fm_color_spec_t& src) {
   std::uint32_t argb = 0;
@@ -279,7 +279,7 @@ formulon::cf::Color cf_color_from_c(const fm_color_spec_t& src) {
 }
 
 fm_status_t check_color_kind(const fm_color_spec_t& color, const char* field) {
-  return check_enum_domain(color.kind, kFmColorNone, kFmColorAuto, field);
+  return check_enum_domain(color.kind, FM_COLOR_KIND_NONE, FM_COLOR_KIND_AUTO, field);
 }
 
 // Rejects a colour of the engaged payloads whose `kind` names no
@@ -411,7 +411,7 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
     spec.custom_icons.reserve(rule.icon_set_icon_count);
     for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
       spec.custom_icons.push_back(
-          formulon::cf::CfIcon{rule.icon_set_icons[i].icon_set, rule.icon_set_icons[i].icon_id});
+          formulon::cf::CfIcon{rule.icon_set_icons[i].icon_set, rule.icon_set_icons[i].icon_index});
     }
   }
   out_rule->icon_set = std::move(spec);
@@ -611,18 +611,18 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     return rc;
   }
   out_rule.stop_if_true = rule->stop_if_true != 0;
-  if (rule->dxf_id_engaged != 0) {
+  if (rule->dxf_index_engaged != 0) {
     // A `dxfId` past the end of `<dxfs>` makes Excel treat the whole
     // `xl/styles.xml` reference as broken and strip every conditional format
     // from the workbook on open. The writer already refuses to emit an
     // unresolvable `dxfId`, but rejecting it here tells the caller at set
     // time which index was wrong instead of silently losing the format.
     const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
-    if (static_cast<std::size_t>(rule->dxf_id) >= dxf_count) {
-      return invalid_argument("dxf_id out of range",
-                              "dxf_id=" + std::to_string(rule->dxf_id) + " dxfs_count=" + std::to_string(dxf_count));
+    if (static_cast<std::size_t>(rule->dxf_index) >= dxf_count) {
+      return invalid_argument("dxf_index out of range", "dxf_index=" + std::to_string(rule->dxf_index) +
+                                                            " dxfs_count=" + std::to_string(dxf_count));
     }
-    out_rule.dxf_id = rule->dxf_id;
+    out_rule.dxf_id = rule->dxf_index;
   }
   assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule);
   if (rule->formula1 != nullptr) {

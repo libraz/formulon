@@ -20,9 +20,9 @@ from formulon import (
     FormulonError,
     Mention,
     Person,
-    SheetRect,
     SortBy,
     SortMethod,
+    TableInput,
     ThreadedCommentInput,
     ValidationErrorStyle,
     ValidationOutcome,
@@ -81,7 +81,7 @@ class AutoFilterTests(unittest.TestCase):
                 range=CellRect(0, 0, 5, 1),
                 columns=[
                     AutoFilterColumn(
-                        col_id=0,
+                        column_offset=0,
                         hidden_button=True,
                         kind=1,
                         filter_blank=True,
@@ -89,14 +89,14 @@ class AutoFilterTests(unittest.TestCase):
                         date_groups=[AutoFilterDateGroup(year=2024, month=5, grouping=DateTimeGrouping.MONTH)],
                     ),
                     AutoFilterColumn(
-                        col_id=1,
+                        column_offset=1,
                         kind=FilterKind.CUSTOM,
                         custom_and=True,
                         custom_count=2,
-                        op1=FilterOperator.GREATER_THAN,
-                        val1="1",
-                        op2=FilterOperator.LESS_THAN,
-                        val2="9",
+                        operator1=FilterOperator.GREATER_THAN,
+                        value1="1",
+                        operator2=FilterOperator.LESS_THAN,
+                        value2="9",
                     ),
                 ],
                 sort=sort,
@@ -113,7 +113,7 @@ class AutoFilterTests(unittest.TestCase):
             self.assertEqual(c0.values, ["1", "3"])
             self.assertEqual(c0.date_groups, [AutoFilterDateGroup(year=2024, month=5, grouping=DateTimeGrouping.MONTH)])
             self.assertEqual(
-                (c1.kind, c1.custom_count, c1.op1, c1.val1, c1.op2, c1.val2),
+                (c1.kind, c1.custom_count, c1.operator1, c1.value1, c1.operator2, c1.value2),
                 (FilterKind.CUSTOM, 2, FilterOperator.GREATER_THAN, "1", FilterOperator.LESS_THAN, "9"),
             )
             self.assertTrue(c1.custom_and)
@@ -131,28 +131,28 @@ class AutoFilterTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _seed_numbers(wb)
             col = AutoFilterColumn(
-                col_id=0,
+                column_offset=0,
                 kind=FilterKind.TOP10,
                 top=False,
                 percent=True,
-                top_val=25.0,
-                filter_val=2.0,
+                top_value=25.0,
+                filter_value=2.0,
             )
             dyn = AutoFilterColumn(
-                col_id=1,
+                column_offset=1,
                 kind=FilterKind.DYNAMIC,
                 dynamic_type=DynamicFilterType.ABOVE_AVERAGE,
-                dyn_val=3.5,
-                val_iso="x",
+                dynamic_value=3.5,
+                value_iso="x",
             )
             wb.sheet(0).set_auto_filter(AutoFilter(range=CellRect(0, 0, 5, 1), columns=[col, dyn]))
             got = wb.sheet(0).get_auto_filter()
             assert got is not None
             self.assertFalse(got.columns[0].top)
             self.assertTrue(got.columns[0].percent)
-            self.assertEqual((got.columns[0].top_val, got.columns[0].filter_val), (25.0, 2.0))
+            self.assertEqual((got.columns[0].top_value, got.columns[0].filter_value), (25.0, 2.0))
             self.assertEqual(got.columns[1].dynamic_type, DynamicFilterType.ABOVE_AVERAGE)
-            self.assertEqual(got.columns[1].dyn_val, 3.5)
+            self.assertEqual(got.columns[1].dynamic_value, 3.5)
 
     def test_evaluate_apply_clear_remove(self) -> None:
         with Workbook.create_default() as wb:
@@ -162,7 +162,11 @@ class AutoFilterTests(unittest.TestCase):
                     range=CellRect(0, 0, 5, 0),
                     columns=[
                         AutoFilterColumn(
-                            col_id=0, kind=FilterKind.CUSTOM, custom_count=1, op1=FilterOperator.GREATER_THAN, val1="2"
+                            column_offset=0,
+                            kind=FilterKind.CUSTOM,
+                            custom_count=1,
+                            operator1=FilterOperator.GREATER_THAN,
+                            value1="2",
                         )
                     ],
                 ),
@@ -174,14 +178,14 @@ class AutoFilterTests(unittest.TestCase):
             wb.sheet(0).apply_auto_filter()
             hidden = [r.row for r in wb.sheet(0).list_row_overrides() if r.hidden]
             self.assertEqual(hidden, [1, 2])
-            wb.sheet(0).clear_auto_filter()
+            wb.sheet(0).clear_auto_filter_criteria()
             got = wb.sheet(0).get_auto_filter()
             assert got is not None
             self.assertEqual(got.columns, [])
             self.assertEqual(wb.sheet(0).evaluate_auto_filter(), AutoFilterEval(1, [True] * 5))
-            wb.sheet(0).remove_auto_filter()
+            wb.sheet(0).set_auto_filter(None)
             self.assertIsNone(wb.sheet(0).get_auto_filter())
-            wb.sheet(0).remove_auto_filter()
+            wb.sheet(0).set_auto_filter(None)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).apply_auto_filter()
             with self.assertRaises(FormulonError):
@@ -191,7 +195,7 @@ class AutoFilterTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
                 wb.sheet(0).set_auto_filter(
-                    AutoFilter(range=CellRect(0, 0, 3, 0), columns=[AutoFilterColumn(col_id=5)]),
+                    AutoFilter(range=CellRect(0, 0, 3, 0), columns=[AutoFilterColumn(column_offset=5)]),
                 )
             with self.assertRaises(FormulonError):
                 wb.sheet(99).get_auto_filter()
@@ -203,36 +207,34 @@ class AutoFilterTests(unittest.TestCase):
             for i in range(1, 4):
                 wb.sheet(0).set_number(i, 0, float(i))
                 wb.sheet(0).set_number(i, 1, 0.0)
-            idx = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 3, 1)), name="Tbl", display_name="Tbl", columns=["n", "m"]
-            )
-            wb.table(idx).remove_auto_filter()
-            self.assertIsNone(wb.table(idx).get_auto_filter())
-            wb.table(idx).set_auto_filter(
+            table = wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 3, 1), name="Tbl", columns=["n", "m"]))
+            table.set_auto_filter(None)
+            self.assertIsNone(table.get_auto_filter())
+            table.set_auto_filter(
                 AutoFilter(
                     range=CellRect(0, 0, 3, 1),
                     columns=[
                         AutoFilterColumn(
-                            col_id=0,
+                            column_offset=0,
                             kind=FilterKind.CUSTOM,
                             custom_count=1,
-                            op1=FilterOperator.GREATER_THAN_OR_EQUAL,
-                            val1="2",
+                            operator1=FilterOperator.GREATER_THAN_OR_EQUAL,
+                            value1="2",
                         )
                     ],
                 )
             )
-            got = wb.table(idx).get_auto_filter()
+            got = table.get_auto_filter()
             assert got is not None
-            self.assertEqual(got.columns[0].val1, "2")
-            self.assertEqual(wb.table(idx).evaluate_auto_filter(), AutoFilterEval(1, [False, True, True]))
-            wb.table(idx).apply_auto_filter()
-            wb.table(idx).clear_auto_filter()
-            self.assertEqual(wb.table(idx).evaluate_auto_filter(), AutoFilterEval(1, [True, True, True]))
-            wb.table(idx).remove_auto_filter()
-            self.assertIsNone(wb.table(idx).get_auto_filter())
+            self.assertEqual(got.columns[0].value1, "2")
+            self.assertEqual(table.evaluate_auto_filter(), AutoFilterEval(1, [False, True, True]))
+            table.apply_auto_filter()
+            table.clear_auto_filter_criteria()
+            self.assertEqual(table.evaluate_auto_filter(), AutoFilterEval(1, [True, True, True]))
+            table.set_auto_filter(None)
+            self.assertIsNone(table.get_auto_filter())
             with self.assertRaises(FormulonError):
-                wb.table(idx.index + 5).get_auto_filter()
+                wb.sheet(0).table(table.index + 5).get_auto_filter()
 
 
 class ValidationCheckTests(unittest.TestCase):

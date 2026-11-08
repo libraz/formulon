@@ -51,7 +51,13 @@ PATCH_OVERRIDES: Dict[str, dict] = {
     "binding.update_pivot_field": {"id": "pivot_field", "get": "pivot_field.get", "create": _PIVOT},
     "binding.update_pivot_item": {"id": "pivot_item", "get": "pivot_field_item.get", "create": _PIVOT},
     "binding.set_cell_format": {"id": "cell_format", "get": "binding.get_cell_format"},
-    "chart_legend.set": {"get": "chart.get", "path": "legend", "create": ["chart.add"]},
+    "chart_legend.update": {"get": "chart.get", "path": "legend", "create": ["chart.add"]},
+    # Chart edits other than the legend: their round trips live in the chart suites.
+    "chart_display.set": {"skip": True},
+    "chart_axis.set": {"skip": True},
+    "chart_series.set": {"skip": True},
+    "chart_point.update": {"skip": True},
+    "chart_plot.set": {"skip": True},
     "table.update": {"create": ["table.create"]},
     "protected_range.update": {"create": ["protected_range.add"]},
     "threaded_comment.update": {"create": ["threaded_comment.add"]},
@@ -140,6 +146,8 @@ def build(entries: dict) -> dict:
         if entry.get("patch") is not True or entry.get("patch_record") in (None, "none"):
             continue
         over = PATCH_OVERRIDES.get(op_id, {})
+        if over.get("skip"):
+            continue
         get_id = over.get("get", op_id.rsplit(".", 1)[0] + ".get")
         if get_id not in entries:
             raise SystemExit(

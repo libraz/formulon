@@ -71,7 +71,7 @@ TEST(CApiSetIterative, NegativePatchFieldsKeepTheStoredSettings) {
   EXPECT_EQ(iterations, 9U);
   EXPECT_DOUBLE_EQ(max_change, 0.5);
 
-  EXPECT_NE(fm_workbook_set_iterative(g.handle, nullptr), 0);
+  EXPECT_NE(fm_workbook_update_iterative(g.handle, nullptr), 0);
 }
 
 TEST(CApiPivotCacheNumbers, RejectNonFiniteValues) {

@@ -74,9 +74,9 @@ fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeT
     s.fields |= FM_SHAPE_FIELD_LINE;
     s.line_color = PullColorSpec(reader, spec, "lineColor");
   }
-  s.line_width_emu = reader.I64(spec, "lineWidthEmu", 0, &present);
+  s.line_width_pt = reader.Double(spec, "lineWidthPt", 0.0, &present);
   s.fields |= present ? FM_SHAPE_FIELD_LINE_WIDTH : 0U;
-  s.rotation = reader.I32(spec, "rotation", 0, &present);
+  s.rotation_deg = reader.Double(spec, "rotationDeg", 0.0, &present);
   s.fields |= present ? FM_SHAPE_FIELD_ROTATION : 0U;
   const bool hidden = reader.Bool(spec, "hidden", false, &present);
   if (present) {
@@ -92,7 +92,7 @@ fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& sp
   for (size_t i = 0; i < 8U; ++i) {
     *GroupColor(g, i) = PullColorSpec(reader, spec, kSparklineColorKeys[i]);
   }
-  g.type = reader.I32(spec, "type", FM_SPARKLINE_LINE);
+  g.type = reader.I32(spec, "type", FM_SPARKLINE_TYPE_LINE);
   g.markers = reader.Bool(spec, "markers", false) ? 1 : 0;
   g.high = reader.Bool(spec, "high", false) ? 1 : 0;
   g.low = reader.Bool(spec, "low", false) ? 1 : 0;
@@ -101,8 +101,8 @@ fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& sp
   g.negative = reader.Bool(spec, "negative", false) ? 1 : 0;
   g.display_x_axis = reader.Bool(spec, "displayXAxis", false) ? 1 : 0;
   g.display_hidden = reader.Bool(spec, "displayHidden", false) ? 1 : 0;
-  g.min_axis_type = reader.I32(spec, "minAxisType", FM_SPARKLINE_AXIS_INDIVIDUAL);
-  g.max_axis_type = reader.I32(spec, "maxAxisType", FM_SPARKLINE_AXIS_INDIVIDUAL);
+  g.min_axis_type = reader.I32(spec, "minAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL);
+  g.max_axis_type = reader.I32(spec, "maxAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL);
   bool present = false;
   g.manual_min = reader.Double(spec, "manualMin", 0.0, &present);
   g.has_manual_min = present ? 1 : 0;
@@ -113,7 +113,7 @@ fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& sp
     g.date_axis_ref = ref_store.c_str();
   }
   g.line_weight = reader.Double(spec, "lineWeight", 0.75);
-  g.empty_cells_as = reader.I32(spec, "emptyCellsAs", FM_SPARKLINE_EMPTY_GAP);
+  g.empty_cells_as = reader.I32(spec, "emptyCellsAs", FM_SPARKLINE_EMPTY_CELLS_GAP);
   return g;
 }
 
@@ -167,8 +167,8 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_t& s) {
   item.Set("fillColor", ColorSpecOrNull(env, s.fill_color));
   item.Set("lineKind", JsIndexOrNull(env, s.line_kind));
   item.Set("lineColor", ColorSpecOrNull(env, s.line_color));
-  item.Set("lineWidthEmu", JsNumber(env, static_cast<double>(s.line_width_emu)));
-  item.Set("rotation", JsNumber(env, s.rotation));
+  item.Set("lineWidthPt", JsNumber(env, s.line_width_pt));
+  item.Set("rotationDeg", JsNumber(env, s.rotation_deg));
   item.Set("hidden", Napi::Boolean::New(env, s.hidden != 0));
   return item;
 }

@@ -1,0 +1,1 @@
+c	record.image_insert	-	fm_picture_insert_spec_t is a record passed by pointer; its first field is `uint32_t struct_size`

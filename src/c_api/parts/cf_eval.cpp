@@ -75,20 +75,20 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
   out->priority = match.priority;
   switch (match.kind) {
     case formulon::cf::CFMatchKind::DifferentialFormat:
-      out->kind = FM_CF_DIFFERENTIAL_FORMAT;
+      out->kind = FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT;
       if (match.dxf_id.has_value()) {
-        out->dxf_id_engaged = 1;
-        out->dxf_id = *match.dxf_id;
+        out->dxf_index_engaged = 1;
+        out->dxf_index = *match.dxf_id;
       }
       return;
     case formulon::cf::CFMatchKind::ColorScale:
-      out->kind = FM_CF_COLOR_SCALE;
+      out->kind = FM_CF_MATCH_KIND_COLOR_SCALE;
       if (match.resolved_fill_color.has_value()) {
         out->color = to_c_color(*match.resolved_fill_color);
       }
       return;
     case formulon::cf::CFMatchKind::DataBar:
-      out->kind = FM_CF_DATA_BAR;
+      out->kind = FM_CF_MATCH_KIND_DATA_BAR;
       if (match.data_bar_render.has_value()) {
         const auto& bar = *match.data_bar_render;
         out->bar_length_pct = bar.length_pct;
@@ -104,7 +104,7 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
       }
       return;
     case formulon::cf::CFMatchKind::IconSet:
-      out->kind = FM_CF_ICON_SET;
+      out->kind = FM_CF_MATCH_KIND_ICON_SET;
       if (match.icon_render.has_value()) {
         out->icon_set_name = static_cast<std::int32_t>(match.icon_render->set_name);
         out->icon_index = match.icon_render->icon_index;
@@ -114,7 +114,7 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
   // Defensive default - every enumerator above returns. If a future
   // kind enumerator is added without a corresponding case the output
   // surfaces as DifferentialFormat with no engaged fields.
-  out->kind = FM_CF_DIFFERENTIAL_FORMAT;
+  out->kind = FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT;
 }
 
 }  // namespace

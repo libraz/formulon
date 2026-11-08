@@ -107,10 +107,11 @@ extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (visibility < static_cast<int32_t>(FM_SHEET_VISIBLE) || visibility > static_cast<int32_t>(FM_SHEET_VERY_HIDDEN)) {
+  if (visibility < static_cast<int32_t>(FM_SHEET_VISIBILITY_VISIBLE) ||
+      visibility > static_cast<int32_t>(FM_SHEET_VISIBILITY_VERY_HIDDEN)) {
     return invalid_argument("unknown visibility", "visibility=" + std::to_string(visibility));
   }
-  if (visibility != static_cast<int32_t>(FM_SHEET_VISIBLE)) {
+  if (visibility != static_cast<int32_t>(FM_SHEET_VISIBILITY_VISIBLE)) {
     if (auto rc = check_keeps_visible_sheet(wb->workbook(), static_cast<std::uint32_t>(sheet_index)); rc != 0) {
       return rc;
     }
@@ -133,14 +134,14 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
     return rc;
   }
   const formulon::SheetView& v = wb->workbook().sheet(sheet_index).view();
-  out->zoom_scale = v.zoom_scale;
+  out->zoom_pct = v.zoom_scale;
   out->freeze_rows = v.freeze_rows;
   out->freeze_cols = v.freeze_cols;
   // `visibility()` resolves the model's two bits, including the
   // combination no writer should produce.
   out->visibility = static_cast<int32_t>(v.visibility());
   out->show_grid_lines = v.show_grid_lines ? 1 : 0;
-  out->show_row_col_headers = v.show_row_col_headers ? 1 : 0;
+  out->show_row_column_headers = v.show_row_col_headers ? 1 : 0;
   out->show_zeros = v.show_zeros ? 1 : 0;
   out->right_to_left = v.right_to_left ? 1 : 0;
   out->tab_selected = v.tab_selected ? 1 : 0;
@@ -284,7 +285,7 @@ extern "C" fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sh
   return set_view_flag(wb, sheet_index, &formulon::SheetView::show_grid_lines, show);
 }
 
-extern "C" fm_status_t fm_sheet_set_show_row_col_headers(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
+extern "C" fm_status_t fm_sheet_set_show_row_column_headers(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
   clear_last_error();
   return set_view_flag(wb, sheet_index, &formulon::SheetView::show_row_col_headers, show);
 }

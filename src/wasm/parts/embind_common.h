@@ -97,12 +97,12 @@ struct JsReadDiagnostics {
 
 /// JS-side mirror of `fm_cf_match_t`. The active sub-fields depend on
 /// `kind`; the rest carry default-zero values. The colours are
-/// `{kind, rgb, theme, tint, indexed}` objects.
+/// `{kind, argb, theme, tint, indexed}` objects.
 struct JsCfMatch {
   int32_t kind = 0;
   int32_t priority = 0;
-  int32_t dxfIdEngaged = 0;
-  uint32_t dxfId = 0;
+  int32_t dxfIndexEngaged = 0;
+  uint32_t dxfIndex = 0;
   emscripten::val color = emscripten::val::null();
   double barLengthPct = 0.0;
   double barAxisPositionPct = 0.0;
@@ -118,7 +118,7 @@ struct JsCfMatch {
 
 /// JS-side mirror of `fm_sheet_view_t`.
 struct JsSheetView {
-  uint32_t zoomScale = 100U;
+  uint32_t zoomPct = 100U;
   uint32_t freezeRows = 0U;
   uint32_t freezeCols = 0U;
   /// `fm_sheet_visibility_t` ordinal.
@@ -134,37 +134,10 @@ struct JsSheetView {
   uint32_t topLeftCol = 0U;
   uint32_t paneTopLeftRow = 0U;
   uint32_t paneTopLeftCol = 0U;
-  double splitX = 0.0;
-  double splitY = 0.0;
+  double splitXTwips = 0.0;
+  double splitYTwips = 0.0;
   bool showFormulas = false;
   bool showOutlineSymbols = true;
-};
-
-/// JS-side mirror of `fm_sheet_protection_t`. The string fields are deep
-/// copies, `null` when the sheet stores none.
-struct JsSheetProtection {
-  bool enabled = false;
-  emscripten::val algorithmName = emscripten::val::null();
-  emscripten::val hashValue = emscripten::val::null();
-  emscripten::val saltValue = emscripten::val::null();
-  uint32_t spinCount = 0U;
-  emscripten::val legacyPassword = emscripten::val::null();
-  bool sheet = false;
-  bool objects = false;
-  bool scenarios = false;
-  bool formatCells = false;
-  bool formatColumns = false;
-  bool formatRows = false;
-  bool insertColumns = false;
-  bool insertRows = false;
-  bool insertHyperlinks = false;
-  bool deleteColumns = false;
-  bool deleteRows = false;
-  bool selectLockedCells = false;
-  bool selectUnlockedCells = false;
-  bool sort = false;
-  bool autoFilter = false;
-  bool pivotTables = false;
 };
 
 // ---- Failure builders ---------------------------------------------------
@@ -308,6 +281,10 @@ enum class JsPatchKey : int32_t {
 /// is false a `null` records a type error on `reader` and reads as `kKeep`.
 JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& value, const char* field, bool nullable);
 
+/// Reads the optional boolean `owner[key]` as an `fm_tristate_t`: an omitted or `null` value is
+/// `FM_TRISTATE_DEFAULT`, `true` / `false` are `FM_TRISTATE_TRUE` / `FM_TRISTATE_FALSE`.
+int32_t js_tristate(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field);
+
 /// Count getter of a count-then-`at` collection scoped to a sheet.
 using JsListCount = fm_status_t (*)(const fm_workbook_t*, size_t, size_t*);
 
@@ -370,7 +347,7 @@ emscripten::val value_to_val(const fm_value_t& v);
 /// Reads a caller-supplied `Value` into `*out`. `kind` is required, and
 /// only the field that kind carries is read: `boolean` must be a JS
 /// boolean, `number` a Number, `text` a string, `errorCode` an int32.
-/// `text` owns the storage a `FM_VAL_TEXT` payload points at, so it must
+/// `text` owns the storage a `FM_VALUE_KIND_TEXT` payload points at, so it must
 /// outlive the C call. Records a TypeError and returns false on any
 /// missing or wrongly-typed field.
 bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text);
@@ -437,14 +414,14 @@ std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char*
 std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, const char* field,
                                                 JsNarrowNumericReader* reader);
 
-/// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
-/// of `v[key]`. An absent object leaves `kind` at `kFmColorNone` (no
+/// Pulls the `{kind, argb, theme, tint, indexed}` colour specification out
+/// of `v[key]`. An absent object leaves `kind` at `FM_COLOR_KIND_NONE` (no
 /// colour). A supplied selector is authoritative; the binding does not
 /// resolve theme/indexed / auto colours.
 fm_color_spec_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
 
 /// `js_pull_color_spec` for a value already in hand; `field` names it in a
-/// rejection. A missing value reads as `kFmColorNone`.
+/// rejection. A missing value reads as `FM_COLOR_KIND_NONE`.
 fm_color_spec_t js_pull_color_spec_value(const emscripten::val& value, const char* field,
                                          JsNarrowNumericReader* reader);
 
@@ -506,7 +483,7 @@ inline void js_set_present_or_null(emscripten::val& o, const char* key, int32_t 
 /// indexed colour straight back and keeps hitting style-table dedup.
 emscripten::val js_color_spec(const fm_color_spec_t& spec);
 
-/// `js_color_spec(spec)`, or `null` when `spec.kind` is `kFmColorNone`.
+/// `js_color_spec(spec)`, or `null` when `spec.kind` is `FM_COLOR_KIND_NONE`.
 emscripten::val js_color_spec_or_null(const fm_color_spec_t& spec);
 
 /// Builds the JS mirror of a border side.

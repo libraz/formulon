@@ -5,7 +5,7 @@
 // The handler evaluates the formula through the C ABI's side-effect-free
 // array surface. Cell-level errors (`#NAME?`, `#DIV/0!`, …) are *not*
 // process-level failures: the cell value just happens to be an
-// `FM_VAL_ERROR`, and we print its display name. A formula that does not
+// `FM_VALUE_KIND_ERROR`, and we print its display name. A formula that does not
 // parse is a failure of the input: exit 65 with the position on stderr and
 // nothing on stdout.
 //

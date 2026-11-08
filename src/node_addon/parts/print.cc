@@ -49,15 +49,20 @@ void PullOptionalBool(CheckedSpecReader& reader, const Napi::Object& spec, const
   engaged = present ? 1 : 0;
 }
 
-// Shared body of the row / column page-break add entries.
-using BreakAddFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t, int32_t);
+// The span and manual flag of a break record `{ first?, last?, manual? }`; an omitted span is the whole sheet
+// and an omitted `manual` is true.
+struct BreakSpan {
+  uint32_t first = 0;
+  uint32_t last = 0;
+  int32_t manual = 1;
+};
 
-Napi::Value InvokeBreakAdd(Workbook& wb, const Napi::CallbackInfo& info, BreakAddFn fn) {
-  return wb.StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
-    const uint32_t index = Workbook::ArgU32(info, 1);
-    return fn(handle, sheet, index, Workbook::ArgFlag(info, 2));
-  });
+BreakSpan ReadBreakSpan(CheckedSpecReader& reader, const Napi::Object& spec) {
+  BreakSpan span;
+  span.first = reader.U32(spec, "first", 0U);
+  span.last = reader.U32(spec, "last", 0U);
+  span.manual = reader.Bool(spec, "manual", true) ? 1 : 0;
+  return span;
 }
 
 }  // namespace
@@ -215,7 +220,7 @@ Napi::Value Workbook::SetSheetPrintTitles(const Napi::CallbackInfo& info) {
   }
   Napi::Object columns;
   if (reader.Object(titles, "columns", &columns)) {
-    in.has_cols = 1;
+    in.has_columns = 1;
     in.first_col = reader.RequiredU32(columns, "first");
     in.last_col = reader.RequiredU32(columns, "last");
   }
@@ -225,20 +230,59 @@ Napi::Value Workbook::SetSheetPrintTitles(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, fm_sheet_set_print_titles(handle_, sheet, &in), env.Undefined());
 }
 
-Napi::Value Workbook::AddSheetRowBreak(const Napi::CallbackInfo& info) {
-  return InvokeBreakAdd(*this, info, &fm_sheet_add_row_break);
+// `info[2]` is the break record, or `null` to remove the break at `info[1]`.
+Napi::Value Workbook::SetRowBreak(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  if (info[2].IsNull()) {
+    return ValueOrThrow(env, fm_sheet_set_row_break(handle_, sheet, row, nullptr), env.Undefined());
+  }
+  CheckedSpecReader reader(env);
+  Napi::Object spec;
+  if (!reader.Object(info[2], "break", &spec)) {
+    return env.Undefined();
+  }
+  const BreakSpan span = ReadBreakSpan(reader, spec);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+  brk.row = row;
+  brk.first = span.first;
+  brk.last = span.last;
+  brk.manual = span.manual;
+  return ValueOrThrow(env, fm_sheet_set_row_break(handle_, sheet, row, &brk), env.Undefined());
 }
 
-Napi::Value Workbook::AddSheetColBreak(const Napi::CallbackInfo& info) {
-  return InvokeBreakAdd(*this, info, &fm_sheet_add_column_break);
-}
-
-Napi::Value Workbook::RemoveSheetRowBreak(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_row_break);
-}
-
-Napi::Value Workbook::RemoveSheetColBreak(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_column_break);
+Napi::Value Workbook::SetColumnBreak(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t col = ArgU32(info, 1);
+  if (info[2].IsNull()) {
+    return ValueOrThrow(env, fm_sheet_set_column_break(handle_, sheet, col, nullptr), env.Undefined());
+  }
+  CheckedSpecReader reader(env);
+  Napi::Object spec;
+  if (!reader.Object(info[2], "break", &spec)) {
+    return env.Undefined();
+  }
+  const BreakSpan span = ReadBreakSpan(reader, spec);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+  brk.col = col;
+  brk.first = span.first;
+  brk.last = span.last;
+  brk.manual = span.manual;
+  return ValueOrThrow(env, fm_sheet_set_column_break(handle_, sheet, col, &brk), env.Undefined());
 }
 
 Napi::Value Workbook::ClearSheetBreaks(const Napi::CallbackInfo& info) {
@@ -263,17 +307,26 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
     return ThrowStatus(env, count_rc);
   }
   for (std::size_t i = 0; i < count; ++i) {
-    fm_page_break_t brk = FM_STRUCT_INIT(fm_page_break_t);
-    const fm_status_t rc = rows ? fm_sheet_get_row_break_at(handle_, sheet, i, &brk)
-                                : fm_sheet_get_column_break_at(handle_, sheet, i, &brk);
-    if (rc != 0) {
-      return ThrowStatus(env, rc);
-    }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("id", Napi::Number::New(env, brk.id));
-    item.Set("min", Napi::Number::New(env, brk.min));
-    item.Set("max", Napi::Number::New(env, brk.max));
-    item.Set("manual", Napi::Boolean::New(env, brk.manual != 0));
+    if (rows) {
+      fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+      if (const fm_status_t rc = fm_sheet_get_row_break_at(handle_, sheet, i, &brk); rc != 0) {
+        return ThrowStatus(env, rc);
+      }
+      item.Set("row", Napi::Number::New(env, brk.row));
+      item.Set("first", Napi::Number::New(env, brk.first));
+      item.Set("last", Napi::Number::New(env, brk.last));
+      item.Set("manual", Napi::Boolean::New(env, brk.manual != 0));
+    } else {
+      fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+      if (const fm_status_t rc = fm_sheet_get_column_break_at(handle_, sheet, i, &brk); rc != 0) {
+        return ThrowStatus(env, rc);
+      }
+      item.Set("col", Napi::Number::New(env, brk.col));
+      item.Set("first", Napi::Number::New(env, brk.first));
+      item.Set("last", Napi::Number::New(env, brk.last));
+      item.Set("manual", Napi::Boolean::New(env, brk.manual != 0));
+    }
     items.Set(i, item);
   }
   return items;
@@ -287,43 +340,43 @@ Napi::Value Workbook::GetSheetColBreaks(const Napi::CallbackInfo& info) {
   return BreaksArray(info, /*rows=*/false);
 }
 
-Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::UpdateSheetPageSetup(const Napi::CallbackInfo& info) {
   fm_page_setup_t out = FM_STRUCT_INIT(fm_page_setup_t);
   return InvokeSheetSpec(
-      info, "setPageSetup expects (sheet:number, setup:object)",
+      info, "updatePageSetup expects (sheet:number, setup:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         uint32_t orientation = 0U;
         PullOptionalU32(reader, spec, "orientation", 0U, orientation, out.orientation_engaged);
         // Past int32 the ordinal wraps negative, which the C ABI rejects like any unknown one.
         out.orientation = static_cast<int32_t>(orientation);
         PullOptionalU32(reader, spec, "paperSize", 0U, out.paper_size, out.paper_size_engaged);
-        PullOptionalU32(reader, spec, "scale", 0U, out.scale, out.scale_engaged);
+        PullOptionalU32(reader, spec, "scalePct", 0U, out.scale_pct, out.scale_pct_engaged);
         PullOptionalU32(reader, spec, "fitToWidth", 0U, out.fit_to_width, out.fit_to_width_engaged);
         PullOptionalU32(reader, spec, "fitToHeight", 0U, out.fit_to_height, out.fit_to_height_engaged);
         PullOptionalBool(reader, spec, "fitToPage", false, out.fit_to_page, out.fit_to_page_engaged);
       },
-      [&](fm_workbook_t* handle) { return fm_sheet_set_page_setup(handle, ArgU32(info, 0), &out); });
+      [&](fm_workbook_t* handle) { return fm_sheet_update_page_setup(handle, ArgU32(info, 0), &out); });
 }
 
-Napi::Value Workbook::SetSheetPageMargins(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::UpdateSheetPageMargins(const Napi::CallbackInfo& info) {
   fm_page_margins_t out = FM_STRUCT_INIT(fm_page_margins_t);
   return InvokeSheetSpec(
-      info, "setPageMargins expects (sheet:number, margins:object)",
+      info, "updatePageMargins expects (sheet:number, margins:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
-        PullOptionalDouble(reader, spec, "left", 0.0, out.left, out.left_engaged);
-        PullOptionalDouble(reader, spec, "right", 0.0, out.right, out.right_engaged);
-        PullOptionalDouble(reader, spec, "top", 0.0, out.top, out.top_engaged);
-        PullOptionalDouble(reader, spec, "bottom", 0.0, out.bottom, out.bottom_engaged);
-        PullOptionalDouble(reader, spec, "header", 0.0, out.header, out.header_engaged);
-        PullOptionalDouble(reader, spec, "footer", 0.0, out.footer, out.footer_engaged);
+        PullOptionalDouble(reader, spec, "leftIn", 0.0, out.left_in, out.left_in_engaged);
+        PullOptionalDouble(reader, spec, "rightIn", 0.0, out.right_in, out.right_in_engaged);
+        PullOptionalDouble(reader, spec, "topIn", 0.0, out.top_in, out.top_in_engaged);
+        PullOptionalDouble(reader, spec, "bottomIn", 0.0, out.bottom_in, out.bottom_in_engaged);
+        PullOptionalDouble(reader, spec, "headerIn", 0.0, out.header_in, out.header_in_engaged);
+        PullOptionalDouble(reader, spec, "footerIn", 0.0, out.footer_in, out.footer_in_engaged);
       },
-      [&](fm_workbook_t* handle) { return fm_sheet_set_page_margins(handle, ArgU32(info, 0), &out); });
+      [&](fm_workbook_t* handle) { return fm_sheet_update_page_margins(handle, ArgU32(info, 0), &out); });
 }
 
-Napi::Value Workbook::SetSheetPrintOptions(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::UpdateSheetPrintOptions(const Napi::CallbackInfo& info) {
   fm_print_options_t out = FM_STRUCT_INIT(fm_print_options_t);
   return InvokeSheetSpec(
-      info, "setPrintOptions expects (sheet:number, options:object)",
+      info, "updatePrintOptions expects (sheet:number, options:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         PullOptionalBool(reader, spec, "gridLines", false, out.grid_lines, out.grid_lines_engaged);
         PullOptionalBool(reader, spec, "headings", false, out.headings, out.headings_engaged);
@@ -331,10 +384,10 @@ Napi::Value Workbook::SetSheetPrintOptions(const Napi::CallbackInfo& info) {
                          out.horizontal_centered_engaged);
         PullOptionalBool(reader, spec, "verticalCentered", false, out.vertical_centered, out.vertical_centered_engaged);
       },
-      [&](fm_workbook_t* handle) { return fm_sheet_set_print_options(handle, ArgU32(info, 0), &out); });
+      [&](fm_workbook_t* handle) { return fm_sheet_update_print_options(handle, ArgU32(info, 0), &out); });
 }
 
-Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::UpdateSheetHeaderFooter(const Napi::CallbackInfo& info) {
   // The six section strings are borrowed by the C struct, so their
   // storage has to outlive the call.
   std::string odd_header;
@@ -345,7 +398,7 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   std::string first_footer;
   fm_header_footer_t out = FM_STRUCT_INIT(fm_header_footer_t);
   return InvokeSheetSpec(
-      info, "setHeaderFooter expects (sheet:number, headerFooter:object)",
+      info, "updateHeaderFooter expects (sheet:number, headerFooter:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         out.odd_header = PullOptionalString(reader, spec, "oddHeader", odd_header);
         out.odd_footer = PullOptionalString(reader, spec, "oddFooter", odd_footer);
@@ -360,7 +413,7 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
         PullOptionalBool(reader, spec, "alignWithMargins", false, out.align_with_margins,
                          out.align_with_margins_engaged);
       },
-      [&](fm_workbook_t* handle) { return fm_sheet_set_header_footer(handle, ArgU32(info, 0), &out); });
+      [&](fm_workbook_t* handle) { return fm_sheet_update_header_footer(handle, ArgU32(info, 0), &out); });
 }
 
 Napi::Value Workbook::GetSheetPageSetup(const Napi::CallbackInfo& info) {
@@ -376,13 +429,13 @@ Napi::Value Workbook::GetSheetPageSetup(const Napi::CallbackInfo& info) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("orientation", JsNumberOrNull(env, setup.orientation_engaged, setup.orientation));
   result.Set("paperSize", Napi::Number::New(env, setup.paper_size));
-  result.Set("scale", Napi::Number::New(env, setup.scale));
+  result.Set("scalePct", Napi::Number::New(env, setup.scale_pct));
   result.Set("fitToWidth", Napi::Number::New(env, setup.fit_to_width));
   result.Set("fitToHeight", Napi::Number::New(env, setup.fit_to_height));
   result.Set("fitToPage", Napi::Boolean::New(env, setup.fit_to_page != 0));
   result.Set("orientationStated", Napi::Boolean::New(env, setup.orientation_engaged != 0));
   result.Set("paperSizeStated", Napi::Boolean::New(env, setup.paper_size_engaged != 0));
-  result.Set("scaleStated", Napi::Boolean::New(env, setup.scale_engaged != 0));
+  result.Set("scalePctStated", Napi::Boolean::New(env, setup.scale_pct_engaged != 0));
   result.Set("fitToWidthStated", Napi::Boolean::New(env, setup.fit_to_width_engaged != 0));
   result.Set("fitToHeightStated", Napi::Boolean::New(env, setup.fit_to_height_engaged != 0));
   result.Set("fitToPageStated", Napi::Boolean::New(env, setup.fit_to_page_engaged != 0));
@@ -400,18 +453,18 @@ Napi::Value Workbook::GetSheetPageMargins(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object result = Napi::Object::New(env);
-  result.Set("left", Napi::Number::New(env, margins.left));
-  result.Set("right", Napi::Number::New(env, margins.right));
-  result.Set("top", Napi::Number::New(env, margins.top));
-  result.Set("bottom", Napi::Number::New(env, margins.bottom));
-  result.Set("header", Napi::Number::New(env, margins.header));
-  result.Set("footer", Napi::Number::New(env, margins.footer));
-  result.Set("leftStated", Napi::Boolean::New(env, margins.left_engaged != 0));
-  result.Set("rightStated", Napi::Boolean::New(env, margins.right_engaged != 0));
-  result.Set("topStated", Napi::Boolean::New(env, margins.top_engaged != 0));
-  result.Set("bottomStated", Napi::Boolean::New(env, margins.bottom_engaged != 0));
-  result.Set("headerStated", Napi::Boolean::New(env, margins.header_engaged != 0));
-  result.Set("footerStated", Napi::Boolean::New(env, margins.footer_engaged != 0));
+  result.Set("leftIn", Napi::Number::New(env, margins.left_in));
+  result.Set("rightIn", Napi::Number::New(env, margins.right_in));
+  result.Set("topIn", Napi::Number::New(env, margins.top_in));
+  result.Set("bottomIn", Napi::Number::New(env, margins.bottom_in));
+  result.Set("headerIn", Napi::Number::New(env, margins.header_in));
+  result.Set("footerIn", Napi::Number::New(env, margins.footer_in));
+  result.Set("leftInStated", Napi::Boolean::New(env, margins.left_in_engaged != 0));
+  result.Set("rightInStated", Napi::Boolean::New(env, margins.right_in_engaged != 0));
+  result.Set("topInStated", Napi::Boolean::New(env, margins.top_in_engaged != 0));
+  result.Set("bottomInStated", Napi::Boolean::New(env, margins.bottom_in_engaged != 0));
+  result.Set("headerInStated", Napi::Boolean::New(env, margins.header_in_engaged != 0));
+  result.Set("footerInStated", Napi::Boolean::New(env, margins.footer_in_engaged != 0));
   return result;
 }
 
@@ -430,8 +483,8 @@ Napi::Object RectToJs(Napi::Env env, const fm_rect_pt_t& r) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("x", Napi::Number::New(env, r.x));
   out.Set("y", Napi::Number::New(env, r.y));
-  out.Set("width", Napi::Number::New(env, r.width));
-  out.Set("height", Napi::Number::New(env, r.height));
+  out.Set("widthPt", Napi::Number::New(env, r.width_pt));
+  out.Set("heightPt", Napi::Number::New(env, r.height_pt));
   return out;
 }
 
@@ -440,16 +493,14 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
   fm_paper_info_t paper = FM_STRUCT_INIT(fm_paper_info_t);
   fm_margins_pt_t margins = FM_STRUCT_INIT(fm_margins_pt_t);
   fm_rect_pt_t printable = FM_STRUCT_INIT(fm_rect_pt_t);
-  double scale = 0.0;
+  double scale_pct = 0.0;
   int32_t page_order = 0;
   fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
   Napi::Array pages = Napi::Array::New(env);
-  Napi::Array horizontal_manual = Napi::Array::New(env);
-  Napi::Array vertical_manual = Napi::Array::New(env);
   (void)fm_pagination_get_paper(pagination, &paper);
   (void)fm_pagination_get_margins(pagination, &margins);
   (void)fm_pagination_get_printable(pagination, &printable);
-  (void)fm_pagination_get_scale(pagination, &scale);
+  (void)fm_pagination_get_scale(pagination, &scale_pct);
   (void)fm_pagination_get_page_order(pagination, &page_order);
   (void)fm_pagination_get_print_titles(pagination, &titles);
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_page_count); ++i) {
@@ -466,40 +517,35 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
     item.Set("heightPt", Napi::Number::New(env, page.height_pt));
     pages.Set(i, item);
   }
-  for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_row_break_count); ++i) {
-    int32_t manual = 0;
-    if (fm_pagination_is_row_break_manual(pagination, i, &manual) == 0) {
-      horizontal_manual.Set(i, Napi::Boolean::New(env, manual != 0));
-    }
-  }
-  for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_column_break_count); ++i) {
-    int32_t manual = 0;
-    if (fm_pagination_is_column_break_manual(pagination, i, &manual) == 0) {
-      vertical_manual.Set(i, Napi::Boolean::New(env, manual != 0));
-    }
-  }
   Napi::Object paper_js = Napi::Object::New(env);
   paper_js.Set("widthPt", Napi::Number::New(env, paper.width_pt));
   paper_js.Set("heightPt", Napi::Number::New(env, paper.height_pt));
   paper_js.Set("landscape", Napi::Boolean::New(env, paper.landscape != 0));
   paper_js.Set("known", Napi::Boolean::New(env, paper.known != 0));
   Napi::Object margins_js = Napi::Object::New(env);
-  margins_js.Set("left", Napi::Number::New(env, margins.left));
-  margins_js.Set("right", Napi::Number::New(env, margins.right));
-  margins_js.Set("top", Napi::Number::New(env, margins.top));
-  margins_js.Set("bottom", Napi::Number::New(env, margins.bottom));
-  margins_js.Set("header", Napi::Number::New(env, margins.header));
-  margins_js.Set("footer", Napi::Number::New(env, margins.footer));
+  margins_js.Set("leftIn", Napi::Number::New(env, margins.left_in));
+  margins_js.Set("rightIn", Napi::Number::New(env, margins.right_in));
+  margins_js.Set("topIn", Napi::Number::New(env, margins.top_in));
+  margins_js.Set("bottomIn", Napi::Number::New(env, margins.bottom_in));
+  margins_js.Set("headerIn", Napi::Number::New(env, margins.header_in));
+  margins_js.Set("footerIn", Napi::Number::New(env, margins.footer_in));
   result.Set("paper", paper_js);
   result.Set("margins", margins_js);
   result.Set("printable", RectToJs(env, printable));
-  result.Set("scale", Napi::Number::New(env, scale));
+  result.Set("scalePct", Napi::Number::New(env, scale_pct));
   result.Set("pageOrder", Napi::Number::New(env, page_order));
   result.Set("printTitles", PrintTitlesToJs(env, titles));
   result.Set("pages", pages);
-  result.Set("rowBreakManual", horizontal_manual);
-  result.Set("columnBreakManual", vertical_manual);
 }
+
+}  // namespace
+
+namespace {
+
+// The span a break covers on the perpendicular axis when it is computed rather than stored:
+// the whole sheet.
+constexpr uint32_t kLastColumnIndex = 16383U;
+constexpr uint32_t kLastRowIndex = 1048575U;
 
 }  // namespace
 
@@ -519,8 +565,9 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
   }
   Napi::Object result = Napi::Object::New(env);
   Napi::Array print_area = Napi::Array::New(env);
-  Napi::Array horizontal_breaks = Napi::Array::New(env);
-  Napi::Array vertical_breaks = Napi::Array::New(env);
+  Napi::Array row_breaks = Napi::Array::New(env);
+  Napi::Array column_breaks = Napi::Array::New(env);
+  const uint32_t sheet = ArgU32(info, 0);
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_print_area_count); ++i) {
     fm_cell_rect_t range{};
     if (fm_pagination_get_print_area_at(pagination, i, &range) != 0) {
@@ -528,21 +575,62 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     }
     print_area.Set(i, RangeToJs(env, range));
   }
+  // A stored break reports its own span; a break the page walk computed covers the whole sheet.
+  std::size_t stored_rows = 0;
+  std::size_t stored_columns = 0;
+  (void)fm_sheet_get_row_break_count(handle_, sheet, &stored_rows);
+  (void)fm_sheet_get_column_break_count(handle_, sheet, &stored_columns);
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_row_break_count); ++i) {
     uint32_t row = 0;
-    if (fm_pagination_get_row_break_at(pagination, i, &row) == 0) {
-      horizontal_breaks.Set(i, Napi::Number::New(env, row));
+    int32_t manual = 0;
+    if (fm_pagination_get_row_break_at(pagination, i, &row) != 0 ||
+        fm_pagination_is_row_break_manual(pagination, i, &manual) != 0) {
+      continue;
     }
+    uint32_t first = 0;
+    uint32_t last = kLastColumnIndex;
+    for (std::size_t k = 0; k < stored_rows; ++k) {
+      fm_row_break_t stored = FM_STRUCT_INIT(fm_row_break_t);
+      if (fm_sheet_get_row_break_at(handle_, sheet, k, &stored) == 0 && stored.row == row) {
+        first = stored.first;
+        last = stored.last;
+        break;
+      }
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("row", Napi::Number::New(env, row));
+    item.Set("first", Napi::Number::New(env, first));
+    item.Set("last", Napi::Number::New(env, last));
+    item.Set("manual", Napi::Boolean::New(env, manual != 0));
+    row_breaks.Set(row_breaks.Length(), item);
   }
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_column_break_count); ++i) {
     uint32_t col = 0;
-    if (fm_pagination_get_column_break_at(pagination, i, &col) == 0) {
-      vertical_breaks.Set(i, Napi::Number::New(env, col));
+    int32_t manual = 0;
+    if (fm_pagination_get_column_break_at(pagination, i, &col) != 0 ||
+        fm_pagination_is_column_break_manual(pagination, i, &manual) != 0) {
+      continue;
     }
+    uint32_t first = 0;
+    uint32_t last = kLastRowIndex;
+    for (std::size_t k = 0; k < stored_columns; ++k) {
+      fm_column_break_t stored = FM_STRUCT_INIT(fm_column_break_t);
+      if (fm_sheet_get_column_break_at(handle_, sheet, k, &stored) == 0 && stored.col == col) {
+        first = stored.first;
+        last = stored.last;
+        break;
+      }
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("col", Napi::Number::New(env, col));
+    item.Set("first", Napi::Number::New(env, first));
+    item.Set("last", Napi::Number::New(env, last));
+    item.Set("manual", Napi::Boolean::New(env, manual != 0));
+    column_breaks.Set(column_breaks.Length(), item);
   }
   result.Set("printArea", print_area);
-  result.Set("rowBreaks", horizontal_breaks);
-  result.Set("columnBreaks", vertical_breaks);
+  result.Set("rowBreaks", row_breaks);
+  result.Set("columnBreaks", column_breaks);
   result.Set("pageCount",
              Napi::Number::New(env, static_cast<double>(PaginationCount(pagination, &fm_pagination_get_page_count))));
   SetPaginationDetail(env, result, pagination);

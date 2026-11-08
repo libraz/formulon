@@ -78,7 +78,7 @@ On Node 24+ and in bundlers that support explicit resource management, `using wb
 
 A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet('Sheet1')` finds a sheet by name (it throws `FormulonError` with `StatusCode.NotFound` when there is none), `wb.listSheets()` lists them all, and `ws.name` and `ws.index` read its current name and position. Every method that takes a cell accepts either `(row, col)` or an A1 string (`ws.setValue('A1', 42)`, `ws.getValue('A2')`), and a rectangle argument accepts `'A1:B2'`. `ws.getValues('A1:B2')` reads a block as rows of values and `ws.setValues('A1', [[1, 'x'], [true, null]])` writes one. A string that starts with `=` passed to `setValue` or `setValues` is entered as a formula; enter untrusted text with `ws.setText('A1', text)`, which always stores text.
 
-`ws.setCellFormat(range, patch)` changes the number format, font, fill, border, alignment and protection of a cell or range, and leaves every attribute the patch does not name as it was. Whole-column and whole-row spans take the same strings as the size operations:
+`ws.updateCellFormat(range, patch)` changes the number format, font, fill, border, alignment and protection of a cell or range, and leaves every attribute the patch does not name as it was. Whole-column and whole-row spans take the same strings as the size operations:
 
 ```js run
 import createFormulon from '@libraz/formulon';
@@ -88,8 +88,8 @@ const wb = formulon.Workbook.createDefault();
 try {
   const ws = wb.sheet(0);
   ws.setValue('A1', 0.256);
-  ws.setCellFormat('A1', { numberFormat: '0.0%', font: { bold: true, color: '#C00000' } });
-  ws.setCellFormat('B:B', { alignment: { horizontal: formulon.HorizontalAlign.Center } });
+  ws.updateCellFormat('A1', { numberFormat: '0.0%', font: { bold: true, color: '#C00000' } });
+  ws.updateCellFormat('B:B', { alignment: { horizontal: formulon.HorizontalAlign.Center } });
   ws.setColumnWidth('B:D', 12);
   console.log(ws.getDisplayText('A1').text); // 25.6%
   console.log(ws.getCellFormat('A1').font.bold); // true
@@ -144,7 +144,7 @@ try {
 }
 ```
 
-A handle of a removed object throws `FormulonError` with `StatusCode.NotFound`. Tables are reached with `wb.table(nameOrIndex)`, charts and the other drawings with `ws.chart(id)`, `ws.shape(id)`, `ws.slicer(id)`, `ws.picture(id)` and `ws.drawing(id)`.
+A handle of a removed object throws `FormulonError` with `StatusCode.NotFound`. Tables are added with `ws.addTable(input)` and reached with `ws.table(ref)` (a name or a sheet-local index), or by name from any sheet with `wb.table(name)`, charts and the other drawings with `ws.chart(id)`, `ws.shape(id)`, `ws.slicer(id)`, `ws.picture(id)` and `ws.drawing(id)`.
 
 ## Choosing a build
 

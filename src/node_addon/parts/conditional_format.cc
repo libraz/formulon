@@ -109,8 +109,8 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     ranges.Set(static_cast<uint32_t>(r), RangeToJs(env, rule.ranges[r]));
   }
   item.Set("ranges", ranges);
-  if (rule.dxf_id_engaged != 0) {
-    item.Set("dxfId", Napi::Number::New(env, rule.dxf_id));
+  if (rule.dxf_index_engaged != 0) {
+    item.Set("dxfIndex", Napi::Number::New(env, rule.dxf_index));
   }
   if (rule.formula1 != nullptr) {
     item.Set("formula1", Napi::String::New(env, rule.formula1));
@@ -119,7 +119,7 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     item.Set("formula2", Napi::String::New(env, rule.formula2));
   }
   if (rule.op_engaged != 0) {
-    item.Set("op", Napi::Number::New(env, static_cast<uint32_t>(rule.op)));
+    item.Set("operator", Napi::Number::New(env, static_cast<uint32_t>(rule.op)));
   }
   if (rule.rank_engaged != 0) {
     item.Set("rank", Napi::Number::New(env, rule.rank));
@@ -206,7 +206,7 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
       for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
         Napi::Object icon = Napi::Object::New(env);
         icon.Set("iconSet", JsString(env, rule.icon_set_icons[j].icon_set));
-        icon.Set("iconId", Napi::Number::New(env, rule.icon_set_icons[j].icon_id));
+        icon.Set("iconIndex", Napi::Number::New(env, rule.icon_set_icons[j].icon_index));
         icons.Set(j, icon);
       }
       icon_set.Set("icons", icons);
@@ -302,17 +302,17 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   rule.type = reader.U8(v, "type", 0U);
   rule.priority = reader.I32(v, "priority", 0);
   rule.stop_if_true = reader.Bool(v, "stopIfTrue", false) ? 1 : 0;
-  bool dxf_id_present = false;
-  rule.dxf_id = reader.U32(v, "dxfId", 0U, &dxf_id_present);
-  if (dxf_id_present) {
-    rule.dxf_id_engaged = 1;
+  bool dxf_index_present = false;
+  rule.dxf_index = reader.U32(v, "dxfIndex", 0U, &dxf_index_present);
+  if (dxf_index_present) {
+    rule.dxf_index_engaged = 1;
   }
   rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.range_count = ranges_buf.size();
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   bool op_present = false;
-  rule.op = reader.U8(v, "op", 0U, &op_present);
+  rule.op = reader.U8(v, "operator", 0U, &op_present);
   if (op_present) {
     rule.op_engaged = 1;
   }
@@ -485,7 +485,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
         }
         std::string icon_set_name;
         reader.String(icon, "iconSet", &icon_set_name);
-        icon_set_icons.push_back(fm_cf_icon_t{cfvo_strings.emplace(icon_set_name), reader.I32(icon, "iconId", 0)});
+        icon_set_icons.push_back(fm_cf_icon_t{cfvo_strings.emplace(icon_set_name), reader.I32(icon, "iconIndex", 0)});
       }
       rule.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
       rule.icon_set_icon_count = static_cast<uint32_t>(icon_set_icons.size());

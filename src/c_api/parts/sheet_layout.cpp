@@ -59,8 +59,8 @@ fm_status_t check_sheet_row_span(const fm_workbook_t* wb, size_t sheet_index, ui
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_get_column_override_count(const fm_workbook_t* wb, size_t sheet_index,
-                                                          size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_column_layout_count(const fm_workbook_t* wb, size_t sheet_index,
+                                                        size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
     return null_argument();
@@ -72,8 +72,8 @@ extern "C" fm_status_t fm_sheet_get_column_override_count(const fm_workbook_t* w
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_column_override_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                       fm_column_layout_t* out) {
+extern "C" fm_status_t fm_sheet_get_column_layout_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                     fm_column_layout_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument();
@@ -93,17 +93,17 @@ extern "C" fm_status_t fm_sheet_get_column_override_at(const fm_workbook_t* wb, 
   out->struct_size = struct_size;
   out->first = cols[idx].first;
   out->last = cols[idx].last;
-  out->width = cols[idx].width;
+  out->width_chars = cols[idx].width;
   out->hidden = cols[idx].hidden ? 1 : 0;
   out->outline_level = cols[idx].outline_level;
   out->collapsed = cols[idx].collapsed ? 1 : 0;
-  out->has_width = formulon::HasExplicitColumnWidth(cols[idx]) ? 1 : 0;
-  out->has_style = cols[idx].has_style ? 1 : 0;
-  out->style_xf = cols[idx].style_xf;
+  out->has_width_chars = formulon::HasExplicitColumnWidth(cols[idx]) ? 1 : 0;
+  out->has_xf_index = cols[idx].has_style ? 1 : 0;
+  out->xf_index = cols[idx].style_xf;
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_row_layout_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
     return null_argument();
@@ -115,8 +115,8 @@ extern "C" fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_row_override_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                    fm_row_layout_t* out) {
+extern "C" fm_status_t fm_sheet_get_row_layout_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                  fm_row_layout_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument();
@@ -135,13 +135,13 @@ extern "C" fm_status_t fm_sheet_get_row_override_at(const fm_workbook_t* wb, siz
   *out = fm_row_layout_t{};
   out->struct_size = struct_size;
   out->row = rows[idx].row;
-  out->height = rows[idx].height;
+  out->height_pt = rows[idx].height;
   out->hidden = rows[idx].hidden ? 1 : 0;
   out->outline_level = rows[idx].outline_level;
   out->collapsed = rows[idx].collapsed ? 1 : 0;
-  out->has_style = rows[idx].has_style ? 1 : 0;
-  out->style_xf = rows[idx].style_xf;
-  out->has_height = rows[idx].has_height ? 1 : 0;
+  out->has_xf_index = rows[idx].has_style ? 1 : 0;
+  out->xf_index = rows[idx].style_xf;
+  out->has_height_pt = rows[idx].has_height ? 1 : 0;
   out->custom_height = rows[idx].custom_height ? 1 : 0;
   return 0;
 }
@@ -163,7 +163,7 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
+extern "C" fm_status_t fm_sheet_reset_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                    uint32_t last) {
   clear_last_error();
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
@@ -218,8 +218,8 @@ extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t s
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                                 size_t xf_index) {
+extern "C" fm_status_t fm_sheet_set_column_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
+                                                    uint32_t last, size_t xf_index) {
   clear_last_error();
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
@@ -232,8 +232,8 @@ extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
-                                                   uint32_t last) {
+extern "C" fm_status_t fm_sheet_reset_column_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
+                                                      uint32_t last) {
   clear_last_error();
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
@@ -396,8 +396,8 @@ extern "C" fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t shee
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                              size_t xf_index) {
+extern "C" fm_status_t fm_sheet_set_row_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                                 size_t xf_index) {
   clear_last_error();
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
@@ -411,7 +411,8 @@ extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_in
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
+extern "C" fm_status_t fm_sheet_reset_row_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
+                                                   uint32_t last) {
   clear_last_error();
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
@@ -470,23 +471,22 @@ fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, 
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_get_range_style_bases(const fm_workbook_t* wb, size_t sheet_index,
-                                                      const fm_cell_rect_t* range, uint32_t* out_xfs, size_t cap,
-                                                      size_t* out_len) {
+extern "C" fm_status_t fm_sheet_get_range_xf_bases(const fm_workbook_t* wb, size_t sheet_index,
+                                                   const fm_cell_rect_t* range, uint32_t* out_xfs, size_t cap,
+                                                   size_t* out_len) {
   return range_style_bases_into(wb, sheet_index, range, nullptr, nullptr, 0U, out_xfs, cap, out_len);
 }
 
-extern "C" fm_status_t fm_sheet_get_range_style_bases_excluding(const fm_workbook_t* wb, size_t sheet_index,
-                                                                const fm_cell_rect_t* range,
-                                                                const uint32_t* excluded_rows,
-                                                                const uint32_t* excluded_cols, size_t excluded_count,
-                                                                uint32_t* out_xfs, size_t cap, size_t* out_len) {
+extern "C" fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t* wb, size_t sheet_index,
+                                                             const fm_cell_rect_t* range, const uint32_t* excluded_rows,
+                                                             const uint32_t* excluded_cols, size_t excluded_count,
+                                                             uint32_t* out_xfs, size_t cap, size_t* out_len) {
   return range_style_bases_into(wb, sheet_index, range, excluded_rows, excluded_cols, excluded_count, out_xfs, cap,
                                 out_len);
 }
 
-extern "C" fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
-                                                  const uint32_t* from_xfs, const uint32_t* to_xfs, size_t count) {
+extern "C" fm_status_t fm_sheet_remap_range_xfs(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
+                                                const uint32_t* from_xfs, const uint32_t* to_xfs, size_t count) {
   clear_last_error();
   if (count > 0U && (from_xfs == nullptr || to_xfs == nullptr)) {
     return null_argument();
@@ -502,9 +502,8 @@ extern "C" fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t shee
   return finish_status(wb->workbook().remap_range_style(sheet_index, rect, std::move(map)));
 }
 
-extern "C" fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, size_t sheet_index,
-                                                     const fm_cell_rect_t* range, uint8_t** out_bytes,
-                                                     size_t* out_len) {
+extern "C" fm_status_t fm_sheet_snapshot_range_xfs(const fm_workbook_t* wb, size_t sheet_index,
+                                                   const fm_cell_rect_t* range, uint8_t** out_bytes, size_t* out_len) {
   clear_last_error();
   if (out_bytes != nullptr) {
     *out_bytes = nullptr;
@@ -527,8 +526,8 @@ extern "C" fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, si
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes,
-                                                    size_t len) {
+extern "C" fm_status_t fm_sheet_restore_range_xfs(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes,
+                                                  size_t len) {
   clear_last_error();
   if (bytes == nullptr && len > 0U) {
     return null_argument();
@@ -539,7 +538,7 @@ extern "C" fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sh
   return finish_status(wb->workbook().restore_range_style(sheet_index, bytes, len));
 }
 
-extern "C" fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
+extern "C" fm_status_t fm_sheet_reset_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   clear_last_error();
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
@@ -569,22 +568,22 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_sheet_format_defaults_t{};
   out->struct_size = struct_size;
-  out->default_col_width = defaults.default_col_width;
-  out->default_row_height = defaults.default_row_height;
-  out->base_col_width = defaults.base_col_width;
-  out->has_default_col_width = defaults.has_default_col_width ? 1 : 0;
-  out->has_default_row_height = defaults.has_default_row_height ? 1 : 0;
+  out->default_column_width_chars = defaults.default_col_width;
+  out->default_row_height_pt = defaults.default_row_height;
+  out->base_column_width_chars = defaults.base_col_width;
+  out->has_default_column_width_chars = defaults.has_default_col_width ? 1 : 0;
+  out->has_default_row_height_pt = defaults.has_default_row_height ? 1 : 0;
   out->custom_height = defaults.custom_height ? 1 : 0;
   out->zero_height = defaults.zero_height ? 1 : 0;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  out->effective_default_col_width = formulon::default_column_width_chars(
+  out->effective_default_column_width_chars = formulon::default_column_width_chars(
       sheet, formulon::resolve_column_width_model(wb->workbook().styles(), formulon::GeometryMode::kDisplay));
-  out->effective_default_row_height = defaults.zero_height ? 0.0 : formulon::print::default_row_height_pt(sheet);
+  out->effective_default_row_height_pt = defaults.zero_height ? 0.0 : formulon::print::default_row_height_pt(sheet);
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_format_defaults(fm_workbook_t* wb, size_t sheet_index,
-                                                    const fm_sheet_format_defaults_t* defaults) {
+extern "C" fm_status_t fm_sheet_update_format_defaults(fm_workbook_t* wb, size_t sheet_index,
+                                                       const fm_sheet_format_defaults_t* defaults) {
   clear_last_error();
   if (defaults == nullptr) {
     return null_argument();
@@ -595,25 +594,25 @@ extern "C" fm_status_t fm_sheet_set_format_defaults(fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  const bool has_col_width = defaults->has_default_col_width != 0;
-  const bool has_row_height = defaults->has_default_row_height != 0;
+  const bool has_col_width = defaults->has_default_column_width_chars != 0;
+  const bool has_row_height = defaults->has_default_row_height_pt != 0;
   if (has_col_width) {
-    if (auto rc = check_finite_non_negative(defaults->default_col_width, "default_col_width"); rc != 0) {
+    if (auto rc = check_finite_non_negative(defaults->default_column_width_chars, "default_col_width"); rc != 0) {
       return rc;
     }
   }
   if (has_row_height) {
-    if (auto rc = check_finite_non_negative(defaults->default_row_height, "default_row_height"); rc != 0) {
+    if (auto rc = check_finite_non_negative(defaults->default_row_height_pt, "default_row_height"); rc != 0) {
       return rc;
     }
   }
-  if (auto rc = check_finite_non_negative(defaults->base_col_width, "base_col_width"); rc != 0) {
+  if (auto rc = check_finite_non_negative(defaults->base_column_width_chars, "base_col_width"); rc != 0) {
     return rc;
   }
   formulon::SheetFormatDefaults& target = wb->workbook().sheet(sheet_index).mutable_format_defaults();
-  target.default_col_width = has_col_width ? defaults->default_col_width : 0.0;
-  target.default_row_height = has_row_height ? defaults->default_row_height : 0.0;
-  target.base_col_width = defaults->base_col_width;
+  target.default_col_width = has_col_width ? defaults->default_column_width_chars : 0.0;
+  target.default_row_height = has_row_height ? defaults->default_row_height_pt : 0.0;
+  target.base_col_width = defaults->base_column_width_chars;
   target.has_default_col_width = has_col_width;
   target.has_default_row_height = has_row_height;
   target.custom_height = defaults->custom_height != 0;

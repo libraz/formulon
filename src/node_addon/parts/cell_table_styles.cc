@@ -22,7 +22,7 @@ namespace {
 Napi::Object CellStyleToJs(Napi::Env env, const fm_cell_style_record_t& cs) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, cs.name));
-  out.Set("xfId", Napi::Number::New(env, cs.xf_id));
+  out.Set("styleXfIndex", Napi::Number::New(env, cs.style_xf_index));
   out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
   out.Set("iLevel", Napi::Number::New(env, cs.i_level));
   out.Set("hidden", Napi::Boolean::New(env, cs.hidden != 0));
@@ -42,8 +42,8 @@ Napi::Object TableStyleToJs(Napi::Env env, const fm_table_style_t& style) {
     Napi::Object e = Napi::Object::New(env);
     e.Set("type", JsString(env, element.type));
     e.Set("size", Napi::Number::New(env, element.size));
-    if (element.has_dxf_id != 0) {
-      e.Set("dxfId", Napi::Number::New(env, element.dxf_id));
+    if (element.has_dxf_index != 0) {
+      e.Set("dxfIndex", Napi::Number::New(env, element.dxf_index));
     }
     elements.Set(i, e);
   }
@@ -116,7 +116,7 @@ Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
   reader.String(record, "name", &name);
   fm_cell_style_record_t cs{};
   cs.name = name.c_str();
-  cs.xf_id = reader.U32(record, "xfId", 0U);
+  cs.style_xf_index = reader.U32(record, "styleXfIndex", 0U);
   cs.builtin_id = reader.U32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE);
   cs.i_level = reader.U32(record, "iLevel", 0U);
   cs.hidden = reader.Bool(record, "hidden", false) ? 1 : 0;
@@ -183,8 +183,8 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
     fm_table_style_element_t out{};
     out.size = reader.U32(element, "size", 1U);
     bool has_dxf = false;
-    out.dxf_id = reader.U32(element, "dxfId", 0U, &has_dxf);
-    out.has_dxf_id = has_dxf ? 1 : 0;
+    out.dxf_index = reader.U32(element, "dxfIndex", 0U, &has_dxf);
+    out.has_dxf_index = has_dxf ? 1 : 0;
     records.push_back(out);
   }
   if (!reader.ok()) {
@@ -256,7 +256,7 @@ Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const fm_status_t rc = fm_workbook_set_table_style_defaults(handle_, table_ptr, pivot_ptr);
+  const fm_status_t rc = fm_workbook_update_table_style_defaults(handle_, table_ptr, pivot_ptr);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

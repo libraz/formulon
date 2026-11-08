@@ -49,14 +49,14 @@ void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
 
 fm_value_t Number(double v) {
   fm_value_t value{};
-  value.kind = FM_VAL_NUMBER;
+  value.kind = FM_VALUE_KIND_NUMBER;
   value.u.number = v;
   return value;
 }
 
 fm_value_t Text(const char* text) {
   fm_value_t value{};
-  value.kind = FM_VAL_TEXT;
+  value.kind = FM_VALUE_KIND_TEXT;
   value.u.text = text;
   return value;
 }
@@ -70,7 +70,7 @@ void AddWholeBetween(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, c
   v.type = 1;
   v.op = 0;
   v.error_style = error_style;
-  v.show_error_message = 1;
+  v.show_error_message = FM_TRISTATE_TRUE;
   v.formula1 = low;
   v.formula2 = high;
   ASSERT_EQ(fm_sheet_add_validation(wb, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
@@ -215,6 +215,83 @@ TEST(FormulonCApiValidation, NoRulesListsNothing) {
   EXPECT_EQ(next, kCursorEnd);
 }
 
+/// A one-cell list rule over A1 with every tristate left at DEFAULT.
+fm_data_validation_t DefaultListRule(const fm_cell_rect_t* range) {
+  fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
+  v.ranges = range;
+  v.range_count = 1;
+  v.type = 3;
+  v.formula1 = "\"a,b\"";
+  return v;
+}
+
+TEST(FormulonCApiValidation, UnsetTristatesReadBackAsExcelDefaults) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 0, 0};
+  const fm_data_validation_t v = DefaultListRule(&range);
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, 0, &got), 0);
+  EXPECT_EQ(got.allow_blank, FM_TRISTATE_TRUE);
+  EXPECT_EQ(got.show_in_cell_dropdown, FM_TRISTATE_TRUE);
+  EXPECT_EQ(got.show_input_message, FM_TRISTATE_TRUE);
+  EXPECT_EQ(got.show_error_message, FM_TRISTATE_TRUE);
+}
+
+TEST(FormulonCApiValidation, ExplicitFalseTristatesRoundTripThroughSave) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 0, 0};
+  fm_data_validation_t v = DefaultListRule(&range);
+  v.allow_blank = FM_TRISTATE_FALSE;
+  v.show_in_cell_dropdown = FM_TRISTATE_FALSE;
+  v.show_input_message = FM_TRISTATE_FALSE;
+  v.show_error_message = FM_TRISTATE_FALSE;
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+
+  WorkbookGuard reloaded;
+  SaveAndReload(wb.handle, &reloaded);
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  ASSERT_EQ(fm_sheet_get_validation(reloaded.handle, 0, 0, &got), 0);
+  EXPECT_EQ(got.allow_blank, FM_TRISTATE_FALSE);
+  EXPECT_EQ(got.show_in_cell_dropdown, FM_TRISTATE_FALSE);
+  EXPECT_EQ(got.show_input_message, FM_TRISTATE_FALSE);
+  EXPECT_EQ(got.show_error_message, FM_TRISTATE_FALSE);
+}
+
+TEST(FormulonCApiValidation, ExplicitTrueTristatesReadBackAsTrue) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 0, 0};
+  fm_data_validation_t v = DefaultListRule(&range);
+  v.allow_blank = FM_TRISTATE_TRUE;
+  v.show_in_cell_dropdown = FM_TRISTATE_TRUE;
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, 0, &got), 0);
+  EXPECT_EQ(got.allow_blank, FM_TRISTATE_TRUE);
+  EXPECT_EQ(got.show_in_cell_dropdown, FM_TRISTATE_TRUE);
+}
+
+TEST(FormulonCApiValidation, TristateOutsideDomainIsRejectedWithoutStoringTheRule) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 0, 0};
+  for (int field = 0; field < 4; ++field) {
+    fm_data_validation_t v = DefaultListRule(&range);
+    int32_t* slots[] = {&v.allow_blank, &v.show_in_cell_dropdown, &v.show_input_message, &v.show_error_message};
+    *slots[field] = 3;
+    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), kInvalidArgument) << "field " << field;
+    *slots[field] = -1;
+    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), kInvalidArgument) << "field " << field;
+  }
+  std::size_t count = 9;
+  ASSERT_EQ(fm_sheet_get_validation_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
 TEST(FormulonCApiValidation, RejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -224,7 +301,7 @@ TEST(FormulonCApiValidation, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, nullptr, &out), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 2000000, 0, &value, &out), kInvalidArgument);
-  value.kind = FM_VAL_ARRAY;
+  value.kind = FM_VALUE_KIND_ARRAY;
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, &out), kInvalidArgument);
   value = Text(nullptr);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, &out), kBindingNullPointer);

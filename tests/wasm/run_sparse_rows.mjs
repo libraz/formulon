@@ -16,8 +16,8 @@ export function registerSparseRows(Module, test) {
         fillIndex: 0,
         borderIndex: 0,
         numFmtId: 0,
-        horizontalAlign: 0,
-        verticalAlign: 2,
+        horizontal: 0,
+        vertical: 2,
         wrapText: true,
       });
       wb.setRangeXfIndex(0, { firstRow: 0, firstCol: 0, lastRow: ROWS - 1, lastCol: 0 }, added);

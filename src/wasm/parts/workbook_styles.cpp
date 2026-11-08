@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -23,34 +24,182 @@ namespace parts {
 
 namespace {
 
+// ---- Differential-format alignment / protection <-> XML -----------------
+//
+// The C record keeps `<alignment/>` and `<protection/>` as serialized XML;
+// the binding projects them to the `Alignment` / `CellProtection` records.
+
+constexpr const char* kHorizontalNames[] = {"general", "left",    "center",           "right",
+                                            "fill",    "justify", "centerContinuous", "distributed"};
+constexpr const char* kVerticalNames[] = {"top", "center", "bottom", "justify", "distributed"};
+
+/// The value of attribute `name` in the element text `xml`; false when absent.
+bool xml_attribute(const std::string& xml, const std::string& name, std::string* value) {
+  const std::size_t head = xml.find(' ' + name + '=');
+  if (head == std::string::npos) {
+    return false;
+  }
+  const std::size_t quote = head + name.size() + 2U;
+  if (quote >= xml.size() || (xml[quote] != '"' && xml[quote] != '\'')) {
+    return false;
+  }
+  const std::size_t end = xml.find(xml[quote], quote + 1U);
+  if (end == std::string::npos) {
+    return false;
+  }
+  *value = xml.substr(quote + 1U, end - quote - 1U);
+  return true;
+}
+
+int32_t xml_int(const std::string& xml, const char* name, int32_t dflt) {
+  std::string text;
+  if (!xml_attribute(xml, name, &text) || text.empty()) {
+    return dflt;
+  }
+  char* end = nullptr;
+  const long parsed = std::strtol(text.c_str(), &end, 10);
+  return end != text.c_str() ? static_cast<int32_t>(parsed) : dflt;
+}
+
+bool xml_flag(const std::string& xml, const char* name, bool dflt) {
+  std::string text;
+  if (!xml_attribute(xml, name, &text)) {
+    return dflt;
+  }
+  return text == "1" || text == "true";
+}
+
+template <std::size_t N>
+uint32_t xml_name_ordinal(const std::string& xml, const char* name, const char* const (&names)[N], uint32_t dflt) {
+  std::string text;
+  if (!xml_attribute(xml, name, &text)) {
+    return dflt;
+  }
+  for (std::size_t i = 0; i < N; ++i) {
+    if (text == names[i]) {
+      return static_cast<uint32_t>(i);
+    }
+  }
+  return dflt;
+}
+
+emscripten::val dxf_alignment_to_val(const std::string& xml) {
+  emscripten::val o = emscripten::val::object();
+  o.set("horizontal", xml_name_ordinal(xml, "horizontal", kHorizontalNames, 0U));
+  o.set("vertical", xml_name_ordinal(xml, "vertical", kVerticalNames, 2U));
+  o.set("wrapText", xml_flag(xml, "wrapText", false));
+  o.set("shrinkToFit", xml_flag(xml, "shrinkToFit", false));
+  o.set("indent", xml_int(xml, "indent", 0));
+  o.set("textRotation", xml_int(xml, "textRotation", 0));
+  o.set("readingOrder", xml_int(xml, "readingOrder", 0));
+  o.set("justifyLastLine", xml_flag(xml, "justifyLastLine", false));
+  o.set("relativeIndent", xml_int(xml, "relativeIndent", 0));
+  return o;
+}
+
+emscripten::val dxf_protection_to_val(const std::string& xml) {
+  emscripten::val o = emscripten::val::object();
+  o.set("locked", xml_flag(xml, "locked", true));
+  o.set("hidden", xml_flag(xml, "hidden", false));
+  return o;
+}
+
+/// `<alignment .../>` for an `Alignment` record; attributes at their default are left out.
+std::string dxf_alignment_xml(JsNarrowNumericReader& reader, const emscripten::val& a) {
+  const uint8_t horizontal = reader.u8(a, "horizontal", 0U, "dxf.alignment.horizontal");
+  const uint8_t vertical = reader.u8(a, "vertical", 2U, "dxf.alignment.vertical");
+  if (horizontal >= std::size(kHorizontalNames)) {
+    reader.fail_range("dxf.alignment.horizontal", "[0, 7]");
+  }
+  if (vertical >= std::size(kVerticalNames)) {
+    reader.fail_range("dxf.alignment.vertical", "[0, 4]");
+  }
+  const bool wrap = reader.boolean(a, "wrapText", false, "dxf.alignment.wrapText");
+  const bool shrink = reader.boolean(a, "shrinkToFit", false, "dxf.alignment.shrinkToFit");
+  const bool justify = reader.boolean(a, "justifyLastLine", false, "dxf.alignment.justifyLastLine");
+  const int32_t indent = reader.i32(a, "indent", 0, "dxf.alignment.indent");
+  const int32_t rotation = reader.i32(a, "textRotation", 0, "dxf.alignment.textRotation");
+  const int32_t order = reader.i32(a, "readingOrder", 0, "dxf.alignment.readingOrder");
+  const int32_t relative = reader.i32(a, "relativeIndent", 0, "dxf.alignment.relativeIndent");
+  if (!reader.ok()) {
+    return std::string();
+  }
+  std::string xml = "<alignment";
+  const auto text = [&](const char* name, const std::string& value) {
+    xml += ' ' + std::string(name) + "=\"" + value + '"';
+  };
+  if (horizontal != 0U) {
+    text("horizontal", kHorizontalNames[horizontal]);
+  }
+  if (vertical != 2U) {
+    text("vertical", kVerticalNames[vertical]);
+  }
+  if (rotation != 0) {
+    text("textRotation", std::to_string(rotation));
+  }
+  if (wrap) {
+    text("wrapText", "1");
+  }
+  if (justify) {
+    text("justifyLastLine", "1");
+  }
+  if (shrink) {
+    text("shrinkToFit", "1");
+  }
+  if (indent != 0) {
+    text("indent", std::to_string(indent));
+  }
+  if (relative != 0) {
+    text("relativeIndent", std::to_string(relative));
+  }
+  if (order != 0) {
+    text("readingOrder", std::to_string(order));
+  }
+  return xml + "/>";
+}
+
+/// `<protection .../>` for a `CellProtection` record.
+std::string dxf_protection_xml(JsNarrowNumericReader& reader, const emscripten::val& p) {
+  const bool locked = reader.boolean(p, "locked", true, "dxf.protection.locked");
+  const bool hidden = reader.boolean(p, "hidden", false, "dxf.protection.hidden");
+  std::string xml = "<protection";
+  if (!locked) {
+    xml += " locked=\"0\"";
+  }
+  if (hidden) {
+    xml += " hidden=\"1\"";
+  }
+  return xml + "/>";
+}
+
 void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf_t* xf, JsNarrowNumericReader& reader) {
   xf->font_index = reader.u32(record, "fontIndex", 0U, "xf.fontIndex");
   xf->fill_index = reader.u32(record, "fillIndex", 0U, "xf.fillIndex");
   xf->border_index = reader.u32(record, "borderIndex", 0U, "xf.borderIndex");
   xf->num_fmt_id = reader.u16(record, "numFmtId", 0U, "xf.numFmtId");
-  const emscripten::val horizontal_align = reader.value(record, "horizontalAlign", "xf.horizontalAlign");
-  const emscripten::val vertical_align = reader.value(record, "verticalAlign", "xf.verticalAlign");
+  const emscripten::val horizontal_align = reader.value(record, "horizontal", "xf.horizontal");
+  const emscripten::val vertical_align = reader.value(record, "vertical", "xf.vertical");
   const emscripten::val wrap_text = reader.value(record, "wrapText", "xf.wrapText");
   const emscripten::val justify_last_line = reader.value(record, "justifyLastLine", "xf.justifyLastLine");
   const bool horizontal_align_present = js_value_present(horizontal_align);
   const bool vertical_align_present = js_value_present(vertical_align);
   const bool wrap_text_present = js_value_present(wrap_text);
   const bool justify_last_line_present = js_value_present(justify_last_line);
-  xf->horizontal_align = reader.u8_value(horizontal_align, 0U, "xf.horizontalAlign");
-  xf->vertical_align = reader.u8_value(vertical_align, 2U, "xf.verticalAlign");
+  xf->horizontal = reader.u8_value(horizontal_align, 0U, "xf.horizontal");
+  xf->vertical = reader.u8_value(vertical_align, 2U, "xf.vertical");
   xf->wrap_text = reader.boolean_value(wrap_text, false) ? 1 : 0;
   xf->justify_last_line = reader.boolean_value(justify_last_line, false) ? 1 : 0;
-  xf->xf_id = reader.u32(record, "xfId", 0U, "xf.xfId");
-  const emscripten::val has_horizontal_align = reader.value(record, "hasHorizontalAlign", "xf.hasHorizontalAlign");
-  const emscripten::val has_vertical_align = reader.value(record, "hasVerticalAlign", "xf.hasVerticalAlign");
+  xf->style_xf_index = reader.u32(record, "styleXfIndex", 0U, "xf.styleXfIndex");
+  const emscripten::val has_horizontal_align = reader.value(record, "hasHorizontal", "xf.hasHorizontal");
+  const emscripten::val has_vertical_align = reader.value(record, "hasVertical", "xf.hasVertical");
   const emscripten::val has_wrap_text = reader.value(record, "hasWrapText", "xf.hasWrapText");
   const emscripten::val has_justify_last_line = reader.value(record, "hasJustifyLastLine", "xf.hasJustifyLastLine");
   const bool has_horizontal_align_present = js_value_present(has_horizontal_align);
   const bool has_vertical_align_present = js_value_present(has_vertical_align);
   const bool has_wrap_text_present = js_value_present(has_wrap_text);
   const bool has_justify_last_line_present = js_value_present(has_justify_last_line);
-  xf->has_horizontal_align = reader.boolean_value(has_horizontal_align, horizontal_align_present) ? 1 : 0;
-  xf->has_vertical_align = reader.boolean_value(has_vertical_align, vertical_align_present) ? 1 : 0;
+  xf->has_horizontal = reader.boolean_value(has_horizontal_align, horizontal_align_present) ? 1 : 0;
+  xf->has_vertical = reader.boolean_value(has_vertical_align, vertical_align_present) ? 1 : 0;
   xf->has_wrap_text = reader.boolean_value(has_wrap_text, wrap_text_present) ? 1 : 0;
   xf->has_justify_last_line = reader.boolean_value(has_justify_last_line, justify_last_line_present) ? 1 : 0;
   const emscripten::val has_alignment = reader.value(record, "hasAlignment", "xf.hasAlignment");
@@ -134,7 +283,7 @@ fm_border_record_t js_pull_border_record(const emscripten::val& record, const Bo
 emscripten::val js_font_record(const fm_font_record_t& f) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", f.name);
-  js_set_present_or_null(o, "size", f.has_size, f.size);
+  js_set_present_or_null(o, "sizePt", f.has_size_pt, f.size_pt);
   js_set_present_or_null(o, "bold", f.has_bold, f.bold != 0);
   js_set_present_or_null(o, "italic", f.has_italic, f.italic != 0);
   js_set_present_or_null(o, "strike", f.has_strike, f.strike != 0);
@@ -163,9 +312,9 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
   };
   *name_storage = reader.string(record, "name", "font.name");
   out->name = name_storage->c_str();
-  const emscripten::val size = reader.value(record, "size", "font.size");
-  out->has_size = js_value_present(size) ? 1 : 0;
-  out->size = reader.number_value(size, 11.0, "font.size");
+  const emscripten::val size = reader.value(record, "sizePt", "font.sizePt");
+  out->has_size_pt = js_value_present(size) ? 1 : 0;
+  out->size_pt = reader.number_value(size, 11.0, "font.sizePt");
   flag("bold", "font.bold", &out->has_bold, &out->bold);
   flag("italic", "font.italic", &out->has_italic, &out->italic);
   flag("strike", "font.strike", &out->has_strike, &out->strike);
@@ -188,8 +337,8 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
 emscripten::val js_fill_record(const fm_fill_record_t& f) {
   emscripten::val o = emscripten::val::object();
   o.set("pattern", static_cast<std::uint32_t>(f.pattern));
-  o.set("fg", js_color_spec(f.fg));
-  o.set("bg", js_color_spec(f.bg));
+  o.set("foreground", js_color_spec(f.foreground));
+  o.set("background", js_color_spec(f.background));
   if (f.has_gradient != 0) {
     emscripten::val gradient = emscripten::val::object();
     gradient.set("type", static_cast<std::int32_t>(f.gradient_type));
@@ -217,8 +366,8 @@ fm_fill_record_t js_pull_fill_record(const emscripten::val& record, std::vector<
                                      JsNarrowNumericReader& reader) {
   fm_fill_record_t fr{};
   fr.pattern = reader.u8(record, "pattern", 0U, "fill.pattern");
-  fr.fg = js_pull_color_spec(record, "fg", &reader);
-  fr.bg = js_pull_color_spec(record, "bg", &reader);
+  fr.foreground = js_pull_color_spec(record, "foreground", &reader);
+  fr.background = js_pull_color_spec(record, "background", &reader);
   const emscripten::val gradient = reader.value(record, "gradient", "fill.gradient");
   if (js_value_present(gradient)) {
     fr.has_gradient = 1;
@@ -259,7 +408,7 @@ emscripten::val js_border_record(const fm_border_record_t& b) {
 }
 
 /// Builds the JS mirror of a cell format. Shared by `getCellXf` and
-/// `getCellStyleXf`. `xfId` is set by the callers: a named-style xf is its
+/// `getCellStyleXf`. `styleXfIndex` is set by the callers: a named-style xf is its
 /// own parent, so `getCellStyleXf` always reports 0 there.
 emscripten::val js_cell_xf_record(const fm_cell_xf_t& xf) {
   emscripten::val o = emscripten::val::object();
@@ -267,8 +416,8 @@ emscripten::val js_cell_xf_record(const fm_cell_xf_t& xf) {
   o.set("fillIndex", xf.fill_index);
   o.set("borderIndex", xf.border_index);
   o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
-  js_set_present_or_null(o, "horizontalAlign", xf.has_horizontal_align, static_cast<uint32_t>(xf.horizontal_align));
-  js_set_present_or_null(o, "verticalAlign", xf.has_vertical_align, static_cast<uint32_t>(xf.vertical_align));
+  js_set_present_or_null(o, "horizontal", xf.has_horizontal, static_cast<uint32_t>(xf.horizontal));
+  js_set_present_or_null(o, "vertical", xf.has_vertical, static_cast<uint32_t>(xf.vertical));
   js_set_present_or_null(o, "wrapText", xf.has_wrap_text, xf.wrap_text != 0);
   js_set_present_or_null(o, "justifyLastLine", xf.has_justify_last_line, xf.justify_last_line != 0);
   o.set("applyNumberFormat", xf.apply_number_format != 0);
@@ -310,7 +459,7 @@ emscripten::val js_cell_xf_result(fm_status_t rc, const fm_cell_xf_t& xf) {
     return emscripten::val::undefined();
   }
   emscripten::val o = js_cell_xf_record(xf);
-  o.set("xfId", xf.xf_id);
+  o.set("styleXfIndex", xf.style_xf_index);
   js_set_cell_xf_alignment(xf, &o);
   return o;
 }
@@ -334,7 +483,7 @@ void JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint
 }
 
 void JsWorkbook::clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) {
-  succeeded(handle_ != nullptr ? fm_sheet_clear_cell_xf_index(handle_, sheet, row, col) : kBindingInvalidHandle);
+  succeeded(handle_ != nullptr ? fm_sheet_reset_cell_xf_index(handle_, sheet, row, col) : kBindingInvalidHandle);
 }
 
 void JsWorkbook::setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t xf_index) {
@@ -374,6 +523,10 @@ emscripten::val JsWorkbook::getFill(uint32_t fill_index) const {
   return js_fill_record(f);
 }
 
+emscripten::val JsWorkbook::getDefaultFont() const {
+  return getFont(0U);
+}
+
 emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
   fm_border_record_t b{};
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_border(handle_, border_index, &b) : kBindingInvalidHandle)) {
@@ -386,7 +539,7 @@ emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
   int32_t present = 0;
   const char* s = nullptr;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_num_fmt_string(handle_, num_fmt_id, &present, &s) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_workbook_get_number_format(handle_, num_fmt_id, &present, &s) : kBindingInvalidHandle;
   return optional_or_null(rc, present,
                           rc == 0 && present != 0 ? emscripten::val(std::string(s)) : emscripten::val::null());
 }
@@ -406,17 +559,13 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
   if (d.border_engaged != 0) {
     o.set("border", js_border_record(d.border));
   }
-  if (d.num_fmt_engaged != 0) {
-    emscripten::val num_fmt = emscripten::val::object();
-    num_fmt.set("numFmtId", static_cast<uint32_t>(d.num_fmt_id));
-    js_set_cstr(num_fmt, "formatCode", d.num_fmt_code);
-    o.set("numFmt", num_fmt);
-  }
+  o.set("numberFormat",
+        d.number_format != nullptr ? emscripten::val(std::string(d.number_format)) : emscripten::val::null());
   if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
-    o.set("alignmentXml", std::string(d.alignment_xml));
+    o.set("alignment", dxf_alignment_to_val(d.alignment_xml));
   }
   if (d.protection_xml != nullptr && d.protection_xml[0] != '\0') {
-    o.set("protectionXml", std::string(d.protection_xml));
+    o.set("protection", dxf_protection_to_val(d.protection_xml));
   }
   return o;
 }
@@ -503,7 +652,7 @@ uint32_t JsWorkbook::addBorder(emscripten::val record) {
 
 uint32_t JsWorkbook::addNumFmt(const std::string& format_code) {
   uint32_t id = 0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_add_num_fmt(handle_, format_code.c_str(), &id)
+  if (!succeeded(handle_ != nullptr ? fm_workbook_add_number_format(handle_, format_code.c_str(), &id)
                                     : kBindingInvalidHandle)) {
     return 0U;
   }
@@ -546,16 +695,16 @@ uint32_t JsWorkbook::addDxf(emscripten::val record) {
           dxf.border = js_pull_border_record(border, kDxfBorderFields, reader);
         }
 
-        emscripten::val num_fmt = reader.value(rec, "numFmt", "dxf.numFmt");
-        if (js_value_present(num_fmt)) {
-          dxf.num_fmt_engaged = 1;
-          dxf.num_fmt_id = reader.u16(num_fmt, "numFmtId", 0U, "dxf.numFmtId");
-          num_fmt_code = reader.string(num_fmt, "formatCode", "dxf.numFmt.formatCode");
-          dxf.num_fmt_code = num_fmt_code.c_str();
-        }
+        dxf.number_format = reader.optional_string(rec, "numberFormat", num_fmt_code, "dxf.numberFormat");
 
-        alignment_xml = reader.string(rec, "alignmentXml", "dxf.alignmentXml");
-        protection_xml = reader.string(rec, "protectionXml", "dxf.protectionXml");
+        const emscripten::val alignment = reader.value(rec, "alignment", "dxf.alignment");
+        if (js_value_present(alignment)) {
+          alignment_xml = dxf_alignment_xml(reader, alignment);
+        }
+        const emscripten::val protection = reader.value(rec, "protection", "dxf.protection");
+        if (js_value_present(protection)) {
+          protection_xml = dxf_protection_xml(reader, protection);
+        }
         dxf.alignment_xml = alignment_xml.c_str();
         dxf.protection_xml = protection_xml.c_str();
       },

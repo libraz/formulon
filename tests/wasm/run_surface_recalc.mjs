@@ -257,7 +257,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     }
   });
 
-  test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', () => {
+  test('setPinnedNow / getPinnedNow drive the clock seam, and setPinnedNow(null) releases the pin', () => {
     const wb = Module.Workbook.createDefault();
     try {
       // Unpinned by default: the workbook follows the host clock.
@@ -284,8 +284,11 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       expectFailure(() => wb.setPinnedNow(2026, 13, 1, 0, 0, 0));
       expectFailure(() => wb.setPinnedNow(2025, 2, 29, 0, 0, 0));
 
-      wb.clearPinnedNow();
+      wb.setPinnedNow(null);
       assert.equal(wb.getPinnedNow(), null);
+      // Releasing an unpinned workbook is a no-op; a lone non-null argument is refused.
+      wb.setPinnedNow(null);
+      assert.throws(() => wb.setPinnedNow(5), TypeError);
     } finally {
       wb.delete();
     }

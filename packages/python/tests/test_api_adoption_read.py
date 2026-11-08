@@ -207,7 +207,7 @@ class UsedRangeTests(unittest.TestCase):
     def test_empty_sheet_has_none(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb[0]
-            ws.set_cell_format("D4", number_format="0.00")
+            ws.update_cell_format("D4", number_format="0.00")
             self.assertIsNone(ws.get_used_range())
             self.assertEqual(list(ws.iter_rows()), [])
 
@@ -217,7 +217,7 @@ class UsedRangeTests(unittest.TestCase):
             ws.set_value("C2", 1)
             ws.set_formula("B4", "=C2")
             ws.set_text("E3", "x")
-            ws.set_cell_format("H10", number_format="0.00")
+            ws.update_cell_format("H10", number_format="0.00")
             self.assertEqual(ws.get_used_range(), CellRect(first_row=1, first_col=1, last_row=3, last_col=4))
             self.assertEqual(
                 list(ws.iter_rows()),
@@ -236,27 +236,30 @@ class OoxmlLayerTests(unittest.TestCase):
             ws = wb[0]
             self.assertIs(wb.ooxml, wb.ooxml)
             self.assertIs(ws.ooxml, ws.ooxml)
-            for name in ("get_font", "add_cell_xf", "list_passthroughs", "set_cell_style"):
+            for name in ("get_font", "add_cell_xf", "list_passthroughs"):
                 self.assertFalse(hasattr(wb, name), name)
                 self.assertTrue(callable(getattr(wb.ooxml, name)), name)
-            for name in ("get_cell_xf_index", "set_column_style", "get_sheet_pr_xml", "remap_range_style"):
+            for name in ("list_cell_styles", "get_cell_style", "set_cell_style", "remove_cell_style"):
+                self.assertTrue(callable(getattr(wb, name)), name)
+                self.assertFalse(hasattr(wb.ooxml, name), name)
+            for name in ("get_cell_xf_index", "set_column_xf_index", "get_sheet_pr_xml", "remap_range_xfs"):
                 self.assertFalse(hasattr(ws, name), name)
                 self.assertTrue(callable(getattr(ws.ooxml, name)), name)
 
     def test_column_and_row_style_reads(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb[0]
-            ws.set_cell_format("Z1", font={"bold": True})
+            ws.update_cell_format("Z1", font={"bold": True})
             xf = ws.ooxml.get_cell_xf_index("Z1")
             self.assertNotEqual(xf, 0)
-            ws.ooxml.set_column_style("B:C", xf)
-            ws.ooxml.set_row_style(4, 4, xf)
-            self.assertEqual(ws.ooxml.get_column_style(2), xf)
-            self.assertIsNone(ws.ooxml.get_column_style(3))
-            self.assertEqual(ws.ooxml.get_row_style(4), xf)
-            self.assertIsNone(ws.ooxml.get_row_style(5))
+            ws.ooxml.set_column_xf_index("B:C", xf)
+            ws.ooxml.set_row_xf_index(4, 4, xf)
+            self.assertEqual(ws.ooxml.get_column_xf_index(2), xf)
+            self.assertIsNone(ws.ooxml.get_column_xf_index(3))
+            self.assertEqual(ws.ooxml.get_row_xf_index(4), xf)
+            self.assertIsNone(ws.ooxml.get_row_xf_index(5))
             for record in (ColumnLayout, RowLayout):
-                self.assertNotIn("style_xf", {f.name for f in dataclasses.fields(record)})
+                self.assertFalse({"style_xf", "xf_index"} & {f.name for f in dataclasses.fields(record)})
             self.assertEqual([(c.first, c.last) for c in ws.list_column_overrides()], [(1, 2)])
             ws.ooxml.set_cell_xf_index("A1", xf)
             self.assertEqual(ws.ooxml.get_cell_xf_index(0, 0), xf)
@@ -265,9 +268,9 @@ class OoxmlLayerTests(unittest.TestCase):
     def test_set_cell_format_writes_through_the_style_tables(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb[0]
-            ws.set_cell_format("A1", font={"color": "#FF0000"})
+            ws.update_cell_format("A1", font={"color": "#FF0000"})
             fmt = ws.get_cell_format("A1")
-            self.assertEqual(fmt.font.color, Color(kind=ColorKind.RGB, rgb=0xFFFF0000))
+            self.assertEqual(fmt.font.color, Color(kind=ColorKind.RGB, argb=0xFFFF0000))
 
 
 class TabColorTests(unittest.TestCase):
@@ -276,7 +279,7 @@ class TabColorTests(unittest.TestCase):
             ws = wb[0]
             self.assertIsNone(ws.get_tab_color())
             ws.set_tab_color("#00FF00")
-            self.assertEqual(ws.get_tab_color(), Color(kind=ColorKind.RGB, rgb=0xFF00FF00))
+            self.assertEqual(ws.get_tab_color(), Color(kind=ColorKind.RGB, argb=0xFF00FF00))
             theme = Color(kind=ColorKind.THEME, theme=4, tint=0.25)
             ws.set_tab_color(theme)
             self.assertEqual(ws.get_tab_color(), theme)
@@ -286,7 +289,7 @@ class TabColorTests(unittest.TestCase):
     def test_tab_colour_keeps_the_rest_of_sheet_pr(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb[0]
-            ws.set_page_setup(fit_to_page=True)
+            ws.update_page_setup(fit_to_page=True)
             ws.set_tab_color("#123456")
             self.assertTrue(ws.get_page_setup().fit_to_page)
             self.assertIn("tabColor", ws.ooxml.get_sheet_pr_xml() or "")

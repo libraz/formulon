@@ -15,7 +15,7 @@ The addon is built directly against the engine's static archive and exposes the 
 - **Multithreaded recalc** — pthreads are wired in by default through the engine's parallel scheduler.
 - **No V8 / WASM heap copies** — `load` and `save`, the most expensive operations on large workbooks, marshal straight to the engine.
 - **Larger workbooks** — not bound by the WASM package's 2 GiB growth ceiling.
-- **Same surface** — the declarations and the native class table register 429 instance methods plus the four static factories. Of those instance methods, 429 are shared with WASM; zero remain WASM-only. [Package surfaces](https://formulon.libraz.net/api/surfaces)
+- **Same surface** — the declarations and the native class table register 431 instance methods plus the four static factories. Of those instance methods, 431 are shared with WASM; zero remain WASM-only. [Package surfaces](https://formulon.libraz.net/api/surfaces)
 - **Excel profiles** — a new workbook and the one-shot `evaluateFormula` start on the default `win-365-en_US` profile; `wb.setProfileId()` selects any of the 28 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 
 ## Installation
@@ -56,7 +56,7 @@ try {
 
 `getValue` and `getValues` return plain JavaScript values: a number, string, boolean, `null` for a blank cell, and an `ExcelError` for an Excel error. `getTypedValue` / `getTypedValues` return the tagged `Value` instead. A string that starts with `=` passed to `setValue` or `setValues` is entered as a formula; enter untrusted text with `ws.setText('A1', text)`, which always stores text.
 
-A format is set with `setCellFormat`; only the keys you give change, and a colour is `'#RRGGBB'`:
+A format is set with `updateCellFormat`; only the keys you give change, and a colour is `'#RRGGBB'`:
 
 ```js run
 import createFormulon from '@libraz/formulon-native';
@@ -66,7 +66,7 @@ const wb = formulon.Workbook.createDefault();
 try {
   const ws = wb.sheet(0);
   ws.setNumber('A1', 1234.5);
-  ws.setCellFormat('A1:B2', {
+  ws.updateCellFormat('A1:B2', {
     numberFormat: '#,##0.00',
     font: { bold: true, color: '#C00000' },
     alignment: { horizontal: formulon.HorizontalAlign.Right },

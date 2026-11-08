@@ -14,12 +14,12 @@ const fullProtection = {
   lockStructure: true,
   lockWindows: true,
   lockRevision: false,
-  workbookPassword: 'CF1A',
+  workbookLegacyPasswordHash: 'CF1A',
   workbookAlgorithmName: 'SHA-512',
   workbookHashValue: 'aGFzaA==',
   workbookSaltValue: 'c2FsdA==',
   workbookSpinCount: 100000,
-  revisionsPassword: '8D2B',
+  revisionsLegacyPasswordHash: '8D2B',
   revisionsAlgorithmName: 'SHA-256',
   revisionsHashValue: 'cmV2',
   revisionsSaltValue: 'c2Fs',
@@ -52,7 +52,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
       { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 2 },
       { firstRow: 4, firstCol: 4, lastRow: 4, lastCol: 4 },
     ],
-    password: 'CC1A',
+    legacyPasswordHash: 'CC1A',
   });
   wb.sheet(0).addProtectedRange({
     name: 'Totals',
@@ -71,7 +71,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
     { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 2 },
     { firstRow: 4, firstCol: 4, lastRow: 4, lastCol: 4 },
   ]);
-  assert.equal(ranges[0].password, 'CC1A');
+  assert.equal(ranges[0].legacyPasswordHash, 'CC1A');
   assert.equal(ranges[1].spinCount, 100000);
   assert.equal(ranges[1].securityDescriptor, 'O:WDG:WD');
 
@@ -86,9 +86,12 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
   });
   // A partial update leaves the keys it omits as they were.
   assert.equal(loaded.sheet(0).listProtectedRanges()[0].name, 'Renamed');
-  assert.equal(loaded.sheet(0).listProtectedRanges()[0].password, 'CC1A');
-  loaded.sheet(0).updateProtectedRange(0, { password: '' });
-  assert.equal(loaded.sheet(0).listProtectedRanges()[0].password, '');
+  assert.equal(loaded.sheet(0).listProtectedRanges()[0].legacyPasswordHash, 'CC1A');
+  loaded.sheet(0).updateProtectedRange(0, { legacyPasswordHash: '' });
+  assert.equal(loaded.sheet(0).listProtectedRanges()[0].legacyPasswordHash, null);
+  loaded.sheet(0).updateProtectedRange(0, { legacyPasswordHash: 'CC1A' });
+  loaded.sheet(0).updateProtectedRange(0, { legacyPasswordHash: null });
+  assert.equal(loaded.sheet(0).listProtectedRanges()[0].legacyPasswordHash, null);
   assert.deepEqual(loaded.sheet(0).listProtectedRanges()[0].ranges, [
     { firstRow: 3, firstCol: 3, lastRow: 3, lastCol: 3 },
   ]);
@@ -161,4 +164,63 @@ test('range-list inputs need at least one rectangle', async () => {
   );
   assert.equal(wb.sheet(0).listValidations().length, 0);
   release(wb);
+});
+
+test('sheet protection is a record whose presence is the protection, with dialog defaults', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+
+  // An empty input protects the sheet with Excel's dialog defaults.
+  wb.sheet(0).setSheetProtection({});
+  const defaults = wb.sheet(0).getSheetProtection();
+  assert.equal(defaults.allowSelectLockedCells, true);
+  assert.equal(defaults.allowSelectUnlockedCells, true);
+  for (const key of [
+    'allowEditObjects',
+    'allowEditScenarios',
+    'allowFormatCells',
+    'allowFormatColumns',
+    'allowFormatRows',
+    'allowInsertColumns',
+    'allowInsertRows',
+    'allowInsertHyperlinks',
+    'allowDeleteColumns',
+    'allowDeleteRows',
+    'allowSort',
+    'allowAutoFilter',
+    'allowPivotTables',
+  ]) {
+    assert.equal(defaults[key], false, key);
+  }
+  assert.equal('enabled' in defaults, false);
+  assert.equal('sheet' in defaults, false);
+
+  // The record a getter returns is accepted as is; a set replaces the whole protection.
+  const next = { ...defaults, allowSelectLockedCells: false, allowSort: true };
+  wb.sheet(0).setSheetProtection(next);
+  const after = wb.sheet(0).getSheetProtection();
+  assert.equal(after.allowSelectLockedCells, false);
+  assert.equal(after.allowSort, true);
+
+  // A patch merges into the stored protection; null removes it.
+  wb.sheet(0).updateSheetProtection({ allowFormatRows: true });
+  const patched = wb.sheet(0).getSheetProtection();
+  assert.equal(patched.allowFormatRows, true);
+  assert.equal(patched.allowSort, true);
+  wb.sheet(0).setSheetProtection(null);
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+  wb.sheet(0).setSheetProtection(null);
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+
+  // A patch on an unprotected sheet applies to the defaults and protects it; an empty patch does not.
+  wb.sheet(0).updateSheetProtection({});
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+  wb.sheet(0).updateSheetProtection({ allowAutoFilter: true });
+  assert.equal(wb.sheet(0).getSheetProtection().allowAutoFilter, true);
+  assert.equal(wb.sheet(0).getSheetProtection().allowSelectLockedCells, true);
+
+  // An unknown sheet is rejected.
+  expectFailure(() => wb.sheet(99).getSheetProtection());
+  expectFailure(() => wb.sheet(99).setSheetProtection(next));
 });

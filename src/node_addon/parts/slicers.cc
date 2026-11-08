@@ -117,13 +117,13 @@ Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer_t slicer = PullSlicer(reader, ArgObject(info, 3), store);
+  const fm_slicer_t slicer = PullSlicer(reader, ArgObject(info, 4), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
   uint32_t object_id = 0;
-  const fm_status_t rc =
-      fm_sheet_add_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &slicer, &object_id);
+  const fm_status_t rc = fm_sheet_add_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
+                                             ArgU32(info, 3), &slicer, &object_id);
   return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 

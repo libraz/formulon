@@ -124,16 +124,16 @@ def _runs() -> Tuple[Any, ...]:
     return ([formulon.PhoneticRun(0, 1, "kana")],)
 
 
-def _hyperlink_kw() -> Dict[str, Any]:
-    return {"target": "https://example.com"}
+def _hyperlink() -> Tuple[Any, ...]:
+    return (formulon.HyperlinkInput(target="https://example.com"),)
 
 
 # Methods that no longer take a coordinate pair or whose pair moved into a record are listed as ``None``: the
 # conformance loop skips them and ``test_non_coordinate_methods`` pins their new shape instead.
 CELL_TABLE: Dict[str, Optional[Case]] = {
-    "Sheet.add_hyperlink": Case(kw=_hyperlink_kw),
+    "Sheet.set_hyperlink": Case(tail=_hyperlink),
     "Sheet.add_pivot": None,
-    "Sheet.clear_cell_xf_index": Case(),
+    "Sheet.reset_cell_xf_index": Case(),
     "Sheet.evaluate_cf_formula": Case(tail=lambda: ("=TRUE",)),
     "Sheet.evaluate_formula": Case(tail=lambda: ("=A1+1",)),
     "Sheet.evaluate_formula_array": Case(tail=lambda: ("=1+1",)),
@@ -167,7 +167,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.set_blank": Case(),
     "Sheet.set_bool": Case(tail=lambda: (True,)),
     "Sheet.set_cell_phonetic": Case(tail=lambda: ("kana",)),
-    "Sheet.set_cell_phonetic_properties": Case(kw=lambda: {"font_id": 0, "type": 1, "alignment": 1}),
+    "Sheet.set_cell_phonetic_properties": Case(kw=lambda: {"font_index": 0, "type": 1, "alignment": 1}),
     "Sheet.set_cell_phonetic_runs": Case(tail=_runs),
     "Sheet.set_cell_show_phonetic": Case(tail=lambda: (True,)),
     "Sheet.set_cell_xf_index": Case(tail=lambda: (0,)),
@@ -186,7 +186,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
 }
 
 RECT_TABLE: Dict[str, Case] = {
-    "Sheet.add_hyperlink_range": Case(kw=_hyperlink_kw),
+    "Sheet.set_hyperlink_range": Case(tail=_hyperlink),
     "Sheet.add_merge": Case(setup=lambda wb, ws: None),
     "Sheet.evaluate_cf_range": Case(),
     "Sheet.get_cell_rect_pt": Case(),
@@ -194,18 +194,18 @@ RECT_TABLE: Dict[str, Case] = {
     "Sheet.get_merges_in_range": Case(setup=_merged),
     "Sheet.iter_rows": Case(),
     "Sheet.list_cells": Case(),
-    "Sheet.get_range_style_bases": Case(),
+    "Sheet.get_range_xf_bases": Case(),
     "Sheet.get_values": Case(),
     "Sheet.get_typed_values": Case(),
-    "Sheet.get_range_style_bases_excluding": Case(tail=lambda: ([(1, 1)],)),
+    "Sheet.get_range_xf_bases_excluding": Case(tail=lambda: ([(1, 1)],)),
     "Sheet.recalc_viewport": Case(),
-    "Sheet.remap_range_style": Case(tail=lambda: ({0: 0},)),
+    "Sheet.remap_range_xfs": Case(tail=lambda: ({0: 0},)),
     "Sheet.remove_merge": Case(setup=_merged),
     "Pivot.set_anchor": Case(setup=_pivot_book, recv=lambda ws: ws.pivot("Pivot1")),
-    "Sheet.set_cell_format": Case(kw=lambda: {"number_format": "0.00"}),
+    "Sheet.update_cell_format": Case(kw=lambda: {"number_format": "0.00"}),
     "Sheet.set_print_area": Case(setup=lambda wb, ws: None),
     "Sheet.set_range_xf_index": Case(tail=lambda: (0,)),
-    "Sheet.snapshot_range_style": Case(),
+    "Sheet.snapshot_range_xfs": Case(),
 }
 
 _CLASSES: Dict[str, type] = {"Sheet": Sheet, "Pivot": formulon.Pivot}
@@ -570,7 +570,7 @@ class BulkValuesTests(unittest.TestCase):
             ws.set_number(2, 0, 3.0)
             ws.set_number(3, 0, 4.0)
             # B3:B4 is the data table's result range, which refuses writes.
-            ws.add_data_table(CellRect(2, 1, 3, 1), col_input=(0, 0))
+            ws.add_data_table(formulon.DataTableInput(CellRect(2, 1, 3, 1), column_input=(0, 0)))
             with self.assertRaises(FormulonError):
                 ws.set_values("A3", [[7, 8]])
             self.assertEqual(ws.get_typed_value(2, 0), _number(7))
@@ -770,9 +770,10 @@ class NoCountNamesTests(unittest.TestCase):
         visible = inspect.signature(formulon.Pivot.add_field_item).parameters["visible"]
         self.assertIs(visible.kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertIs(visible.default, True)
-        shared_visible = inspect.signature(formulon.Pivot.add_field_shared_item).parameters["visible"]
-        self.assertIs(shared_visible.kind, inspect.Parameter.KEYWORD_ONLY)
-        self.assertIs(shared_visible.default, True)
+        cache_index = inspect.signature(formulon.Pivot.add_field_item).parameters["cache_index"]
+        self.assertIs(cache_index.kind, inspect.Parameter.KEYWORD_ONLY)
+        self.assertIsNone(cache_index.default)
+        self.assertFalse(hasattr(formulon.Pivot, "add_field_shared_item"))
         grouping = inspect.signature(formulon.Chart.set_type).parameters["grouping"]
         self.assertEqual(grouping.default, formulon.ChartGrouping.CLUSTERED)
 
@@ -798,9 +799,9 @@ class NoCountNamesTests(unittest.TestCase):
     def test_iterative_validation(self) -> None:
         with _open() as wb:
             with self.assertRaises(ValueError):
-                wb.set_iterative(max_change=-1.0)
+                wb.update_iterative(max_change=-1.0)
             with self.assertRaises(TypeError):
-                wb.set_iterative(max_iterations=1.5)  # type: ignore[arg-type]
+                wb.update_iterative(max_iterations=1.5)  # type: ignore[arg-type]
 
     def test_formula_text_forms(self) -> None:
         with _open() as wb:
@@ -822,15 +823,16 @@ class PatchShapeTests(unittest.TestCase):
     """Every patch method takes keyword-only ``UNCHANGED`` arguments named like fields of the paired record."""
 
     PATCHES: List[Tuple[type, str, Optional[type]]] = [
-        (Sheet, "set_view", getattr(formulon, "SheetView", None)),
+        (Sheet, "update_view", getattr(formulon, "SheetView", None)),
         (formulon.Pivot, "update_field", getattr(formulon, "PivotField", None)),
-        (formulon.Pivot, "update_item", getattr(formulon, "PivotItem", None)),
-        (formulon.Pivot, "set_style_info", getattr(formulon, "PivotStyle", None)),
-        (formulon.Chart, "set_legend", getattr(formulon, "ChartLegend", None)),
+        (formulon.Pivot, "update_field_item", getattr(formulon, "PivotItem", None)),
+        (formulon.Pivot, "update_style_options", getattr(formulon, "PivotStyleOptions", None)),
+        (formulon.Chart, "update_legend", getattr(formulon, "ChartLegend", None)),
         (Sheet, "update_threaded_comment", None),
         (formulon.Table, "update", None),
-        (Sheet, "set_print_options", None),
-        (Sheet, "set_header_footer", None),
+        (formulon.Table, "update_style_options", getattr(formulon, "TableStyleOptions", None)),
+        (Sheet, "update_print_options", None),
+        (Sheet, "update_header_footer", None),
     ]
 
     def test_signatures(self) -> None:
@@ -888,37 +890,37 @@ class SetViewTests(unittest.TestCase):
     def test_empty_patch_changes_nothing(self) -> None:
         with _open() as wb:
             before = wb.sheet(0).get_view()
-            wb.sheet(0).set_view()
+            wb.sheet(0).update_view()
             self.assertEqual(wb.sheet(0).get_view(), before)
 
     def test_none_is_a_type_error(self) -> None:
         with _open() as wb:
             with self.assertRaises(TypeError):
-                wb.sheet(0).set_view(zoom_scale=None)  # type: ignore[arg-type]
+                wb.sheet(0).update_view(zoom_pct=None)  # type: ignore[arg-type]
 
     def test_one_key_changes_one_field(self) -> None:
         with _open() as wb:
             before = wb.sheet(0).get_view()
-            wb.sheet(0).set_view(show_grid_lines=False)
+            wb.sheet(0).update_view(show_grid_lines=False)
             self.assertEqual(wb.sheet(0).get_view(), dataclasses.replace(before, show_grid_lines=False))
 
     def test_freeze_rows_keeps_freeze_cols(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.set_view(freeze_rows=1, freeze_cols=1)
-            ws.set_view(freeze_rows=2)
+            ws.update_view(freeze_rows=1, freeze_cols=1)
+            ws.update_view(freeze_rows=2)
             view = ws.get_view()
             self.assertEqual((view.freeze_rows, view.freeze_cols), (2, 1))
 
     def test_freeze_and_split_conflict(self) -> None:
         with _open() as wb:
             with self.assertRaises(TypeError):
-                wb.sheet(0).set_view(freeze_rows=1, split_x=100)
+                wb.sheet(0).update_view(freeze_rows=1, split_x_twips=100)
 
     def test_pane_corner_is_checked_after_the_merge(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.set_view(freeze_rows=1, pane_top_left_row=3)
+            ws.update_view(freeze_rows=1, pane_top_left_row=3)
             view = ws.get_view()
             self.assertEqual((view.freeze_rows, view.pane_top_left_row), (1, 3))
 
@@ -926,7 +928,7 @@ class SetViewTests(unittest.TestCase):
         with _open() as wb:
             before = wb.sheet(0).get_view()
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_view(zoom_scale=150, visibility=formulon.SheetVisibility.HIDDEN)
+                wb.sheet(0).update_view(zoom_pct=150, visibility=formulon.SheetVisibility.HIDDEN)
             self.assertEqual(wb.sheet(0).get_view(), before)
 
 
@@ -945,8 +947,8 @@ class ChartLegendPatchTests(unittest.TestCase):
     def test_position_keeps_overlay(self) -> None:
         with _open() as wb:
             oid = self._chart(wb)
-            wb.sheet(0).chart(oid).set_legend(position=formulon.ChartLegendPosition.TOP, overlay=True)
-            wb.sheet(0).chart(oid).set_legend(position=formulon.ChartLegendPosition.RIGHT)
+            wb.sheet(0).chart(oid).set_legend(formulon.ChartLegend(formulon.ChartLegendPosition.TOP, True))
+            wb.sheet(0).chart(oid).update_legend(position=formulon.ChartLegendPosition.RIGHT)
             legend = wb.sheet(0).chart(oid).get_properties().legend  # type: ignore[union-attr]
             self.assertEqual(legend.position, formulon.ChartLegendPosition.RIGHT)
             self.assertTrue(legend.overlay)
@@ -955,16 +957,16 @@ class ChartLegendPatchTests(unittest.TestCase):
         with _open() as wb:
             oid = self._chart(wb)
             with self.assertRaises(TypeError):
-                wb.sheet(0).chart(oid).set_legend(position=None)  # type: ignore[arg-type]
+                wb.sheet(0).chart(oid).update_legend(position=None)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                wb.sheet(0).chart(oid).set_legend(hidden_series=None)  # type: ignore[arg-type]
+                wb.sheet(0).chart(oid).update_legend(hidden_series=None)  # type: ignore[arg-type]
 
     def test_overlay_alone_creates_a_right_legend(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             oid = self._chart(wb, legend=None)
             self.assertIsNone(ws.chart(oid).get_properties().legend)  # type: ignore[union-attr]
-            ws.chart(oid).set_legend(overlay=True)
+            ws.chart(oid).update_legend(overlay=True)
             legend = ws.chart(oid).get_properties().legend  # type: ignore[union-attr]
             self.assertEqual(legend.position, formulon.ChartLegendPosition.RIGHT)
             self.assertTrue(legend.overlay)
@@ -976,16 +978,16 @@ class PrintPatchTests(unittest.TestCase):
         for cleared in (None, ""):
             with self.subTest(cleared=cleared), _open() as wb:
                 ws = wb.sheet(0)
-                ws.set_header_footer(odd_header="&Ctitle")
+                ws.update_header_footer(odd_header="&Ctitle")
                 self.assertIn("title", ws.ooxml.get_header_footer_xml() or "")
-                ws.set_header_footer(odd_header=cleared)
+                ws.update_header_footer(odd_header=cleared)
                 self.assertNotIn("title", ws.ooxml.get_header_footer_xml() or "")
 
     def test_omitted_keys_are_kept(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.set_header_footer(odd_header="&Ctitle", odd_footer="&Cfoot")
-            ws.set_header_footer(odd_header="&Cnew")
+            ws.update_header_footer(odd_header="&Ctitle", odd_footer="&Cfoot")
+            ws.update_header_footer(odd_header="&Cnew")
             xml = ws.ooxml.get_header_footer_xml() or ""
             self.assertIn("new", xml)
             self.assertIn("foot", xml)
@@ -993,9 +995,9 @@ class PrintPatchTests(unittest.TestCase):
     def test_print_options_none_is_a_type_error(self) -> None:
         with _open() as wb:
             with self.assertRaises(TypeError):
-                wb.sheet(0).set_print_options(grid_lines=None)  # type: ignore[arg-type]
-            wb.sheet(0).set_print_options(grid_lines=True)
-            wb.sheet(0).set_print_options(headings=True)
+                wb.sheet(0).update_print_options(grid_lines=None)  # type: ignore[arg-type]
+            wb.sheet(0).update_print_options(grid_lines=True)
+            wb.sheet(0).update_print_options(headings=True)
             xml = wb.sheet(0).ooxml.get_print_options_xml() or ""
             self.assertIn("gridLines", xml)
             self.assertIn("headings", xml)
@@ -1034,11 +1036,11 @@ class PivotPatchTests(unittest.TestCase):
             _pivot_book(wb, ws)
             ws.pivot(0).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
             ws.pivot(0).add_field_item(0, "East", visible=True)
-            ws.pivot(0).update_item(0, 0, visible=False, caption="Eastern")
+            ws.pivot(0).update_field_item(0, 0, visible=False, caption="Eastern")
             item = ws.pivot(0).get_field_item(0, 0)
             self.assertFalse(item.visible)
             self.assertEqual(item.caption, "Eastern")
-            ws.pivot(0).update_item(0, 0, caption=None)
+            ws.pivot(0).update_field_item(0, 0, caption=None)
             item = ws.pivot(0).get_field_item(0, 0)
             self.assertIsNone(item.caption)
             self.assertFalse(item.visible)
@@ -1053,45 +1055,41 @@ def _table_book(wb: Workbook) -> None:
     ws = wb.sheet(0)
     for c, head in enumerate(("A", "B")):
         ws.set_text(0, c, head)
-    wb.add_table(
-        range=formulon.SheetRect(0, CellRect(0, 0, 2, 1)),
-        name="Original",
-        display_name="Shown",
-        columns=["A", "B"],
-    )
+    ws.add_table(formulon.TableInput(range=CellRect(0, 0, 2, 1), name="Shown", columns=["A", "B"]))
 
 
 class RefTests(unittest.TestCase):
-    def test_remove_table_by_display_name(self) -> None:
+    def test_remove_table_by_name(self) -> None:
         with _open() as wb:
             _table_book(wb)
-            wb.remove_table("Shown")
-            self.assertEqual(wb.list_tables(), [])
+            wb.sheet(0).remove_table("Shown")
+            self.assertEqual(wb.sheet(0).list_tables(), [])
 
-    def test_remove_table_by_name_that_differs_is_not_found(self) -> None:
+    def test_remove_table_by_unknown_name_is_not_found(self) -> None:
         with _open() as wb:
             _table_book(wb)
             with self.assertRaises(NotFoundError):
-                wb.remove_table("Original")
-            self.assertEqual(len(wb.list_tables()), 1)
+                wb.sheet(0).remove_table("Original")
+            self.assertEqual(len(wb.sheet(0).list_tables()), 1)
 
     def test_remove_table_edges(self) -> None:
         with _open() as wb:
             _table_book(wb)
+            ws = wb.sheet(0)
             with self.assertRaises(NotFoundError):
-                wb.remove_table("Missing")
+                ws.remove_table("Missing")
             with self.assertRaises(IndexOutOfRangeError):
-                wb.remove_table(99)
+                ws.remove_table(99)
             with self.assertRaises(TypeError):
-                wb.remove_table(True)  # type: ignore[arg-type]
-            wb.remove_table(0)
-            self.assertEqual(wb.list_tables(), [])
+                ws.remove_table(True)  # type: ignore[arg-type]
+            ws.remove_table(0)
+            self.assertEqual(ws.list_tables(), [])
 
     def test_string_refs_fold_case(self) -> None:
         with _open() as wb:
             _table_book(wb)
-            wb.remove_table("SHOWN")
-            self.assertEqual(wb.list_tables(), [])
+            wb.sheet(0).remove_table("SHOWN")
+            self.assertEqual(wb.sheet(0).list_tables(), [])
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
@@ -1099,7 +1097,9 @@ class RefTests(unittest.TestCase):
             self.assertEqual(ws.list_pivots(), [])
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, op=3, formula1="5"))
+            ws.add_cf_rule(
+                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
+            )
             rule_id = ws.list_cf_rules()[0].id
             ws.remove_cf_rule(rule_id.lower())
             self.assertEqual(ws.list_cf_rules(), [])
@@ -1108,19 +1108,19 @@ class RefTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             ws.set_text(0, 0, "A")
-            wb.add_table(
-                range=formulon.SheetRect(0, CellRect(0, 0, 1, 0)), name="Sales", display_name="Sales", columns=["A"]
-            )
+            ws.add_table(formulon.TableInput(range=CellRect(0, 0, 1, 0), name="Sales", columns=["A"]))
             with self.assertRaises(NotFoundError):
-                wb.remove_table("0")
-            self.assertEqual(len(wb.list_tables()), 1)
-            wb.remove_table(0)
-            self.assertEqual(wb.list_tables(), [])
+                ws.remove_table("0")
+            self.assertEqual(len(ws.list_tables()), 1)
+            ws.remove_table(0)
+            self.assertEqual(ws.list_tables(), [])
 
     def test_cf_rule_by_id(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, op=3, formula1="5"))
+            ws.add_cf_rule(
+                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
+            )
             rule_id = ws.list_cf_rules()[0].id
             self.assertTrue(rule_id)
             ws.remove_cf_rule(rule_id)
@@ -1131,10 +1131,14 @@ class RefTests(unittest.TestCase):
     def test_colliding_cf_id_gets_a_fresh_one(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, op=3, formula1="5"))
+            ws.add_cf_rule(
+                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
+            )
             rule_id = ws.list_cf_rules()[0].id
             ws.add_cf_rule(
-                formulon.ConditionalFormatInput(ranges=[CellRect(0, 1, 2, 1)], type=1, op=3, formula1="6", id=rule_id)
+                formulon.ConditionalFormatInput(
+                    ranges=[CellRect(0, 1, 2, 1)], type=1, operator=3, formula1="6", id=rule_id
+                )
             )
             ids = [rule.id for rule in ws.list_cf_rules()]
             self.assertEqual(len(ids), 2)
@@ -1144,7 +1148,9 @@ class RefTests(unittest.TestCase):
     def test_cf_round_trip_keeps_one_equals_sign(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, op=3, formula1="5"))
+            ws.add_cf_rule(
+                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
+            )
             rule = ws.list_cf_rules()[0]
             self.assertTrue(rule.formula1.startswith("="))
             self.assertFalse(rule.formula1.startswith("=="))
@@ -1210,7 +1216,7 @@ class ModuleFunctionTests(unittest.TestCase):
             b"\x00\x00\x00\x00\x00\x00\x00\x00IEND\xaeB`\x82"
         )
         info = formulon.get_image_info(png)
-        self.assertEqual((info.px_width, info.px_height), (3, 2))
+        self.assertEqual((info.width_px, info.height_px), (3, 2))
         self.assertEqual(info.format, formulon.ImageFormat.PNG)
 
     def test_status_name(self) -> None:
@@ -1400,7 +1406,7 @@ class ErrorDisplayNameTests(unittest.TestCase):
 
 class PlatformOnlyRemovalTests(unittest.TestCase):
     def test_removed_python_only_names(self) -> None:
-        for name in ("add_batch", "rename_table", "set_table_style_info"):
+        for name in ("add_batch", "rename_table", "set_table_style_options"):
             self.assertFalse(hasattr(Workbook, name), name)
         self.assertFalse(hasattr(Sheet, "has_cell_phonetic_properties"))
 
@@ -1409,7 +1415,7 @@ class PlatformOnlyRemovalTests(unittest.TestCase):
             ws = wb.sheet(0)
             ws.set_text(0, 0, "x")
             self.assertFalse(ws.get_cell_phonetic_properties(0, 0).present)
-            ws.set_cell_phonetic_properties(0, 0, font_id=0, type=1, alignment=1)
+            ws.set_cell_phonetic_properties(0, 0, font_index=0, type=1, alignment=1)
             self.assertTrue(ws.get_cell_phonetic_properties(0, 0).present)
 
     def test_unset_pivot_option_strings_read_none(self) -> None:

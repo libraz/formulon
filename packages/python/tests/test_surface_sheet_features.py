@@ -10,8 +10,9 @@ from formulon import (
     Comment,
     DataValidationInput,
     FormulonError,
+    HyperlinkInput,
     InvalidArgumentError,
-    SheetProtection,
+    SheetProtectionInput,
     SheetViewMode,
     SheetVisibility,
     ValueKind,
@@ -101,7 +102,9 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
 
     def test_hyperlink_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_hyperlink(2, 3, target="https://example.com", display="Example", tooltip="tip")
+            wb.sheet(0).set_hyperlink(
+                2, 3, HyperlinkInput(target="https://example.com", display="Example", tooltip="tip")
+            )
             links = wb.sheet(0).list_hyperlinks()
             self.assertEqual(len(links), 1)
             self.assertEqual(links[0].rect, CellRect(2, 3, 2, 3))
@@ -116,13 +119,13 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
                 with self.assertRaises(InvalidArgumentError):
                     wb.sheet(0).ooxml.set_range_xf_index(bad, 0)
                 with self.assertRaises(InvalidArgumentError):
-                    wb.sheet(0).ooxml.get_range_style_bases(bad)
+                    wb.sheet(0).ooxml.get_range_xf_bases(bad)
             self.assertEqual(wb.sheet(0).list_merges(), [])
 
     def test_hyperlink_range_roundtrip_at_nonzero_coordinate(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_hyperlink_range(
-                CellRect(4, 6, 7, 9), target="https://example.com", display="Range", tooltip="tip"
+            wb.sheet(0).set_hyperlink_range(
+                CellRect(4, 6, 7, 9), HyperlinkInput(target="https://example.com", display="Range", tooltip="tip")
             )
             links = wb.sheet(0).list_hyperlinks()
             self.assertEqual(len(links), 1)
@@ -149,21 +152,32 @@ class ValidationTests(unittest.TestCase):
             wb.sheet(0).clear_validations()
             self.assertEqual(len(wb.sheet(0).list_validations()), 0)
 
+    def test_validation_input_defaults_follow_the_data_validation_dialog(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.sheet(0).add_validation(
+                DataValidationInput(type=3, ranges=[CellRect(0, 0, 4, 0)], formula1='"a,b,c"'),
+            )
+            dv = wb.sheet(0).list_validations()[0]
+            self.assertTrue(dv.allow_blank)
+            self.assertTrue(dv.show_input_message)
+            self.assertTrue(dv.show_error_message)
+            self.assertTrue(dv.show_in_cell_dropdown)
+
 
 class SheetViewProtectionTests(unittest.TestCase):
     def test_view_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_view(zoom_scale=150)
-            wb.sheet(0).set_view(freeze_rows=1, freeze_cols=2)
+            wb.sheet(0).update_view(zoom_pct=150)
+            wb.sheet(0).update_view(freeze_rows=1, freeze_cols=2)
             view = wb.sheet(0).get_view()
-            self.assertEqual(view.zoom_scale, 150)
+            self.assertEqual(view.zoom_pct, 150)
             self.assertEqual((view.freeze_rows, view.freeze_cols), (1, 2))
 
     def test_view_display_defaults(self) -> None:
         with Workbook.create_default() as wb:
             view = wb.sheet(0).get_view()
             self.assertTrue(view.show_grid_lines)
-            self.assertTrue(view.show_row_col_headers)
+            self.assertTrue(view.show_row_column_headers)
             self.assertTrue(view.show_zeros)
             self.assertFalse(view.right_to_left)
             self.assertFalse(view.tab_selected)
@@ -171,20 +185,20 @@ class SheetViewProtectionTests(unittest.TestCase):
 
     def test_view_display_setters_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_view(show_grid_lines=False)
-            wb.sheet(0).set_view(show_row_col_headers=False)
-            wb.sheet(0).set_view(show_zeros=False)
-            wb.sheet(0).set_view(right_to_left=True)
-            wb.sheet(0).set_view(tab_selected=True)
-            wb.sheet(0).set_view(view_mode=SheetViewMode.PAGE_BREAK_PREVIEW)
+            wb.sheet(0).update_view(show_grid_lines=False)
+            wb.sheet(0).update_view(show_row_column_headers=False)
+            wb.sheet(0).update_view(show_zeros=False)
+            wb.sheet(0).update_view(right_to_left=True)
+            wb.sheet(0).update_view(tab_selected=True)
+            wb.sheet(0).update_view(view_mode=SheetViewMode.PAGE_BREAK_PREVIEW)
             view = wb.sheet(0).get_view()
             self.assertFalse(view.show_grid_lines)
-            self.assertFalse(view.show_row_col_headers)
+            self.assertFalse(view.show_row_column_headers)
             self.assertFalse(view.show_zeros)
             self.assertTrue(view.right_to_left)
             self.assertTrue(view.tab_selected)
             self.assertEqual(view.view_mode, SheetViewMode.PAGE_BREAK_PREVIEW)
-            wb.sheet(0).set_view(view_mode=SheetViewMode.NORMAL)
+            wb.sheet(0).update_view(view_mode=SheetViewMode.NORMAL)
             self.assertEqual(wb.sheet(0).get_view().view_mode, SheetViewMode.NORMAL)
 
     def test_visibility_states_very_hidden(self) -> None:
@@ -193,20 +207,20 @@ class SheetViewProtectionTests(unittest.TestCase):
             wb.add_sheet("Shown")
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VISIBLE)
 
-            wb.sheet(0).set_view(visibility=SheetVisibility.VERY_HIDDEN)
+            wb.sheet(0).update_view(visibility=SheetVisibility.VERY_HIDDEN)
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VERY_HIDDEN)
 
-            wb.sheet(0).set_view(visibility=SheetVisibility.HIDDEN)
+            wb.sheet(0).update_view(visibility=SheetVisibility.HIDDEN)
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.HIDDEN)
 
-            wb.sheet(0).set_view(visibility=SheetVisibility.VISIBLE)
+            wb.sheet(0).update_view(visibility=SheetVisibility.VISIBLE)
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VISIBLE)
 
     def test_visibility_rejects_hiding_the_only_visible_sheet(self) -> None:
         with Workbook.create_default() as wb:
             for hide in (
-                lambda: wb.sheet(0).set_view(visibility=SheetVisibility.HIDDEN),
-                lambda: wb.sheet(0).set_view(visibility=SheetVisibility.VERY_HIDDEN),
+                lambda: wb.sheet(0).update_view(visibility=SheetVisibility.HIDDEN),
+                lambda: wb.sheet(0).update_view(visibility=SheetVisibility.VERY_HIDDEN),
             ):
                 with self.assertRaises(FormulonError):
                     hide()
@@ -215,9 +229,9 @@ class SheetViewProtectionTests(unittest.TestCase):
     def test_visibility_rejects_unknown_state(self) -> None:
         with Workbook.create_default() as wb:
             wb.add_sheet("Shown")
-            wb.sheet(0).set_view(visibility=SheetVisibility.VERY_HIDDEN)
+            wb.sheet(0).update_view(visibility=SheetVisibility.VERY_HIDDEN)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_view(visibility=3)
+                wb.sheet(0).update_view(visibility=3)
             # A refused call leaves the sheet as it was.
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VERY_HIDDEN)
 
@@ -225,24 +239,27 @@ class SheetViewProtectionTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_column_width(0, 2, 18.5)
             cols = wb.sheet(0).list_column_overrides()
-            explicit = next(c for c in cols if c.width is not None and abs(c.width - 18.5) < 1e-9)
-            self.assertIsNone(wb.sheet(0).ooxml.get_column_style(explicit.first))
+            explicit = next(c for c in cols if c.width_chars is not None and abs(c.width_chars - 18.5) < 1e-9)
+            self.assertIsNone(wb.sheet(0).ooxml.get_column_xf_index(explicit.first))
             wb.sheet(0).set_column_width(4, 4, 0.0)
             zero = next(c for c in wb.sheet(0).list_column_overrides() if c.first == 4 and c.last == 4)
-            self.assertEqual(zero.width, 0.0)
+            self.assertEqual(zero.width_chars, 0.0)
             wb.sheet(0).set_row_height(0, 0, 30.0)
             rows = wb.sheet(0).list_row_overrides()
-            explicit_row = next(r for r in rows if r.height is not None and abs(r.height - 30.0) < 1e-9)
-            self.assertIsNone(wb.sheet(0).ooxml.get_row_style(explicit_row.row))
+            explicit_row = next(r for r in rows if r.height_pt is not None and abs(r.height_pt - 30.0) < 1e-9)
+            self.assertIsNone(wb.sheet(0).ooxml.get_row_xf_index(explicit_row.row))
 
     def test_protection_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            prot = SheetProtection(enabled=True, sheet=True, format_cells=True)
-            wb.sheet(0).set_sheet_protection(prot)
+            self.assertIsNone(wb.sheet(0).get_sheet_protection())
+            wb.sheet(0).set_sheet_protection(SheetProtectionInput(allow_format_cells=True))
             got = wb.sheet(0).get_sheet_protection()
-            self.assertTrue(got.enabled)
-            self.assertTrue(got.sheet)
-            self.assertTrue(got.format_cells)
+            self.assertIsNotNone(got)
+            self.assertTrue(got.allow_format_cells)
+            self.assertFalse(got.allow_sort)
+            self.assertTrue(got.allow_select_locked_cells)
+            wb.sheet(0).set_sheet_protection(None)
+            self.assertIsNone(wb.sheet(0).get_sheet_protection())
 
 
 if __name__ == "__main__":

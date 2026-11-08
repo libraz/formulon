@@ -38,7 +38,7 @@ from formulon import (
     ConditionalFormatInput,
     DataBar,
     DefinedNameInput,
-    DifferentialFormat,
+    DxfInput,
     ErrorCode,
     ExcelError,
     ExternalLinkKind,
@@ -54,13 +54,15 @@ from formulon import (
     PivotDataFieldInput,
     PivotFieldInput,
     PivotFilterInput,
-    PivotFilterType,
-    PivotFilterValueKind,
+    PivotFilterKind,
+    PivotFilterOperandKind,
     PivotGrandTotals,
     PivotInput,
+    ShapeInput,
     Sheet,
     SheetRect,
     SheetSelection,
+    TableInput,
     TableStyle,
     TableStyleDefaults,
     TableStyleElement,
@@ -79,7 +81,7 @@ from formulon import (
 
 
 def _rgb(red: int, green: int, blue: int) -> Color:
-    return Color(ColorKind.RGB, rgb=0xFF000000 | (red << 16) | (green << 8) | blue)
+    return Color(ColorKind.RGB, argb=0xFF000000 | (red << 16) | (green << 8) | blue)
 
 
 class IndexGetterTests(unittest.TestCase):
@@ -98,7 +100,7 @@ class IndexGetterTests(unittest.TestCase):
                 ("list_sparkline_groups", ws.list_sparkline_groups()),
                 ("list_external_links", wb.list_external_links()),
                 ("get_cell_phonetic_runs", ws.get_cell_phonetic_runs(0, 0)),
-                ("list_tables", wb.list_tables()),
+                ("list_tables", ws.list_tables()),
             ):
                 with self.subTest(name=name):
                     self.assertEqual(listed, [])
@@ -113,7 +115,7 @@ class IndexGetterTests(unittest.TestCase):
                     len(wb.sheet(0).list_sparkline_groups()),
                     len(wb.list_external_links()),
                     len(wb.sheet(0).get_cell_phonetic_runs(0, 0)),
-                    len(wb.list_tables()),
+                    len(wb.sheet(0).list_tables()),
                     len(wb.sheet(0).list_cells()),
                 ],
                 [0] * 8,
@@ -280,17 +282,17 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
             fill_index=0,
             border_index=0,
             num_fmt_id=0,
-            horizontal_align=0,
-            vertical_align=2,
+            horizontal=0,
+            vertical=2,
             wrap_text=False,
         )
 
     def test_named_style_xf_writer_round_trips_through_its_reader(self) -> None:
         with Workbook.create_default() as wb:
-            xf_id = wb.ooxml.add_cell_style_xf(self._xf())
-            read_back = wb.ooxml.get_cell_style_xf(xf_id)
+            style_xf_index = wb.ooxml.add_cell_style_xf(self._xf())
+            read_back = wb.ooxml.get_cell_style_xf(style_xf_index)
         self.assertEqual(read_back.num_fmt_id, 0)
-        self.assertEqual(read_back.vertical_align, 2)
+        self.assertEqual(read_back.vertical, 2)
 
     def test_named_style_xf_writer_deduplicates(self) -> None:
         with Workbook.create_default() as wb:
@@ -300,7 +302,7 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
 
     def test_iterative_settings_read_back_what_was_set(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_iterative(enabled=True, max_iterations=42, max_change=0.5)
+            wb.update_iterative(enabled=True, max_iterations=42, max_change=0.5)
             settings = wb.get_iterative()
         self.assertTrue(settings.enabled)
         self.assertEqual(settings.max_iterations, 42)
@@ -308,8 +310,8 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
 
     def test_iterative_cap_and_threshold_survive_being_disabled(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_iterative(enabled=True, max_iterations=42, max_change=0.5)
-            wb.set_iterative(enabled=False, max_iterations=42, max_change=0.5)
+            wb.update_iterative(enabled=True, max_iterations=42, max_change=0.5)
+            wb.update_iterative(enabled=False, max_iterations=42, max_change=0.5)
             settings = wb.get_iterative()
         self.assertFalse(settings.enabled)
         self.assertEqual(settings.max_iterations, 42)
@@ -317,10 +319,10 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
 
     def test_enable_toggle_keeps_the_cap_and_threshold(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_iterative(enabled=True, max_iterations=42, max_change=0.5)
-            wb.set_iterative(enabled=False)
+            wb.update_iterative(enabled=True, max_iterations=42, max_change=0.5)
+            wb.update_iterative(enabled=False)
             disabled = wb.get_iterative()
-            wb.set_iterative(enabled=True)
+            wb.update_iterative(enabled=True)
             reenabled = wb.get_iterative()
         self.assertFalse(disabled.enabled)
         self.assertTrue(reenabled.enabled)
@@ -334,11 +336,11 @@ class StyleSeedingTests(unittest.TestCase):
     def test_empty_workbook_style_records_append_after_the_reserved_slots(self) -> None:
         with Workbook.create_empty() as wb:
             wb.add_sheet("Sheet1")
-            font_index = wb.ooxml.add_font(Font(name="Arial", size=12.0))
+            font_index = wb.ooxml.add_font(Font(name="Arial", size_pt=12.0))
             # Excel reserves fill 0 for `none` and fill 1 for `gray125`.
-            fill_index = wb.ooxml.add_fill(Fill(pattern=1, fg=Color(ColorKind.RGB, rgb=0xFFFF0000)))
+            fill_index = wb.ooxml.add_fill(Fill(pattern=1, foreground=Color(ColorKind.RGB, argb=0xFFFF0000)))
             border_index = wb.ooxml.add_border(
-                Border(left=BorderSide(style=1, color=Color(ColorKind.RGB, rgb=0xFF000000)))
+                Border(left=BorderSide(style=1, color=Color(ColorKind.RGB, argb=0xFF000000)))
             )
             xf_index = wb.ooxml.add_cell_xf(
                 CellXfInput(
@@ -346,8 +348,8 @@ class StyleSeedingTests(unittest.TestCase):
                     fill_index=fill_index,
                     border_index=border_index,
                     num_fmt_id=0,
-                    horizontal_align=0,
-                    vertical_align=0,
+                    horizontal=0,
+                    vertical=0,
                     wrap_text=False,
                 )
             )
@@ -528,7 +530,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             # written with no <phoneticPr> element at all.
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0))
 
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_id=3, type=2, alignment=2)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=3, type=2, alignment=2)
             # Setting the readings must not reset the rendering.
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "おおさか")])
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2, present=True))
@@ -541,22 +543,22 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_phonetic_properties_reject_values_the_container_cannot_hold(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "大阪")
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_id=1, type=3, alignment=3)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=1, type=3, alignment=3)
             # Two bits each on the binary side, so a wider ordinal is
             # refused rather than truncated into a valid-looking one.
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_id=0, type=4, alignment=0)
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0, type=4, alignment=0)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_id=0, type=0, alignment=4)
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0, type=0, alignment=4)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_id=0x10000, type=0, alignment=0)
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0x10000, type=0, alignment=0)
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(1, 3, 3, present=True))
 
     def test_a_value_write_discards_the_guide_and_its_rendering(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "大阪")
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "おおさか")])
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_id=3, type=2, alignment=2)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=3, type=2, alignment=2)
             wb.sheet(0).set_text(0, 0, "京都")
             self.assertEqual(wb.sheet(0).get_cell_phonetic_runs(0, 0), [])
             self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0))
@@ -565,10 +567,10 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             self.assertEqual(wb.ooxml.get_font(0).name, "Calibri")
             # add_font can only ever append beside the seeded default.
-            self.assertGreater(wb.ooxml.add_font(Font(name="游ゴシック", size=11.0)), 0)
+            self.assertGreater(wb.ooxml.add_font(Font(name="游ゴシック", size_pt=11.0)), 0)
             self.assertEqual(wb.ooxml.get_font(0).name, "Calibri")
 
-            wb.set_default_font(Font(name="游ゴシック", size=11.0, charset=128))
+            wb.set_default_font(Font(name="游ゴシック", size_pt=11.0, charset=128))
             self.assertEqual(wb.ooxml.get_font(0).name, "游ゴシック")
             self.assertEqual(wb.ooxml.get_font(0).charset, 128)
             data = wb.save()
@@ -577,8 +579,8 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_set_font_overwrites_an_existing_slot(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.ooxml.add_font(Font(name="Meiryo", size=12.0))
-            wb.ooxml.set_font(index, Font(name="MS Gothic", size=9.0))
+            index = wb.ooxml.add_font(Font(name="Meiryo", size_pt=12.0))
+            wb.ooxml.set_font(index, Font(name="MS Gothic", size_pt=9.0))
             self.assertEqual(wb.ooxml.get_font(index).name, "MS Gothic")
             self.assertEqual(len(wb.ooxml.list_fonts()), index + 1)
             with self.assertRaises(FormulonError):
@@ -586,51 +588,66 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_table_create_update_remove(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_text(0, 0, "A")
-            wb.sheet(0).set_text(0, 1, "B")
-            index = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 2, 1)), name="Table1", display_name="Table1", columns=["A", "B"]
-            )
+            ws = wb.sheet(0)
+            ws.set_text(0, 0, "A")
+            ws.set_text(0, 1, "B")
+            table = ws.add_table(TableInput(range=CellRect(0, 0, 2, 1), name="Table1", columns=["A", "B"]))
             self.assertEqual(
-                [t.get_properties().range for t in wb.list_tables()],
+                [t.get_properties().range for t in ws.list_tables()],
                 [SheetRect(0, CellRect(0, 0, 2, 1))],
             )
-            self.assertEqual([t.name for t in wb.list_tables()], ["Table1"])
+            self.assertEqual([t.name for t in ws.list_tables()], ["Table1"])
 
-            wb.table(index).update(range=SheetRect(0, CellRect(0, 0, 4, 1)))
+            table.update(range=CellRect(0, 0, 4, 1))
             self.assertEqual(
-                [t.get_properties().range for t in wb.list_tables()],
+                [t.get_properties().range for t in ws.list_tables()],
                 [SheetRect(0, CellRect(0, 0, 4, 1))],
             )
 
-            wb.remove_table(index)
-            self.assertEqual(wb.list_tables(), [])
+            ws.remove_table(table)
+            self.assertEqual(ws.list_tables(), [])
 
     def test_table_style_toggles_survive_a_style_name_change(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 2, 1)),
-                name="Sales",
-                display_name="Sales",
-                columns=["A", "B"],
-                style_name="TableStyleLight9",
+            table = wb.sheet(0).add_table(
+                TableInput(
+                    range=CellRect(0, 0, 2, 1),
+                    name="Sales",
+                    columns=["A", "B"],
+                    style_name="TableStyleLight9",
+                )
             )
-            table = wb.list_tables()[0].get_properties()
-            self.assertEqual(table.style_name, "TableStyleLight9")
-            self.assertTrue(table.show_row_stripes)
-            self.assertFalse(table.show_first_column)
-            self.assertEqual((table.header_row, table.totals_row), (True, False))
-            self.assertEqual([c.name for c in table.columns], ["A", "B"])
+            style = table.get_style_options()
+            self.assertEqual(style.style_name, "TableStyleLight9")
+            self.assertTrue(style.show_row_stripes)
+            self.assertFalse(style.show_first_column)
+            properties = table.get_properties()
+            self.assertEqual((properties.header_row, properties.totals_row), (True, False))
+            self.assertEqual([c.name for c in properties.columns], ["A", "B"])
 
-            wb.table(index).update(
-                range=SheetRect(0, CellRect(0, 0, 2, 1)), show_first_column=True, show_row_stripes=False
-            )
-            wb.table(index).update(range=SheetRect(0, CellRect(0, 0, 2, 1)), style_name="TableStyleMedium4")
+            table.update_style_options(show_first_column=True, show_row_stripes=False)
+            table.update_style_options(style_name="TableStyleMedium4")
             with Workbook.load(wb.save()) as reloaded:
-                table = reloaded.list_tables()[0].get_properties()
-                self.assertEqual(table.style_name, "TableStyleMedium4")
-                self.assertTrue(table.show_first_column)
-                self.assertFalse(table.show_row_stripes)
+                style = reloaded.sheet(0).list_tables()[0].get_style_options()
+                self.assertEqual(style.style_name, "TableStyleMedium4")
+                self.assertTrue(style.show_first_column)
+                self.assertFalse(style.show_row_stripes)
+
+    def test_table_without_a_style_name_takes_the_default_style(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            plain = ws.add_table(TableInput(range=CellRect(0, 0, 2, 1), name="Plain", columns=["A", "B"]))
+            options = plain.get_style_options()
+            self.assertEqual(options.style_name, "TableStyleMedium2")
+            self.assertTrue(options.show_row_stripes)
+            self.assertFalse(options.show_first_column)
+
+            bare = ws.add_table(TableInput(range=CellRect(0, 3, 2, 4), name="Bare", columns=["C", "D"], style_name=""))
+            self.assertIsNone(bare.get_style_options())
+
+            wb.update_table_style_defaults(table_style="TableStyleLight9")
+            styled = ws.add_table(TableInput(range=CellRect(5, 0, 7, 1), name="Styled", columns=["E", "F"]))
+            self.assertEqual(styled.get_style_options().style_name, "TableStyleLight9")
 
     def test_table_column_totals_write_the_totals_row(self) -> None:
         with Workbook.create_default() as wb:
@@ -638,22 +655,23 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.sheet(0).set_text(0, 1, "Amount")
             wb.sheet(0).set_number(1, 1, 10.0)
             wb.sheet(0).set_number(2, 1, 20.0)
-            index = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 3, 1)),
-                name="Sales",
-                display_name="Sales",
-                columns=["Product", "Amount"],
-                totals_row=True,
+            table = wb.sheet(0).add_table(
+                TableInput(
+                    range=CellRect(0, 0, 3, 1),
+                    name="Sales",
+                    columns=["Product", "Amount"],
+                    totals_row=True,
+                )
             )
-            wb.table(index).set_column_totals(0, label="Total")
-            wb.table(index).set_column_totals(1, function="sum")
+            table.set_column_totals(0, label="Total")
+            table.set_column_totals(1, function="sum")
             self.assertEqual(wb.sheet(0).get_formula(3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
             self.assertEqual(wb.sheet(0).get_value(3, 1), 30.0)
             with self.assertRaises(FormulonError):
-                wb.table(index).set_column_totals(1, function="median")
+                table.set_column_totals(1, function="median")
             with Workbook.load(wb.save()) as reloaded:
-                columns = reloaded.list_tables()[0].get_properties().columns
+                columns = reloaded.sheet(0).list_tables()[0].get_properties().columns
                 self.assertEqual(columns[0].totals_row_label, "Total")
                 self.assertEqual(columns[1].totals_row_function, "sum")
 
@@ -661,28 +679,24 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "Amount")
             wb.sheet(0).set_number(1, 0, 5.0)
-            index = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 1, 0)), name="Sales", display_name="Sales", columns=["Amount"]
-            )
+            table = wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 1, 0), name="Sales", columns=["Amount"]))
             wb.sheet(0).set_formula(0, 3, "=SUM(Sales[Amount])")
-            wb.table(index).update(range=SheetRect(0, CellRect(0, 0, 1, 0)), name="Revenue")
+            table.rename("Revenue")
             self.assertEqual(wb.sheet(0).get_formula(0, 3), "=SUM(Revenue[Amount])")
-            self.assertEqual(wb.list_tables()[0].display_name, "Revenue")
-            other = wb.add_table(
-                range=SheetRect(0, CellRect(0, 2, 1, 2)), name="Other", display_name="Other", columns=["X"]
-            )
+            self.assertEqual(wb.sheet(0).list_tables()[0].name, "Revenue")
+            other = wb.sheet(0).add_table(TableInput(range=CellRect(0, 2, 1, 2), name="Other", columns=["X"]))
             with self.assertRaises(FormulonError):
-                wb.table(other).update(name="revenue")
+                other.rename("revenue")
 
     def test_custom_table_style_round_trips(self) -> None:
         with Workbook.create_default() as wb:
-            dxf = wb.ooxml.add_dxf(DifferentialFormat())
+            dxf = wb.ooxml.add_dxf(DxfInput())
             style = TableStyle(
                 name="Corporate",
                 pivot=False,
                 elements=[
-                    TableStyleElement("wholeTable", dxf_id=dxf),
-                    TableStyleElement("firstRowStripe", size=2, dxf_id=dxf),
+                    TableStyleElement("wholeTable", dxf_index=dxf),
+                    TableStyleElement("firstRowStripe", size=2, dxf_index=dxf),
                     TableStyleElement("totalRow"),
                 ],
             )
@@ -692,12 +706,8 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 wb.get_table_style_defaults(),
                 TableStyleDefaults(table_style="TableStyleMedium2", pivot_style="PivotStyleLight16"),
             )
-            index = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 1, 0)),
-                name="T",
-                display_name="T",
-                columns=["X"],
-                style_name="Corporate",
+            table = wb.sheet(0).add_table(
+                TableInput(range=CellRect(0, 0, 1, 0), name="T", columns=["X"], style_name="Corporate")
             )
             with self.assertRaises(FormulonError):
                 wb.set_table_style(TableStyle(name="TableStyleMedium2"))
@@ -705,45 +715,46 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 self.assertEqual(reloaded.list_table_styles(), [style])
                 self.assertEqual(reloaded.get_table_style("corporate"), style)
                 self.assertIsNone(reloaded.get_table_style("Other"))
-                self.assertEqual(reloaded.list_tables()[index.index].get_properties().style_name, "Corporate")
-                reloaded.set_table_style_defaults(table_style="Corporate")
+                self.assertEqual(
+                    reloaded.sheet(0).list_tables()[table.index].get_style_options().style_name, "Corporate"
+                )
+                reloaded.update_table_style_defaults(table_style="Corporate")
                 self.assertEqual(reloaded.get_table_style_defaults().table_style, "Corporate")
                 reloaded.remove_table_style("corporate")
                 self.assertEqual(reloaded.list_table_styles(), [])
                 self.assertEqual(reloaded.get_table_style_defaults().table_style, "TableStyleMedium2")
 
-    def test_table_update_none_style_name_removes_the_style(self) -> None:
+    def test_table_update_none_style_name_removes_the_name_and_keeps_the_toggles(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "A")
             wb.sheet(0).set_text(0, 1, "B")
-            index = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 2, 1)),
-                name="Sales",
-                display_name="Sales",
-                columns=["A", "B"],
-                style_name="TableStyleMedium2",
+            table = wb.sheet(0).add_table(
+                TableInput(
+                    range=CellRect(0, 0, 2, 1),
+                    name="Sales",
+                    columns=["A", "B"],
+                    style_name="TableStyleMedium2",
+                )
             )
-            wb.table(index).update(range=SheetRect(0, CellRect(0, 0, 2, 1)))
-            self.assertEqual(wb.list_tables()[0].get_properties().style_name, "TableStyleMedium2")
+            table.update(range=CellRect(0, 0, 2, 1))
+            self.assertEqual(table.get_style_options().style_name, "TableStyleMedium2")
 
-            wb.table(index).update(range=SheetRect(0, CellRect(0, 0, 2, 1)), style_name=None)
-            table = wb.list_tables()[0].get_properties()
-            self.assertIsNone(table.style_name)
-            self.assertFalse(table.show_row_stripes)
+            table.update_style_options(style_name=None)
+            options = table.get_style_options()
+            self.assertIsNone(options.style_name)
+            self.assertTrue(options.show_row_stripes)
             data = wb.save()
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             parts = [name for name in archive.namelist() if name.startswith("xl/tables/")]
             self.assertEqual(len(parts), 1)
-            self.assertNotIn(b"tableStyleInfo", archive.read(parts[0]))
+            self.assertIn(b"tableStyleInfo", archive.read(parts[0]))
         with Workbook.load(data) as reloaded:
-            self.assertIsNone(reloaded.list_tables()[0].get_properties().style_name)
+            self.assertIsNone(reloaded.sheet(0).list_tables()[0].get_style_options().style_name)
 
     def test_table_create_rejects_a_column_count_that_does_not_match_ref(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.add_table(
-                    range=SheetRect(0, CellRect(0, 0, 2, 1)), name="Table1", display_name="Table1", columns=["OnlyOne"]
-                )
+                wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 2, 1), name="Table1", columns=["OnlyOne"]))
 
     def test_auto_filter_xml_round_trips(self) -> None:
         fragment = '<autoFilter ref="A1:B3"/>'
@@ -756,17 +767,17 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_named_cell_style_registration_reaches_the_reader(self) -> None:
         with Workbook.create_default() as wb:
-            xf_id = wb.ooxml.add_cell_style_xf(StyleAndCalcAccessorTests._xf())
-            before = len(wb.ooxml.list_cell_styles())
-            wb.ooxml.set_cell_style(CellStyle("MyStyle", xf_id))
-            names = [style.name for style in wb.ooxml.list_cell_styles()]
+            style_xf_index = wb.ooxml.add_cell_style_xf(StyleAndCalcAccessorTests._xf())
+            before = len(wb.list_cell_styles())
+            wb.set_cell_style(CellStyle("MyStyle", style_xf_index))
+            names = [style.name for style in wb.list_cell_styles()]
         self.assertGreater(len(names), before)
         self.assertIn("MyStyle", names)
 
     def test_named_cell_style_rejects_an_unregistered_xf_id(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.ooxml.set_cell_style(CellStyle("Bogus", 9999))
+                wb.set_cell_style(CellStyle("Bogus", 9999))
 
 
 class OneShotEvaluationTests(unittest.TestCase):
@@ -847,8 +858,8 @@ class PivotFilterPersistenceTests(unittest.TestCase):
         return PivotFilterInput(
             axis=PivotAxis.ROW,
             field_name="Region",
-            type=PivotFilterType.VALUE_GREATER_THAN,
-            value_kind=PivotFilterValueKind.DOUBLE,
+            type=PivotFilterKind.VALUE_GREATER_THAN,
+            value_kind=PivotFilterOperandKind.DOUBLE,
             value_double=15.0,
         )
 
@@ -862,8 +873,8 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             wb.close()
         self.assertEqual(got.axis, PivotAxis.ROW)
         self.assertEqual(got.field_name, "Region")
-        self.assertEqual(got.type, PivotFilterType.VALUE_GREATER_THAN)
-        self.assertEqual(got.value_kind, PivotFilterValueKind.DOUBLE)
+        self.assertEqual(got.type, PivotFilterKind.VALUE_GREATER_THAN)
+        self.assertEqual(got.value_kind, PivotFilterOperandKind.DOUBLE)
         self.assertEqual(got.value_double, 15.0)
 
     def test_count_reports_the_filters_on_the_pivot(self) -> None:
@@ -888,8 +899,8 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             self.assertEqual(len(reloaded.sheet(0).list_pivots()), 1)
             self.assertEqual(len(reloaded.sheet(0).pivot(0).list_filters()), 1)
             got = reloaded.sheet(0).pivot(0).list_filters()[0]
-            self.assertEqual((got.field_name, got.type), ("Region", PivotFilterType.VALUE_GREATER_THAN))
-            self.assertEqual((got.value_kind, got.value_double), (PivotFilterValueKind.DOUBLE, 15.0))
+            self.assertEqual((got.field_name, got.type), ("Region", PivotFilterKind.VALUE_GREATER_THAN))
+            self.assertEqual((got.value_kind, got.value_double), (PivotFilterOperandKind.DOUBLE, 15.0))
 
     def test_out_of_range_index_is_rejected(self) -> None:
         wb, pivot = self._workbook_with_pivot()
@@ -906,7 +917,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def test_definition_survives_save_and_load(self) -> None:
         wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
-            wb.sheet(0).pivot(pivot).set_grand_totals(rows=True, columns=False)
+            wb.sheet(0).pivot(pivot).update_grand_totals(rows=True, columns=False)
             cache_id = wb.sheet(0).pivot(pivot).get_cache().cache_id
             data = wb.save()
         finally:
@@ -935,17 +946,17 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.add_sheet("B")
             wb.add_sheet("C")
-            self.assertEqual(wb.get_active_sheet().index, 0)
+            self.assertEqual(wb.active_sheet().index, 0)
             wb.set_active_sheet(2)
-            self.assertEqual(wb.get_active_sheet().index, 2)
+            self.assertEqual(wb.active_sheet().index, 2)
             with self.assertRaises(FormulonError):
                 wb.set_active_sheet(9)
-            self.assertEqual(wb.get_active_sheet().index, 2)
+            self.assertEqual(wb.active_sheet().index, 2)
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_active_sheet().index, 2)
+            self.assertEqual(reloaded.active_sheet().index, 2)
             reloaded.sheet(2).move(0)
-            self.assertEqual(reloaded.get_active_sheet().index, 0)
+            self.assertEqual(reloaded.active_sheet().index, 0)
 
     def test_show_phonetic_survives_value_writes_and_a_round_trip(self) -> None:
         with Workbook.create_default() as wb:
@@ -967,7 +978,7 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
             wb.sheet(0).set_text(0, 0, "漢字")
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "かんじ")])
             self.assertFalse(wb.sheet(0).get_cell_phonetic_properties(0, 0).present)
-            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_id=0, type=0, alignment=0)
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, font_index=0, type=0, alignment=0)
             self.assertTrue(wb.sheet(0).get_cell_phonetic_properties(0, 0).present)
             data = wb.save()
         with Workbook.load(data) as reloaded:
@@ -982,13 +993,13 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
 class SheetViewOriginAndSelectionTests(unittest.TestCase):
     def test_scroll_origin_pane_origin_and_selection_round_trip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_view(freeze_rows=2, freeze_cols=1)
+            wb.sheet(0).update_view(freeze_rows=2, freeze_cols=1)
             view = wb.sheet(0).get_view()
             self.assertEqual((view.pane_top_left_row, view.pane_top_left_col), (2, 1))
-            wb.sheet(0).set_view(top_left_row=5, top_left_col=0)
-            wb.sheet(0).set_view(pane_top_left_row=40, pane_top_left_col=6)
+            wb.sheet(0).update_view(top_left_row=5, top_left_col=0)
+            wb.sheet(0).update_view(pane_top_left_row=40, pane_top_left_col=6)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_view(pane_top_left_row=1, pane_top_left_col=6)
+                wb.sheet(0).update_view(pane_top_left_row=1, pane_top_left_col=6)
             ranges = [CellRect(41, 7, 43, 8), CellRect(50, 9, 50, 9)]
             wb.sheet(0).set_selection(active_row=41, active_col=7, ranges=list(ranges))
             with self.assertRaises(FormulonError):
@@ -1007,26 +1018,30 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
     def test_split_reads_back_round_trips_and_exchanges_with_freeze(self) -> None:
         with Workbook.create_default() as wb:
             view = wb.sheet(0).get_view()
-            self.assertEqual((view.split_x, view.split_y), (0.0, 0.0))
-            wb.sheet(0).set_view(split_x=2000, split_y=1500)
+            self.assertEqual((view.split_x_twips, view.split_y_twips), (0.0, 0.0))
+            wb.sheet(0).update_view(split_x_twips=2000, split_y_twips=1500)
             view = wb.sheet(0).get_view()
-            self.assertEqual((view.split_x, view.split_y, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0))
+            self.assertEqual(
+                (view.split_x_twips, view.split_y_twips, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0)
+            )
             data = wb.save()
-            wb.sheet(0).set_view(freeze_rows=2, freeze_cols=1)
+            wb.sheet(0).update_view(freeze_rows=2, freeze_cols=1)
             view = wb.sheet(0).get_view()
-            self.assertEqual((view.split_x, view.split_y), (0.0, 0.0))
-            wb.sheet(0).set_view(split_x=0, split_y=900)
+            self.assertEqual((view.split_x_twips, view.split_y_twips), (0.0, 0.0))
+            wb.sheet(0).update_view(split_x_twips=0, split_y_twips=900)
             view = wb.sheet(0).get_view()
-            self.assertEqual((view.split_y, view.freeze_rows, view.freeze_cols), (900.0, 0, 0))
+            self.assertEqual((view.split_y_twips, view.freeze_rows, view.freeze_cols), (900.0, 0, 0))
             for bad in ((-1, 0), (0, float("nan")), (float("inf"), 0)):
                 with self.assertRaises(FormulonError):
-                    wb.sheet(0).set_view(split_x=bad[0], split_y=bad[1])
-            self.assertEqual(wb.sheet(0).get_view().split_y, 900.0)
-            wb.sheet(0).set_view(split_x=0, split_y=0)
-            self.assertEqual(wb.sheet(0).get_view().split_y, 0.0)
+                    wb.sheet(0).update_view(split_x_twips=bad[0], split_y_twips=bad[1])
+            self.assertEqual(wb.sheet(0).get_view().split_y_twips, 900.0)
+            wb.sheet(0).update_view(split_x_twips=0, split_y_twips=0)
+            self.assertEqual(wb.sheet(0).get_view().split_y_twips, 0.0)
         with Workbook.load(data) as reloaded:
             view = reloaded.sheet(0).get_view()
-            self.assertEqual((view.split_x, view.split_y, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0))
+            self.assertEqual(
+                (view.split_x_twips, view.split_y_twips, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0)
+            )
 
     def test_unset_selection_reads_as_a1(self) -> None:
         with Workbook.create_default() as wb:
@@ -1095,7 +1110,10 @@ class CollectionReaderAllocationTests(unittest.TestCase):
 
     def test_get_hyperlinks_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.sheet(0).add_hyperlink(r, 8, target="https://example.com/") for r in range(n)],
+            lambda wb, n: [
+                wb.sheet(0).set_hyperlink(r, 8, formulon.HyperlinkInput(target="https://example.com/"))
+                for r in range(n)
+            ],
             lambda wb: wb.sheet(0).list_hyperlinks(),
         )
 
@@ -1128,16 +1146,16 @@ class CollectionReaderAllocationTests(unittest.TestCase):
 
     def test_evaluate_cf_range_allocation_count_is_flat(self) -> None:
         def populate(wb, n):
-            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DxfInput())
             for r in range(n):
                 wb.sheet(0).set_number(r, 0, float(r + 100))
             wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, n - 1, 0)],
                     type=1,
-                    op=4,
+                    operator=4,
                     formula1="10",
-                    dxf_id=dxf_index,
+                    dxf_index=dxf_index,
                 ),
             )
             wb.recalc()
@@ -1250,14 +1268,14 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
     def test_default_today_serial_disables_time_period_rules(self) -> None:
         """Omitting ``today_serial`` must not pin the basis to 1899-12-30."""
         with Workbook.create_default() as wb:
-            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DxfInput())
             wb.sheet(0).set_number(0, 0, 0.0)
             wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 0, 0)],
                     type=15,
                     time_period=0,
-                    dxf_id=dxf_index,
+                    dxf_index=dxf_index,
                 ),
             )
             wb.recalc()
@@ -1272,14 +1290,14 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
         """Omitting ``today_serial`` evaluates ``timePeriod`` rules against the pinned date."""
         with Workbook.create_default() as wb:
             wb.set_pinned_now(datetime.datetime(2024, 3, 15, 9, 30))
-            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DxfInput())
             wb.sheet(0).set_number(0, 0, 45366.0)  # 2024-03-15
             wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 0, 0)],
                     type=15,
                     time_period=0,
-                    dxf_id=dxf_index,
+                    dxf_index=dxf_index,
                 ),
             )
             wb.recalc()
@@ -1445,7 +1463,7 @@ class PackedIntegerGuardTests(unittest.TestCase):
                 with self.subTest(from_col_offset_emu=bad):
                     with self.assertRaises(exception):
                         wb.sheet(0).add_shape(
-                            anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_offset_emu=bad
+                            ShapeInput(anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_offset_emu=bad)
                         )
             self.assertEqual(wb.sheet(0).list_shapes(), [])
 

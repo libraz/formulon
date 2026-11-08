@@ -5,7 +5,7 @@ import { appendEmptyZipEntry, expectFailure, readAll, readZipEntryText, VAL } fr
 const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : RangeError);
 
 /** A literal `#AARRGGBB` colour spec as the raw layer reads it back. */
-const rgbColor = (argb) => ({ kind: 1, rgb: argb, theme: 0, tint: 0, indexed: 0 });
+const rgbColor = (argb) => ({ kind: 1, argb: argb, theme: 0, tint: 0, indexed: 0 });
 
 export function registerCellsIo(Module, test) {
   test('setText / setBool / setBlank round-trip', () => {
@@ -63,8 +63,8 @@ export function registerCellsIo(Module, test) {
       );
 
       const runs = [
-        { sb: 0, eb: 2, text: 'トウキョウ' },
-        { sb: 2, eb: 3, text: 'ト' },
+        { start: 0, end: 2, text: 'トウキョウ' },
+        { start: 2, end: 3, text: 'ト' },
       ];
       wb.setCellPhoneticRuns(0, 0, 0, runs);
       assert.deepEqual(
@@ -85,7 +85,7 @@ export function registerCellsIo(Module, test) {
           () => wb.getCellPhoneticRunCount(0, 0, 0),
           (i) => wb.getCellPhoneticRun(0, 0, 0, i),
         ),
-        [{ sb: 0, eb: 3, text: 'トウキョウト' }],
+        [{ start: 0, end: 3, text: 'トウキョウト' }],
       );
 
       wb.setCellPhoneticRuns(0, 0, 0, []);
@@ -99,8 +99,8 @@ export function registerCellsIo(Module, test) {
 
       expectFailure(() =>
         wb.setCellPhoneticRuns(0, 0, 0, [
-          { sb: 2, eb: 3, text: 'ト' },
-          { sb: 0, eb: 2, text: 'トウ' },
+          { start: 2, end: 3, text: 'ト' },
+          { start: 0, end: 2, text: 'トウ' },
         ]),
       );
     } finally {
@@ -112,37 +112,37 @@ export function registerCellsIo(Module, test) {
     // The result carries a `status` alongside the triple; compare the
     // triple alone so a status-shape change does not read as a value change.
     const phoneticProps = (book, sheet, row, col) => {
-      const { fontId, type, alignment } = book.getCellPhoneticProperties(sheet, row, col);
-      return { fontId, type, alignment };
+      const { fontIndex, type, alignment } = book.getCellPhoneticProperties(sheet, row, col);
+      return { fontIndex, type, alignment };
     };
     const wb = Module.Workbook.createDefault();
     try {
       wb.setText(0, 0, 0, '大阪');
       // An unannotated cell reports what Excel infers for a guide written
       // with no <phoneticPr> at all.
-      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 0, type: 0, alignment: 0 });
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontIndex: 0, type: 0, alignment: 0 });
 
-      wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 });
+      wb.setCellPhoneticProperties(0, 0, 0, { fontIndex: 3, type: 2, alignment: 2 });
       // Setting the readings must not reset the rendering.
-      wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]);
-      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
+      wb.setCellPhoneticRuns(0, 0, 0, [{ start: 0, end: 2, text: 'おおさか' }]);
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontIndex: 3, type: 2, alignment: 2 });
 
       const saved = wb.save();
       const loaded = Module.Workbook.load(saved);
       try {
-        assert.deepEqual(phoneticProps(loaded, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
+        assert.deepEqual(phoneticProps(loaded, 0, 0, 0), { fontIndex: 3, type: 2, alignment: 2 });
       } finally {
         loaded.delete();
       }
 
       // Two bits each on the binary side, so a wider ordinal is refused
       // rather than truncated into a different, valid-looking one.
-      expectFailure(() => wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 4, alignment: 0 }));
-      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
+      expectFailure(() => wb.setCellPhoneticProperties(0, 0, 0, { fontIndex: 0, type: 4, alignment: 0 }));
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontIndex: 3, type: 2, alignment: 2 });
 
       // A value write discards the guide and its rendering together.
       wb.setText(0, 0, 0, '京都');
-      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontId: 0, type: 0, alignment: 0 });
+      assert.deepEqual(phoneticProps(wb, 0, 0, 0), { fontIndex: 0, type: 0, alignment: 0 });
     } finally {
       wb.delete();
     }
@@ -155,8 +155,8 @@ export function registerCellsIo(Module, test) {
       try {
         wb.setText(0, 0, 0, '東京都');
         const runs = [
-          { sb: 0, eb: 2, text: 'トウキョウ' },
-          { sb: 2, eb: 3, text: 'ト' },
+          { start: 0, end: 2, text: 'トウキョウ' },
+          { start: 2, end: 3, text: 'ト' },
         ];
         wb.setCellPhoneticRuns(0, 0, 0, runs);
         const beforeRuns = readAll(
@@ -164,9 +164,9 @@ export function registerCellsIo(Module, test) {
           (i) => wb.getCellPhoneticRun(0, 0, 0, i),
         );
         assert.throws(
-          () => wb.setCellPhoneticRuns(0, 0, 0, [{ sb: value, eb: 2, text: '壊' }]),
+          () => wb.setCellPhoneticRuns(0, 0, 0, [{ start: value, end: 2, text: '壊' }]),
           nestedErrorClass(value),
-          `setCellPhoneticRuns sb=${String(value)} accepted`,
+          `setCellPhoneticRuns start=${String(value)} accepted`,
         );
         assert.deepEqual(
           readAll(
@@ -176,20 +176,20 @@ export function registerCellsIo(Module, test) {
           beforeRuns,
         );
 
-        wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 });
+        wb.setCellPhoneticProperties(0, 0, 0, { fontIndex: 3, type: 2, alignment: 2 });
         const beforeProps = wb.getCellPhoneticProperties(0, 0, 0);
         assert.throws(
-          () => wb.setCellPhoneticProperties(0, 0, 0, { fontId: value, type: 2, alignment: 2 }),
+          () => wb.setCellPhoneticProperties(0, 0, 0, { fontIndex: value, type: 2, alignment: 2 }),
           nestedErrorClass(value),
-          `setCellPhoneticProperties fontId=${String(value)} accepted`,
+          `setCellPhoneticProperties fontIndex=${String(value)} accepted`,
         );
         assert.deepEqual(
           {
-            fontId: wb.getCellPhoneticProperties(0, 0, 0).fontId,
+            fontIndex: wb.getCellPhoneticProperties(0, 0, 0).fontIndex,
             type: wb.getCellPhoneticProperties(0, 0, 0).type,
             alignment: wb.getCellPhoneticProperties(0, 0, 0).alignment,
           },
-          { fontId: beforeProps.fontId, type: beforeProps.type, alignment: beforeProps.alignment },
+          { fontIndex: beforeProps.fontIndex, type: beforeProps.type, alignment: beforeProps.alignment },
         );
 
         assert.throws(
@@ -228,18 +228,18 @@ export function registerCellsIo(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       assert.equal(wb.getFont(0).name, 'Calibri');
-      const appended = wb.addFont({ name: '游ゴシック', size: 11 });
+      const appended = wb.addFont({ name: '游ゴシック', sizePt: 11 });
       assert.ok(appended > 0);
       assert.equal(wb.getFont(0).name, 'Calibri');
 
-      wb.setDefaultFont({ name: '游ゴシック', size: 11, charset: 128 });
+      wb.setDefaultFont({ name: '游ゴシック', sizePt: 11, charset: 128 });
       assert.equal(wb.getFont(0).name, '游ゴシック');
       assert.equal(wb.getFont(0).charset, 128);
 
-      const added = wb.addFont({ name: 'Meiryo', size: 12 });
-      wb.setFont(added, { name: 'MS Gothic', size: 9 });
+      const added = wb.addFont({ name: 'Meiryo', sizePt: 12 });
+      wb.setFont(added, { name: 'MS Gothic', sizePt: 9 });
       assert.equal(wb.getFont(added).name, 'MS Gothic');
-      expectFailure(() => wb.setFont(wb.getFontCount(), { name: 'MS Gothic', size: 9 }));
+      expectFailure(() => wb.setFont(wb.getFontCount(), { name: 'MS Gothic', sizePt: 9 }));
     } finally {
       wb.delete();
     }
@@ -248,19 +248,21 @@ export function registerCellsIo(Module, test) {
   test('table update omits fields without resetting existing metadata', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const created = wb.addTable({
-        range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
+      const created = wb.addTable(0, {
+        range: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 },
         name: 'Sales',
         columns: ['Product', 'Amount'],
         styleName: 'TableStyleMedium2',
         headerRow: false,
         totalsRow: true,
       });
-      const before = wb.getTable(created);
+      const before = wb.getTable(0, created);
       assert.deepEqual(before.range.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 });
       assert.equal(before.headerRow, false);
       assert.equal(before.totalsRow, true);
       assert.equal('headerRowCount' in before, false);
+      assert.equal('styleName' in before, false);
+      assert.equal('displayName' in before, false);
 
       const beforeSaved = wb.save();
       const beforeXml = readZipEntryText(beforeSaved, 'xl/tables/table1.xml');
@@ -271,8 +273,8 @@ export function registerCellsIo(Module, test) {
       // An empty update object is a partial no-op. This specifically covers
       // the WASM-to-C mapping of omitted rect/style/row flags to preservation
       // sentinels rather than empty/false defaults.
-      wb.updateTable(created, {});
-      const after = wb.getTable(created);
+      wb.updateTable(0, created, {});
+      const after = wb.getTable(0, created);
       assert.deepEqual(after.range.rect, before.range.rect);
 
       const saved = wb.save();
@@ -283,7 +285,7 @@ export function registerCellsIo(Module, test) {
       const loaded = Module.Workbook.load(saved);
       try {
         assert.equal(loaded.disposed, false);
-        const reloaded = loaded.getTable(created);
+        const reloaded = loaded.getTable(0, created);
         assert.deepEqual(reloaded.range.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 });
         const roundTripped = loaded.save();
         const roundTrippedXml = readZipEntryText(roundTripped, 'xl/tables/table1.xml');
@@ -299,12 +301,12 @@ export function registerCellsIo(Module, test) {
   });
 
   test('table update rethrows nested getter failures before changing the table', () => {
-    const getterFields = ['rect', 'styleName', 'headerRow', 'totalsRow'];
+    const getterFields = ['rect', 'headerRow', 'totalsRow'];
     for (const field of getterFields) {
       const wb = Module.Workbook.createDefault();
       try {
-        const created = wb.addTable({
-          range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
+        const created = wb.addTable(0, {
+          range: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 },
           name: 'Sales',
           columns: ['Product', 'Amount'],
           styleName: 'TableStyleMedium2',
@@ -319,7 +321,7 @@ export function registerCellsIo(Module, test) {
             throw new Error(`table update ${field} getter`);
           },
         });
-        assert.throws(() => wb.updateTable(created, spec), new RegExp(`table update ${field} getter`));
+        assert.throws(() => wb.updateTable(0, created, spec), new RegExp(`table update ${field} getter`));
         assert.equal(readZipEntryText(wb.save(), 'xl/tables/table1.xml'), before);
       } finally {
         wb.delete();
@@ -330,8 +332,8 @@ export function registerCellsIo(Module, test) {
   test('table update reads each optional field once before the C call', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const created = wb.addTable({
-        range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
+      const created = wb.addTable(0, {
+        range: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 },
         name: 'Sales',
         columns: ['Product', 'Amount'],
         styleName: 'TableStyleMedium2',
@@ -340,7 +342,6 @@ export function registerCellsIo(Module, test) {
       });
       const values = {
         rect: { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 },
-        styleName: 'TableStyleLight9',
         headerRow: true,
         totalsRow: false,
       };
@@ -356,31 +357,31 @@ export function registerCellsIo(Module, test) {
           },
         });
       }
-      wb.updateTable(created, spec);
-      assert.deepEqual(reads, { rect: 1, styleName: 1, headerRow: 1, totalsRow: 1 });
-      assert.deepEqual(wb.getTable(created).range.rect, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 });
+      wb.updateTable(0, created, spec);
+      assert.deepEqual(reads, { rect: 1, headerRow: 1, totalsRow: 1 });
+      assert.deepEqual(wb.getTable(0, created).range.rect, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 });
     } finally {
       wb.delete();
     }
   });
 
-  test('createTable rejects a narrowing range.sheet before table_create', () => {
+  test('addTable rejects a narrowing range coordinate before the table is created', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('table sheet')];
     for (const value of invalid) {
       const wb = Module.Workbook.createDefault();
       try {
         assert.throws(
           () =>
-            wb.addTable({
-              range: { sheet: value, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
+            wb.addTable(0, {
+              range: { firstRow: value, firstCol: 0, lastRow: 2, lastCol: 1 },
               name: 'BadTable',
               columns: ['Product', 'Amount'],
             }),
-          // A non-integer sheet (fraction, NaN, infinity) is a type error; 2^32 is a range error.
+          // A non-integer coordinate (fraction, NaN, infinity) is a type error; 2^32 is a range error.
           typeof value === 'number' && !Number.isInteger(value) ? TypeError : nestedErrorClass(value),
-          `createTable range.sheet=${String(value)} accepted`,
+          `addTable range.firstRow=${String(value)} accepted`,
         );
-        assert.equal(wb.getTableCount(), 0);
+        assert.equal(wb.getTableCount(0), 0);
       } finally {
         wb.delete();
       }
@@ -506,17 +507,17 @@ export function registerCellsIo(Module, test) {
         type: 3,
         formula1: '"Yes,No"',
       });
-      // `dxfId` is a real index into `<dxfs>`, not a sentinel: every binding
+      // `dxfIndex` is a real index into `<dxfs>`, not a sentinel: every binding
       // signals "no differential format" by omitting the field, which leaves
-      // the C ABI's `dxf_id_engaged` at 0. Supplying `0` therefore claims the
+      // the C ABI's `dxf_index_engaged` at 0. Supplying `0` therefore claims the
       // first dxf, so the table has to have one.
       const dxf = wb.addDxf({ font: { bold: true } });
       wb.addCfRule(0, {
         ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 1,
-        op: 5,
+        operator: 5,
         formula1: '10',
-        dxfId: dxf,
+        dxfIndex: dxf,
         stopIfTrue: false,
       });
       const xlsx = wb.saveWithDiagnostics(1);

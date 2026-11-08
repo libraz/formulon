@@ -592,6 +592,70 @@ class DerivationTest(BindingRuleTestBase):
         self.assertNotIn(("wasm", "cf.get_at", "getCfAt"), hits(ctx, "R0.coverage"))
 
 
+class FieldRenameTest(BindingRuleTestBase):
+    """`kind: field` renames and drops, read from the record's whole shape."""
+
+    @staticmethod
+    def field(record: str, js: str, was: str, **extra: object) -> dict:
+        return {"kind": "field", "record": record, "js": js, "surfaces": ["wasm"], "closes": "R8.js",
+                "was": {"js": was}, **extra}  # fmt: skip
+
+    def test_r8_js_reads_inherited_patch_alias_and_union_fields(self) -> None:
+        def record(js: str, role: str) -> dict:
+            return {"kind": "record", "role": role, "js": js, "surfaces": ["wasm"]}
+
+        ledger = {
+            "entries": {
+                "record.defaults": record("Defaults", "result"),
+                "record.fill_patch": record("FillPatch", "patch"),
+                "record.rule_input": record("RuleInput", "input"),
+                "field.defaults_width": self.field("record.defaults", "widthChars", "width"),
+                "field.fill_patch_transparency": self.field("record.fill_patch", "transparencyPct", "transparency"),
+                "field.rule_input_dxf": self.field("record.rule_input", "dxfIndex", "dxfId"),
+            }
+        }  # fmt: skip
+
+        def dts(width: str, transparency: str, dxf: str) -> str:
+            return (
+                "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+                f"export interface DefaultsInput {{\n  readonly {width}: number;\n}}\n"
+                "export interface Defaults extends DefaultsInput {\n  readonly effective: number;\n}\n"
+                f"export type FillPatch = Patch<{{\n  {transparency}: number;\n}}>;\n"
+                "interface RuleBase {\n  stopIfTrue?: boolean;\n}\n"
+                f"interface ExpressionRule extends RuleBase {{\n  {dxf}?: number;\n}}\n"
+                f"interface ColorScaleRule extends RuleBase {{\n  {dxf}?: number;\n}}\n"
+                "export type RuleInput =\n  | ExpressionRule\n  | ColorScaleRule;\n"
+            )
+
+        self.assert_rule(
+            "R8.js",
+            self.fixture.context("", ledger, wasm=dts("width", "transparency", "dxfId")),
+            self.fixture.context("", ledger, wasm=dts("widthChars", "transparencyPct", "dxfIndex")),
+            [("wasm", "field.defaults_width", "widthChars"),
+             ("wasm", "field.fill_patch_transparency", "transparencyPct"),
+             ("wasm", "field.rule_input_dxf", "dxfIndex")],
+        )  # fmt: skip
+
+    def test_a_dropped_field_is_looked_up_in_its_record_only(self) -> None:
+        ledger = {
+            "entries": {
+                "record.protection": {"kind": "record", "role": "result", "js": "Protection", "surfaces": ["wasm"]},
+                "field.protection_sheet": {"kind": "field", "record": "record.protection", "surfaces": ["wasm"],
+                                           "drop": {"js": "sheet", "closes": "R41.bool.polarity"},
+                                           "was": {"js": "sheet"}},
+            }
+        }  # fmt: skip
+        sheet_elsewhere = "export interface Drawing {\n  readonly sheet: number;\n}\n"
+        self.assert_rule(
+            "R41.bool.polarity",
+            self.fixture.context("", ledger, wasm=sheet_elsewhere
+                                 + "export interface Protection {\n  readonly sheet: number;\n}\n"),
+            self.fixture.context("", ledger, wasm=sheet_elsewhere
+                                 + "export interface Protection {\n  readonly lockStructure: boolean;\n}\n"),
+            [("wasm", "field.protection_sheet", "sheet")],
+        )  # fmt: skip
+
+
 class RoleSuffixDerivationTest(BindingRuleTestBase):
     LEDGER = {
         "entries": {
@@ -1636,6 +1700,40 @@ class ClassScopeTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r23_track_skips_an_op_on_a_const_workbook(self) -> None:
+        header = (
+            "FM_API fm_status_t fm_workbook_resolve_table_runtime_id({const}fm_workbook_t* wb, uint32_t id,"
+            " size_t* out_sheet_index, size_t* out_table_index);\n"
+        )
+        ledger = {
+            "entries": {
+                "table_runtime_id.resolve": {"kind": "op", "scope": "workbook",
+                                             "c": "fm_workbook_resolve_table_runtime_id",
+                                             "js": "resolveTableRuntimeId", "py": "resolve_table_runtime_id",
+                                             "surfaces": ["c", "wasm", "native", "py"]},
+            }
+        }  # fmt: skip
+        self.assert_rule(
+            "R23.track",
+            self.fixture.context(header.format(const=""), ledger, py_sheet=""),
+            self.fixture.context(header.format(const="const "), ledger, py_sheet=""),
+            [("py", "table_runtime_id.resolve", "SHEET_STRUCTURE_OPS"),
+             ("wasm", "table_runtime_id.resolve", "SHEET_STRUCTURE_OPS")],
+        )  # fmt: skip
+
+    def test_r23_a_name_each_scope_claims_sits_on_both_classes(self) -> None:
+        table = {"kind": "op", "js": "table", "py": "table", "surfaces": ["wasm", "native", "py"]}
+        workbook_only = {"entries": {"binding.table": {**table, "scope": "workbook"}}}
+        both = {"entries": {"binding.table": {**table, "scope": "workbook"},
+                            "binding.sheet_table": {**table, "scope": "sheet"}}}  # fmt: skip
+        js = _wb("  table(name: string): Table;\n") + _sheet("  table(table: TableRef): Table;\n")
+        self.assert_rule(
+            "R23.js",
+            self.fixture.context("", workbook_only, wasm=js, native=js, common=FACADE),
+            self.fixture.context("", both, wasm=js, native=js, common=FACADE),
+            [("native", "binding.table", "Sheet"), ("wasm", "binding.table", "Sheet")],
+        )
+
 
 class CollectionAccessTest(BindingRuleTestBase):
     def ledger(self) -> dict:
@@ -1947,6 +2045,34 @@ class ClosedSetTest(BindingRuleTestBase):
             self.fixture.context(self.HEADER, self.LEDGER, py_workbook=bad),
             self.fixture.context(self.HEADER, self.LEDGER, py_workbook=good),
             [("py", "mode.set", "set_mode(mode)"), ("py", "record.thing", "Thing.mode")],
+        )
+
+    def test_r6_closed_reads_a_tristate_field_as_a_boolean(self) -> None:
+        header = (
+            "typedef enum { FM_TRISTATE_DEFAULT = 0, FM_TRISTATE_FALSE = 1, FM_TRISTATE_TRUE = 2 } fm_tristate_t;\n"
+            "typedef struct {\n  int32_t allow_blank; /* fm_tristate_t */\n} fm_validation_t;\n"
+        )
+        ledger = {
+            "entries": {
+                "record.validation": {"kind": "record", "role": "result", "c": "fm_validation_t", "js": "Validation",
+                                      "py": "Validation", "surfaces": ["c", "wasm", "py"]},
+            }
+        }  # fmt: skip
+        bad_js = "export interface Validation {\n  readonly allowBlank: number;\n}\n"
+        good_js = "export interface Validation {\n  readonly allowBlank: boolean | null;\n}\n"
+        bad_py = "@dataclass(frozen=True)\nclass Validation:\n    allow_blank: int\n"
+        good_py = "@dataclass(frozen=True)\nclass Validation:\n    allow_blank: bool\n"
+        self.assert_rule(
+            "R6.closed.js",
+            self.fixture.context(header, ledger, wasm=bad_js),
+            self.fixture.context(header, ledger, wasm=good_js),
+            [("wasm", "record.validation", "Validation.allowBlank")],
+        )
+        self.assert_rule(
+            "R6.closed.py",
+            self.fixture.context(header, ledger, py_workbook=bad_py),
+            self.fixture.context(header, ledger, py_workbook=good_py),
+            [("py", "record.validation", "Validation.allow_blank")],
         )
 
 
@@ -2521,7 +2647,7 @@ class PatchShapeTest(BindingRuleTestBase):
             [("c", "group.update", "update"), ("c", "table.update", "update")],
         )
 
-    def test_r18_all_accepts_the_a1_alternative_of_a_rectangle_field(self) -> None:
+    def test_r18_all_accepts_the_a1_and_sheet_local_alternatives_of_a_rectangle_field(self) -> None:
         records = (
             "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
             "export interface TableProperties {\n  readonly range: SheetRect;\n  readonly area: CellRect;\n"
@@ -2536,7 +2662,7 @@ class PatchShapeTest(BindingRuleTestBase):
         good = (
             records
             + (
-                "export interface TablePatch {\n  range?: SheetRect | string;\n  area?: string | CellRect | null;\n"
+                "export interface TablePatch {\n  range?: CellRect | SheetRect | string;\n  area?: string | CellRect | null;\n"
                 "  name?: string;\n}\n"
             )
             + _sheet("  update(patch: TablePatch): void;\n")
@@ -2544,7 +2670,8 @@ class PatchShapeTest(BindingRuleTestBase):
         bad = (
             records
             + (
-                "export interface TablePatch {\n  range?: number | string;\n  area?: string;\n  name?: string | number;\n}\n"
+                "export interface TablePatch {\n  range?: number | string;\n  area?: CellRect | SheetRect;\n"
+                "  name?: string | number;\n}\n"
             )
             + _sheet("  update(patch: TablePatch): void;\n")
         )
@@ -2780,6 +2907,18 @@ class RefArgTest(BindingRuleTestBase):
                 ("wasm", "removePivot", "pivot"),
                 ("wasm", "removeTable", "tableIndex"),
             ],
+        )
+
+    def test_r26_keeps_the_type_of_an_argument_the_ledger_exempts(self) -> None:
+        add = {"kind": "op", "scope": "sheet", "js": "addSlicer", "py": "add_slicer", "surfaces": ["wasm", "py"]}
+        exempt = {"ref_exempt": {"params": ["table"], "reason": "a slicer may filter a table on another sheet"}}
+        js = _sheet("  addSlicer(table: Table | string, column: string): Slicer;\n")
+        py = _py_sheet("    def add_slicer(self, table: Union[str, Table], column: str) -> Slicer: ...\n")
+        self.assert_rule(
+            "R26.ref",
+            self.fixture.context("", {"entries": {"slicer.add": add}}, wasm=js, py_workbook=py),
+            self.fixture.context("", {"entries": {"slicer.add": {**add, **exempt}}}, wasm=js, py_workbook=py),
+            [("py", "slicer.add", "table"), ("wasm", "slicer.add", "table")],
         )
 
 

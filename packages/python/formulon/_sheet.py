@@ -49,11 +49,12 @@ from ._status import (
 )
 from ._workbook import (
     _CELL_RANGE_NO_CURSOR,
+    _PATCH_CLEAR,
+    _PATCH_SET,
     _STATUS_NOT_FOUND,
     UNCHANGED,
     Alignment,
     AlignmentPatch,
-    AnchorEditAs,
     AnchorKind,
     ArrayFormula,
     AutoFilter,
@@ -85,12 +86,14 @@ from ._workbook import (
     ColorKind,
     ColorResolution,
     ColorScale,
+    ColumnBreak,
     ColumnLayout,
     Comment,
     ConditionalFormat,
     ConditionalFormatInput,
     DataBar,
     DataTable,
+    DataTableInput,
     DataTableInputCell,
     DataValidation,
     DataValidationInput,
@@ -114,11 +117,11 @@ from ._workbook import (
     HeaderFooter,
     HorizontalAlign,
     Hyperlink,
+    HyperlinkInput,
     IconSet,
     MarginsPt,
     Mention,
     NativeValue,
-    PageBreak,
     PageLayout,
     PageMargins,
     PageOrientation,
@@ -127,6 +130,7 @@ from ._workbook import (
     Paper,
     PhoneticProperties,
     PhoneticRun,
+    PictureInput,
     PivotInput,
     PrintOptions,
     PrintTitles,
@@ -135,23 +139,25 @@ from ._workbook import (
     ReadingOrder,
     RectPt,
     ResolvedColor,
+    RowBreak,
     RowLayout,
-    ShapePaint,
+    ShapeInput,
     SheetComment,
     SheetFormatDefaults,
     SheetProtection,
+    SheetProtectionInput,
     SheetSelection,
     SheetView,
     SheetViewMode,
     SheetVisibility,
-    SlicerCrossFilter,
-    SlicerSortOrder,
+    SlicerInput,
     Sparkline,
     SparklineAxisType,
     SparklineEmptyCells,
     SparklineGroup,
     SparklineType,
     Spill,
+    TableInput,
     ThreadedComment,
     ThreadedCommentInput,
     Unchanged,
@@ -191,6 +197,7 @@ from ._workbook import (
     _read_cstr_out,
     _read_optional_cstr_out,
     _threaded_comment_from,
+    _tristate_default,
     _write_mentions,
     _write_value_input,
 )
@@ -199,20 +206,20 @@ __all__ = ["Sheet", "SheetOoxml"]
 
 # <facade-tables>
 WORKBOOK_METHODS = (
+    "active_sheet",
     "add_person",
     "add_pivot_cache",
     "add_sheet",
-    "add_table",
-    "clear_theme",
     "close",
     "closed",
     "copy_sheet",
     "format_reference",
     "format_value",
-    "get_active_sheet",
     "get_calc_mode",
     "get_calc_on_save",
+    "get_cell_style",
     "get_date1904",
+    "get_default_font",
     "get_defined_name",
     "get_diagnostics",
     "get_file_name",
@@ -230,74 +237,71 @@ WORKBOOK_METHODS = (
     "get_theme_script_font",
     "get_workbook_protection",
     "has_dirty_cells",
+    "list_cell_styles",
     "list_defined_names",
     "list_external_links",
     "list_people",
     "list_pivot_caches",
     "list_sheets",
     "list_table_styles",
-    "list_tables",
     "ooxml",
     "parse_reference",
     "pivot_cache",
     "recalc",
     "recalc_data_tables",
+    "remove_cell_style",
     "remove_defined_name",
     "remove_person",
     "remove_pivot_cache",
     "remove_sheet",
-    "remove_table",
     "remove_table_style",
+    "reset_theme",
     "resolve_color",
     "save",
     "save_with_diagnostics",
     "set_active_sheet",
     "set_calc_mode",
     "set_calc_on_save",
+    "set_cell_style",
     "set_date1904",
     "set_default_font",
     "set_defined_name",
     "set_file_name",
     "set_full_precision",
-    "set_iterative",
     "set_pinned_now",
     "set_profile_id",
     "set_ref_mode",
     "set_table_style",
-    "set_table_style_defaults",
     "set_theme_colors",
     "set_theme_fonts",
     "set_theme_script_font",
     "set_workbook_protection",
     "sheet",
     "table",
+    "update_iterative",
+    "update_table_style_defaults",
 )
 SHEET_METHODS = (
     "add_cf_rule",
     "add_chart",
-    "add_column_break",
     "add_data_table",
-    "add_hyperlink",
-    "add_hyperlink_range",
     "add_merge",
     "add_picture",
     "add_pivot",
     "add_protected_range",
-    "add_row_break",
     "add_shape",
     "add_slicer",
     "add_sparkline_group",
+    "add_table",
     "add_threaded_comment",
     "add_validation",
     "apply_auto_filter",
     "chart",
-    "clear_auto_filter",
+    "clear_auto_filter_criteria",
     "clear_breaks",
     "clear_cf_rules",
-    "clear_column_width",
     "clear_hyperlinks",
     "clear_merges",
-    "clear_row_height",
     "clear_validations",
     "convert_column_chars_to_pt",
     "convert_column_pt_to_chars",
@@ -327,7 +331,6 @@ SHEET_METHODS = (
     "get_date",
     "get_dependents",
     "get_display_text",
-    "get_effective_style",
     "get_format_defaults",
     "get_formula",
     "get_formula_r1c1",
@@ -376,14 +379,13 @@ SHEET_METHODS = (
     "list_shapes",
     "list_slicers",
     "list_sparkline_groups",
+    "list_tables",
     "list_threaded_comments",
     "list_validations",
     "picture",
     "pivot",
     "recalc_viewport",
-    "remove_auto_filter",
     "remove_cf_rule",
-    "remove_column_break",
     "remove_comment",
     "remove_data_table",
     "remove_drawing",
@@ -391,21 +393,22 @@ SHEET_METHODS = (
     "remove_merge",
     "remove_pivot",
     "remove_protected_range",
-    "remove_row_break",
     "remove_sparkline_group",
+    "remove_table",
     "remove_threaded_comment",
     "remove_validation",
+    "reset_column_width",
+    "reset_row_height",
     "restore_drawing",
-    "restore_range_style",
     "set_array_formula",
     "set_auto_filter",
     "set_blank",
     "set_bool",
-    "set_cell_format",
     "set_cell_phonetic",
     "set_cell_phonetic_properties",
     "set_cell_phonetic_runs",
     "set_cell_show_phonetic",
+    "set_column_break",
     "set_column_collapsed",
     "set_column_hidden",
     "set_column_outline",
@@ -413,16 +416,14 @@ SHEET_METHODS = (
     "set_comment",
     "set_comment_visible",
     "set_error",
-    "set_format_defaults",
     "set_formula",
-    "set_header_footer",
+    "set_hyperlink",
+    "set_hyperlink_range",
     "set_number",
-    "set_page_margins",
-    "set_page_setup",
     "set_print_area",
-    "set_print_options",
     "set_print_titles",
     "set_row_auto_height",
+    "set_row_break",
     "set_row_collapsed",
     "set_row_height",
     "set_row_hidden",
@@ -433,13 +434,20 @@ SHEET_METHODS = (
     "set_text",
     "set_value",
     "set_values",
-    "set_view",
     "shape",
     "slicer",
-    "snapshot_range_style",
+    "table",
+    "update_cell_format",
+    "update_format_defaults",
+    "update_header_footer",
+    "update_page_margins",
+    "update_page_setup",
+    "update_print_options",
     "update_protected_range",
+    "update_sheet_protection",
     "update_sparkline_group",
     "update_threaded_comment",
+    "update_view",
     "validate_value",
 )
 OOXML_WORKBOOK_METHODS = (
@@ -449,54 +457,53 @@ OOXML_WORKBOOK_METHODS = (
     "add_dxf",
     "add_fill",
     "add_font",
-    "add_num_fmt",
+    "add_number_format",
     "get_border",
-    "get_cell_style",
     "get_cell_style_xf",
     "get_cell_xf",
     "get_dxf",
     "get_fill",
     "get_font",
-    "get_num_fmt_string",
-    "get_passthrough",
+    "get_number_format",
+    "has_passthrough",
     "list_borders",
     "list_cell_style_xfs",
-    "list_cell_styles",
     "list_cell_xfs",
     "list_dxfs",
     "list_fills",
     "list_fonts",
     "list_passthroughs",
-    "remove_cell_style",
-    "set_cell_style",
     "set_font",
 )
 OOXML_SHEET_METHODS = (
-    "clear_cell_xf_index",
-    "clear_column_style",
-    "clear_row_style",
     "get_auto_filter_xml",
     "get_cell_xf_index",
-    "get_column_style",
+    "get_column_xf_index",
+    "get_effective_style",
     "get_header_footer_xml",
     "get_page_margins_xml",
     "get_page_setup_xml",
     "get_print_options_xml",
-    "get_range_style_bases",
-    "get_range_style_bases_excluding",
-    "get_row_style",
+    "get_range_xf_bases",
+    "get_range_xf_bases_excluding",
+    "get_row_xf_index",
     "get_sheet_pr_xml",
-    "remap_range_style",
+    "remap_range_xfs",
+    "reset_cell_xf_index",
+    "reset_column_xf_index",
+    "reset_row_xf_index",
+    "restore_range_xfs",
     "set_auto_filter_xml",
     "set_cell_xf_index",
-    "set_column_style",
+    "set_column_xf_index",
     "set_header_footer_xml",
     "set_page_margins_xml",
     "set_page_setup_xml",
     "set_print_options_xml",
     "set_range_xf_index",
-    "set_row_style",
+    "set_row_xf_index",
     "set_sheet_pr_xml",
+    "snapshot_range_xfs",
 )
 SHEET_STRUCTURE_OPS = (
     "Pivot.show_details",
@@ -520,9 +527,9 @@ LIST_FAMILIES = {
     "Workbook.list_fonts": ("get_font_count", "get_font"),
 }
 HANDWRITTEN = (
+    "active_sheet",
+    "add_cf_rule",
     "add_data_table",
-    "add_hyperlink",
-    "add_hyperlink_range",
     "add_picture",
     "add_sheet",
     "chart",
@@ -530,13 +537,13 @@ HANDWRITTEN = (
     "drawing",
     "evaluate_typed_formula",
     "evaluate_typed_formula_array",
-    "get_active_sheet",
     "get_cell_format",
     "get_cell_phonetic_runs",
-    "get_column_style",
+    "get_column_xf_index",
     "get_date",
+    "get_default_font",
     "get_formula",
-    "get_row_style",
+    "get_row_xf_index",
     "get_theme_colors",
     "get_theme_fonts",
     "get_typed_value",
@@ -561,25 +568,25 @@ HANDWRITTEN = (
     "remove_sheet",
     "set_active_sheet",
     "set_array_formula",
-    "set_cell_format",
     "set_comment",
     "set_formula",
+    "set_hyperlink",
+    "set_hyperlink_range",
     "set_pinned_now",
     "set_theme_colors",
     "set_theme_script_font",
     "set_value",
     "set_values",
-    "set_view",
     "shape",
     "slicer",
     "table",
+    "update_cell_format",
     "update_protected_range",
     "update_sparkline_group",
     "update_threaded_comment",
+    "update_view",
 )
 CELL_ARGS = {
-    "Sheet.add_hyperlink": ((0, 1),),
-    "Sheet.clear_cell_xf_index": ((0, 1),),
     "Sheet.evaluate_cf_formula": ((0, 1), (2, 3)),
     "Sheet.evaluate_formula": ((0, 1),),
     "Sheet.evaluate_formula_array": ((0, 1),),
@@ -610,6 +617,7 @@ CELL_ARGS = {
     "Sheet.remove_comment": ((0, 1),),
     "Sheet.remove_data_table": ((0, 1),),
     "Sheet.remove_hyperlink": ((0, 1),),
+    "Sheet.reset_cell_xf_index": ((0, 1),),
     "Sheet.set_blank": ((0, 1),),
     "Sheet.set_bool": ((0, 1),),
     "Sheet.set_cell_phonetic": ((0, 1),),
@@ -621,6 +629,7 @@ CELL_ARGS = {
     "Sheet.set_comment_visible": ((0, 1),),
     "Sheet.set_error": ((0, 1),),
     "Sheet.set_formula": ((0, 1),),
+    "Sheet.set_hyperlink": ((0, 1),),
     "Sheet.set_number": ((0, 1),),
     "Sheet.set_text": ((0, 1),),
     "Sheet.set_value": ((0, 1),),
@@ -628,46 +637,46 @@ CELL_ARGS = {
     "Sheet.validate_value": ((0, 1),),
 }
 RECT_ARGS = {
-    "Sheet.add_hyperlink_range": (0,),
     "Sheet.add_merge": (0,),
     "Sheet.evaluate_cf_range": (0,),
     "Sheet.get_cell_rect_pt": (0,),
     "Sheet.get_cells_in_range": (0,),
     "Sheet.get_merges_in_range": (0,),
-    "Sheet.get_range_style_bases": (0,),
-    "Sheet.get_range_style_bases_excluding": (0,),
+    "Sheet.get_range_xf_bases": (0,),
+    "Sheet.get_range_xf_bases_excluding": (0,),
     "Sheet.get_typed_values": (0,),
     "Sheet.get_values": (0,),
     "Sheet.iter_rows": (0,),
     "Sheet.list_cells": (0,),
     "Sheet.recalc_viewport": (0,),
-    "Sheet.remap_range_style": (0,),
+    "Sheet.remap_range_xfs": (0,),
     "Sheet.remove_merge": (0,),
-    "Sheet.set_cell_format": (0,),
+    "Sheet.set_hyperlink_range": (0,),
     "Sheet.set_print_area": (0,),
     "Sheet.set_range_xf_index": (0,),
-    "Sheet.snapshot_range_style": (0,),
+    "Sheet.snapshot_range_xfs": (0,),
+    "Sheet.update_cell_format": (0,),
 }
 SPAN_ARGS = {
-    "Sheet.clear_column_style": ((0, "col", "span"),),
-    "Sheet.clear_column_width": ((0, "col", "span"),),
-    "Sheet.clear_row_height": ((0, "row", "span"),),
-    "Sheet.clear_row_style": ((0, "row", "span"),),
     "Sheet.delete_columns": ((0, "col", "start_count"),),
     "Sheet.delete_rows": ((0, "row", "start_count"),),
     "Sheet.insert_columns": ((0, "col", "start_count"),),
     "Sheet.insert_rows": ((0, "row", "start_count"),),
+    "Sheet.reset_column_width": ((0, "col", "span"),),
+    "Sheet.reset_column_xf_index": ((0, "col", "span"),),
+    "Sheet.reset_row_height": ((0, "row", "span"),),
+    "Sheet.reset_row_xf_index": ((0, "row", "span"),),
     "Sheet.set_column_collapsed": ((0, "col", "span"),),
     "Sheet.set_column_hidden": ((0, "col", "span"),),
     "Sheet.set_column_outline": ((0, "col", "span"),),
-    "Sheet.set_column_style": ((0, "col", "span"),),
     "Sheet.set_column_width": ((0, "col", "span"),),
+    "Sheet.set_column_xf_index": ((0, "col", "span"),),
     "Sheet.set_row_auto_height": ((0, "row", "span"),),
     "Sheet.set_row_collapsed": ((0, "row", "span"),),
     "Sheet.set_row_height": ((0, "row", "span"),),
     "Sheet.set_row_hidden": ((0, "row", "span"),),
     "Sheet.set_row_outline": ((0, "row", "span"),),
-    "Sheet.set_row_style": ((0, "row", "span"),),
+    "Sheet.set_row_xf_index": ((0, "row", "span"),),
 }
 # </facade-tables>
 
@@ -676,6 +685,8 @@ CellInput = Union[
     None, bool, int, float, decimal.Decimal, str, ExcelError, Value, datetime.date, datetime.datetime, datetime.time
 ]
 
+# `fm_tristate_t` TRUE: reads return FALSE (1) or TRUE (2), never DEFAULT.
+_TRISTATE_TRUE = 2
 _LAST_ROW = 1048575
 _LAST_COL = 16383
 # The built-in number format each en-US date code a date write gives a General cell names.
@@ -897,7 +908,7 @@ def _with_cell_context(exc: FormulonError, row: int, col: int) -> FormulonError:
 
 
 # ---------------------------------------------------------------------------
-# Cell formats: ``Sheet.get_cell_format`` / ``Sheet.set_cell_format`` over the
+# Cell formats: ``Sheet.get_cell_format`` / ``Sheet.update_cell_format`` over the
 # style records. tools/api/cell_format_cases.json pins the behaviour for the
 # Python and JS facades alike.
 # ---------------------------------------------------------------------------
@@ -912,7 +923,7 @@ _FORMAT_SIDE = ("side", False, None)
 _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
     "font": {
         "name": ("string", False, None),
-        "size": ("size", True, None),
+        "size_pt": ("size", True, None),
         "bold": _FORMAT_FLAG,
         "italic": _FORMAT_FLAG,
         "strike": _FORMAT_FLAG,
@@ -929,8 +940,8 @@ _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
     },
     "fill": {
         "pattern": ("enum", False, FillPattern),
-        "fg": _FORMAT_COLOR,
-        "bg": _FORMAT_COLOR,
+        "foreground": _FORMAT_COLOR,
+        "background": _FORMAT_COLOR,
         "gradient": ("gradient", True, None),
     },
     "border": {
@@ -959,8 +970,8 @@ _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
 
 # The ``CellXfInput`` field each alignment key writes, and the presence flag it sets when it has one.
 _ALIGNMENT_XF: Dict[str, Tuple[str, Optional[str]]] = {
-    "horizontal": ("horizontal_align", "has_horizontal_align"),
-    "vertical": ("vertical_align", "has_vertical_align"),
+    "horizontal": ("horizontal", "has_horizontal"),
+    "vertical": ("vertical", "has_vertical"),
     "wrap_text": ("wrap_text", "has_wrap_text"),
     "justify_last_line": ("justify_last_line", "has_justify_last_line"),
     "shrink_to_fit": ("shrink_to_fit", None),
@@ -1077,7 +1088,7 @@ def _format_group(group: str, value: Any, label: str) -> Dict[str, Any]:
 
 
 def _check_cell_format_patch(given: Dict[str, Any]) -> Dict[str, Any]:
-    """Every given argument of :meth:`Sheet.set_cell_format`, checked before anything is written."""
+    """Every given argument of :meth:`Sheet.update_cell_format`, checked before anything is written."""
     out: Dict[str, Any] = {}
     for key, value in given.items():
         if value is UNCHANGED:
@@ -1103,10 +1114,10 @@ def _merge_fill(current: Fill, patch: Dict[str, Any]) -> Fill:
     changes: Dict[str, Any] = {"gradient": patch.get("gradient")}
     if "pattern" in patch:
         changes["pattern"] = patch["pattern"]
-    for key in ("fg", "bg"):
+    for key in ("foreground", "background"):
         if key in patch:
             changes[key] = patch[key]
-    colored = "fg" in patch or "bg" in patch
+    colored = "foreground" in patch or "background" in patch
     if colored and "pattern" not in patch and current.pattern == FillPattern.NONE:
         changes["pattern"] = FillPattern.SOLID
     return dataclasses.replace(current, **changes)
@@ -1133,10 +1144,10 @@ def _cell_xf_input(xf: CellXf) -> Dict[str, Any]:
         "fill_index": xf.fill_index,
         "border_index": xf.border_index,
         "num_fmt_id": xf.num_fmt_id,
-        "horizontal_align": HorizontalAlign.GENERAL if xf.horizontal_align is None else xf.horizontal_align,
-        "has_horizontal_align": xf.horizontal_align is not None,
-        "vertical_align": VerticalAlign.BOTTOM if xf.vertical_align is None else xf.vertical_align,
-        "has_vertical_align": xf.vertical_align is not None,
+        "horizontal": HorizontalAlign.GENERAL if xf.horizontal is None else xf.horizontal,
+        "has_horizontal": xf.horizontal is not None,
+        "vertical": VerticalAlign.BOTTOM if xf.vertical is None else xf.vertical,
+        "has_vertical": xf.vertical is not None,
         "wrap_text": bool(xf.wrap_text),
         "has_wrap_text": xf.wrap_text is not None,
         "justify_last_line": bool(xf.justify_last_line),
@@ -1151,14 +1162,13 @@ def _cell_xf_input(xf: CellXf) -> Dict[str, Any]:
         "has_protection": xf.locked is not None or xf.hidden is not None,
         "locked": True if xf.locked is None else xf.locked,
         "hidden": False if xf.hidden is None else xf.hidden,
-        "xf_id": xf.xf_id,
+        "style_xf_index": xf.style_xf_index,
     }
     for key in _OPTIONAL_XF_FIELDS:
         if getattr(xf, key) is not None:
             fields[key] = getattr(xf, key)
     fields["has_alignment"] = any(
-        fields[flag]
-        for flag in ("has_horizontal_align", "has_vertical_align", "has_wrap_text", "has_justify_last_line")
+        fields[flag] for flag in ("has_horizontal", "has_vertical", "has_wrap_text", "has_justify_last_line")
     ) or any(key in fields for key in _OPTIONAL_XF_FIELDS)
     return fields
 
@@ -1196,17 +1206,18 @@ def _patched_xf(workbook: Workbook, xf: CellXf, patch: Dict[str, Any], num_fmt_i
     return CellXfInput(**fields)
 
 
-def _cell_format_of(workbook: Workbook, xf: CellXf) -> CellFormat:
-    """The :class:`CellFormat` of the cell XF record ``xf``."""
-    code = None if xf.num_fmt_id == 0 else workbook.ooxml.get_num_fmt_string(xf.num_fmt_id)
+def _cell_format_of(workbook: Workbook, xf: CellXf, source: EffectiveStyleSource) -> CellFormat:
+    """The :class:`CellFormat` of the cell XF record ``xf``, found at ``source``."""
+    code = None if xf.num_fmt_id == 0 else workbook.ooxml.get_number_format(xf.num_fmt_id)
     return CellFormat(
+        source=source,
         number_format="General" if code is None else code,
         font=workbook.ooxml.get_font(xf.font_index),
         fill=workbook.ooxml.get_fill(xf.fill_index),
         border=workbook.ooxml.get_border(xf.border_index),
         alignment=Alignment(
-            horizontal=HorizontalAlign.GENERAL if xf.horizontal_align is None else HorizontalAlign(xf.horizontal_align),
-            vertical=VerticalAlign.BOTTOM if xf.vertical_align is None else VerticalAlign(xf.vertical_align),
+            horizontal=HorizontalAlign.GENERAL if xf.horizontal is None else HorizontalAlign(xf.horizontal),
+            vertical=VerticalAlign.BOTTOM if xf.vertical is None else VerticalAlign(xf.vertical),
             wrap_text=bool(xf.wrap_text),
             shrink_to_fit=bool(xf.shrink_to_fit),
             indent=xf.indent or 0,
@@ -1271,10 +1282,10 @@ class Sheet:
     The cell, row and column XF indices and the raw worksheet XML are
     reached through :attr:`ooxml`.
 
-    Pivot tables and drawing objects are handles too: :meth:`pivot`,
-    :meth:`drawing` and the per-kind accessors return the same
-    :class:`Pivot` or :class:`Drawing` object for the same pivot or object
-    every time.
+    Tables, pivot tables and drawing objects are handles too: :meth:`table`,
+    :meth:`pivot`, :meth:`drawing` and the per-kind accessors return the same
+    :class:`Table`, :class:`Pivot` or :class:`Drawing` object for the same
+    table, pivot or object every time.
     """
 
     __slots__ = ("_workbook", "_position", "_name", "_pivots", "_drawings", "_ooxml")
@@ -1668,14 +1679,14 @@ class Sheet:
         serial, code = date_serial(value, date1904=workbook.get_date1904())
         self.set_number(row, col, serial)
         ooxml = workbook.ooxml
-        if ooxml.get_cell_xf(self.get_effective_style(row, col).xf_index).num_fmt_id != 0:
+        if ooxml.get_cell_xf(self.ooxml.get_effective_style(row, col).xf_index).num_fmt_id != 0:
             return
         rect = CellRect(first_row=row, first_col=col, last_row=row, last_col=col)
         patch: Dict[str, Any] = {"number_format": code}
-        bases = self.ooxml.get_range_style_bases(rect)
+        bases = self.ooxml.get_range_xf_bases(rect)
         num_fmt_id = _BUILTIN_DATE_NUM_FMT_IDS[code]
         xfs = [ooxml.add_cell_xf(_patched_xf(workbook, ooxml.get_cell_xf(base), patch, num_fmt_id)) for base in bases]
-        self.ooxml.remap_range_style(rect, dict(zip(bases, xfs)))
+        self.ooxml.remap_range_xfs(rect, dict(zip(bases, xfs)))
 
     @overload
     @_coordinate_form
@@ -1776,8 +1787,8 @@ class Sheet:
                 fields = S.PHONETIC_RUN.unpack(LIB, run_ptr)
                 runs.append(
                     PhoneticRun(
-                        sb=fields["sb"],
-                        eb=fields["eb"],
+                        start=fields["sb"],
+                        end=fields["eb"],
                         text=LIB.read_cstr(fields["text"]) if fields["text"] else "",
                     )
                 )
@@ -1785,10 +1796,12 @@ class Sheet:
 
     @overload
     @_coordinate_form
-    def set_cell_phonetic_properties(self, row: int, col: int, *, font_id: int, type: int, alignment: int) -> None: ...
+    def set_cell_phonetic_properties(
+        self, row: int, col: int, *, font_index: int, type: int, alignment: int
+    ) -> None: ...
 
     @overload
-    def set_cell_phonetic_properties(self, a1: str, *, font_id: int, type: int, alignment: int) -> None: ...
+    def set_cell_phonetic_properties(self, a1: str, *, font_index: int, type: int, alignment: int) -> None: ...
 
     def set_cell_phonetic_properties(self, *args: Any, **kwargs: Any) -> None:
         """Set how the cell's phonetic guide renders.
@@ -1799,8 +1812,8 @@ class Sheet:
         Only observable on a cell that has runs, and every value-setting
         method clears both, so call it after the cell's text.
         """
-        row, col, font_id, type, alignment = self._cell_args(
-            "set_cell_phonetic_properties", args, kwargs, ("font_id", "type", "alignment")
+        row, col, font_index, type, alignment = self._cell_args(
+            "set_cell_phonetic_properties", args, kwargs, ("font_index", "type", "alignment")
         )
         sheet = self._index()
         h = self._workbook._require()
@@ -1810,7 +1823,7 @@ class Sheet:
                 _uint(sheet, "sheet_index"),
                 _uint(row, "row"),
                 _uint(col, "col"),
-                _uint(font_id, "font_id"),
+                _uint(font_index, "font_index"),
                 _uint(type, "type"),
                 _uint(alignment, "alignment"),
             )
@@ -1850,7 +1863,7 @@ class Sheet:
                 )
             )
             return PhoneticProperties(
-                font_id=LIB.read_u32(font_ptr),
+                font_index=LIB.read_u32(font_ptr),
                 type=LIB.read_u32(type_ptr),
                 alignment=LIB.read_u32(alignment_ptr),
                 present=bool(
@@ -2470,85 +2483,61 @@ class Sheet:
     # -- Hyperlinks --------------------------------------------------------
     @overload
     @_coordinate_form
-    def add_hyperlink(
-        self,
-        row: int,
-        col: int,
-        *,
-        target: Optional[str],
-        location: Optional[str] = None,
-        display: Optional[str] = None,
-        tooltip: Optional[str] = None,
-    ) -> None: ...
+    def set_hyperlink(self, row: int, col: int, link: Union[HyperlinkInput, Hyperlink, None]) -> None: ...
 
     @overload
-    def add_hyperlink(
-        self,
-        a1: str,
-        *,
-        target: Optional[str],
-        location: Optional[str] = None,
-        display: Optional[str] = None,
-        tooltip: Optional[str] = None,
-    ) -> None: ...
+    def set_hyperlink(self, a1: str, link: Union[HyperlinkInput, Hyperlink, None]) -> None: ...
 
-    def add_hyperlink(
-        self,
-        *args: Any,
-        target: Optional[str],
-        location: Optional[str] = None,
-        display: Optional[str] = None,
-        tooltip: Optional[str] = None,
-        **kwargs: Any,
-    ) -> None:
-        """Append a hyperlink on the cell ``(row, col)``.
+    def set_hyperlink(self, *args: Any, **kwargs: Any) -> None:
+        """Set the hyperlink anchored at the cell ``(row, col)``, replacing the one there; ``None`` removes it.
 
-        ``target`` is the external address (URL, file path); ``None`` makes a
-        link inside the workbook, which then needs ``location`` (a reference
-        such as ``"Sheet2!A1"`` or a defined name). ``location`` beside a
-        ``target`` is the fragment within it. ``display`` is the hyperlink's
-        stored display attribute; the cell value is not written, so call
-        :meth:`set_text` with the same text to show it.
+        ``link.target`` is the external address (URL, file path); ``None``
+        makes a link inside the workbook, which then needs ``link.location``
+        (a reference such as ``"Sheet2!A1"`` or a defined name). A
+        ``location`` beside a ``target`` is the fragment within it.
+        ``display`` is the hyperlink's stored display attribute; the cell
+        value is not written, so call :meth:`set_text` with the same text to
+        show it. The link covers the one cell: ``link.rect`` is ignored, so a
+        :class:`Hyperlink` read back can be passed in. Removing a cell that
+        has no hyperlink does nothing.
 
         Raises:
-          TypeError: when ``target`` and ``location`` are both ``None``.
+          TypeError: when ``link`` is neither a :class:`Hyperlink` nor ``None``,
+            or its ``target`` and ``location`` are both ``None``.
         """
-        row, col = self._cell_args("add_hyperlink", args, kwargs, ())
-        self._add_hyperlink(CellRect(row, col, row, col), target, location, display, tooltip)
+        row, col, link = self._cell_args("set_hyperlink", args, kwargs, ("link",))
+        self._set_hyperlink(row, col, CellRect(row, col, row, col), link)
 
-    def add_hyperlink_range(
-        self,
-        range: Union[CellRect, str],
-        *,
-        target: Optional[str],
-        location: Optional[str] = None,
-        display: Optional[str] = None,
-        tooltip: Optional[str] = None,
-    ) -> None:
-        """Append a hyperlink covering the cells of ``range``; the arguments read as in :meth:`add_hyperlink`."""
+    def set_hyperlink_range(self, range: Union[CellRect, str], link: Union[HyperlinkInput, Hyperlink, None]) -> None:
+        """Set the hyperlink covering the cells of ``range``, replacing the one anchored at its top-left cell.
+
+        ``None`` removes the hyperlink anchored there. The arguments read as in :meth:`set_hyperlink`.
+        """
         rect = self._rect(range)
-        self._add_hyperlink(rect, target, location, display, tooltip)
+        self._set_hyperlink(rect.first_row, rect.first_col, rect, link)
 
-    def _add_hyperlink(
-        self,
-        rect: CellRect,
-        target: Optional[str],
-        location: Optional[str],
-        display: Optional[str],
-        tooltip: Optional[str],
-    ) -> None:
-        if target is None and location is None:
-            raise TypeError("formulon: a hyperlink needs a target or a location")
+    def _set_hyperlink(self, row: int, col: int, rect: CellRect, link: Union[HyperlinkInput, Hyperlink, None]) -> None:
+        if link is not None:
+            if not isinstance(link, (HyperlinkInput, Hyperlink)):
+                raise TypeError(
+                    f"formulon: link must be a HyperlinkInput, a Hyperlink or None, got {type(link).__name__}"
+                )
+            if link.target is None and link.location is None:
+                raise TypeError("formulon: a hyperlink needs a target or a location")
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            ptr = scope.struct(S.HYPERLINK)
-            S.HYPERLINK.pack(LIB, ptr, {"rect": _cell_rect_fields(rect)})
-            S.write_str_field(LIB, ptr, S.HYPERLINK, "target", target, scope)
-            S.write_str_field(LIB, ptr, S.HYPERLINK, "location", location, scope)
-            S.write_str_field(LIB, ptr, S.HYPERLINK, "display", display, scope)
-            S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", tooltip, scope)
-            _check(LIB.fm_sheet_add_hyperlink(h, _uint(sheet, "sheet"), ptr))
+            ptr = 0
+            if link is not None:
+                ptr = scope.struct(S.HYPERLINK)
+                S.HYPERLINK.pack(LIB, ptr, {"rect": _cell_rect_fields(rect)})
+                S.write_str_field(LIB, ptr, S.HYPERLINK, "target", link.target, scope)
+                S.write_str_field(LIB, ptr, S.HYPERLINK, "location", link.location, scope)
+                S.write_str_field(LIB, ptr, S.HYPERLINK, "display", link.display, scope)
+                S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", link.tooltip, scope)
+            _check(
+                LIB.fm_sheet_set_hyperlink(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), ptr)
+            )
 
     @overload
     @_coordinate_form
@@ -2748,7 +2737,7 @@ class Sheet:
 
     _PROTECTED_RANGE_TEXT = (
         "name",
-        "password",
+        "legacy_password_hash",
         "algorithm_name",
         "hash_value",
         "salt_value",
@@ -2780,7 +2769,8 @@ class Sheet:
             return ProtectedRange(
                 spin_count=d["spin_count"],
                 ranges=_decode_cell_rect_array(d["ranges"], d["range_count"]),
-                **{fld: LIB.read_cstr(d[fld]) for fld in self._PROTECTED_RANGE_TEXT},
+                legacy_password_hash=LIB.read_cstr(d["legacy_password_hash"]) or None,
+                **{fld: LIB.read_cstr(d[fld]) for fld in self._PROTECTED_RANGE_TEXT if fld != "legacy_password_hash"},
             )
 
     def _protected_range_call(
@@ -2837,7 +2827,7 @@ class Sheet:
         *,
         name: Union[str, Unchanged] = UNCHANGED,
         ranges: Union[Sequence[CellRect], Unchanged] = UNCHANGED,
-        password: Union[str, Unchanged] = UNCHANGED,
+        legacy_password_hash: Union[str, Unchanged] = UNCHANGED,
         algorithm_name: Union[str, Unchanged] = UNCHANGED,
         hash_value: Union[str, Unchanged] = UNCHANGED,
         salt_value: Union[str, Unchanged] = UNCHANGED,
@@ -2861,7 +2851,7 @@ class Sheet:
             for key, value in (
                 ("name", name),
                 ("ranges", ranges),
-                ("password", password),
+                ("legacy_password_hash", legacy_password_hash),
                 ("algorithm_name", algorithm_name),
                 ("hash_value", hash_value),
                 ("salt_value", salt_value),
@@ -2928,12 +2918,12 @@ class Sheet:
         return DataValidation(
             ranges=ranges,
             type=d["type"],
-            op=d["op"],
+            operator=d["op"],
             error_style=d["error_style"],
-            allow_blank=bool(d["allow_blank"]),
-            show_input_message=bool(d["show_input_message"]),
-            show_error_message=bool(d["show_error_message"]),
-            show_dropdown=bool(d["show_dropdown"]),
+            allow_blank=d["allow_blank"] == _TRISTATE_TRUE,
+            show_input_message=d["show_input_message"] == _TRISTATE_TRUE,
+            show_error_message=d["show_error_message"] == _TRISTATE_TRUE,
+            show_in_cell_dropdown=d["show_in_cell_dropdown"] == _TRISTATE_TRUE,
             formula1=LIB.read_cstr(d["formula1"]) or None,
             formula2=LIB.read_cstr(d["formula2"]) or None,
             error_title=LIB.read_cstr(d["error_title"]) or None,
@@ -2957,12 +2947,12 @@ class Sheet:
                 ptr,
                 {
                     "type": _uint(validation.type, "type", 8),
-                    "op": _uint(validation.op, "op", 8),
+                    "op": _uint(validation.operator, "operator", 8),
                     "error_style": _uint(validation.error_style, "error_style", 8),
-                    "allow_blank": 1 if validation.allow_blank else 0,
-                    "show_input_message": 1 if validation.show_input_message else 0,
-                    "show_error_message": 1 if validation.show_error_message else 0,
-                    "show_dropdown": 1 if validation.show_dropdown else 0,
+                    "allow_blank": _tristate_default(validation.allow_blank),
+                    "show_input_message": _tristate_default(validation.show_input_message),
+                    "show_error_message": _tristate_default(validation.show_error_message),
+                    "show_in_cell_dropdown": _tristate_default(validation.show_in_cell_dropdown),
                 },
             )
             ranges_ptr = _pack_cell_rect_array(validation.ranges, scope)
@@ -2998,93 +2988,161 @@ class Sheet:
         _check(LIB.fm_sheet_clear_validations(h, _uint(sheet, "sheet")))
 
     # -- Sheet protection --------------------------------------------------
-    _PROTECT_FLAGS = (
-        "sheet",
-        "objects",
-        "scenarios",
-        "format_cells",
-        "format_columns",
-        "format_rows",
-        "insert_columns",
-        "insert_rows",
-        "insert_hyperlinks",
-        "delete_columns",
-        "delete_rows",
-        "select_locked_cells",
-        "select_unlocked_cells",
-        "sort",
-        "auto_filter",
-        "pivot_tables",
-    )
+    # The two select flags are ``fm_tristate_t`` in C (FALSE 1, TRUE 2); the others are 0 / 1.
+    _PROTECT_TRISTATE = frozenset(("allow_select_locked_cells", "allow_select_unlocked_cells"))
 
-    def get_sheet_protection(self) -> SheetProtection:
-        """Read the sheet's ``<sheetProtection>`` flags."""
+    def get_sheet_protection(self) -> Optional[SheetProtection]:
+        """Read the sheet's ``<sheetProtection>`` record, or ``None`` when the sheet is not protected."""
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             ptr = scope.struct(S.SHEET_PROTECTION)
-            _check(LIB.fm_sheet_get_sheet_protection(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_sheet_protection(h, _uint(sheet, "sheet_index"), present, ptr))
+            if not LIB.read_i32(present):
+                return None
             d = S.SHEET_PROTECTION.unpack(LIB, ptr)
             return SheetProtection(
-                enabled=bool(d["enabled"]),
                 algorithm_name=LIB.read_cstr(d["algorithm_name"]) or None,
                 hash_value=LIB.read_cstr(d["hash_value"]) or None,
                 salt_value=LIB.read_cstr(d["salt_value"]) or None,
                 spin_count=d["spin_count"],
-                legacy_password=LIB.read_cstr(d["legacy_password"]) or None,
-                **{flag: bool(d[flag]) for flag in self._PROTECT_FLAGS},
+                legacy_password_hash=LIB.read_cstr(d["legacy_password_hash"]) or None,
+                **{
+                    flag: d[flag] == 2 if flag in self._PROTECT_TRISTATE else d[flag] != 0
+                    for flag in S.SHEET_PROTECTION_ALLOW_FLAGS
+                },
             )
 
-    def set_sheet_protection(self, protection: Optional[SheetProtection]) -> None:
-        """Replace the sheet's ``<sheetProtection>`` flags wholesale; ``None`` removes the element."""
-        if protection is None:
-            protection = SheetProtection()
+    def set_sheet_protection(self, protection: Union[SheetProtectionInput, SheetProtection, None]) -> None:
+        """Protect the sheet with ``protection``, replacing any protection it has; ``None`` unprotects it.
+
+        The defaults of :class:`SheetProtectionInput` are those of Excel's
+        Protect Sheet dialog. A :class:`SheetProtection` read back is
+        accepted as it is. Unprotecting an unprotected sheet does nothing.
+
+        Raises:
+          TypeError: when ``protection`` is neither a :class:`SheetProtectionInput`,
+            a :class:`SheetProtection` nor ``None``.
+        """
+        if protection is not None and not isinstance(protection, (SheetProtectionInput, SheetProtection)):
+            raise TypeError(
+                "formulon: protection must be a SheetProtectionInput, a SheetProtection or None, "
+                f"got {type(protection).__name__}"
+            )
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            ptr = scope.struct(S.SHEET_PROTECTION)
-            values: Dict[str, int] = {
-                "enabled": 1 if protection.enabled else 0,
-                "spin_count": _uint(protection.spin_count, "spin_count"),
-            }
-            for flag in self._PROTECT_FLAGS:
-                values[flag] = 1 if getattr(protection, flag) else 0
-            S.SHEET_PROTECTION.pack(LIB, ptr, values)
-            for fld in ("algorithm_name", "hash_value", "salt_value", "legacy_password"):
-                S.write_str_field(LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), scope)
+            ptr = 0
+            if protection is not None:
+                ptr = scope.struct(S.SHEET_PROTECTION)
+                values: Dict[str, int] = {"spin_count": _uint(protection.spin_count, "spin_count")}
+                for flag in S.SHEET_PROTECTION_ALLOW_FLAGS:
+                    value = getattr(protection, flag)
+                    values[flag] = _tristate_default(value) if flag in self._PROTECT_TRISTATE else (1 if value else 0)
+                S.SHEET_PROTECTION.pack(LIB, ptr, values)
+                for fld in S.SHEET_PROTECTION_TEXT_FIELDS:
+                    S.write_str_field(LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), scope)
             _check(LIB.fm_sheet_set_sheet_protection(h, _uint(sheet, "sheet_index"), ptr))
+
+    def update_sheet_protection(
+        self,
+        *,
+        algorithm_name: Union[str, None, Unchanged] = UNCHANGED,
+        hash_value: Union[str, None, Unchanged] = UNCHANGED,
+        salt_value: Union[str, None, Unchanged] = UNCHANGED,
+        spin_count: Union[int, None, Unchanged] = UNCHANGED,
+        legacy_password_hash: Union[str, None, Unchanged] = UNCHANGED,
+        allow_edit_objects: Union[bool, Unchanged] = UNCHANGED,
+        allow_edit_scenarios: Union[bool, Unchanged] = UNCHANGED,
+        allow_format_cells: Union[bool, Unchanged] = UNCHANGED,
+        allow_format_columns: Union[bool, Unchanged] = UNCHANGED,
+        allow_format_rows: Union[bool, Unchanged] = UNCHANGED,
+        allow_insert_columns: Union[bool, Unchanged] = UNCHANGED,
+        allow_insert_rows: Union[bool, Unchanged] = UNCHANGED,
+        allow_insert_hyperlinks: Union[bool, Unchanged] = UNCHANGED,
+        allow_delete_columns: Union[bool, Unchanged] = UNCHANGED,
+        allow_delete_rows: Union[bool, Unchanged] = UNCHANGED,
+        allow_select_locked_cells: Union[bool, Unchanged] = UNCHANGED,
+        allow_select_unlocked_cells: Union[bool, Unchanged] = UNCHANGED,
+        allow_sort: Union[bool, Unchanged] = UNCHANGED,
+        allow_auto_filter: Union[bool, Unchanged] = UNCHANGED,
+        allow_pivot_tables: Union[bool, Unchanged] = UNCHANGED,
+    ) -> None:
+        """Update the sheet's protection with the arguments given; an omitted argument keeps its value.
+
+        ``None`` clears a text field or ``spin_count``; an ``allow_*`` flag has
+        no cleared form. On an unprotected sheet the patch applies to the
+        :class:`SheetProtectionInput` defaults and protects the sheet, unless
+        every argument is omitted. The update is all-or-nothing.
+
+        Raises:
+          TypeError: when an ``allow_*`` flag is not a ``bool`` (``None``
+            included), a text field is neither a ``str`` nor ``None``, or
+            ``spin_count`` is neither an integer nor ``None``.
+        """
+        arguments = dict(locals())
+        given = {
+            name: arguments[name]
+            for name in (*S.SHEET_PROTECTION_TEXT_FIELDS, "spin_count", *S.SHEET_PROTECTION_ALLOW_FLAGS)
+            if arguments[name] is not UNCHANGED
+        }
+        for name, value in given.items():
+            if name in S.SHEET_PROTECTION_ALLOW_FLAGS:
+                _flag(value, name)
+            elif name in S.SHEET_PROTECTION_TEXT_FIELDS:
+                if value is not None and not isinstance(value, str):
+                    raise TypeError(f"formulon: {name} must be a str or None, got {type(value).__name__}")
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.SHEET_PROTECTION_PATCH)
+            values: Dict[str, int] = {}
+            for name, value in given.items():
+                if value is None:
+                    values[name + "_op"] = _PATCH_CLEAR
+                    continue
+                values[name + "_op"] = _PATCH_SET
+                if name == "spin_count":
+                    values[name] = _uint(value, name)
+                elif name in S.SHEET_PROTECTION_ALLOW_FLAGS:
+                    values[name] = 1 if value else 0
+                else:
+                    values[name] = scope.cstr(value)
+            S.SHEET_PROTECTION_PATCH.pack(LIB, ptr, values)
+            _check(LIB.fm_sheet_update_sheet_protection(h, _uint(sheet, "sheet_index"), ptr))
 
     # -- Geometry / display ------------------------------------------------
     @overload
     @_span_form
-    def clear_row_height(self, first: int, last: int) -> None: ...
+    def reset_row_height(self, first: int, last: int) -> None: ...
 
     @overload
-    def clear_row_height(self, span: str) -> None: ...
+    def reset_row_height(self, span: str) -> None: ...
 
-    def clear_row_height(self, *args: Any, **kwargs: Any) -> None:
-        """Remove the height override on ``[first, last]`` (back to the sheet default)."""
-        first, last = self._span_args("clear_row_height", args, kwargs, ("first", "last"))
+    def reset_row_height(self, *args: Any, **kwargs: Any) -> None:
+        """Reset the height on ``[first, last]`` to the sheet default by dropping its override."""
+        first, last = self._span_args("reset_row_height", args, kwargs, ("first", "last"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
-            LIB.fm_sheet_clear_row_height(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+            LIB.fm_sheet_reset_row_height(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
         )
 
     @overload
     @_span_form
-    def clear_column_width(self, first: int, last: int) -> None: ...
+    def reset_column_width(self, first: int, last: int) -> None: ...
 
     @overload
-    def clear_column_width(self, span: str) -> None: ...
+    def reset_column_width(self, span: str) -> None: ...
 
-    def clear_column_width(self, *args: Any, **kwargs: Any) -> None:
-        """Remove the width override on ``[first, last]`` (back to the sheet default)."""
-        first, last = self._span_args("clear_column_width", args, kwargs, ("first", "last"))
+    def reset_column_width(self, *args: Any, **kwargs: Any) -> None:
+        """Reset the width on ``[first, last]`` to the sheet default by dropping its override."""
+        first, last = self._span_args("reset_column_width", args, kwargs, ("first", "last"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
-            LIB.fm_sheet_clear_column_width(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+            LIB.fm_sheet_reset_column_width(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
         )
 
     def get_format_defaults(self) -> SheetFormatDefaults:
@@ -3096,47 +3154,49 @@ class Sheet:
             _check(LIB.fm_sheet_get_format_defaults(h, _uint(sheet, "sheet_index"), ptr))
             d = S.SHEET_FORMAT_DEFAULTS.unpack(LIB, ptr)
             return SheetFormatDefaults(
-                default_col_width=d["default_col_width"] if d["has_default_col_width"] else None,
-                default_row_height=d["default_row_height"] if d["has_default_row_height"] else None,
-                base_col_width=d["base_col_width"],
+                default_col_width_chars=(
+                    d["default_column_width_chars"] if d["has_default_column_width_chars"] else None
+                ),
+                default_row_height_pt=d["default_row_height_pt"] if d["has_default_row_height_pt"] else None,
+                base_col_width_chars=d["base_column_width_chars"],
                 custom_height=bool(d["custom_height"]),
                 zero_height=bool(d["zero_height"]),
-                effective_default_col_width=d["effective_default_col_width"],
-                effective_default_row_height=d["effective_default_row_height"],
+                effective_default_col_width_chars=d["effective_default_column_width_chars"],
+                effective_default_row_height_pt=d["effective_default_row_height_pt"],
             )
 
-    def set_format_defaults(
+    def update_format_defaults(
         self,
         *,
-        default_col_width: Union[float, None, Unchanged] = UNCHANGED,
-        default_row_height: Union[float, None, Unchanged] = UNCHANGED,
-        base_col_width: Union[float, Unchanged] = UNCHANGED,
+        default_col_width_chars: Union[float, None, Unchanged] = UNCHANGED,
+        default_row_height_pt: Union[float, None, Unchanged] = UNCHANGED,
+        base_col_width_chars: Union[float, Unchanged] = UNCHANGED,
         custom_height: Union[bool, Unchanged] = UNCHANGED,
         zero_height: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the sheet's default column / row metrics; an omitted argument keeps its value.
 
         Arguments are the :class:`SheetFormatDefaults` fields.
-        ``default_col_width`` / ``default_row_height`` given as ``None`` clear
-        the stored value; the other arguments cannot be cleared.
+        ``default_col_width_chars`` / ``default_row_height_pt`` given as
+        ``None`` clear the stored value; the other arguments cannot be cleared.
 
         Raises:
-          TypeError: when ``base_col_width`` is ``None`` or a flag is not a ``bool``.
+          TypeError: when ``base_col_width_chars`` is ``None`` or a flag is not a ``bool``.
         """
-        if base_col_width is None:
-            raise TypeError("formulon: base_col_width cannot be None")
+        if base_col_width_chars is None:
+            raise TypeError("formulon: base_col_width_chars cannot be None")
         for name, value in (("custom_height", custom_height), ("zero_height", zero_height)):
             if value is not UNCHANGED:
                 _flag(value, name)
-        given = (default_col_width, default_row_height, base_col_width, custom_height, zero_height)
+        given = (default_col_width_chars, default_row_height_pt, base_col_width_chars, custom_height, zero_height)
         if any(value is UNCHANGED for value in given):
             stored = self.get_format_defaults()
-            if default_col_width is UNCHANGED:
-                default_col_width = stored.default_col_width
-            if default_row_height is UNCHANGED:
-                default_row_height = stored.default_row_height
-            if base_col_width is UNCHANGED:
-                base_col_width = stored.base_col_width
+            if default_col_width_chars is UNCHANGED:
+                default_col_width_chars = stored.default_col_width_chars
+            if default_row_height_pt is UNCHANGED:
+                default_row_height_pt = stored.default_row_height_pt
+            if base_col_width_chars is UNCHANGED:
+                base_col_width_chars = stored.base_col_width_chars
             if custom_height is UNCHANGED:
                 custom_height = stored.custom_height
             if zero_height is UNCHANGED:
@@ -3149,16 +3209,18 @@ class Sheet:
                 LIB,
                 ptr,
                 {
-                    "default_col_width": 0.0 if default_col_width is None else float(default_col_width),
-                    "default_row_height": 0.0 if default_row_height is None else float(default_row_height),
-                    "base_col_width": float(base_col_width),
-                    "has_default_col_width": 0 if default_col_width is None else 1,
-                    "has_default_row_height": 0 if default_row_height is None else 1,
+                    "default_column_width_chars": 0.0
+                    if default_col_width_chars is None
+                    else float(default_col_width_chars),
+                    "default_row_height_pt": 0.0 if default_row_height_pt is None else float(default_row_height_pt),
+                    "base_column_width_chars": float(base_col_width_chars),
+                    "has_default_column_width_chars": 0 if default_col_width_chars is None else 1,
+                    "has_default_row_height_pt": 0 if default_row_height_pt is None else 1,
                     "custom_height": 1 if custom_height else 0,
                     "zero_height": 1 if zero_height else 0,
                 },
             )
-            _check(LIB.fm_sheet_set_format_defaults(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_format_defaults(h, _uint(sheet, "sheet_index"), ptr))
 
     def _read_f64_out(self, fn, *args) -> float:
         """Call a ``(..., double* out)`` ABI function and return the double."""
@@ -3209,7 +3271,7 @@ class Sheet:
             return WidthModel(
                 points_per_char=d["points_per_char"],
                 padding_pt=d["padding_pt"],
-                normal_font_size=d["normal_font_size"],
+                normal_font_size_pt=d["normal_font_size_pt"],
                 calibrated=bool(d["calibrated"]),
                 normal_font_name=LIB.read_cstr(d["normal_font_name"]),
                 platform=LIB.read_cstr(d["platform"]),
@@ -3359,22 +3421,18 @@ class Sheet:
     def get_auto_filter(self) -> Optional[AutoFilter]:
         """Return the sheet AutoFilter, or ``None`` when the sheet has none."""
         sheet = self._index()
-        return self._workbook._read_auto_filter(LIB.fm_sheet_get_auto_filter, sheet, "sheet_index")
+        return self._workbook._read_auto_filter(LIB.fm_sheet_get_auto_filter, sheet)
 
-    def set_auto_filter(self, auto_filter: AutoFilter) -> None:
-        """Replace the sheet AutoFilter. Row visibility is unchanged; see :meth:`apply_auto_filter`.
+    def set_auto_filter(self, auto_filter: Optional[AutoFilter]) -> None:
+        """Replace the sheet AutoFilter, or remove it with ``None`` (no-op without one).
 
-        The ``ref`` of the sort state and of its conditions takes an A1 range too.
+        Row visibility is unchanged; see :meth:`apply_auto_filter`. The
+        ``ref`` of the sort state and of its conditions takes an A1 range too.
         """
         sheet = self._index()
-        auto_filter = _normalize_auto_filter(auto_filter, self._workbook, sheet)
-        self._workbook._write_auto_filter(LIB.fm_sheet_set_auto_filter, sheet, auto_filter, "sheet_index")
-
-    def remove_auto_filter(self) -> None:
-        """Remove the sheet AutoFilter (no-op when absent). Row visibility is unchanged."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_auto_filter(h, _uint(sheet, "sheet_index")))
+        if auto_filter is not None:
+            auto_filter = _normalize_auto_filter(auto_filter, self._workbook, sheet)
+        self._workbook._write_auto_filter(LIB.fm_sheet_set_auto_filter, auto_filter, sheet)
 
     def apply_auto_filter(self) -> None:
         """Hide the body rows the sheet AutoFilter excludes and show the rest."""
@@ -3382,11 +3440,15 @@ class Sheet:
         h = self._workbook._require()
         _check(LIB.fm_sheet_apply_auto_filter(h, _uint(sheet, "sheet_index")))
 
-    def clear_auto_filter(self) -> None:
-        """Drop every column criterion of the sheet AutoFilter and show all its body rows."""
+    def clear_auto_filter_criteria(self) -> None:
+        """Drop every column criterion of the sheet AutoFilter and show all its body rows.
+
+        The AutoFilter itself stays (remove it with ``set_auto_filter(None)``);
+        a filter without criteria is left as it is.
+        """
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_auto_filter(h, _uint(sheet, "sheet_index")))
+        _check(LIB.fm_sheet_clear_auto_filter_criteria(h, _uint(sheet, "sheet_index")))
 
     def evaluate_auto_filter(self) -> AutoFilterEval:
         """Evaluate the sheet AutoFilter without changing the sheet.
@@ -3394,9 +3456,7 @@ class Sheet:
         Body row ``first_row + i`` matches when ``match[i]`` is true.
         """
         sheet = self._index()
-        return AutoFilterEval(
-            *self._workbook._evaluate_auto_filter(LIB.fm_sheet_evaluate_auto_filter, sheet, "sheet_index")
-        )
+        return AutoFilterEval(*self._workbook._evaluate_auto_filter(LIB.fm_sheet_evaluate_auto_filter, sheet))
 
     # -- Validation checks -----------------------------------------------------
     @overload
@@ -3662,132 +3722,101 @@ class Sheet:
         ids = self._object_ids(LIB.fm_sheet_get_slicer_count, LIB.fm_sheet_get_slicer_at, S.SLICER)
         return [cast("Slicer", self._drawing_handle(object_id)) for object_id in ids]
 
-    def add_picture(
-        self,
-        data: Union[bytes, bytearray, memoryview],
-        *,
-        name: str = "",
-        description: str = "",
-        anchor: Optional[DrawingAnchor] = None,
-    ) -> Picture:
-        """Insert ``data`` as a picture placed by ``anchor`` and return its handle.
+    def add_picture(self, data: Union[bytes, bytearray, memoryview], input: Optional[PictureInput] = None) -> Picture:
+        """Insert ``data`` as a picture placed as ``input`` says and return its handle.
 
-        An empty ``name`` becomes ``Picture <id>``. ``anchor`` ``None`` is a
-        one-cell anchor at A1. A ``width_emu`` or ``height_emu`` of ``0``
-        means the image's pixel size times 9525. ``edit_as`` is honoured for a
-        two-cell anchor only. Existing drawing content is kept.
+        An empty ``name`` becomes ``Picture <id>``. An ``anchor`` of ``None``
+        (and no ``input`` at all) is a one-cell anchor at A1. A ``width_emu``
+        or ``height_emu`` of ``0`` means the image's pixel size times 9525.
+        ``edit_as`` is honoured for a two-cell anchor only. Existing drawing
+        content is kept.
         """
-        if anchor is None:
-            anchor = DrawingAnchor()
+        if input is None:
+            input = PictureInput()
+        elif not isinstance(input, PictureInput):
+            raise TypeError(f"formulon: input must be a PictureInput or None, got {type(input).__name__}")
+        anchor = DrawingAnchor() if input.anchor is None else input.anchor
         sheet = self._index()
         h = self._workbook._require()
         raw = bytes(data)
         with _ArgScope() as scope:
             out = scope.out_ptr()
             buf = scope.buffer(raw)
-            ptr = scope.struct_array(S.IMAGE_INSERT, 1)
-            S.IMAGE_INSERT.pack(LIB, ptr, {"anchor": _drawing_anchor_fields(anchor)})
-            S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "name", name, scope)
-            S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "description", description, scope)
-            _check(LIB.fm_sheet_add_image(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out))
+            ptr = scope.struct_array(S.PICTURE_INSERT_SPEC, 1)
+            S.PICTURE_INSERT_SPEC.pack(LIB, ptr, {"anchor": _drawing_anchor_fields(anchor)})
+            S.write_str_field(LIB, ptr, S.PICTURE_INSERT_SPEC, "name", input.name, scope)
+            S.write_str_field(LIB, ptr, S.PICTURE_INSERT_SPEC, "description", input.description, scope)
+            _check(LIB.fm_sheet_add_picture(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out))
             object_id = LIB.read_u32(out)
         return cast("Picture", self._drawing_handle(object_id))
 
-    def add_shape(
-        self,
-        *,
-        anchor_kind: AnchorKind,
-        edit_as: AnchorEditAs = AnchorEditAs.TWO_CELL,
-        from_row: int = 0,
-        from_col: int = 0,
-        from_row_offset_emu: int = 0,
-        from_col_offset_emu: int = 0,
-        to_row: int = 0,
-        to_col: int = 0,
-        to_row_offset_emu: int = 0,
-        to_col_offset_emu: int = 0,
-        width_emu: int = 0,
-        height_emu: int = 0,
-        name: Optional[str] = None,
-        preset_geometry: Optional[str] = None,
-        text: Optional[str] = None,
-        text_box: Optional[bool] = None,
-        fill_kind: Optional[ShapePaint] = None,
-        fill_color: Optional[ColorInput] = None,
-        line_kind: Optional[ShapePaint] = None,
-        line_color: Optional[ColorInput] = None,
-        line_width_emu: Optional[int] = None,
-        rotation: Optional[int] = None,
-        hidden: Optional[bool] = None,
-    ) -> Shape:
-        """Append a shape on top of the sheet's drawing and return its handle.
+    def add_shape(self, input: ShapeInput) -> Shape:
+        """Append the shape ``input`` describes on top of the sheet's drawing and return its handle.
 
-        A ``None`` argument is not applied. ``preset_geometry`` defaults to ``rect`` and
-        ``name`` to ``Shape <id>``; a ``preset_geometry`` naming a line or connector
-        geometry makes a connector, which holds no text. A two-cell anchor's
-        size is its box (``width_emu`` / ``height_emu`` are ignored); an absolute anchor's
-        position is ``from_col_offset_emu`` (x) and ``from_row_offset_emu`` (y). ``fill_kind``
-        and ``line_kind`` must be ``SOLID`` (with an RGB or theme ``fill_color`` / ``line_color``) or ``NONE``;
-        a colour needs its kind (``TypeError`` otherwise), and a colour with ``NONE`` fails with a status error.
+        A ``None`` field is not applied; see :class:`ShapeInput` for the
+        defaults, the anchor rules and the units. A colour needs its kind
+        (``TypeError`` otherwise), and a colour with ``NONE`` fails with a
+        status error.
         """
+        if not isinstance(input, ShapeInput):
+            raise TypeError(f"formulon: input must be a ShapeInput, got {type(input).__name__}")
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
             ptr = _pack_shape(
-                scope, name, preset_geometry, text, text_box, anchor_kind, edit_as, from_row, from_col, from_row_offset_emu,
-                from_col_offset_emu, to_row, to_col, to_row_offset_emu, to_col_offset_emu, width_emu, height_emu, fill_kind, fill_color,
-                line_kind, line_color, line_width_emu, rotation, hidden,
+                scope, input.name, input.preset_geometry, input.text, input.text_box, input.anchor_kind, input.edit_as,
+                input.from_row, input.from_col, input.from_row_offset_emu, input.from_col_offset_emu, input.to_row,
+                input.to_col, input.to_row_offset_emu, input.to_col_offset_emu, input.width_emu, input.height_emu,
+                input.fill_kind, input.fill_color, input.line_kind, input.line_color, input.line_width_pt,
+                input.rotation_deg, input.hidden,
             )  # fmt: skip
             _check(LIB.fm_sheet_add_shape(h, _uint(sheet, "sheet_index"), ptr, out))
             object_id = LIB.read_u32(out)
         return cast("Shape", self._drawing_handle(object_id))
 
-    def add_slicer(
-        self,
-        table: Union[int, str, Table],
-        column: int,
-        *,
-        from_row: int,
-        from_col: int,
-        to_row: int,
-        to_col: int,
-        from_row_offset_emu: int = 0,
-        from_col_offset_emu: int = 0,
-        to_row_offset_emu: int = 0,
-        to_col_offset_emu: int = 0,
-        name: Optional[str] = None,
-        caption: Optional[str] = None,
-        style: Optional[str] = None,
-        column_count: Optional[int] = None,
-        row_height_emu: Optional[int] = None,
-        sort_order: Optional[SlicerSortOrder] = None,
-        cross_filter: Optional[SlicerCrossFilter] = None,
-    ) -> Slicer:
-        """Add a slicer over column ``column`` of ``table`` (an index, a display name or a :class:`Table`); return its handle.
+    def add_slicer(self, table: Union[str, Table], column: int, input: SlicerInput) -> Slicer:
+        """Add a slicer over column ``column`` of ``table`` (a :class:`Table` or its name); return its handle.
 
-        The frame is the two-cell anchor ``from_*`` .. ``to_*`` (0-based cells
-        plus EMU offsets), named as in :meth:`add_shape`. The name and caption
-        default to the column name (the name is made unique),
-        ``row_height_emu`` to 241300 and ``column_count`` to 1. The table may
-        live on another sheet.
+        ``table`` may live on another sheet; a name is compared
+        case-insensitively. The frame is the two-cell anchor
+        ``input.from_*`` .. ``input.to_*`` (0-based cells plus EMU offsets),
+        named as in :class:`ShapeInput`. The name and caption default to the
+        column name (the name is made unique), ``row_height_emu`` to 241300
+        and ``column_count`` to 1.
+
+        Raises:
+          NotFoundError: when no table has the name ``table``.
+          TypeError: when ``table`` is neither a ``str`` nor a :class:`Table`.
         """
-        table_index = self._workbook._table_index(table)
+        from ._table import Table
+
+        if not isinstance(input, SlicerInput):
+            raise TypeError(f"formulon: input must be a SlicerInput, got {type(input).__name__}")
+        if isinstance(table, Table):
+            table_sheet, table_index = table.sheet.index, table.index
+        elif isinstance(table, str):
+            found = self._workbook.table(table)
+            table_sheet, table_index = found.sheet.index, found.index
+        else:
+            raise TypeError(f"formulon: table must be a Table or a str, got {type(table).__name__}")
         sheet = self._index()
         h = self._workbook._require()
         anchor = (
-            from_row, from_col, to_row, to_col,
-            from_row_offset_emu, from_col_offset_emu, to_row_offset_emu, to_col_offset_emu,
+            input.from_row, input.from_col, input.to_row, input.to_col,
+            input.from_row_offset_emu, input.from_col_offset_emu, input.to_row_offset_emu, input.to_col_offset_emu,
         )  # fmt: skip
         with _ArgScope() as scope:
             out = scope.out_ptr()
             ptr = _pack_slicer(
-                scope, name, caption, style, column_count, row_height_emu, anchor, sort_order, cross_filter
-            )
+                scope, input.name, input.caption, input.style, input.column_count, input.row_height_emu, anchor,
+                input.sort_order, input.cross_filter,
+            )  # fmt: skip
             _check(
                 LIB.fm_sheet_add_slicer(
                     h,
                     _uint(sheet, "sheet_index"),
+                    _uint(table_sheet, "table_sheet_index"),
                     _uint(table_index, "table_index"),
                     _uint(column, "column_index"),
                     ptr,
@@ -3797,12 +3826,12 @@ class Sheet:
             object_id = LIB.read_u32(out)
         return cast("Slicer", self._drawing_handle(object_id))
 
-    def restore_drawing(self, data: Union[bytes, bytearray, memoryview], *, new_id: bool = False) -> Drawing:
+    def restore_drawing(self, data: Union[bytes, bytearray, memoryview], *, assign_new_id: bool = False) -> Drawing:
         """Put a ``snapshot()`` capture back and return the object's handle.
 
         An object with the same id is replaced and the capture returns to its
         recorded list position; a handle of that id addresses it again. With
-        ``new_id`` it is added on top as a copy with a fresh id.
+        ``assign_new_id`` it is added on top as a copy with a fresh id.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -3812,7 +3841,7 @@ class Sheet:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_restore_drawing(
-                    h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), 1 if new_id else 0, out
+                    h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), 1 if assign_new_id else 0, out
                 )
             )
             object_id = LIB.read_u32(out)
@@ -3850,37 +3879,35 @@ class Sheet:
                 ),
             )
 
-    def add_data_table(
-        self,
-        rect: Union[CellRect, str],
-        *,
-        row_input: Union[Tuple[int, int], DataTableInputCell, str, None] = None,
-        col_input: Union[Tuple[int, int], DataTableInputCell, str, None] = None,
-    ) -> None:
-        """Create a data table whose result range is ``rect``.
+    def add_data_table(self, spec: Union[DataTableInput, DataTable]) -> None:
+        """Create the data table ``spec`` describes.
 
         The formulas sit in the row above the range and the substitution values in the column left of it (a
-        one-variable table), or the other way round; ``row_input`` / ``col_input`` are the ``(row, col)`` input
-        cells that receive the values of the row above / the column left. Give one for a one-variable table, both
-        for a two-variable one. ``rect`` is a :class:`CellRect` or an unqualified A1 range; an input cell is a
+        one-variable table), or the other way round; ``spec.row_input`` / ``spec.column_input`` are the input cells
+        that receive the values of the row above / the column left. Give one for a one-variable table, both
+        for a two-variable one. ``spec.rect`` is a :class:`CellRect` or an unqualified A1 range; an input cell is a
         ``(row, col)`` pair, a :class:`DataTableInputCell` or one A1 cell string. The result cells read 0 until the
         next recalc and refuse writes until the table is removed.
         """
-        rect = self._rect(rect)
+        if isinstance(spec, DataTable):
+            spec = DataTableInput(rect=spec.rect, row_input=spec.row_input, column_input=spec.column_input)
+        if not isinstance(spec, DataTableInput):
+            raise TypeError(f"formulon: spec must be a DataTableInput or DataTable, got {type(spec).__name__}")
+        rect = self._rect(spec.rect)
         inputs = [
             self._cell(cell)
             if isinstance(cell, str)
             else (cell.row, cell.col)
             if isinstance(cell, DataTableInputCell)
             else cell
-            for cell in (row_input, col_input)
+            for cell in (spec.row_input, spec.column_input)
         ]
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.DATA_TABLE, 1)
             values: Dict[str, object] = {"rect": _cell_rect_fields(rect)}
-            for prefix, cell in (("row_input", inputs[0]), ("col_input", inputs[1])):
+            for prefix, cell in (("row_input", inputs[0]), ("column_input", inputs[1])):
                 if cell is not None:
                     values["has_" + prefix] = 1
                     values[prefix + "_row"] = _uint(cell[0], prefix + "_row")
@@ -3922,7 +3949,7 @@ class Sheet:
             two_dimensional=bool(d["two_dimensional"]),
             row_oriented=bool(d["row_oriented"]),
             row_input=_input("row_input"),
-            col_input=_input("col_input"),
+            column_input=_input("column_input"),
         )
 
     @overload
@@ -4269,21 +4296,17 @@ class Sheet:
                 row_breaks = []
                 for i in range(break_count):
                     _check(LIB.fm_pagination_get_row_break_at(pagination, _uint(i, "index"), value_ptr))
-                    row_breaks.append(LIB.read_u32(value_ptr))
+                    row = LIB.read_u32(value_ptr)
+                    _check(LIB.fm_pagination_is_row_break_manual(pagination, _uint(i, "index"), value_ptr))
+                    row_breaks.append(RowBreak(row=row, manual=bool(LIB.read_i32(value_ptr))))
                 column_breaks = []
                 for i in range(column_break_count):
                     _check(LIB.fm_pagination_get_column_break_at(pagination, _uint(i, "index"), value_ptr))
-                    column_breaks.append(LIB.read_u32(value_ptr))
-                row_break_manual = []
-                for i in range(break_count):
-                    _check(LIB.fm_pagination_is_row_break_manual(pagination, _uint(i, "index"), value_ptr))
-                    row_break_manual.append(bool(LIB.read_i32(value_ptr)))
-                column_break_manual = []
-                for i in range(column_break_count):
+                    col = LIB.read_u32(value_ptr)
                     _check(LIB.fm_pagination_is_column_break_manual(pagination, _uint(i, "index"), value_ptr))
-                    column_break_manual.append(bool(LIB.read_i32(value_ptr)))
+                    column_breaks.append(ColumnBreak(col=col, manual=bool(LIB.read_i32(value_ptr))))
                 _check(LIB.fm_pagination_get_scale(pagination, scale_ptr))
-                scale = LIB.read_f64(scale_ptr)
+                scale_pct = LIB.read_f64(scale_ptr)
                 _check(LIB.fm_pagination_get_page_order(pagination, value_ptr))
                 page_order = LIB.read_i32(value_ptr)
 
@@ -4313,12 +4336,10 @@ class Sheet:
                     paper,
                     margins,
                     printable,
-                    scale,
+                    scale_pct,
                     page_order,
                     print_titles,
                     pages,
-                    row_break_manual,
-                    column_break_manual,
                 )
             finally:
                 LIB.fm_pagination_destroy(pagination)
@@ -4333,12 +4354,12 @@ class Sheet:
             _check(LIB.fm_sheet_get_view(h, _uint(sheet, "sheet_index"), ptr))
             d = S.SHEET_VIEW.unpack(LIB, ptr)
             return SheetView(
-                zoom_scale=d["zoom_scale"],
+                zoom_pct=d["zoom_pct"],
                 freeze_rows=d["freeze_rows"],
                 freeze_cols=d["freeze_cols"],
                 visibility=SheetVisibility(d["visibility"]),
                 show_grid_lines=bool(d["show_grid_lines"]),
-                show_row_col_headers=bool(d["show_row_col_headers"]),
+                show_row_column_headers=bool(d["show_row_column_headers"]),
                 show_zeros=bool(d["show_zeros"]),
                 right_to_left=bool(d["right_to_left"]),
                 tab_selected=bool(d["tab_selected"]),
@@ -4347,27 +4368,27 @@ class Sheet:
                 top_left_col=d["top_left_col"],
                 pane_top_left_row=d["pane_top_left_row"],
                 pane_top_left_col=d["pane_top_left_col"],
-                split_x=d["split_x"],
-                split_y=d["split_y"],
+                split_x_twips=d["split_x"],
+                split_y_twips=d["split_y"],
                 show_formulas=bool(d["show_formulas"]),
                 show_outline_symbols=bool(d["show_outline_symbols"]),
             )
 
-    def set_view(
+    def update_view(
         self,
         *,
-        zoom_scale: Union[int, Unchanged] = UNCHANGED,
+        zoom_pct: Union[int, Unchanged] = UNCHANGED,
         freeze_rows: Union[int, Unchanged] = UNCHANGED,
         freeze_cols: Union[int, Unchanged] = UNCHANGED,
-        split_x: Union[float, Unchanged] = UNCHANGED,
-        split_y: Union[float, Unchanged] = UNCHANGED,
+        split_x_twips: Union[float, Unchanged] = UNCHANGED,
+        split_y_twips: Union[float, Unchanged] = UNCHANGED,
         top_left_row: Union[int, Unchanged] = UNCHANGED,
         top_left_col: Union[int, Unchanged] = UNCHANGED,
         pane_top_left_row: Union[int, Unchanged] = UNCHANGED,
         pane_top_left_col: Union[int, Unchanged] = UNCHANGED,
         visibility: Union[SheetVisibility, Unchanged] = UNCHANGED,
         show_grid_lines: Union[bool, Unchanged] = UNCHANGED,
-        show_row_col_headers: Union[bool, Unchanged] = UNCHANGED,
+        show_row_column_headers: Union[bool, Unchanged] = UNCHANGED,
         show_zeros: Union[bool, Unchanged] = UNCHANGED,
         show_formulas: Union[bool, Unchanged] = UNCHANGED,
         show_outline_symbols: Union[bool, Unchanged] = UNCHANGED,
@@ -4377,8 +4398,8 @@ class Sheet:
     ) -> None:
         """Update the sheet view; an omitted argument keeps its value.
 
-        Arguments are the :class:`SheetView` fields. ``zoom_scale`` is clamped
-        to ``[10, 400]``. ``split_x`` / ``split_y`` are in twips; a split
+        Arguments are the :class:`SheetView` fields. ``zoom_pct`` is clamped
+        to ``[10, 400]``. ``split_x_twips`` / ``split_y_twips`` are in twips; a split
         replaces any freeze and a freeze any split, and changing either resets
         the pane origin unless ``pane_top_left_*`` is given. One half of a
         pair (``freeze_rows`` without ``freeze_cols``, ``top_left_row``
@@ -4400,7 +4421,7 @@ class Sheet:
         """
         flags = (
             ("show_grid_lines", show_grid_lines, LIB.fm_sheet_set_show_grid_lines),
-            ("show_row_col_headers", show_row_col_headers, LIB.fm_sheet_set_show_row_col_headers),
+            ("show_row_column_headers", show_row_column_headers, LIB.fm_sheet_set_show_row_column_headers),
             ("show_zeros", show_zeros, LIB.fm_sheet_set_show_zeros),
             ("show_formulas", show_formulas, LIB.fm_sheet_set_show_formulas),
             ("show_outline_symbols", show_outline_symbols, LIB.fm_sheet_set_show_outline_symbols),
@@ -4408,11 +4429,11 @@ class Sheet:
         given = {
             key: value
             for key, value in (
-                ("zoom_scale", zoom_scale),
+                ("zoom_pct", zoom_pct),
                 ("freeze_rows", freeze_rows),
                 ("freeze_cols", freeze_cols),
-                ("split_x", split_x),
-                ("split_y", split_y),
+                ("split_x_twips", split_x_twips),
+                ("split_y_twips", split_y_twips),
                 ("top_left_row", top_left_row),
                 ("top_left_col", top_left_col),
                 ("pane_top_left_row", pane_top_left_row),
@@ -4435,21 +4456,21 @@ class Sheet:
         def non_zero(*keys: str) -> bool:
             return any(key in given and given[key] != 0 for key in keys)
 
-        if non_zero("freeze_rows", "freeze_cols") and non_zero("split_x", "split_y"):
+        if non_zero("freeze_rows", "freeze_cols") and non_zero("split_x_twips", "split_y_twips"):
             raise TypeError("formulon: cannot freeze and split the view at once")
         if not given:
             return
         view = self.get_view()
         merged = {**{f.name: getattr(view, f.name) for f in dataclasses.fields(view)}, **given}
         freeze = merged["freeze_rows"] != view.freeze_rows or merged["freeze_cols"] != view.freeze_cols
-        split = merged["split_x"] != view.split_x or merged["split_y"] != view.split_y
+        split = merged["split_x_twips"] != view.split_x_twips or merged["split_y_twips"] != view.split_y_twips
         # The panes once applied: a freeze replaces a split and a split a freeze.
-        panes = [view.freeze_rows, view.freeze_cols, view.split_x, view.split_y]
+        panes = [view.freeze_rows, view.freeze_cols, view.split_x_twips, view.split_y_twips]
         if freeze:
             panes = [merged["freeze_rows"], merged["freeze_cols"], 0, 0]
         if split:
-            cleared = merged["split_x"] == 0 and merged["split_y"] == 0
-            panes = [panes[0], panes[1], 0, 0] if cleared else [0, 0, merged["split_x"], merged["split_y"]]
+            cleared = merged["split_x_twips"] == 0 and merged["split_y_twips"] == 0
+            panes = [panes[0], panes[1], 0, 0] if cleared else [0, 0, merged["split_x_twips"], merged["split_y_twips"]]
         sheet = self._index()
         pane_origin = "pane_top_left_row" in given or "pane_top_left_col" in given
         if pane_origin and all(n == 0 for n in panes):
@@ -4478,7 +4499,7 @@ class Sheet:
         if split:
             _check(
                 LIB.fm_sheet_set_split(
-                    h, _uint(sheet, "sheet_index"), float(merged["split_x"]), float(merged["split_y"])
+                    h, _uint(sheet, "sheet_index"), float(merged["split_x_twips"]), float(merged["split_y_twips"])
                 )
             )
         # Changing the panes resets their origin, so a missing partner is read afresh.
@@ -4502,8 +4523,8 @@ class Sheet:
         for key, value, setter in flags:
             if key in given:
                 _check(setter(h, _uint(sheet, "sheet_index"), 1 if value else 0))
-        if "zoom_scale" in given:
-            _check(LIB.fm_sheet_set_zoom(h, _uint(sheet, "sheet_index"), _uint(zoom_scale, "zoom_scale")))
+        if "zoom_pct" in given:
+            _check(LIB.fm_sheet_set_zoom(h, _uint(sheet, "sheet_index"), _uint(zoom_pct, "zoom_pct")))
         if "view_mode" in given:
             _check(LIB.fm_sheet_set_view_mode(h, _uint(sheet, "sheet_index"), _sint(view_mode, "view_mode")))
         if "right_to_left" in given:
@@ -4660,7 +4681,7 @@ class Sheet:
         values: Dict[str, int] = {}
         for axis, (flag, first, last) in (
             (titles.rows, ("has_rows", "first_row", "last_row")),
-            (titles.columns, ("has_cols", "first_col", "last_col")),
+            (titles.columns, ("has_columns", "first_col", "last_col")),
         ):
             if axis is not None:
                 values[flag] = 1
@@ -4671,29 +4692,51 @@ class Sheet:
             S.PRINT_TITLES.pack(LIB, ptr, values)
             _check(LIB.fm_sheet_set_print_titles(h, _uint(sheet, "sheet_index"), ptr))
 
-    def add_row_break(self, row: int, *, manual: bool = True) -> None:
-        """Upsert a row break before ``row``, spanning the whole sheet."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_add_row_break(h, _uint(sheet, "sheet_index"), _uint(row, "row"), 1 if manual else 0))
+    def set_row_break(self, row: int, brk: Optional[RowBreak]) -> None:
+        """Set the row break before ``row``, replacing the span and ``manual`` flag of one already there.
 
-    def add_column_break(self, col: int, *, manual: bool = True) -> None:
-        """Upsert a column break before ``col``, spanning the whole sheet."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_add_column_break(h, _uint(sheet, "sheet_index"), _uint(col, "col"), 1 if manual else 0))
+        ``brk`` is a :class:`RowBreak` (or a :class:`ColumnBreak`; only its
+        ``first``, ``last`` and ``manual`` are read, ``row`` is ignored, so a
+        break read back can be passed in). ``first == last == 0`` covers the
+        whole sheet. ``None`` removes the break (a no-op when there is none).
 
-    def remove_row_break(self, row: int) -> None:
-        """Remove the row break at ``row``. An absent break is a no-op."""
+        Raises:
+          TypeError: when ``brk`` is neither a break record nor ``None``.
+          InvalidArgumentError: for a row past the grid, an inverted span or a
+            span past the last column.
+          PreconditionFailedError: when the axis already holds 1026 breaks.
+        """
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_row_break(h, _uint(sheet, "sheet_index"), _uint(row, "row")))
+        with _ArgScope() as scope:
+            ptr = self._pack_break(scope, S.ROW_BREAK, brk)
+            _check(LIB.fm_sheet_set_row_break(h, _uint(sheet, "sheet_index"), _uint(row, "row"), ptr))
 
-    def remove_column_break(self, col: int) -> None:
-        """Remove the column break at ``col``. An absent break is a no-op."""
+    def set_column_break(self, col: int, brk: Optional[ColumnBreak]) -> None:
+        """Set or remove the column break before ``col``, as :meth:`set_row_break` does for rows.
+
+        The whole-sheet span (``first == last == 0``) covers every row.
+        """
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_column_break(h, _uint(sheet, "sheet_index"), _uint(col, "col")))
+        with _ArgScope() as scope:
+            ptr = self._pack_break(scope, S.COLUMN_BREAK, brk)
+            _check(LIB.fm_sheet_set_column_break(h, _uint(sheet, "sheet_index"), _uint(col, "col"), ptr))
+
+    @staticmethod
+    def _pack_break(scope: _ArgScope, layout: S.Struct, brk: Union[RowBreak, ColumnBreak, None]) -> int:
+        """The break struct ``brk`` describes in ``layout``; the null pointer for ``None``."""
+        if brk is None:
+            return 0
+        if not isinstance(brk, (RowBreak, ColumnBreak)):
+            raise TypeError(f"formulon: a break must be a RowBreak, a ColumnBreak or None, got {type(brk).__name__}")
+        ptr = scope.struct(layout)
+        layout.pack(
+            LIB,
+            ptr,
+            {"first": _uint(brk.first, "first"), "last": _uint(brk.last, "last"), "manual": 1 if brk.manual else 0},
+        )
+        return ptr
 
     def clear_breaks(self) -> None:
         """Remove every manual break on both axes."""
@@ -4701,40 +4744,44 @@ class Sheet:
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_breaks(h, _uint(sheet, "sheet_index")))
 
-    def _read_breaks(self, count_export: str, at_export: str) -> List[PageBreak]:
+    def _read_breaks(self, count_fn, at_fn, layout: S.Struct, record, key: str) -> list:
         sheet = self._index()
         h = self._workbook._require()
-        count = _read_count(getattr(LIB, count_export), h, _uint(sheet, "sheet_index"))
-        out: List[PageBreak] = []
+        count = _read_count(count_fn, h, _uint(sheet, "sheet_index"))
+        out = []
         with _ArgScope() as scope:
-            ptr = scope.struct(S.PAGE_BREAK)
+            ptr = scope.struct(layout)
             for i in range(count):
-                _check(getattr(LIB, at_export)(h, _uint(sheet, "sheet_index"), _uint(i, "index"), ptr))
-                d = S.PAGE_BREAK.unpack(LIB, ptr)
-                out.append(PageBreak(id=d["id"], min=d["min"], max=d["max"], manual=bool(d["manual"])))
+                _check(at_fn(h, _uint(sheet, "sheet_index"), _uint(i, "index"), ptr))
+                d = layout.unpack(LIB, ptr)
+                out.append(record(**{key: d[key]}, first=d["first"], last=d["last"], manual=bool(d["manual"])))
         return out
 
-    def list_row_breaks(self) -> List[PageBreak]:
+    def list_row_breaks(self) -> List[RowBreak]:
         """Return the row breaks, ascending by row."""
-        return self._read_breaks("fm_sheet_get_row_break_count", "fm_sheet_get_row_break_at")
+        return self._read_breaks(
+            LIB.fm_sheet_get_row_break_count, LIB.fm_sheet_get_row_break_at, S.ROW_BREAK, RowBreak, "row"
+        )
 
-    def list_column_breaks(self) -> List[PageBreak]:
+    def list_column_breaks(self) -> List[ColumnBreak]:
         """Return the column breaks, ascending by column."""
-        return self._read_breaks("fm_sheet_get_column_break_count", "fm_sheet_get_column_break_at")
+        return self._read_breaks(
+            LIB.fm_sheet_get_column_break_count, LIB.fm_sheet_get_column_break_at, S.COLUMN_BREAK, ColumnBreak, "col"
+        )
 
-    def set_page_setup(
+    def update_page_setup(
         self,
         *,
         orientation: Union[PageOrientation, None, Unchanged] = UNCHANGED,
         paper_size: Union[int, Unchanged] = UNCHANGED,
-        scale: Union[int, Unchanged] = UNCHANGED,
+        scale_pct: Union[int, Unchanged] = UNCHANGED,
         fit_to_width: Union[int, Unchanged] = UNCHANGED,
         fit_to_height: Union[int, Unchanged] = UNCHANGED,
         fit_to_page: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<pageSetup>``; an omitted argument keeps its attribute.
 
-        ``paper_size`` is the OOXML code (9 = A4). ``scale`` outside
+        ``paper_size`` is the OOXML code (9 = A4). ``scale_pct`` (a percentage) outside
         ``[10, 400]`` is rejected rather than clamped -- a mis-stated print
         scale lands on paper, so rounding it silently would hide the error.
         ``fit_to_page`` sets or clears ``<sheetPr><pageSetUpPr fitToPage>``
@@ -4760,7 +4807,7 @@ class Sheet:
         for name, value in (
             ("orientation", orientation),
             ("paper_size", paper_size),
-            ("scale", scale),
+            ("scale_pct", scale_pct),
             ("fit_to_width", fit_to_width),
             ("fit_to_height", fit_to_height),
             ("fit_to_page", fit_to_page),
@@ -4780,17 +4827,17 @@ class Sheet:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PAGE_SETUP)
             S.PAGE_SETUP.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_set_page_setup(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_page_setup(h, _uint(sheet, "sheet_index"), ptr))
 
-    def set_page_margins(
+    def update_page_margins(
         self,
         *,
-        left: Union[float, Unchanged] = UNCHANGED,
-        right: Union[float, Unchanged] = UNCHANGED,
-        top: Union[float, Unchanged] = UNCHANGED,
-        bottom: Union[float, Unchanged] = UNCHANGED,
-        header: Union[float, Unchanged] = UNCHANGED,
-        footer: Union[float, Unchanged] = UNCHANGED,
+        left_in: Union[float, Unchanged] = UNCHANGED,
+        right_in: Union[float, Unchanged] = UNCHANGED,
+        top_in: Union[float, Unchanged] = UNCHANGED,
+        bottom_in: Union[float, Unchanged] = UNCHANGED,
+        header_in: Union[float, Unchanged] = UNCHANGED,
+        footer_in: Union[float, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``<pageMargins>``, in inches; an omitted argument keeps its margin.
 
@@ -4804,12 +4851,12 @@ class Sheet:
             ptr = scope.struct(S.PAGE_MARGINS)
             values: Dict[str, object] = {}
             for name, value in (
-                ("left", left),
-                ("right", right),
-                ("top", top),
-                ("bottom", bottom),
-                ("header", header),
-                ("footer", footer),
+                ("left_in", left_in),
+                ("right_in", right_in),
+                ("top_in", top_in),
+                ("bottom_in", bottom_in),
+                ("header_in", header_in),
+                ("footer_in", footer_in),
             ):
                 if value is UNCHANGED:
                     continue
@@ -4818,9 +4865,9 @@ class Sheet:
                 values[f"{name}_engaged"] = 1
                 values[name] = float(value)
             S.PAGE_MARGINS.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_set_page_margins(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_page_margins(h, _uint(sheet, "sheet_index"), ptr))
 
-    def set_print_options(
+    def update_print_options(
         self,
         *,
         grid_lines: Union[bool, Unchanged] = UNCHANGED,
@@ -4850,9 +4897,9 @@ class Sheet:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PRINT_OPTIONS)
             S.PRINT_OPTIONS.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_set_print_options(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_print_options(h, _uint(sheet, "sheet_index"), ptr))
 
-    def set_header_footer(
+    def update_header_footer(
         self,
         *,
         odd_header: Union[str, None, Unchanged] = UNCHANGED,
@@ -4913,7 +4960,7 @@ class Sheet:
             for name, text in sections:
                 _, off = S.HEADER_FOOTER.offsets[name]
                 LIB.write_bytes(ptr + off, struct.pack("<I", scope.cstr(text)))
-            _check(LIB.fm_sheet_set_header_footer(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_header_footer(h, _uint(sheet, "sheet_index"), ptr))
 
     def get_page_setup(self) -> PageSetup:
         """Read the effective page setup and which attributes state it."""
@@ -4926,13 +4973,13 @@ class Sheet:
             return PageSetup(
                 orientation=PageOrientation(d["orientation"]) if d["orientation_engaged"] else None,
                 paper_size=d["paper_size"],
-                scale=d["scale"],
+                scale_pct=d["scale_pct"],
                 fit_to_width=d["fit_to_width"],
                 fit_to_height=d["fit_to_height"],
                 fit_to_page=bool(d["fit_to_page"]),
                 orientation_stated=bool(d["orientation_engaged"]),
                 paper_size_stated=bool(d["paper_size_engaged"]),
-                scale_stated=bool(d["scale_engaged"]),
+                scale_pct_stated=bool(d["scale_pct_engaged"]),
                 fit_to_width_stated=bool(d["fit_to_width_engaged"]),
                 fit_to_height_stated=bool(d["fit_to_height_engaged"]),
                 fit_to_page_stated=bool(d["fit_to_page_engaged"]),
@@ -4947,18 +4994,18 @@ class Sheet:
             _check(LIB.fm_sheet_get_page_margins(h, _uint(sheet, "sheet_index"), ptr))
             d = S.PAGE_MARGINS.unpack(LIB, ptr)
             return PageMargins(
-                left=d["left"],
-                right=d["right"],
-                top=d["top"],
-                bottom=d["bottom"],
-                header=d["header"],
-                footer=d["footer"],
-                left_stated=bool(d["left_engaged"]),
-                right_stated=bool(d["right_engaged"]),
-                top_stated=bool(d["top_engaged"]),
-                bottom_stated=bool(d["bottom_engaged"]),
-                header_stated=bool(d["header_engaged"]),
-                footer_stated=bool(d["footer_engaged"]),
+                left_in=d["left_in"],
+                right_in=d["right_in"],
+                top_in=d["top_in"],
+                bottom_in=d["bottom_in"],
+                header_in=d["header_in"],
+                footer_in=d["footer_in"],
+                left_in_stated=bool(d["left_in_engaged"]),
+                right_in_stated=bool(d["right_in_engaged"]),
+                top_in_stated=bool(d["top_in_engaged"]),
+                bottom_in_stated=bool(d["bottom_in_engaged"]),
+                header_in_stated=bool(d["header_in_engaged"]),
+                footer_in_stated=bool(d["footer_in_engaged"]),
             )
 
     def get_print_options(self) -> PrintOptions:
@@ -4978,7 +5025,7 @@ class Sheet:
         """Read the ``<headerFooter>`` sections and flags, and which flags the XML states.
 
         A section the sheet does not carry reads ``None``; a present one is
-        its decoded text, as :meth:`set_header_footer` takes it.
+        its decoded text, as :meth:`update_header_footer` takes it.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -4999,13 +5046,13 @@ class Sheet:
             ColumnLayout(
                 first=d["first"],
                 last=d["last"],
-                width=d["width"] if d["has_width"] else None,
+                width_chars=d["width_chars"] if d["has_width_chars"] else None,
                 hidden=bool(d["hidden"]),
                 outline_level=d["outline_level"],
                 collapsed=bool(d["collapsed"]),
             )
             for d in self._layout_overrides(
-                LIB.fm_sheet_get_column_override_count, LIB.fm_sheet_get_column_override_at, S.COLUMN_LAYOUT
+                LIB.fm_sheet_get_column_layout_count, LIB.fm_sheet_get_column_layout_at, S.COLUMN_LAYOUT
             )
         ]
 
@@ -5026,23 +5073,23 @@ class Sheet:
 
     @overload
     @_span_form
-    def set_column_width(self, first: int, last: int, width: float) -> None: ...
+    def set_column_width(self, first: int, last: int, width_chars: float) -> None: ...
 
     @overload
-    def set_column_width(self, span: str, width: float) -> None: ...
+    def set_column_width(self, span: str, width_chars: float) -> None: ...
 
     def set_column_width(self, *args: Any, **kwargs: Any) -> None:
         """Set the column width override on ``[first, last]``.
 
-        ``width`` is a stored width: characters with the column padding
-        included, as ``<col width>`` holds it.
+        ``width_chars`` is a stored width: characters with the column padding
+        included, as ``<col width>`` holds it (at most 255).
         """
-        first, last, width = self._span_args("set_column_width", args, kwargs, ("first", "last", "width"))
+        first, last, width_chars = self._span_args("set_column_width", args, kwargs, ("first", "last", "width_chars"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_column_width(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(width)
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(width_chars)
             )
         )
 
@@ -5109,54 +5156,54 @@ class Sheet:
         return [
             RowLayout(
                 row=d["row"],
-                height=d["height"] if d["has_height"] else None,
+                height_pt=d["height_pt"] if d["has_height_pt"] else None,
                 hidden=bool(d["hidden"]),
                 outline_level=d["outline_level"],
                 collapsed=bool(d["collapsed"]),
                 custom_height=bool(d["custom_height"]),
             )
             for d in self._layout_overrides(
-                LIB.fm_sheet_get_row_override_count, LIB.fm_sheet_get_row_override_at, S.ROW_LAYOUT
+                LIB.fm_sheet_get_row_layout_count, LIB.fm_sheet_get_row_layout_at, S.ROW_LAYOUT
             )
         ]
 
     @overload
     @_span_form
-    def set_row_height(self, first: int, last: int, height: float) -> None: ...
+    def set_row_height(self, first: int, last: int, height_pt: float) -> None: ...
 
     @overload
-    def set_row_height(self, span: str, height: float) -> None: ...
+    def set_row_height(self, span: str, height_pt: float) -> None: ...
 
     def set_row_height(self, *args: Any, **kwargs: Any) -> None:
-        """Set the row height on ``[first, last]`` as a manual height (``customHeight``)."""
-        first, last, height = self._span_args("set_row_height", args, kwargs, ("first", "last", "height"))
+        """Set the row height, in points, on ``[first, last]`` as a manual height (``customHeight``; at most 409)."""
+        first, last, height_pt = self._span_args("set_row_height", args, kwargs, ("first", "last", "height_pt"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_row_height(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height)
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height_pt)
             )
         )
 
     @overload
     @_span_form
-    def set_row_auto_height(self, first: int, last: int, height: float) -> None: ...
+    def set_row_auto_height(self, first: int, last: int, height_pt: float) -> None: ...
 
     @overload
-    def set_row_auto_height(self, span: str, height: float) -> None: ...
+    def set_row_auto_height(self, span: str, height_pt: float) -> None: ...
 
     def set_row_auto_height(self, *args: Any, **kwargs: Any) -> None:
-        """Store ``height`` as the cached automatic height of the rows on ``[first, last]``.
+        """Store ``height_pt`` (points) as the cached automatic height of the rows on ``[first, last]``.
 
         Saved as ``ht`` without ``customHeight``, so each row keeps following its
         content and font; the rows' other attributes are kept.
         """
-        first, last, height = self._span_args("set_row_auto_height", args, kwargs, ("first", "last", "height"))
+        first, last, height_pt = self._span_args("set_row_auto_height", args, kwargs, ("first", "last", "height_pt"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_row_auto_height(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height)
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height_pt)
             )
         )
 
@@ -5217,53 +5264,6 @@ class Sheet:
                 h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if collapsed else 0
             )
         )
-
-    def snapshot_range_style(self, range: Union[CellRect, str]) -> bytes:
-        """Capture the style state of a selection as opaque bytes for :meth:`restore_range_style`.
-
-        The capture holds the covered column styles (column selection), row
-        styles (row selection) and every stored cell's XF and explicit mark.
-        Take it before :meth:`remap_range_style` to be able to undo the edit.
-        """
-        rect = self._rect(range)
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            rp = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rp, rect)
-            bytes_ptr = scope.out_ptr()
-            len_ptr = scope.out_ptr()
-            data_ptr = 0
-            try:
-                _check(
-                    LIB.fm_sheet_snapshot_range_style(
-                        h,
-                        _uint(sheet, "sheet_index"),
-                        rp,
-                        bytes_ptr,
-                        len_ptr,
-                    )
-                )
-                data_ptr = LIB.read_u32(bytes_ptr)
-                return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
-            finally:
-                if data_ptr:
-                    LIB.fm_buffer_destroy(data_ptr)
-
-    def restore_range_style(self, data: Union[bytes, bytearray, memoryview]) -> None:
-        """Put a :meth:`snapshot_range_style` capture back on the sheet.
-
-        Captured axis styles and cell XFs are restored exactly; a stored cell of
-        the captured rectangle that was not captured loses its style. Values and
-        formulas are untouched. An invalid capture raises :class:`FormulonError`
-        and changes nothing.
-        """
-        sheet = self._index()
-        h = self._workbook._require()
-        raw = bytes(data)
-        with _ArgScope() as scope:
-            buf = scope.buffer(raw) if raw else 0
-            _check(LIB.fm_sheet_restore_range_style(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len")))
 
     # -- Conditional formatting --------------------------------------------
     def evaluate_cf_range(
@@ -5336,8 +5336,8 @@ class Sheet:
                             CfMatch(
                                 kind=_enum(CfMatchKind, d["kind"]),
                                 priority=d["priority"],
-                                dxf_id_engaged=bool(d["dxf_id_engaged"]),
-                                dxf_id=d["dxf_id"],
+                                dxf_index_engaged=bool(d["dxf_index_engaged"]),
+                                dxf_index=d["dxf_index"],
                                 color=_color_from(d["color"]),
                                 bar_length_pct=d["bar_length_pct"],
                                 bar_axis_position_pct=d["bar_axis_position_pct"],
@@ -5446,7 +5446,7 @@ class Sheet:
                     [
                         CfIcon(
                             LIB.read_cstr(LIB.read_u32(d["icon_set_icons"] + i * S.CF_ICON.size)),
-                            LIB.read_i32(d["icon_set_icons"] + i * S.CF_ICON.size + S.CF_ICON.offsets["icon_id"][1]),
+                            LIB.read_i32(d["icon_set_icons"] + i * S.CF_ICON.size + S.CF_ICON.offsets["icon_index"][1]),
                         )
                         for i in range(d["icon_set_icon_count"])
                     ],
@@ -5457,10 +5457,10 @@ class Sheet:
                 priority=d["priority"],
                 stop_if_true=bool(d["stop_if_true"]),
                 ranges=ranges,
-                dxf_id=d["dxf_id"] if d["dxf_id_engaged"] else None,
+                dxf_index=d["dxf_index"] if d["dxf_index_engaged"] else None,
                 formula1=LIB.read_cstr(d["formula1"]),
                 formula2=LIB.read_cstr(d["formula2"]),
-                op=d["op"] if d["op_engaged"] else None,
+                operator=d["op"] if d["op_engaged"] else None,
                 rank=d["rank"] if d["rank_engaged"] else None,
                 percent=bool(d["percent"]),
                 bottom=bool(d["bottom"]),
@@ -5493,13 +5493,13 @@ class Sheet:
                 ptr,
                 {
                     "type": _uint(rule.type, "type", 8),
-                    "op": _uint(rule.op or 0, "op", 8),
+                    "op": _uint(rule.operator or 0, "operator", 8),
                     "time_period": _uint(rule.time_period or 0, "time_period", 8),
                     "priority": _sint(rule.priority, "priority"),
                     "stop_if_true": 1 if rule.stop_if_true else 0,
-                    "dxf_id_engaged": 1 if rule.dxf_id is not None else 0,
-                    "dxf_id": _uint(rule.dxf_id or 0, "dxf_id"),
-                    "op_engaged": 1 if rule.op is not None else 0,
+                    "dxf_index_engaged": 1 if rule.dxf_index is not None else 0,
+                    "dxf_index": _uint(rule.dxf_index or 0, "dxf_index"),
+                    "op_engaged": 1 if rule.operator is not None else 0,
                     "rank_engaged": 1 if rule.rank is not None else 0,
                     "rank": _sint(rule.rank or 0, "rank"),
                     "percent": 1 if rule.percent else 0,
@@ -5593,7 +5593,7 @@ class Sheet:
                         S.CF_ICON.pack(
                             LIB,
                             icons_ptr + i * S.CF_ICON.size,
-                            {"icon_set": name_ptr, "icon_id": _sint(icon.icon_id, "icon_id")},
+                            {"icon_set": name_ptr, "icon_index": _sint(icon.icon_index, "icon_index")},
                         )
                     LIB.write_bytes(ptr + ro["icon_set_icons"][1], struct.pack("<I", icons_ptr))
                     LIB.write_bytes(ptr + ro["icon_set_icon_count"][1], struct.pack("<I", len(icon_set.icons)))
@@ -5635,10 +5635,10 @@ class Sheet:
         """
         row, col = self._cell_args("get_cell_format", args, kwargs, ())
         workbook = self._workbook
-        xf_index = self.get_effective_style(row, col).xf_index
-        return _cell_format_of(workbook, workbook.ooxml.get_cell_xf(xf_index))
+        style = self.ooxml.get_effective_style(row, col)
+        return _cell_format_of(workbook, workbook.ooxml.get_cell_xf(style.xf_index), style.source)
 
-    def set_cell_format(
+    def update_cell_format(
         self,
         range: Union[CellRect, str],
         *,
@@ -5648,13 +5648,15 @@ class Sheet:
         border: Union[BorderPatch, Border, Unchanged] = UNCHANGED,
         alignment: Union[AlignmentPatch, Alignment, Unchanged] = UNCHANGED,
         protection: Union[CellProtectionPatch, CellProtection, Unchanged] = UNCHANGED,
+        source: Union[EffectiveStyleSource, Unchanged] = UNCHANGED,
     ) -> None:
         """Merge the given groups into the format of every cell of ``range``; an omitted group or key is kept.
 
         A group is a patch mapping (:class:`FontPatch`, ...) or the record
         :meth:`get_cell_format` reads, so passing every field of a
-        :class:`CellFormat` copies that format. ``None``
-        clears a key the read record reports as nullable (``bold``, ``size``,
+        :class:`CellFormat` copies that format (its ``source`` is accepted and
+        ignored). ``None``
+        clears a key the read record reports as nullable (``bold``, ``size_pt``,
         ``family``, ...). A colour is ``"#RRGGBB"``, ``"#AARRGGBB"`` or a
         :class:`Color`; a fill colour without a pattern makes the fill solid.
         A whole-column, whole-row or whole-sheet ``range`` (``"B:B"``,
@@ -5677,7 +5679,7 @@ class Sheet:
 
         Example::
 
-            ws.set_cell_format("A1:B2", number_format="0.00", font={"bold": True})
+            ws.update_cell_format("A1:B2", number_format="0.00", font={"bold": True})
         """
         patch = _check_cell_format_patch(
             {
@@ -5690,55 +5692,17 @@ class Sheet:
             }
         )
         rect = self._rect(range)
-        bases = self.ooxml.get_range_style_bases(rect)
+        bases = self.ooxml.get_range_xf_bases(rect)
         if not patch:
             return
         workbook = self._workbook
         num_fmt_id: Optional[int] = None
         if "number_format" in patch:
             code = patch["number_format"]
-            num_fmt_id = 0 if code == "General" else workbook.ooxml.add_num_fmt(code)
+            num_fmt_id = 0 if code == "General" else workbook.ooxml.add_number_format(code)
         ooxml = workbook.ooxml
         xfs = [ooxml.add_cell_xf(_patched_xf(workbook, ooxml.get_cell_xf(base), patch, num_fmt_id)) for base in bases]
-        self.ooxml.remap_range_style(rect, dict(zip(bases, xfs)))
-
-    @overload
-    @_coordinate_form
-    def get_effective_style(self, row: int, col: int) -> EffectiveStyle: ...
-
-    @overload
-    def get_effective_style(self, a1: str) -> EffectiveStyle: ...
-
-    def get_effective_style(self, *args: Any, **kwargs: Any) -> EffectiveStyle:
-        """Read the effective style of the cell at ``(row, col)``; the cell need not exist."""
-        row, col = self._cell_args("get_effective_style", args, kwargs, ())
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.EFFECTIVE_STYLE)
-            _check(
-                LIB.fm_sheet_get_effective_style(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), ptr
-                )
-            )
-            d = S.EFFECTIVE_STYLE.unpack(LIB, ptr)
-            offsets = S.EFFECTIVE_STYLE.offsets
-            border_argb = struct.unpack("<5I", LIB.read_bytes(ptr + offsets["border_argb"][1], 20))
-            border_res = struct.unpack("<5i", LIB.read_bytes(ptr + offsets["border_resolution"][1], 20))
-            return EffectiveStyle(
-                xf_index=d["xf_index"],
-                source=EffectiveStyleSource(d["source"]),
-                font_index=d["font_index"],
-                fill_index=d["fill_index"],
-                border_index=d["border_index"],
-                font=ResolvedColor(d["font_argb"], ColorResolution(d["font_resolution"])),
-                fill_foreground=ResolvedColor(d["fill_fg_argb"], ColorResolution(d["fill_fg_resolution"])),
-                fill_background=ResolvedColor(d["fill_bg_argb"], ColorResolution(d["fill_bg_resolution"])),
-                borders=[ResolvedColor(a, ColorResolution(r)) for a, r in zip(border_argb, border_res)],
-                locked=bool(d["locked"]),
-                hidden=bool(d["hidden"]),
-                num_fmt_code=LIB.read_cstr(d["num_fmt_code"]),
-            )
+        self.ooxml.remap_range_xfs(rect, dict(zip(bases, xfs)))
 
     # -- Pivot tables ------------------------------------------------------
     def _pivot_count(self) -> int:
@@ -5830,6 +5794,70 @@ class Sheet:
         h = self._workbook._require()
         _check(LIB.fm_sheet_remove_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
 
+    # -- Tables ------------------------------------------------------------
+    def _table_count(self) -> int:
+        return self._workbook._table_count(self._index())
+
+    def _table_index(self, table: Union[int, str, Table]) -> int:
+        """The sheet-local index ``table`` addresses: an index, a table name or a :class:`Table` of this sheet."""
+        from ._table import Table
+
+        if isinstance(table, Table):
+            if table.sheet is not self:
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT, _diagnostic_override=("table is a Table of another sheet", "")
+                )
+            return table.index
+        sheet = self._index()
+        h = self._workbook._require()
+        return resolve_ref(
+            table,
+            lambda: [Table._name(h, sheet, i) for i in range(self._table_count())],
+            "table",
+        )
+
+    def list_tables(self) -> List[Table]:
+        """Return the handles of the sheet's worksheet tables; a table's position is its sheet-local index."""
+        sheet = self._index()
+        return [self._workbook._table_handle(sheet, i) for i in range(self._table_count())]
+
+    def table(self, table: Union[int, str, Table]) -> Table:
+        """Return the handle of the table ``table`` on this sheet: an index, a name or a :class:`Table` of this sheet.
+
+        A name is compared case-insensitively and a string is always a name,
+        digits included. :meth:`Workbook.table` finds a table on any sheet.
+
+        Raises:
+          NotFoundError: when no table of the sheet has the name ``table``.
+          IndexOutOfRangeError: when the index is past the last table.
+          InvalidArgumentError: when ``table`` is a :class:`Table` of another sheet.
+        """
+        return self._workbook._table_handle(self._index(), _uint(self._table_index(table), "table_index"))
+
+    def add_table(self, input: TableInput) -> Table:
+        """Create the worksheet table ``input`` describes on this sheet and return its handle.
+
+        A ``name`` another table already has (compared case-insensitively)
+        raises ``AlreadyExistsError``. See :class:`TableInput` for the defaults.
+
+        Example::
+
+            ws.set_values("A1", [["Item", "Qty"], ["Apple", 3]])
+            table = ws.add_table(TableInput(range="A1:B2", name="Sales"))
+        """
+        return self._workbook._add_table(self._index(), input)
+
+    def remove_table(self, table: Union[int, str, Table]) -> None:
+        """Remove the table ``table``; its handle raises :class:`NotFoundError` from then on.
+
+        Formulas that name the table keep their structured references and
+        evaluate to ``#NAME?``. Fails as :meth:`table` does when there is no such table.
+        """
+        table_index = _uint(self._table_index(table), "table_index")
+        sheet = self._index()
+        h = self._workbook._require()
+        _check(LIB.fm_sheet_remove_table(h, _uint(sheet, "sheet_index"), table_index))
+
     # -- Dependency-graph trace --------------------------------------------
     @overload
     @_coordinate_form
@@ -5885,7 +5913,7 @@ class Sheet:
                     S.zero_struct(LIB, S.CELL_NODE, nptr)
                     _check(LIB.fm_cell_nodes_get_node_at(handle, _uint(i, "idx"), nptr))
                     d = S.CELL_NODE.unpack(LIB, nptr)
-                    nodes.append(CellNode(sheet=d["sheet"], row=d["row"], col=d["col"]))
+                    nodes.append(CellNode(sheet=d["sheet_index"], row=d["row"], col=d["col"]))
                 return nodes
             finally:
                 if handle:
@@ -5967,7 +5995,7 @@ class SheetOoxml:
 
     The cell, row and column XF indices, the range-style remap that works on
     them, and the raw XML of the worksheet elements the typed setters cover.
-    Most code uses :meth:`Sheet.set_cell_format`, which takes whole columns
+    Most code uses :meth:`Sheet.update_cell_format`, which takes whole columns
     (``"B:B"``) and rows (``"3:3"``) too.
     """
 
@@ -5979,26 +6007,26 @@ class SheetOoxml:
     def __repr__(self) -> str:
         return f"{self._sheet!r}.ooxml"
 
-    def get_column_style(self, col: int) -> Optional[int]:
-        """The cell-style XF index column ``col`` carries (:meth:`set_column_style`); ``None`` when it has none."""
+    def get_column_xf_index(self, col: int) -> Optional[int]:
+        """The cell-style XF index column ``col`` carries (:meth:`set_column_xf_index`); ``None`` when it has none."""
         col = _uint(col, "col")
         spans = self._sheet._layout_overrides(
-            LIB.fm_sheet_get_column_override_count, LIB.fm_sheet_get_column_override_at, S.COLUMN_LAYOUT
+            LIB.fm_sheet_get_column_layout_count, LIB.fm_sheet_get_column_layout_at, S.COLUMN_LAYOUT
         )
         for d in spans:
             if d["first"] <= col <= d["last"]:
-                return d["style_xf"] if d["has_style"] else None
+                return d["xf_index"] if d["has_xf_index"] else None
         return None
 
-    def get_row_style(self, row: int) -> Optional[int]:
-        """The cell-style XF index row ``row`` makes effective (:meth:`set_row_style`); ``None`` when it has none."""
+    def get_row_xf_index(self, row: int) -> Optional[int]:
+        """The cell-style XF index row ``row`` makes effective (:meth:`set_row_xf_index`); ``None`` when it has none."""
         row = _uint(row, "row")
         rows = self._sheet._layout_overrides(
-            LIB.fm_sheet_get_row_override_count, LIB.fm_sheet_get_row_override_at, S.ROW_LAYOUT
+            LIB.fm_sheet_get_row_layout_count, LIB.fm_sheet_get_row_layout_at, S.ROW_LAYOUT
         )
         for d in rows:
             if d["row"] == row:
-                return d["style_xf"] if d["has_style"] else None
+                return d["xf_index"] if d["has_xf_index"] else None
         return None
 
     def get_auto_filter_xml(self) -> Optional[str]:
@@ -6041,7 +6069,7 @@ class SheetOoxml:
         return self._sheet._get_print_xml("fm_sheet_get_page_setup_xml")
 
     def set_page_setup_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`Sheet.set_page_setup`.
+        """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_setup`.
 
         Replace the sheet's ``<pageSetup>`` element; ``None`` (or ``""``)
         removes it. ``fitToPage`` is not a ``<pageSetup>`` attribute but lives
@@ -6059,7 +6087,7 @@ class SheetOoxml:
         return self._sheet._get_print_xml("fm_sheet_get_page_margins_xml")
 
     def set_page_margins_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`Sheet.set_page_margins`.
+        """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_margins`.
 
         Replace the sheet's ``<pageMargins>`` element; ``None`` (or ``""``) removes it.
         """
@@ -6073,7 +6101,7 @@ class SheetOoxml:
         return self._sheet._get_print_xml("fm_sheet_get_print_options_xml")
 
     def set_print_options_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`Sheet.set_print_options`.
+        """OOXML fragment for round trips; normally use :meth:`Sheet.update_print_options`.
 
         Replace the sheet's ``<printOptions>`` element; ``None`` (or ``""``) removes it.
         """
@@ -6087,13 +6115,13 @@ class SheetOoxml:
         return self._sheet._get_print_xml("fm_sheet_get_header_footer_xml")
 
     def set_header_footer_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`Sheet.set_header_footer`.
+        """OOXML fragment for round trips; normally use :meth:`Sheet.update_header_footer`.
 
         Replace the sheet's ``<headerFooter>`` element; ``None`` (or ``""``)
         removes it. Header and footer codes are introduced by ``&``, which lives in XML
         element text and so must arrive escaped: Excel writes
         ``<oddHeader>&amp;C...</oddHeader>``. Pass decoded text to
-        :meth:`Sheet.set_header_footer` instead to let the engine escape it.
+        :meth:`Sheet.update_header_footer` instead to let the engine escape it.
         """
         self._sheet._set_print_xml("fm_sheet_set_header_footer_xml", xml)
 
@@ -6106,7 +6134,7 @@ class SheetOoxml:
         return self._sheet._get_print_xml("fm_sheet_get_sheet_pr_xml")
 
     def set_sheet_pr_xml(self, xml: Optional[str]) -> None:
-        """OOXML fragment for round trips; normally use :meth:`Sheet.set_page_setup`, which writes its ``fitToPage``.
+        """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_setup`, which writes its ``fitToPage``.
 
         Replace the sheet's ``<sheetPr>`` element; ``None`` (or ``""``) removes it.
         """
@@ -6114,92 +6142,182 @@ class SheetOoxml:
 
     @overload
     @_span_form
-    def set_column_style(self, first: int, last: int, xf_index: int) -> None: ...
+    def set_column_xf_index(self, first: int, last: int, xf_index: int) -> None: ...
 
     @overload
-    def set_column_style(self, span: str, xf_index: int) -> None: ...
+    def set_column_xf_index(self, span: str, xf_index: int) -> None: ...
 
-    def set_column_style(self, *args: Any, **kwargs: Any) -> None:
+    def set_column_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Set the cell-style XF on ``[first, last]``, keeping the other column attributes."""
-        first, last, xf_index = self._sheet._span_args("set_column_style", args, kwargs, ("first", "last", "xf_index"))
+        first, last, xf_index = self._sheet._span_args(
+            "set_column_xf_index", args, kwargs, ("first", "last", "xf_index")
+        )
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
         _check(
-            LIB.fm_sheet_set_column_style(
+            LIB.fm_sheet_set_column_xf_index(
                 h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
             )
         )
 
     @overload
     @_span_form
-    def clear_column_style(self, first: int, last: int) -> None: ...
+    def reset_column_xf_index(self, first: int, last: int) -> None: ...
 
     @overload
-    def clear_column_style(self, span: str) -> None: ...
+    def reset_column_xf_index(self, span: str) -> None: ...
 
-    def clear_column_style(self, *args: Any, **kwargs: Any) -> None:
+    def reset_column_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Remove the cell-style XF on ``[first, last]``, keeping the other column attributes."""
-        first, last = self._sheet._span_args("clear_column_style", args, kwargs, ("first", "last"))
+        first, last = self._sheet._span_args("reset_column_xf_index", args, kwargs, ("first", "last"))
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
         _check(
-            LIB.fm_sheet_clear_column_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+            LIB.fm_sheet_reset_column_xf_index(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")
+            )
         )
 
     @overload
     @_span_form
-    def set_row_style(self, first: int, last: int, xf_index: int) -> None: ...
+    def set_row_xf_index(self, first: int, last: int, xf_index: int) -> None: ...
 
     @overload
-    def set_row_style(self, span: str, xf_index: int) -> None: ...
+    def set_row_xf_index(self, span: str, xf_index: int) -> None: ...
 
-    def set_row_style(self, *args: Any, **kwargs: Any) -> None:
+    def set_row_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Set the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes.
 
         Every row of the span gets an override. The span and ``xf_index`` are
         validated before anything changes.
         """
-        first, last, xf_index = self._sheet._span_args("set_row_style", args, kwargs, ("first", "last", "xf_index"))
+        first, last, xf_index = self._sheet._span_args("set_row_xf_index", args, kwargs, ("first", "last", "xf_index"))
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
         _check(
-            LIB.fm_sheet_set_row_style(
+            LIB.fm_sheet_set_row_xf_index(
                 h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
             )
         )
 
     @overload
     @_span_form
-    def clear_row_style(self, first: int, last: int) -> None: ...
+    def reset_row_xf_index(self, first: int, last: int) -> None: ...
 
     @overload
-    def clear_row_style(self, span: str) -> None: ...
+    def reset_row_xf_index(self, span: str) -> None: ...
 
-    def clear_row_style(self, *args: Any, **kwargs: Any) -> None:
+    def reset_row_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Remove the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes."""
-        first, last = self._sheet._span_args("clear_row_style", args, kwargs, ("first", "last"))
+        first, last = self._sheet._span_args("reset_row_xf_index", args, kwargs, ("first", "last"))
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
-        _check(LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")))
+        _check(
+            LIB.fm_sheet_reset_row_xf_index(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+        )
 
-    def get_range_style_bases(self, range: Union[CellRect, str]) -> List[int]:
+    @overload
+    @_coordinate_form
+    def get_effective_style(self, row: int, col: int) -> EffectiveStyle: ...
+
+    @overload
+    def get_effective_style(self, a1: str) -> EffectiveStyle: ...
+
+    def get_effective_style(self, *args: Any, **kwargs: Any) -> EffectiveStyle:
+        """Read the effective style of the cell at ``(row, col)``; the cell need not exist."""
+        row, col = self._sheet._cell_args("get_effective_style", args, kwargs, ())
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.EFFECTIVE_STYLE)
+            _check(
+                LIB.fm_sheet_get_effective_style(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), ptr
+                )
+            )
+            d = S.EFFECTIVE_STYLE.unpack(LIB, ptr)
+            offsets = S.EFFECTIVE_STYLE.offsets
+            border_argb = struct.unpack("<5I", LIB.read_bytes(ptr + offsets["border_argb"][1], 20))
+            border_res = struct.unpack("<5i", LIB.read_bytes(ptr + offsets["border_resolution"][1], 20))
+            return EffectiveStyle(
+                xf_index=d["xf_index"],
+                source=EffectiveStyleSource(d["source"]),
+                font_index=d["font_index"],
+                fill_index=d["fill_index"],
+                border_index=d["border_index"],
+                font_color=ResolvedColor(d["font_argb"], ColorResolution(d["font_resolution"])),
+                fill_foreground=ResolvedColor(d["fill_fg_argb"], ColorResolution(d["fill_fg_resolution"])),
+                fill_background=ResolvedColor(d["fill_bg_argb"], ColorResolution(d["fill_bg_resolution"])),
+                borders=[ResolvedColor(a, ColorResolution(r)) for a, r in zip(border_argb, border_res)],
+                protection=CellProtection(locked=bool(d["locked"]), hidden=bool(d["hidden"])),
+                number_format=LIB.read_cstr(d["num_fmt_code"]),
+            )
+
+    def snapshot_range_xfs(self, range: Union[CellRect, str]) -> bytes:
+        """Capture the style state of a selection as opaque bytes for :meth:`restore_range_xfs`.
+
+        The capture holds the covered column styles (column selection), row
+        styles (row selection) and every stored cell's XF and explicit mark.
+        Take it before :meth:`remap_range_xfs` to be able to undo the edit.
+        """
+        rect = self._sheet._rect(range)
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
+            bytes_ptr = scope.out_ptr()
+            len_ptr = scope.out_ptr()
+            data_ptr = 0
+            try:
+                _check(
+                    LIB.fm_sheet_snapshot_range_xfs(
+                        h,
+                        _uint(sheet, "sheet_index"),
+                        rp,
+                        bytes_ptr,
+                        len_ptr,
+                    )
+                )
+                data_ptr = LIB.read_u32(bytes_ptr)
+                return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
+            finally:
+                if data_ptr:
+                    LIB.fm_buffer_destroy(data_ptr)
+
+    def restore_range_xfs(self, data: Union[bytes, bytearray, memoryview]) -> None:
+        """Put a :meth:`snapshot_range_xfs` capture back on the sheet.
+
+        Captured axis styles and cell XFs are restored exactly; a stored cell of
+        the captured rectangle that was not captured loses its style. Values and
+        formulas are untouched. An invalid capture raises :class:`FormulonError`
+        and changes nothing.
+        """
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        raw = bytes(data)
+        with _ArgScope() as scope:
+            buf = scope.buffer(raw) if raw else 0
+            _check(LIB.fm_sheet_restore_range_xfs(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len")))
+
+    def get_range_xf_bases(self, range: Union[CellRect, str]) -> List[int]:
         """List, ascending, every cell XF some cell of the selection resolves to.
 
         ``range`` is a selection: full height is a column selection, full
         width a row selection, both the whole sheet, neither a cell range. It
         is the first step of an attribute patch (for example a font size over a selection): read the
         bases, build a patched XF for each with :meth:`WorkbookOoxml.add_font` /
-        :meth:`WorkbookOoxml.add_cell_xf`, then apply them with :meth:`remap_range_style`.
+        :meth:`WorkbookOoxml.add_cell_xf`, then apply them with :meth:`remap_range_xfs`.
         """
         rect = self._sheet._rect(range)
-        return self.get_range_style_bases_excluding(rect, ())
+        return self.get_range_xf_bases_excluding(rect, ())
 
-    def get_range_style_bases_excluding(
+    def get_range_xf_bases_excluding(
         self,
         range: Union[CellRect, str],
         excluded: Sequence[Tuple[int, int]],
     ) -> List[int]:
-        """:meth:`get_range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
+        """:meth:`get_range_xf_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
 
         An excluded cell contributes no XF, neither its own nor the row, column
         or default style beneath it. Cells outside the selection and repeats are
@@ -6220,7 +6338,7 @@ class SheetOoxml:
             len_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
             _check(
-                LIB.fm_sheet_get_range_style_bases_excluding(
+                LIB.fm_sheet_get_range_xf_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
                     rp,
@@ -6237,7 +6355,7 @@ class SheetOoxml:
                 return []
             buf = scope.alloc(4 * total)
             _check(
-                LIB.fm_sheet_get_range_style_bases_excluding(
+                LIB.fm_sheet_get_range_xf_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
                     rp,
@@ -6252,14 +6370,14 @@ class SheetOoxml:
             n = min(total, LIB.read_u32(len_ptr))
             return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
 
-    def remap_range_style(self, range: Union[CellRect, str], mapping: Dict[int, int]) -> None:
+    def remap_range_xfs(self, range: Union[CellRect, str], mapping: Dict[int, int]) -> None:
         """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
 
         An XF absent from ``mapping`` is kept. Each target must be a valid cell
         XF, else :class:`FormulonError` and nothing changes. Patch an attribute
-        by reading :meth:`get_range_style_bases`, adding a patched XF for each base
-        and passing ``{base: patched}``. Undo with :meth:`Sheet.snapshot_range_style`
-        taken beforehand and :meth:`Sheet.restore_range_style`.
+        by reading :meth:`get_range_xf_bases`, adding a patched XF for each base
+        and passing ``{base: patched}``. Undo with :meth:`snapshot_range_xfs`
+        taken beforehand and :meth:`restore_range_xfs`.
         """
         rect = self._sheet._rect(range)
         sheet = self._sheet._index()
@@ -6274,7 +6392,7 @@ class SheetOoxml:
                 from_buf = scope.buffer(b"".join(struct.pack("<I", _uint(k, "from_xf")) for k, _ in pairs))
                 to_buf = scope.buffer(b"".join(struct.pack("<I", _uint(v, "to_xf")) for _, v in pairs))
             _check(
-                LIB.fm_sheet_remap_range_style(
+                LIB.fm_sheet_remap_range_xfs(
                     h,
                     _uint(sheet, "sheet_index"),
                     rp,
@@ -6326,23 +6444,23 @@ class SheetOoxml:
 
     @overload
     @_coordinate_form
-    def clear_cell_xf_index(self, row: int, col: int) -> None: ...
+    def reset_cell_xf_index(self, row: int, col: int) -> None: ...
 
     @overload
-    def clear_cell_xf_index(self, a1: str) -> None: ...
+    def reset_cell_xf_index(self, a1: str) -> None: ...
 
-    def clear_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
-        """Remove the direct style assignment from the cell at ``(row, col)``.
+    def reset_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
+        """Reset the cell at ``(row, col)`` to its inherited XF by removing its direct style assignment.
 
         A blank cell inherits the row / column style again; value, formula and
         comments are kept. An absent cell is a no-op. A non-blank cell keeps
-        owning the default xf. Use the ``source`` of :meth:`Sheet.get_effective_style`
+        owning the default xf. Use the ``source`` of :meth:`get_effective_style`
         to tell an unassigned cell from one directly assigned the Normal xf.
         """
-        row, col = self._sheet._cell_args("clear_cell_xf_index", args, kwargs, ())
+        row, col = self._sheet._cell_args("reset_cell_xf_index", args, kwargs, ())
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
-        _check(LIB.fm_sheet_clear_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
+        _check(LIB.fm_sheet_reset_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
 
     def set_range_xf_index(self, range: Union[CellRect, str], xf_index: int) -> None:
         """Store ``xf_index`` on every cell of ``range``.

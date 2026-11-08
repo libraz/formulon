@@ -218,7 +218,7 @@ function makePivotWorkbook(Workbook) {
     wb.pivotCache(cacheId).setRecordValue(rec, 0, region);
     wb.pivotCache(cacheId).setRecordValue(rec, 1, amount);
   }
-  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 4 });
+  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 4 } });
   wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
   const amountField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
   wb.sheet(0).pivot(pivot).addDataField({
@@ -465,7 +465,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(wb.sheet(0).pivot(pivot).getCache(), wb.listPivotCaches()[0]);
     assert.equal(wb.sheet(0).pivot(pivot).name, 'Pivot1');
     assert.deepEqual({ ...wb.sheet(0).pivot(pivot).getGrandTotals() }, { rows: true, columns: true });
-    wb.sheet(0).pivot(pivot).setGrandTotals({ rows: false, columns: true });
+    wb.sheet(0).pivot(pivot).updateGrandTotals({ rows: false, columns: true });
     const totals = wb.sheet(0).pivot(pivot).getGrandTotals();
     assert.equal(totals.rows, false);
     assert.equal(totals.columns, true);
@@ -486,7 +486,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
 
     wb.sheet(0).pivot(pivot).addFieldItem(0, 'East', { visible: true });
     wb.sheet(0).pivot(pivot).addFieldItem(0, 'West', { visible: true });
-    wb.sheet(0).pivot(pivot).updateItem(0, 1, { visible: false });
+    wb.sheet(0).pivot(pivot).updateFieldItem(0, 1, { visible: false });
     assert.equal(wb.sheet(0).pivot(pivot).listFieldItems(0).length, 2);
     const east = wb.sheet(0).pivot(pivot).getFieldItem(0, 0);
     assert.equal(east.name, 'East');
@@ -494,10 +494,10 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(east.cacheIndex, null);
     assert.equal(east.visible, true);
     assert.equal(wb.sheet(0).pivot(pivot).getFieldItem(0, 1).visible, false);
-    wb.sheet(0).pivot(pivot).addFieldSharedItem(0, 5, { visible: true });
+    wb.sheet(0).pivot(pivot).addFieldItem(0, { cacheIndex: 5 }, { visible: true });
     const bound = wb.sheet(0).pivot(pivot).getFieldItem(0, 2);
     assert.equal(bound.cacheIndex, 5);
-    assert.equal(bound.name, '');
+    assert.equal(bound.name, null);
 
     const dataField = wb.sheet(0).pivot(pivot).listDataFields()[0];
     assert.equal(dataField.name, 'Sum of Amount');
@@ -514,20 +514,20 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    const initial = wb.sheet(0).pivot(pivot).getStyleInfo();
+    const initial = wb.sheet(0).pivot(pivot).getStyleOptions();
     assert.notEqual(initial, null);
-    assert.equal(initial.name, 'PivotStyleLight16');
+    assert.equal(initial.styleName, 'PivotStyleLight16');
     assert.deepEqual(
-      [initial.showRowHeaders, initial.showColHeaders, initial.showRowStripes, initial.showColStripes],
+      [initial.showRowHeaders, initial.showColumnHeaders, initial.showRowStripes, initial.showColumnStripes],
       [true, true, false, false],
     );
     assert.equal(initial.showLastColumn, true);
 
-    wb.sheet(0).pivot(pivot).setStyleInfo({ name: 'PivotStyleDark3', showRowStripes: true });
-    const set = wb.sheet(0).pivot(pivot).getStyleInfo();
-    assert.equal(set.name, 'PivotStyleDark3');
+    wb.sheet(0).pivot(pivot).updateStyleOptions({ styleName: 'PivotStyleDark3', showRowStripes: true });
+    const set = wb.sheet(0).pivot(pivot).getStyleOptions();
+    assert.equal(set.styleName, 'PivotStyleDark3');
     assert.deepEqual(
-      [set.showRowHeaders, set.showColHeaders, set.showRowStripes, set.showColStripes, set.showLastColumn],
+      [set.showRowHeaders, set.showColumnHeaders, set.showRowStripes, set.showColumnStripes, set.showLastColumn],
       [true, true, true, false, true],
     );
 
@@ -535,22 +535,22 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     const saved = wb.save();
     const reloaded = Module.Workbook.load(saved);
     try {
-      assert.equal(reloaded.sheet(0).pivot(0).getStyleInfo().name, 'PivotStyleDark3');
-      assert.equal(reloaded.sheet(0).pivot(0).getStyleInfo().showRowStripes, true);
+      assert.equal(reloaded.sheet(0).pivot(0).getStyleOptions().styleName, 'PivotStyleDark3');
+      assert.equal(reloaded.sheet(0).pivot(0).getStyleOptions().showRowStripes, true);
     } finally {
       reloaded.dispose();
     }
 
-    // An empty patch changes nothing; an empty name leaves the element without a style name.
-    wb.sheet(0).pivot(pivot).setStyleInfo({});
-    assert.equal(wb.sheet(0).pivot(pivot).getStyleInfo().name, 'PivotStyleDark3');
-    wb.sheet(0).pivot(pivot).setStyleInfo({ name: '' });
-    const bare = wb.sheet(0).pivot(pivot).getStyleInfo();
+    // An empty patch changes nothing; a null name leaves the element without a style name.
+    wb.sheet(0).pivot(pivot).updateStyleOptions({});
+    assert.equal(wb.sheet(0).pivot(pivot).getStyleOptions().styleName, 'PivotStyleDark3');
+    wb.sheet(0).pivot(pivot).updateStyleOptions({ styleName: null });
+    const bare = wb.sheet(0).pivot(pivot).getStyleOptions();
     assert.notEqual(bare, null);
-    assert.equal(bare.name, '');
+    assert.equal(bare.styleName, null);
 
-    expectFailure(() => wb.sheet(0).pivot(9).getStyleInfo());
-    expectFailure(() => wb.sheet(0).pivot(9).setStyleInfo({ name: 'X' }));
+    expectFailure(() => wb.sheet(0).pivot(9).getStyleOptions());
+    expectFailure(() => wb.sheet(0).pivot(9).updateStyleOptions({ styleName: 'X' }));
   } finally {
     wb.dispose();
   }
@@ -610,16 +610,16 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
   const wb = Module.Workbook.createDefault();
   wb.addSheet('B');
   wb.addSheet('C');
-  assert.equal(wb.getActiveSheet(), wb.sheet(0));
+  assert.equal(wb.activeSheet(), wb.sheet(0));
   wb.setActiveSheet(2);
-  const active = wb.getActiveSheet();
+  const active = wb.activeSheet();
   assert.equal(active, wb.sheet('C'));
   expectFailure(() => wb.setActiveSheet(9));
-  assert.equal(wb.getActiveSheet().index, 2);
+  assert.equal(wb.activeSheet().index, 2);
   const saved = wb.save();
   const loaded = Module.Workbook.load(saved);
   try {
-    assert.equal(loaded.getActiveSheet().name, 'C');
+    assert.equal(loaded.activeSheet().name, 'C');
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -652,16 +652,16 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   wb.sheet(0).setText(0, 0, '漢字');
-  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
+  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ start: 0, end: 2, text: 'かんじ' }]);
   assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, false);
-  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 0, type: 0, alignment: 0 });
+  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 0, type: 0, alignment: 0 });
   assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, true);
   const saved = wb.save();
   const loaded = Module.Workbook.load(saved);
   try {
     const got = loaded.sheet(0).getCellPhoneticProperties(0, 0);
     assert.equal(got.present, true);
-    assert.deepEqual([got.fontId, got.type, got.alignment], [0, 0, 0]);
+    assert.deepEqual([got.fontIndex, got.type, got.alignment], [0, 0, 0]);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -671,21 +671,20 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
-  wb.sheet(0).setView({ freezeRows: 2, freezeCols: 1 });
+  wb.sheet(0).updateView({ freezeRows: 2, freezeCols: 1 });
   const view = wb.sheet(0).getView();
   assert.equal(view.paneTopLeftRow, 2);
   assert.equal(view.paneTopLeftCol, 1);
-  wb.sheet(0).setView({ topLeftRow: 5, topLeftCol: 0, paneTopLeftRow: 40, paneTopLeftCol: 6 });
-  expectFailure(() => wb.sheet(0).setView({ paneTopLeftRow: 1, paneTopLeftCol: 6 }));
+  wb.sheet(0).updateView({ topLeftRow: 5, topLeftCol: 0, paneTopLeftRow: 40, paneTopLeftCol: 6 });
+  expectFailure(() => wb.sheet(0).updateView({ paneTopLeftRow: 1, paneTopLeftCol: 6 }));
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
   ];
-  wb.sheet(0).setSelection({ activeRow: 41, activeCol: 7, ranges });
+  wb.sheet(0).setSelection({ active: 'H42', ranges });
   expectFailure(() =>
     wb.sheet(0).setSelection({
-      activeRow: 0,
-      activeCol: 0,
+      active: 'A1',
       ranges: [{ firstRow: 3, firstCol: 0, lastRow: 1, lastCol: 0 }],
     }),
   );
@@ -715,29 +714,29 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
-    wb.sheet(0).setView({ splitX: 2000, splitY: 1500 });
+    assert.deepEqual([wb.sheet(0).getView().splitXTwips, wb.sheet(0).getView().splitYTwips], [0, 0]);
+    wb.sheet(0).updateView({ splitXTwips: 2000, splitYTwips: 1500 });
     const view = wb.sheet(0).getView();
-    assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
+    assert.deepEqual([view.splitXTwips, view.splitYTwips, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
     const loaded = Module.Workbook.load(saved);
     try {
       const got = loaded.sheet(0).getView();
-      assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
+      assert.deepEqual([got.splitXTwips, got.splitYTwips, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
     } finally {
       loaded.dispose();
     }
-    wb.sheet(0).setView({ freezeRows: 2, freezeCols: 1 });
-    assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
-    wb.sheet(0).setView({ splitX: 0, splitY: 900 });
+    wb.sheet(0).updateView({ freezeRows: 2, freezeCols: 1 });
+    assert.deepEqual([wb.sheet(0).getView().splitXTwips, wb.sheet(0).getView().splitYTwips], [0, 0]);
+    wb.sheet(0).updateView({ splitXTwips: 0, splitYTwips: 900 });
     const split = wb.sheet(0).getView();
-    assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
-    assert.throws(() => wb.sheet(0).setView({ splitX: -1, splitY: 0 }));
-    assert.throws(() => wb.sheet(0).setView({ splitX: 0, splitY: Number.NaN }));
-    assert.throws(() => wb.sheet(0).setView({ splitX: Number.POSITIVE_INFINITY, splitY: 0 }));
-    assert.equal(wb.sheet(0).getView().splitY, 900);
-    wb.sheet(0).setView({ splitX: 0, splitY: 0 });
-    assert.equal(wb.sheet(0).getView().splitY, 0);
+    assert.deepEqual([split.splitXTwips, split.splitYTwips, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
+    assert.throws(() => wb.sheet(0).updateView({ splitXTwips: -1, splitYTwips: 0 }));
+    assert.throws(() => wb.sheet(0).updateView({ splitXTwips: 0, splitYTwips: Number.NaN }));
+    assert.throws(() => wb.sheet(0).updateView({ splitXTwips: Number.POSITIVE_INFINITY, splitYTwips: 0 }));
+    assert.equal(wb.sheet(0).getView().splitYTwips, 900);
+    wb.sheet(0).updateView({ splitXTwips: 0, splitYTwips: 0 });
+    assert.equal(wb.sheet(0).getView().splitYTwips, 0);
   } finally {
     wb.dispose();
   }
@@ -755,7 +754,7 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
       const rec = wb.pivotCache(cacheId).addRecord();
       for (const [col, value] of [0, 0, sales, 1].entries()) wb.pivotCache(cacheId).setRecordValue(rec, col, value);
     }
-    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchorRow: 0, anchorCol: 6 });
+    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchor: { row: 0, col: 6 } });
     const region = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
     const sales = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Sales', axis: 2 });
     assert.equal(region, 0);

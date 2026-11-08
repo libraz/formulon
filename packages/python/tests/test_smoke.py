@@ -21,7 +21,7 @@ from formulon import (
     DefinedNameInput,
     FormulonError,
     SheetComment,
-    SheetRect,
+    TableInput,
     Value,
     ValueKind,
     Workbook,
@@ -164,7 +164,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
                     for _ in range(200):
                         barrier.wait()
                         try:
-                            worker.remove_table(index)
+                            worker.sheet(0).remove_table(index)
                         except FormulonError as error:
                             contexts[index].append(error.context)
                         barrier.wait()
@@ -189,7 +189,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
             self.assertEqual(unexpected, [])
             for index in indices:
                 self.assertEqual(len(contexts[index]), 200)
-                expected = f"index={index} count=0"
+                expected = f"table_index={index} count=0"
                 self.assertEqual(contexts[index], [expected] * 200)
             self.assertEqual(sum(len(values) for values in contexts.values()), 800)
         finally:
@@ -283,7 +283,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
             self.assertTrue(result.row_breaks)
             self.assertEqual(
                 result.row_breaks,
-                sorted(set(result.row_breaks)),
+                sorted(set(result.row_breaks), key=lambda b: b.row),
             )
             self.assertEqual(result.column_breaks, [])
 
@@ -428,24 +428,27 @@ class IteratorHandleLivenessTests(unittest.TestCase):
         wb.add_sheet("Sheet2")
         wb.sheet(0).set_text(0, 0, "A")
         wb.sheet(1).set_text(0, 0, "A")
-        wb.add_table(range=SheetRect(0, CellRect(0, 0, 0, 0)), name="TableOne", display_name="TableOne", columns=["A"])
-        wb.add_table(range=SheetRect(1, CellRect(0, 0, 0, 0)), name="TableTwo", display_name="TableTwo", columns=["A"])
-        wb.list_tables()[0]
+        wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 0, 0), name="TableOne", columns=["A"]))
+        wb.sheet(1).add_table(TableInput(range=CellRect(0, 0, 0, 0), name="TableTwo", columns=["A"]))
+        wb.table("TableOne")
+        wb.sheet(0).list_tables()[0]
         wb.close()
         with self.assertRaises(FormulonError):
-            wb.list_tables()[1]
+            wb.table("TableTwo")
+        with self.assertRaises(FormulonError):
+            wb.sheet(1).list_tables()[0]
 
     def test_table_rename_column_rewrites_structured_references(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "Qty")
             wb.sheet(0).set_number(1, 0, 2)
-            wb.add_table(range=SheetRect(0, CellRect(0, 0, 1, 0)), name="T", display_name="T", columns=["Qty"])
+            wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 1, 0), name="T", columns=["Qty"]))
             wb.sheet(0).set_formula(0, 2, "=SUM(T[Qty])")
-            self.assertEqual(wb.table(0).rename_column(0, "Amount"), "Amount")
+            self.assertEqual(wb.table("T").rename_column(0, "Amount"), "Amount")
             self.assertEqual(wb.sheet(0).get_formula(0, 2), "=SUM(T[Amount])")
-            self.assertEqual(wb.table(0).rename_column(0, ""), "Column1")
+            self.assertEqual(wb.table("T").rename_column(0, ""), "Column1")
             with self.assertRaises(FormulonError):
-                wb.table(0).rename_column(1, "X")
+                wb.table("T").rename_column(1, "X")
 
 
 if __name__ == "__main__":

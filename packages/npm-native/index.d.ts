@@ -559,37 +559,32 @@ export interface TableColumn {
   readonly totalsRowFormula: string;
 }
 
-/** Return type of `Table.getProperties()`. `styleName` is `null` without a named
- *  style and may name a custom style (`getTableStyle`); the toggles read false when the table has no
- *  `<tableStyleInfo>`. `headerRow` and `totalsRow` say whether the table has a header row and a
- *  totals row. */
+/** Return type of `Table.getProperties()`. `name` is the table's one name: the name formulas and
+ *  `Workbook.table` use, also written as the file's name attribute. `headerRow` and `totalsRow` say whether the
+ *  table has a header row and a totals row. The style lives in `Table.getStyleOptions()`. */
 export interface TableProperties {
   readonly name: string;
-  readonly displayName: string;
   /** The table's sheet and range. */
   readonly range: SheetRect;
-  readonly styleName: string | null;
-  readonly showFirstColumn: boolean;
-  readonly showLastColumn: boolean;
-  readonly showRowStripes: boolean;
-  readonly showColumnStripes: boolean;
   readonly headerRow: boolean;
   readonly totalsRow: boolean;
   readonly columns: readonly TableColumn[];
 }
 
-/** Authoring input for a worksheet table over `range`, a {@link SheetRect} or a sheet-qualified A1 range
- * (`'Sheet1!A1:C9'`; an unqualified one fails with `StatusCode.InvalidArgument`). Without `columns` the
- * column names are the header row's cell texts, and an empty header cell takes the profile's column word
- * and a number (`Column2`). With `columns`, one name per column of the range, each non-empty header cell
- * must equal its name (otherwise `StatusCode.InvalidArgument`) and an empty one is written with it.
- * `styleName` names a built-in TableStyle or a custom style. A styled table starts with row stripes on and
- * the other toggles off; a supplied toggle overrides that (and, without `styleName`, writes an unnamed style
- * element). */
+/** Argument of `Sheet.addTable`: a worksheet table over `range` on the receiving sheet, a {@link CellRect} or an
+ * A1 range (`'A1:C9'`). Without `columns` the column names are the header row's cell texts, and an empty header
+ * cell takes the profile's column word and a number (`Column2`). With `columns`, one name per column of the
+ * range, each non-empty header cell must equal its name (otherwise `StatusCode.InvalidArgument`) and an empty
+ * one is written with it. A `name` another table already uses (compared case-insensitively) fails with
+ * `StatusCode.AlreadyExists`.
+ *
+ * `styleName` names a built-in TableStyle or a custom style; omitted, it is the workbook default
+ * (`getTableStyleDefaults().tableStyle`), else `TableStyleMedium2`. `""` creates the table without a style
+ * element. A styled table starts with row stripes on and the other toggles off; a supplied toggle overrides
+ * that. */
 export interface TableInput {
-  range: SheetRect | string;
+  range: CellRect | string;
   name: string;
-  displayName?: string;
   columns?: readonly string[];
   styleName?: string;
   showFirstColumn?: boolean;
@@ -600,28 +595,32 @@ export interface TableInput {
   totalsRow?: boolean;
 }
 
-/** Partial table metadata update (`Table.update`). An omitted key leaves the field unchanged; `styleName: null`
- * removes the table style (the only key that accepts `null`), and a new `styleName` keeps the four toggles.
- * `range` takes a {@link SheetRect} or an A1 string and resizes the table; its `sheet` must be the table's
- * own sheet, otherwise the call fails with `StatusCode.InvalidArgument`. `headerRow` and `totalsRow` update
- * their flags only when supplied; turning `totalsRow` on writes each column's totals cell on the last row
- * of the range (see `Table.setColumnTotals`). `name` renames the table (`displayName` follows it unless
- * supplied), with `addTable`'s uniqueness rule, and rewrites structured references to the old name in
- * cell, defined-name, conditional-format, validation and chart formulas; a bare table name used as a
- * reference is not rewritten. The update is all-or-nothing. The record `Table.getProperties()` returns is
- * also accepted: `columns` is ignored. */
+/** Argument of `Table.update`. An omitted key leaves the field unchanged and no key accepts `null` (a
+ * `TypeError`). `range` takes a {@link CellRect} or an A1 range on the table's sheet and resizes the table.
+ * `headerRow` and `totalsRow` update their flags only when supplied; turning `totalsRow` on writes each column's
+ * totals cell on the last row of the range (see `Table.setColumnTotals`). The update is all-or-nothing. The
+ * record `Table.getProperties()` returns is also accepted: its `name` and `columns` are ignored. Renaming goes
+ * through `Table.rename`, the style through `Table.updateStyleOptions`. */
 export interface TablePatch {
-  range?: SheetRect | string;
-  name?: string;
-  displayName?: string;
-  styleName?: string | null;
-  showFirstColumn?: boolean;
-  showLastColumn?: boolean;
-  showRowStripes?: boolean;
-  showColumnStripes?: boolean;
+  range?: CellRect | SheetRect | string;
   headerRow?: boolean;
   totalsRow?: boolean;
 }
+
+/** Return type of `Table.getStyleOptions()`, which returns `null` when the table has no style element.
+ *  `styleName` is `null` for a style element without a named style and may name a custom style
+ *  (`Workbook.getTableStyle`). */
+export interface TableStyleOptions {
+  readonly styleName: string | null;
+  readonly showFirstColumn: boolean;
+  readonly showLastColumn: boolean;
+  readonly showRowStripes: boolean;
+  readonly showColumnStripes: boolean;
+}
+
+/** Argument of `Table.updateStyleOptions`. `styleName: null` removes the style name (the only key that accepts
+ *  `null`); a new `styleName` keeps the four toggles. */
+export type TableStyleOptionsPatch = Patch<TableStyleOptions>;
 
 /** Totals-row settings of one table column (`Table.setColumnTotals`).
  *  `function` defaults to `'none'`; `formula` is required for `'custom'`. */
@@ -664,12 +663,12 @@ export type TableStyleElementType =
   | 'pageFieldValues';
 
 /** One element of a custom table style. `size` is the stripe band size
- *  (default 1); `dxfId` indexes the differential formats (`addDxf`) and is
+ *  (default 1); `dxfIndex` indexes the differential formats (`addDxf`) and is
  *  absent for a region the style lists without formatting. */
 export interface TableStyleElement {
   readonly type: TableStyleElementType;
   readonly size?: number;
-  readonly dxfId?: number;
+  readonly dxfIndex?: number;
 }
 
 /** A custom table / PivotTable style (`setTableStyle`). `pivot` / `table`
@@ -681,13 +680,15 @@ export interface TableStyle {
   readonly elements?: readonly TableStyleElement[];
 }
 
-/** Return type of `Workbook.getTableStyleDefaults()`; a name is `null` when unset. */
+/** Return type of `Workbook.getTableStyleDefaults()`; a name is `null` when unset. `tableStyle` is the style
+ *  `Sheet.addTable` applies when `styleName` is omitted (unset: `TableStyleMedium2`), `pivotStyle` the style
+ *  `Sheet.addPivot` applies (unset: `PivotStyleLight16`). */
 export interface TableStyleDefaults {
   readonly tableStyle: string | null;
   readonly pivotStyle: string | null;
 }
 
-/** Argument of `Workbook.setTableStyleDefaults`. */
+/** Argument of `Workbook.updateTableStyleDefaults`. */
 export type TableStyleDefaultsPatch = Patch<TableStyleDefaults>;
 
 /** PivotTable layout cell kind. */
@@ -789,13 +790,13 @@ export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
 export const PIVOT_VALUES_FIELD = -2;
 
 /** Filter type for an active (slicer-applied) filter. */
-export const PivotFilterType: Readonly<{
-  ValueTop10: 0;
+export const PivotFilterKind: Readonly<{
+  ValueTopCount: 0;
   ValueGreaterThan: 1;
   ValueBetween: 2;
   LabelContains: 3;
   LabelBeginsWith: 4;
-  LabelDate: 5;
+  DateBetween: 5;
   ValueEqual: 6;
   ValueNotEqual: 7;
   ValueGreaterThanOrEqual: 8;
@@ -859,8 +860,8 @@ export const PivotFilterType: Readonly<{
   DateM11: 66;
   DateM12: 67;
 }>;
-/** Union of the {@link PivotFilterType} ordinals. */
-export type PivotFilterType =
+/** Union of the {@link PivotFilterKind} ordinals. */
+export type PivotFilterKind =
   | 0
   | 1
   | 2
@@ -990,13 +991,13 @@ export interface PivotWorksheetSource {
 
 /** Discriminator for the variant payload carried by a pivot filter
  *  spec. A slot without a payload (the optional upper bound of a range filter) is `null`. */
-export const PivotFilterValueKind: Readonly<{
+export const PivotFilterOperandKind: Readonly<{
   Int: 0;
   Double: 1;
   Text: 2;
 }>;
-/** Union of the {@link PivotFilterValueKind} ordinals. */
-export type PivotFilterValueKind = 0 | 1 | 2;
+/** Union of the {@link PivotFilterOperandKind} ordinals. */
+export type PivotFilterOperandKind = 0 | 1 | 2;
 
 /** Plain-data spec for `Pivot.addField`. */
 export interface PivotFieldInput {
@@ -1028,20 +1029,20 @@ export interface PivotDataFieldInput {
   readonly showAsBaseItem?: number | null;
 }
 
-/** Return type of `Pivot.getStyleInfo()`, which returns `null` when
- *  the definition has no style element. */
-export interface PivotStyle {
-  readonly name: string;
+/** Return type of `Pivot.getStyleOptions()`, which returns `null` when the definition has no style element.
+ *  `styleName` is `null` for a style element without a named style. */
+export interface PivotStyleOptions {
+  readonly styleName: string | null;
   readonly showRowHeaders: boolean;
-  readonly showColHeaders: boolean;
+  readonly showColumnHeaders: boolean;
   readonly showRowStripes: boolean;
-  readonly showColStripes: boolean;
+  readonly showColumnStripes: boolean;
   readonly showLastColumn: boolean;
 }
 
-/** Argument of `Pivot.setStyleInfo`. `name: null` writes the style element without a style name; the flags
- *  have no cleared form. */
-export type PivotStylePatch = Patch<PivotStyle>;
+/** Argument of `Pivot.updateStyleOptions`. `styleName: null` writes the style element without a style name; the
+ *  flags have no cleared form. */
+export type PivotStyleOptionsPatch = Patch<PivotStyleOptions>;
 
 /** Return type of `Pivot.getGrandTotals()`: whether the row and the column grand total bands show. */
 export interface PivotGrandTotals {
@@ -1049,12 +1050,12 @@ export interface PivotGrandTotals {
   readonly columns: boolean;
 }
 
-/** Argument of `Pivot.setGrandTotals`. */
+/** Argument of `Pivot.updateGrandTotals`. */
 export type PivotGrandTotalsPatch = Patch<PivotGrandTotals>;
 
 /** The PivotTable Options of one pivot (`Pivot.getOptions` /
- *  `Pivot.setOptions`). A string is `null` when
- *  the option is unset. `setOptions` takes any subset of the members:
+ *  `Pivot.updateOptions`). A string is `null` when
+ *  the option is unset. `updateOptions` takes any subset of the members:
  *  an omitted member keeps its current value, and `null` unsets a string. */
 export interface PivotOptions {
   /** Error cells show `errorCaption`; the caption is kept while this is off. */
@@ -1071,7 +1072,7 @@ export interface PivotOptions {
   /** Classic layout with grid drop zones. */
   readonly gridDropZones: boolean;
   readonly showEmptyRow: boolean;
-  readonly showEmptyCol: boolean;
+  readonly showEmptyColumn: boolean;
   readonly showDataDropDown: boolean;
   readonly printDrill: boolean;
   readonly fieldPrintTitles: boolean;
@@ -1096,11 +1097,11 @@ export interface PivotOptions {
   readonly enableDrill: boolean;
 }
 
-/** Argument of `Pivot.setOptions`. */
+/** Argument of `Pivot.updateOptions`. */
 export type PivotOptionsPatch = Patch<PivotOptions>;
 
 /** The options of one pivot cache (`PivotCache.getOptions` /
- *  `PivotCache.setOptions`). */
+ *  `PivotCache.updateOptions`). */
 export interface PivotCacheOptions {
   /** Save the source records with the file. */
   readonly saveData: boolean;
@@ -1109,7 +1110,7 @@ export interface PivotCacheOptions {
   readonly refreshOnLoad: boolean;
 }
 
-/** Argument of `PivotCache.setOptions`. */
+/** Argument of `PivotCache.updateOptions`. */
 export type PivotCacheOptionsPatch = Patch<PivotCacheOptions>;
 
 /** One element of `PivotCache.listCalculatedItems()`. */
@@ -1145,7 +1146,7 @@ export interface PivotField {
   readonly dateCalendar: PivotCalendar;
   /** For a group field, the index of the field it groups; `null` otherwise. */
   readonly groupBaseIndex: number | null;
-  /** Whether the automatic subtotal shows; `false` whenever `subtotalFns`
+  /** Whether the automatic subtotal shows; `false` whenever `subtotalFunctions`
    *  is non-empty, since custom functions replace it. */
   readonly defaultSubtotal: boolean;
   /** Whether a blank row follows each item. */
@@ -1154,9 +1155,9 @@ export interface PivotField {
   readonly fillDownLabels: boolean;
   /** Whether the field lists items without data. */
   readonly showAll: boolean;
-  /** Custom subtotal functions (`Pivot.addFieldSubtotalFn`), in ascending
+  /** Custom subtotal functions (`Pivot.addFieldSubtotalFunction`), in ascending
    *  `PivotAggregation` order. */
-  readonly subtotalFns: readonly PivotAggregation[];
+  readonly subtotalFunctions: readonly PivotAggregation[];
 }
 
 /** Argument of `Pivot.updateField`. `customName` and `numberFormat` (a number format code) clear with `null`
@@ -1170,8 +1171,8 @@ export type PivotFieldPatch = Patch<
 
 /** Element of `Pivot.getFieldItem(...)` and `Pivot.listFieldItems(...)`. */
 export interface PivotItem {
-  /** The item's own label; empty for an item bound only by cache index. */
-  readonly name: string;
+  /** The item's own label; `null` for an item bound only by cache index. */
+  readonly name: string | null;
   /** Index into the bound cache field's shared items, `null` for an item
    *  bound by label only. */
   readonly cacheIndex: number | null;
@@ -1182,13 +1183,14 @@ export interface PivotItem {
   readonly showDetail: boolean;
 }
 
-/** Argument of `Pivot.updateItem`. `caption: null` (or `""`) clears the caption; `visible` and `showDetail`
+/** Argument of `Pivot.updateFieldItem`. `caption: null` (or `""`) clears the caption; `visible` and `showDetail`
  *  have no cleared form. */
 export type PivotItemPatch = Patch<Pick<PivotItem, 'visible' | 'showDetail' | 'caption'>>;
 
 /** Argument of `Sheet.addPivot`: a new empty pivot named `name`, drawing from cache `cacheId`, with its
  *  top-left cell at `anchor` (a {@link CellAddress} or an A1 cell, `'C3'`). A `PivotCache` handle passes its
- *  `cacheId`. */
+ *  `cacheId`. The pivot takes the workbook's PivotTable style default (`getTableStyleDefaults().pivotStyle`),
+ *  else `PivotStyleLight16`. */
 export interface PivotInput {
   name: string;
   cacheId: number;
@@ -1242,19 +1244,19 @@ export interface PivotDateGroupInput {
 /** Plain-data spec for `Pivot.addFilter`. For non-range filters, `valueKind` must be
  *  one of `Int` / `Double` / `Text`; the high-bound payload is honoured
  *  only for range filter types (`ValueBetween`, `ValueNotBetween`,
- *  `LabelDate`, `DateNotBetween`); `LabelBetween` / `LabelNotBetween` take
+ *  `DateBetween`, `DateNotBetween`); `LabelBetween` / `LabelNotBetween` take
  *  their upper bound in `valueHighText`, and no other type may set it. */
 export interface PivotFilterInput {
   readonly axis: PivotAxis;
   readonly fieldName: string;
-  readonly type: PivotFilterType;
+  readonly type: PivotFilterKind;
   /** Data-field aggregate scored by value filters. Defaults to 0. */
   readonly dataFieldIndex?: number;
-  readonly valueKind?: PivotFilterValueKind;
+  readonly valueKind?: PivotFilterOperandKind;
   readonly valueInt?: number;
   readonly valueDouble?: number;
   readonly valueText?: string;
-  readonly valueHighKind?: PivotFilterValueKind;
+  readonly valueHighKind?: PivotFilterOperandKind;
   readonly valueHighInt?: number;
   readonly valueHighDouble?: number;
   readonly valueHighText?: string;
@@ -1270,14 +1272,14 @@ export interface PivotFilterInput {
 export interface PivotFilter {
   readonly axis: PivotAxis;
   readonly fieldName: string;
-  readonly type: PivotFilterType;
+  readonly type: PivotFilterKind;
   readonly dataFieldIndex: number;
-  readonly valueKind: PivotFilterValueKind | null;
+  readonly valueKind: PivotFilterOperandKind | null;
   readonly valueInt: number;
   readonly valueDouble: number;
   readonly valueText: string;
   /** `null` when the filter has no high bound. */
-  readonly valueHighKind: PivotFilterValueKind | null;
+  readonly valueHighKind: PivotFilterOperandKind | null;
   readonly valueHighInt: number;
   readonly valueHighDouble: number;
   /** `null` when the filter has no high bound. */
@@ -1570,9 +1572,9 @@ export type CfDataBarAxisPosition = 0 | 1 | 2;
 export interface CfMatch {
   readonly kind: CfMatchKind;
   readonly priority: number;
-  /** `1` when `dxfId` is meaningful; `0` otherwise. */
-  readonly dxfIdEngaged: number;
-  readonly dxfId: number;
+  /** `1` when `dxfIndex` is meaningful; `0` otherwise. */
+  readonly dxfIndexEngaged: number;
+  readonly dxfIndex: number;
   /** Active when `kind === ColorScale`. */
   readonly color: Color;
   /** Active when `kind === DataBar`. */
@@ -1604,8 +1606,10 @@ export interface Pagination {
    *  still falls back to the used range in that case, so `pageCount` can be
    *  non-zero without a declared area. */
   readonly printArea: readonly CellRect[];
-  readonly rowBreaks: readonly number[];
-  readonly columnBreaks: readonly number[];
+  /** The row breaks in effect, ascending by `row`. */
+  readonly rowBreaks: readonly RowBreak[];
+  /** The column breaks in effect, ascending by `col`. */
+  readonly columnBreaks: readonly ColumnBreak[];
   readonly pageCount: number;
   /** Paper the layout ran on, after the orientation swap. `known` is false
    *  when the stored `paperSize` was unrecognised and A4 was substituted. */
@@ -1613,18 +1617,14 @@ export interface Pagination {
   readonly margins: PaginationMargins;
   /** Cell-body rectangle before print-title reservation, from the page's top-left corner. */
   readonly printable: RectPt;
-  /** Effective scale as a factor (1 is 100%). */
-  readonly scale: number;
+  /** Effective print scale as a percentage (100 is 100%). */
+  readonly scalePct: number;
   /** 0 = down then over, 1 = over then down. */
   readonly pageOrder: number;
   /** Repeat rows / columns in effect; `null` when neither axis repeats. */
   readonly printTitles: PrintTitles | null;
   /** Physical pages in print order. */
   readonly pages: readonly PaginationPage[];
-  /** Parallel to `rowBreaks`: true for a manual break. */
-  readonly rowBreakManual: readonly boolean[];
-  /** Parallel to `columnBreaks`: true for a manual break. */
-  readonly columnBreakManual: readonly boolean[];
 }
 
 /** `Pagination.paper`. `known` is false when the stored `paperSize` was
@@ -1636,23 +1636,23 @@ export interface PaginationPaper {
   readonly known: boolean;
 }
 
-/** `Pagination.margins`, in points; `header` / `footer` are measured
+/** `Pagination.margins`, in inches; `headerIn` / `footerIn` are measured
  *  from the page edge to the header / footer band. */
 export interface PaginationMargins {
-  readonly left: number;
-  readonly right: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly header: number;
-  readonly footer: number;
+  readonly leftIn: number;
+  readonly rightIn: number;
+  readonly topIn: number;
+  readonly bottomIn: number;
+  readonly headerIn: number;
+  readonly footerIn: number;
 }
 
 /** A rectangle in points. */
 export interface RectPt {
   readonly x: number;
   readonly y: number;
-  readonly width: number;
-  readonly height: number;
+  readonly widthPt: number;
+  readonly heightPt: number;
 }
 
 /** One physical page of a `Pagination`. `widthPt` / `heightPt` are the
@@ -1684,23 +1684,24 @@ export type GeometryMode = 0 | 1;
 export interface WidthModel {
   readonly pointsPerChar: number;
   readonly paddingPt: number;
-  readonly normalFontSize: number;
+  /** Point size of the Normal font. */
+  readonly normalFontSizePt: number;
   /** False when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
   readonly calibrated: boolean;
   readonly normalFontName: string;
   readonly platform: string;
 }
 
-/** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColWidth` and `defaultRowHeight`
- *  are `null` when the sheet stores none; on set, `null` clears the stored value and an omitted key keeps it. */
+/** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColWidthChars` and `defaultRowHeightPt`
+ *  are `null` when the sheet stores none; on update, `null` clears the stored value and an omitted key keeps it. */
 export interface SheetFormatDefaultsInput {
-  /** Character units. */
-  readonly defaultColWidth: number | null;
-  /** Points. */
-  readonly defaultRowHeight: number | null;
-  /** Character units; OOXML default 8. */
-  readonly baseColWidth: number;
-  /** `<sheetFormatPr customHeight>`: `defaultRowHeight` is an explicit override that stays as
+  /** Characters, 0 to 255. */
+  readonly defaultColWidthChars: number | null;
+  /** Points, 0 to 409. */
+  readonly defaultRowHeightPt: number | null;
+  /** Characters; OOXML default 8. */
+  readonly baseColWidthChars: number;
+  /** `<sheetFormatPr customHeight>`: `defaultRowHeightPt` is an explicit override that stays as
    *  written, rather than a cached figure Excel recomputes from the Normal font. An omitted key
    *  on set keeps the stored flag. */
   readonly customHeight: boolean;
@@ -1709,17 +1710,17 @@ export interface SheetFormatDefaultsInput {
   readonly zeroHeight: boolean;
 }
 
-/** Argument of `Sheet.setFormatDefaults`. */
+/** Argument of `Sheet.updateFormatDefaults`. */
 export type SheetFormatDefaultsPatch = Patch<SheetFormatDefaultsInput>;
 
 /** Return type of `Sheet.getFormatDefaults()`. The effective
- *  values are read-only and ignored by `setFormatDefaults`. */
+ *  values are read-only and ignored by `updateFormatDefaults`. */
 export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
-  /** Stored width the sheet lays columns out with: `defaultColWidth` when set, else the column
-   *  Excel derives from `baseColWidth` and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43). */
-  readonly effectiveDefaultColWidth: number;
-  /** Points the sheet lays rows out with: `defaultRowHeight` when set, else 102/7 (about 14.57); 0 when `zeroHeight` hides rows by default. */
-  readonly effectiveDefaultRowHeight: number;
+  /** Stored width in characters the sheet lays columns out with: `defaultColWidthChars` when set, else the column
+   *  Excel derives from `baseColWidthChars` and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43). */
+  readonly effectiveDefaultColWidthChars: number;
+  /** Points the sheet lays rows out with: `defaultRowHeightPt` when set, else 102/7 (about 14.57); 0 when `zeroHeight` hides rows by default. */
+  readonly effectiveDefaultRowHeightPt: number;
 }
 
 /** One populated cell, as `Sheet.listCells` and `Sheet.getCellsInRange` return it: its coordinates, its
@@ -1779,12 +1780,12 @@ export const SheetViewMode: Readonly<{
 /** Union of the {@link SheetViewMode} ordinals. */
 export type SheetViewMode = 0 | 1 | 2;
 
-/** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
+/** Per-sheet view: zoom percentage (10..400, default 100), frozen-pane row/col
  *  counts, tab visibility, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>` (gridlines, row/col headers, zero display,
  *  right-to-left, tab-selected, view mode). */
 export interface SheetView {
-  readonly zoomScale: number;
+  readonly zoomPct: number;
   readonly freezeRows: number;
   readonly freezeCols: number;
   /** The tab state. */
@@ -1811,15 +1812,15 @@ export interface SheetView {
   readonly paneTopLeftCol: number;
   /** An unfrozen split's position in twips (`<pane xSplit ySplit>`); `0` for no
    *  split on that axis, and always `0` while the view is frozen. */
-  readonly splitX: number;
-  readonly splitY: number;
+  readonly splitXTwips: number;
+  readonly splitYTwips: number;
   /** `showFormulas`: cells show their formula text; default false. */
   readonly showFormulas: boolean;
   /** `showOutlineSymbols`: the outline gutter's group symbols are shown; default true. */
   readonly showOutlineSymbols: boolean;
 }
 
-/** Argument of `Sheet.setView`. No key has a cleared form. */
+/** Argument of `Sheet.updateView`. No key has a cleared form. */
 export type SheetViewPatch = Patch<SheetView>;
 
 /** The active pane's selection: the active cell and the selected ranges.
@@ -1841,48 +1842,91 @@ export interface SheetSelection {
 }
 
 /**
- * Mirror of OOXML `<sheetProtection>` (ECMA-376 §18.3.1.85).
+ * Protection of one sheet (`<sheetProtection>`, ECMA-376 §18.3.1.85), as `Sheet.getSheetProtection()` returns
+ * it; that getter returns `null` for an unprotected sheet, so the record's presence is the protection.
  *
- * Round-trip metadata only — the engine does not enforce locks at
- * evaluation time. The host UI inspects these flags to mirror Excel's
- * "Protect Sheet" dialog state.
- *
- * `enabled` controls whether the `<sheetProtection>` element is
- * emitted at all; setting it to `false` clears the protection block on
- * save.
+ * Round-trip metadata only: the engine does not enforce locks at evaluation time. Each `allow*` flag is `true`
+ * when users may perform that action on the protected sheet, as the "Protect Sheet" dialog shows it. Hash fields
+ * are stored exactly as given; the host computes them. A string is `null` when absent.
  */
 export interface SheetProtection {
-  readonly enabled: boolean;
   readonly algorithmName: string | null;
   readonly hashValue: string | null;
   readonly saltValue: string | null;
   readonly spinCount: number;
-  readonly legacyPassword: string | null;
-  readonly sheet: boolean;
-  readonly objects: boolean;
-  readonly scenarios: boolean;
-  readonly formatCells: boolean;
-  readonly formatColumns: boolean;
-  readonly formatRows: boolean;
-  readonly insertColumns: boolean;
-  readonly insertRows: boolean;
-  readonly insertHyperlinks: boolean;
-  readonly deleteColumns: boolean;
-  readonly deleteRows: boolean;
-  readonly selectLockedCells: boolean;
-  readonly selectUnlockedCells: boolean;
-  readonly sort: boolean;
-  readonly autoFilter: boolean;
-  readonly pivotTables: boolean;
+  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  readonly legacyPasswordHash: string | null;
+  /** Users may edit objects (shapes, charts, pictures) on the protected sheet; Excel's default `false`. */
+  readonly allowEditObjects: boolean;
+  /** Users may edit scenarios on the protected sheet; Excel's default `false`. */
+  readonly allowEditScenarios: boolean;
+  /** Users may format cells on the protected sheet; Excel's default `false`. */
+  readonly allowFormatCells: boolean;
+  /** Users may format columns on the protected sheet; Excel's default `false`. */
+  readonly allowFormatColumns: boolean;
+  /** Users may format rows on the protected sheet; Excel's default `false`. */
+  readonly allowFormatRows: boolean;
+  /** Users may insert columns on the protected sheet; Excel's default `false`. */
+  readonly allowInsertColumns: boolean;
+  /** Users may insert rows on the protected sheet; Excel's default `false`. */
+  readonly allowInsertRows: boolean;
+  /** Users may insert hyperlinks on the protected sheet; Excel's default `false`. */
+  readonly allowInsertHyperlinks: boolean;
+  /** Users may delete columns on the protected sheet; Excel's default `false`. */
+  readonly allowDeleteColumns: boolean;
+  /** Users may delete rows on the protected sheet; Excel's default `false`. */
+  readonly allowDeleteRows: boolean;
+  /** Users may select locked cells on the protected sheet; Excel's default `true`. */
+  readonly allowSelectLockedCells: boolean;
+  /** Users may select unlocked cells on the protected sheet; Excel's default `true`. */
+  readonly allowSelectUnlockedCells: boolean;
+  /** Users may sort on the protected sheet; Excel's default `false`. */
+  readonly allowSort: boolean;
+  /** Users may use AutoFilter on the protected sheet; Excel's default `false`. */
+  readonly allowAutoFilter: boolean;
+  /** Users may use PivotTables on the protected sheet; Excel's default `false`. */
+  readonly allowPivotTables: boolean;
 }
+
+/** Argument of `Sheet.setSheetProtection`: the whole protection of a protected sheet. Every key is optional; an
+ *  omitted `allow*` flag takes Excel's dialog default (`allowSelectLockedCells` and `allowSelectUnlockedCells`
+ *  `true`, every other flag `false`), an omitted string is absent and an omitted `spinCount` is 0. The record
+ *  `Sheet.getSheetProtection()` returns is accepted as is. */
+export interface SheetProtectionInput {
+  algorithmName?: string | null;
+  hashValue?: string | null;
+  saltValue?: string | null;
+  spinCount?: number;
+  legacyPasswordHash?: string | null;
+  allowEditObjects?: boolean;
+  allowEditScenarios?: boolean;
+  allowFormatCells?: boolean;
+  allowFormatColumns?: boolean;
+  allowFormatRows?: boolean;
+  allowInsertColumns?: boolean;
+  allowInsertRows?: boolean;
+  allowInsertHyperlinks?: boolean;
+  allowDeleteColumns?: boolean;
+  allowDeleteRows?: boolean;
+  allowSelectLockedCells?: boolean;
+  allowSelectUnlockedCells?: boolean;
+  allowSort?: boolean;
+  allowAutoFilter?: boolean;
+  allowPivotTables?: boolean;
+}
+
+/** Argument of `Sheet.updateSheetProtection`. `null` clears a string or `spinCount`; an `allow*` flag has no
+ *  cleared form (`TypeError`). On an unprotected sheet the patch applies to the {@link SheetProtectionInput}
+ *  defaults and protects the sheet, unless every key is omitted. */
+export type SheetProtectionPatch = Patch<SheetProtectionInput>;
 
 /** Per-column-range layout override. Inclusive `[first, last]` columns
  *  carry the same width / hidden / outline level. */
 export interface ColumnLayout {
   readonly first: number;
   readonly last: number;
-  /** The explicit width (raw presence or non-zero legacy width); `null` when the span states none. */
-  readonly width: number | null;
+  /** The explicit width in characters (raw presence or non-zero legacy width); `null` when the span states none. */
+  readonly widthChars: number | null;
   readonly hidden: boolean;
   readonly outlineLevel: number;
   /** The outline group this span summarises is collapsed. */
@@ -1892,8 +1936,8 @@ export interface ColumnLayout {
 /** Per-row layout override. */
 export interface RowLayout {
   readonly row: number;
-  /** The stored height; `null` when the row stores none. */
-  readonly height: number | null;
+  /** The stored height in points; `null` when the row stores none. */
+  readonly heightPt: number | null;
   readonly hidden: boolean;
   readonly outlineLevel: number;
   /** The outline group this row summarises is collapsed. */
@@ -1941,7 +1985,7 @@ export interface Hyperlink {
   readonly tooltip: string | null;
 }
 
-/** Argument of `Sheet.addHyperlink` / `addHyperlinkRange`. A `null` `target` is an in-workbook link and needs
+/** Argument of `Sheet.setHyperlink` / `setHyperlinkRange`. A `null` `target` is an in-workbook link and needs
  *  `location`, its A1 destination. A `null` `display` or `tooltip` is the same as omitting it, so a read
  *  `Hyperlink` can be passed back. */
 export interface HyperlinkInput {
@@ -1965,12 +2009,13 @@ export interface WorkbookProtection {
   readonly lockWindows: boolean;
   readonly lockRevision: boolean;
   /** Legacy 16-bit password hash, as the hex text Excel writes. */
-  readonly workbookPassword: string | null;
+  readonly workbookLegacyPasswordHash: string | null;
   readonly workbookAlgorithmName: string | null;
   readonly workbookHashValue: string | null;
   readonly workbookSaltValue: string | null;
   readonly workbookSpinCount: number;
-  readonly revisionsPassword: string | null;
+  /** Legacy 16-bit password hash of the revision lock, as the hex text Excel writes. */
+  readonly revisionsLegacyPasswordHash: string | null;
   readonly revisionsAlgorithmName: string | null;
   readonly revisionsHashValue: string | null;
   readonly revisionsSaltValue: string | null;
@@ -1982,7 +2027,8 @@ export interface WorkbookProtection {
 export interface ProtectedRange {
   readonly name: string;
   readonly ranges: readonly CellRect[];
-  readonly password: string;
+  /** Legacy 16-bit password hash, as the hex text Excel writes; `null` when absent. */
+  readonly legacyPasswordHash: string | null;
   readonly algorithmName: string;
   readonly hashValue: string;
   readonly saltValue: string;
@@ -1991,9 +2037,10 @@ export interface ProtectedRange {
 }
 
 /** Argument of `updateProtectedRange`: every {@link ProtectedRange} key, each optional. A key left out is
- *  unchanged and no key accepts `null` (a `TypeError`); the empty string clears `password`,
- *  `algorithmName`, `hashValue`, `saltValue` and `securityDescriptor`. Leaving `ranges` out keeps the stored
- *  ranges, including any the engine cannot parse; an empty `ranges` fails with `StatusCode.InvalidArgument`.
+ *  unchanged; `legacyPasswordHash: null` removes the hash and any other `null` is a `TypeError`. The empty
+ *  string clears `legacyPasswordHash`, `algorithmName`, `hashValue`, `saltValue` and `securityDescriptor`.
+ *  Leaving `ranges` out keeps the stored ranges, including any the engine cannot parse; an empty `ranges` fails
+ *  with `StatusCode.InvalidArgument`.
  *  A `ProtectedRange` read back passes as is; any unknown key fails with a `TypeError`. */
 export type ProtectedRangePatch = Patch<ProtectedRange>;
 
@@ -2037,14 +2084,16 @@ export type ValidationOperator = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export interface DataValidation {
   readonly ranges: readonly CellRect[];
   readonly type: ValidationType;
-  readonly op: ValidationOperator;
+  readonly operator: ValidationOperator;
   readonly errorStyle: ValidationErrorStyle;
+  /** A blank cell passes the rule. */
   readonly allowBlank: boolean;
+  /** The prompt (`promptTitle` / `promptMessage`) shows when the cell is selected. */
   readonly showInputMessage: boolean;
+  /** The error alert (`errorTitle` / `errorMessage`) shows on invalid entry. */
   readonly showErrorMessage: boolean;
-  /** Whether the in-cell dropdown arrow is shown (`list` type only).
-   *  Defaults to `true`, matching Excel's default. */
-  readonly showDropDown: boolean;
+  /** The in-cell dropdown arrow is shown (`List` type only). */
+  readonly showInCellDropdown: boolean;
   /** Formula text, leading `=` included. */
   readonly formula1: string;
   readonly formula2: string;
@@ -2054,21 +2103,23 @@ export interface DataValidation {
   readonly promptMessage: string;
 }
 
-/** Argument shape accepted by `Sheet.addValidation(validation)`. Every
- *  field except `ranges` and `type` is optional; missing fields default to
- *  `Between` / `Stop`, `false` for booleans, and `""` for strings. `ranges` must hold at least one
+/** Argument of `Sheet.addValidation(validation)`. Every field except `ranges` and `type` is optional. An omitted
+ *  field takes Excel's dialog default: `Between` / `Stop`, `true` for `allowBlank`, `showInputMessage`,
+ *  `showErrorMessage` and `showInCellDropdown`, and `""` for strings. `ranges` must hold at least one
  *  rectangle. A formula that does not parse fails with its parser status and `FormulonError.parseError`. */
 export interface DataValidationInput {
   ranges: readonly (CellRect | string)[] | string;
   type: ValidationType;
-  op?: ValidationOperator;
+  operator?: ValidationOperator;
   errorStyle?: ValidationErrorStyle;
+  /** A blank cell passes the rule; default `true`. */
   allowBlank?: boolean;
+  /** Show the prompt when the cell is selected; default `true`. */
   showInputMessage?: boolean;
+  /** Show the error alert on invalid entry; default `true`. */
   showErrorMessage?: boolean;
-  /** Whether the in-cell dropdown arrow is shown (`list` type only).
-   *  Defaults to `true`, matching Excel's default. */
-  showDropDown?: boolean;
+  /** Show the in-cell dropdown arrow (`List` type only); default `true`. */
+  showInCellDropdown?: boolean;
   /** Formula text; the leading `=` is optional. */
   formula1?: string;
   formula2?: string;
@@ -2151,7 +2202,7 @@ export const FunctionAvailability: Readonly<{
 export type FunctionAvailability = 0 | 1 | 2 | 3;
 
 /** Metadata of a registered function, as `getFunctionMetadata(name)` returns it.
- *  `signatureTemplate` and `description` are always `undefined`: the engine ships no
+ *  `signature` and `description` are always `undefined`: the engine ships no
  *  human-readable function text, and {@link mergeFunctionMetadata} overlays a host-supplied
  *  provider document (`docs/function-metadata-schema.md`). */
 export interface FunctionMetadata {
@@ -2161,7 +2212,7 @@ export interface FunctionMetadata {
   readonly maxArity: number | null;
   /** How far the engine implements the function. */
   readonly availability: FunctionAvailability;
-  readonly signatureTemplate?: string;
+  readonly signature?: string;
   readonly description?: string;
 }
 
@@ -2202,8 +2253,8 @@ export interface MergedFunctionMetadata extends FunctionMetadata {
  *  structural `getFunctionMetadata()` result.
  *
  *  Field precedence (first non-nullish wins):
- *    - `signatureTemplate`: `entry.localized[locale].signature` ->
- *      `entry.signature` -> `base.signatureTemplate`
+ *    - `signature`: `entry.localized[locale].signature` ->
+ *      `entry.signature` -> `base.signature`
  *    - `description`: `entry.localized[locale].description` ->
  *      `entry.description` -> `base.description`
  *    - `localizedName`: `entry.aliases[locale]` -> `base.name`
@@ -2307,12 +2358,12 @@ export interface ConditionalFormat {
   readonly priority: number;
   readonly stopIfTrue: boolean;
   readonly ranges: readonly CellRect[];
-  readonly dxfId?: number;
+  readonly dxfIndex?: number;
   /** Formula text, leading `=` included. */
   readonly formula1?: string;
   readonly formula2?: string;
   /** Engaged for `CellIs` rules. */
-  readonly op?: CfOperator;
+  readonly operator?: CfOperator;
   /** Engaged for `Top10` rules. */
   readonly rank?: number;
   readonly percent?: boolean;
@@ -2376,10 +2427,10 @@ export interface ConditionalFormat {
 /** One level of a custom icon set. `iconSet` is the `ST_IconSetType` spelling
  *  of the set the icon comes from (`"3Arrows"`, `"3Triangles"`, `"5Boxes"`,
  *  `"NoIcons"` for a level that draws nothing, ...), which reaches past
- *  {@link IconSetName}; `iconId` is the zero-based icon within it. */
+ *  {@link IconSetName}; `iconIndex` is the zero-based icon within it. */
 export interface CfIconInput {
   iconSet: string;
-  iconId: number;
+  iconIndex: number;
 }
 
 /** The members every {@link ConditionalFormatInput} shares. When `priority` is missing, zero, or negative, the
@@ -2392,9 +2443,12 @@ interface CfRuleInputBase {
   id?: string;
 }
 
-/** A rule that applies a differential format (`dxfId`, an index of `Workbook.ooxml.listDxfs()`). */
+/** A rule that applies a differential format: `format`, registered as a new differential format, or
+ *  `dxfIndex`, an index of `Workbook.ooxml.listDxfs()`. Giving both throws `TypeError`; giving neither applies no
+ *  formatting. */
 interface CfFormatRuleInputBase extends CfRuleInputBase {
-  dxfId?: number;
+  format?: CellFormatPatch;
+  dxfIndex?: number;
 }
 
 /** `Expression`: formats a cell where `formula1` (leading `=` optional) is true. */
@@ -2406,7 +2460,7 @@ interface CfExpressionRuleInput extends CfFormatRuleInputBase {
 /** `CellIs`: compares the cell with `formula1`, and `formula2` for `Between` / `NotBetween`. */
 interface CfCellIsRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.CellIs;
-  op: CfOperator;
+  operator: CfOperator;
   formula1: string;
   formula2?: string;
 }
@@ -2667,9 +2721,9 @@ export interface CellXf {
   readonly borderIndex: number;
   readonly numFmtId: number;
   /** OOXML `horizontal`; `null` when the attribute is absent. */
-  readonly horizontalAlign: HorizontalAlign | null;
+  readonly horizontal: HorizontalAlign | null;
   /** OOXML `vertical`; `null` when the attribute is absent. */
-  readonly verticalAlign: VerticalAlign | null;
+  readonly vertical: VerticalAlign | null;
   /** OOXML `wrapText`; `null` when the attribute is absent. */
   readonly wrapText: boolean | null;
   /** OOXML `justifyLastLine`; effective with distributed horizontal alignment. `null` when the attribute is absent. */
@@ -2701,7 +2755,7 @@ export interface CellXf {
   readonly readingOrder?: ReadingOrder;
   /** Index into `<cellStyleXfs>` of the named style this format inherits
    *  from. Always 0 for a record read back from `getCellStyleXf`. */
-  readonly xfId?: number;
+  readonly styleXfIndex?: number;
 }
 
 /** Which selector a `Color` carries. */
@@ -2722,7 +2776,7 @@ export interface Color {
   /** Which selector the colour carries. */
   readonly kind: ColorKind;
   /** AARRGGBB; meaningful when `kind` is `Rgb`. */
-  readonly rgb: number;
+  readonly argb: number;
   /** Theme index; meaningful when `kind` is `Theme`. */
   readonly theme: number;
   /** Theme tint in -1..1; meaningful when `kind` is `Theme`. */
@@ -2734,9 +2788,9 @@ export interface Color {
 /** Plain-data shape of a font record. Mirrors `formulon::io::Font`. */
 export interface Font {
   readonly name: string;
-  /** The `<sz>` size; `null` without the element, which on a differential font leaves the size unchanged. On
-   *  input an omitted size is `null`. */
-  readonly size: number | null;
+  /** The `<sz>` size in points; `null` without the element, which on a differential font leaves the size
+   *  unchanged. On input an omitted size is `null`. */
+  readonly sizePt: number | null;
   /** The `<b>` element: `null` without it, which on a differential font means "leave bold unchanged";
    *  `false` means "switch bold off". */
   readonly bold: boolean | null;
@@ -2766,9 +2820,9 @@ export interface Font {
 export interface Fill {
   readonly pattern: FillPattern;
   /** The `<fgColor>` element; `ColorKind.None` without one. */
-  readonly fg: Color;
+  readonly foreground: Color;
   /** The `<bgColor>` element; `ColorKind.None` without one. */
-  readonly bg: Color;
+  readonly background: Color;
   /** A `<gradientFill>`; when present the pattern fields are ignored. */
   readonly gradient?: GradientFill;
 }
@@ -2816,17 +2870,17 @@ export interface CellXfInput {
   readonly fillIndex: number;
   readonly borderIndex: number;
   readonly numFmtId: number;
-  readonly horizontalAlign: HorizontalAlign;
-  readonly verticalAlign: VerticalAlign;
+  readonly horizontal: HorizontalAlign;
+  readonly vertical: VerticalAlign;
   readonly wrapText: boolean;
   /** OOXML `justifyLastLine`; effective with distributed alignment. Defaults to false. */
   readonly justifyLastLine?: boolean;
   /** Whether to preserve an explicit alignment child. Omit to infer from supplied alignment fields. */
   readonly hasAlignment?: boolean;
-  /** Whether `horizontalAlign` was explicitly supplied; defaults to inference. */
-  readonly hasHorizontalAlign?: boolean;
-  /** Whether `verticalAlign` was explicitly supplied; defaults to inference. */
-  readonly hasVerticalAlign?: boolean;
+  /** Whether `horizontal` was explicitly supplied; defaults to inference. */
+  readonly hasHorizontal?: boolean;
+  /** Whether `vertical` was explicitly supplied; defaults to inference. */
+  readonly hasVertical?: boolean;
   /** Whether `wrapText` was explicitly supplied; defaults to inference. */
   readonly hasWrapText?: boolean;
   /** Whether `justifyLastLine` was explicitly supplied; defaults to inference. */
@@ -2859,12 +2913,15 @@ export interface CellXfInput {
   /** Index of the named style in `<cellStyleXfs>` this format inherits from.
    *  Only meaningful for `addCellXf`; must name an entry created by
    *  `addCellStyleXf`. Defaults to 0. */
-  readonly xfId?: number;
+  readonly styleXfIndex?: number;
 }
 
 /** Return type of `Sheet.getCellFormat`: the format a cell shows, read from its effective XF (cell, then row,
- *  then column, then the default). Conditional formatting is not applied. */
+ *  then column, then the default). Conditional formatting is not applied. The XF indexes live under
+ *  `Sheet.ooxml`: the effective one in `getEffectiveStyle`, the cell's own in `getCellXfIndex`. */
 export interface CellFormat {
+  /** Which layer the effective XF came from. */
+  readonly source: EffectiveStyleSource;
   /** The number format code; `"General"` for General. */
   readonly numberFormat: string;
   readonly font: Font;
@@ -2904,11 +2961,11 @@ export interface CellProtection {
 export type ColorInput = string | Color;
 
 /** The font keys of a {@link CellFormatPatch}; an omitted key keeps its value. `null` clears a key whose
- *  {@link Font} field is nullable (`size`, `bold`, `italic`, `strike`), which then reads back `null`. */
+ *  {@link Font} field is nullable (`sizePt`, `bold`, `italic`, `strike`), which then reads back `null`. */
 export interface FontPatch {
   readonly name?: string;
-  /** Points; finite and not negative. `null` removes the `<sz>` element. */
-  readonly size?: number | null;
+  /** Points, 1 to 409. `null` removes the `<sz>` element. */
+  readonly sizePt?: number | null;
   /** `null` removes the `<b>` element. */
   readonly bold?: boolean | null;
   /** `null` removes the `<i>` element. */
@@ -2920,12 +2977,12 @@ export interface FontPatch {
   readonly color?: ColorInput;
 }
 
-/** The fill keys of a {@link CellFormatPatch}. Setting `fg` or `bg` on a fill without a pattern makes it
- *  `FillPattern.Solid` unless `pattern` is given; any fill key drops a gradient. */
+/** The fill keys of a {@link CellFormatPatch}. Setting `foreground` or `background` on a fill without a pattern
+ *  makes it `FillPattern.Solid` unless `pattern` is given; any fill key drops a gradient. */
 export interface FillPatch {
   readonly pattern?: FillPattern;
-  readonly fg?: ColorInput;
-  readonly bg?: ColorInput;
+  readonly foreground?: ColorInput;
+  readonly background?: ColorInput;
 }
 
 /** One border side of a {@link BorderPatch}. */
@@ -2966,11 +3023,12 @@ export interface CellProtectionPatch {
   readonly hidden?: boolean;
 }
 
-/** Argument of `Sheet.setCellFormat`: the format keys to change, each group merged into the current format. An
- *  omitted key keeps its value. `null` clears a key whose field in the read record is nullable (`Font.size`,
- *  `Font.bold`, `Font.family`, ...), which then reads back `null`; on any other key it throws `TypeError`. A
- *  group also takes the matching record `getCellFormat` returns, so `setCellFormat(range, ws.getCellFormat(cell))`
- *  copies a format; any other key throws `TypeError`. */
+/** Argument of `Sheet.updateCellFormat`: the format keys to change, each group merged into the current format.
+ *  An omitted key keeps its value. `null` clears a key whose field in the read record is nullable
+ *  (`Font.sizePt`, `Font.bold`, `Font.family`, ...), which then reads back `null`; on any other key it throws
+ *  `TypeError`. A group also takes the matching record `getCellFormat` returns, so
+ *  `updateCellFormat(range, ws.getCellFormat(cell))` copies a format (`source` is ignored); any
+ *  other key throws `TypeError`. */
 export interface CellFormatPatch {
   /** A number format code; `"General"` resets it. */
   readonly numberFormat?: string;
@@ -2981,22 +3039,22 @@ export interface CellFormatPatch {
   readonly protection?: CellProtectionPatch;
 }
 
-/** One `<rPh>` block: `text` reads the half-open span `[sb, eb)` of the
+/** One `<rPh>` block: `text` reads the half-open span `[start, end)` of the
  *  cell's surface text, measured in UTF-16 code units. */
 export interface PhoneticRun {
-  readonly sb: number;
-  readonly eb: number;
+  readonly start: number;
+  readonly end: number;
   readonly text: string;
 }
 
-/** How a cell's phonetic guide renders (OOXML `<phoneticPr>`). `fontId`
+/** How a cell's phonetic guide renders (OOXML `<phoneticPr>`). `fontIndex`
  *  indexes the workbook's font table for the ruby text; `type` is the kana
  *  form (0 half-width katakana, 1 full-width katakana, 2 hiragana, 3 no
  *  conversion) and `alignment` how the kana is distributed (0 no control,
  *  1 left, 2 center, 3 distributed). The all-zero triple is what Excel
  *  infers for a guide written with no `<phoneticPr>` element. */
 export interface PhoneticPropertiesInput {
-  fontId: number;
+  fontIndex: number;
   type: number;
   alignment: number;
 }
@@ -3015,14 +3073,22 @@ export interface Dxf {
   readonly font?: Font;
   readonly fill?: Fill;
   readonly border?: Border;
-  readonly numFmt?: {
-    numFmtId: number;
-    formatCode: string;
-  };
-  /** Serialized OOXML `<alignment .../>` child; lexical formatting may normalize on load. */
-  readonly alignmentXml?: string;
-  /** Serialized OOXML `<protection .../>` child; lexical formatting may normalize on load. */
-  readonly protectionXml?: string;
+  /** The number format code; `null` when the format sets none. The format's id is assigned on save. */
+  readonly numberFormat: string | null;
+  readonly alignment?: Alignment;
+  readonly protection?: CellProtection;
+}
+
+/** Argument of `Workbook.ooxml.addDxf`: the parts of a differential format, each optional; an omitted part (or a
+ *  `null` / omitted `numberFormat`) is not set. The {@link Dxf} record `getDxf` returns is accepted as is. */
+export interface DxfInput {
+  readonly font?: Font;
+  readonly fill?: Fill;
+  readonly border?: Border;
+  /** A number format code; the format's id is assigned on save. */
+  readonly numberFormat?: string | null;
+  readonly alignment?: Alignment;
+  readonly protection?: CellProtection;
 }
 
 /** Minimum severity for the engine's structured log stream. `Off` discards every record and is the default: an
@@ -3073,12 +3139,12 @@ export interface ExternalLink {
   readonly kind: ExternalLinkKind;
 }
 
-/** Argument of `Workbook.ooxml.setCellStyle`. Also the record `listCellStyles` and `getCellStyle` return. */
+/** Argument of `Workbook.setCellStyle`. Also the record `listCellStyles` and `getCellStyle` return. */
 export interface CellStyle {
   /** Display name of the style. */
   readonly name: string;
   /** Index into the `<cellStyleXfs>` table; defaults to 0. */
-  readonly xfId?: number;
+  readonly styleXfIndex?: number;
   /** OOXML built-in ordinal (`0..53`); defaults to `0xFFFFFFFF` (custom). */
   readonly builtinId?: number;
   /** Outline level of the `RowLevel_n` / `ColLevel_n` styles; defaults to 0. */
@@ -3351,10 +3417,24 @@ export const ChartPlotType: Readonly<{
   Stock: 13;
   Surface: 14;
   Surface3D: 15;
-  Chartex: 16;
+  Extended: 16;
 }>;
 /** Union of the {@link ChartPlotType} ordinals. */
 export type ChartPlotType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+
+/** Series layout of an extended (`cx:`) chart plot, `ChartPlot.extendedLayout` (`ST_SeriesLayout`). */
+export const ChartExtendedLayout: Readonly<{
+  BoxWhisker: 0;
+  ClusteredColumn: 1;
+  Funnel: 2;
+  ParetoLine: 3;
+  RegionMap: 4;
+  Sunburst: 5;
+  Treemap: 6;
+  Waterfall: 7;
+}>;
+/** Union of the {@link ChartExtendedLayout} ordinals. */
+export type ChartExtendedLayout = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** Kinds `Sheet.addChart` and `Chart.setType` produce. */
 export const ChartInsertKind: Readonly<{
@@ -3576,9 +3656,9 @@ export interface ThemeColors {
   readonly colors: readonly number[];
 }
 
-/** Argument of `Workbook.setThemeColors`: the 12 scheme colours. */
+/** Argument of `Workbook.setThemeColors`: the 12 scheme colours, each a {@link ColorInput} (an RGB colour). */
 export interface ThemeColorsInput {
-  readonly colors: readonly number[];
+  readonly colors: readonly ColorInput[];
 }
 
 /** Argument of `Workbook.setThemeScriptFont`: one script's typeface in the major (`major` true) or minor font
@@ -3595,7 +3675,7 @@ export interface ResolvedColor {
   readonly resolution: ColorResolution;
 }
 
-/** Return type of `Sheet.getEffectiveStyle(...)`. */
+/** Return type of `Sheet.ooxml.getEffectiveStyle(...)`. */
 export interface EffectiveStyle {
   readonly xfIndex: number;
   /** One of `EffectiveStyleSource.*`. */
@@ -3603,7 +3683,7 @@ export interface EffectiveStyle {
   readonly fontIndex: number;
   readonly fillIndex: number;
   readonly borderIndex: number;
-  readonly font: ResolvedColor;
+  readonly fontColor: ResolvedColor;
   readonly fillForeground: ResolvedColor;
   readonly fillBackground: ResolvedColor;
   readonly borders: {
@@ -3613,9 +3693,9 @@ export interface EffectiveStyle {
     bottom: ResolvedColor;
     diagonal: ResolvedColor;
   };
-  readonly locked: boolean;
-  readonly hidden: boolean;
-  readonly numFmtCode: string;
+  readonly protection: CellProtection;
+  /** The number format code. */
+  readonly numberFormat: string;
 }
 
 /** Return type of `Workbook.getIterative()`. */
@@ -3628,7 +3708,7 @@ export interface IterativeSettings {
   readonly maxChange: number;
 }
 
-/** Argument of `Workbook.setIterative`; every field is required when given, so `null` throws `TypeError`. */
+/** Argument of `Workbook.updateIterative`; every field is required when given, so `null` throws `TypeError`. */
 export type IterativeSettingsPatch = Patch<IterativeSettings>;
 
 /** One `<dateGroupItem>` of a values filter. `grouping` is the granularity
@@ -3643,14 +3723,14 @@ export interface AutoFilterDateGroup {
   grouping: DateTimeGrouping;
 }
 
-/** One `<filterColumn>`. `colId` is the 0-based offset from the first column
+/** One `<filterColumn>`. `columnOffset` is the 0-based offset from the first column
  *  of the AutoFilter range. `kind` selects the criterion and only that
  *  criterion's fields are read on input (a `FilterKind`); on output every other criterion's
- *  fields are zero. Custom operators `op1` / `op2` are
+ *  fields are zero. Custom operators `operator1` / `operator2` are
  *  `FilterOperator`s; `dynamicType` is a `DynamicFilterType`.
- *  `dxfId` of `4294967295` means absent. */
+ *  `dxfIndex` of `4294967295` means absent. */
 export interface AutoFilterColumn {
-  colId: number;
+  columnOffset: number;
   hiddenButton: boolean;
   showButton: boolean;
   kind: FilterKind;
@@ -3659,27 +3739,27 @@ export interface AutoFilterColumn {
   dateGroups: readonly AutoFilterDateGroup[];
   customAnd: boolean;
   customCount: number;
-  op1: FilterOperator;
-  val1: string;
-  op2: FilterOperator;
-  val2: string;
+  operator1: FilterOperator;
+  value1: string;
+  operator2: FilterOperator;
+  value2: string;
   top: boolean;
   percent: boolean;
-  topVal: number;
-  /** The top-10 `filterVal`; `null` when absent. */
-  filterVal: number | null;
+  topValue: number;
+  /** The top-10 `<top10 filterVal>`; `null` when absent. */
+  filterValue: number | null;
   dynamicType: DynamicFilterType;
   /** The dynamic filter's `val`; `null` when absent. */
-  dynVal: number | null;
+  dynamicValue: number | null;
   /** The dynamic filter's `<dynamicFilter maxVal>`; `null` when absent. */
-  dynMaxVal: number | null;
-  valIso: string;
-  maxValIso: string;
-  dxfId: number;
+  dynamicMaxValue: number | null;
+  valueIso: string;
+  maxValueIso: string;
+  dxfIndex: number;
   cellColor: boolean;
   iconSet: IconSetName;
   /** `null` when the icon filter names no icon. */
-  iconId: number | null;
+  iconIndex: number | null;
 }
 
 /** One `<sortCondition>`. `sortBy` is a `SortBy`. */
@@ -3689,10 +3769,10 @@ export interface AutoFilterSortCondition {
   sortBy: SortBy;
   customList: string;
   /** `null` when the condition names no differential format. */
-  dxfId: number | null;
+  dxfIndex: number | null;
   iconSet: IconSetName;
   /** `null` when the condition names no icon. */
-  iconId: number | null;
+  iconIndex: number | null;
 }
 
 /** The `<sortState>` of an AutoFilter. `sortMethod` is a
@@ -3706,7 +3786,7 @@ export interface AutoFilterSortState {
 }
 
 /** A sheet or table AutoFilter. `range` includes the header row; `columns`
- *  must be in strictly ascending `colId` order inside it. */
+ *  must be in strictly ascending `columnOffset` order inside it. */
 export interface AutoFilter {
   readonly range: CellRect;
   readonly columns: readonly AutoFilterColumn[];
@@ -3725,11 +3805,11 @@ export interface AutoFilterDateGroupInput {
   grouping?: DateTimeGrouping;
 }
 
-/** Input form of {@link AutoFilterColumn}; only `colId` is required. Omitted
+/** Input form of {@link AutoFilterColumn}; only `columnOffset` is required. Omitted
  *  fields read as zero / false / empty / `null`, except `showButton` and `top`
- *  (true) and `dxfId` (absent). */
+ *  (true) and `dxfIndex` (absent). */
 export interface AutoFilterColumnInput {
-  colId: number;
+  columnOffset: number;
   hiddenButton?: boolean;
   showButton?: boolean;
   kind?: FilterKind;
@@ -3738,23 +3818,23 @@ export interface AutoFilterColumnInput {
   dateGroups?: readonly AutoFilterDateGroupInput[];
   customAnd?: boolean;
   customCount?: number;
-  op1?: FilterOperator;
-  val1?: string;
-  op2?: FilterOperator;
-  val2?: string;
+  operator1?: FilterOperator;
+  value1?: string;
+  operator2?: FilterOperator;
+  value2?: string;
   top?: boolean;
   percent?: boolean;
-  topVal?: number;
-  filterVal?: number | null;
+  topValue?: number;
+  filterValue?: number | null;
   dynamicType?: DynamicFilterType;
-  dynVal?: number | null;
-  dynMaxVal?: number | null;
-  valIso?: string;
-  maxValIso?: string;
-  dxfId?: number;
+  dynamicValue?: number | null;
+  dynamicMaxValue?: number | null;
+  valueIso?: string;
+  maxValueIso?: string;
+  dxfIndex?: number;
   cellColor?: boolean;
   iconSet?: IconSetName;
-  iconId?: number | null;
+  iconIndex?: number | null;
 }
 
 /** Input form of {@link AutoFilterSortCondition}; only `ref` is required.
@@ -3764,9 +3844,9 @@ export interface AutoFilterSortConditionInput {
   descending?: boolean;
   sortBy?: SortBy;
   customList?: string;
-  dxfId?: number | null;
+  dxfIndex?: number | null;
   iconSet?: IconSetName;
-  iconId?: number | null;
+  iconIndex?: number | null;
 }
 
 /** Input form of {@link AutoFilterSortState}; only `ref` is required.
@@ -3863,23 +3943,23 @@ export interface Person {
 /** Format and pixel size of an image. */
 export interface ImageInfo {
   readonly format: ImageFormat;
-  readonly pxWidth: number;
-  readonly pxHeight: number;
+  readonly widthPx: number;
+  readonly heightPx: number;
 }
 
 /** Return type of `Picture.getProperties()`: the picture's format, pixel size and a copy of its media bytes. */
 export interface PictureProperties {
   readonly format: ImageFormat;
-  readonly pxWidth: number;
-  readonly pxHeight: number;
+  readonly widthPx: number;
+  readonly heightPx: number;
   readonly bytes: Uint8Array;
 }
 
 /** Return type of `Drawing.getDrawingProperties()`: one anchored object of a sheet's drawing. An absolute anchor reports its
  *  position from A1 as `fromColOffsetEmu` (x) and `fromRowOffsetEmu` (y); `toRow` /
  *  `toCol` and their offsets are zero unless the anchor is two-cell. Offsets
- *  and `widthEmu` / `heightEmu` are in EMU. `imageFormat` is non-zero for a picture whose
- *  media part is present; `mediaPath` is `null` for a non-picture. */
+ *  and `widthEmu` / `heightEmu` are in EMU. `format` is non-zero for a picture whose
+ *  media part is present. */
 export interface DrawingProperties {
   readonly objectId: number;
   readonly kind: DrawingObjectKind;
@@ -3895,10 +3975,9 @@ export interface DrawingProperties {
   readonly toColOffsetEmu: number;
   readonly widthEmu: number;
   readonly heightEmu: number;
-  readonly imageFormat: ImageFormat;
+  readonly format: ImageFormat;
   readonly name: string;
   readonly description: string;
-  readonly mediaPath: string | null;
 }
 
 /** Name, description and placement of a new picture (`Sheet.addPicture`) or chart frame
@@ -3930,8 +4009,8 @@ export interface DrawingAnchor {
 /** Return type of `Shape.getProperties()`: a shape, connector or group of a sheet's drawing. The anchor fields
  *  read as in {@link DrawingProperties}. `fillKind` / `lineKind` are {@link ShapePaint}; `fillColor` /
  *  `lineColor` are the colour when the kind is `Solid` (`Rgb` or `Theme`), else `null`; a colour with a
- *  transform a theme reference cannot state reads as `Other`. `rotation` is in 60000ths of a degree,
- *  `lineWidthEmu` is 0 without a width. `presetGeometry` is the preset geometry, empty for custom
+ *  transform a theme reference cannot state reads as `Other`. `rotationDeg` is in degrees, `lineWidthPt` in
+ *  points and 0 without a width. `presetGeometry` is the preset geometry, empty for custom
  *  geometry or a group; `text` joins paragraphs with `\n`. */
 export interface ShapeProperties {
   readonly objectId: number;
@@ -3956,19 +4035,51 @@ export interface ShapeProperties {
   readonly fillColor: Color | null;
   readonly lineKind: ShapePaint | null;
   readonly lineColor: Color | null;
-  readonly lineWidthEmu: number;
-  readonly rotation: number;
+  readonly lineWidthPt: number;
+  readonly rotationDeg: number;
   readonly hidden: boolean;
 }
 
-/** Fields `Sheet.addShape` applies and the keys {@link ShapePatch} takes; a key left out is not applied.
- *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`; a
- *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with an RGB or theme
- *  `fillColor` / `lineColor`) or `None`; a colour without its kind fails with a `TypeError`, and a colour with
- *  `None` with a status error. An insert needs `anchorKind`, defaults `presetGeometry` to
- *  `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector geometry makes a
- *  connector, which holds no text. An update cannot change the anchor kind. */
+/** Argument of `Sheet.addShape`. `anchorKind` is required and applies the whole anchor (`editAs`, `from*`,
+ *  `to*`, `widthEmu`, `heightEmu`; a two-cell anchor's size is its box); any other key left out is not applied.
+ *  `fillKind` / `lineKind` must be `Solid` (with an RGB or theme `fillColor` / `lineColor`) or `None`; a colour
+ *  without its kind fails with a `TypeError`, and a colour with `None` with a status error. `presetGeometry`
+ *  defaults to `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector geometry makes a
+ *  connector, which holds no text. `rotationDeg` is in degrees and `lineWidthPt` in points. */
 export interface ShapeInput {
+  name?: string;
+  presetGeometry?: string;
+  text?: string;
+  textBox?: boolean;
+  anchorKind: AnchorKind;
+  editAs?: AnchorEditAs;
+  fromRow?: number;
+  fromCol?: number;
+  fromRowOffsetEmu?: number;
+  fromColOffsetEmu?: number;
+  toRow?: number;
+  toCol?: number;
+  toRowOffsetEmu?: number;
+  toColOffsetEmu?: number;
+  widthEmu?: number;
+  heightEmu?: number;
+  fillKind?: ShapePaint;
+  fillColor?: ColorInput;
+  lineKind?: ShapePaint;
+  lineColor?: ColorInput;
+  lineWidthPt?: number;
+  rotationDeg?: number;
+  hidden?: boolean;
+}
+
+/** Argument of `Shape.update`: the {@link ShapeInput} keys, each optional. A key left out is unchanged and no key
+ *  accepts `null` to clear, except `fillKind` / `lineKind` / `fillColor` / `lineColor`, where `null` also means
+ *  unchanged so that the value {@link ShapeProperties} returns can be passed back as is. Any other `null` fails
+ *  with a `TypeError`. The anchor keys (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`) need `anchorKind` in
+ *  the same patch, otherwise the call fails with a `TypeError`; an update cannot change the anchor kind.
+ *  `objectId` and `kind` of a {@link ShapeProperties} are ignored; any other unknown key fails with a
+ *  `TypeError`. */
+export interface ShapePatch {
   name?: string;
   presetGeometry?: string;
   text?: string;
@@ -3985,22 +4096,14 @@ export interface ShapeInput {
   toColOffsetEmu?: number;
   widthEmu?: number;
   heightEmu?: number;
-  fillKind?: ShapePaint;
-  fillColor?: ColorInput;
-  lineKind?: ShapePaint;
-  lineColor?: ColorInput;
-  lineWidthEmu?: number;
-  rotation?: number;
+  fillKind?: ShapePaint | null;
+  fillColor?: ColorInput | null;
+  lineKind?: ShapePaint | null;
+  lineColor?: ColorInput | null;
+  lineWidthPt?: number;
+  rotationDeg?: number;
   hidden?: boolean;
 }
-
-/** Argument of `Shape.update`: every {@link ShapeInput} key, each optional. A key left out is unchanged and
- *  no key accepts `null` to clear, except `fillKind` / `lineKind` / `fillColor` / `lineColor`, where `null` also
- *  means unchanged so that the value {@link ShapeProperties} returns can be passed back as is. Any other `null` fails with a
- *  `TypeError`. The anchor keys (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`) need `anchorKind` in the
- *  same patch, otherwise the call fails with a `TypeError`. `objectId` and `kind` of a
- *  {@link ShapeProperties} are ignored; any other unknown key fails with a `TypeError`. */
-export type ShapePatch = Patch<ShapeInput>;
 
 /** Return type of `Slicer.getProperties()`: a table slicer of a worksheet. `objectId` is the slicer's frame in
  *  the sheet's drawing; the anchor fields read as in {@link DrawingProperties}, with `to*` zero unless the
@@ -4030,17 +4133,17 @@ export interface SlicerProperties {
   readonly toColOffsetEmu: number;
 }
 
-/** Fields `Sheet.addSlicer` applies; a key left out is not applied. Giving `fromRow` applies the whole
- *  two-cell anchor (`from*`, `to*`). `addSlicer` needs the anchor and defaults `name` and `caption` to the
- *  column name (the name is made unique), `rowHeightEmu` to 241300 and `columnCount` to 1; `name`
- *  cannot be updated (see {@link SlicerPatch}). A `null` (or empty) `style` removes the style. */
+/** Argument of `Sheet.addSlicer`; a key left out is not applied. `fromRow` is required and applies the whole
+ *  two-cell anchor (`from*`, `to*`). `name` and `caption` default to the column name (the name is made
+ *  unique), `rowHeightEmu` to 241300 and `columnCount` to 1; `name` cannot be updated (see
+ *  {@link SlicerPatch}). A `null` (or empty) `style` creates the slicer without a style. */
 export interface SlicerInput {
   name?: string;
   caption?: string;
   style?: string | null;
   columnCount?: number;
   rowHeightEmu?: number;
-  fromRow?: number;
+  fromRow: number;
   fromCol?: number;
   fromRowOffsetEmu?: number;
   fromColOffsetEmu?: number;
@@ -4092,16 +4195,16 @@ export interface DataTable {
   readonly twoDimensional: boolean;
   readonly rowOriented: boolean;
   readonly rowInput: DataTableInputCell | null;
-  readonly colInput: DataTableInputCell | null;
+  readonly columnInput: DataTableInputCell | null;
 }
 
 /** Argument of `addDataTable`: the result range plus the input cells (`{ row, col }`). Give `rowInput`
- *  or `colInput` for a one-variable table, both for a two-variable one. `rect` and each input cell also take
+ *  or `columnInput` for a one-variable table, both for a two-variable one. `rect` and each input cell also take
  *  an A1 string (`'B2:D6'`, `'A1'`); an input cell string names a single cell. */
 export interface DataTableInput {
   rect: CellRect | string;
   rowInput?: DataTableInputCell | string | null;
-  colInput?: DataTableInputCell | string | null;
+  columnInput?: DataTableInputCell | string | null;
 }
 
 /** One sparkline: the data `formula` (a sheet-qualified range without `=`) and the
@@ -4190,6 +4293,21 @@ export const ChartSourceKind: Readonly<{
 /** Union of the {@link ChartSourceKind} ordinals. */
 export type ChartSourceKind = 0 | 1 | 2;
 
+/** Which input of a chart a source or an unresolved entry belongs to. The six series roles (`Name` .. `Size`)
+ *  name the series inputs; `Title` (the chart title) and `AxisTitle` occur only in `ChartData.unresolved`. */
+export const ChartRole: Readonly<{
+  Name: 0;
+  Categories: 1;
+  Values: 2;
+  X: 3;
+  Y: 4;
+  Size: 5;
+  Title: 6;
+  AxisTitle: 7;
+}>;
+/** Union of the {@link ChartRole} ordinals. */
+export type ChartRole = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
 /** One series input: nothing, a range reference, or literal points. */
 export interface ChartDataSource {
   readonly kind: ChartSourceKind;
@@ -4197,25 +4315,31 @@ export interface ChartDataSource {
   readonly literal: readonly (number | string)[];
 }
 
+/** A series input as text, or the {@link ChartDataSource} record a series reads back (a `ChartSourceKind.Ref`
+ *  source sets its `formula`, a `None` source an empty reference; a `Literal` source is rejected). */
+export type ChartDataSourceInput = ChartDataSource | string;
+
 /** Solid fill; `color` is `ColorKind.Rgb`, or `ColorKind.Theme` for a theme reference (a colour with other
  *  transforms reads as its rendered `Rgb`), `null` when the element states none;
- *  `transparency` is a percentage (0..100). */
+ *  `transparencyPct` is a percentage (0..100). */
 export interface ChartFill {
   readonly color: Color | null;
-  readonly transparency: number | null;
+  readonly transparencyPct: number | null;
 }
 
+/** A line: `transparencyPct` as in {@link ChartFill}, `widthPt` in points. */
 export interface ChartLine {
   readonly color: Color | null;
-  readonly transparency: number | null;
+  readonly transparencyPct: number | null;
   readonly widthPt: number | null;
   readonly dash: ChartLineDash | null;
   readonly none: boolean;
 }
 
+/** A series or point marker; `sizePt` is the marker size in points. */
 export interface ChartMarker {
   readonly symbol: ChartMarkerSymbol;
-  readonly size: number | null;
+  readonly sizePt: number | null;
   readonly fill: ChartFill;
   readonly line: ChartLine;
 }
@@ -4261,16 +4385,18 @@ export interface ChartSeries {
   readonly labels: ChartLabels | null;
 }
 
+/** One plot group. `extendedLayout` is the series layout of an `Extended` plot, `null` for any other type;
+ *  `gapWidthPct` is a percentage of the bar width and `firstSliceAngleDeg` an angle in degrees. */
 export interface ChartPlot {
   readonly type: ChartPlotType;
-  readonly chartexLayout: string | null;
+  readonly extendedLayout: ChartExtendedLayout | null;
   readonly barDirection: ChartBarDirection | null;
   readonly grouping: ChartGrouping | null;
   readonly varyColors: boolean;
-  readonly gapWidth: number | null;
+  readonly gapWidthPct: number | null;
   readonly overlap: number | null;
   readonly holeSize: number | null;
-  readonly firstSliceAngle: number | null;
+  readonly firstSliceAngleDeg: number | null;
   readonly axisIds: readonly number[];
   readonly series: readonly ChartSeries[];
 }
@@ -4284,6 +4410,9 @@ export interface ChartTitle {
   readonly formula: string | null;
 }
 
+/** A title as its text, or the {@link ChartTitle} record a chart or axis reads back. */
+export type ChartTitleInput = ChartTitle | string;
+
 /** A chart's legend: where it sits, whether it overlays the plot, and the series (`c:idx` values) it hides. */
 export interface ChartLegend {
   readonly position: ChartLegendPosition;
@@ -4291,15 +4420,16 @@ export interface ChartLegend {
   readonly hiddenSeries: readonly number[];
 }
 
-/** Argument of `Chart.setLegend`. An omitted key keeps the legend's value, or takes Excel's default (`Right`,
+/** Argument of `Chart.updateLegend`. An omitted key keeps the legend's value, or takes Excel's default (`Right`,
  *  `false`, `[]`) when the chart has no legend. No key has a cleared form; `hiddenSeries: []` shows every entry. */
 export type ChartLegendPatch = Patch<ChartLegend>;
 
+/** One chart axis. `visible` is `false` for a deleted axis (`c:delete`), the same key `ChartAxisPatch` takes. */
 export interface ChartAxis {
   readonly id: number;
   readonly kind: ChartAxisKind;
   readonly position: ChartAxisPosition;
-  readonly deleted: boolean;
+  readonly visible: boolean;
   readonly crossAxis: number;
   readonly crosses: ChartAxisCrosses | null;
   readonly crossesAt: number | null;
@@ -4323,7 +4453,8 @@ export interface ChartProperties {
   readonly objectId: number;
   readonly name: string;
   readonly description: string;
-  readonly isChartex: boolean;
+  /** An extended (`cx:`) chart. */
+  readonly isExtended: boolean;
   readonly isPivotChart: boolean;
   readonly onChartsheet: boolean;
   readonly title: ChartTitle | null;
@@ -4346,10 +4477,10 @@ export interface ChartDataSeries {
   readonly plotIndex: number;
   readonly index: number;
   readonly name: string | null;
-  /** Number format of the values (the y values in the XY domain). */
-  readonly formatCode: string;
-  /** Number format of the x values; empty outside the XY domain. */
-  readonly xFormatCode: string;
+  /** Number format code of the values (the y values in the XY domain). */
+  readonly numberFormat: string;
+  /** Number format code of the x values; empty outside the XY domain. */
+  readonly xNumberFormat: string;
   readonly filtered: boolean;
   readonly values: Float64Array;
   readonly states: Uint8Array;
@@ -4365,7 +4496,9 @@ export interface ChartDataSeries {
   };
 }
 
-/** Series resolved against the current cell values by Excel's rules. `unresolved` lists inputs that did not resolve; `axisId` names the axis of an `axis_title` entry. */
+/** Series resolved against the current cell values by Excel's rules. `unresolved` lists inputs that did not
+ *  resolve: `source` is the input's {@link ChartRole}, `seriesIndex` the series' `c:idx` (0 for a title) and
+ *  `axisId` the axis of a `ChartRole.AxisTitle` entry. */
 export interface ChartData {
   domain: 'category' | 'xy';
   pointCount: number;
@@ -4373,13 +4506,13 @@ export interface ChartData {
     labels: string[];
     levels: string[][];
     values: Float64Array | null;
-    formatCode: string;
+    numberFormat: string;
     generated: boolean;
   };
   series: ChartDataSeries[];
   titleText: string | null;
   axisTitleTexts: { axisId: number; text: string }[];
-  unresolved: { seriesIndex: number; source: string; axisId: number }[];
+  unresolved: { seriesIndex: number; source: ChartRole; axisId: number }[];
 }
 
 /** Options of `Sheet.addChart`. A `headerRow` / `headerColumn` that is omitted or `null` follows Excel's detection,
@@ -4412,12 +4545,12 @@ export interface ChartSourceInput {
  *  cell colour, `tint` in -1..1 quantised to 1e-5); indexed and automatic colours are rejected. */
 export type ChartFillPatch = Patch<{
   color: ColorInput;
-  transparency: number;
+  transparencyPct: number;
 }>;
 
 export type ChartLinePatch = Patch<{
   color: ColorInput;
-  transparency: number;
+  transparencyPct: number;
   widthPt: number;
   dash: ChartLineDash;
   none: boolean;
@@ -4425,7 +4558,7 @@ export type ChartLinePatch = Patch<{
 
 export type ChartMarkerPatch = Patch<{
   symbol: ChartMarkerSymbol;
-  size: number;
+  sizePt: number;
   fill: ChartFillPatch;
   line: ChartLinePatch;
 }>;
@@ -4445,12 +4578,12 @@ export type ChartLabelsPatch = Patch<{
 
 /** An empty string for `name`, `categories` or `x` removes the reference; one for `values`, `y` or `size` is rejected. */
 export type ChartSeriesPatch = Patch<{
-  name: string;
-  categories: string;
-  values: string;
-  x: string;
-  y: string;
-  size: string;
+  name: ChartDataSourceInput;
+  categories: ChartDataSourceInput;
+  values: ChartDataSourceInput;
+  x: ChartDataSourceInput;
+  y: ChartDataSourceInput;
+  size: ChartDataSourceInput;
   fill: ChartFillPatch;
   line: ChartLinePatch;
   marker: ChartMarkerPatch;
@@ -4458,17 +4591,25 @@ export type ChartSeriesPatch = Patch<{
   labels: ChartLabelsPatch;
 }>;
 
+/** Argument of `Chart.addSeries`: the {@link ChartSeriesPatch} keys with the value reference required, `values`
+ *  on a category plot or `y` on a scatter or bubble plot (the other is rejected when absent). */
+export interface ChartSeriesInput extends Omit<ChartSeriesPatch, 'values' | 'y'> {
+  values?: ChartDataSourceInput | null;
+  y?: ChartDataSourceInput | null;
+}
+
 export type ChartPointPatch = Patch<{
   fill: ChartFillPatch;
   line: ChartLinePatch;
   marker: ChartMarkerPatch;
 }>;
 
-/** A field the plot type does not have is rejected; `holeSize` is 10..90 and doughnut only. */
+/** A field the plot type does not have is rejected; `holeSize` is 10..90 and doughnut only. `gapWidthPct` is a
+ *  percentage of the bar width, `firstSliceAngleDeg` an angle in degrees. */
 export type ChartPlotPatch = Patch<{
-  gapWidth: number;
+  gapWidthPct: number;
   overlap: number;
-  firstSliceAngle: number;
+  firstSliceAngleDeg: number;
   varyColors: boolean;
   holeSize: number;
 }>;
@@ -4478,7 +4619,7 @@ export type ChartPlotPatch = Patch<{
  *  the axis linear and on `tickLabelPosition` (`nextTo`, `low`, `high`, `none`) restores the default. */
 export type ChartAxisPatch = Patch<{
   visible: boolean;
-  title: string | ChartTitle;
+  title: ChartTitleInput;
   min: number;
   max: number;
   majorUnit: number;
@@ -4491,7 +4632,7 @@ export type ChartAxisPatch = Patch<{
   tickLabelPosition: 'nextTo' | 'low' | 'high' | 'none';
 }>;
 
-/** Patch for `Chart.setDisplay`. An omitted key keeps the element, `null` removes it, a value sets it.
+/** Patch for `Chart.updateDisplay`. An omitted key keeps the element, `null` removes it, a value sets it.
  *  `naAsBlank: true` writes `c16r3:dispNaAsBlank`; `false` and `null` both remove it, as Excel does, so a
  *  read-back is `null`. `blanksAs` takes `Gap`, `Zero` or `Span`; use `null` to remove it. */
 export type ChartDisplayPatch = Patch<{
@@ -4511,10 +4652,10 @@ export interface ChartPreviewOverridesInput {
   naAsBlank?: boolean;
 }
 
-/** Options of `Sheet.restoreDrawing`. With `newId` the capture is added on top as a
+/** Options of `Sheet.restoreDrawing`. With `assignNewId` the capture is added on top as a
  *  copy with a fresh id; otherwise the object with the same id is replaced. */
 export interface RestoreDrawingOptions {
-  newId?: boolean;
+  assignNewId?: boolean;
 }
 
 /** An inclusive 0-based span of rows or columns. */
@@ -4530,14 +4671,33 @@ export interface PrintTitles {
   readonly columns: Span | null;
 }
 
-/** One manual page break. `id` is the 0-based row / column the break
- * precedes; `min` / `max` bound it on the perpendicular axis. `manual` is
- * false for a break Excel computed rather than one a user placed. */
-export interface PageBreak {
-  readonly id: number;
-  readonly min: number;
-  readonly max: number;
+/** One row break (`<rowBreaks><brk>`): the break sits before the 0-based row `row` and covers the columns
+ *  `first..last` (OOXML `min` / `max`). `manual` is `false` for a break Excel computed rather than one a user
+ *  placed. */
+export interface RowBreak {
+  readonly row: number;
+  readonly first: number;
+  readonly last: number;
   readonly manual: boolean;
+}
+
+/** One column break (`<colBreaks><brk>`): the break sits before the 0-based column `col` and covers the rows
+ *  `first..last`; `manual` as in {@link RowBreak}. */
+export interface ColumnBreak {
+  readonly col: number;
+  readonly first: number;
+  readonly last: number;
+  readonly manual: boolean;
+}
+
+/** Argument of `Sheet.setRowBreak` / `Sheet.setColumnBreak`: the span the break covers on the perpendicular
+ *  axis and whether it is a manual break. Omitting both `first` and `last` (or giving both as 0) covers the
+ *  whole sheet; `manual` defaults to `true`. A {@link RowBreak} / {@link ColumnBreak} read back is accepted;
+ *  its `row` / `col` is ignored. */
+export interface PageBreakInput {
+  first?: number;
+  last?: number;
+  manual?: boolean;
 }
 
 /** Page orientation as `<pageSetup orientation>` states it; without the attribute (the printer default) the
@@ -4549,7 +4709,7 @@ export const PageOrientation: Readonly<{
 /** Union of the {@link PageOrientation} ordinals. */
 export type PageOrientation = 0 | 1;
 
-/** The `<pageSetup>` values `Sheet.setPageSetup` accepts. Only the keys present are applied; every
+/** The `<pageSetup>` values `Sheet.updatePageSetup` accepts. Only the keys present are applied; every
  * other attribute in the stored XML — including ones this engine does not
  * model, such as `r:id`, `horizontalDpi` and `copies` — is left alone.
  *
@@ -4562,64 +4722,64 @@ export interface PageSetupInput {
   /** OOXML paperSize code; 9 = A4. */
   readonly paperSize: number;
   /** Print scale percentage. Outside `[10, 400]` is rejected, not clamped. */
-  readonly scale: number;
+  readonly scalePct: number;
   readonly fitToWidth: number;
   readonly fitToHeight: number;
   readonly fitToPage: boolean;
 }
 
-/** Argument of `Sheet.setPageSetup`. */
+/** Argument of `Sheet.updatePageSetup`. */
 export type PageSetupPatch = Patch<PageSetupInput>;
 
 /** Result of `Sheet.getPageSetup`. Every value carries the setting
  * in force; the `*Stated` flags say whether the XML declares it, which is
- * the only way to tell `scale="100"` from an absent attribute. `orientation` is `null` without the attribute. */
+ * the only way to tell `scale="100"` from an absent attribute. `scalePct` is a percentage. `orientation` is `null` without the attribute. */
 export interface PageSetup {
   readonly orientation: PageOrientation | null;
   readonly paperSize: number;
-  readonly scale: number;
+  readonly scalePct: number;
   readonly fitToWidth: number;
   readonly fitToHeight: number;
   readonly fitToPage: boolean;
   readonly orientationStated: boolean;
   readonly paperSizeStated: boolean;
-  readonly scaleStated: boolean;
+  readonly scalePctStated: boolean;
   readonly fitToWidthStated: boolean;
   readonly fitToHeightStated: boolean;
   readonly fitToPageStated: boolean;
 }
 
-/** The `<pageMargins>` values `Sheet.setPageMargins` accepts, in inches. A negative, infinite or NaN
+/** The `<pageMargins>` values `Sheet.updatePageMargins` accepts, in inches. A negative, infinite or NaN
  * margin is rejected: the paginator subtracts these from the paper. */
 export interface PageMarginsInput {
-  readonly left: number;
-  readonly right: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly header: number;
-  readonly footer: number;
+  readonly leftIn: number;
+  readonly rightIn: number;
+  readonly topIn: number;
+  readonly bottomIn: number;
+  readonly headerIn: number;
+  readonly footerIn: number;
 }
 
-/** Argument of `Sheet.setPageMargins`. */
+/** Argument of `Sheet.updatePageMargins`. */
 export type PageMarginsPatch = Patch<PageMarginsInput>;
 
 /** Result of `Sheet.getPageMargins`, in inches. */
 export interface PageMargins {
-  readonly left: number;
-  readonly right: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly header: number;
-  readonly footer: number;
-  readonly leftStated: boolean;
-  readonly rightStated: boolean;
-  readonly topStated: boolean;
-  readonly bottomStated: boolean;
-  readonly headerStated: boolean;
-  readonly footerStated: boolean;
+  readonly leftIn: number;
+  readonly rightIn: number;
+  readonly topIn: number;
+  readonly bottomIn: number;
+  readonly headerIn: number;
+  readonly footerIn: number;
+  readonly leftInStated: boolean;
+  readonly rightInStated: boolean;
+  readonly topInStated: boolean;
+  readonly bottomInStated: boolean;
+  readonly headerInStated: boolean;
+  readonly footerInStated: boolean;
 }
 
-/** Argument of `Sheet.setPrintOptions`: partial `<printOptions>` update. No key has a cleared form. */
+/** Argument of `Sheet.updatePrintOptions`: partial `<printOptions>` update. No key has a cleared form. */
 export type PrintOptionsPatch = Patch<{
   gridLines: boolean;
   headings: boolean;
@@ -4640,7 +4800,7 @@ export interface PrintOptions {
   readonly verticalCenteredStated: boolean;
 }
 
-/** Argument of `Sheet.setHeaderFooter`: partial `<headerFooter>` update.
+/** Argument of `Sheet.updateHeaderFooter`: partial `<headerFooter>` update.
  *
  * A section cleared with `null` or `""` is removed; the flags have no cleared form. Section text is the
  * decoded string, so Excel's formatting codes go in plainly (`'&C&"MS Gothic"Report &P/&N'`); the engine
@@ -4659,7 +4819,7 @@ export type HeaderFooterPatch = Patch<{
 }>;
 
 /** Result of `Sheet.getHeaderFooter`. A section the sheet does not have is `null`; section text is decoded as
- *  `setHeaderFooter` takes it. A flag the XML does not state reads its schema default (`differentOddEven` /
+ *  `updateHeaderFooter` takes it. A flag the XML does not state reads its schema default (`differentOddEven` /
  *  `differentFirst` `false`, `scaleWithDoc` / `alignWithMargins` `true`), with its `*Stated` flag `false`. */
 export interface HeaderFooter {
   readonly oddHeader: string | null;
@@ -4704,10 +4864,11 @@ export type IterativeProgressCallback = (
  *  names compare). A `Sheet` of another workbook throws `TypeError`. */
 export type SheetRef = Sheet | number | string;
 
-/** A table passed by its workbook-wide index (its position in `listTables()`), its `displayName` (the name
- *  formulas use) or its `Table` handle. A string is always a name, digits included. Resolving a name reads the
- *  table list, so removing tables by name in a loop is quadratic. A name no table has fails with
- *  `StatusCode.NotFound`; a handle of another workbook with `StatusCode.InvalidArgument`. */
+/** A table passed by its sheet-local position (its index in `Sheet.listTables()`), its name (the name formulas
+ *  use, matched case-insensitively) or its `Table` handle. A string is always a name, digits included. A position
+ *  past the end fails with `StatusCode.IndexOutOfRange`, a name no table of the sheet has with
+ *  `StatusCode.NotFound`, and a handle of another sheet with `StatusCode.InvalidArgument`. Resolving a name reads
+ *  the table list, so removing tables by name in a loop is quadratic. */
 export type TableRef = number | string | Table;
 /** A pivot table passed by its index on the sheet (its position in `listPivots()`), its name (the first of
  *  several pivots with that name) or its `Pivot` handle. Resolved as {@link TableRef} is; a handle of another
@@ -4721,7 +4882,7 @@ export type CfRuleRef = number | string;
 export type ProtectedRangeRef = number | string;
 
 /** Workbook handle: the workbook-scope operations, the `Sheet` handles that carry the sheet-scope ones, and the
- *  `Table` and `PivotCache` handles of its tables and pivot caches.
+ *  `PivotCache` handles of its pivot caches.
  *  Release it with `dispose()` (or a `using` declaration) when finished: `dispose()` frees the handle at once. A
  *  workbook that is dropped without it may be freed when the garbage collector reclaims it, in both packages;
  *  that is best-effort, so rely on `dispose()` for a timely release. Create one with the static factories of
@@ -4739,9 +4900,12 @@ export type ProtectedRangeRef = number | string;
  *  `drawing()` family, `Chart.getData`) fails with `StatusCode.NotFound`. An index past the end fails with
  *  `StatusCode.IndexOutOfRange`.
  *
- *  An `update<X>` method is always a partial update: it takes an `<X>Patch`, and a key left out is unchanged.
- *  A `set<X>` method follows its argument type: `R` replaces the whole value, `<R>Patch` updates part of it, and
- *  `<R>Input` is an input with defaults.
+ *  An `update<X>` method is always a partial update: it takes an `<X>Patch`, a key left out is unchanged, and the
+ *  whole patch is validated before anything changes. A `set<X>` method replaces the whole value: it takes the
+ *  record its getter returns (or an `<X>Input` with defaults), and where the value can be absent `null` removes
+ *  it, doing nothing when it is already absent. A `remove<X>` fails with `StatusCode.NotFound` when there is
+ *  nothing to remove; a `clear<X>` empties a collection and does nothing when it is empty; a `reset<X>` returns
+ *  one property to its default.
  *
  *  Under `CalcMode.Auto` (the default) a value read or a save first computes the cells a change left dirty,
  *  so a read after a write sees the new value without a `recalc()`. Such a read may run the iterative-progress
@@ -4752,7 +4916,9 @@ export type ProtectedRangeRef = number | string;
  *  The XF-level style tables, named styles and XML passthrough parts are reached through `ooxml`.
  *
  *  Tables, pivots, pivot caches and drawing objects are handles (`Table`, `Pivot`, `PivotCache`, `Drawing`): the
- *  parent adds, removes, lists and looks them up, and every other operation is a method of the handle. One object
+ *  parent (the sheet for tables, pivots and drawing objects, the workbook for pivot caches) adds, removes, lists
+ *  and looks them up, and every other operation is a method of the handle; `Workbook.table(name)` also finds a
+ *  table by name across the workbook. One object
  *  has one handle, so every lookup of it returns the same handle. Tables, pivots, conditional-format rules and
  *  protected ranges are addressed by index, name or handle (`TableRef`, `PivotRef`, `CfRuleRef`,
  *  `ProtectedRangeRef`). Validations and sparkline groups are addressed by index only, and removing one shifts the
@@ -4826,13 +4992,14 @@ export interface Workbook {
   /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); without workbook views (an XLSB
    *  load) the first tab-selected sheet; the first sheet when neither is recorded. Removing or hiding the
    *  active sheet activates the next visible sheet, else the previous one. */
-  getActiveSheet(): Sheet;
+  activeSheet(): Sheet;
   /** Marks `sheet` active so a save records it, creating a minimal `<bookViews>` when the workbook has none.
    *  Other `<workbookView>` attributes survive; `firstSheet` is lowered to the sheet's index when larger. The
    *  sheet becomes the only tab-selected one. A hidden sheet is rejected. */
   setActiveSheet(sheet: SheetRef): void;
-  /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format `formatCode`; empty means General. */
-  formatValue(value: Value, formatCode: string): DisplayText;
+  /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format code
+   *  `numberFormat`; empty means General. */
+  formatValue(value: Value, numberFormat: string): DisplayText;
 
   /** Computes every dirty cell now, serially on the caller thread, whatever the calc mode. Under
    *  `CalcMode.Auto` a read does this on its own; call it to choose when the work happens, or under
@@ -4879,7 +5046,7 @@ export interface Workbook {
    *  `getIterative` reports the clamped value, and a fractional one throws `TypeError`; `maxChange` is the absolute
    *  convergence threshold, and a negative value throws `RangeError` and one that is not finite fails with
    *  `StatusCode.InvalidArgument`. */
-  setIterative(patch: IterativeSettingsPatch): void;
+  updateIterative(patch: IterativeSettingsPatch): void;
   /** Reads back the stored iterative-calculation settings. The cap and
    *  threshold are the stored values even while `enabled` is false, so a
    *  host can render Excel's iterative-calculation dialog before the user
@@ -4973,29 +5140,10 @@ export interface Workbook {
    *  `hidden` returns to its default. An empty `formula` fails with `StatusCode.InvalidArgument`, and one that does
    *  not parse with `StatusCode.ParserUnexpectedToken`; `removeDefinedName` removes a name. */
   setDefinedName(definedName: DefinedNameInput): void;
-  /** Lists the handles of the workbook's worksheet tables; a table's position in the array is its workbook-wide
-   *  table index. A new array on each call. */
-  listTables(): readonly Table[];
-  /** The handle of the table `table`. A name no table has fails with `StatusCode.NotFound`, an index past the last
-   *  table with `StatusCode.IndexOutOfRange`. */
-  table(table: TableRef): Table;
-  /** Creates a worksheet table and returns its handle.
-   *  `input.columns` is optional and defaults to the header row's cell texts; when given, it holds one unique,
-   *  non-empty name per column of `input.range`.
-   *
-   *  @example
-   *  ```ts
-   *  ws.setValues('A1', [['Item', 'Qty'], ['Apple', 3]]);
-   *  const table = wb.addTable({
-   *    range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
-   *    name: 'Sales',
-   *    columns: ['Item', 'Qty'],
-   *  });
-   *  ``` */
-  addTable(input: TableInput): Table;
-  /** Removes the table `table`; its handle then fails with `StatusCode.NotFound`. Formulas that name the table keep
-   *  their structured references and evaluate to `#NAME?`. */
-  removeTable(table: TableRef): void;
+  /** The handle of the table named `name` on any sheet, matched case-insensitively; the one workbook-wide table
+   *  lookup (tables are added, listed and removed on their `Sheet`). A name no table has fails with
+   *  `StatusCode.NotFound`. */
+  table(name: string): Table;
   /** Lists the workbook's persons. */
   listPeople(): readonly Person[];
   /** Appends a person to the workbook's person list. Fails with `StatusCode.ThreadedCommentInvalid` when the id is
@@ -5035,8 +5183,20 @@ export interface Workbook {
   /** Declares the workbook's default font: font 0, the record an unstyled
    *  cell resolves to. A new workbook seeds it with Excel's Calibri 11 and
    *  `addFont` can only append beside it, so this is the way to change what
-   *  a never-styled cell is saved as. Read it back with `ooxml.getFont(0)`. */
+   *  a never-styled cell is saved as. Read it back with `getDefaultFont()`. */
   setDefaultFont(record: Font): void;
+  /** Reads the workbook's default font (font 0), the record an unstyled cell resolves to. */
+  getDefaultFont(): Font;
+
+  /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
+  listCellStyles(): readonly CellStyle[];
+  /** Reads the named cell style `name` (matched exactly); `null` when there is none. */
+  getCellStyle(name: string): CellStyle | null;
+  /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent fields default to `styleXfIndex` 0, a
+   *  custom style (`0xFFFFFFFF`), level 0 and both flags false. */
+  setCellStyle(record: CellStyle): void;
+  /** Removes the `<cellStyle>` named `name`; cell formats that used it are repointed at the Normal style. */
+  removeCellStyle(name: string): void;
 
   /** Lists the custom table / PivotTable styles (`<tableStyles>`) in file order. */
   listTableStyles(): readonly TableStyle[];
@@ -5044,7 +5204,7 @@ export interface Workbook {
   getTableStyle(name: string): TableStyle | null;
   /** Adds a custom table style, or replaces the one with the same name
    *  (case-insensitive). The name may not be a built-in style name; each
-   *  element type may appear once, `size` must be at least 1 and `dxfId`
+   *  element type may appear once, `size` must be at least 1 and `dxfIndex`
    *  must name an existing differential format. A first style also sets the
    *  defaults to `TableStyleMedium2` / `PivotStyleLight16`. */
   setTableStyle(style: TableStyle): void;
@@ -5054,7 +5214,7 @@ export interface Workbook {
   /** Reads the default table and PivotTable style names. */
   getTableStyleDefaults(): TableStyleDefaults;
   /** Sets the default style names; an omitted field keeps its default and `null` (or `""`) removes it. */
-  setTableStyleDefaults(patch: TableStyleDefaultsPatch): void;
+  updateTableStyleDefaults(patch: TableStyleDefaultsPatch): void;
 
   /** The theme's major and minor typefaces; the default theme's when the part is absent or unparseable
    *  (`getThemeColors().source` tells the cases apart). */
@@ -5076,8 +5236,9 @@ export interface Workbook {
   /** Reads the typeface of `key.script` in the major (`key.major` true) or minor font set; `null` when the set
    *  does not list the script. */
   getThemeScriptFont(key: Pick<ThemeScriptFontInput, 'major' | 'script'>): ThemeScriptFont | null;
-  /** Removes the theme part so the workbook reports the default theme (`source` is `Default`). Excel adds a theme part again when it saves the file. */
-  clearTheme(): void;
+  /** Restores the default Office theme by removing the theme part, so the workbook reports the default theme
+   *  (`source` is `Default`). Excel adds a theme part again when it saves the file. */
+  resetTheme(): void;
   /** Resolves a colour specification to ARGB against the theme and the
    *  indexed palette; `context` decides what an automatic colour means. */
   resolveColor(spec: Color, context: ColorContext): ResolvedColor;
@@ -5316,7 +5477,7 @@ export interface Sheet {
    *  @example
    *  ```ts
    *  ws.setNumber('A1', 0.256);
-   *  ws.setCellFormat('A1', { numberFormat: '0.0%' });
+   *  ws.updateCellFormat('A1', { numberFormat: '0.0%' });
    *  ws.getDisplayText('A1').text; // '25.6%'
    *  ``` */
   getDisplayText(row: number, col: number): DisplayText;
@@ -5447,17 +5608,16 @@ export interface Sheet {
 
   /** Reads the sheet's typed AutoFilter; `null` when absent. */
   getAutoFilter(): AutoFilter | null;
-  /** Replaces the sheet AutoFilter and its hidden `_xlnm._FilterDatabase`
-   *  name. Row visibility is unchanged; call `applyAutoFilter` to hide the
+  /** Replaces the sheet AutoFilter and its hidden `_xlnm._FilterDatabase` name, or with `null` removes it (a
+   *  sheet without one is left as it is). Row visibility is unchanged; call `applyAutoFilter` to hide the
    *  excluded rows. */
-  setAutoFilter(filter: AutoFilterInput): void;
-  /** Removes the sheet AutoFilter. Row visibility is unchanged. */
-  removeAutoFilter(): void;
+  setAutoFilter(filter: AutoFilterInput | null): void;
   /** Hides every body row the criteria exclude and shows the rest, as
    *  Excel's Reapply does. Fails with `StatusCode.NotFound` when there is no AutoFilter. */
   applyAutoFilter(): void;
-  /** Drops every column criterion and shows all body rows. */
-  clearAutoFilter(): void;
+  /** Drops every column criterion and shows all body rows; the AutoFilter itself stays (remove it with
+   *  `setAutoFilter(null)`). Does nothing on a filter without criteria. */
+  clearAutoFilterCriteria(): void;
   /** Evaluates the sheet AutoFilter without changing the sheet. */
   evaluateAutoFilter(): AutoFilterEval;
 
@@ -5515,11 +5675,14 @@ export interface Sheet {
   /** Appends a shape on top and returns its handle; a sheet without a drawing gets one and existing drawing
    *  content is kept. */
   addShape(spec: ShapeInput): Shape;
-  /** Adds a slicer over column `column` (0-based) of table `table` and returns its handle. It creates the slicer
-   *  and cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. */
-  addSlicer(table: TableRef, column: number, spec: SlicerInput): Slicer;
+  /** Adds a slicer over column `column` (0-based) of the table `table`, passed as its `Table` handle or its name
+   *  (matched case-insensitively), and returns its handle. It creates the slicer and cache parts, the `Slicer_*`
+   *  defined name and the drawing frame; the table may live on another sheet. A name no table has fails with
+   *  `StatusCode.NotFound`. */
+  addSlicer(table: Table | string, column: number, spec: SlicerInput): Slicer;
   /** Puts a `snapshot` capture of a picture, chart or shape back and returns the object's handle: in place of
-   *  an object with the same id at its recorded position, where a handle of that id addresses it again, or as a copy on top with `newId`. */
+   *  an object with the same id at its recorded position, where a handle of that id addresses it again, or as a
+   *  copy on top with `assignNewId`. */
   restoreDrawing(bytes: Uint8Array, opts?: RestoreDrawingOptions): Drawing;
   /** Removes the drawing object `objectId` and the parts only it reaches; other drawing content is kept. A
    *  shape, connector or group goes with its children; a slicer with its frame, and its cache when no other
@@ -5576,6 +5739,26 @@ export interface Sheet {
   /** Removes the pivot table `pivot`; its handle then fails with `StatusCode.NotFound`. */
   removePivot(pivot: PivotRef): void;
 
+  /** Lists the handles of the sheet's worksheet tables; a table's position in the array is its sheet-local
+   *  index. A new array on each call. */
+  listTables(): readonly Table[];
+  /** The handle of the table `table` on this sheet. A position past the last table fails with
+   *  `StatusCode.IndexOutOfRange`, a name no table of the sheet has with `StatusCode.NotFound`;
+   *  `Workbook.table(name)` finds a table on any sheet. */
+  table(table: TableRef): Table;
+  /** Creates a worksheet table on this sheet and returns its handle. See {@link TableInput} for the defaults; a
+   *  name another table already uses fails with `StatusCode.AlreadyExists`.
+   *
+   *  @example
+   *  ```ts
+   *  ws.setValues('A1', [['Item', 'Qty'], ['Apple', 3]]);
+   *  const table = ws.addTable({ range: 'A1:B2', name: 'Sales' });
+   *  ``` */
+  addTable(input: TableInput): Table;
+  /** Removes the table `table`; its handle then fails with `StatusCode.NotFound`. Formulas that name the table keep
+   *  their structured references and evaluate to `#NAME?`. Fails as `table` does when there is no such table. */
+  removeTable(table: TableRef): void;
+
   /** Evaluates every CF block on the sheet against the cells of `range` and returns only the cells that
    *  produced at least one match. `todaySerial` pins the
    *  date basis for `TimePeriod` rules (default: the pinned clock, else today); pass `NaN` to disable them (no
@@ -5598,32 +5781,33 @@ export interface Sheet {
   /** Writes `_xlnm.Print_Titles`; an axis whose span is `null` does not repeat, and `null` removes the name. */
   setPrintTitles(titles: PrintTitles | null): void;
 
-  /** Upserts a row break before `row`, spanning the whole sheet. */
-  addRowBreak(row: number, manual: boolean): void;
-  /** Upserts a column break before `col`, spanning the whole sheet. */
-  addColumnBreak(col: number, manual: boolean): void;
-  /** Removes the row break at `row`; `StatusCode.NotFound` when there is none. */
-  removeRowBreak(row: number): void;
-  /** Removes the column break at `col`; `StatusCode.NotFound` when there is none. */
-  removeColumnBreak(col: number): void;
+  /** Sets the row break before `row`, replacing the span and `manual` flag of one already there, or with `null`
+   *  removes it (doing nothing when there is none). See {@link PageBreakInput} for the defaults. A row past the
+   *  grid, an inverted span or a span past the last column fails with `StatusCode.InvalidArgument`; adding a
+   *  break to an axis that holds 1026 fails with `StatusCode.PreconditionFailed`. */
+  setRowBreak(row: number, input: PageBreakInput | null): void;
+  /** Sets or removes the column break before `col`, as `setRowBreak` does for rows; the whole-sheet span covers
+   *  every row. */
+  setColumnBreak(col: number, input: PageBreakInput | null): void;
   /** Removes every manual break on both axes. */
   clearBreaks(): void;
   /** Returns the row breaks, ascending by row. */
-  listRowBreaks(): readonly PageBreak[];
+  listRowBreaks(): readonly RowBreak[];
   /** Returns the column breaks, ascending by column. */
-  listColumnBreaks(): readonly PageBreak[];
+  listColumnBreaks(): readonly ColumnBreak[];
 
   /** Applies a partial `<pageSetup>` update. `fitToPage` sets or clears `<sheetPr><pageSetUpPr fitToPage>`
    *  without disturbing anything else `<sheetPr>` carries; `false` removes the attribute. `orientation: null`
    *  leaves a sheet that states no orientation as it is and fails with `StatusCode.InvalidArgument` on one that
-   *  states it, since a stated orientation cannot be removed. */
-  setPageSetup(setup: PageSetupPatch): void;
+   *  states it, since a stated orientation cannot be removed. `scalePct` outside `[10, 400]` fails with
+   *  `StatusCode.InvalidArgument`. */
+  updatePageSetup(patch: PageSetupPatch): void;
   /** Applies a partial `<pageMargins>` update, in inches. */
-  setPageMargins(margins: PageMarginsPatch): void;
+  updatePageMargins(patch: PageMarginsPatch): void;
   /** Applies a partial `<printOptions>` update. */
-  setPrintOptions(patch: PrintOptionsPatch): void;
+  updatePrintOptions(patch: PrintOptionsPatch): void;
   /** Applies a partial `<headerFooter>` update. */
-  setHeaderFooter(patch: HeaderFooterPatch): void;
+  updateHeaderFooter(patch: HeaderFooterPatch): void;
   /** Reads the effective page setup and which attributes state it. */
   getPageSetup(): PageSetup;
   /** Reads the effective page margins, in inches. */
@@ -5639,12 +5823,12 @@ export interface Sheet {
   /** Updates the view with the keys `patch` names; an empty patch changes nothing. A freeze or split key takes
    *  its partner from the current view (`{ freezeRows: 2 }` keeps `freezeCols`), and a non-zero freeze with a
    *  non-zero split throws `TypeError`. Applied in a fixed order: freeze or split (each replaces the other, and a
-   *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomScale` (clamped to
+   *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomPct` (clamped to
    *  `[10, 400]`), `viewMode`, `rightToLeft`, `tabSelected`, `visibility`. The pane origin must lie past the
    *  frozen rows and columns. Hiding the only visible sheet and a pane origin other than `0, 0` without panes are checked against
    *  the merged view before anything is written, failing with `StatusCode.InvalidArgument`; another engine
    *  failure throws with the earlier keys applied. */
-  setView(patch: SheetViewPatch): void;
+  updateView(patch: SheetViewPatch): void;
   /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */
   getTabColor(): Color | null;
   /** Sets the tab colour; `null` removes it. */
@@ -5656,25 +5840,25 @@ export interface Sheet {
    *  kept. */
   setSelection(selection: SheetSelectionInput): void;
 
-  /**
-   * Reads the sheet's `<sheetProtection>` flags. Strings are
-   * deep-copied; the returned object is independent of the
-   * workbook's storage.
-   */
-  getSheetProtection(): SheetProtection;
-  /**
-   * Replaces the sheet's `<sheetProtection>` flags wholesale. `null`, like a record with `enabled: false`,
-   * clears the protection block on save.
-   */
-  setSheetProtection(protection: SheetProtection | null): void;
+  /** Reads the sheet's protection; `null` when the sheet is not protected. The returned object is independent
+   *  of the workbook's storage. */
+  getSheetProtection(): SheetProtection | null;
+  /** Protects the sheet with `protection`, replacing any protection it has (an omitted key takes its
+   *  {@link SheetProtectionInput} default), or with `null` unprotects it (doing nothing when it is not
+   *  protected). */
+  setSheetProtection(protection: SheetProtectionInput | null): void;
+  /** Merges `patch` into the sheet's protection. On an unprotected sheet the patch applies to the
+   *  {@link SheetProtectionInput} defaults and protects the sheet, unless every key is omitted. */
+  updateSheetProtection(patch: SheetProtectionPatch): void;
 
   /** Returns the column-layout overrides on the sheet in storage order. */
   listColumnOverrides(): readonly ColumnLayout[];
-  /** Sets / replaces the column width override on `[first, last]`. `width` is a stored width:
-   *  characters with the column padding included, as `<col width>` holds it. */
-  setColumnWidth(first: number, last: number, width: number): void;
+  /** Sets / replaces the column width override on `[first, last]`. `widthChars` is a stored width in
+   *  characters with the column padding included, as `<col width>` holds it, 0 to 255; outside that (or not
+   *  finite) fails with `StatusCode.InvalidArgument`. */
+  setColumnWidth(first: number, last: number, widthChars: number): void;
   /** `setColumnWidth` over the A1 column span `span` (`"B"`, `"B:D"`). */
-  setColumnWidth(span: string, width: number): void;
+  setColumnWidth(span: string, widthChars: number): void;
   /** Sets / replaces the column hidden flag on `[first, last]`. */
   setColumnHidden(first: number, last: number, hidden: boolean): void;
   /** `setColumnHidden` over the A1 column span `span` (`"B"`, `"B:D"`). */
@@ -5691,14 +5875,18 @@ export interface Sheet {
 
   /** Returns the row-layout overrides on the sheet. */
   listRowOverrides(): readonly RowLayout[];
-  /** Sets / replaces the row height on `[first, last]` as a manual height (`customHeight`), which stays put when the row's content or font changes. */
-  setRowHeight(first: number, last: number, height: number): void;
+  /** Sets / replaces the row height on `[first, last]` as a manual height (`customHeight`), which stays put when
+   *  the row's content or font changes. `heightPt` is in points, 0 to 409; outside that (or not finite) fails
+   *  with `StatusCode.InvalidArgument`. */
+  setRowHeight(first: number, last: number, heightPt: number): void;
   /** `setRowHeight` over the A1 row span `span` (`"3"`, `"3:5"`). */
-  setRowHeight(span: string, height: number): void;
-  /** Stores `height` as the cached automatic height of the rows on `[first, last]`: saved as `ht` without `customHeight`, so each row keeps following its content and font. Row style, hidden, outline and collapsed state are kept; `clearRowHeight` drops it. */
-  setRowAutoHeight(first: number, last: number, height: number): void;
+  setRowHeight(span: string, heightPt: number): void;
+  /** Stores `heightPt` (points, 0 to 409) as the cached automatic height of the rows on `[first, last]`: saved
+   *  as `ht` without `customHeight`, so each row keeps following its content and font. Row style, hidden,
+   *  outline and collapsed state are kept; `resetRowHeight` drops it. */
+  setRowAutoHeight(first: number, last: number, heightPt: number): void;
   /** `setRowAutoHeight` over the A1 row span `span` (`"3"`, `"3:5"`). */
-  setRowAutoHeight(span: string, height: number): void;
+  setRowAutoHeight(span: string, heightPt: number): void;
   /** Sets / replaces the row hidden flag on `[first, last]`. */
   setRowHidden(first: number, last: number, hidden: boolean): void;
   /** `setRowHidden` over the A1 row span `span` (`"3"`, `"3:5"`). */
@@ -5712,24 +5900,21 @@ export interface Sheet {
   setRowCollapsed(first: number, last: number, collapsed: boolean): void;
   /** `setRowCollapsed` over the A1 row span `span` (`"3"`, `"3:5"`). */
   setRowCollapsed(span: string, collapsed: boolean): void;
-  /** Captures the style state of a selection (covered column or row styles and every stored cell's XF) as opaque, versioned bytes for `restoreRangeStyle`; use it to undo a `remapRangeStyle`. */
-  snapshotRangeStyle(range: CellRect | string): Uint8Array;
-  /** Puts a `snapshotRangeStyle` capture back exactly. Values, formulas, phonetic runs and comments are not touched; nothing changes when it throws. */
-  restoreRangeStyle(bytes: Uint8Array): void;
-  /** Removes the height override on rows `first..last`, returning them to the sheet default height. */
-  clearRowHeight(first: number, last: number): void;
-  /** `clearRowHeight` over the A1 row span `span` (`"3"`, `"3:5"`). */
-  clearRowHeight(span: string): void;
-  /** Removes the width override on columns `first..last`, returning them to the sheet default width. Hidden state, outline level and column style are kept. */
-  clearColumnWidth(first: number, last: number): void;
-  /** `clearColumnWidth` over the A1 column span `span` (`"B"`, `"B:D"`). */
-  clearColumnWidth(span: string): void;
+  /** Resets rows `first..last` to the sheet default height by removing their height override. */
+  resetRowHeight(first: number, last: number): void;
+  /** `resetRowHeight` over the A1 row span `span` (`"3"`, `"3:5"`). */
+  resetRowHeight(span: string): void;
+  /** Resets columns `first..last` to the sheet default width by removing their width override. Hidden state,
+   *  outline level and column XF are kept. */
+  resetColumnWidth(first: number, last: number): void;
+  /** `resetColumnWidth` over the A1 column span `span` (`"B"`, `"B:D"`). */
+  resetColumnWidth(span: string): void;
 
   /** Reads the sheet's default column / row metrics. */
   getFormatDefaults(): SheetFormatDefaults;
-  /** Replaces the sheet's default column / row metrics; an omitted key keeps its value and `null` clears
-   *  `defaultColWidth` / `defaultRowHeight`. */
-  setFormatDefaults(defaults: SheetFormatDefaultsPatch): void;
+  /** Updates the sheet's default column / row metrics; an omitted key keeps its value and `null` clears
+   *  `defaultColWidthChars` / `defaultRowHeightPt`. */
+  updateFormatDefaults(patch: SheetFormatDefaultsPatch): void;
 
   /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
    *  Hidden rows and columns contribute zero extent. `mode` defaults to `Display`. */
@@ -5764,15 +5949,9 @@ export interface Sheet {
    *
    *  @example
    *  ```ts
-   *  ws.setCellFormat('A1:C1', { font: { bold: true }, numberFormat: '#,##0.00' });
+   *  ws.updateCellFormat('A1:C1', { font: { bold: true }, numberFormat: '#,##0.00' });
    *  ``` */
-  setCellFormat(range: CellRect | string, patch: CellFormatPatch): void;
-  /** The formatting a cell shows: the xf chosen from cell, row, column or
-   *  the default, with its colours resolved. Conditional formatting is not
-   *  applied. */
-  getEffectiveStyle(row: number, col: number): EffectiveStyle;
-  /** `getEffectiveStyle` at the A1 address `a1`. */
-  getEffectiveStyle(a1: string): EffectiveStyle;
+  updateCellFormat(range: CellRect | string, patch: CellFormatPatch): void;
 
   /** Adds a merge range to the sheet. Covered cells keep their values and stay writable; clear them first to match
    *  Excel's Merge. */
@@ -5822,14 +6001,16 @@ export interface Sheet {
   /** Removes the protected range `protectedRange`. */
   removeProtectedRange(protectedRange: ProtectedRangeRef): void;
 
-  /** Appends a hyperlink at `(row, col)`. For an in-workbook link, pass a `null` `target` and the A1 destination as
+  /** Sets the hyperlink of the cell `(row, col)`, replacing the one anchored there, or with `null` removes it
+   *  (doing nothing when there is none). For an in-workbook link, pass a `null` `target` and the A1 destination as
    *  `location`. `display` is the hyperlink's stored display attribute; the cell value is not written, so call
    *  `setText(cell, display)` to show it. */
-  addHyperlink(row: number, col: number, link: HyperlinkInput): void;
-  /** `addHyperlink` at the A1 address `a1`. */
-  addHyperlink(a1: string, link: HyperlinkInput): void;
-  /** Appends a hyperlink covering the cells of `range`. */
-  addHyperlinkRange(range: CellRect | string, link: HyperlinkInput): void;
+  setHyperlink(row: number, col: number, link: HyperlinkInput | null): void;
+  /** `setHyperlink` at the A1 address `a1`. */
+  setHyperlink(a1: string, link: HyperlinkInput | null): void;
+  /** Sets a hyperlink covering the cells of `range`, replacing the one anchored at its top-left cell, or with
+   *  `null` removes the hyperlink anchored there (doing nothing when there is none). */
+  setHyperlinkRange(range: CellRect | string, link: HyperlinkInput | null): void;
   /** Removes every hyperlink anchored at `(row, col)`; `StatusCode.NotFound` when none is. */
   removeHyperlink(row: number, col: number): void;
   /** `removeHyperlink` at the A1 address `a1`. */
@@ -5914,9 +6095,8 @@ export interface Sheet {
 }
 
 /** The OOXML-level layer of a workbook, `Workbook.ooxml`: the style record tables (cell XFs, fonts, fills,
- *  borders, number formats, differential formats, named-style XFs), the named cell styles that reference
- *  them by index, and the parts carried through unchanged. Most code formats cells with
- *  `Sheet.setCellFormat` and never needs it. */
+ *  borders, number formats, differential formats, named-style XFs) and the parts carried through unchanged.
+ *  Most code formats cells with `Sheet.updateCellFormat` and never needs it. */
 export interface WorkbookOoxml {
   /** Returns the resolved XF record at `xfIndex`. */
   getCellXf(xfIndex: number): CellXf;
@@ -5926,10 +6106,10 @@ export interface WorkbookOoxml {
   getFill(fillIndex: number): Fill;
   /** Returns the border record at `borderIndex`, including its Color selectors. */
   getBorder(borderIndex: number): Border;
-  /** Returns the effective format string for `numFmtId` in the workbook profile's vocabulary (id 14 is
+  /** Returns the effective number format code for `numFmtId` in the workbook profile's vocabulary (id 14 is
    *  `m/d/yy` under en-US, `yyyy/m/d` under ja-JP); `null` when no format maps to it. */
-  getNumFmtString(numFmtId: number): string | null;
-  /** Returns the differential-format record referenced by CF `dxfId`. */
+  getNumberFormat(numFmtId: number): string | null;
+  /** Returns the differential-format record referenced by CF `dxfIndex`. */
   getDxf(dxfIndex: number): Dxf;
 
   /** Adds a font (deduplicating against existing entries) and returns
@@ -5944,18 +6124,18 @@ export interface WorkbookOoxml {
   addFill(record: Fill): number;
   /** Adds a border (deduplicating against existing entries). */
   addBorder(record: Border): number;
-  /** Adds a number-format code in the workbook profile's vocabulary and returns its id. A built-in id
-   *  whose profile code equals `formatCode` (lowest id first) wins, then an existing custom record,
+  /** Adds a number format code in the workbook profile's vocabulary and returns its id. A built-in id
+   *  whose profile code equals `numberFormat` (lowest id first) wins, then an existing custom record,
    *  else a custom code is appended at `max(existing_custom_id, 163) + 1`. Under en-US `m/d/yy` is id 14;
-   *  the ECMA-376 spelling `mm-dd-yy` is a custom format. `getNumFmtString(addNumFmt(x))` returns `x`. */
-  addNumFmt(formatCode: string): number;
+   *  the ECMA-376 spelling `mm-dd-yy` is a custom format. `getNumberFormat(addNumberFormat(x))` returns `x`. */
+  addNumberFormat(numberFormat: string): number;
   /** Adds an `<xf>` record (deduplicating against existing entries).
    *  Out-of-range font/fill/border indices or unregistered `numFmtId`
    *  surface `StatusCode.InvalidArgument` rather than auto-growing the parallel
    *  tables. */
   addCellXf(record: CellXfInput): number;
-  /** Adds a `<dxf>` differential-format record for conditional formats. */
-  addDxf(record: Dxf): number;
+  /** Adds a `<dxf>` differential-format record for conditional formats and returns its `dxfIndex`. */
+  addDxf(input: DxfInput): number;
 
   /** Lists the font records; a record's position is its font index. */
   listFonts(): readonly Font[];
@@ -5965,46 +6145,36 @@ export interface WorkbookOoxml {
   listBorders(): readonly Border[];
   /** Lists the resolved `<xf>` records; a record's position is its XF index. */
   listCellXfs(): readonly CellXf[];
-  /** Lists the `<dxf>` records; a record's position is the CF `dxfId` naming it. */
+  /** Lists the `<dxf>` records; a record's position is the CF `dxfIndex` naming it. */
   listDxfs(): readonly Dxf[];
 
-  /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
-  listCellStyles(): readonly CellStyle[];
-  /** Lists the `<cellStyleXfs>` records — the named-style xf table referenced by `CellStyle.xfId`, independent of
-   *  the per-cell `cellXfs` table; a record's position is its `cellStyleXfIndex`. */
+  /** Lists the `<cellStyleXfs>` records — the named-style xf table referenced by `CellStyle.styleXfIndex`,
+   *  independent of the per-cell `cellXfs` table; a record's position is its `cellStyleXfIndex`. */
   listCellStyleXfs(): readonly CellXf[];
-  /** Reads the named cell style `name` (matched exactly); `null` when there is none. */
-  getCellStyle(name: string): CellStyle | null;
   /** Returns the named-style xf record at `cellStyleXfIndex`. Output shape mirrors
    *  `getCellXf`. */
   getCellStyleXf(cellStyleXfIndex: number): CellXf;
   /** Appends (deduplicating) a named-style xf and returns its
-   *  `<cellStyleXfs>` index, which is what `setCellStyle` and
-   *  `CellXf.xfId` reference. */
+   *  `<cellStyleXfs>` index, which is what `Workbook.setCellStyle` and
+   *  `CellXf.styleXfIndex` reference. */
   addCellStyleXf(record: CellXfInput): number;
-  /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent
-   *  fields default to `xfId` 0, a custom style (`0xFFFFFFFF`), level 0 and
-   *  both flags false. */
-  setCellStyle(record: CellStyle): void;
-  /** Removes the `<cellStyle>` named `name`; cell formats that used it are
-   *  repointed at the Normal style. */
-  removeCellStyle(name: string): void;
 
   /** Lists the paths of the OOXML parts the reader carried through unchanged. */
   listPassthroughs(): readonly string[];
-  /** Reports whether a passthrough part sits at `path` (no leading `/`); returns the path, or `null`. */
-  getPassthrough(path: string): string | null;
+  /** Reports whether a passthrough part sits at `path` (no leading `/`). */
+  hasPassthrough(path: string): boolean;
 }
 
-/** The OOXML-level layer of a sheet, `Sheet.ooxml`: the cell, row and column XF indices, the range-style
- *  remap that works on them, and the raw XML of the worksheet elements the typed setters cover. Most code
- *  uses `Sheet.setCellFormat`, which takes whole columns (`'B:B'`) and rows (`'3:3'`) too. */
+/** The OOXML-level layer of a sheet, `Sheet.ooxml`: the cell, row and column XF indices, the range-XF remap,
+ *  snapshot and restore that work on them, the effective style, and the raw XML of the worksheet elements the
+ *  typed setters cover. Most code uses `Sheet.updateCellFormat`, which takes whole columns (`'B:B'`) and rows
+ *  (`'3:3'`) too. */
 export interface SheetOoxml {
-  /** The cell-style XF index the columns of `col` carry (`setColumnStyle`); `null` when the column has none. */
-  getColumnStyle(col: number): number | null;
-  /** The cell-style XF index row `row` makes effective (OOXML `customFormat="1"`, `setRowStyle`); `null` when
+  /** The cell XF index the columns of `col` carry (`setColumnXfIndex`); `null` when the column has none. */
+  getColumnXfIndex(col: number): number | null;
+  /** The cell XF index row `row` makes effective (OOXML `customFormat="1"`, `setRowXfIndex`); `null` when
    *  the row has none. */
-  getRowStyle(row: number): number | null;
+  getRowXfIndex(row: number): number | null;
 
   /** OOXML fragment for round trips; normally use `getAutoFilter`. Reads the complete worksheet-level
    *  `<autoFilter>` element; `null` when the sheet has no AutoFilter definition. */
@@ -6016,51 +6186,54 @@ export interface SheetOoxml {
   /** OOXML fragment for round trips; normally use `getPageSetup`. Reads the worksheet's `<pageSetup>` element;
    *  `null` when absent. */
   getPageSetupXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPageSetup`. Replaces `<pageSetup>`; `null` (or `""`)
+  /** OOXML fragment for round trips; normally use `updatePageSetup`. Replaces `<pageSetup>`; `null` (or `""`)
    *  removes it and restores the defaults. A fragment carrying `r:id` is rejected unless the sheet already has a
    *  printerSettings part, since the reference would otherwise dangle. */
   setPageSetupXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageMargins`. Reads the worksheet's `<pageMargins>`
    *  element; `null` when absent. */
   getPageMarginsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPageMargins`. Replaces `<pageMargins>`; `null` (or `""`)
+  /** OOXML fragment for round trips; normally use `updatePageMargins`. Replaces `<pageMargins>`; `null` (or `""`)
    *  removes it. */
   setPageMarginsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPrintOptions`. Reads the worksheet's `<printOptions>`
    *  element; `null` when absent. */
   getPrintOptionsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPrintOptions`. Replaces `<printOptions>`; `null` (or `""`)
+  /** OOXML fragment for round trips; normally use `updatePrintOptions`. Replaces `<printOptions>`; `null` (or `""`)
    *  removes it. */
   setPrintOptionsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getHeaderFooter`. Reads the worksheet's `<headerFooter>`
    *  element; `null` when absent. */
   getHeaderFooterXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setHeaderFooter`. Replaces `<headerFooter>`; `null` (or `""`)
+  /** OOXML fragment for round trips; normally use `updateHeaderFooter`. Replaces `<headerFooter>`; `null` (or `""`)
    *  removes it. Header codes live in XML element text, so a hand-built fragment writes them escaped
-   *  (`<oddHeader>&amp;C...</oddHeader>`); `setHeaderFooter` takes the decoded text instead. */
+   *  (`<oddHeader>&amp;C...</oddHeader>`); `updateHeaderFooter` takes the decoded text instead. */
   setHeaderFooterXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageSetup`, which reads its `fitToPage`. Reads the
    *  worksheet's `<sheetPr>` element; `null` when absent. It also carries the tab colour and VBA code name. */
   getSheetPrXml(): string | null;
-  /** OOXML fragment for round trips; normally use `setPageSetup`, which writes its `fitToPage`. Replaces
+  /** OOXML fragment for round trips; normally use `updatePageSetup`, which writes its `fitToPage`. Replaces
    *  `<sheetPr>`; `null` (or `""`) removes it. */
   setSheetPrXml(xml: string | null): void;
-  /** Sets / replaces the cell-style XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled cell of the span takes this XF, unless its row has a style. */
-  setColumnStyle(first: number, last: number, xfIndex: number): void;
-  /** `setColumnStyle` over the A1 column span `span` (`"B"`, `"B:D"`). */
-  setColumnStyle(span: string, xfIndex: number): void;
-  /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
-  clearColumnStyle(first: number, last: number): void;
-  /** `clearColumnStyle` over the A1 column span `span` (`"B"`, `"B:D"`). */
-  clearColumnStyle(span: string): void;
-  /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes when it throws. */
-  setRowStyle(first: number, last: number, xfIndex: number): void;
-  /** `setRowStyle` over the A1 row span `span` (`"3"`, `"3:5"`). */
-  setRowStyle(span: string, xfIndex: number): void;
-  /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
-  clearRowStyle(first: number, last: number): void;
-  /** `clearRowStyle` over the A1 row span `span` (`"3"`, `"3:5"`). */
-  clearRowStyle(span: string): void;
+  /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an
+   *  unstyled cell of the span takes this XF, unless its row has one. */
+  setColumnXfIndex(first: number, last: number, xfIndex: number): void;
+  /** `setColumnXfIndex` over the A1 column span `span` (`"B"`, `"B:D"`). */
+  setColumnXfIndex(span: string, xfIndex: number): void;
+  /** Resets columns `[first, last]` to the default XF by removing their cell XF, retaining other column
+   *  attributes. */
+  resetColumnXfIndex(first: number, last: number): void;
+  /** `resetColumnXfIndex` over the A1 column span `span` (`"B"`, `"B:D"`). */
+  resetColumnXfIndex(span: string): void;
+  /** Sets / replaces the cell XF of the inclusive row span `first..last`; index 0 is the default XF. A value
+   *  later entered into an unstyled cell of a covered row takes this XF. Nothing changes when it throws. */
+  setRowXfIndex(first: number, last: number, xfIndex: number): void;
+  /** `setRowXfIndex` over the A1 row span `span` (`"3"`, `"3:5"`). */
+  setRowXfIndex(span: string, xfIndex: number): void;
+  /** Resets rows `first..last` to the default XF by removing their cell XF, retaining other row attributes. */
+  resetRowXfIndex(first: number, last: number): void;
+  /** `resetRowXfIndex` over the A1 row span `span` (`"3"`, `"3:5"`). */
+  resetRowXfIndex(span: string): void;
   /**
    * Lists, ascending, every cell-XF index some cell of the selection resolves to: the XFs of
    * cells that carry their own, then the row, column or default (0) style of the rest. `range`
@@ -6070,17 +6243,17 @@ export interface SheetOoxml {
    * First step of an attribute-only change (say the font size) over a selection, the way
    * Excel applies it to a row, column, range or the whole sheet: read the bases here, build
    * each one's patched XF with `Workbook.ooxml.addFont` / `addCellXf`, then apply the pairs with
-   * `remapRangeStyle`.
+   * `remapRangeXfs`.
    */
-  getRangeStyleBases(range: CellRect | string): readonly number[];
+  getRangeXfBases(range: CellRect | string): readonly number[];
   /**
-   * `getRangeStyleBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
+   * `getRangeXfBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
    * an excluded cell contributes no XF, neither its own nor the row, column or default style
    * beneath it. Use it when the host resolves those cells itself (say, a pending edit overrides
    * their style). Excluded cells outside the selection and repeats are ignored; excluding every
    * cell yields an empty list. Fails when the arrays differ in length.
    */
-  getRangeStyleBasesExcluding(
+  getRangeXfBasesExcluding(
     range: CellRect | string,
     excludedRows: readonly number[],
     excludedCols: readonly number[],
@@ -6094,7 +6267,18 @@ export interface SheetOoxml {
    * in length, a `fromXfs` entry repeats, a `toXfs` entry is past the cell-XF table, or more
    * than 1,048,576 cells would be written.
    */
-  remapRangeStyle(range: CellRect | string, fromXfs: readonly number[], toXfs: readonly number[]): void;
+  remapRangeXfs(range: CellRect | string, fromXfs: readonly number[], toXfs: readonly number[]): void;
+  /** Captures the XF state of a selection (covered column or row XFs and every stored cell's XF) as opaque,
+   *  versioned bytes for `restoreRangeXfs`; use it to undo a `remapRangeXfs`. */
+  snapshotRangeXfs(range: CellRect | string): Uint8Array;
+  /** Puts a `snapshotRangeXfs` capture back exactly. Values, formulas, phonetic runs and comments are not
+   *  touched; nothing changes when it throws. */
+  restoreRangeXfs(bytes: Uint8Array): void;
+  /** The formatting a cell shows: the XF chosen from cell, row, column or the default, with its colours
+   *  resolved. Conditional formatting is not applied. */
+  getEffectiveStyle(row: number, col: number): EffectiveStyle;
+  /** `getEffectiveStyle` at the A1 address `a1`. */
+  getEffectiveStyle(a1: string): EffectiveStyle;
 
   /** Returns the cell XF index of the cell at `(row, col)`. */
   getCellXfIndex(row: number, col: number): number;
@@ -6106,42 +6290,48 @@ export interface SheetOoxml {
   /** `setCellXfIndex` at the A1 address `a1`. */
   setCellXfIndex(a1: string, xfIndex: number): void;
   /**
-   * Removes the direct style assignment from the cell at `(row, col)`
-   * so a blank cell inherits its row / column style again. Value, formula and
-   * comments are kept; an absent cell stays absent. A non-blank cell keeps
-   * owning the default xf. Use `getEffectiveStyle().source` to tell an
-   * unassigned cell (`Row` / `Column` / `Default`) from a direct Normal
-   * (`Cell`).
+   * Resets the cell at `(row, col)` to its inherited XF by removing its direct assignment, so a blank cell
+   * inherits its row / column XF again. Value, formula and comments are kept; an absent cell stays absent. A
+   * non-blank cell keeps owning the default xf. Use `getEffectiveStyle().source` to tell an unassigned cell
+   * (`Row` / `Column` / `Default`) from a direct Normal (`Cell`).
    */
-  clearCellXfIndex(row: number, col: number): void;
-  /** `clearCellXfIndex` at the A1 address `a1`. */
-  clearCellXfIndex(a1: string): void;
+  resetCellXfIndex(row: number, col: number): void;
+  /** `resetCellXfIndex` at the A1 address `a1`. */
+  resetCellXfIndex(a1: string): void;
   /** Applies `xfIndex` across the cells of `range`, materialising blank
    *  cells so an empty ruled box renders. Saves one call per cell. An
    *  index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.InvalidArgument`. */
   setRangeXfIndex(range: CellRect | string, xfIndex: number): void;
 }
 
-/** One worksheet table. Get it from `Workbook.table(ref)`, `listTables()` or `addTable`; the workbook keeps one
- *  handle per table, so every lookup of the same table returns the same object. The handle follows its table
- *  when tables are added or removed, rows or columns are edited, or the table is renamed. Once the table is
- *  removed (directly, or with its sheet), every member but `workbook` fails with `StatusCode.NotFound`. Remove a
- *  table with `Workbook.removeTable`. */
+/** One worksheet table. Get it from `Sheet.table(ref)`, `Sheet.listTables()`, `Sheet.addTable` or
+ *  `Workbook.table(name)`; the workbook keeps one handle per table, so every lookup of the same table returns the
+ *  same object. The handle follows its table when tables are added or removed, rows or columns are edited, or
+ *  the table is renamed. Once the table is removed (directly, or with its sheet), every member but `workbook`
+ *  fails with `StatusCode.NotFound`. Remove a table with `Sheet.removeTable`. */
 export interface Table {
   /** The workbook this table belongs to. */
   readonly workbook: Workbook;
-  /** The table's current workbook-wide index (its position in `listTables()`). */
+  /** The sheet the table lives on. */
+  readonly sheet: Sheet;
+  /** The table's current index on its sheet (its position in `Sheet.listTables()`). */
   readonly index: number;
-  /** The table's current name. */
+  /** The table's current name: the name formulas and `Workbook.table` use. */
   readonly name: string;
-  /** The table's current display name, the name formulas use. */
-  readonly displayName: string;
-  /** Reads the table's name, range, style, toggles and columns. */
+  /** Reads the table's name, range, header / totals flags and columns. */
   getProperties(): TableProperties;
-  /** Partially updates the table, its `name` / `displayName` included. Omitted fields preserve their current
-   *  values. A supplied `range` must keep the table's existing column count; `styleName: null` clears the
-   *  style. */
+  /** Partially updates the table's range and header / totals rows; omitted fields keep their current values. A
+   *  supplied `range` must keep the table's existing column count. */
   update(patch: TablePatch): void;
+  /** Renames the table. A name another table already uses (compared case-insensitively) fails with
+   *  `StatusCode.AlreadyExists`, an empty or malformed one with `StatusCode.InvalidArgument`. Structured
+   *  references to the old name are rewritten in cell, defined-name, conditional-format, validation and chart
+   *  formulas; a bare table name used as a reference is not rewritten. */
+  rename(name: string): void;
+  /** Reads the table's style name and toggles; `null` when the table has no style element. */
+  getStyleOptions(): TableStyleOptions | null;
+  /** Updates the table's style name and toggles with the keys `patch` names. */
+  updateStyleOptions(patch: TableStyleOptionsPatch): void;
   /** Renames column `column` (0-based), as typing over its header cell does, and returns the final name. An empty
    *  `name` takes the Excel profile's `Column<N>` (`列<N>`) with the lowest unused N, a name another column already has
    *  (ASCII case-insensitively) gains the lowest unused N >= 2, and anything else is kept verbatim. Every
@@ -6154,14 +6344,14 @@ export interface Table {
   setColumnTotals(column: number, totals: TableColumnTotalsInput): void;
   /** Reads the table's AutoFilter; `null` when it has none. */
   getAutoFilter(): AutoFilter | null;
-  /** Replaces the table's AutoFilter. Row visibility is unchanged. */
-  setAutoFilter(filter: AutoFilterInput): void;
-  /** Removes the table's AutoFilter. Row visibility is unchanged. */
-  removeAutoFilter(): void;
+  /** Replaces the table's AutoFilter, or with `null` removes it (a table without one is left as it is). Row
+   *  visibility is unchanged. */
+  setAutoFilter(filter: AutoFilterInput | null): void;
   /** Hides every body row the table's criteria exclude and shows the rest. */
   applyAutoFilter(): void;
-  /** Drops every column criterion and shows all body rows. */
-  clearAutoFilter(): void;
+  /** Drops every column criterion and shows all body rows; the AutoFilter itself stays (remove it with
+   *  `setAutoFilter(null)`). Does nothing on a filter without criteria. */
+  clearAutoFilterCriteria(): void;
   /** Evaluates the table's AutoFilter without changing the sheet. */
   evaluateAutoFilter(): AutoFilterEval;
 }
@@ -6188,28 +6378,29 @@ export interface Pivot {
   /** Returns the pivot's layout, computed from its cache records; the sheet cells are not written (`project()`
    *  writes them). */
   getLayout(): PivotLayout;
-  /** Sets the rectangle the pivot reserves (`<location ref>`); its top-left cell is the anchor. */
-  setAnchor(range: CellRect | string): void;
-  /** Reads the row / column grand total flags `setGrandTotals` writes. */
+  /** Moves the pivot so its top-left cell is `cell` (a {@link CellAddress} or an A1 cell, `'C3'`), the same
+   *  meaning as `PivotInput.anchor`. */
+  setAnchor(cell: CellAddress | string): void;
+  /** Reads the row / column grand total flags `updateGrandTotals` writes. */
   getGrandTotals(): PivotGrandTotals;
   /** Toggles the row / column grand total bands; an omitted key keeps its band. */
-  setGrandTotals(patch: PivotGrandTotalsPatch): void;
-  /** Reads the table style `setStyleInfo` writes. */
-  getStyleInfo(): PivotStyle | null;
-  /** Updates the pivot's table style and toggles with the keys `patch` names, making the style element present;
-   *  a pivot without one starts from no style name and every flag off. New pivots start as `PivotStyleLight16`
-   *  with row / column headers and last column on. */
-  setStyleInfo(patch: PivotStylePatch): void;
+  updateGrandTotals(patch: PivotGrandTotalsPatch): void;
+  /** Reads the pivot's style name and toggles; `null` when the definition has no style element. */
+  getStyleOptions(): PivotStyleOptions | null;
+  /** Updates the pivot's style and toggles with the keys `patch` names, making the style element present; a
+   *  pivot without one starts from no style name and every flag off. A new pivot starts with the workbook's
+   *  PivotTable style default (else `PivotStyleLight16`) and row / column headers and last column on. */
+  updateStyleOptions(patch: PivotStyleOptionsPatch): void;
   /** Reads the pivot's compact / tabular / outline report layout. */
   getReportLayout(): PivotReportLayout;
   /** Sets the pivot's compact / tabular / outline report layout. */
   setReportLayout(layout: PivotReportLayout): void;
-  /** Reads the PivotTable Options `setOptions` writes. */
+  /** Reads the PivotTable Options `updateOptions` writes. */
   getOptions(): PivotOptions;
-  /** Writes the PivotTable Options; members the object omits keep their current value. Wrong-typed members
+  /** Updates the PivotTable Options; members the patch omits keep their current value. Wrong-typed members
    *  fail without changing the pivot. Fails with `StatusCode.PreconditionFailed` when the report would overlap
    *  another structure. */
-  setOptions(options: PivotOptionsPatch): void;
+  updateOptions(patch: PivotOptionsPatch): void;
   /** Reads whether a cache change left the pivot's sheet cells stale; see `project`. */
   isProjectionPending(): boolean;
   /** Writes the pivot's report, computed from its cache records, into its sheet cells now and clears the pending
@@ -6255,28 +6446,26 @@ export interface Pivot {
   /** Reads item `itemIndex` of the field. */
   getFieldItem(fieldIndex: number, itemIndex: number): PivotItem;
   /** Updates item `itemIndex` of pivot field `fieldIndex` with the keys `patch` names. */
-  updateItem(fieldIndex: number, itemIndex: number, patch: PivotItemPatch): void;
-  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
-   *  its label. The item binds to the first shared item of the cache field
-   *  that renders as `name` (unbound when none does), and the filter engine
-   *  matches source records by comparing their rendered label against
-   *  `name`. An empty `name` therefore cannot express the blank item,
-   *  which has no label of its own; use `addFieldSharedItem`. `options.visible` defaults to `true`. */
-  addFieldItem(fieldIndex: number, name: string, options?: { visible?: boolean }): number;
-  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
-   *  its position in the bound cache field's shared items -- the same
-   *  index space as OOXML `<item x="N">`. The label is resolved from that
-   *  shared item, which makes this the form that can express the blank
-   *  item. `cacheIndex` is not validated: the cache field may be filled in
-   *  after the pivot definition, and an index that resolves to nothing
-   *  yields an item with an empty label that filters nothing. `options.visible` defaults to `true`. */
-  addFieldSharedItem(fieldIndex: number, cacheIndex: number, options?: { visible?: boolean }): number;
+  updateFieldItem(fieldIndex: number, itemIndex: number, patch: PivotItemPatch): void;
+  /** Appends a manual-filter item to pivot field `fieldIndex` and returns its item index. The item is addressed
+   *  one of two ways:
+   *  - by label (a string): it binds to the first shared item of the cache field that renders as `item`
+   *    (unbound when none does), and the filter engine matches source records by comparing their rendered label
+   *    against it. An empty label cannot express the blank item, which has no label of its own.
+   *  - by `{ cacheIndex }`: its position in the bound cache field's shared items, the index space of OOXML
+   *    `<item x="N">`. The label is resolved from that shared item, which makes this the form that can express
+   *    the blank item. `cacheIndex` is not validated: the cache field may be filled in after the pivot
+   *    definition, and an index that resolves to nothing yields an item with an empty label that filters
+   *    nothing.
+   *
+   *  `options.visible` defaults to `true`. */
+  addFieldItem(fieldIndex: number, item: string | { cacheIndex: number }, options?: { visible?: boolean }): number;
   /** Drops every manual-filter item from pivot field `fieldIndex`. */
   clearFieldItems(fieldIndex: number): void;
-  /** Appends a subtotal-fn entry to pivot field `fieldIndex`. */
-  addFieldSubtotalFn(fieldIndex: number, agg: PivotAggregation): void;
-  /** Drops every subtotal-fn entry from pivot field `fieldIndex`. */
-  clearFieldSubtotalFns(fieldIndex: number): void;
+  /** Adds the custom subtotal function `aggregation` to pivot field `fieldIndex`. */
+  addFieldSubtotalFunction(fieldIndex: number, aggregation: PivotAggregation): void;
+  /** Drops every custom subtotal function from pivot field `fieldIndex`. */
+  clearFieldSubtotalFunctions(fieldIndex: number): void;
   /** Groups the date field `fieldIndex` (a source field, or one of its group
    *  fields) by the `PivotDatePeriod` bits of `group.periods`, as Excel's Group
    *  command does, replacing any grouping it has. Each period becomes a
@@ -6350,8 +6539,8 @@ export interface PivotCache {
   setWorksheetSource(source: PivotWorksheetSourceInput | null): void;
   /** Reads the cache's options. */
   getOptions(): PivotCacheOptions;
-  /** Writes the cache's options; members the object omits keep their current value. */
-  setOptions(options: PivotCacheOptionsPatch): void;
+  /** Updates the cache's options; members the patch omits keep their current value. */
+  updateOptions(patch: PivotCacheOptionsPatch): void;
   /** Lists the cache's fields; a field's position is its `fieldIndex`. */
   listFields(): readonly PivotCacheField[];
   /** Appends a new field with the given UTF-8 name to the cache. Returns the new field's index. */
@@ -6462,23 +6651,29 @@ export interface Chart extends Drawing {
   /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitle} sets that kind, so a title
    *  of kind `ChartTitleKind.Auto` returns the title to Excel's automatic one. */
   setTitle(title: string | ChartTitle | null): void;
-  /** Updates the legend with the keys `patch` names (creating it when absent), or removes it with `null`.
-   *  `hiddenSeries` holds series `c:idx` values. */
-  setLegend(patch: ChartLegendPatch | null): void;
-  /** Patches the axis `axisId`. */
-  setAxis(axisId: number, patch: ChartAxisPatch): void;
-  /** Patches how blanks are plotted, whether hidden cells are skipped and whether `#N/A` draws as blank. */
-  setDisplay(patch: ChartDisplayPatch): void;
-  /** Patches the series with `c:idx` `seriesIndex` of plot group `plot`. */
-  setSeries(plot: number, seriesIndex: number, patch: ChartSeriesPatch): void;
-  /** Patches a data point; `null` or an empty patch removes its formatting. */
-  setPoint(plot: number, seriesIndex: number, pointIndex: number, patch: ChartPointPatch | null): void;
-  /** Patches plot group `plot`. */
-  setPlot(plot: number, patch: ChartPlotPatch): void;
+  /** Replaces the legend with `legend` (the record `getProperties().legend` returns), or with `null` removes it
+   *  (doing nothing when the chart has none). `hiddenSeries` holds series `c:idx` values. */
+  setLegend(legend: ChartLegend | null): void;
+  /** Updates the legend with the keys `patch` names, creating it when absent. */
+  updateLegend(patch: ChartLegendPatch): void;
+  /** Updates the axis `axisId`; an axis id the chart lacks fails with `StatusCode.NotFound`. */
+  updateAxis(axisId: number, patch: ChartAxisPatch): void;
+  /** Updates how blanks are plotted, whether hidden cells are skipped and whether `#N/A` draws as blank. */
+  updateDisplay(patch: ChartDisplayPatch): void;
+  /** Updates the series with `c:idx` `seriesIndex` of plot group `plot`; a series index the plot lacks fails with
+   *  `StatusCode.NotFound`. */
+  updateSeries(plot: number, seriesIndex: number, patch: ChartSeriesPatch): void;
+  /** Replaces the formatting of data point `pointIndex` with `point` (a {@link ChartPoint} read back; its `index`
+   *  is ignored), or with `null` removes it (doing nothing when the point has none). */
+  setPoint(plot: number, seriesIndex: number, pointIndex: number, point: ChartPoint | null): void;
+  /** Updates the formatting of data point `pointIndex` with the keys `patch` names. */
+  updatePoint(plot: number, seriesIndex: number, pointIndex: number, patch: ChartPointPatch): void;
+  /** Updates plot group `plot`. */
+  updatePlot(plot: number, patch: ChartPlotPatch): void;
   /** Replaces the chart filter: series by `c:idx` and categories by position are hidden. */
   setFilter(hiddenSeries: readonly number[], hiddenCategories: readonly number[]): void;
-  /** Appends a series to plot group `plot`; the patch must set `values` (`y` for a scatter plot). */
-  addSeries(plot: number, patch: ChartSeriesPatch): number;
+  /** Appends a series to plot group `plot` and returns its `c:idx`. */
+  addSeries(plot: number, input: ChartSeriesInput): number;
   /** Removes the series with `c:idx` `seriesIndex` from plot group `plot`. */
   removeSeries(plot: number, seriesIndex: number): void;
   /** Rebuilds every series from `source.source`, keeping the chart kind and each series' formatting by index, and
@@ -6603,12 +6798,12 @@ export interface Formulon {
   PivotAxis: typeof PivotAxis;
   PivotAggregation: typeof PivotAggregation;
   PivotShowValuesAs: typeof PivotShowValuesAs;
-  PivotFilterType: typeof PivotFilterType;
+  PivotFilterKind: typeof PivotFilterKind;
   PivotDatePeriod: typeof PivotDatePeriod;
   PivotCalendar: typeof PivotCalendar;
   PivotSortOrder: typeof PivotSortOrder;
   PivotReportLayout: typeof PivotReportLayout;
-  PivotFilterValueKind: typeof PivotFilterValueKind;
+  PivotFilterOperandKind: typeof PivotFilterOperandKind;
   CfMatchKind: typeof CfMatchKind;
   CfRuleType: typeof CfRuleType;
   CfOperator: typeof CfOperator;
@@ -6646,6 +6841,7 @@ export interface Formulon {
   SparklineAxisType: typeof SparklineAxisType;
   SparklineEmptyCells: typeof SparklineEmptyCells;
   ChartPlotType: typeof ChartPlotType;
+  ChartExtendedLayout: typeof ChartExtendedLayout;
   ChartInsertKind: typeof ChartInsertKind;
   ChartGrouping: typeof ChartGrouping;
   ChartBlanksAs: typeof ChartBlanksAs;
@@ -6655,6 +6851,7 @@ export interface Formulon {
   ChartTitleKind: typeof ChartTitleKind;
   ChartSeriesDirection: typeof ChartSeriesDirection;
   ChartSourceKind: typeof ChartSourceKind;
+  ChartRole: typeof ChartRole;
   ChartLegendPosition: typeof ChartLegendPosition;
   ChartLineDash: typeof ChartLineDash;
   ChartMarkerSymbol: typeof ChartMarkerSymbol;

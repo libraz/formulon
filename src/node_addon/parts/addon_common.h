@@ -163,7 +163,7 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m);
 /// Translates an `fm_color_spec_t` into `{ kind, rgb, theme, tint, indexed }`.
 Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec);
 
-/// `ColorSpecToJs(spec)`, or `null` when `spec.kind` is `kFmColorNone`.
+/// `ColorSpecToJs(spec)`, or `null` when `spec.kind` is `FM_COLOR_KIND_NONE`.
 Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_spec_t& spec);
 
 /// Builds a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }`.
@@ -177,6 +177,8 @@ Napi::Value JsNumber(Napi::Env env, double v);
 
 /// JS boolean from a C `int32_t` flag (non-zero is true).
 Napi::Value JsBool(Napi::Env env, int32_t v);
+/// An `fm_tristate_t` read as a boolean: `FM_TRISTATE_TRUE` is `true`.
+Napi::Value JsTristate(Napi::Env env, int32_t v);
 
 /// JS string from a C string, or `null` when it is NULL or empty: the C ABI
 /// spells an absent string attribute as "".
@@ -220,6 +222,9 @@ class CheckedSpecReader final {
   bool Array(const Napi::Value& value, const char* key, Napi::Array* out);
   bool Bool(const Napi::Object& owner, const char* key, bool dflt, bool* present = nullptr);
   bool Bool(const Napi::Value& value, const char* key, bool dflt);
+  /// A `boolean | null | undefined` field as an `fm_tristate_t`: absent and `null` are `FM_TRISTATE_DEFAULT`.
+  int32_t Tristate(const Napi::Object& owner, const char* key);
+  int32_t Tristate(const Napi::Value& value, const char* key);
   double Double(const Napi::Object& owner, const char* key, double dflt, bool* present = nullptr);
   double Double(const Napi::Value& value, const char* key, double dflt);
   uint8_t U8(const Napi::Object& owner, const char* key, uint8_t dflt, bool* present = nullptr);
@@ -289,7 +294,7 @@ PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, c
 bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out);
 
 /// Reads the `{ kind, rgb, theme, tint, indexed }` colour specification out
-/// of `owner[key]`. An absent object leaves `kind` at `kFmColorNone` (no
+/// of `owner[key]`. An absent object leaves `kind` at `FM_COLOR_KIND_NONE` (no
 /// colour). A supplied selector is authoritative; this binding does not
 /// resolve theme/indexed / auto colours.
 fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key);

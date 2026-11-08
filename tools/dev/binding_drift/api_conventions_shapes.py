@@ -78,8 +78,9 @@ def _value_params(params: Sequence[Tuple[str, str]], js: bool) -> List[Tuple[str
 
 def _strip_null(text: str, js: bool) -> List[str]:
     """Top-level union alternatives without the absent alternative (`null` / `undefined` / `None`)."""
-    text = text.strip().strip("'\"")
+    text = text.strip()
     if not js:
+        text = text.strip("'\"")
         inner = re.fullmatch(r"(?:typing\.)?Optional\[(.*)\]", text)
         if inner:
             text = inner.group(1)
@@ -123,13 +124,16 @@ def _class_problems(
 ) -> Iterator[Tuple[str, str, str]]:
     field = _field(surface)
     union = {name: True for members in classes.values() for name in members}
-    for key, entry, scope in _scoped_entries(ctx, field, surface):
+    scoped = list(_scoped_entries(ctx, field, surface))
+    # A name both classes publish is each scope's own when each scope has an entry for it.
+    claimed = {(scope, entry[field]) for _, entry, scope in scoped}
+    for key, entry, scope in scoped:
         name = _in_tree(union, entry, field)
         if name is None or name == _dropped(entry, field):
             continue
         want = SHEET_CLASS if scope == "sheet" else WORKBOOK_CLASS
         other = WORKBOOK_CLASS if want == SHEET_CLASS else SHEET_CLASS
-        if name in classes[other]:
+        if name in classes[other] and ("workbook" if scope == "sheet" else "sheet", name) not in claimed:
             yield key, other, f"`{name}` is a {scope}-scope op; it belongs on `{want}`, not `{other}`"
         elif name not in classes[want]:
             continue
@@ -200,7 +204,7 @@ def facade_table(text: str, language: str, table: str) -> Optional[Set[str]]:
 
 def _structure_ops(ctx: Context) -> List[Tuple[str, dict]]:
     """Ops that change the number or order of sheets: a non-`get` op returning `out_sheet_index`, and every
-    non-`get` op of the sheet collection."""
+    non-`get` op of the sheet collection; an op taking a `const fm_workbook_t*` changes nothing."""
     sheet_ops = set((ctx.ledger.collections.get("sheet") or {}).get("ops") or [])
     out = []
     for key, entry in sorted(ctx.ledger.entries.items()):
@@ -208,6 +212,8 @@ def _structure_ops(ctx: Context) -> List[Tuple[str, dict]]:
             continue
         fn = _tree_c(ctx, entry)
         if fn is None or c_verb(ctx.target_c(fn.name)) == "get":
+            continue
+        if fn.params and fn.params[0].ctype == "const fm_workbook_t*":
             continue
         returns_sheet = any(p.name == "out_sheet_index" and p.pointer_depth == 1 for p in fn.params)
         if returns_sheet or key in sheet_ops:
@@ -850,6 +856,8 @@ def _rule_py_absent(ctx: Context) -> Iterable[Violation]:
 # String parameters and fields whose values the C side closes without an enum: the binding names the alias,
 # or a string-literal union where the value is `None`.
 CLOSED_STRINGS = {"profile_id": "ExcelProfileId", "tick_label_position": None}
+# A C optional boolean: the bindings read and write it as a boolean, absent meaning Excel's default.
+C_TRISTATE = "fm_tristate_t"
 
 
 def _c_enum_fields(ctx: Context) -> Dict[str, Dict[str, str]]:
@@ -914,6 +922,8 @@ def _closed_problems(ctx: Context, surface: str) -> Iterator[Tuple[str, str, str
             if binding not in types or (name, binding) in exempt:
                 continue
             loose = _open_alternatives(types[binding], js, tables)
+            if family == C_TRISTATE and all(_is_bool(a, js) for a in loose):
+                continue
             if loose:
                 yield (
                     key,
@@ -967,7 +977,8 @@ def _bare_string(text: str, js: bool) -> bool:
 def _rule_js_closed(ctx: Context) -> Iterable[Violation]:
     """A JS field whose C field carries an enum (enum typedef, or a comment naming an enum typedef or a
     `FM_<FAMILY>_*` set) and an argument the ledger types `enum:<key>` admit only the binding's `as const`
-    tables; a closed string set (`CLOSED_STRINGS`) is its alias or a literal union, never bare `string`.
+    tables; a closed string set (`CLOSED_STRINGS`) is its alias or a literal union, never bare `string`. A
+    `fm_tristate_t` field is a `boolean`.
     """
     for surface in JS_SURFACES:
         for key, disc, message in _closed_problems(ctx, surface):
@@ -977,7 +988,7 @@ def _rule_js_closed(ctx: Context) -> Iterable[Violation]:
 @_owned("R6.closed.py")
 def _rule_py_closed(ctx: Context) -> Iterable[Violation]:
     """The Python counterpart of `R6.closed.js`: an enum slot is annotated with its `IntEnum` alone (no bare
-    or added `int`), a closed string set with its `Literal` alias.
+    or added `int`), a closed string set with its `Literal` alias, a `fm_tristate_t` field a `bool`.
     """
     for key, disc, message in _closed_problems(ctx, "py"):
         yield _violation(ctx, "R6.closed.py", "py", key, disc, message)
@@ -995,7 +1006,7 @@ ABSENT_MEMBERS = {
     "ChartAxisCrosses": ("Absent", True),
     "ShapePaint": ("Unset", True),
     "ChartBarDirection": ("Absent", True),
-    "PivotFilterValueKind": ("None", True),
+    "PivotFilterOperandKind": ("None", True),
     "ChartTitleKind": ("None", False),
     "ChartLegendPosition": ("None", False),
 }

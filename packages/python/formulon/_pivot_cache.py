@@ -144,7 +144,7 @@ class PivotCache:
                 refresh_on_load=d["refresh_on_load"] != 0,
             )
 
-    def set_options(
+    def update_options(
         self,
         *,
         save_data: Union[bool, Unchanged] = UNCHANGED,
@@ -179,7 +179,7 @@ class PivotCache:
                     else 0,
                 },
             )
-            _check(LIB.fm_workbook_set_pivot_cache_options(h, cache_id, ptr))
+            _check(LIB.fm_workbook_update_pivot_cache_options(h, cache_id, ptr))
 
     # -- Fields ------------------------------------------------------------
     def list_fields(self) -> List[PivotCacheField]:

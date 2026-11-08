@@ -166,13 +166,13 @@ TEST(FormulonCApiCalcMode, ExcelProfileSwitchDirtiesProfileSensitiveFormulas) {
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   ASSERT_DOUBLE_EQ(v.u.number, 38526.0);
 
   ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_NE(v.u.number, 38526.0) << "the profile switch must dirty CODE() so it re-evaluates under the new host";
 }
 
@@ -250,7 +250,7 @@ TEST(FormulonCApiCalcMode, AutoNoTableModeRoundTripsThroughOoxml) {
 TEST(FormulonCApiCalcMode, IterativeOptionsRoundTripThroughCalcPr) {
   // The reader/writer parses iterate / iterateCount / iterateDelta on
   // the same `<calcPr>` element. Drive the full round-trip through the
-  // `fm_workbook_set_iterative` setter and confirm a reload preserves
+  // `fm_workbook_update_iterative` setter and confirm a reload preserves
   // the iterative-on flag together with calcMode.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

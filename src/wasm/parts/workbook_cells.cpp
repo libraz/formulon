@@ -77,11 +77,11 @@ void JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col,
   records.reserve(count);
   for (uint32_t i = 0; i < count && reader.ok(); ++i) {
     const emscripten::val run = reader.array_element(runs, i, "setCellPhoneticRuns.run");
-    const emscripten::val sb_value = reader.value(run, "sb", "setCellPhoneticRuns.sb");
-    const emscripten::val eb_value = reader.value(run, "eb", "setCellPhoneticRuns.eb");
+    const emscripten::val sb_value = reader.value(run, "start", "setCellPhoneticRuns.start");
+    const emscripten::val eb_value = reader.value(run, "end", "setCellPhoneticRuns.end");
     const emscripten::val text_value = reader.value(run, "text", "setCellPhoneticRuns.text");
-    const uint32_t sb = reader.u32_value(sb_value, 0U, "setCellPhoneticRuns.sb");
-    const uint32_t eb = reader.u32_value(eb_value, 0U, "setCellPhoneticRuns.eb");
+    const uint32_t sb = reader.u32_value(sb_value, 0U, "setCellPhoneticRuns.start");
+    const uint32_t eb = reader.u32_value(eb_value, 0U, "setCellPhoneticRuns.end");
     texts.push_back(reader.string_value(text_value, "setCellPhoneticRuns.text"));
     records.push_back(fm_phonetic_run_t{sb, eb, nullptr});
   }
@@ -101,7 +101,7 @@ void JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_
     return;
   }
   JsNarrowNumericReader reader("setCellPhoneticProperties");
-  const uint32_t font_id = reader.u32(properties, "fontId", 0U, "phoneticProperties.fontId");
+  const uint32_t font_id = reader.u32(properties, "fontIndex", 0U, "phoneticProperties.fontIndex");
   const uint32_t type = reader.u32(properties, "type", 0U, "phoneticProperties.type");
   const uint32_t alignment = reader.u32(properties, "alignment", 0U, "phoneticProperties.alignment");
   if (!reader.ok()) {
@@ -154,14 +154,14 @@ emscripten::val JsWorkbook::getCellPhoneticRun(uint32_t sheet, uint32_t row, uin
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("sb", run.sb);
-  o.set("eb", run.eb);
+  o.set("start", run.sb);
+  o.set("end", run.eb);
   js_set_cstr(o, "text", run.text);
   return o;
 }
 
 emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const {
-  uint32_t font_id = 0;
+  size_t font_id = 0;
   uint32_t type = 0;
   uint32_t alignment = 0;
   int32_t present = 0;
@@ -172,7 +172,7 @@ emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t r
   }
   (void)fm_sheet_has_cell_phonetic_properties(handle_, sheet, row, col, &present);
   emscripten::val o = emscripten::val::object();
-  o.set("fontId", font_id);
+  o.set("fontIndex", font_id);
   o.set("type", type);
   o.set("alignment", alignment);
   o.set("present", present != 0);
@@ -307,33 +307,67 @@ emscripten::val JsWorkbook::listDefinedNames() const {
   return arr;
 }
 
-uint32_t JsWorkbook::tableRuntimeId(uint32_t idx) const {
+double JsWorkbook::tableCount(uint32_t sheet) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return 0.0;
+  }
+  std::size_t count = 0;
+  if (!succeeded(fm_sheet_get_table_count(handle_, sheet, &count))) {
+    return 0.0;
+  }
+  return static_cast<double>(count);
+}
+
+uint32_t JsWorkbook::tableRuntimeId(uint32_t sheet, uint32_t idx) const {
   uint32_t out = 0;
-  succeeded(handle_ != nullptr ? fm_workbook_get_table_runtime_id(handle_, idx, &out) : kBindingInvalidHandle);
+  succeeded(handle_ != nullptr ? fm_sheet_get_table_runtime_id(handle_, sheet, idx, &out) : kBindingInvalidHandle);
   return out;
 }
 
-uint32_t JsWorkbook::resolveTableRuntimeId(uint32_t id) const {
-  std::size_t out = 0;
-  succeeded(handle_ != nullptr ? fm_workbook_resolve_table_runtime_id(handle_, id, &out) : kBindingInvalidHandle);
-  return static_cast<uint32_t>(out);
-}
-
-emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
-  const char* name = nullptr;
-  const char* display = nullptr;
-  fm_cell_rect_t rect{};
+emscripten::val JsWorkbook::resolveTableRuntimeId(uint32_t id) const {
   std::size_t sheet_index = 0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_table(handle_, idx, &name, &display, &rect, &sheet_index)
+  std::size_t table_index = 0;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_resolve_table_runtime_id(handle_, id, &sheet_index, &table_index)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
+  emscripten::val o = emscripten::val::object();
+  o.set("sheet", static_cast<uint32_t>(sheet_index));
+  o.set("index", static_cast<uint32_t>(table_index));
+  return o;
+}
+
+emscripten::val JsWorkbook::findTable(const std::string& name) const {
+  std::size_t sheet_index = 0;
+  std::size_t table_index = 0;
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr
+                     ? fm_workbook_find_table(handle_, name.c_str(), &sheet_index, &table_index, &present)
+                     : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("sheet", static_cast<uint32_t>(sheet_index));
+  o.set("index", static_cast<uint32_t>(table_index));
+  return o;
+}
+
+emscripten::val JsWorkbook::tableAt(uint32_t sheet, uint32_t idx) const {
+  const char* name = nullptr;
+  fm_cell_rect_t rect{};
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_table(handle_, sheet, idx, &name, &rect) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
   fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
-  fm_status_t rc = fm_workbook_get_table_info(handle_, idx, &info);
+  fm_status_t rc = fm_sheet_get_table_info(handle_, sheet, idx, &info);
   emscripten::val columns = emscripten::val::array();
   for (uint32_t i = 0; rc == 0 && i < info.column_count; ++i) {
     fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-    rc = fm_workbook_get_table_column(handle_, idx, i, &column);
+    rc = fm_sheet_get_table_column(handle_, sheet, idx, i, &column);
     if (rc == 0) {
       emscripten::val c = emscripten::val::object();
       js_set_cstr(c, "name", column.name);
@@ -348,35 +382,37 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   }
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", name);
-  js_set_cstr(o, "displayName", display);
   emscripten::val range = emscripten::val::object();
-  range.set("sheet", static_cast<uint32_t>(sheet_index));
+  range.set("sheet", sheet);
   range.set("rect", cell_rect_to_val(rect));
   o.set("range", range);
-  js_set_cstr_or_null(o, "styleName", info.style_name);
-  o.set("showFirstColumn", info.show_first_column != 0);
-  o.set("showLastColumn", info.show_last_column != 0);
-  o.set("showRowStripes", info.show_row_stripes != 0);
-  o.set("showColumnStripes", info.show_column_stripes != 0);
   o.set("headerRow", info.header_row_count != 0);
   o.set("totalsRow", info.totals_row_count != 0);
   o.set("columns", columns);
   return o;
 }
 
+emscripten::val JsWorkbook::getTableStyleOptions(uint32_t sheet, uint32_t idx) const {
+  fm_table_style_options_t info = FM_STRUCT_INIT(fm_table_style_options_t);
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_table_style_options(handle_, sheet, idx, &info)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  if (info.present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  js_set_cstr_or_null(o, "styleName", info.style_name);
+  o.set("showFirstColumn", info.show_first_column != 0);
+  o.set("showLastColumn", info.show_last_column != 0);
+  o.set("showRowStripes", info.show_row_stripes != 0);
+  o.set("showColumnStripes", info.show_column_stripes != 0);
+  return o;
+}
+
 namespace {
 
-/// The four `<tableStyleInfo>` toggles of a table input, each `-1` when the
-/// input omits it.
-struct JsTableStyleToggles {
-  int32_t first_column = -1;
-  int32_t last_column = -1;
-  int32_t row_stripes = -1;
-  int32_t column_stripes = -1;
-
-  bool any() const { return first_column >= 0 || last_column >= 0 || row_stripes >= 0 || column_stripes >= 0; }
-};
-
+/// An optional boolean as `-1` (omitted), `0` or `1`.
 int32_t js_optional_bool(JsNarrowNumericReader& reader, const emscripten::val& spec, const char* key,
                          const char* field) {
   const emscripten::val value = reader.value(spec, key, field);
@@ -386,60 +422,81 @@ int32_t js_optional_bool(JsNarrowNumericReader& reader, const emscripten::val& s
   return reader.boolean_value(value, false) ? 1 : 0;
 }
 
-JsTableStyleToggles js_table_style_toggles(JsNarrowNumericReader& reader, const emscripten::val& spec) {
-  JsTableStyleToggles toggles;
-  toggles.first_column = js_optional_bool(reader, spec, "showFirstColumn", "table.showFirstColumn");
-  toggles.last_column = js_optional_bool(reader, spec, "showLastColumn", "table.showLastColumn");
-  toggles.row_stripes = js_optional_bool(reader, spec, "showRowStripes", "table.showRowStripes");
-  toggles.column_stripes = js_optional_bool(reader, spec, "showColumnStripes", "table.showColumnStripes");
-  return toggles;
-}
-
-/// Applies the supplied toggles over the table's current ones, keeping its
-/// style name.
-fm_status_t apply_table_style_toggles(fm_workbook_t* handle, uint32_t idx, const JsTableStyleToggles& toggles) {
-  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
-  if (const fm_status_t rc = fm_workbook_get_table_info(handle, idx, &info); rc != 0) {
-    return rc;
+/// A boolean toggle of a table style patch: `KEEP` when `key` is omitted, else `SET`.
+void js_table_style_toggle(JsNarrowNumericReader& reader, const emscripten::val& spec, const char* key,
+                           const char* field, int32_t* op, int32_t* value) {
+  const emscripten::val v = reader.value(spec, key, field);
+  if (!reader.ok() || !js_value_present(v)) {
+    return;
   }
-  // A table without the element takes the creation defaults underneath.
-  const bool present = info.style_present != 0;
-  const std::string name = string_from_cstr(info.style_name);
-  const auto pick = [](int32_t supplied, int32_t current) { return supplied >= 0 ? supplied : current; };
-  return fm_workbook_set_table_style_info(handle, idx, name.c_str(), pick(toggles.first_column, info.show_first_column),
-                                          pick(toggles.last_column, info.show_last_column),
-                                          pick(toggles.row_stripes, present ? info.show_row_stripes : 1),
-                                          pick(toggles.column_stripes, info.show_column_stripes));
+  *op = FM_CHART_PATCH_OP_SET;
+  *value = reader.boolean_value(v, false) ? 1 : 0;
 }
 
 }  // namespace
 
-uint32_t JsWorkbook::createTable(emscripten::val spec) {
+void JsWorkbook::updateTableStyleOptions(uint32_t sheet, uint32_t idx, emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("updateTableStyleOptions");
+  fm_table_style_options_patch_t p = FM_STRUCT_INIT(fm_table_style_options_patch_t);
+  std::string style_name;
+  // `null` removes the style name; a string replaces it; an omitted key keeps it.
+  const emscripten::val name_value = reader.value(patch, "styleName", "updateTableStyleOptions.styleName");
+  switch (js_patch_key(reader, name_value, "updateTableStyleOptions.styleName", true)) {
+    case JsPatchKey::kClear:
+      p.style_name_op = FM_CHART_PATCH_OP_CLEAR;
+      break;
+    case JsPatchKey::kSet:
+      p.style_name_op = FM_CHART_PATCH_OP_SET;
+      p.style_name = reader.optional_string_value(name_value, style_name, "updateTableStyleOptions.styleName");
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
+  js_table_style_toggle(reader, patch, "showFirstColumn", "updateTableStyleOptions.showFirstColumn",
+                        &p.show_first_column_op, &p.show_first_column);
+  js_table_style_toggle(reader, patch, "showLastColumn", "updateTableStyleOptions.showLastColumn",
+                        &p.show_last_column_op, &p.show_last_column);
+  js_table_style_toggle(reader, patch, "showRowStripes", "updateTableStyleOptions.showRowStripes",
+                        &p.show_row_stripes_op, &p.show_row_stripes);
+  js_table_style_toggle(reader, patch, "showColumnStripes", "updateTableStyleOptions.showColumnStripes",
+                        &p.show_column_stripes_op, &p.show_column_stripes);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_table_style_options(handle_, sheet, idx, &p));
+}
+
+uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return 0U;
   }
   JsNarrowNumericReader reader("addTable");
-  const emscripten::val range = reader.value(spec, "range", "addTable.range");
-  uint32_t sheet = 0U;
   fm_cell_rect_t rect{};
+  const emscripten::val range = reader.value(spec, "range", "addTable.range");
   if (reader.require_object(range, "addTable.range")) {
-    sheet = reader.required_u32(range, "sheet", "addTable.range.sheet");
-    const emscripten::val rect_value = reader.value(range, "rect", "addTable.range.rect");
-    if (reader.require_object(rect_value, "addTable.range.rect")) {
-      rect = js_pull_range(rect_value, &reader);
-    }
+    rect = js_pull_range(range, &reader);
   }
   const std::string name = reader.string(spec, "name", "addTable.name");
-  std::string display_name = reader.string(spec, "displayName", "addTable.displayName");
-  if (display_name.empty()) {
-    display_name = name;
-  }
-  const std::string style_name = reader.string(spec, "styleName", "addTable.styleName");
+  // An omitted `styleName` applies the workbook default; `""` creates the table without a style element.
+  std::string style_store;
+  const char* style_name = reader.optional_string(spec, "styleName", style_store, "addTable.styleName");
   const bool header_row = reader.boolean(spec, "headerRow", true, "addTable.headerRow");
   const bool totals_row = reader.boolean(spec, "totalsRow", false, "addTable.totalsRow");
   const emscripten::val columns = reader.value(spec, "columns", "addTable.columns");
-  const JsTableStyleToggles toggles = js_table_style_toggles(reader, spec);
+  fm_table_style_options_patch_t toggles = FM_STRUCT_INIT(fm_table_style_options_patch_t);
+  js_table_style_toggle(reader, spec, "showFirstColumn", "addTable.showFirstColumn", &toggles.show_first_column_op,
+                        &toggles.show_first_column);
+  js_table_style_toggle(reader, spec, "showLastColumn", "addTable.showLastColumn", &toggles.show_last_column_op,
+                        &toggles.show_last_column);
+  js_table_style_toggle(reader, spec, "showRowStripes", "addTable.showRowStripes", &toggles.show_row_stripes_op,
+                        &toggles.show_row_stripes);
+  js_table_style_toggle(reader, spec, "showColumnStripes", "addTable.showColumnStripes",
+                        &toggles.show_column_stripes_op, &toggles.show_column_stripes);
   if (!reader.ok()) {
     return 0U;
   }
@@ -469,15 +526,16 @@ uint32_t JsWorkbook::createTable(emscripten::val spec) {
   }
   size_t index = 0;
   const fm_status_t rc =
-      fm_workbook_add_table(handle_, sheet, &rect, name.c_str(), display_name.c_str(), pointers.data(), pointers.size(),
-                            style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
+      fm_sheet_add_table(handle_, sheet, &rect, name.c_str(), pointers.empty() ? nullptr : pointers.data(),
+                         pointers.size(), style_name, header_row ? 1 : 0, totals_row ? 1 : 0, &index);
   if (!succeeded(rc)) {
     return 0U;
   }
-  if (toggles.any()) {
-    if (const fm_status_t style_rc = apply_table_style_toggles(handle_, static_cast<uint32_t>(index), toggles);
+  if (toggles.show_first_column_op != 0 || toggles.show_last_column_op != 0 || toggles.show_row_stripes_op != 0 ||
+      toggles.show_column_stripes_op != 0) {
+    if (const fm_status_t style_rc = fm_sheet_update_table_style_options(handle_, sheet, index, &toggles);
         style_rc != 0) {
-      fm_workbook_remove_table(handle_, index);
+      fm_sheet_remove_table(handle_, sheet, index);
       record_failure(style_rc);
       return 0U;
     }
@@ -485,72 +543,39 @@ uint32_t JsWorkbook::createTable(emscripten::val spec) {
   return static_cast<uint32_t>(index);
 }
 
-void JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
+void JsWorkbook::updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
 
   // The C ABI requires the range, so an omitted `rect` is resolved to the
-  // current range before forwarding the partial update. Other omitted fields
-  // use the C ABI's preservation sentinels directly.
+  // current range before forwarding the partial update. An omitted flag
+  // keeps its current value.
   JsNarrowNumericReader reader("updateTable");
   const emscripten::val rect_value = reader.value(spec, "rect", "updateTable.rect");
   const bool has_rect = js_value_present(rect_value);
   fm_cell_rect_t rect = js_pull_range(rect_value, &reader);
-  std::string style_name;
-  const char* style_name_ptr = reader.optional_string(spec, "styleName", style_name, "updateTable.styleName");
-  std::string name;
-  std::string display_name;
-  const char* name_ptr = reader.optional_string(spec, "name", name, "updateTable.name");
-  const char* display_name_ptr = reader.optional_string(spec, "displayName", display_name, "updateTable.displayName");
   const int32_t header_row = js_optional_bool(reader, spec, "headerRow", "updateTable.headerRow");
   const int32_t totals_row = js_optional_bool(reader, spec, "totalsRow", "updateTable.totalsRow");
-  const JsTableStyleToggles toggles = js_table_style_toggles(reader, spec);
   if (!reader.ok()) {
     return;
   }
-
-  const char* current_name = nullptr;
-  const char* current_display_name = nullptr;
-  fm_cell_rect_t current_rect{};
-  std::size_t ignored_sheet = 0;
-  if (const fm_status_t lookup_rc =
-          fm_workbook_get_table(handle_, idx, &current_name, &current_display_name, &current_rect, &ignored_sheet);
-      lookup_rc != 0) {
-    record_failure(lookup_rc);
-    return;
-  }
-  const std::string old_name = string_from_cstr(current_name);
-  const std::string old_display_name = string_from_cstr(current_display_name);
   if (!has_rect) {
-    rect = current_rect;
-  }
-
-  // The rename goes first because it is the step a name clash can refuse;
-  // a later failure renames back so the update stays all-or-nothing.
-  const bool renaming = name_ptr != nullptr || display_name_ptr != nullptr;
-  if (renaming) {
-    const std::string next_name = name_ptr != nullptr ? name : old_name;
-    const std::string next_display_name =
-        display_name_ptr != nullptr ? display_name : (name_ptr != nullptr ? name : old_display_name);
-    if (const fm_status_t rc = fm_workbook_rename_table(handle_, idx, next_name.c_str(), next_display_name.c_str());
-        rc != 0) {
-      record_failure(rc);
+    const char* ignored_name = nullptr;
+    if (const fm_status_t lookup_rc = fm_sheet_get_table(handle_, sheet, idx, &ignored_name, &rect); lookup_rc != 0) {
+      record_failure(lookup_rc);
       return;
     }
   }
-  fm_status_t rc = fm_workbook_update_table(handle_, idx, &rect, style_name_ptr, header_row, totals_row);
-  if (rc == 0 && toggles.any()) {
-    rc = apply_table_style_toggles(handle_, idx, toggles);
-  }
-  if (rc != 0 && renaming) {
-    fm_workbook_rename_table(handle_, idx, old_name.c_str(), old_display_name.c_str());
-  }
-  succeeded(rc);
+  succeeded(fm_sheet_update_table(handle_, sheet, idx, &rect, nullptr, header_row, totals_row));
 }
 
-void JsWorkbook::setTableColumnTotals(uint32_t idx, uint32_t column, emscripten::val totals) {
+void JsWorkbook::renameTable(uint32_t sheet, uint32_t idx, const std::string& name) {
+  succeeded(handle_ != nullptr ? fm_sheet_rename_table(handle_, sheet, idx, name.c_str()) : kBindingInvalidHandle);
+}
+
+void JsWorkbook::setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t column, emscripten::val totals) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
@@ -565,17 +590,18 @@ void JsWorkbook::setTableColumnTotals(uint32_t idx, uint32_t column, emscripten:
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_workbook_set_table_column_totals(handle_, idx, column, function_ptr, label_ptr, formula_ptr));
+  succeeded(fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function_ptr, label_ptr, formula_ptr));
 }
 
-void JsWorkbook::removeTable(uint32_t idx) {
-  succeeded(handle_ != nullptr ? fm_workbook_remove_table(handle_, idx) : kBindingInvalidHandle);
+void JsWorkbook::removeTable(uint32_t sheet, uint32_t idx) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_table(handle_, sheet, idx) : kBindingInvalidHandle);
 }
 
-std::string JsWorkbook::renameTableColumn(uint32_t idx, uint32_t column, const std::string& name) {
+std::string JsWorkbook::renameTableColumn(uint32_t sheet, uint32_t idx, uint32_t column, const std::string& name) {
   const char* final_name = nullptr;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_rename_table_column(handle_, idx, column, name.c_str(), &final_name)
-                                    : kBindingInvalidHandle)) {
+  if (!succeeded(handle_ != nullptr
+                     ? fm_sheet_rename_table_column(handle_, sheet, idx, column, name.c_str(), &final_name)
+                     : kBindingInvalidHandle)) {
     return std::string();
   }
   return string_from_cstr(final_name);
@@ -601,11 +627,10 @@ void JsWorkbook::removeDefinedName(const std::string& name, int32_t localSheetId
                                : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::getPassthrough(const std::string& path) const {
+bool JsWorkbook::hasPassthrough(const std::string& path) const {
   int32_t present = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_passthrough(handle_, path.c_str(), &present) : kBindingInvalidHandle;
-  return optional_or_null(rc, present, emscripten::val(path));
+  succeeded(handle_ != nullptr ? fm_workbook_has_passthrough(handle_, path.c_str(), &present) : kBindingInvalidHandle);
+  return present != 0;
 }
 
 emscripten::val JsWorkbook::listPassthroughs() const {
@@ -617,7 +642,7 @@ emscripten::val JsWorkbook::listPassthroughs() const {
 }
 
 emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) const {
-  fm_pivot_cells_t* cells = nullptr;
+  fm_pivot_report_t* cells = nullptr;
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_pivot_layout(handle_, sheet, pivotIndex, &cells)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
@@ -625,32 +650,32 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
 
   int32_t present = 0;
   fm_cell_rect_t bounds{};
-  fm_status_t rc = fm_pivot_cells_get_bounds(cells, &present, &bounds);
+  fm_status_t rc = fm_pivot_report_get_bounds(cells, &present, &bounds);
   if (rc != 0) {
-    fm_pivot_cells_destroy(cells);
+    fm_pivot_report_destroy(cells);
     record_failure(rc);
     return emscripten::val::undefined();
   }
 
   emscripten::val arr = emscripten::val::array();
   std::size_t count = 0;
-  rc = fm_pivot_cells_get_cell_count(cells, &count);
+  rc = fm_pivot_report_get_cell_count(cells, &count);
   if (rc != 0) {
-    fm_pivot_cells_destroy(cells);
+    fm_pivot_report_destroy(cells);
     record_failure(rc);
     return emscripten::val::undefined();
   }
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
-    if (fm_pivot_cells_get_cell_at(cells, i, &cell) != 0) {
+    if (fm_pivot_report_get_cell_at(cells, i, &cell) != 0) {
       continue;
     }
     arr.set(emitted, pivot_cell_to_val(cell));
     ++emitted;
   }
 
-  fm_pivot_cells_destroy(cells);
+  fm_pivot_report_destroy(cells);
   emscripten::val o = emscripten::val::object();
   o.set("rect", present != 0 ? cell_rect_to_val(bounds) : emscripten::val::null());
   o.set("cells", arr);

@@ -30,7 +30,7 @@ test('dispose() and [Symbol.dispose]() are refused inside the iterative progress
   const { Workbook } = await getModule();
   for (const release of [(wb) => wb.dispose(), (wb) => wb[Symbol.dispose]()]) {
     const wb = Workbook.createDefault();
-    wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+    wb.updateIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
     wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     let caught = null;
     wb.setIterativeProgress(() => {

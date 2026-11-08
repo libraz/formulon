@@ -80,7 +80,7 @@ function failureProbes(wb, Module) {
     [true, () => wb.pivotCache(9999).listCalculatedItems()],
     [true, () => wb.sheet(99).pivot(0).isProjectionPending()],
     [true, () => wb.pivotCache(9999).listFields()],
-    [true, () => wb.sheet(99).pivot(0).getStyleInfo()],
+    [true, () => wb.sheet(99).pivot(0).getStyleOptions()],
     [true, () => wb.sheet(99).pivot(0).getRowFieldOrder()],
     [true, () => wb.sheet(0).pivot(99).listFields()],
     [true, () => wb.sheet(99).pivot(0).getFieldItem(0, 0)],
@@ -99,7 +99,7 @@ function failureProbes(wb, Module) {
     [true, () => wb.ooxml.getFont(9999)],
     [true, () => wb.ooxml.getFill(9999)],
     [true, () => wb.ooxml.getBorder(9999)],
-    [false, () => wb.ooxml.getNumFmtString(59999)],
+    [false, () => wb.ooxml.getNumberFormat(59999)],
     [true, () => wb.sheet(99).getLambdaText(0, 0)],
     [true, () => wb.sheet(99).getCellPhoneticRuns(0, 0)],
     [true, () => wb.sheet(99).listCfRules()],
@@ -113,7 +113,7 @@ function failureProbes(wb, Module) {
     // A released handle is the only failure path, which is not usable here.
     [false, () => wb.getTableStyleDefaults()],
     [true, () => wb.ooxml.addCellXf({ fontIndex: 9999 })],
-    [false, () => wb.ooxml.addNumFmt('0.00')],
+    [false, () => wb.ooxml.addNumberFormat('0.00')],
     [false, () => wb.getIterative()],
     [true, () => wb.sheet(99).recalcViewport({ firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 })],
     [true, () => wb.sheet(99).ooxml.getAutoFilterXml()],
@@ -151,14 +151,14 @@ function failureProbes(wb, Module) {
     [true, () => wb.sheet(99).chart(1).getData()],
     [true, () => wb.sheet(99).addChart({ kind: 0, source: 'A1:B2' })],
     [true, () => wb.sheet(99).chart(1).addSeries(0, { values: 'A1:A2' })],
-    [true, () => wb.sheet(99).ooxml.getRangeStyleBases({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
-    [true, () => wb.sheet(99).snapshotRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    [true, () => wb.sheet(99).ooxml.getRangeXfBases({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    [true, () => wb.sheet(99).ooxml.snapshotRangeXfs({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
     [true, () => wb.sheet(99).getDisplayText(0, 0)],
     // A released handle is the only failure path, which is not usable here.
     [false, () => wb.getThemeFonts()],
     [false, () => wb.getThemeColors()],
     [true, () => wb.resolveColor({ kind: 2, theme: 0, tint: Number.NaN }, 0)],
-    [true, () => wb.sheet(99).getEffectiveStyle(0, 0)],
+    [true, () => wb.sheet(99).ooxml.getEffectiveStyle(0, 0)],
   ];
 }
 
@@ -188,14 +188,14 @@ test('iterative caps use the signed int32 contract', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    wb.setIterative({ enabled: true, maxIterations: 2 ** 31 - 1, maxChange: 0.1 });
-    wb.setIterative({ enabled: false, maxIterations: 0 });
+    wb.updateIterative({ enabled: true, maxIterations: 2 ** 31 - 1, maxChange: 0.1 });
+    wb.updateIterative({ enabled: false, maxIterations: 0 });
     assert.equal(wb.getIterative().maxIterations, 1, 'a zero cap is the native clamp of 1');
     for (const value of [2 ** 31, -1]) {
-      assert.throws(() => wb.setIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
+      assert.throws(() => wb.updateIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
     }
     for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, '5', null]) {
-      assert.throws(() => wb.setIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
+      assert.throws(() => wb.updateIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
     }
     assert.equal(wb.getIterative().maxIterations, 1);
   } finally {

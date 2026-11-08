@@ -37,7 +37,7 @@ def _read_json(relative: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# set_cell_format / get_cell_format: tools/api/cell_format_cases.json
+# update_cell_format / get_cell_format: tools/api/cell_format_cases.json
 # ---------------------------------------------------------------------------
 
 FORMAT_CASES: List[Dict[str, Any]] = _read_json("tools/api/cell_format_cases.json")["cases"]
@@ -90,13 +90,13 @@ def _argb_text(rgb: int) -> str:
 
 
 def _assert_subset(test: unittest.TestCase, actual: Any, expected: Any, label: str, key: Optional[str] = None) -> None:
-    """``actual`` carries every key ``expected`` names; ``#AARRGGBB`` text is compared with ``.rgb``."""
+    """``actual`` carries every key ``expected`` names; ``#AARRGGBB`` text is compared with ``.argb``."""
     if isinstance(expected, dict):
         for k, v in expected.items():
             test.assertTrue(hasattr(actual, _snake(k)), f"{label}: no attribute {_snake(k)}")
             _assert_subset(test, getattr(actual, _snake(k)), v, f"{label}.{k}", k)
     elif isinstance(expected, str) and _ARGB.match(expected):
-        test.assertEqual(_argb_text(actual.rgb), expected, label)
+        test.assertEqual(_argb_text(actual.argb), expected, label)
     elif isinstance(expected, str) and key in ENUM_KEYS:
         test.assertIs(actual, _member(ENUM_KEYS[key], expected), label)
     else:
@@ -121,7 +121,7 @@ class CellFormatCaseTests(unittest.TestCase):
     def _run(self, wb: Workbook, case: Dict[str, Any]) -> None:
         ws = wb.sheet(0)
         for step in case.get("before", []):
-            ws.set_cell_format(step["range"], **_convert(step["patch"]))
+            ws.update_cell_format(step["range"], **_convert(step["patch"]))
         if "patch_from" in case:
             record = ws.get_cell_format(case["patch_from"])
             patch = {f.name: getattr(record, f.name) for f in dataclasses.fields(record)}
@@ -138,17 +138,17 @@ class CellFormatCaseTests(unittest.TestCase):
         if "throws" in case:
             expected = EXCEPTIONS[case["throws"]["py"]]
             with self.assertRaises(expected):
-                ws.set_cell_format(case["range"], **patch)
+                ws.update_cell_format(case["range"], **patch)
             self.assertEqual(snapshot(), before, "a failed call changed a cell")
             self.assertEqual(len(wb.ooxml.list_cell_xfs()), xf_count, "a failed call added a cell format")
             return
 
-        ws.set_cell_format(case["range"], **patch)
+        ws.update_cell_format(case["range"], **patch)
         after = snapshot()
         for cell, fmt in case.get("expect", {}).items():
             _assert_subset(self, ws.get_cell_format(cell), fmt, f"{case['id']} {cell}")
         for cell, fields in case.get("expect_xf", {}).items():
-            xf = wb.ooxml.get_cell_xf(ws.get_effective_style(cell).xf_index)
+            xf = wb.ooxml.get_cell_xf(ws.ooxml.get_effective_style(cell).xf_index)
             for field, want in fields.items():
                 actual = getattr(xf, _snake(field))
                 if isinstance(want, str) and field in ENUM_KEYS:
@@ -158,7 +158,7 @@ class CellFormatCaseTests(unittest.TestCase):
             self.assertEqual(after[cell], before[cell], f"{cell} changed")
         if case.get("idempotent"):
             count = len(wb.ooxml.list_cell_xfs())
-            ws.set_cell_format(case["range"], **patch)
+            ws.update_cell_format(case["range"], **patch)
             self.assertEqual(len(wb.ooxml.list_cell_xfs()), count, "a second application added a cell format")
 
 
@@ -166,9 +166,9 @@ class CellFormatShapeTests(unittest.TestCase):
     def test_a_record_group_is_accepted_like_a_patch(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.set_cell_format("A1", font={"bold": True}, number_format="0.0")
+            ws.update_cell_format("A1", font={"bold": True}, number_format="0.0")
             record = ws.get_cell_format("A1")
-            ws.set_cell_format(
+            ws.update_cell_format(
                 "C3",
                 number_format=record.number_format,
                 font=record.font,
@@ -182,51 +182,51 @@ class CellFormatShapeTests(unittest.TestCase):
     def test_get_takes_coordinates_and_text(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.set_cell_format("B2", font={"italic": True})
+            ws.update_cell_format("B2", font={"italic": True})
             self.assertEqual(ws.get_cell_format(1, 1), ws.get_cell_format("B2"))
             self.assertTrue(ws.get_cell_format("B2").font.italic)
 
     def test_rect_takes_a_cell_rect(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.set_cell_format(formulon.CellRect(0, 0, 1, 1), font={"bold": True})
+            ws.update_cell_format(formulon.CellRect(0, 0, 1, 1), font={"bold": True})
             self.assertTrue(ws.get_cell_format("B2").font.bold)
             self.assertFalse(ws.get_cell_format("C3").font.bold)
 
     def test_edge_values(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.set_cell_format("A1", font={"size": 0})
-            self.assertEqual(ws.get_cell_format("A1").font.size, 0)
-            ws.set_cell_format("A1", font={"size": -0.0}, alignment={"indent": 0})
+            ws.update_cell_format("A1", font={"size_pt": 0})
+            self.assertEqual(ws.get_cell_format("A1").font.size_pt, 0)
+            ws.update_cell_format("A1", font={"size_pt": -0.0}, alignment={"indent": 0})
             self.assertEqual(ws.get_cell_format("A1").alignment.indent, 0)
-            ws.set_cell_format("A1", alignment={"indent": 255, "text_rotation": 180})
+            ws.update_cell_format("A1", alignment={"indent": 255, "text_rotation": 180})
             self.assertEqual(ws.get_cell_format("A1").alignment.indent, 255)
             for bad in (float("nan"), float("inf"), -float("inf")):
                 with self.subTest(size=bad), self.assertRaises(ValueError):
-                    ws.set_cell_format("A1", font={"size": bad})
+                    ws.update_cell_format("A1", font={"size_pt": bad})
             for field in ("indent", "text_rotation", "relative_indent"):
                 with self.subTest(field=field), self.assertRaises(ValueError):
-                    ws.set_cell_format("A1", alignment={field: float("nan")})
+                    ws.update_cell_format("A1", alignment={field: float("nan")})
             for value in (2**32, 2**31):
                 with self.subTest(indent=value), self.assertRaises(InvalidArgumentError):
-                    ws.set_cell_format("A1", alignment={"indent": value})
+                    ws.update_cell_format("A1", alignment={"indent": value})
             with self.assertRaises(TypeError):
-                ws.set_cell_format("A1", number_format=None)  # type: ignore[arg-type]
+                ws.update_cell_format("A1", number_format=None)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                ws.set_cell_format("A1", font={"bold": 1})  # type: ignore[typeddict-item]
+                ws.update_cell_format("A1", font={"bold": 1})  # type: ignore[typeddict-item]
 
     def test_numbers_that_read_as_bool_or_text_are_type_errors(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            for patch in ({"size": True}, {"name": 3}, {"underline": "Single"}):
+            for patch in ({"size_pt": True}, {"name": 3}, {"underline": "Single"}):
                 with self.subTest(patch=patch), self.assertRaises((TypeError, ValueError)):
-                    ws.set_cell_format("A1", font=patch)  # type: ignore[arg-type]
+                    ws.update_cell_format("A1", font=patch)  # type: ignore[arg-type]
 
     def test_non_ascii_font_name_and_number_format(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.set_cell_format("A1", font={"name": "游ゴシック \U0001f600"}, number_format='0.0"円"')
+            ws.update_cell_format("A1", font={"name": "游ゴシック \U0001f600"}, number_format='0.0"円"')
             fmt = ws.get_cell_format("A1")
             self.assertEqual(fmt.font.name, "游ゴシック \U0001f600")
             self.assertEqual(fmt.number_format, '0.0"円"')
@@ -234,10 +234,10 @@ class CellFormatShapeTests(unittest.TestCase):
     def test_failed_call_leaves_the_sheet_unchanged(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.set_cell_format("A1:B2", font={"bold": True})
+            ws.update_cell_format("A1:B2", font={"bold": True})
             before = ws.get_cell_format("A1")
             with self.assertRaises(InvalidArgumentError):
-                ws.set_cell_format("A1:B2", font={"italic": True}, alignment={"indent": 256})
+                ws.update_cell_format("A1:B2", font={"italic": True}, alignment={"indent": 256})
             self.assertEqual(ws.get_cell_format("A1"), before)
 
 
@@ -310,12 +310,12 @@ def _xf_of(ws: Sheet) -> int:
             fill_index=0,
             border_index=0,
             num_fmt_id=2,
-            horizontal_align=formulon.HorizontalAlign.GENERAL,
-            vertical_align=formulon.VerticalAlign.BOTTOM,
+            horizontal=formulon.HorizontalAlign.GENERAL,
+            vertical=formulon.VerticalAlign.BOTTOM,
             wrap_text=False,
             has_alignment=False,
-            has_horizontal_align=False,
-            has_vertical_align=False,
+            has_horizontal=False,
+            has_vertical=False,
             has_wrap_text=False,
         )
     )
@@ -338,17 +338,17 @@ SPAN_METHODS: Dict[str, _Row] = {
     "Sheet.set_column_hidden": _Row(lambda ws: (True,)),
     "Sheet.set_column_outline": _Row(lambda ws: (2,)),
     "Sheet.set_column_collapsed": _Row(lambda ws: (True,)),
-    "Sheet.set_column_style": _Row(lambda ws: (_xf_of(ws),)),
-    "Sheet.clear_column_style": _Row(pre=lambda ws: ws.ooxml.set_column_style(1, 3, _xf_of(ws))),
-    "Sheet.clear_column_width": _Row(pre=lambda ws: ws.set_column_width(1, 3, 12)),
+    "Sheet.set_column_xf_index": _Row(lambda ws: (_xf_of(ws),)),
+    "Sheet.reset_column_xf_index": _Row(pre=lambda ws: ws.ooxml.set_column_xf_index(1, 3, _xf_of(ws))),
+    "Sheet.reset_column_width": _Row(pre=lambda ws: ws.set_column_width(1, 3, 12)),
     "Sheet.set_row_height": _Row(lambda ws: (30,)),
     "Sheet.set_row_auto_height": _Row(lambda ws: (30,)),
     "Sheet.set_row_hidden": _Row(lambda ws: (True,)),
     "Sheet.set_row_outline": _Row(lambda ws: (2,)),
     "Sheet.set_row_collapsed": _Row(lambda ws: (True,)),
-    "Sheet.set_row_style": _Row(lambda ws: (_xf_of(ws),)),
-    "Sheet.clear_row_style": _Row(pre=lambda ws: ws.ooxml.set_row_style(2, 4, _xf_of(ws))),
-    "Sheet.clear_row_height": _Row(pre=lambda ws: ws.set_row_height(2, 4, 30)),
+    "Sheet.set_row_xf_index": _Row(lambda ws: (_xf_of(ws),)),
+    "Sheet.reset_row_xf_index": _Row(pre=lambda ws: ws.ooxml.set_row_xf_index(2, 4, _xf_of(ws))),
+    "Sheet.reset_row_height": _Row(pre=lambda ws: ws.set_row_height(2, 4, 30)),
     "Sheet.insert_rows": _Row(),
     "Sheet.delete_rows": _Row(),
     "Sheet.insert_columns": _Row(),

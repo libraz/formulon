@@ -698,13 +698,22 @@ def _owned(rule_id: str):
 
 
 def _drop_violations(ctx: Context, rule_id: str) -> Iterator[Violation]:
+    """Dropped names still in the tree; a dropped binding field is looked up among its record's fields."""
     for key, entry in ctx.ledger.entries.items():
         drop = entry.get("drop") if isinstance(entry, dict) else None
         if not isinstance(drop, dict) or drop.get("closes", DEFAULT_DROP_RULE) != rule_id:
             continue
+        record = ctx.ledger.entry(entry.get("record")) if entry.get("kind") == "field" else None
         for surface in ("c", *BINDING_SURFACES):
             name = drop.get(_field(surface))
-            if isinstance(name, str) and name in _symbols(ctx, surface):
+            if not isinstance(name, str):
+                continue
+            if record is not None and surface != "c":
+                shape = _record_fields(surfaces(ctx), record, surface) if record else None
+                present = shape is not None and name in shape[1]
+            else:
+                present = name in _symbols(ctx, surface)
+            if present:
                 yield _violation(ctx, rule_id, surface, key, name, f"`{name}` is dropped from the {surface} surface")
 
 
@@ -1457,14 +1466,70 @@ def _allocates_key(fn: CFunction) -> bool:
     )
 
 
+_TS_EXTENDS_RE = re.compile(r"^(?:export\s+)?(?:declare\s+)?interface\s+([A-Za-z_$][\w$]*)\s+extends\s+([^{]+)\{", re.M)
+
+
+def _js_fields(decls: Dict[str, TsDecl], raw: str, name: str, seen: Tuple[str, ...] = ()) -> Optional[Dict[str, str]]:
+    """Field name -> type of interface `name`, inherited fields included (from any interface in `decls`, which
+    may hold module-private ones); None when it is not an interface."""
+    decl = decls.get(name)
+    if decl is None or decl.kind != "interface":
+        return None
+    out: Dict[str, str] = {}
+    for match in _TS_EXTENDS_RE.finditer(raw):
+        if match.group(1) == name:
+            for parent in (p.strip() for p in match.group(2).split(",")):
+                if parent not in seen:
+                    out.update(_js_fields(decls, raw, parent, seen + (name,)) or {})
+    out.update({m.name: m.type for m in decl.members if not m.is_method})
+    return out
+
+
+def _patch_keys(decls: Dict[str, TsDecl], raw: str, text: str) -> Optional[Dict[str, str]]:
+    """Key -> type of a patch type expression: an interface, `Patch<T>`, `Pick<T, 'a' | 'b'>` or `{ ... }`."""
+    text = text.strip()
+    inner = re.fullmatch(r"(?:Patch|Partial)<(.*)>", text, re.S)
+    if inner:
+        return _patch_keys(decls, raw, inner.group(1))
+    pick = re.fullmatch(r"Pick<\s*([A-Za-z_$][\w$]*)\s*,(.*)>", text, re.S)
+    if pick:
+        fields = _patch_keys(decls, raw, pick.group(1))
+        keys = re.findall(r"'([^']*)'|\"([^\"]*)\"", pick.group(2))
+        return None if fields is None else {k: fields[k] for k in (a or b for a, b in keys) if k in fields}
+    if text.startswith("{"):
+        return {m.name: m.type for m in _parse_members(text.strip("{} \n")) if not m.is_method}
+    decl = decls.get(text)
+    if decl is not None and decl.kind == "type":
+        return _patch_keys(decls, raw, decl.text)
+    return _js_fields(decls, raw, text)
+
+
+def _js_record_keys(decls: Dict[str, TsDecl], raw: str, name: str) -> Optional[Dict[str, str]]:
+    """Field name -> type of record type `name`: an interface (inherited fields included), a patch alias, or the
+    fields of every alternative of a discriminated union; None when the checker cannot read it."""
+    keys = _patch_keys(decls, raw, name)
+    if keys is not None:
+        return keys
+    decl = decls.get(name)
+    alternatives = _top_union(decl.text) if decl is not None and decl.kind == "type" else []
+    if len(alternatives) < 2:
+        return None
+    out: Dict[str, str] = {}
+    for alternative in alternatives:
+        out.update(_js_record_keys(decls, raw, alternative) or {})
+    return out
+
+
 def _record_fields(found: Surfaces, record: dict, surface: str) -> Optional[Tuple[str, Set[str]]]:
     field = _field(surface)
     if surface == "py":
         name = _in_tree(found.py.classes, record, field)
         return (name, set(found.py.classes[name].fields)) if name else None
-    decls = found.js[surface].decls
-    name = _in_tree(decls, record, field)
-    return (name, {m.name for m in decls[name].members}) if name else None
+    js = found.js[surface]
+    name = _in_tree(js.decls, record, field)
+    if not name:
+        return None
+    return name, set(_js_record_keys({**js.private, **js.decls}, js.raw, name) or ())
 
 
 def _field_renames(ctx: Context, surface: str, rule_id: str) -> Iterator[Violation]:

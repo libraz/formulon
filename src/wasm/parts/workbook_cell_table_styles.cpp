@@ -22,7 +22,7 @@ namespace {
 emscripten::val cell_style_to_val(const fm_cell_style_record_t& cs) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", cs.name);
-  o.set("xfId", cs.xf_id);
+  o.set("styleXfIndex", cs.style_xf_index);
   o.set("builtinId", cs.builtin_id);
   o.set("iLevel", cs.i_level);
   o.set("hidden", cs.hidden != 0);
@@ -41,8 +41,8 @@ emscripten::val table_style_to_val(const fm_table_style_t& style) {
     emscripten::val e = emscripten::val::object();
     js_set_cstr(e, "type", element.type);
     e.set("size", element.size);
-    if (element.has_dxf_id != 0) {
-      e.set("dxfId", element.dxf_id);
+    if (element.has_dxf_index != 0) {
+      e.set("dxfIndex", element.dxf_index);
     }
     elements.call<void>("push", e);
   }
@@ -104,7 +104,7 @@ void JsWorkbook::setCellStyle(emscripten::val record) {
   const std::string name = reader.string(record, "name", "cellStyle.name");
   fm_cell_style_record_t cs{};
   cs.name = name.c_str();
-  cs.xf_id = reader.u32(record, "xfId", 0U, "cellStyle.xfId");
+  cs.style_xf_index = reader.u32(record, "styleXfIndex", 0U, "cellStyle.styleXfIndex");
   cs.builtin_id = reader.u32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE, "cellStyle.builtinId");
   cs.i_level = reader.u32(record, "iLevel", 0U, "cellStyle.iLevel");
   cs.hidden = reader.boolean(record, "hidden", false, "cellStyle.hidden") ? 1 : 0;
@@ -160,10 +160,10 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
       types.push_back(reader.string(element, "type", "style.elements[].type"));
       fm_table_style_element_t record{};
       record.size = reader.u32(element, "size", 1U, "style.elements[].size");
-      const emscripten::val dxf = reader.value(element, "dxfId", "style.elements[].dxfId");
+      const emscripten::val dxf = reader.value(element, "dxfIndex", "style.elements[].dxfIndex");
       if (reader.ok() && js_value_present(dxf)) {
-        record.has_dxf_id = 1;
-        record.dxf_id = reader.u32_value(dxf, 0U, "style.elements[].dxfId");
+        record.has_dxf_index = 1;
+        record.dxf_index = reader.u32_value(dxf, 0U, "style.elements[].dxfIndex");
       }
       records.push_back(record);
     }
@@ -226,7 +226,7 @@ void JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_workbook_set_table_style_defaults(handle_, table_ptr, pivot_ptr));
+  succeeded(fm_workbook_update_table_style_defaults(handle_, table_ptr, pivot_ptr));
 }
 }  // namespace parts
 }  // namespace wasm

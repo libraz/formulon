@@ -52,10 +52,10 @@ from typing import (
     cast,
     overload,
 )
+from xml.etree import ElementTree
 
 from . import _structs as S
 from ._c import LIB, FormulaSyntaxError, FormulonError, InvalidFileError, ValueKind, _sint, _uint, fm_value_t_size
-from ._refs import resolve_ref
 from ._status import StatusCode
 
 __all__ = [
@@ -113,6 +113,7 @@ __all__ = [
     "ChartDataSeries",
     "ChartDataSource",
     "ChartDisplayPatch",
+    "ChartExtendedLayout",
     "ChartFill",
     "ChartFillPatch",
     "ChartGrouping",
@@ -135,6 +136,7 @@ __all__ = [
     "ChartPointPatch",
     "ChartPointState",
     "ChartProperties",
+    "ChartRole",
     "ChartSeries",
     "ChartSeriesDirection",
     "ChartSeriesPatch",
@@ -152,6 +154,7 @@ __all__ = [
     "ColorKind",
     "ColorResolution",
     "ColorScale",
+    "ColumnBreak",
     "ColumnLayout",
     "Comment",
     "compare_text",
@@ -159,18 +162,20 @@ __all__ = [
     "ConditionalFormatInput",
     "DataBar",
     "DataTable",
+    "DataTableInput",
     "DataTableInputCell",
     "DataValidation",
     "DataValidationInput",
     "DateTimeGrouping",
     "DefinedName",
     "DefinedNameInput",
-    "DifferentialFormat",
     "DisplayStatus",
     "DisplayText",
     "DrawingAnchor",
     "DrawingObjectKind",
     "DrawingProperties",
+    "Dxf",
+    "DxfInput",
     "DynamicFilterType",
     "EffectiveStyle",
     "EffectiveStyleSource",
@@ -203,6 +208,7 @@ __all__ = [
     "HeaderFooter",
     "HorizontalAlign",
     "Hyperlink",
+    "HyperlinkInput",
     "IconSet",
     "IconSetName",
     "ImageFormat",
@@ -219,7 +225,9 @@ __all__ = [
     "MarginsPt",
     "Mention",
     "NativeValue",
-    "PageBreak",
+    "PictureInput",
+    "PivotStyleOptions",
+    "RowBreak",
     "PageLayout",
     "PageMargins",
     "PageOrientation",
@@ -251,8 +259,8 @@ __all__ = [
     "PivotFieldInput",
     "PivotFilter",
     "PivotFilterInput",
-    "PivotFilterType",
-    "PivotFilterValueKind",
+    "PivotFilterKind",
+    "PivotFilterOperandKind",
     "PivotGrandTotals",
     "PivotInput",
     "PivotItem",
@@ -262,7 +270,6 @@ __all__ = [
     "PivotReportLayout",
     "PivotShowValuesAs",
     "PivotSortOrder",
-    "PivotStyle",
     "PivotWorksheetSource",
     "PrintOptions",
     "PrintTitles",
@@ -276,11 +283,13 @@ __all__ = [
     "ResolvedColor",
     "RowLayout",
     "SaveDiagnostics",
+    "ShapeInput",
     "ShapePaint",
     "ShapeProperties",
     "SheetComment",
     "SheetFormatDefaults",
     "SheetProtection",
+    "SheetProtectionInput",
     "SheetRect",
     "SheetRef",
     "SheetSelection",
@@ -288,6 +297,7 @@ __all__ = [
     "SheetViewMode",
     "SheetVisibility",
     "SlicerCrossFilter",
+    "SlicerInput",
     "SlicerProperties",
     "SlicerSortOrder",
     "SortBy",
@@ -300,10 +310,12 @@ __all__ = [
     "SparklineType",
     "Spill",
     "TableColumn",
+    "TableInput",
     "TableProperties",
     "TableStyle",
     "TableStyleDefaults",
     "TableStyleElement",
+    "TableStyleOptions",
     "ThemeColors",
     "ThemeFonts",
     "ThemeScriptFont",
@@ -701,23 +713,61 @@ class TableColumn:
 class TableProperties:
     """One table, as :meth:`Table.get_properties` returns it.
 
-    ``style_name`` is ``None`` without a named style and may name a custom
-    style (:meth:`Workbook.get_table_style`); the four toggles read false
-    without ``<tableStyleInfo>``. ``header_row`` and ``totals_row`` say whether the table has those rows.
+    ``name`` is the one table name, the name formulas and :meth:`Workbook.table`
+    use. ``header_row`` and ``totals_row`` say whether the table has those
+    rows. The style is read through :meth:`Table.get_style_options`.
     """
 
     name: str
-    display_name: str
     #: The table's sheet and range.
     range: SheetRect
+    header_row: bool = True
+    totals_row: bool = False
+    columns: List[TableColumn] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TableStyleOptions:
+    """The style element of a table (``<tableStyleInfo>``), as :meth:`Table.get_style_options` returns it.
+
+    ``style_name`` is ``None`` for an element without a named style and may
+    name a custom style (:meth:`Workbook.get_table_style`).
+    :meth:`Table.update_style_options` takes these fields as keyword arguments.
+    """
+
     style_name: Optional[str] = None
     show_first_column: bool = False
     show_last_column: bool = False
     show_row_stripes: bool = False
     show_column_stripes: bool = False
+
+
+@dataclass
+class TableInput:
+    """A table :meth:`Sheet.add_table` creates.
+
+    ``range`` is a :class:`CellRect` or an unqualified A1 range on the sheet.
+    Omitted ``columns`` take their names from the header cells, an empty one
+    named as Excel does (``Column1``, ...). Given, ``columns`` holds one
+    non-empty, table-unique name per column of the range: a non-empty header
+    cell must already hold that name, and an empty one receives it.
+    ``style_name`` ``None`` applies the workbook's table-style default
+    (:meth:`Workbook.get_table_style_defaults`), else ``TableStyleMedium2``;
+    ``""`` creates the table without a style element. A styled table starts
+    with row stripes on and the other toggles off; a ``show_*`` that is not
+    ``None`` overrides that.
+    """
+
+    range: Union[CellRect, str]
+    name: str
+    columns: Optional[Sequence[str]] = None
+    style_name: Optional[str] = None
+    show_first_column: Optional[bool] = None
+    show_last_column: Optional[bool] = None
+    show_row_stripes: Optional[bool] = None
+    show_column_stripes: Optional[bool] = None
     header_row: bool = True
     totals_row: bool = False
-    columns: List[TableColumn] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -726,13 +776,13 @@ class TableStyleElement:
 
     ``type`` is the ``ST_TableStyleType`` token (``"wholeTable"``,
     ``"firstRowStripe"``, ``"pageFieldLabels"``, ...); ``size`` is the stripe
-    band size; ``dxf_id`` indexes the differential formats, ``None`` for a
+    band size; ``dxf_index`` indexes the differential formats, ``None`` for a
     region listed without formatting.
     """
 
     type: str
     size: int = 1
-    dxf_id: Optional[int] = None
+    dxf_index: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -1524,18 +1574,20 @@ class PivotShowValuesAs(IntEnum):
     RANK_DESCENDING = 15
 
 
-class PivotFilterType(IntEnum):
+class PivotFilterKind(IntEnum):
     """Filter type of a pivot filter: every OOXML pivot filter type.
 
     The values are the C ABI's filter-type ordinals.
     """
 
-    VALUE_TOP_10 = 0
+    #: The top / bottom N filter (``count``, ``percent`` or ``sum`` by the operand).
+    VALUE_TOP_COUNT = 0
     VALUE_GREATER_THAN = 1
     VALUE_BETWEEN = 2
     LABEL_CONTAINS = 3
     LABEL_BEGINS_WITH = 4
-    LABEL_DATE = 5
+    #: Dates between two dates (``dateBetween``).
+    DATE_BETWEEN = 5
     VALUE_EQUAL = 6
     VALUE_NOT_EQUAL = 7
     VALUE_GREATER_THAN_OR_EQUAL = 8
@@ -1600,7 +1652,7 @@ class PivotFilterType(IntEnum):
     DATE_M12 = 67
 
 
-class PivotFilterValueKind(IntEnum):
+class PivotFilterOperandKind(IntEnum):
     """Discriminator for a pivot filter spec's variant payload; an absent operand is ``None``."""
 
     INT = 0
@@ -1633,10 +1685,10 @@ class PivotCellKind(IntEnum):
 
     HEADER = 0
     ROW_LABEL = 1
-    COL_LABEL = 2
+    COLUMN_LABEL = 2
     DATA = 3
     ROW_SUBTOTAL = 4
-    COL_SUBTOTAL = 5
+    COLUMN_SUBTOTAL = 5
     GRAND_TOTAL = 6
     BLANK = 7
 
@@ -1719,6 +1771,21 @@ class Hyperlink:
     tooltip: Optional[str]
 
 
+@dataclass
+class HyperlinkInput:
+    """A hyperlink :meth:`Sheet.set_hyperlink` / :meth:`Sheet.set_hyperlink_range` set.
+
+    ``target`` ``None`` is a link inside the workbook and needs ``location``
+    (its destination); a ``None`` ``display`` or ``tooltip`` is the same as
+    omitting it. A :class:`Hyperlink` read back is accepted in its place.
+    """
+
+    target: Optional[str]
+    location: Optional[str] = None
+    display: Optional[str] = None
+    tooltip: Optional[str] = None
+
+
 @dataclass(frozen=True)
 class Comment:
     """A cell comment."""
@@ -1743,12 +1810,12 @@ class DataValidation:
 
     ranges: List[CellRect]
     type: ValidationType
-    op: ValidationOperator
+    operator: ValidationOperator
     error_style: ValidationErrorStyle
     allow_blank: bool
     show_input_message: bool
     show_error_message: bool
-    show_dropdown: bool
+    show_in_cell_dropdown: bool
     formula1: Optional[str]
     formula2: Optional[str]
     error_title: Optional[str]
@@ -1758,29 +1825,28 @@ class DataValidation:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", _enum(ValidationType, self.type))
-        object.__setattr__(self, "op", _enum(ValidationOperator, self.op))
+        object.__setattr__(self, "operator", _enum(ValidationOperator, self.operator))
 
 
 @dataclass
 class DataValidationInput:
     """Argument shape for :meth:`Sheet.add_validation`.
 
-    Every field except ``type`` and ``ranges`` (at least one rectangle)
-    defaults to a benign zero/false/empty so callers populate only the
-    parts they need. ``show_dropdown`` defaults
-    to ``True`` to match the OOXML default (the in-cell dropdown arrow is
-    shown for ``list`` validations unless explicitly suppressed).
+    Every field except ``type`` and ``ranges`` (at least one rectangle) has a
+    default. ``allow_blank``, ``show_input_message``, ``show_error_message``
+    and ``show_in_cell_dropdown`` default to ``True`` as in Excel's Data
+    Validation dialog; the texts default to empty.
     """
 
     type: ValidationType
     #: Rectangles, unqualified A1 ranges, or one A1 string.
     ranges: Union[List[Union[CellRect, str]], str]
-    op: ValidationOperator = ValidationOperator.BETWEEN
+    operator: ValidationOperator = ValidationOperator.BETWEEN
     error_style: ValidationErrorStyle = ValidationErrorStyle.STOP
-    allow_blank: bool = False
-    show_input_message: bool = False
-    show_error_message: bool = False
-    show_dropdown: bool = True
+    allow_blank: bool = True
+    show_input_message: bool = True
+    show_error_message: bool = True
+    show_in_cell_dropdown: bool = True
     formula1: str = ""
     formula2: str = ""
     error_title: str = ""
@@ -1789,8 +1855,8 @@ class DataValidationInput:
     prompt_message: str = ""
 
 
-# `dxf_id` value meaning "no differential format".
-_FILTER_DXF_ID_NONE = 0xFFFFFFFF
+# `dxf_index` value meaning "no differential format".
+_FILTER_DXF_INDEX_NONE = 0xFFFFFFFF
 
 
 @dataclass
@@ -1810,7 +1876,8 @@ class AutoFilterDateGroup:
 class AutoFilterColumn:
     """One ``<filterColumn>``; only the fields of the criterion selected by ``kind`` are read."""
 
-    col_id: int
+    #: The column's 0-based offset from the filter range's first column.
+    column_offset: int
     hidden_button: bool = False
     show_button: bool = True
     kind: FilterKind = FilterKind.NONE
@@ -1819,26 +1886,27 @@ class AutoFilterColumn:
     date_groups: List[AutoFilterDateGroup] = field(default_factory=list)
     custom_and: bool = False
     custom_count: int = 0
-    op1: FilterOperator = FilterOperator.EQUAL
-    val1: str = ""
-    op2: FilterOperator = FilterOperator.EQUAL
-    val2: str = ""
+    operator1: FilterOperator = FilterOperator.EQUAL
+    value1: str = ""
+    operator2: FilterOperator = FilterOperator.EQUAL
+    value2: str = ""
     top: bool = True
     percent: bool = False
-    top_val: float = 0.0
+    #: The top-10 count or percent (``val``).
+    top_value: float = 0.0
     #: The top-10 ``filterVal``; ``None`` when absent.
-    filter_val: Optional[float] = None
+    filter_value: Optional[float] = None
     dynamic_type: DynamicFilterType = DynamicFilterType.NULL
     #: The dynamic filter's ``val`` / ``maxVal``; ``None`` when absent.
-    dyn_val: Optional[float] = None
-    dyn_max_val: Optional[float] = None
-    val_iso: str = ""
-    max_val_iso: str = ""
-    dxf_id: int = _FILTER_DXF_ID_NONE
+    dynamic_value: Optional[float] = None
+    dynamic_max_value: Optional[float] = None
+    value_iso: str = ""
+    max_value_iso: str = ""
+    dxf_index: int = _FILTER_DXF_INDEX_NONE
     cell_color: bool = False
     icon_set: int = 0
     #: ``None`` when the icon filter names no icon.
-    icon_id: Optional[int] = None
+    icon_index: Optional[int] = None
 
 
 @dataclass
@@ -1850,10 +1918,10 @@ class AutoFilterSortCondition:
     sort_by: SortBy = SortBy.VALUE
     custom_list: str = ""
     #: ``None`` when the condition names no differential format.
-    dxf_id: Optional[int] = None
+    dxf_index: Optional[int] = None
     icon_set: int = 0
     #: ``None`` when the condition names no icon.
-    icon_id: Optional[int] = None
+    icon_index: Optional[int] = None
 
 
 @dataclass
@@ -1974,8 +2042,8 @@ class ImageInfo:
     """Format and pixel size of an image."""
 
     format: ImageFormat
-    px_width: int
-    px_height: int
+    width_px: int
+    height_px: int
 
 
 @dataclass(frozen=True)
@@ -1983,8 +2051,8 @@ class PictureProperties:
     """A picture's image format, pixel size and a copy of its media bytes (:meth:`Picture.get_properties`)."""
 
     format: ImageFormat
-    px_width: int
-    px_height: int
+    width_px: int
+    height_px: int
     bytes: bytes
 
 
@@ -2006,11 +2074,9 @@ class DrawingProperties:
     to_col_offset_emu: int
     width_emu: int
     height_emu: int
-    image_format: ImageFormat
+    format: ImageFormat
     name: str
     description: str
-    #: The media part a picture shows; ``None`` for a chart.
-    media_path: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -2021,8 +2087,8 @@ class ShapeProperties:
     ``line_color`` are RGB or theme colours when the matching kind is ``ShapePaint.SOLID``
     and ``None`` otherwise; a kind is ``None`` when the shape states no fill or
     outline element.
-    ``rotation`` is in 60000ths of a degree; ``preset_geometry`` is empty for custom
-    geometry or a group.
+    ``rotation_deg`` is in degrees and ``line_width_pt`` in points (``0`` without a
+    width); ``preset_geometry`` is empty for custom geometry or a group.
     """
 
     object_id: int
@@ -2047,9 +2113,61 @@ class ShapeProperties:
     fill_color: Optional[Color]
     line_kind: Optional[ShapePaint]
     line_color: Optional[Color]
-    line_width_emu: int
-    rotation: int
+    line_width_pt: float
+    rotation_deg: float
     hidden: bool
+
+
+@dataclass
+class PictureInput:
+    """Name, description and placement of a picture :meth:`Sheet.add_picture` inserts.
+
+    An empty ``name`` becomes ``Picture <id>``; ``anchor`` ``None`` is a
+    one-cell anchor at A1.
+    """
+
+    name: str = ""
+    description: str = ""
+    anchor: Optional[DrawingAnchor] = None
+
+
+@dataclass
+class ShapeInput:
+    """A shape :meth:`Sheet.add_shape` appends; a ``None`` field is not applied.
+
+    ``preset_geometry`` defaults to ``rect`` and ``name`` to ``Shape <id>``; a
+    ``preset_geometry`` naming a line or connector geometry makes a connector,
+    which holds no text. A two-cell anchor's size is its box (``width_emu`` /
+    ``height_emu`` are ignored); an absolute anchor's position is
+    ``from_col_offset_emu`` (x) and ``from_row_offset_emu`` (y). ``fill_kind``
+    and ``line_kind`` must be ``SOLID`` (with an RGB or theme ``fill_color`` /
+    ``line_color``) or ``NONE``; a colour needs its kind. ``line_width_pt`` is
+    in points and ``rotation_deg`` in degrees.
+    """
+
+    anchor_kind: AnchorKind
+    edit_as: AnchorEditAs = AnchorEditAs.TWO_CELL
+    from_row: int = 0
+    from_col: int = 0
+    from_row_offset_emu: int = 0
+    from_col_offset_emu: int = 0
+    to_row: int = 0
+    to_col: int = 0
+    to_row_offset_emu: int = 0
+    to_col_offset_emu: int = 0
+    width_emu: int = 0
+    height_emu: int = 0
+    name: Optional[str] = None
+    preset_geometry: Optional[str] = None
+    text: Optional[str] = None
+    text_box: Optional[bool] = None
+    fill_kind: Optional[ShapePaint] = None
+    fill_color: Optional[ColorInput] = None
+    line_kind: Optional[ShapePaint] = None
+    line_color: Optional[ColorInput] = None
+    line_width_pt: Optional[float] = None
+    rotation_deg: Optional[float] = None
+    hidden: Optional[bool] = None
 
 
 @dataclass(frozen=True)
@@ -2087,6 +2205,33 @@ class SlicerProperties:
 
 
 @dataclass
+class SlicerInput:
+    """A slicer :meth:`Sheet.add_slicer` adds; a ``None`` field is not applied.
+
+    The frame is the two-cell anchor ``from_*`` .. ``to_*`` (0-based cells
+    plus EMU offsets). The name and caption default to the column name (the
+    name is made unique), ``row_height_emu`` to 241300 and ``column_count``
+    to 1.
+    """
+
+    from_row: int
+    from_col: int
+    to_row: int
+    to_col: int
+    from_row_offset_emu: int = 0
+    from_col_offset_emu: int = 0
+    to_row_offset_emu: int = 0
+    to_col_offset_emu: int = 0
+    name: Optional[str] = None
+    caption: Optional[str] = None
+    style: Optional[str] = None
+    column_count: Optional[int] = None
+    row_height_emu: Optional[int] = None
+    sort_order: Optional[SlicerSortOrder] = None
+    cross_filter: Optional[SlicerCrossFilter] = None
+
+
+@dataclass
 class DataTableInputCell:
     """An input cell of a data table; ``deleted`` marks one removed by a row or column delete."""
 
@@ -2109,7 +2254,23 @@ class DataTable:
     two_dimensional: bool
     row_oriented: bool
     row_input: Optional[DataTableInputCell]
-    col_input: Optional[DataTableInputCell]
+    column_input: Optional[DataTableInputCell]
+
+
+@dataclass
+class DataTableInput:
+    """A data table :meth:`Sheet.add_data_table` creates.
+
+    ``rect`` is the result range, a :class:`CellRect` or an unqualified A1
+    range. ``row_input`` / ``column_input`` are the input cells that receive the
+    values of the row above / the column left of the range, each a
+    :class:`DataTableInputCell`, a ``(row, col)`` pair or one A1 cell; give
+    one for a one-variable table, both for a two-variable one.
+    """
+
+    rect: Union[CellRect, str]
+    row_input: Union[DataTableInputCell, Tuple[int, int], str, None] = None
+    column_input: Union[DataTableInputCell, Tuple[int, int], str, None] = None
 
 
 @dataclass(frozen=True)
@@ -2176,7 +2337,21 @@ class ChartPlotType(IntEnum):
     STOCK = 13
     SURFACE = 14
     SURFACE_3D = 15
-    CHARTEX = 16
+    #: An extended (``cx:``) chart; :attr:`ChartPlot.extended_layout` names its layout.
+    EXTENDED = 16
+
+
+class ChartExtendedLayout(IntEnum):
+    """Layout of an extended chart's plot (``cx:series/@layoutId``)."""
+
+    BOX_WHISKER = 0
+    CLUSTERED_COLUMN = 1
+    FUNNEL = 2
+    PARETO_LINE = 3
+    REGION_MAP = 4
+    SUNBURST = 5
+    TREEMAP = 6
+    WATERFALL = 7
 
 
 class ChartInsertKind(IntEnum):
@@ -2272,7 +2447,7 @@ class ChartAxisPosition(IntEnum):
 class ChartBarDirection(IntEnum):
     """Whether a bar-family plot draws vertical columns or horizontal bars."""
 
-    COL = 0
+    COLUMN = 0
     BAR = 1
 
 
@@ -2317,6 +2492,22 @@ class ChartLabelPosition(IntEnum):
     RIGHT = 8
 
 
+class ChartRole(IntEnum):
+    """A chart input: the six series roles, the chart title and an axis title.
+
+    The six series roles also index the per-series inputs (:class:`ChartSeriesRanges`).
+    """
+
+    NAME = 0
+    CATEGORIES = 1
+    VALUES = 2
+    X = 3
+    Y = 4
+    SIZE = 5
+    TITLE = 6
+    AXIS_TITLE = 7
+
+
 class ChartSourceKind(IntEnum):
     """What a chart series input holds."""
 
@@ -2345,10 +2536,10 @@ class ChartTitle:
 
 @dataclass(frozen=True)
 class ChartFill:
-    """Solid fill; ``color`` is an RGB or theme :class:`Color` and ``transparency`` a percentage, each ``None`` when absent."""
+    """Solid fill; ``color`` is an RGB or theme :class:`Color` and ``transparency_pct`` a percentage, each ``None`` when absent."""
 
     color: Optional[Color] = None
-    transparency: Optional[float] = None
+    transparency_pct: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -2356,7 +2547,7 @@ class ChartLine:
     """Outline; ``color`` is an RGB or theme :class:`Color` (``None`` when absent) and ``none`` an explicit no-line."""
 
     color: Optional[Color] = None
-    transparency: Optional[float] = None
+    transparency_pct: Optional[float] = None
     width_pt: Optional[float] = None
     dash: Optional[ChartLineDash] = None
     none: bool = False
@@ -2364,10 +2555,10 @@ class ChartLine:
 
 @dataclass(frozen=True)
 class ChartMarker:
-    """Series or point marker."""
+    """Series or point marker; ``size_pt`` is in points."""
 
     symbol: ChartMarkerSymbol
-    size: Optional[int]
+    size_pt: Optional[int]
     fill: ChartFill
     line: ChartLine
 
@@ -2423,17 +2614,21 @@ class ChartSeries:
 
 @dataclass(frozen=True)
 class ChartPlot:
-    """One plot group; ``bar_direction`` is ``None`` outside the bar family or when the file omits it."""
+    """One plot group; ``bar_direction`` is ``None`` outside the bar family or when the file omits it.
+
+    ``extended_layout`` is ``None`` unless ``type`` is ``EXTENDED``. ``gap_width_pct`` is a percentage of
+    the bar width and ``first_slice_angle_deg`` is in degrees.
+    """
 
     type: ChartPlotType
-    chartex_layout: Optional[str]
+    extended_layout: Optional[ChartExtendedLayout]
     bar_direction: Optional[ChartBarDirection]
     grouping: Optional[ChartGrouping]
     vary_colors: bool
-    gap_width: Optional[int]
+    gap_width_pct: Optional[int]
     overlap: Optional[int]
     hole_size: Optional[int]
-    first_slice_angle: Optional[int]
+    first_slice_angle_deg: Optional[int]
     axis_ids: List[int]
     series: List[ChartSeries]
 
@@ -2445,7 +2640,7 @@ class ChartAxis:
     id: int
     kind: ChartAxisKind
     position: ChartAxisPosition
-    deleted: bool
+    visible: bool
     cross_axis: int
     crosses: Optional[ChartAxisCrosses]
     crosses_at: Optional[float]
@@ -2493,7 +2688,7 @@ class ChartProperties:
     object_id: int
     name: str
     description: str
-    is_chartex: bool
+    is_extended: bool
     is_pivot_chart: bool
     on_chartsheet: bool
     title: Optional[ChartTitle]
@@ -2569,11 +2764,11 @@ class ChartAxisTitleText:
 class ChartUnresolved:
     """An input that did not resolve; its points read as gaps.
 
-    ``source`` is ``name``, ``cat``, ``val``, ``x``, ``y``, ``size``, ``title`` or ``axis_title``.
+    ``source`` is the role of the input; ``axis_id`` names the axis of an ``AXIS_TITLE``.
     """
 
     series_index: int
-    source: str
+    source: ChartRole
     axis_id: int
 
 
@@ -2594,14 +2789,14 @@ class ChartFillPatch(TypedDict, total=False):
     """Fill patch: an omitted key is kept, ``None`` removes the element; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
 
     color: Optional[ColorInput]
-    transparency: Optional[float]
+    transparency_pct: Optional[float]
 
 
 class ChartLinePatch(TypedDict, total=False):
     """Outline patch; ``none`` is a bool and rejects ``None``; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
 
     color: Optional[ColorInput]
-    transparency: Optional[float]
+    transparency_pct: Optional[float]
     width_pt: Optional[float]
     dash: Optional[ChartLineDash]
     none: Optional[bool]
@@ -2611,7 +2806,7 @@ class ChartMarkerPatch(TypedDict, total=False):
     """Marker patch; ``symbol`` rejects ``None``."""
 
     symbol: Optional[ChartMarkerSymbol]
-    size: Optional[float]
+    size_pt: Optional[float]
     fill: Optional[ChartFillPatch]
     line: Optional[ChartLinePatch]
 
@@ -2634,22 +2829,43 @@ class ChartLabelsPatch(TypedDict, total=False):
 class ChartSeriesPatch(TypedDict, total=False):
     """Series patch.
 
-    A reference is its new text; ``""`` removes ``name``, ``categories`` or ``x``
-    (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on ``marker``
+    A reference is its new text or a :class:`ChartDataSource` with a reference; ``""`` removes ``name``,
+    ``categories`` or ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on ``marker``
     or ``labels`` removes it.
     """
 
-    name: Optional[str]
-    categories: Optional[str]
-    values: Optional[str]
-    x: Optional[str]
-    y: Optional[str]
-    size: Optional[str]
+    name: Union[ChartDataSource, str, None]
+    categories: Union[ChartDataSource, str, None]
+    values: Union[ChartDataSource, str, None]
+    x: Union[ChartDataSource, str, None]
+    y: Union[ChartDataSource, str, None]
+    size: Union[ChartDataSource, str, None]
     fill: Optional[ChartFillPatch]
     line: Optional[ChartLinePatch]
     marker: Optional[ChartMarkerPatch]
     smooth: Optional[bool]
     labels: Optional[ChartLabelsPatch]
+
+
+@dataclass
+class ChartSeriesInput:
+    """A new series for :meth:`Chart.add_series`.
+
+    ``values`` is required (``y`` for a scatter plot); every other field is optional and reads as the
+    same key of :class:`ChartSeriesPatch`.
+    """
+
+    values: Union[ChartDataSource, str, None] = None
+    name: Union[ChartDataSource, str, None] = None
+    categories: Union[ChartDataSource, str, None] = None
+    x: Union[ChartDataSource, str, None] = None
+    y: Union[ChartDataSource, str, None] = None
+    size: Union[ChartDataSource, str, None] = None
+    fill: Optional[ChartFillPatch] = None
+    line: Optional[ChartLinePatch] = None
+    marker: Optional[ChartMarkerPatch] = None
+    smooth: Optional[bool] = None
+    labels: Optional[ChartLabelsPatch] = None
 
 
 class ChartPointPatch(TypedDict, total=False):
@@ -2663,9 +2879,9 @@ class ChartPointPatch(TypedDict, total=False):
 class ChartPlotPatch(TypedDict, total=False):
     """Plot-group patch; a field the plot type does not have is rejected. ``hole_size`` is 10..90 (doughnut only)."""
 
-    gap_width: Optional[int]
+    gap_width_pct: Optional[int]
     overlap: Optional[int]
-    first_slice_angle: Optional[int]
+    first_slice_angle_deg: Optional[int]
     vary_colors: Optional[bool]
     hole_size: Optional[int]
 
@@ -2696,7 +2912,7 @@ class ChartAxisPatch(TypedDict, total=False):
 
 
 class ChartDisplayPatch(TypedDict, total=False):
-    """Display patch for :meth:`Chart.set_display`; an omitted key is kept, ``None`` removes the element."""
+    """Display patch for :meth:`Chart.update_display`; an omitted key is kept, ``None`` removes the element."""
 
     blanks_as: Optional[ChartBlanksAs]
     plot_visible_only: Optional[bool]
@@ -2713,12 +2929,14 @@ class WorkbookProtection:
     lock_structure: bool = False
     lock_windows: bool = False
     lock_revision: bool = False
-    workbook_password: Optional[str] = None
+    #: The legacy 16-bit password hash (hex, ``workbookPassword``).
+    workbook_legacy_password_hash: Optional[str] = None
     workbook_algorithm_name: Optional[str] = None
     workbook_hash_value: Optional[str] = None
     workbook_salt_value: Optional[str] = None
     workbook_spin_count: int = 0
-    revisions_password: Optional[str] = None
+    #: The legacy 16-bit password hash (hex, ``revisionsPassword``).
+    revisions_legacy_password_hash: Optional[str] = None
     revisions_algorithm_name: Optional[str] = None
     revisions_hash_value: Optional[str] = None
     revisions_salt_value: Optional[str] = None
@@ -2731,7 +2949,8 @@ class ProtectedRange:
 
     name: str
     ranges: List[CellRect]
-    password: str = ""
+    #: The legacy 16-bit password hash (hex, ``password``); ``None`` when absent.
+    legacy_password_hash: Optional[str] = None
     algorithm_name: str = ""
     hash_value: str = ""
     salt_value: str = ""
@@ -2741,30 +2960,61 @@ class ProtectedRange:
 
 @dataclass(frozen=True)
 class SheetProtection:
-    """Sheet ``<sheetProtection>`` flags; a text field the element does not state is ``None``."""
+    """The protection of a protected sheet (:meth:`Sheet.get_sheet_protection`).
 
-    enabled: bool = False
+    Each ``allow_*`` flag permits one action on the protected sheet. The
+    defaults are those of Excel's Protect Sheet dialog: selecting locked and
+    unlocked cells is allowed, every other action is not. A text field the
+    sheet does not state is ``None``.
+    """
+
     algorithm_name: Optional[str] = None
     hash_value: Optional[str] = None
     salt_value: Optional[str] = None
     spin_count: int = 0
-    legacy_password: Optional[str] = None
-    sheet: bool = False
-    objects: bool = False
-    scenarios: bool = False
-    format_cells: bool = False
-    format_columns: bool = False
-    format_rows: bool = False
-    insert_columns: bool = False
-    insert_rows: bool = False
-    insert_hyperlinks: bool = False
-    delete_columns: bool = False
-    delete_rows: bool = False
-    select_locked_cells: bool = False
-    select_unlocked_cells: bool = False
-    sort: bool = False
-    auto_filter: bool = False
-    pivot_tables: bool = False
+    #: The legacy 16-bit password hash (hex, ``password``).
+    legacy_password_hash: Optional[str] = None
+    allow_edit_objects: bool = False
+    allow_edit_scenarios: bool = False
+    allow_format_cells: bool = False
+    allow_format_columns: bool = False
+    allow_format_rows: bool = False
+    allow_insert_columns: bool = False
+    allow_insert_rows: bool = False
+    allow_insert_hyperlinks: bool = False
+    allow_delete_columns: bool = False
+    allow_delete_rows: bool = False
+    allow_select_locked_cells: bool = True
+    allow_select_unlocked_cells: bool = True
+    allow_sort: bool = False
+    allow_auto_filter: bool = False
+    allow_pivot_tables: bool = False
+
+
+@dataclass
+class SheetProtectionInput:
+    """The protection :meth:`Sheet.set_sheet_protection` applies; the fields and defaults of :class:`SheetProtection`."""
+
+    algorithm_name: Optional[str] = None
+    hash_value: Optional[str] = None
+    salt_value: Optional[str] = None
+    spin_count: int = 0
+    legacy_password_hash: Optional[str] = None
+    allow_edit_objects: bool = False
+    allow_edit_scenarios: bool = False
+    allow_format_cells: bool = False
+    allow_format_columns: bool = False
+    allow_format_rows: bool = False
+    allow_insert_columns: bool = False
+    allow_insert_rows: bool = False
+    allow_insert_hyperlinks: bool = False
+    allow_delete_columns: bool = False
+    allow_delete_rows: bool = False
+    allow_select_locked_cells: bool = True
+    allow_select_unlocked_cells: bool = True
+    allow_sort: bool = False
+    allow_auto_filter: bool = False
+    allow_pivot_tables: bool = False
 
 
 @dataclass(frozen=True)
@@ -2773,12 +3023,13 @@ class SheetView:
     display / orientation flags mirrored from OOXML ``<sheetView>``.
     """
 
-    zoom_scale: int
+    #: The zoom as a percentage (100 is 100%).
+    zoom_pct: int
     freeze_rows: int
     freeze_cols: int
     visibility: SheetVisibility = SheetVisibility.VISIBLE
     show_grid_lines: bool = True
-    show_row_col_headers: bool = True
+    show_row_column_headers: bool = True
     show_zeros: bool = True
     right_to_left: bool = False
     tab_selected: bool = False
@@ -2787,8 +3038,9 @@ class SheetView:
     top_left_col: int = 0
     pane_top_left_row: int = 0
     pane_top_left_col: int = 0
-    split_x: float = 0.0
-    split_y: float = 0.0
+    #: The split position of a split (unfrozen) pane, in twips.
+    split_x_twips: float = 0.0
+    split_y_twips: float = 0.0
     show_formulas: bool = False
     show_outline_symbols: bool = True
 
@@ -2797,15 +3049,15 @@ class SheetView:
 class ColumnLayout:
     """A per-column-range layout override (inclusive ``[first, last]``).
 
-    ``width`` is the explicit width (the raw source bit or a legacy non-zero
-    width), ``None`` when the span states none; an explicit zero stays
-    distinguishable from an absent width. The column style is read through
-    :meth:`SheetOoxml.get_column_style`.
+    ``width_chars`` is the explicit width in characters (the raw source bit or
+    a legacy non-zero width), ``None`` when the span states none; an explicit
+    zero stays distinguishable from an absent width. The column XF is read
+    through :meth:`SheetOoxml.get_column_xf_index`.
     """
 
     first: int
     last: int
-    width: Optional[float]
+    width_chars: Optional[float]
     hidden: bool
     outline_level: int
     #: ``collapsed="1"``: the outline group this span summarises is collapsed.
@@ -2814,11 +3066,11 @@ class ColumnLayout:
 
 @dataclass(frozen=True)
 class RowLayout:
-    """A per-row layout override; the row style is read through :meth:`SheetOoxml.get_row_style`."""
+    """A per-row layout override; the row XF is read through :meth:`SheetOoxml.get_row_xf_index`."""
 
     row: int
-    #: The stored height; ``None`` when the row stores none.
-    height: Optional[float]
+    #: The stored height in points; ``None`` when the row stores none.
+    height_pt: Optional[float]
     hidden: bool
     outline_level: int
     #: ``customHeight="1"``: an explicit override rather than a cached auto height.
@@ -2869,27 +3121,23 @@ class Pagination:
     :class:`CellRect` rectangles. It is empty when the sheet declares no print area and is
     not backfilled with the used range; pagination itself still falls back
     to the used range, so ``page_count`` can be non-zero while this is
-    empty. Break lists contain the zero-based row or column a new physical
-    page begins before.
+    empty. The break lists hold the breaks in effect, ascending, each before
+    the zero-based row or column a new physical page begins with.
     """
 
     page_count: int
     print_area: List[CellRect]
-    row_breaks: List[int]
-    column_breaks: List[int]
+    row_breaks: List["RowBreak"]
+    column_breaks: List["ColumnBreak"]
     paper: "Paper"
     margins: "MarginsPt"
     printable: "RectPt"
-    #: Effective scale as a factor (1.0 is 100%).
-    scale: float
+    #: Effective print scale as a percentage (100 is 100%).
+    scale_pct: float
     #: 0 down-then-over, 1 over-then-down.
     page_order: int
     print_titles: "PrintTitles"
     pages: List["PageLayout"]
-    #: Per-break manual flags, parallel to ``row_breaks``.
-    row_break_manual: List[bool]
-    #: Per-break manual flags, parallel to ``column_breaks``.
-    column_break_manual: List[bool]
 
 
 @dataclass(frozen=True)
@@ -2898,8 +3146,8 @@ class RectPt:
 
     x: float
     y: float
-    width: float
-    height: float
+    width_pt: float
+    height_pt: float
 
 
 @dataclass(frozen=True)
@@ -2915,14 +3163,14 @@ class Paper:
 
 @dataclass(frozen=True)
 class MarginsPt:
-    """Page margins in points."""
+    """Page margins in inches."""
 
-    left: float
-    right: float
-    top: float
-    bottom: float
-    header: float
-    footer: float
+    left_in: float
+    right_in: float
+    top_in: float
+    bottom_in: float
+    header_in: float
+    footer_in: float
 
 
 @dataclass(frozen=True)
@@ -2958,24 +3206,24 @@ class PageLayout:
 class SheetFormatDefaults:
     """Sheet default column / row metrics (``<sheetFormatPr>``).
 
-    ``default_col_width`` is a stored width (characters with the column
-    padding included) and ``default_row_height`` in points; each is ``None``
-    when the sheet stores none. ``Sheet.set_format_defaults`` takes these
+    ``default_col_width_chars`` is a stored width (characters with the column
+    padding included) and ``default_row_height_pt`` in points; each is ``None``
+    when the sheet stores none. ``Sheet.update_format_defaults`` takes these
     fields as keyword arguments: ``None`` clears the stored value and
     :data:`UNCHANGED` (the default) keeps it.
-    ``effective_default_col_width`` / ``effective_default_row_height`` are
-    read-only values the sheet lays out with: the stated default, else the
-    column Excel derives from ``base_col_width`` and the Normal font
+    ``effective_default_col_width_chars`` / ``effective_default_row_height_pt``
+    are read-only values the sheet lays out with: the stated default, else the
+    column Excel derives from ``base_col_width_chars`` and the Normal font
     (Calibri 11, base 8: 9.140625, shown as 8.43) and 102/7 pt; the row height is 0 when
     ``zero_height`` hides rows by default. They are ignored when setting.
     """
 
-    default_col_width: Optional[float] = None
-    default_row_height: Optional[float] = None
-    base_col_width: float = 8.0
-    effective_default_col_width: float = 0.0
-    effective_default_row_height: float = 0.0
-    #: ``customHeight``: ``default_row_height`` is an explicit override rather
+    default_col_width_chars: Optional[float] = None
+    default_row_height_pt: Optional[float] = None
+    base_col_width_chars: float = 8.0
+    effective_default_col_width_chars: float = 0.0
+    effective_default_row_height_pt: float = 0.0
+    #: ``customHeight``: ``default_row_height_pt`` is an explicit override rather
     #: than a cached figure Excel recomputes from the Normal font. ``None``
     #: keeps the stored flag when setting.
     custom_height: Optional[bool] = None
@@ -2995,7 +3243,7 @@ class WidthModel:
 
     points_per_char: float
     padding_pt: float
-    normal_font_size: float
+    normal_font_size_pt: float
     #: False when the Normal font is not a measured calibration point.
     calibrated: bool
     normal_font_name: str
@@ -3003,18 +3251,33 @@ class WidthModel:
 
 
 @dataclass(frozen=True)
-class PageBreak:
-    """One manual page break as the worksheet declares it.
+class RowBreak:
+    """One row break (``<rowBreaks><brk>``).
 
-    ``id`` is the zero-based row or column the break precedes; ``min`` /
-    ``max`` bound the break on the perpendicular axis. ``manual`` is False
-    for a break Excel computed and recorded rather than one a user placed.
+    The break sits before the zero-based row ``row`` and covers the columns
+    ``first..last`` (OOXML ``min`` / ``max``). ``manual`` is False for a
+    break Excel computed rather than one a user placed. As the argument of
+    :meth:`Sheet.set_row_break`, ``row`` is ignored and ``first == last == 0``
+    covers the whole row.
     """
 
-    id: int
-    min: int
-    max: int
-    manual: bool
+    row: int
+    first: int = 0
+    last: int = 0
+    manual: bool = True
+
+
+@dataclass(frozen=True)
+class ColumnBreak:
+    """One column break (``<colBreaks><brk>``): before the zero-based column ``col``, covering the rows ``first..last``.
+
+    ``manual`` and the argument form of :meth:`Sheet.set_column_break` are as in :class:`RowBreak`.
+    """
+
+    col: int
+    first: int = 0
+    last: int = 0
+    manual: bool = True
 
 
 @dataclass(frozen=True)
@@ -3024,6 +3287,7 @@ class PageSetup:
     Every value field carries the setting in force. The ``*_stated`` flags
     say whether the XML actually declares it, which is the only way to tell
     ``scale="100"`` from an absent attribute that defaults to 100.
+    ``scale_pct`` is the print scale as a percentage.
 
     ``fit_to_page`` lives in ``<sheetPr><pageSetUpPr>`` rather than
     ``<pageSetup>``; it is reported here because callers reason about it as
@@ -3033,13 +3297,13 @@ class PageSetup:
     #: ``None`` when the sheet states no orientation (Excel prints portrait).
     orientation: Optional[PageOrientation]
     paper_size: int
-    scale: int
+    scale_pct: int
     fit_to_width: int
     fit_to_height: int
     fit_to_page: bool
     orientation_stated: bool
     paper_size_stated: bool
-    scale_stated: bool
+    scale_pct_stated: bool
     fit_to_width_stated: bool
     fit_to_height_stated: bool
     fit_to_page_stated: bool
@@ -3049,18 +3313,18 @@ class PageSetup:
 class PageMargins:
     """Effective ``<pageMargins>`` values in inches, with presence flags."""
 
-    left: float
-    right: float
-    top: float
-    bottom: float
-    header: float
-    footer: float
-    left_stated: bool
-    right_stated: bool
-    top_stated: bool
-    bottom_stated: bool
-    header_stated: bool
-    footer_stated: bool
+    left_in: float
+    right_in: float
+    top_in: float
+    bottom_in: float
+    header_in: float
+    footer_in: float
+    left_in_stated: bool
+    right_in_stated: bool
+    top_in_stated: bool
+    bottom_in_stated: bool
+    header_in_stated: bool
+    footer_in_stated: bool
 
 
 @dataclass(frozen=True)
@@ -3082,7 +3346,7 @@ class HeaderFooter:
     """Effective ``<headerFooter>`` values.
 
     A section the sheet does not have is ``None``; the text is decoded as
-    :meth:`Sheet.set_header_footer` takes it. A flag the sheet does not state
+    :meth:`Sheet.update_header_footer` takes it. A flag the sheet does not state
     reads its schema default (``different_odd_even`` / ``different_first``
     false, ``scale_with_doc`` / ``align_with_margins`` true) with its
     ``*_stated`` flag false.
@@ -3113,8 +3377,8 @@ class CfMatch:
 
     kind: CfMatchKind
     priority: int
-    dxf_id_engaged: bool
-    dxf_id: int
+    dxf_index_engaged: bool
+    dxf_index: int
     color: Color
     bar_length_pct: float
     bar_axis_position_pct: float
@@ -3223,11 +3487,11 @@ class CfIcon:
 
     ``icon_set`` is the ``ST_IconSetType`` spelling of the set the icon comes
     from (``"3Arrows"``, ``"3Triangles"``, ``"5Boxes"``, ``"NoIcons"`` for a
-    level that draws nothing, ...); ``icon_id`` is the zero-based icon within it.
+    level that draws nothing, ...); ``icon_index`` is the zero-based icon within it.
     """
 
     icon_set: str
-    icon_id: int = 0
+    icon_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -3239,10 +3503,10 @@ class ConditionalFormat:
     priority: int
     stop_if_true: bool
     ranges: List[CellRect]
-    dxf_id: Optional[int]
+    dxf_index: Optional[int]
     formula1: str
     formula2: str
-    op: Optional[CfOperator]
+    operator: Optional[CfOperator]
     rank: Optional[int]
     percent: bool
     bottom: bool
@@ -3257,8 +3521,8 @@ class ConditionalFormat:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", _enum(CfRuleType, self.type))
-        if self.op is not None:
-            object.__setattr__(self, "op", _enum(CfOperator, self.op))
+        if self.operator is not None:
+            object.__setattr__(self, "operator", _enum(CfOperator, self.operator))
         if self.time_period is not None:
             object.__setattr__(self, "time_period", _enum(CfTimePeriod, self.time_period))
 
@@ -3277,10 +3541,10 @@ class ConditionalFormatInput:
     priority: int = 0
     stop_if_true: bool = False
     id: str = ""
-    dxf_id: Optional[int] = None
+    dxf_index: Optional[int] = None
     formula1: str = ""
     formula2: str = ""
-    op: Optional[CfOperator] = None
+    operator: Optional[CfOperator] = None
     rank: Optional[int] = None
     percent: bool = False
     bottom: bool = False
@@ -3341,7 +3605,7 @@ class FunctionMetadata:
     #: ``None`` denotes an unbounded variadic.
     max_arity: Optional[int]
     availability: FunctionAvailability
-    signature_template: Optional[str]
+    signature: Optional[str]
     description: Optional[str]
 
 
@@ -3407,11 +3671,12 @@ class CellXf:
     fill_index: int
     border_index: int
     num_fmt_id: int
-    horizontal_align: Optional[HorizontalAlign] = None
-    vertical_align: Optional[VerticalAlign] = None
+    horizontal: Optional[HorizontalAlign] = None
+    vertical: Optional[VerticalAlign] = None
     wrap_text: Optional[bool] = None
     justify_last_line: Optional[bool] = None
-    xf_id: int = 0
+    #: The ``<cellStyleXfs>`` entry the format inherits from.
+    style_xf_index: int = 0
     text_rotation: Optional[int] = None
     indent: Optional[int] = None
     relative_indent: Optional[int] = None
@@ -3432,27 +3697,27 @@ class CellXf:
 class CellXfInput:
     """An ``<xf>`` record :meth:`WorkbookOoxml.add_cell_xf` and :meth:`WorkbookOoxml.add_cell_style_xf` write.
 
-    A ``has_*`` flag left ``None`` is inferred: ``has_horizontal_align``,
-    ``has_vertical_align``, ``has_wrap_text`` and ``has_alignment`` read true
+    A ``has_*`` flag left ``None`` is inferred: ``has_horizontal``,
+    ``has_vertical``, ``has_wrap_text`` and ``has_alignment`` read true
     (their values are always supplied), ``has_justify_last_line`` follows
     ``justify_last_line``, and ``has_protection`` is true when ``locked`` or
     ``hidden`` is given. An optional attribute left ``None`` is not written;
-    without ``<protection>`` a cell is locked and not hidden. ``xf_id`` names
-    the ``<cellStyleXfs>`` entry the format inherits from (``add_cell_xf``
-    only).
+    without ``<protection>`` a cell is locked and not hidden. ``style_xf_index``
+    names the ``<cellStyleXfs>`` entry the format inherits from
+    (``add_cell_xf`` only).
     """
 
     font_index: int
     fill_index: int
     border_index: int
     num_fmt_id: int
-    horizontal_align: HorizontalAlign
-    vertical_align: VerticalAlign
+    horizontal: HorizontalAlign
+    vertical: VerticalAlign
     wrap_text: bool
     justify_last_line: Optional[bool] = None
     has_alignment: Optional[bool] = None
-    has_horizontal_align: Optional[bool] = None
-    has_vertical_align: Optional[bool] = None
+    has_horizontal: Optional[bool] = None
+    has_vertical: Optional[bool] = None
     has_wrap_text: Optional[bool] = None
     has_justify_last_line: Optional[bool] = None
     apply_number_format: bool = False
@@ -3472,14 +3737,14 @@ class CellXfInput:
     relative_indent: Optional[int] = None
     shrink_to_fit: Optional[bool] = None
     reading_order: Optional[ReadingOrder] = None
-    xf_id: int = 0
+    style_xf_index: int = 0
 
 
 @dataclass(frozen=True)
 class Color:
     """A colour as an OOXML ``<color>`` element states it.
 
-    ``kind`` selects the meaningful field: ``rgb`` (``0xAARRGGBB``) for
+    ``kind`` selects the meaningful field: ``argb`` (``0xAARRGGBB``) for
     ``ColorKind.RGB``, ``theme`` and ``tint`` for ``ColorKind.THEME``,
     ``indexed`` for ``ColorKind.INDEXED``; ``ColorKind.NONE`` is no colour.
     Records read from a file keep the specification as written, so a theme
@@ -3488,7 +3753,7 @@ class Color:
     """
 
     kind: ColorKind = ColorKind.NONE
-    rgb: int = 0
+    argb: int = 0
     theme: int = 0
     tint: float = 0.0
     indexed: int = 0
@@ -3496,15 +3761,15 @@ class Color:
 
 @dataclass(frozen=True)
 class PhoneticRun:
-    """One ``<rPh>`` block: ``text`` reads the span ``[sb, eb)``.
+    """One ``<rPh>`` block: ``text`` reads the half-open span ``[start, end)``.
 
     Offsets are UTF-16 code units, which is how Excel indexes string
     positions. A whole-cell reading is the single run
     ``PhoneticRun(0, <length of the cell text>, kana)``.
     """
 
-    sb: int = 0
-    eb: int = 0
+    start: int = 0
+    end: int = 0
     text: str = ""
 
 
@@ -3517,7 +3782,7 @@ class PhoneticProperties:
     included), false for the state an absent element resolves to.
     """
 
-    font_id: int = 0
+    font_index: int = 0
     type: int = 0
     alignment: int = 0
     present: bool = False
@@ -3531,14 +3796,14 @@ class Font:
     ``condense``, ``extend``) is ``None`` without its OOXML element: on a
     differential font an absent ``<b>`` means "leave the source formatting
     unchanged" while ``False`` (``<b val="0"/>``) means "switch bold off".
-    ``size``, ``family`` and ``charset`` are ``None`` without their element;
+    ``size_pt`` (points), ``family`` and ``charset`` are ``None`` without their element;
     a ``None`` size leaves the size unchanged on a differential font, and
     every cell-font entry point writes a size. ``color`` is ``ColorKind.NONE``
     without a ``<color>`` element and takes a ``ColorInput`` on input.
     """
 
     name: str = ""
-    size: Optional[float] = 11.0
+    size_pt: Optional[float] = 11.0
     bold: Optional[bool] = None
     italic: Optional[bool] = None
     strike: Optional[bool] = None
@@ -3584,14 +3849,14 @@ class GradientFill:
 class Fill:
     """A fill record.
 
-    ``fg`` and ``bg`` are the pattern's colours, each a ``ColorInput`` on
-    input. A ``gradient`` makes the record a ``<gradientFill>`` and the pattern
-    fields are ignored.
+    ``foreground`` and ``background`` are the pattern's colours, each a
+    ``ColorInput`` on input. A ``gradient`` makes the record a
+    ``<gradientFill>`` and the pattern fields are ignored.
     """
 
     pattern: FillPattern = FillPattern.NONE
-    fg: Color = field(default_factory=Color)
-    bg: Color = field(default_factory=Color)
+    foreground: Color = field(default_factory=Color)
+    background: Color = field(default_factory=Color)
     gradient: Optional[GradientFill] = None
 
 
@@ -3654,11 +3919,14 @@ class CellFormat:
     """The format a cell shows, as :meth:`Sheet.get_cell_format` reads it.
 
     Read from the cell's effective XF (cell, then row, then column, then the
-    default); conditional formatting is not applied. ``number_format`` is the
-    format code, ``"General"`` for General; ``alignment`` and ``protection``
-    hold the defaults when the XF has no such element.
+    default); conditional formatting is not applied. ``source`` is the layer it
+    came from; the XF index is :meth:`SheetOoxml.get_cell_xf_index`.
+    ``number_format`` is the format code, ``"General"`` for General;
+    ``alignment`` and ``protection`` hold the defaults when the XF has no such
+    element.
     """
 
+    source: EffectiveStyleSource
     number_format: str
     font: Font
     fill: Fill
@@ -3673,15 +3941,15 @@ ColorInput = Union[str, Color]
 
 
 class FontPatch(TypedDict, total=False):
-    """The font keys of :meth:`Sheet.set_cell_format`; an omitted key keeps its value.
+    """The font keys of :meth:`Sheet.update_cell_format`; an omitted key keeps its value.
 
-    ``None`` clears ``size``, ``bold``, ``italic`` or ``strike`` (the element
+    ``None`` clears ``size_pt``, ``bold``, ``italic`` or ``strike`` (the element
     is removed and reads back ``None``).
     """
 
     name: str
     #: Points; finite and not negative.
-    size: Optional[float]
+    size_pt: Optional[float]
     bold: Optional[bool]
     italic: Optional[bool]
     strike: Optional[bool]
@@ -3691,16 +3959,16 @@ class FontPatch(TypedDict, total=False):
 
 
 class FillPatch(TypedDict, total=False):
-    """The fill keys of :meth:`Sheet.set_cell_format`.
+    """The fill keys of :meth:`Sheet.update_cell_format`.
 
-    Setting ``fg`` or ``bg`` on a fill without a pattern makes it
-    ``FillPattern.SOLID`` unless ``pattern`` is given; any fill key drops a
+    Setting ``foreground`` or ``background`` on a fill without a pattern makes
+    it ``FillPattern.SOLID`` unless ``pattern`` is given; any fill key drops a
     gradient.
     """
 
     pattern: FillPattern
-    fg: ColorInput
-    bg: ColorInput
+    foreground: ColorInput
+    background: ColorInput
 
 
 class BorderSidePatch(TypedDict, total=False):
@@ -3711,7 +3979,7 @@ class BorderSidePatch(TypedDict, total=False):
 
 
 class BorderPatch(TypedDict, total=False):
-    """The border keys of :meth:`Sheet.set_cell_format`; each side merges into the current side."""
+    """The border keys of :meth:`Sheet.update_cell_format`; each side merges into the current side."""
 
     left: BorderSidePatch
     right: BorderSidePatch
@@ -3723,7 +3991,7 @@ class BorderPatch(TypedDict, total=False):
 
 
 class AlignmentPatch(TypedDict, total=False):
-    """The alignment keys of :meth:`Sheet.set_cell_format`."""
+    """The alignment keys of :meth:`Sheet.update_cell_format`."""
 
     horizontal: HorizontalAlign
     vertical: VerticalAlign
@@ -3739,29 +4007,39 @@ class AlignmentPatch(TypedDict, total=False):
 
 
 class CellProtectionPatch(TypedDict, total=False):
-    """The protection keys of :meth:`Sheet.set_cell_format`."""
+    """The protection keys of :meth:`Sheet.update_cell_format`."""
 
     locked: bool
     hidden: bool
 
 
-@dataclass
-class DifferentialFormat:
-    """An optional-style-fragment record used by conditional formats.
+@dataclass(frozen=True)
+class Dxf:
+    """A differential format (``<dxf>``), the formatting a conditional format or table style applies.
 
-    A number format is engaged when ``num_fmt_id`` is not ``None``.
-    ``alignment_xml`` and ``protection_xml`` carry serialized OOXML child
-    fragments, ``None`` when absent. Their semantic content survives
-    round-tripping, while XML lexical formatting may normalize on load.
+    The record :meth:`WorkbookOoxml.get_dxf` returns. A part is ``None`` when
+    the format does not set it. ``number_format`` is the format code; the
+    workbook assigns its number-format id.
     """
 
     font: Optional[Font] = None
     fill: Optional[Fill] = None
     border: Optional[Border] = None
-    num_fmt_id: Optional[int] = None
-    num_fmt_code: Optional[str] = None
-    alignment_xml: Optional[str] = None
-    protection_xml: Optional[str] = None
+    number_format: Optional[str] = None
+    alignment: Optional[Alignment] = None
+    protection: Optional[CellProtection] = None
+
+
+@dataclass
+class DxfInput:
+    """The differential format :meth:`WorkbookOoxml.add_dxf` takes; the parts and defaults of :class:`Dxf`."""
+
+    font: Optional[Font] = None
+    fill: Optional[Fill] = None
+    border: Optional[Border] = None
+    number_format: Optional[str] = None
+    alignment: Optional[Alignment] = None
+    protection: Optional[CellProtection] = None
 
 
 def _decode_color(ptr: int) -> Color:
@@ -3772,7 +4050,7 @@ def _color_fields(spec: Color) -> Dict[str, object]:
     """The colour-spec record fields of ``spec``."""
     return {
         "kind": _uint(spec.kind, "kind", 8),
-        "rgb": _uint(spec.rgb, "rgb"),
+        "argb": _uint(spec.argb, "argb"),
         "theme": _uint(spec.theme, "theme"),
         "tint": float(spec.tint),
         "indexed": _uint(spec.indexed, "indexed"),
@@ -3781,7 +4059,9 @@ def _color_fields(spec: Color) -> Dict[str, object]:
 
 def _color_from(d: Mapping[str, Any]) -> Color:
     """A :class:`Color` from decoded colour-spec record fields."""
-    return Color(kind=_enum(ColorKind, d["kind"]), rgb=d["rgb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"])
+    return Color(
+        kind=_enum(ColorKind, d["kind"]), argb=d["argb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"]
+    )
 
 
 def _optional_color_from(d: Mapping[str, Any]) -> Optional[Color]:
@@ -3803,7 +4083,7 @@ def _decode_font(ptr: int) -> Font:
     color = _decode_color(ptr + S.FONT_RECORD.offsets["color"][1])
     return Font(
         name=LIB.read_cstr(d["name"]),
-        size=d["size"] if d["has_size"] else None,
+        size_pt=d["size_pt"] if d["has_size_pt"] else None,
         **{name: bool(d[name]) if d[f"has_{name}"] else None for name in _FONT_TOGGLES},
         underline=_enum(UnderlineStyle, d["underline"]),
         vert_align=_enum(FontVerticalAlign, d["vert_align"]),
@@ -3816,8 +4096,8 @@ def _decode_font(ptr: int) -> Font:
 
 def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
     fields: Dict[str, object] = {
-        "size": 0.0 if record.size is None else float(record.size),
-        "has_size": 0 if record.size is None else 1,
+        "size_pt": 0.0 if record.size_pt is None else float(record.size_pt),
+        "has_size_pt": 0 if record.size_pt is None else 1,
         "underline": _uint(record.underline, "underline", 8),
         "vert_align": _uint(record.vert_align, "vert_align", 8),
         "has_family": 0 if record.family is None else 1,
@@ -3855,12 +4135,10 @@ def _decode_fill(ptr: int) -> Fill:
             bottom=d["gradient_bottom"],
             stops=stops,
         )
-    fg = _decode_color(ptr + S.FILL_RECORD.offsets["fg"][1])
-    bg = _decode_color(ptr + S.FILL_RECORD.offsets["bg"][1])
     return Fill(
         pattern=_enum(FillPattern, d["pattern"]),
-        fg=fg,
-        bg=bg,
+        foreground=_decode_color(ptr + S.FILL_RECORD.offsets["foreground"][1]),
+        background=_decode_color(ptr + S.FILL_RECORD.offsets["background"][1]),
         gradient=gradient,
     )
 
@@ -3894,8 +4172,8 @@ def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
             gradient_stop_count=len(gradient.stops),
         )
     S.FILL_RECORD.pack(LIB, ptr, values)
-    _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg, "Fill.fg")
-    _pack_color(ptr + S.FILL_RECORD.offsets["bg"][1], record.bg, "Fill.bg")
+    _pack_color(ptr + S.FILL_RECORD.offsets["foreground"][1], record.foreground, "Fill.foreground")
+    _pack_color(ptr + S.FILL_RECORD.offsets["background"][1], record.background, "Fill.background")
 
 
 def _decode_border_record(ptr: int) -> Border:
@@ -3924,12 +4202,107 @@ def _pack_border_record(ptr: int, border: Border) -> None:
         _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.color, f"Border.{side}.color")
 
 
+# OOXML tokens of the alignment enums, in ordinal order.
+_HORIZONTAL_TOKENS = ("general", "left", "center", "right", "fill", "justify", "centerContinuous", "distributed")
+_VERTICAL_TOKENS = ("top", "center", "bottom", "justify", "distributed")
+# (Alignment field, OOXML attribute) of the boolean and integer alignment attributes.
+_ALIGNMENT_FLAGS = (
+    ("wrap_text", "wrapText"),
+    ("shrink_to_fit", "shrinkToFit"),
+    ("justify_last_line", "justifyLastLine"),
+)
+_ALIGNMENT_NUMBERS = (
+    ("indent", "indent"),
+    ("text_rotation", "textRotation"),
+    ("relative_indent", "relativeIndent"),
+    ("reading_order", "readingOrder"),
+)
+
+
+def _xml_flag(text: str) -> bool:
+    return text in ("1", "true")
+
+
+def _xml_element(text: str, tag: str) -> Optional[Any]:
+    """The ``<tag>`` element a dxf child fragment holds; ``None`` for an empty fragment."""
+    if not text:
+        return None
+    element = ElementTree.fromstring(text)
+    return element if element.tag.rsplit("}", 1)[-1] == tag else None
+
+
+def _alignment_from_xml(text: str) -> Optional[Alignment]:
+    """Decode a dxf's ``<alignment>`` fragment; an absent attribute reads its default."""
+    element = _xml_element(text, "alignment")
+    if element is None:
+        return None
+    attrs = {key.rsplit("}", 1)[-1]: value for key, value in element.attrib.items()}
+    values: Dict[str, Any] = {}
+    if attrs.get("horizontal") in _HORIZONTAL_TOKENS:
+        values["horizontal"] = HorizontalAlign(_HORIZONTAL_TOKENS.index(attrs["horizontal"]))
+    if attrs.get("vertical") in _VERTICAL_TOKENS:
+        values["vertical"] = VerticalAlign(_VERTICAL_TOKENS.index(attrs["vertical"]))
+    for name, attr in _ALIGNMENT_FLAGS:
+        if attr in attrs:
+            values[name] = _xml_flag(attrs[attr])
+    for name, attr in _ALIGNMENT_NUMBERS:
+        if attr in attrs:
+            values[name] = int(attrs[attr])
+    if "reading_order" in values:
+        values["reading_order"] = _enum(ReadingOrder, values["reading_order"])
+    return Alignment(**values)
+
+
+def _alignment_to_xml(alignment: Optional[Alignment]) -> Optional[str]:
+    """Encode an :class:`Alignment` as a dxf ``<alignment>`` fragment, stating the attributes off their default."""
+    if alignment is None:
+        return None
+    if not isinstance(alignment, Alignment):
+        raise TypeError(f"formulon: Dxf.alignment must be an Alignment, got {type(alignment).__name__}")
+    default = Alignment()
+    attrs: List[str] = []
+    if alignment.horizontal != default.horizontal:
+        attrs.append(f'horizontal="{_HORIZONTAL_TOKENS[HorizontalAlign(alignment.horizontal)]}"')
+    if alignment.vertical != default.vertical:
+        attrs.append(f'vertical="{_VERTICAL_TOKENS[VerticalAlign(alignment.vertical)]}"')
+    for name, attr in _ALIGNMENT_NUMBERS:
+        value = getattr(alignment, name)
+        if value != getattr(default, name):
+            attrs.append(f'{attr}="{_sint(int(value), name)}"')
+    for name, attr in _ALIGNMENT_FLAGS:
+        if getattr(alignment, name):
+            attrs.append(f'{attr}="1"')
+    return "<alignment" + "".join(" " + a for a in attrs) + "/>"
+
+
+def _protection_from_xml(text: str) -> Optional[CellProtection]:
+    """Decode a dxf's ``<protection>`` fragment; an absent attribute reads its default."""
+    element = _xml_element(text, "protection")
+    if element is None:
+        return None
+    attrs = {key.rsplit("}", 1)[-1]: value for key, value in element.attrib.items()}
+    default = CellProtection()
+    return CellProtection(
+        locked=_xml_flag(attrs["locked"]) if "locked" in attrs else default.locked,
+        hidden=_xml_flag(attrs["hidden"]) if "hidden" in attrs else default.hidden,
+    )
+
+
+def _protection_to_xml(protection: Optional[CellProtection]) -> Optional[str]:
+    """Encode a :class:`CellProtection` as a dxf ``<protection>`` fragment."""
+    if protection is None:
+        return None
+    if not isinstance(protection, CellProtection):
+        raise TypeError(f"formulon: Dxf.protection must be a CellProtection, got {type(protection).__name__}")
+    return f'<protection locked="{1 if protection.locked else 0}" hidden="{1 if protection.hidden else 0}"/>'
+
+
 @dataclass(frozen=True)
 class CellStyle:
-    """A named cell style (``<cellStyle>`` entry)."""
+    """A named cell style (``<cellStyle>`` entry); ``style_xf_index`` is its ``<cellStyleXfs>`` entry."""
 
     name: str
-    xf_id: int
+    style_xf_index: int
     builtin_id: int = CELL_STYLE_BUILTIN_ID_NONE
     i_level: int = 0
     hidden: bool = False
@@ -3992,13 +4365,13 @@ class EffectiveStyle:
     font_index: int
     fill_index: int
     border_index: int
-    font: ResolvedColor
+    font_color: ResolvedColor
     fill_foreground: ResolvedColor
     fill_background: ResolvedColor
     borders: List[ResolvedColor]
-    locked: bool
-    hidden: bool
-    num_fmt_code: str
+    protection: CellProtection
+    #: The number format code.
+    number_format: str
 
 
 @dataclass(frozen=True)
@@ -4105,7 +4478,7 @@ class PivotField:
     ungrouped) and ``date_calendar`` their calendar; ``group_base_index`` is
     the field a group field groups, ``None`` for any other field. A text the
     field does not state is ``None``.
-    ``subtotal_fns`` lists the custom subtotal functions in ascending
+    ``subtotal_functions`` lists the custom subtotal functions in ascending
     aggregation order; ``default_subtotal`` is false whenever it is non-empty,
     since custom functions replace the automatic subtotal.
     """
@@ -4122,7 +4495,7 @@ class PivotField:
     date_calendar: PivotCalendar
     group_base_index: Optional[int]
     default_subtotal: bool
-    subtotal_fns: List[PivotAggregation]
+    subtotal_functions: List[PivotAggregation]
     insert_blank_row: bool = False
     fill_down_labels: bool = False
     show_all: bool = False
@@ -4147,17 +4520,18 @@ class PivotItem:
 
 
 @dataclass(frozen=True)
-class PivotStyle:
-    """A pivot table's style, as read by :meth:`Pivot.get_style_info`.
+class PivotStyleOptions:
+    """A pivot table's style, as read by :meth:`Pivot.get_style_options`.
 
-    ``name`` is ``None`` when the style element carries no style name.
+    ``style_name`` is ``None`` when the style element carries no style name.
+    :meth:`Pivot.update_style_options` takes these fields as keyword arguments.
     """
 
-    name: Optional[str]
+    style_name: Optional[str]
     show_row_headers: bool
-    show_col_headers: bool
+    show_column_headers: bool
     show_row_stripes: bool
-    show_col_stripes: bool
+    show_column_stripes: bool
     show_last_column: bool
 
 
@@ -4166,36 +4540,37 @@ class PivotOptions:
     """The PivotTable Options of one pivot table, as read by :meth:`Pivot.get_options`.
 
     A read fills every member; a string option reads ``None`` when unset.
+    :meth:`Pivot.update_options` takes these fields as keyword arguments.
     A ``missing_caption`` of exactly ``-`` is written as the number 0.
     ``indent`` runs 0-126 and ``page_wrap`` 0-255 (0 does not wrap).
     """
 
-    show_error: Optional[bool] = None
-    error_caption: Optional[str] = None
-    show_missing: Optional[bool] = None
-    missing_caption: Optional[str] = None
-    show_headers: Optional[bool] = None
-    show_drill: Optional[bool] = None
-    show_data_tips: Optional[bool] = None
-    grid_drop_zones: Optional[bool] = None
-    show_empty_row: Optional[bool] = None
-    show_empty_col: Optional[bool] = None
-    show_data_drop_down: Optional[bool] = None
-    print_drill: Optional[bool] = None
-    field_print_titles: Optional[bool] = None
-    item_print_titles: Optional[bool] = None
-    merge_item: Optional[bool] = None
-    indent: Optional[int] = None
-    page_over_then_down: Optional[bool] = None
-    page_wrap: Optional[int] = None
-    multiple_field_filters: Optional[bool] = None
-    preserve_formatting: Optional[bool] = None
-    custom_list_sort: Optional[bool] = None
-    alt_text: Optional[str] = None
-    alt_text_summary: Optional[str] = None
-    grand_total_caption: Optional[str] = None
-    auto_formatting: Optional[bool] = None
-    enable_drill: Optional[bool] = None
+    show_error: bool
+    error_caption: Optional[str]
+    show_missing: bool
+    missing_caption: Optional[str]
+    show_headers: bool
+    show_drill: bool
+    show_data_tips: bool
+    grid_drop_zones: bool
+    show_empty_row: bool
+    show_empty_column: bool
+    show_data_drop_down: bool
+    print_drill: bool
+    field_print_titles: bool
+    item_print_titles: bool
+    merge_item: bool
+    indent: int
+    page_over_then_down: bool
+    page_wrap: int
+    multiple_field_filters: bool
+    preserve_formatting: bool
+    custom_list_sort: bool
+    alt_text: Optional[str]
+    alt_text_summary: Optional[str]
+    grand_total_caption: Optional[str]
+    auto_formatting: bool
+    enable_drill: bool
 
 
 @dataclass(frozen=True)
@@ -4249,12 +4624,12 @@ class PivotFilterInput:
 
     axis: PivotAxis
     field_name: str
-    type: PivotFilterType
-    value_kind: Optional[PivotFilterValueKind] = None
+    type: PivotFilterKind
+    value_kind: Optional[PivotFilterOperandKind] = None
     value_int: int = 0
     value_double: float = 0.0
     value_text: str = ""
-    value_high_kind: Optional[PivotFilterValueKind] = None
+    value_high_kind: Optional[PivotFilterOperandKind] = None
     value_high_int: int = 0
     value_high_double: float = 0.0
     data_field_index: int = 0
@@ -4291,7 +4666,7 @@ def _print_titles_from(d: Dict[str, int]) -> PrintTitles:
     """Decode the C print-titles record; an axis whose flag is clear reads ``None``."""
     return PrintTitles(
         rows=Span(d["first_row"], d["last_row"]) if d["has_rows"] else None,
-        columns=Span(d["first_col"], d["last_col"]) if d["has_cols"] else None,
+        columns=Span(d["first_col"], d["last_col"]) if d["has_columns"] else None,
     )
 
 
@@ -4322,12 +4697,12 @@ class PivotFilter:
 
     axis: PivotAxis
     field_name: str
-    type: PivotFilterType
-    value_kind: Optional[PivotFilterValueKind]
+    type: PivotFilterKind
+    value_kind: Optional[PivotFilterOperandKind]
     value_int: int
     value_double: float
     value_text: str
-    value_high_kind: Optional[PivotFilterValueKind]
+    value_high_kind: Optional[PivotFilterOperandKind]
     value_high_int: int
     value_high_double: float
     data_field_index: int
@@ -4352,16 +4727,16 @@ def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
         "fill_index": _uint(record.fill_index, "fill_index"),
         "border_index": _uint(record.border_index, "border_index"),
         "num_fmt_id": _uint(record.num_fmt_id, "num_fmt_id", 16),
-        "horizontal_align": _uint(record.horizontal_align, "horizontal_align", 8),
-        "has_horizontal_align": stated(record.has_horizontal_align, True),
-        "vertical_align": _uint(record.vertical_align, "vertical_align", 8),
-        "has_vertical_align": stated(record.has_vertical_align, True),
+        "horizontal": _uint(record.horizontal, "horizontal", 8),
+        "has_horizontal": stated(record.has_horizontal, True),
+        "vertical": _uint(record.vertical, "vertical", 8),
+        "has_vertical": stated(record.has_vertical, True),
         "wrap_text": 1 if record.wrap_text else 0,
         "has_wrap_text": stated(record.has_wrap_text, True),
         "justify_last_line": 1 if record.justify_last_line else 0,
         "has_justify_last_line": stated(record.has_justify_last_line, record.justify_last_line is not None),
         "has_alignment": stated(record.has_alignment, True),
-        "xf_id": _uint(record.xf_id, "xf_id"),
+        "style_xf_index": _uint(record.style_xf_index, "style_xf_index"),
         "has_text_rotation": 1 if record.text_rotation is not None else 0,
         "text_rotation": _uint(record.text_rotation or 0, "text_rotation"),
         "has_indent": 1 if record.indent is not None else 0,
@@ -4388,6 +4763,13 @@ def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
 # ---------------------------------------------------------------------------
 # Workbook handle
 # ---------------------------------------------------------------------------
+
+
+def _tristate_default(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
+    """Map an optional flag to ``fm_tristate_t``: ``None`` is ``DEFAULT`` (Excel's default), then ``FALSE`` / ``TRUE``."""
+    if flag is None:
+        return 0
+    return 2 if flag else 1
 
 
 def _tristate(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
@@ -4498,7 +4880,7 @@ class _ArgScope:
 def _read_image_info(ptr: int) -> ImageInfo:
     """Decode an image info struct."""
     d = S.IMAGE_INFO.unpack(LIB, ptr)
-    return ImageInfo(format=ImageFormat(d["format"]), px_width=d["px_width"], px_height=d["px_height"])
+    return ImageInfo(format=ImageFormat(d["format"]), width_px=d["width_px"], height_px=d["height_px"])
 
 
 def _read_count(fn, *args) -> int:
@@ -4524,6 +4906,18 @@ def _read_optional_cstr_out(fn, *args) -> Optional[str]:
         out = scope.out_ptr()
         _check(fn(*args, present, out))
         return LIB.read_cstr(LIB.read_u32(out)) if LIB.read_u32(present) else None
+
+
+def _finite(value: Any, name: str) -> float:
+    """``value`` as a finite ``float``; ``TypeError`` for a non-number, ``InvalidArgumentError`` for NaN / infinity."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise TypeError(f"formulon: {name} must be a number, got {type(value).__name__}")
+    x = float(value)
+    if not math.isfinite(x):
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{name} must be finite", f"{name}={x!r}")
+        )
+    return x
 
 
 _SHAPE_FIELDS = {
@@ -4562,14 +4956,15 @@ def _pack_shape(
     fill_color,
     line_kind,
     line_color,
-    line_width_emu,
-    rotation,
+    line_width_pt,
+    rotation_deg,
     hidden,
 ) -> int:
     """Build a shape input struct; a ``None`` argument is a field left out of the mask.
 
     ``fill_color`` / ``line_color`` are the ``ColorInput`` of a solid kind, ``None`` for any other;
-    a colour without its kind raises ``TypeError``.
+    a colour without its kind raises ``TypeError``. ``line_width_pt`` is in points and
+    ``rotation_deg`` in degrees.
     """
     for kind_name, kind, color_name, color in (
         ("fill_kind", fill_kind, "fill_color", fill_color),
@@ -4607,12 +5002,12 @@ def _pack_shape(
         mask |= _SHAPE_FIELDS["line"]
         values.update(line_kind=_sint(line_kind, "line_kind"))
         values["line_color"] = _color_fields(optional_color_input(line_color, "line_color"))
-    if line_width_emu is not None:
+    if line_width_pt is not None:
         mask |= _SHAPE_FIELDS["line_width"]
-        values["line_width_emu"] = _sint(line_width_emu, "line_width_emu", 64)
-    if rotation is not None:
+        values["line_width_pt"] = _finite(line_width_pt, "line_width_pt")
+    if rotation_deg is not None:
         mask |= _SHAPE_FIELDS["rotation"]
-        values["rotation"] = _sint(rotation, "rotation")
+        values["rotation_deg"] = _finite(rotation_deg, "rotation_deg")
     if hidden is not None:
         mask |= _SHAPE_FIELDS["hidden"]
         values["hidden"] = 1 if hidden else 0
@@ -4787,19 +5182,19 @@ _PATCH_SET = 2
 # The C "no title" / "no legend" members; the binding reports them as a ``None`` record.
 _CHART_TITLE_NONE = 0
 _CHART_LEGEND_NONE = -1
-# `fm_chart_role_t` order, which is also the order of `fm_chart_data_series_t.range_count`.
+# The series roles of `fm_chart_role_t` in order, which is also the order of `fm_chart_data_series_t.range_count`.
 _CHART_ROLES = ("name", "categories", "values", "x", "y", "size")
 
 # (patch key, C field, scalar kind) per patch struct.
-_FILL_PATCH_SPEC = (("color", "color", "color"), ("transparency", "transparency_pct", "f64"))
+_FILL_PATCH_SPEC = (("color", "color", "color"), ("transparency_pct", "transparency_pct", "f64"))
 _LINE_PATCH_SPEC = (
     ("color", "color", "color"),
-    ("transparency", "transparency_pct", "f64"),
+    ("transparency_pct", "transparency_pct", "f64"),
     ("width_pt", "width_pt", "f64"),
     ("dash", "dash", "i32"),
     ("none", "none", "bool"),
 )
-_MARKER_PATCH_SPEC = (("symbol", "symbol", "i32"), ("size", "size", "f64"))
+_MARKER_PATCH_SPEC = (("symbol", "symbol", "i32"), ("size_pt", "size_pt", "f64"))
 _LABELS_PATCH_SPEC = (
     ("show_value", "show_value", "bool"),
     ("show_category", "show_category", "bool"),
@@ -4813,9 +5208,9 @@ _LABELS_PATCH_SPEC = (
     ("font_size_pt", "font_size_pt", "f64"),
 )
 _PLOT_PATCH_SPEC = (
-    ("gap_width", "gap_width", "u32"),
+    ("gap_width_pct", "gap_width_pct", "u32"),
     ("overlap", "overlap", "i32"),
-    ("first_slice_angle", "first_slice_angle", "u32"),
+    ("first_slice_angle_deg", "first_slice_angle_deg", "u32"),
     ("vary_colors", "vary_colors", "bool"),
     ("hole_size", "hole_size", "u32"),
 )
@@ -4830,21 +5225,21 @@ _AXIS_PATCH_SPEC = (
     ("reversed", "reversed", "bool"),
     ("log_base", "log_base", "f64"),
     ("crosses", "crosses", "i32"),
-    ("tick_label_position", "tick_label_pos", "str"),
+    ("tick_label_position", "tick_label_position", "str"),
 )
 # Patch fields whose `_op` companion drops the unit suffix of the value field.
-_PATCH_OP_PREFIX = {"transparency_pct": "transparency", "width_pt": "width", "font_size_pt": "font_size"}
+_PATCH_OP_PREFIX = {"font_size_pt": "font_size"}
 _PREVIEW_OVERRIDE_SPEC = (
     ("direction", "direction", "i32"),
     ("header_row", "header_row", "bool"),
     ("header_column", "header_column", "bool"),
     ("blanks_as", "blanks_as", "i32"),
-    ("plot_visible_only", "plot_vis_only", "bool"),
+    ("plot_visible_only", "plot_visible_only", "bool"),
     ("na_as_blank", "na_as_blank", "bool"),
 )
 _DISPLAY_PATCH_SPEC = (
     ("blanks_as", "blanks_as", "i32"),
-    ("plot_visible_only", "plot_vis_only", "bool"),
+    ("plot_visible_only", "plot_visible_only", "bool"),
     ("na_as_blank", "na_as_blank", "bool"),
 )
 _SERIES_REF_KEYS = ("name", "categories", "values", "x", "y", "size")
@@ -4893,13 +5288,13 @@ def _read_chart_title(d: Dict[str, object]) -> Optional[ChartTitle]:
 
 
 def _read_chart_fill(d: Dict[str, object]) -> ChartFill:
-    return ChartFill(color=_optional_color_from(d["color"]), transparency=_nan_none(d["transparency_pct"]))
+    return ChartFill(color=_optional_color_from(d["color"]), transparency_pct=_nan_none(d["transparency_pct"]))
 
 
 def _read_chart_line(d: Dict[str, object]) -> ChartLine:
     return ChartLine(
         color=_optional_color_from(d["color"]),
-        transparency=_nan_none(d["transparency_pct"]),
+        transparency_pct=_nan_none(d["transparency_pct"]),
         width_pt=_nan_none(d["width_pt"]),
         dash=_enum(ChartLineDash, d["dash"]) if d["has_dash"] else None,
         none=bool(d["none"]),
@@ -4909,7 +5304,7 @@ def _read_chart_line(d: Dict[str, object]) -> ChartLine:
 def _read_chart_marker(d: Dict[str, object]) -> ChartMarker:
     return ChartMarker(
         symbol=_enum(ChartMarkerSymbol, d["symbol"]),
-        size=d["size"] if d["has_size"] else None,
+        size_pt=d["size_pt"] if d["has_size_pt"] else None,
         fill=_read_chart_fill(d["fill"]),
         line=_read_chart_line(d["line"]),
     )
@@ -4974,14 +5369,14 @@ def _read_chart_plot(chart: int, plot: int) -> ChartPlot:
     d = _read_struct(LIB.fm_chart_get_plot_at, S.CHART_PLOT, chart, plot)
     return ChartPlot(
         type=_enum(ChartPlotType, d["type"]),
-        chartex_layout=LIB.read_cstr(d["chartex_layout"]) or None,
-        bar_direction=_enum_or_none(ChartBarDirection, d["bar_dir"]),
+        extended_layout=_enum_or_none(ChartExtendedLayout, d["extended_layout"]),
+        bar_direction=_enum_or_none(ChartBarDirection, d["bar_direction"]),
         grouping=_enum(ChartGrouping, d["grouping"]) if d["has_grouping"] else None,
         vary_colors=_tri(d["vary_colors"]) is True,
-        gap_width=d["gap_width"] if d["has_gap_width"] else None,
+        gap_width_pct=d["gap_width_pct"] if d["has_gap_width_pct"] else None,
         overlap=d["overlap"] if d["has_overlap"] else None,
         hole_size=d["hole_size"] if d["has_hole_size"] else None,
-        first_slice_angle=d["first_slice_angle"] if d["has_first_slice_angle"] else None,
+        first_slice_angle_deg=d["first_slice_angle_deg"] if d["has_first_slice_angle_deg"] else None,
         axis_ids=[
             _read_count(LIB.fm_chart_get_plot_axis_id_at, chart, _uint(plot, "plot"), _uint(i, "idx"))
             for i in range(d["axis_id_count"])
@@ -4996,7 +5391,7 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxis:
         id=d["id"],
         kind=_enum(ChartAxisKind, d["kind"]),
         position=_enum(ChartAxisPosition, d["position"]),
-        deleted=bool(d["deleted"]),
+        visible=bool(d["visible"]),
         cross_axis=d["cross_axis"],
         crosses=_enum_or_none(ChartAxisCrosses, d["crosses"]),
         crosses_at=_nan_none(d["crosses_at"]),
@@ -5011,7 +5406,7 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxis:
         title=_read_chart_title(d["title"]),
         major_gridlines=bool(d["major_gridlines"]),
         minor_gridlines=bool(d["minor_gridlines"]),
-        tick_label_position=_opt_cstr(d["tick_label_pos"]),
+        tick_label_position=_opt_cstr(d["tick_label_position"]),
     )
 
 
@@ -5030,7 +5425,7 @@ def _read_chart(chart: int) -> ChartProperties:
         object_id=d["object_id"],
         name=LIB.read_cstr(d["name"]),
         description=LIB.read_cstr(d["description"]),
-        is_chartex=bool(d["is_chartex"]),
+        is_extended=bool(d["is_extended"]),
         is_pivot_chart=bool(d["is_pivot_chart"]),
         on_chartsheet=bool(d["on_chartsheet"]),
         title=_read_chart_title(d["title"]),
@@ -5046,7 +5441,7 @@ def _read_chart(chart: int) -> ChartProperties:
             ],
         ),
         blanks_as=_enum_or_none(ChartBlanksAs, d["blanks_as"]),
-        plot_visible_only=_tri(d["plot_vis_only"]),
+        plot_visible_only=_tri(d["plot_visible_only"]),
         na_as_blank=_tri(d["na_as_blank"]),
         date1904=bool(d["date1904"]),
         style=d["style"] if d["has_style"] else None,
@@ -5083,7 +5478,7 @@ def _read_chart_data(data: int) -> ChartData:
             values.append(LIB.read_f64(value_out))
         levels: List[List[str]] = []
         for level in range(info["category_level_count"]):
-            size = _read_count(LIB.fm_chart_data_get_category_level_size, data, _uint(level, "level"))
+            size = _read_count(LIB.fm_chart_data_get_category_level_count, data, _uint(level, "level"))
             names: List[str] = []
             for i in range(size):
                 _check(LIB.fm_chart_data_get_category_level_at(data, _uint(level, "level"), _uint(i, "idx"), label_out))
@@ -5135,7 +5530,7 @@ def _read_chart_data(data: int) -> ChartData:
             )
         ],
         unresolved=[
-            ChartUnresolved(series_index=u["series_index"], source=LIB.read_cstr(u["source"]), axis_id=u["axis_id"])
+            ChartUnresolved(series_index=u["series_index"], source=_enum(ChartRole, u["source"]), axis_id=u["axis_id"])
             for u in (
                 _read_struct(LIB.fm_chart_data_get_unresolved_at, S.CHART_UNRESOLVED, data, i)
                 for i in range(info["unresolved_count"])
@@ -5230,11 +5625,22 @@ def _encode_optional_patch(out: Dict[str, object], key: str, patch: Mapping, enc
         out[key] = encode(patch[key], scope)
 
 
+def _source_text(value: object, key: str) -> object:
+    """The reference text of a series input; a :class:`ChartDataSource` reads as its formula."""
+    if not isinstance(value, ChartDataSource):
+        return value
+    if value.kind == ChartSourceKind.LITERAL:
+        raise TypeError(f"formulon: {key} cannot be set from a literal ChartDataSource")
+    return value.formula
+
+
 def _encode_series_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
     unknown = set(patch) - set(_SERIES_REF_KEYS) - {"fill", "line", "marker", "smooth", "labels"}
     if unknown:
         raise TypeError(f"formulon: unknown series patch key(s): {sorted(unknown)}")
-    out: Dict[str, object] = {key: scope.cstr(patch[key]) for key in _SERIES_REF_KEYS if key in patch}
+    out: Dict[str, object] = {
+        key: scope.cstr(_source_text(patch[key], key)) for key in _SERIES_REF_KEYS if key in patch
+    }
     out["fill"] = _encode_fill_patch(patch.get("fill"), scope)
     out["line"] = _encode_line_patch(patch.get("line"), scope)
     _encode_optional_patch(out, "marker", patch, _encode_marker_patch, scope)
@@ -5266,8 +5672,8 @@ def _encode_axis_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
 
 
 def _header_mode(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
-    """Map an optional flag to a chart header mode: ``None`` is Excel's detection."""
-    return 0 if flag is None else (1 if flag else 2)
+    """Map an optional header flag to ``fm_tristate_t``: ``None`` is Excel's detection."""
+    return _tristate_default(flag)
 
 
 def _id_array(values: Sequence[int], name: str, scope: _ArgScope) -> int:
@@ -5437,10 +5843,9 @@ def _drawing_object_from(d: Dict[str, Any]) -> DrawingProperties:
         to_col_offset_emu=d["to_col_offset_emu"],
         width_emu=d["width_emu"],
         height_emu=d["height_emu"],
-        image_format=_enum(ImageFormat, d["image_format"]),
+        format=_enum(ImageFormat, d["image_format"]),
         name=LIB.read_cstr(d["name"]),
         description=LIB.read_cstr(d["description"]),
-        media_path=LIB.read_cstr(d["media_path"]) or None,
     )
 
 
@@ -5468,8 +5873,8 @@ def _shape_from(d: Dict[str, Any]) -> ShapeProperties:
         fill_color=_optional_color_from(d["fill_color"]),
         line_kind=_enum_or_none(ShapePaint, d["line_kind"]),
         line_color=_optional_color_from(d["line_color"]),
-        line_width_emu=d["line_width_emu"],
-        rotation=d["rotation"],
+        line_width_pt=d["line_width_pt"],
+        rotation_deg=d["rotation_deg"],
         hidden=bool(d["hidden"]),
     )
 
@@ -5511,7 +5916,7 @@ def _person_from(d: Dict[str, Any]) -> Person:
 def _cell_style_from(d: Dict[str, Any]) -> CellStyle:
     return CellStyle(
         name=LIB.read_cstr(d["name"]),
-        xf_id=d["xf_id"],
+        style_xf_index=d["style_xf_index"],
         builtin_id=d["builtin_id"],
         i_level=d["i_level"],
         hidden=bool(d["hidden"]),
@@ -5527,7 +5932,7 @@ def _table_style_from(d: Dict[str, Any]) -> TableStyle:
             TableStyleElement(
                 type=LIB.read_cstr(e["type"]),
                 size=e["size"],
-                dxf_id=e["dxf_id"] if e["has_dxf_id"] else None,
+                dxf_index=e["dxf_index"] if e["has_dxf_index"] else None,
             )
         )
     return TableStyle(
@@ -5565,43 +5970,56 @@ _FILTER_COLUMN_BOOLS = (
     "percent",
     "cell_color",
 )
-_FILTER_COLUMN_INTS = ("kind", "custom_count", "op1", "op2", "dynamic_type", "icon_set")
-_FILTER_COLUMN_DOUBLES = ("top_val",)
-# Optional members and the ``has_*`` flag that states each one.
-_FILTER_COLUMN_OPTIONAL = (
-    ("filter_val", "has_filter_val"),
-    ("dyn_val", "has_dyn_val"),
-    ("dyn_max_val", "has_dyn_max_val"),
-    ("icon_id", "has_icon_id"),
+# (record field, C field) pairs; the C struct keeps the OOXML attribute spellings.
+_FILTER_COLUMN_INTS = (
+    ("kind", "kind"),
+    ("custom_count", "custom_count"),
+    ("operator1", "op1"),
+    ("operator2", "op2"),
+    ("dynamic_type", "dynamic_type"),
+    ("icon_set", "icon_set"),
 )
-_FILTER_COLUMN_STRINGS = ("val1", "val2", "val_iso", "max_val_iso")
+_FILTER_COLUMN_DOUBLES = (("top_value", "top_val"),)
+# Optional members: (record field, C field, the ``has_*`` flag that states it).
+_FILTER_COLUMN_OPTIONAL = (
+    ("filter_value", "filter_val", "has_filter_val"),
+    ("dynamic_value", "dyn_val", "has_dyn_val"),
+    ("dynamic_max_value", "dyn_max_val", "has_dyn_max_val"),
+    ("icon_index", "icon_index", "has_icon_index"),
+)
+_FILTER_COLUMN_STRINGS = (
+    ("value1", "val1"),
+    ("value2", "val2"),
+    ("value_iso", "val_iso"),
+    ("max_value_iso", "max_val_iso"),
+)
 
 
 def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> None:
     fields: Dict[str, object] = {
-        "col_id": _uint(col.col_id, "col_id"),
-        "dxf_id": _uint(col.dxf_id, "dxf_id"),
+        "column_offset": _uint(col.column_offset, "column_offset"),
+        "dxf_index": _uint(col.dxf_index, "dxf_index"),
     }
     for name in _FILTER_COLUMN_BOOLS:
         fields[name] = 1 if getattr(col, name) else 0
-    for name in _FILTER_COLUMN_INTS:
-        fields[name] = _sint(getattr(col, name), name)
-    for name in _FILTER_COLUMN_DOUBLES:
-        fields[name] = float(getattr(col, name))
-    for name, flag in _FILTER_COLUMN_OPTIONAL:
+    for name, c_name in _FILTER_COLUMN_INTS:
+        fields[c_name] = _sint(getattr(col, name), name)
+    for name, c_name in _FILTER_COLUMN_DOUBLES:
+        fields[c_name] = float(getattr(col, name))
+    for name, c_name, flag in _FILTER_COLUMN_OPTIONAL:
         value = getattr(col, name)
         fields[flag] = 0 if value is None else 1
         if value is None:
             continue
-        if name == "icon_id":
-            fields[name] = _sint(value, name)
+        if name == "icon_index":
+            fields[c_name] = _sint(value, name)
         else:
-            fields[name] = float(value)
+            fields[c_name] = float(value)
     fields["value_count"] = _uint(len(col.values), "value_count")
     fields["date_group_count"] = _uint(len(col.date_groups), "date_group_count")
     S.FILTER_COLUMN.pack(LIB, ptr, fields)
-    for name in _FILTER_COLUMN_STRINGS:
-        S.write_str_field(LIB, ptr, S.FILTER_COLUMN, name, getattr(col, name), scope)
+    for name, c_name in _FILTER_COLUMN_STRINGS:
+        S.write_str_field(LIB, ptr, S.FILTER_COLUMN, c_name, getattr(col, name), scope)
     if col.values:
         arr = scope.alloc(4 * len(col.values))
         for i, text in enumerate(col.values):
@@ -5634,11 +6052,11 @@ def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, scope: _ArgSco
         {
             "descending": 1 if cond.descending else 0,
             "sort_by": _sint(cond.sort_by, "sort_by"),
-            "dxf_id": _uint(cond.dxf_id or 0, "dxf_id"),
-            "has_dxf_id": 0 if cond.dxf_id is None else 1,
+            "dxf_index": _uint(cond.dxf_index or 0, "dxf_index"),
+            "has_dxf_index": 0 if cond.dxf_index is None else 1,
             "icon_set": _sint(cond.icon_set, "icon_set"),
-            "icon_id": _sint(cond.icon_id or 0, "icon_id"),
-            "has_icon_id": 0 if cond.icon_id is None else 1,
+            "icon_index": _sint(cond.icon_index or 0, "icon_index"),
+            "has_icon_index": 0 if cond.icon_index is None else 1,
         },
     )
     _pack_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1], cond.ref)
@@ -5692,10 +6110,12 @@ def _decode_filter_column(ptr: int) -> AutoFilterColumn:
         g = S.DATE_GROUP_ITEM.unpack(LIB, d["date_groups"] + i * S.DATE_GROUP_ITEM.size)
         groups.append(AutoFilterDateGroup(**g))
     kwargs: Dict[str, object] = {name: bool(d[name]) for name in _FILTER_COLUMN_BOOLS}
-    kwargs.update({name: d[name] for name in _FILTER_COLUMN_INTS + _FILTER_COLUMN_DOUBLES})
-    kwargs.update({name: d[name] if d[flag] else None for name, flag in _FILTER_COLUMN_OPTIONAL})
-    kwargs.update({name: LIB.read_cstr(d[name]) for name in _FILTER_COLUMN_STRINGS})
-    return AutoFilterColumn(col_id=d["col_id"], dxf_id=d["dxf_id"], values=values, date_groups=groups, **kwargs)  # type: ignore[arg-type]
+    kwargs.update({name: d[c_name] for name, c_name in _FILTER_COLUMN_INTS + _FILTER_COLUMN_DOUBLES})
+    kwargs.update({name: d[c_name] if d[flag] else None for name, c_name, flag in _FILTER_COLUMN_OPTIONAL})
+    kwargs.update({name: LIB.read_cstr(d[c_name]) for name, c_name in _FILTER_COLUMN_STRINGS})
+    return AutoFilterColumn(
+        column_offset=d["column_offset"], dxf_index=d["dxf_index"], values=values, date_groups=groups, **kwargs
+    )  # type: ignore[arg-type]
 
 
 def _decode_sort_condition(ptr: int) -> AutoFilterSortCondition:
@@ -5705,9 +6125,9 @@ def _decode_sort_condition(ptr: int) -> AutoFilterSortCondition:
         descending=bool(d["descending"]),
         sort_by=d["sort_by"],
         custom_list=LIB.read_cstr(d["custom_list"]),
-        dxf_id=d["dxf_id"] if d["has_dxf_id"] else None,
+        dxf_index=d["dxf_index"] if d["has_dxf_index"] else None,
         icon_set=d["icon_set"],
-        icon_id=d["icon_id"] if d["has_icon_id"] else None,
+        icon_index=d["icon_index"] if d["has_icon_index"] else None,
     )
 
 
@@ -5744,7 +6164,7 @@ def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], scope: _ArgScope) -> i
     ptr = scope.alloc(size * len(runs))
     for i, run in enumerate(runs):
         slot = ptr + i * size
-        S.PHONETIC_RUN.pack(LIB, slot, {"sb": _uint(run.sb, "sb"), "eb": _uint(run.eb, "eb")})
+        S.PHONETIC_RUN.pack(LIB, slot, {"sb": _uint(run.start, "start"), "eb": _uint(run.end, "end")})
         S.write_str_field(LIB, slot, S.PHONETIC_RUN, "text", run.text, scope, allow_empty=True)
     return ptr
 
@@ -5869,7 +6289,7 @@ class Workbook:
       cannot corrupt engine state -- it just blocks. The wheel recalculates
       serially; it has no parallel-recalc entry point. There is no
       iterative-progress callback; cap the work with
-      ``set_iterative(max_iterations=...)``.
+      ``update_iterative(max_iterations=...)``.
     """
 
     __slots__ = ("_handle", "_sheets", "_tables", "_pivot_caches", "_ooxml")
@@ -6204,7 +6624,7 @@ class Workbook:
             return "Workbook(closed)"
         return f"Workbook(sheets={len(self._sheet_handles())})"
 
-    def get_active_sheet(self) -> Sheet:
+    def active_sheet(self) -> Sheet:
         """The active sheet (``activeTab`` of the first workbook view).
 
         Without workbook views (an XLSB load) the first tab-selected sheet;
@@ -6322,7 +6742,7 @@ class Workbook:
             _check(LIB.fm_workbook_has_dirty_cells(h, out))
             return LIB.read_i32(out) != 0
 
-    def set_iterative(
+    def update_iterative(
         self,
         *,
         enabled: Union[bool, Unchanged] = UNCHANGED,
@@ -6367,12 +6787,12 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = scope.struct(S.ITERATIVE_SETTINGS_PATCH)
             S.ITERATIVE_SETTINGS_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_workbook_set_iterative(h, ptr))
+            _check(LIB.fm_workbook_update_iterative(h, ptr))
 
     def get_iterative(self) -> IterativeSettings:
         """Read back the iterative-calculation settings.
 
-        The counterpart of :meth:`set_iterative`; the cap and threshold are
+        The counterpart of :meth:`update_iterative`; the cap and threshold are
         the stored values even when ``enabled`` is ``False``.
         """
         h = self._require()
@@ -6525,153 +6945,112 @@ class Workbook:
                 )
         return out
 
-    def list_tables(self) -> List[Table]:
-        """The handles of the workbook's tables; a table's position in the list is its table index."""
-        return [self._table_handle(i) for i in range(self._table_count())]
+    def table(self, name: str) -> Table:
+        """Return the handle of the table named ``name`` (compared case-insensitively), on any sheet.
 
-    def table(self, table: Union[int, str, Table]) -> Table:
-        """Return the handle of one table.
-
-        Every call for the same table returns the same :class:`Table` object.
-
-        Args:
-          table: a 0-based table index, a table's display name (compared
-            case-insensitively), or a :class:`Table` of this workbook.
+        Table names are unique across the workbook, which is why this lookup
+        is workbook-wide; :meth:`Sheet.table` addresses a sheet's tables by
+        index as well. Every call for the same table returns the same
+        :class:`Table` object.
 
         Raises:
-          NotFoundError: when no table has the display name ``table``, or
-            ``table`` is a removed table's handle.
-          IndexOutOfRangeError: when ``table`` is an index past the last table.
-          InvalidArgumentError: when ``table`` is a :class:`Table` of another workbook.
+          TypeError: when ``name`` is not a ``str``.
+          NotFoundError: when no table has the name ``name``.
         """
-        return self._table_handle(self._table_index(table))
-
-    def _table_count(self) -> int:
-        """Return the number of tables in the workbook."""
+        if not isinstance(name, str):
+            raise TypeError(f"formulon: table name must be a str, got {type(name).__name__}")
         h = self._require()
-        return _read_count(LIB.fm_workbook_get_table_count, h)
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            sheet_ptr = scope.out_ptr()
+            index_ptr = scope.out_ptr()
+            present = scope.out_ptr()
+            _check(LIB.fm_workbook_find_table(h, name_ptr, sheet_ptr, index_ptr, present))
+            if LIB.read_i32(present) == 0:
+                raise FormulonError(
+                    StatusCode.NOT_FOUND, _diagnostic_override=(f'no table is named "{name}"', f"name={name}")
+                )
+            sheet, index = LIB.read_u32(sheet_ptr), LIB.read_u32(index_ptr)
+        return self._table_handle(sheet, index)
 
-    def _table_handle(self, index: int) -> Table:
-        """The handle of the table at ``index``, created on first use and kept for the workbook's life."""
+    def _table_count(self, sheet_index: int) -> int:
+        """Return the number of tables on sheet ``sheet_index``."""
+        h = self._require()
+        return _read_count(LIB.fm_sheet_get_table_count, h, _uint(sheet_index, "sheet_index"))
+
+    def _table_handle(self, sheet_index: int, table_index: int) -> Table:
+        """The handle of table ``table_index`` on ``sheet_index``, created on first use and kept for the workbook's life."""
         from ._table import Table
 
         h = self._require()
-        runtime_id = _read_count(LIB.fm_workbook_get_table_runtime_id, h, _uint(index, "table_index"))
+        runtime_id = _read_count(
+            LIB.fm_sheet_get_table_runtime_id, h, _uint(sheet_index, "sheet_index"), _uint(table_index, "table_index")
+        )
         handle = self._tables.get(runtime_id)
         if handle is None:
             handle = Table(self, runtime_id)
             self._tables[runtime_id] = handle
         return handle
 
-    def _table_index(self, table: Union[int, str, Table]) -> int:
-        """The index ``table`` addresses: an index, a table's display name, or a :class:`Table` of this workbook."""
-        from ._table import Table
+    def _add_table(self, sheet_index: int, table: TableInput) -> Table:
+        """Create the table ``table`` describes on sheet ``sheet_index`` and return its handle.
 
-        if isinstance(table, Table):
-            if table.workbook is not self:
-                raise FormulonError(
-                    StatusCode.INVALID_ARGUMENT,
-                    _diagnostic_override=("the table belongs to another workbook", ""),
-                )
-            return table.index
-        return resolve_ref(table, self._table_display_names, "table")
-
-    def _table_display_names(self) -> Iterator[str]:
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.out_ptr()
-            display_ptr = scope.out_ptr()
-            rect_ptr = scope.struct(S.CELL_RECT)
-            sheet_ptr = scope.out_ptr()
-            names = []
-            for index in range(self._table_count()):
-                _check(
-                    LIB.fm_workbook_get_table(
-                        h, _uint(index, "table_index"), name_ptr, display_ptr, rect_ptr, sheet_ptr
-                    )
-                )
-                names.append(LIB.read_cstr(LIB.read_u32(display_ptr)))
-        return iter(names)
-
-    def add_table(
-        self,
-        *,
-        range: Union[SheetRect, str],
-        name: str,
-        columns: Optional[Sequence[str]] = None,
-        display_name: Optional[str] = None,
-        style_name: Optional[str] = None,
-        show_first_column: Optional[bool] = None,
-        show_last_column: Optional[bool] = None,
-        show_row_stripes: Optional[bool] = None,
-        show_column_stripes: Optional[bool] = None,
-        header_row: bool = True,
-        totals_row: bool = False,
-    ) -> Table:
-        """Create a worksheet table over ``range`` and return its handle.
-
-        ``range`` is a :class:`SheetRect` or a sheet-qualified A1 range
-        (``"Sheet1!A1:B4"``). Omitted ``columns`` take their names from the
-        header cells, an empty one named as Excel does (``Column1``, ...).
-        Given, ``columns`` holds one non-empty, table-unique name per column of
-        the range: a non-empty header cell must already hold that name, and an
-        empty one receives it. ``display_name`` defaults to ``name``. Without
-        ``style_name`` the table has no ``<tableStyleInfo>``; a styled table
-        starts with row stripes on and the other toggles off, and a supplied
-        ``show_*`` overrides that (without a style name it writes an unnamed
-        style element).
-
-        Example::
-
-            ws.set_text("A1", "Item")
-            ws.set_text("B1", "Qty")
-            table = wb.add_table(range="Sheet1!A1:B4", name="Orders")
+        The body of :meth:`Sheet.add_table`; see there for the contract.
         """
-        target = sheet_rect(self, range, None, "range")
-        for label, text in (("name", name), ("display_name", display_name)):
-            if isinstance(text, str) and self._names_a_cell(text):
-                raise FormulonError(
-                    StatusCode.INVALID_ARGUMENT,
-                    _diagnostic_override=(f'invalid table {label}: "{text}" is a cell address', f"{label}={text}"),
-                )
+        if not isinstance(table, TableInput):
+            raise TypeError(f"formulon: expected a TableInput, got {type(table).__name__}")
+        rect = cell_rect(self, table.range, "TableInput.range")
+        if isinstance(table.name, str) and self._names_a_cell(table.name):
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _diagnostic_override=(f'invalid table name: "{table.name}" is a cell address', f"name={table.name}"),
+            )
         h = self._require()
-        sheet = target.sheet
-        rect = target.rect
+        sheet = _uint(sheet_index, "sheet_index")
         with _ArgScope() as scope:
             rect_ptr = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rect_ptr, rect)
-            name_ptr = scope.nonempty_cstr(name)
-            display_ptr = scope.nonempty_cstr(name if display_name is None else display_name)
-            style_ptr = scope.nonempty_cstr(style_name)
-            names = [str(column) for column in columns or ()]
+            name_ptr = scope.nonempty_cstr(table.name)
+            style_ptr = scope.opt_cstr(table.style_name)
+            names = [str(column) for column in table.columns or ()]
             name_ptrs = [scope.nonempty_cstr(column) for column in names]
             array_ptr = scope.alloc(4 * len(name_ptrs)) if name_ptrs else 0
             if array_ptr:
                 LIB.write_bytes(array_ptr, b"".join(struct.pack("<I", p) for p in name_ptrs))
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_add_table(
+                LIB.fm_sheet_add_table(
                     h,
-                    _uint(sheet, "sheet_index"),
+                    sheet,
                     rect_ptr,
                     name_ptr,
-                    display_ptr,
                     array_ptr,
                     _uint(len(name_ptrs), "column_count"),
                     style_ptr,
-                    1 if header_row else 0,
-                    1 if totals_row else 0,
+                    1 if table.header_row else 0,
+                    1 if table.totals_row else 0,
                     out,
                 )
             )
             index = LIB.read_u32(out)
-        handle = self._table_handle(index)
-        toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
-        if any(t is not None for t in toggles):
+        handle = self._table_handle(sheet_index, index)
+        toggles = {
+            name: getattr(table, name)
+            for name in ("show_first_column", "show_last_column", "show_row_stripes", "show_column_stripes")
+            if getattr(table, name) is not None
+        }
+        if toggles:
             try:
-                handle._apply_style_toggles(index, toggles)
+                with _ArgScope() as scope:
+                    ptr = scope.struct(S.TABLE_STYLE_OPTIONS_PATCH)
+                    values: Dict[str, int] = {}
+                    for name, value in toggles.items():
+                        values[name + "_op"] = _PATCH_SET
+                        values[name] = 1 if value else 0
+                    S.TABLE_STYLE_OPTIONS_PATCH.pack(LIB, ptr, values)
+                    _check(LIB.fm_sheet_update_table_style_options(h, sheet, _uint(index, "table_index"), ptr))
             except BaseException:
-                self.remove_table(index)
+                _check(LIB.fm_sheet_remove_table(h, sheet, _uint(index, "table_index")))
                 raise
         return handle
 
@@ -6683,22 +7062,6 @@ class Workbook:
             return False
         rect = ref.rect
         return ref.sheet_name is None and rect.first_row == rect.last_row and rect.first_col == rect.last_col
-
-    def remove_table(self, table: Union[int, str, Table]) -> None:
-        """Remove ``table``; its handle raises :class:`NotFoundError` from then on.
-
-        Formulas that name the table keep their structured references and
-        evaluate to ``#NAME?``.
-
-        Raises:
-          NotFoundError: when no table has the display name ``table``, or
-            ``table`` is a removed table's handle.
-          IndexOutOfRangeError: when ``table`` is an index past the last table.
-          InvalidArgumentError: when ``table`` is a :class:`Table` of another workbook.
-        """
-        index = self._table_index(table)
-        h = self._require()
-        _check(LIB.fm_workbook_remove_table(h, _uint(index, "table_index")))
 
     # -- Sheet structure ---------------------------------------------------
     def copy_sheet(
@@ -6942,7 +7305,7 @@ class Workbook:
         """
         h = self._require()
         if t is None:
-            _check(LIB.fm_workbook_clear_pinned_now(h))
+            _check(LIB.fm_workbook_set_pinned_now(h, 0))
             return
         if not isinstance(t, datetime.datetime):
             raise TypeError(f"formulon: the pinned time must be a datetime.datetime, got {type(t).__name__}")
@@ -7019,11 +7382,11 @@ class Workbook:
 
     # -- Protection records ------------------------------------------------
     _WORKBOOK_PROTECTION_TEXT = (
-        "workbook_password",
+        "workbook_legacy_password_hash",
         "workbook_algorithm_name",
         "workbook_hash_value",
         "workbook_salt_value",
-        "revisions_password",
+        "revisions_legacy_password_hash",
         "revisions_algorithm_name",
         "revisions_hash_value",
         "revisions_salt_value",
@@ -7071,36 +7434,44 @@ class Workbook:
             _check(LIB.fm_workbook_set_workbook_protection(h, ptr))
 
     # -- AutoFilter ----------------------------------------------------------
-    def _read_auto_filter(self, fn, index: int, index_name: str) -> Optional[AutoFilter]:
+    #
+    # ``indices`` are the leading ``size_t`` arguments that address the filter:
+    # ``(sheet_index,)`` for a sheet filter, ``(sheet_index, table_index)`` for
+    # a table's.
+    def _read_auto_filter(self, fn, *indices: int) -> Optional[AutoFilter]:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.AUTO_FILTER)
             present = scope.out_ptr()
-            _check(fn(h, _uint(index, index_name), ptr, present))
+            _check(fn(h, *(_uint(i, "index") for i in indices), ptr, present))
             if LIB.read_u32(present) == 0:
                 return None
             return _decode_auto_filter(ptr)
 
-    def _write_auto_filter(self, fn, index: int, auto_filter: AutoFilter, index_name: str) -> None:
+    def _write_auto_filter(self, fn, auto_filter: Optional[AutoFilter], *indices: int) -> None:
+        """Replace the filter; ``None`` removes it (a no-op without one)."""
         h = self._require()
         with _ArgScope() as scope:
-            ptr = scope.struct_array(S.AUTO_FILTER, 1)
-            _pack_auto_filter(ptr, auto_filter, scope)
-            _check(fn(h, _uint(index, index_name), ptr))
+            ptr = 0
+            if auto_filter is not None:
+                ptr = scope.struct_array(S.AUTO_FILTER, 1)
+                _pack_auto_filter(ptr, auto_filter, scope)
+            _check(fn(h, *(_uint(i, "index") for i in indices), ptr))
 
-    def _evaluate_auto_filter(self, fn, index: int, index_name: str) -> "tuple[int, List[bool]]":
+    def _evaluate_auto_filter(self, fn, *indices: int) -> "tuple[int, List[bool]]":
         h = self._require()
+        args = tuple(_uint(i, "index") for i in indices)
         with _ArgScope() as scope:
-            len_ptr = scope.out_ptr()
+            count_ptr = scope.out_ptr()
             first_ptr = scope.out_ptr()
             buf = 0
             # Size the buffer first, then fetch.
-            _check(fn(h, _uint(index, index_name), 0, 0, len_ptr, first_ptr))
-            total = LIB.read_u32(len_ptr)
+            _check(fn(h, *args, 0, 0, count_ptr, first_ptr))
+            total = LIB.read_u32(count_ptr)
             if total == 0:
                 return LIB.read_u32(first_ptr), []
             buf = scope.alloc(total)
-            _check(fn(h, _uint(index, index_name), buf, total, len_ptr, first_ptr))
+            _check(fn(h, *args, buf, total, count_ptr, first_ptr))
             flags = LIB.read_bytes(buf, total)
             return LIB.read_u32(first_ptr), [b != 0 for b in flags]
 
@@ -7200,11 +7571,11 @@ class Workbook:
             fill_index=d["fill_index"],
             border_index=d["border_index"],
             num_fmt_id=d["num_fmt_id"],
-            horizontal_align=_enum(HorizontalAlign, d["horizontal_align"]) if d["has_horizontal_align"] else None,
-            vertical_align=_enum(VerticalAlign, d["vertical_align"]) if d["has_vertical_align"] else None,
+            horizontal=_enum(HorizontalAlign, d["horizontal"]) if d["has_horizontal"] else None,
+            vertical=_enum(VerticalAlign, d["vertical"]) if d["has_vertical"] else None,
             wrap_text=bool(d["wrap_text"]) if d["has_wrap_text"] else None,
             justify_last_line=bool(d["justify_last_line"]) if d["has_justify_last_line"] else None,
-            xf_id=d["xf_id"],
+            style_xf_index=d["style_xf_index"],
             text_rotation=d["text_rotation"] if d["has_text_rotation"] else None,
             indent=d["indent"] if d["has_indent"] else None,
             relative_indent=d["relative_indent"] if d["has_relative_indent"] else None,
@@ -7239,13 +7610,70 @@ class Workbook:
         with Excel's Calibri 11, and :meth:`WorkbookOoxml.add_font` can only append beside
         it, so this is the way a ja-JP host declares e.g. ``游ゴシック`` for
         the cells it never styles explicitly. Read it back with
-        ``get_font(0)``.
+        :meth:`get_default_font`.
         """
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.FONT_RECORD)
             _pack_font(ptr, record, scope)
             _check(LIB.fm_workbook_set_default_font(h, ptr))
+
+    def get_default_font(self) -> Font:
+        """Return the workbook's default font (font 0), the font an unstyled cell resolves to."""
+        return self.ooxml.get_font(0)  # type: ignore[attr-defined]
+
+    def list_cell_styles(self) -> List[CellStyle]:
+        """Return the named cell styles in file order."""
+        h = self._require()
+        n = _read_count(LIB.fm_workbook_get_cell_style_count, h)
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CELL_STYLE_RECORD)
+            out: List[CellStyle] = []
+            for i in range(n):
+                S.zero_struct(LIB, S.CELL_STYLE_RECORD, ptr)
+                _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index"), ptr))
+                out.append(_cell_style_from(S.CELL_STYLE_RECORD.unpack(LIB, ptr)))
+        return out
+
+    def get_cell_style(self, name: str) -> Optional[CellStyle]:
+        """Return the named cell style ``name`` (matched exactly), or ``None``."""
+        return self._lookup(LIB.fm_workbook_get_cell_style, (name,), S.CELL_STYLE_RECORD, _cell_style_from)
+
+    def set_cell_style(self, record: CellStyle) -> None:
+        """Add or replace the named cell style ``record.name``.
+
+        ``record.style_xf_index`` must reference an existing named-style xf --
+        register one with :meth:`WorkbookOoxml.add_cell_style_xf` first.
+        ``builtin_id`` is an Excel built-in style ordinal (0..53); leave it at
+        ``CELL_STYLE_BUILTIN_ID_NONE`` for a custom style.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CELL_STYLE_RECORD)
+            S.CELL_STYLE_RECORD.pack(
+                LIB,
+                ptr,
+                {
+                    "style_xf_index": _uint(record.style_xf_index, "style_xf_index"),
+                    "builtin_id": _uint(record.builtin_id, "builtin_id"),
+                    "i_level": _uint(record.i_level, "i_level"),
+                    "hidden": 1 if record.hidden else 0,
+                    "custom_builtin": 1 if record.custom_builtin else 0,
+                },
+            )
+            S.write_str_field(LIB, ptr, S.CELL_STYLE_RECORD, "name", record.name, scope, allow_empty=True)
+            _check(LIB.fm_workbook_set_cell_style(h, ptr))
+
+    def remove_cell_style(self, name: str) -> None:
+        """Remove the named cell style ``name``.
+
+        Cell xfs inheriting from it are repointed at Normal; no xf index
+        shifts. The Normal style and unknown names raise ``FormulonError``.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            _check(LIB.fm_workbook_remove_cell_style(h, name_ptr))
 
     def _add_xf_record(self, record: CellXfInput, fn) -> int:
         h = self._require()
@@ -7277,8 +7705,8 @@ class Workbook:
         """Add a custom table style, or replace the one with the same name.
 
         The name may not be a built-in style name; each element type may
-        appear once, ``size`` must be at least 1 and ``dxf_id`` must name an
-        existing differential format (:meth:`add_dxf`).
+        appear once, ``size`` must be at least 1 and ``dxf_index`` must name an
+        existing differential format (:meth:`WorkbookOoxml.add_dxf`).
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -7294,8 +7722,8 @@ class Workbook:
                         {
                             "type": type_ptr,
                             "size": _uint(element.size, "size"),
-                            "has_dxf_id": 0 if element.dxf_id is None else 1,
-                            "dxf_id": _uint(0 if element.dxf_id is None else element.dxf_id, "dxf_id"),
+                            "has_dxf_index": 0 if element.dxf_index is None else 1,
+                            "dxf_index": _uint(0 if element.dxf_index is None else element.dxf_index, "dxf_index"),
                         },
                     )
             name_ptr = scope.cstr(style.name)
@@ -7335,7 +7763,7 @@ class Workbook:
                 pivot_style=LIB.read_cstr(LIB.read_u32(pivot_ptr)) or None,
             )
 
-    def set_table_style_defaults(
+    def update_table_style_defaults(
         self,
         *,
         table_style: Union[str, Unchanged, None] = UNCHANGED,
@@ -7346,7 +7774,7 @@ class Workbook:
         with _ArgScope() as scope:
             # The C call keeps a NULL name and removes an empty one.
             ptrs = [0 if value is UNCHANGED else scope.cstr(value or "") for value in (table_style, pivot_style)]
-            _check(LIB.fm_workbook_set_table_style_defaults(h, ptrs[0], ptrs[1]))
+            _check(LIB.fm_workbook_update_table_style_defaults(h, ptrs[0], ptrs[1]))
 
     def get_theme_fonts(self) -> ThemeFonts:
         """Read the theme's major (heading) and minor (body) typefaces.
@@ -7430,14 +7858,14 @@ class Workbook:
             face_ptr = scope.cstr(typeface)
             _check(LIB.fm_workbook_set_theme_script_font(h, 1 if major else 0, script_ptr, face_ptr))
 
-    def clear_theme(self) -> None:
-        """Remove the theme part so the workbook reports the default theme.
+    def reset_theme(self) -> None:
+        """Restore the default Office theme by removing the theme part.
 
         :meth:`get_theme_colors` then reports ``ThemeSource.DEFAULT``. Excel adds a
         theme part again when it saves the file.
         """
         h = self._require()
-        _check(LIB.fm_workbook_clear_theme(h))
+        _check(LIB.fm_workbook_reset_theme(h))
 
     def resolve_color(self, spec: Color, context: ColorContext = ColorContext.FONT) -> ResolvedColor:
         """Resolve ``spec`` to the ``0xAARRGGBB`` Excel renders.
@@ -7717,9 +8145,9 @@ class WorkbookOoxml:
     """The OOXML-level layer of a workbook, :attr:`Workbook.ooxml`.
 
     The style tables a cell XF indexes (fonts, fills, borders, number
-    formats, ``<cellXfs>``, ``<cellStyleXfs>``, DXFs), the named cell styles
-    and the passthrough parts. Most code uses :meth:`Sheet.set_cell_format`
-    and :meth:`Sheet.get_cell_format` instead.
+    formats, ``<cellXfs>``, ``<cellStyleXfs>``, DXFs) and the passthrough
+    parts. Most code uses :meth:`Sheet.update_cell_format` and
+    :meth:`Sheet.get_cell_format` instead.
     """
 
     __slots__ = ("_workbook",)
@@ -7744,14 +8172,14 @@ class WorkbookOoxml:
                 out.append(PassthroughPart(path=LIB.read_cstr(LIB.read_u32(path_ptr))))
         return out
 
-    def get_passthrough(self, path: str) -> Optional[str]:
-        """Return ``path`` when a passthrough part sits there (no leading ``/``), else ``None``."""
+    def has_passthrough(self, path: str) -> bool:
+        """Whether a passthrough part sits at ``path`` (no leading ``/``)."""
         h = self._workbook._require()
         with _ArgScope() as scope:
             path_ptr = scope.cstr(path)
             present = scope.out_ptr()
-            _check(LIB.fm_workbook_get_passthrough(h, path_ptr, present))
-            return path if LIB.read_u32(present) else None
+            _check(LIB.fm_workbook_has_passthrough(h, path_ptr, present))
+            return LIB.read_u32(present) != 0
 
     def get_cell_xf(self, xf_index: int) -> CellXf:
         """Return the resolved ``<xf>`` record at ``xf_index``."""
@@ -7785,8 +8213,8 @@ class WorkbookOoxml:
             _decode_border_record,
         )
 
-    def get_dxf(self, dxf_index: int) -> DifferentialFormat:
-        """Read one differential format by its conditional-format ``dxfId``."""
+    def get_dxf(self, dxf_index: int) -> Dxf:
+        """Read one differential format by its index (a conditional format's ``dxf_index``)."""
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DXF_RECORD)
@@ -7795,24 +8223,23 @@ class WorkbookOoxml:
             offsets = S.DXF_RECORD.offsets
             font = _decode_font(ptr + offsets["font"][1]) if d["font_engaged"] else None
             fill = _decode_fill(ptr + offsets["fill"][1]) if d["fill_engaged"] else None
-            return DifferentialFormat(
+            return Dxf(
                 font=font,
                 fill=fill,
                 border=_decode_border_record(ptr + offsets["border"][1]) if d["border_engaged"] else None,
-                num_fmt_id=d["num_fmt_id"] if d["num_fmt_engaged"] else None,
-                num_fmt_code=(LIB.read_cstr(d["num_fmt_code"]) or None) if d["num_fmt_engaged"] else None,
-                alignment_xml=LIB.read_cstr(d["alignment_xml"]) or None,
-                protection_xml=LIB.read_cstr(d["protection_xml"]) or None,
+                number_format=_opt_cstr(d["number_format"]),
+                alignment=_alignment_from_xml(LIB.read_cstr(d["alignment_xml"])),
+                protection=_protection_from_xml(LIB.read_cstr(d["protection_xml"])),
             )
 
-    def get_num_fmt_string(self, num_fmt_id: int) -> Optional[str]:
+    def get_number_format(self, num_fmt_id: int) -> Optional[str]:
         """Return the effective format code for ``num_fmt_id`` in the workbook profile's vocabulary.
 
         Built-in id 14 is ``m/d/yy`` under en-US and ``yyyy/m/d`` under ja-JP. ``None`` when no format maps to it.
         """
         h = self._workbook._require()
         return _read_optional_cstr_out(
-            LIB.fm_workbook_get_num_fmt_string,
+            LIB.fm_workbook_get_number_format,
             h,
             _uint(num_fmt_id, "num_fmt_id", 16),
         )
@@ -7833,26 +8260,13 @@ class WorkbookOoxml:
         """Every ``<xf>`` record of ``<cellXfs>``, in index order."""
         return [self.get_cell_xf(i) for i in range(self._workbook._style_count(LIB.fm_workbook_get_cell_xf_count))]
 
-    def list_cell_styles(self) -> List[CellStyle]:
-        """Return the named cell styles in file order."""
-        h = self._workbook._require()
-        n = _read_count(LIB.fm_workbook_get_cell_style_count, h)
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.CELL_STYLE_RECORD)
-            out: List[CellStyle] = []
-            for i in range(n):
-                S.zero_struct(LIB, S.CELL_STYLE_RECORD, ptr)
-                _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index"), ptr))
-                out.append(_cell_style_from(S.CELL_STYLE_RECORD.unpack(LIB, ptr)))
-        return out
-
     def list_cell_style_xfs(self) -> List[CellXf]:
         """Every ``<cellStyleXfs>`` record, in index order."""
         count = self._workbook._style_count(LIB.fm_workbook_get_cell_style_xf_count)
         return [self.get_cell_style_xf(i) for i in range(count)]
 
-    def list_dxfs(self) -> List[DifferentialFormat]:
-        """Every differential format available to CF rules, in ``dxfId`` order."""
+    def list_dxfs(self) -> List[Dxf]:
+        """Every differential format, in index order."""
         return [self.get_dxf(i) for i in range(self._workbook._style_count(LIB.fm_workbook_get_dxf_count))]
 
     def add_font(self, record: Font) -> int:
@@ -7898,7 +8312,7 @@ class WorkbookOoxml:
             _check(LIB.fm_workbook_add_border(h, ptr, out))
             return LIB.read_u32(out)
 
-    def add_num_fmt(self, format_code: str) -> int:
+    def add_number_format(self, format_code: str) -> int:
         """Add (dedup) a number-format code in the workbook profile's vocabulary; return its resolved id.
 
         A built-in id whose profile code equals ``format_code`` wins (``m/d/yy`` is 14 under en-US); the ECMA-376
@@ -7908,7 +8322,7 @@ class WorkbookOoxml:
         with _ArgScope() as scope:
             code_ptr = scope.cstr(format_code)
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_add_num_fmt(h, code_ptr, out))
+            _check(LIB.fm_workbook_add_number_format(h, code_ptr, out))
             return LIB.read_u32(out)
 
     def add_cell_xf(self, record: CellXfInput) -> int:
@@ -7929,8 +8343,14 @@ class WorkbookOoxml:
         """
         return self._workbook._add_xf_record(record, LIB.fm_workbook_add_cell_style_xf)
 
-    def add_dxf(self, record: DifferentialFormat) -> int:
-        """Add (dedup) a differential format and return its ``dxfId``."""
+    def add_dxf(self, record: Union[DxfInput, Dxf]) -> int:
+        """Add (dedup) a differential format and return its index.
+
+        Accepts a :class:`DxfInput` or the :class:`Dxf` :meth:`get_dxf` returns.
+        A ``number_format`` is registered as :meth:`add_number_format` does.
+        """
+        if not isinstance(record, (DxfInput, Dxf)):
+            raise TypeError(f"formulon: expected a DxfInput, got {type(record).__name__}")
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DXF_RECORD)
@@ -7942,8 +8362,6 @@ class WorkbookOoxml:
                     "font_engaged": 1 if record.font is not None else 0,
                     "fill_engaged": 1 if record.fill is not None else 0,
                     "border_engaged": 1 if record.border is not None else 0,
-                    "num_fmt_engaged": 1 if record.num_fmt_id is not None else 0,
-                    "num_fmt_id": _uint(record.num_fmt_id or 0, "num_fmt_id", 16),
                 },
             )
             offsets = S.DXF_RECORD.offsets
@@ -7953,51 +8371,11 @@ class WorkbookOoxml:
                 _pack_fill(ptr + offsets["fill"][1], record.fill, scope)
             if record.border is not None:
                 _pack_border_record(ptr + offsets["border"][1], record.border)
-            S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, scope)
-            S.write_str_field(LIB, ptr, S.DXF_RECORD, "alignment_xml", record.alignment_xml, scope)
-            S.write_str_field(LIB, ptr, S.DXF_RECORD, "protection_xml", record.protection_xml, scope)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "number_format", record.number_format, scope)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "alignment_xml", _alignment_to_xml(record.alignment), scope)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "protection_xml", _protection_to_xml(record.protection), scope)
             _check(LIB.fm_workbook_add_dxf(h, ptr, out))
             return LIB.read_u32(out)
-
-    def set_cell_style(self, record: CellStyle) -> None:
-        """Add or replace the named ``<cellStyle>`` record ``record.name``.
-
-        ``record.xf_id`` must reference an existing named-style xf -- register
-        one with :meth:`add_cell_style_xf` first. ``builtin_id`` is an Excel
-        built-in style ordinal (0..53); leave it at
-        ``CELL_STYLE_BUILTIN_ID_NONE`` for a custom style.
-        """
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.CELL_STYLE_RECORD)
-            S.CELL_STYLE_RECORD.pack(
-                LIB,
-                ptr,
-                {
-                    "xf_id": _uint(record.xf_id, "xf_id"),
-                    "builtin_id": _uint(record.builtin_id, "builtin_id"),
-                    "i_level": _uint(record.i_level, "i_level"),
-                    "hidden": 1 if record.hidden else 0,
-                    "custom_builtin": 1 if record.custom_builtin else 0,
-                },
-            )
-            S.write_str_field(LIB, ptr, S.CELL_STYLE_RECORD, "name", record.name, scope, allow_empty=True)
-            _check(LIB.fm_workbook_set_cell_style(h, ptr))
-
-    def remove_cell_style(self, name: str) -> None:
-        """Remove the named cell style ``name``.
-
-        Cell xfs inheriting from it are repointed at Normal; no xf index
-        shifts. The Normal style and unknown names raise ``FormulonError``.
-        """
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            _check(LIB.fm_workbook_remove_cell_style(h, name_ptr))
-
-    def get_cell_style(self, name: str) -> Optional[CellStyle]:
-        """Return the named cell style ``name`` (matched exactly), or ``None``."""
-        return self._workbook._lookup(LIB.fm_workbook_get_cell_style, (name,), S.CELL_STYLE_RECORD, _cell_style_from)
 
     def get_cell_style_xf(self, cell_style_xf_index: int) -> CellXf:
         """Return the named-style xf record at ``cell_style_xf_index``."""
@@ -8075,7 +8453,7 @@ def get_function_metadata(name: str) -> Optional[FunctionMetadata]:
             min_arity=d["min_arity"],
             max_arity=max_arity,
             availability=_enum(FunctionAvailability, d["availability"]),
-            signature_template=sig,
+            signature=sig,
             description=desc,
         )
 
@@ -8254,7 +8632,7 @@ def get_collation_classes(
 
 # Imported last: these modules import this one, and the annotations above name their classes, which
 # `typing.get_type_hints` resolves from this module's globals.
-from ._inputs import color_input, optional_color_input, sheet_rect  # noqa: E402
+from ._inputs import cell_rect, color_input, optional_color_input  # noqa: E402
 from ._pivot_cache import PivotCache  # noqa: E402
 from ._sheet import Sheet  # noqa: E402
 from ._table import Table  # noqa: E402

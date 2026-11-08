@@ -94,8 +94,8 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
       [1, 1, 1],
     );
     assert.equal(byType.get(2).colorScale.colors.length, 3);
-    assert.equal(byType.get(2).colorScale.colors[2].rgb, 0xff63be7b);
-    assert.equal(byType.get(3).dataBar.fill.rgb, 0xff0070c0);
+    assert.equal(byType.get(2).colorScale.colors[2].argb, 0xff63be7b);
+    assert.equal(byType.get(3).dataBar.fill.argb, 0xff0070c0);
 
     const saved = wb.save();
     bytes = saved;
@@ -113,12 +113,12 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   }
 });
 
-test('addValidation defaults every omitted boolean to false', async () => {
+test('addValidation defaults every omitted boolean to true and keeps an explicit false', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    // A list rule stating only what it needs: the booleans are left out
-    // so the binding's own defaults are what is read back.
+    // A list rule stating only what it needs: the booleans are left out so Excel's dialog
+    // defaults are what is read back.
     wb.sheet(0).addValidation({
       ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
       type: 3,
@@ -128,31 +128,61 @@ test('addValidation defaults every omitted boolean to false', async () => {
     assert.equal(rules.length, 1);
     const rule = rules[0];
     assert.equal(typeof rule.allowBlank, 'boolean');
-    assert.equal(rule.allowBlank, false);
-    assert.equal(rule.showInputMessage, false);
-    assert.equal(rule.showErrorMessage, false);
-    // `showDropDown` is the documented exception: absent means the
-    // in-cell arrow is shown, which is what Excel does.
-    assert.equal(rule.showDropDown, true);
+    assert.equal(rule.allowBlank, true);
+    assert.equal(rule.showInputMessage, true);
+    assert.equal(rule.showErrorMessage, true);
+    assert.equal(rule.showInCellDropdown, true);
     assert.equal(rule.type, 3);
-    assert.equal(rule.op, 0);
+    assert.equal(rule.operator, 0);
     assert.equal(rule.errorStyle, 0);
     assert.equal(rule.formula1, '="Yes,No"');
     assert.equal(rule.formula2, '');
     assert.equal(rule.ranges.length, 1);
     assert.equal(rule.ranges[0].lastRow, 2);
 
-    // An explicit `true` is not overwritten by the default.
+    // An explicit `false` is not overwritten by the default.
     wb.sheet(0).addValidation({
       ranges: [{ firstRow: 3, firstCol: 0, lastRow: 3, lastCol: 0 }],
       type: 3,
-      allowBlank: true,
+      allowBlank: false,
+      showInputMessage: false,
+      showErrorMessage: false,
+      showInCellDropdown: false,
       formula1: '"A,B"',
     });
-    assert.equal(wb.sheet(0).listValidations()[1].allowBlank, true);
+    const explicit = wb.sheet(0).listValidations()[1];
+    assert.equal(explicit.allowBlank, false);
+    assert.equal(explicit.showInputMessage, false);
+    assert.equal(explicit.showErrorMessage, false);
+    assert.equal(explicit.showInCellDropdown, false);
   } finally {
     wb.dispose();
   }
+});
+
+test('setHyperlink upserts one link per cell and a null link removes it', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  wb.sheet(0).setHyperlink(1, 1, { target: 'https://example.com/a', display: 'A' });
+  wb.sheet(0).setHyperlink(1, 1, { target: 'https://example.com/b' });
+  const links = wb.sheet(0).listHyperlinks();
+  assert.equal(links.length, 1);
+  assert.equal(links[0].target, 'https://example.com/b');
+  assert.equal(links[0].display, null);
+
+  wb.sheet(0).setHyperlinkRange(
+    { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 },
+    { target: 'https://example.com/range' },
+  );
+  assert.equal(wb.sheet(0).listHyperlinks().length, 2);
+  wb.sheet(0).setHyperlinkRange({ firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 }, null);
+  assert.equal(wb.sheet(0).listHyperlinks().length, 1);
+
+  wb.sheet(0).setHyperlink(1, 1, null);
+  assert.equal(wb.sheet(0).getHyperlink(1, 1), null);
+  // Removing a link that is not there is a no-op.
+  wb.sheet(0).setHyperlink(1, 1, null);
+  assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
 test('merges, comments and hyperlinks round-trip through save and load', async () => {
@@ -163,7 +193,7 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
     wb.sheet(0).setText(0, 0, '見出し');
     wb.sheet(0).addMerge({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 3 });
     wb.sheet(0).setComment(2, 1, { author: '校閲者', text: '要確認' });
-    wb.sheet(0).addHyperlink(3, 0, { target: 'https://example.com/', display: '例', tooltip: 'ツールチップ' });
+    wb.sheet(0).setHyperlink(3, 0, { target: 'https://example.com/', display: '例', tooltip: 'ツールチップ' });
 
     const merges = wb.sheet(0).listMerges();
     assert.equal(merges.length, 1);

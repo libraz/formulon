@@ -232,7 +232,7 @@ test('getTypedValues reads a block that setValues stores back unchanged', () => 
 test('getUsedRange bounds the cells holding a value or a formula', () => {
   withSheet((ws) => {
     assert.equal(ws.getUsedRange(), null);
-    ws.setCellFormat('D10', { numberFormat: '0.00' });
+    ws.updateCellFormat('D10', { numberFormat: '0.00' });
     assert.equal(ws.getUsedRange(), null);
     ws.setValue('C3', 1);
     ws.setFormula('B5', '=C3');
@@ -324,11 +324,11 @@ test('a Date written with setValue stores its serial and, on a General cell, a d
     const i = c.input;
     withSheet((ws, wb) => {
       wb.setDate1904(c.date1904);
-      if (c.effective_format === 'custom') ws.setCellFormat('A1', { numberFormat: '0.00' });
-      ws.setCellFormat('Z1', { numberFormat: '0.00' });
-      const styled = ws.getEffectiveStyle('Z1').xfIndex;
-      if (c.effective_format === 'row_style') ws.ooxml.setRowStyle(0, 0, styled);
-      if (c.effective_format === 'column_style') ws.ooxml.setColumnStyle(0, 0, styled);
+      if (c.effective_format === 'custom') ws.updateCellFormat('A1', { numberFormat: '0.00' });
+      ws.updateCellFormat('Z1', { numberFormat: '0.00' });
+      const styled = ws.ooxml.getEffectiveStyle('Z1').xfIndex;
+      if (c.effective_format === 'row_style') ws.ooxml.setRowXfIndex(0, 0, styled);
+      if (c.effective_format === 'column_style') ws.ooxml.setColumnXfIndex(0, 0, styled);
       let date;
       if (i.kind === 'invalid_date') date = new Date(Number.NaN);
       else if (i.kind === 'instant') date = new Date(i.iso);
@@ -346,11 +346,11 @@ test('a Date written with setValue stores its serial and, on a General cell, a d
         rejectsWith(() => ws.setValue('A1', date), StatusCode[want.error]);
         return;
       }
-      const before = wb.ooxml.getCellXf(ws.getEffectiveStyle('A1').xfIndex).numFmtId;
+      const before = wb.ooxml.getCellXf(ws.ooxml.getEffectiveStyle('A1').xfIndex).numFmtId;
       ws.setValue('A1', date);
       const serial = ws.getValue('A1');
       assert.ok(Math.abs(serial - want.serial) <= Math.abs(want.serial) * 1e-12, `${c.id}: ${serial}`);
-      const after = wb.ooxml.getCellXf(ws.getEffectiveStyle('A1').xfIndex).numFmtId;
+      const after = wb.ooxml.getCellXf(ws.ooxml.getEffectiveStyle('A1').xfIndex).numFmtId;
       assert.equal(after, want.format_id ?? before, c.id);
     });
   }
@@ -392,12 +392,12 @@ test('the tab colour takes a colour string or a Color and reads back a Color', (
     ws.setTabColor('#FF0000');
     assert.deepEqual(ws.getTabColor(), {
       kind: formulon.ColorKind.Rgb,
-      rgb: 0xffff0000,
+      argb: 0xffff0000,
       theme: 0,
       tint: 0,
       indexed: 0,
     });
-    const theme = { kind: formulon.ColorKind.Theme, rgb: 0, theme: 4, tint: 0.5, indexed: 0 };
+    const theme = { kind: formulon.ColorKind.Theme, argb: 0, theme: 4, tint: 0.5, indexed: 0 };
     ws.setTabColor(theme);
     assert.deepEqual(ws.getTabColor(), theme);
     ws.setTabColor(null);

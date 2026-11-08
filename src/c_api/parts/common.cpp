@@ -57,22 +57,22 @@ namespace parts {
 // to its `FM_VAL_*` by name; these static_asserts pin the parity so a
 // reorder of either enum is a build break rather than a silent wire-format
 // drift across the C ABI.
-static_assert(FM_VAL_BLANK == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Blank),
-              "FM_VAL_BLANK must match ValueKind::Blank");
-static_assert(FM_VAL_NUMBER == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Number),
-              "FM_VAL_NUMBER must match ValueKind::Number");
-static_assert(FM_VAL_BOOL == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Bool),
-              "FM_VAL_BOOL must match ValueKind::Bool");
-static_assert(FM_VAL_TEXT == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Text),
-              "FM_VAL_TEXT must match ValueKind::Text");
-static_assert(FM_VAL_ERROR == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Error),
-              "FM_VAL_ERROR must match ValueKind::Error");
-static_assert(FM_VAL_ARRAY == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Array),
-              "FM_VAL_ARRAY must match ValueKind::Array");
-static_assert(FM_VAL_REF == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Ref),
-              "FM_VAL_REF must match ValueKind::Ref");
-static_assert(FM_VAL_LAMBDA == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Lambda),
-              "FM_VAL_LAMBDA must match ValueKind::Lambda");
+static_assert(FM_VALUE_KIND_BLANK == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Blank),
+              "FM_VALUE_KIND_BLANK must match ValueKind::Blank");
+static_assert(FM_VALUE_KIND_NUMBER == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Number),
+              "FM_VALUE_KIND_NUMBER must match ValueKind::Number");
+static_assert(FM_VALUE_KIND_BOOL == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Bool),
+              "FM_VALUE_KIND_BOOL must match ValueKind::Bool");
+static_assert(FM_VALUE_KIND_TEXT == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Text),
+              "FM_VALUE_KIND_TEXT must match ValueKind::Text");
+static_assert(FM_VALUE_KIND_ERROR == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Error),
+              "FM_VALUE_KIND_ERROR must match ValueKind::Error");
+static_assert(FM_VALUE_KIND_ARRAY == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Array),
+              "FM_VALUE_KIND_ARRAY must match ValueKind::Array");
+static_assert(FM_VALUE_KIND_REF == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Ref),
+              "FM_VALUE_KIND_REF must match ValueKind::Ref");
+static_assert(FM_VALUE_KIND_LAMBDA == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Lambda),
+              "FM_VALUE_KIND_LAMBDA must match ValueKind::Lambda");
 
 namespace {
 
@@ -172,7 +172,7 @@ fm_status_t ensure_calculated(const fm_workbook_t* wb) {
 }
 
 // The C enums carry the engine ordinals unchanged; pin the last member of each.
-static_assert(kFmColorAuto == static_cast<int>(formulon::ColorSpec::Kind::kAuto), "fm_color_kind_t drift");
+static_assert(FM_COLOR_KIND_AUTO == static_cast<int>(formulon::ColorSpec::Kind::kAuto), "fm_color_kind_t drift");
 static_assert(FM_CF_RULE_TYPE_UNIQUE_VALUES == static_cast<int>(formulon::cf::RuleType::UniqueValues),
               "fm_cf_rule_type_t drift");
 static_assert(FM_CF_OPERATOR_NOT_BETWEEN == static_cast<int>(formulon::cf::CellIsOperator::NotBetween),
@@ -188,13 +188,13 @@ fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fa
   fm_color_spec_t out{};
   if (src.kind == formulon::ColorSpec::Kind::kNone) {
     if (fallback_argb != 0U) {
-      out.kind = kFmColorRgb;
-      out.rgb = fallback_argb;
+      out.kind = FM_COLOR_KIND_RGB;
+      out.argb = fallback_argb;
     }
     return out;
   }
   out.tint = src.tint;
-  out.rgb = src.rgb;
+  out.argb = src.rgb;
   out.theme = src.theme;
   out.indexed = src.indexed;
   out.kind = static_cast<std::uint8_t>(src.kind);
@@ -203,14 +203,14 @@ fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fa
 
 formulon::ColorSpec color_spec_from_c(const fm_color_spec_t& src, std::uint32_t* out_argb) {
   if (out_argb != nullptr) {
-    *out_argb = src.kind == kFmColorRgb ? src.rgb : 0U;
+    *out_argb = src.kind == FM_COLOR_KIND_RGB ? src.argb : 0U;
   }
   formulon::ColorSpec out;
-  if (src.kind == kFmColorNone) {
+  if (src.kind == FM_COLOR_KIND_NONE) {
     return out;
   }
   out.kind = static_cast<formulon::ColorSpec::Kind>(src.kind);
-  out.rgb = src.rgb;
+  out.rgb = src.argb;
   out.theme = src.theme;
   out.tint = src.tint;
   out.indexed = src.indexed;
@@ -372,19 +372,19 @@ fm_status_t check_finite(double value, const char* field) {
 
 fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
   switch (in.kind) {
-    case FM_VAL_BLANK:
+    case FM_VALUE_KIND_BLANK:
       *out = formulon::Value::blank();
       return 0;
-    case FM_VAL_NUMBER:
+    case FM_VALUE_KIND_NUMBER:
       if (auto rc = check_finite(in.u.number, "value"); rc != 0) {
         return rc;
       }
       *out = formulon::Value::number(in.u.number);
       return 0;
-    case FM_VAL_BOOL:
+    case FM_VALUE_KIND_BOOL:
       *out = formulon::Value::boolean(in.u.boolean != 0);
       return 0;
-    case FM_VAL_TEXT:
+    case FM_VALUE_KIND_TEXT:
       if (in.u.text == nullptr) {
         return null_argument("value text");
       }
@@ -393,7 +393,7 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
       }
       *out = formulon::Value::text(in.u.text);
       return 0;
-    case FM_VAL_ERROR:
+    case FM_VALUE_KIND_ERROR:
       if (!is_valid_error_code(in.u.error_code)) {
         return invalid_error_code(in.u.error_code);
       }
@@ -493,8 +493,8 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
       return rc;
     }
     if (rule.data_bar_axis_position_engaged != 0) {
-      if (auto rc =
-              check_enum_domain(rule.data_bar_axis_position, 0, FM_CF_DATA_BAR_AXIS_NONE, "data_bar_axis_position");
+      if (auto rc = check_enum_domain(rule.data_bar_axis_position, 0, FM_CF_DATA_BAR_AXIS_POSITION_NONE,
+                                      "data_bar_axis_position");
           rc != 0) {
         return rc;
       }
@@ -544,7 +544,7 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
       for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
         const fm_cf_icon_t& icon = rule.icon_set_icons[i];
         const std::size_t available = icon.icon_set == nullptr ? 0U : cf::cf_icon_set_icon_count(icon.icon_set);
-        if (available == 0U || icon.icon_id < 0 || static_cast<std::size_t>(icon.icon_id) >= available) {
+        if (available == 0U || icon.icon_index < 0 || static_cast<std::size_t>(icon.icon_index) >= available) {
           return invalid_argument("icon_set_icons entry names no icon", "icon_set_icons[" + std::to_string(i) + "]");
         }
       }
@@ -576,11 +576,27 @@ fm_status_t validate(const fm_data_validation_t& v) {
   if (auto rc = check_enum_domain(v.error_style, 0, 2, "error_style"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_enum_domain(v.allow_blank, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "allow_blank"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(v.show_input_message, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "show_input_message");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(v.show_error_message, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "show_error_message");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc =
+          check_enum_domain(v.show_in_cell_dropdown, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "show_in_cell_dropdown");
+      rc != 0) {
+    return rc;
+  }
   return check_utf8({v.error_title, v.error_message, v.prompt_title, v.prompt_message});
 }
 
 fm_status_t validate(const fm_font_record_t& font) {
-  if (fm_status_t rc = check_finite_non_negative(font.size, "font.size"); rc != 0) {
+  if (fm_status_t rc = check_finite_non_negative(font.size_pt, "font.size"); rc != 0) {
     return rc;
   }
   return check_utf8({font.name});
@@ -706,7 +722,7 @@ fm_status_t validate(const fm_pivot_data_field_spec_t& spec) {
   if (auto rc = check_utf8({spec.name}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec.aggregation, 0, FM_PIVOT_AGG_VARP, "aggregation"); rc != 0) {
+  if (auto rc = check_enum_domain(spec.aggregation, 0, FM_PIVOT_AGGREGATION_VARP, "aggregation"); rc != 0) {
     return rc;
   }
   return check_enum_domain(spec.show_as, 0, FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING, "show_as");
@@ -719,31 +735,31 @@ fm_status_t validate(const fm_pivot_filter_spec_t& spec) {
   if (auto rc = check_enum_domain(spec.axis, 0, FM_PIVOT_AXIS_PAGE, "axis"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.type, 0, FM_PIVOT_FILTER_DATE_M12, "type");
+  return check_enum_domain(spec.type, 0, FM_PIVOT_FILTER_KIND_DATE_M12, "type");
 }
 
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
   switch (v.kind()) {
     case formulon::ValueKind::Blank:
-      out->kind = FM_VAL_BLANK;
+      out->kind = FM_VALUE_KIND_BLANK;
       out->u.number = 0.0;
       return;
     case formulon::ValueKind::Number:
-      out->kind = FM_VAL_NUMBER;
+      out->kind = FM_VALUE_KIND_NUMBER;
       out->u.number = v.as_number();
       return;
     case formulon::ValueKind::Bool:
-      out->kind = FM_VAL_BOOL;
+      out->kind = FM_VALUE_KIND_BOOL;
       out->u.boolean = v.as_boolean() ? 1 : 0;
       return;
     case formulon::ValueKind::Text: {
       const std::string_view text = v.as_text();
-      out->kind = FM_VAL_TEXT;
+      out->kind = FM_VALUE_KIND_TEXT;
       out->u.text = store_cstr(store, text);
       return;
     }
     case formulon::ValueKind::Error:
-      out->kind = FM_VAL_ERROR;
+      out->kind = FM_VALUE_KIND_ERROR;
       // The C-ABI wire format for errors is the raw `ErrorCode` ordinal
       // (Null=0, Div0=1, Value=2, ...), NOT the OOXML wire code. This is
       // the single source of truth for the boundary; see the
@@ -753,22 +769,22 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
     case formulon::ValueKind::Array:
       // Array passthrough is reserved; the kind is reported but no
       // payload is exposed across the boundary in this bundle.
-      out->kind = FM_VAL_ARRAY;
+      out->kind = FM_VALUE_KIND_ARRAY;
       out->u.number = 0.0;
       return;
     case formulon::ValueKind::Ref:
-      out->kind = FM_VAL_REF;
+      out->kind = FM_VALUE_KIND_REF;
       out->u.number = 0.0;
       return;
     case formulon::ValueKind::Lambda:
-      out->kind = FM_VAL_LAMBDA;
+      out->kind = FM_VALUE_KIND_LAMBDA;
       out->u.number = 0.0;
       return;
   }
   // Defensive default: surface as Blank rather than leaving uninitialised
   // bytes on the boundary. The switch above is exhaustive over every
   // `ValueKind` enumerator, so this branch is unreachable in practice.
-  out->kind = FM_VAL_BLANK;
+  out->kind = FM_VALUE_KIND_BLANK;
   out->u.number = 0.0;
 }
 
@@ -1183,6 +1199,37 @@ const char* display_formula(const formulon::Workbook& book, const std::string& m
   }
   std::string shown = display_formula_text(book, model, own_table);
   return shown == model ? model.c_str() : store.emplace_back(std::move(shown)).c_str();
+}
+
+fm_status_t resolve_sheet_table(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t table_index,
+                                std::size_t* out_global) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  const auto& tables = wb->workbook().tables();
+  std::size_t local = 0;
+  for (std::size_t i = 0; i < tables.size(); ++i) {
+    if (tables[i].sheet_index != sheet_index) {
+      continue;
+    }
+    if (local == table_index) {
+      *out_global = i;
+      return 0;
+    }
+    ++local;
+  }
+  return check_index(table_index, local, "table_index");
+}
+
+std::size_t local_table_index(const formulon::Workbook& book, std::size_t global) {
+  const auto& tables = book.tables();
+  std::size_t local = 0;
+  for (std::size_t i = 0; i < global; ++i) {
+    if (tables[i].sheet_index == tables[global].sheet_index) {
+      ++local;
+    }
+  }
+  return local;
 }
 
 }  // namespace parts

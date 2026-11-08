@@ -3,6 +3,7 @@
 // inserting, updating and removing them.
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -13,6 +14,7 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "drawing/drawing_geometry.h"
 #include "drawing/shape_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -55,7 +57,7 @@ fm_status_t paint_color_from_c(formulon::ShapePaint paint, const fm_color_spec_t
                                formulon::ColorSpec& out) {
   out = formulon::ColorSpec{};
   if (paint != formulon::ShapePaint::kSolid) {
-    if (color.kind != kFmColorNone) {
+    if (color.kind != FM_COLOR_KIND_NONE) {
       return invalid_argument("colour needs a solid paint", std::string("field=") + field);
     }
     return 0;
@@ -74,6 +76,12 @@ fm_status_t paint_color_from_c(formulon::ShapePaint paint, const fm_color_spec_t
 }
 
 // Converts `shape` to the model spec; a non-zero return is the status to report.
+/// `a:xfrm/@rot` counts 60000ths of a degree.
+constexpr double kRotationUnitsPerDegree = 60000.0;
+constexpr double kMaxRotationDeg = 3600.0;
+constexpr double kFullTurnDeg = 360.0;
+constexpr double kMaxLineWidthPt = 1584.0;
+
 fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
   spec.fields = shape.fields;
   if ((shape.fields & ~formulon::shape_field::kAll) != 0U) {
@@ -116,8 +124,24 @@ fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
       return rc;
     }
   }
-  spec.line_width_emu = shape.line_width_emu;
-  spec.rotation = shape.rotation;
+  if ((shape.fields & FM_SHAPE_FIELD_LINE_WIDTH) != 0U) {
+    if (!std::isfinite(shape.line_width_pt) || shape.line_width_pt < 0.0 || shape.line_width_pt > kMaxLineWidthPt) {
+      return invalid_argument("line width is outside its range", "field=line_width_pt");
+    }
+    spec.line_width_emu = std::llround(shape.line_width_pt * static_cast<double>(formulon::kEmuPerPoint));
+  }
+  if ((shape.fields & FM_SHAPE_FIELD_ROTATION) != 0U) {
+    if (!std::isfinite(shape.rotation_deg) || std::fabs(shape.rotation_deg) > kMaxRotationDeg) {
+      return invalid_argument("rotation is outside its range", "field=rotation_deg");
+    }
+    double turned = std::fmod(shape.rotation_deg, kFullTurnDeg);
+    if (turned < 0.0) {
+      turned += kFullTurnDeg;
+    }
+    const std::int64_t units = std::llround(turned * kRotationUnitsPerDegree);
+    spec.rotation =
+        static_cast<std::int32_t>(units % static_cast<std::int64_t>(kFullTurnDeg * kRotationUnitsPerDegree));
+  }
   spec.hidden = shape.hidden != 0;
   return 0;
 }
@@ -175,8 +199,8 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
   out->fill_color = paint_color_to_c(info.fill, info.fill_color);
   out->line_kind = to_c(info.line);
   out->line_color = paint_color_to_c(info.line, info.line_color);
-  out->line_width_emu = info.line_width_emu;
-  out->rotation = info.rotation;
+  out->line_width_pt = static_cast<double>(info.line_width_emu) / static_cast<double>(formulon::kEmuPerPoint);
+  out->rotation_deg = static_cast<double>(info.rotation) / kRotationUnitsPerDegree;
   out->hidden = info.hidden ? 1 : 0;
   out->text_box = info.text_box ? 1 : 0;
   out->name = store_cstr(store, obj.name);

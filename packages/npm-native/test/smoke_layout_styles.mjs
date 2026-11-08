@@ -1,8 +1,8 @@
 import test from 'node:test';
 import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
-const rgb = (value) => ({ kind: 1, rgb: value, theme: 0, tint: 0, indexed: 0 });
-const NO_COLOR = { kind: 0, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+const rgb = (value) => ({ kind: 1, argb: value, theme: 0, tint: 0, indexed: 0 });
+const NO_COLOR = { kind: 0, argb: 0, theme: 0, tint: 0, indexed: 0 };
 
 test('addMerge + getMerges round-trip a single range', async () => {
   const mod = await getModule();
@@ -28,15 +28,15 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);
   // Three entries with progressively more optional fields populated.
-  wb.sheet(0).addHyperlink(1, 2, { target: 'https://example.com/' });
-  wb.sheet(0).addHyperlink(3, 4, { target: 'mailto:hello@example.com', display: 'Hello' });
-  wb.sheet(0).addHyperlink(5, 6, {
+  wb.sheet(0).setHyperlink(1, 2, { target: 'https://example.com/' });
+  wb.sheet(0).setHyperlink(3, 4, { target: 'mailto:hello@example.com', display: 'Hello' });
+  wb.sheet(0).setHyperlink(5, 6, {
     target: null,
     location: 'Sheet1!A1',
     display: 'See X',
     tooltip: 'Internal link',
   });
-  wb.sheet(0).addHyperlinkRange(
+  wb.sheet(0).setHyperlinkRange(
     { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
     { target: 'https://example.com/range', display: 'Range', tooltip: 'Range tip' },
   );
@@ -66,9 +66,34 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
     },
   );
   // Sheet-out-of-range is rejected.
-  assert.throws(() => wb.sheet(999).addHyperlink(0, 0, { target: 'https://x/' }), isFormulonError);
+  assert.throws(() => wb.sheet(999).setHyperlink(0, 0, { target: 'https://x/' }), isFormulonError);
   // clearHyperlinks drops everything.
   wb.sheet(0).clearHyperlinks();
+  assert.equal(wb.sheet(0).listHyperlinks().length, 0);
+});
+
+test('setHyperlink upserts one link per cell and a null link removes it', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  wb.sheet(0).setHyperlink(1, 1, { target: 'https://example.com/a', display: 'A' });
+  wb.sheet(0).setHyperlink(1, 1, { target: 'https://example.com/b' });
+  const links = wb.sheet(0).listHyperlinks();
+  assert.equal(links.length, 1);
+  assert.equal(links[0].target, 'https://example.com/b');
+  assert.equal(links[0].display, null);
+
+  wb.sheet(0).setHyperlinkRange(
+    { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 },
+    { target: 'https://example.com/range' },
+  );
+  assert.equal(wb.sheet(0).listHyperlinks().length, 2);
+  wb.sheet(0).setHyperlinkRange({ firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 }, null);
+  assert.equal(wb.sheet(0).listHyperlinks().length, 1);
+
+  wb.sheet(0).setHyperlink(1, 1, null);
+  assert.equal(wb.sheet(0).getHyperlink(1, 1), null);
+  // Removing a link that is not there is a no-op.
+  wb.sheet(0).setHyperlink(1, 1, null);
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
@@ -121,9 +146,9 @@ test('removeMerge + clearMerges step-wise prune the merge list', async () => {
 test('setSheetZoom + getSheetView surface the new zoom', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setView({ zoomScale: 175 });
+  wb.sheet(0).updateView({ zoomPct: 175 });
   const v = wb.sheet(0).getView();
-  assert.equal(v.zoomScale, 175);
+  assert.equal(v.zoomPct, 175);
   // Default freeze / visibility state survives a zoom change.
   assert.equal(v.freezeRows, 0);
   assert.equal(v.freezeCols, 0);
@@ -140,19 +165,19 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
   const columns = wb.sheet(0).listColumnOverrides();
   const widthZero = columns.find((column) => column.first === 0 && column.last === 0);
   assert.ok(widthZero);
-  assert.equal(widthZero.width, 0);
-  assert.equal(wb.sheet(0).ooxml.getColumnStyle(0), null);
+  assert.equal(widthZero.widthChars, 0);
+  assert.equal(wb.sheet(0).ooxml.getColumnXfIndex(0), null);
   assert.equal(widthZero.hidden, false);
   const hidden = columns.find((column) => column.first === 1 && column.last === 1);
   assert.ok(hidden);
   assert.equal(hidden.hidden, true);
-  assert.equal(hidden.width, null);
+  assert.equal(hidden.widthChars, null);
 
   const rows = wb.sheet(0).listRowOverrides();
   const row = rows.find((entry) => entry.row === 3);
   assert.ok(row);
-  assert.equal(row.height, 30);
-  assert.equal(wb.sheet(0).ooxml.getRowStyle(3), null);
+  assert.equal(row.heightPt, 30);
+  assert.equal(wb.sheet(0).ooxml.getRowXfIndex(3), null);
 });
 
 test('getSheetView surfaces display / orientation defaults', async () => {
@@ -170,12 +195,12 @@ test('getSheetView surfaces display / orientation defaults', async () => {
 test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setSheetViewMode round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setView({ showGridLines: false });
-  wb.sheet(0).setView({ showRowColHeaders: false });
-  wb.sheet(0).setView({ showZeros: false });
-  wb.sheet(0).setView({ rightToLeft: true });
-  wb.sheet(0).setView({ tabSelected: true });
-  wb.sheet(0).setView({ viewMode: mod.SheetViewMode.PageBreakPreview });
+  wb.sheet(0).updateView({ showGridLines: false });
+  wb.sheet(0).updateView({ showRowColHeaders: false });
+  wb.sheet(0).updateView({ showZeros: false });
+  wb.sheet(0).updateView({ rightToLeft: true });
+  wb.sheet(0).updateView({ tabSelected: true });
+  wb.sheet(0).updateView({ viewMode: mod.SheetViewMode.PageBreakPreview });
   const v = wb.sheet(0).getView();
   assert.equal(v.showGridLines, false);
   assert.equal(v.showRowColHeaders, false);
@@ -225,7 +250,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
 
   const fontResult = wb.ooxml.addFont({
     name: 'Arial',
-    size: 12,
+    sizePt: 12,
     bold: true,
     italic: false,
     strike: false,
@@ -235,7 +260,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   // Linear-search dedup: the second call with the same payload returns the same index.
   const fontDup = wb.ooxml.addFont({
     name: 'Arial',
-    size: 12,
+    sizePt: 12,
     bold: true,
     italic: false,
     strike: false,
@@ -245,7 +270,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(fontDup, fontResult);
   assert.equal(wb.ooxml.listFonts().length, 2);
 
-  const fill = wb.ooxml.addFill({ pattern: 1, fg: rgb(0xffff0000), bg: rgb(0xff000000) });
+  const fill = wb.ooxml.addFill({ pattern: 1, foreground: rgb(0xffff0000), background: rgb(0xff000000) });
   const border = wb.ooxml.addBorder({
     left: { style: 1, color: rgb(0xff000000) },
     right: { style: 1, color: rgb(0xff000000) },
@@ -256,10 +281,10 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     diagonalDown: false,
   });
 
-  const builtin = wb.ooxml.addNumFmt('General');
+  const builtin = wb.ooxml.addNumberFormat('General');
   assert.equal(builtin, 0);
 
-  const custom = wb.ooxml.addNumFmt('"USD" #,##0');
+  const custom = wb.ooxml.addNumberFormat('"USD" #,##0');
   assert.ok(custom >= 164, `expected custom id >= 164, got ${custom}`);
 
   const xf = wb.ooxml.addCellXf({
@@ -267,8 +292,8 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     fillIndex: fill,
     borderIndex: border,
     numFmtId: custom,
-    horizontalAlign: 1,
-    verticalAlign: 2,
+    horizontal: 1,
+    vertical: 2,
     wrapText: true,
   });
 
@@ -279,8 +304,8 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(reread.fontIndex, fontResult);
   assert.equal(reread.numFmtId, custom);
   assert.equal(reread.wrapText, true);
-  assert.equal(reread.horizontalAlign, 1);
-  assert.equal(reread.verticalAlign, 2);
+  assert.equal(reread.horizontal, 1);
+  assert.equal(reread.vertical, 2);
   assert.equal(reread.justifyLastLine, null);
 
   const optional = wb.ooxml.addCellXf({
@@ -302,7 +327,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(optionalRead.shrinkToFit, false);
   assert.equal(optionalRead.readingOrder, 0);
   assert.equal(optionalRead.justifyLastLine, true);
-  assert.equal(optionalRead.horizontalAlign, null);
+  assert.equal(optionalRead.horizontal, null);
   assert.equal(wb.ooxml.addCellXf(optionalRead), optional);
 
   const omitted = wb.ooxml.addCellXf({
@@ -312,10 +337,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     numFmtId: custom,
   });
   const omittedRead = wb.ooxml.getCellXf(omitted);
-  assert.deepEqual(
-    [omittedRead.horizontalAlign, omittedRead.wrapText, omittedRead.justifyLastLine],
-    [null, null, null],
-  );
+  assert.deepEqual([omittedRead.horizontal, omittedRead.wrapText, omittedRead.justifyLastLine], [null, null, null]);
 
   const explicitEmpty = wb.ooxml.addCellXf({
     fontIndex: fontResult,
@@ -337,18 +359,18 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(rborder.left.style, 1);
   assert.equal(rborder.diagonalUp, false);
 
-  const rfmt = wb.ooxml.getNumFmtString(custom);
+  const rfmt = wb.ooxml.getNumberFormat(custom);
   assert.equal(rfmt, '"USD" #,##0');
 });
 
 test('selector colours survive get/add identity and save/load', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const theme = { kind: 2, rgb: 0, theme: 3, tint: 0.5, indexed: 0 };
-  const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
-  const automatic = { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+  const theme = { kind: 2, argb: 0, theme: 3, tint: 0.5, indexed: 0 };
+  const indexed = { kind: 3, argb: 0, theme: 0, tint: 0, indexed: 9 };
+  const automatic = { kind: 4, argb: 0, theme: 0, tint: 0, indexed: 0 };
 
-  const font = wb.ooxml.addFont({ name: 'SelectorFont', size: 11, color: theme });
+  const font = wb.ooxml.addFont({ name: 'SelectorFont', sizePt: 11, color: theme });
   const gotFont = wb.ooxml.getFont(font);
   assert.equal(gotFont.color.kind, 2);
   assert.equal(gotFont.color.theme, 3);
@@ -358,13 +380,13 @@ test('selector colours survive get/add identity and save/load', async () => {
 
   const fill = wb.ooxml.addFill({
     pattern: 1,
-    fg: indexed,
-    bg: automatic,
+    foreground: indexed,
+    background: automatic,
   });
   const gotFill = wb.ooxml.getFill(fill);
-  assert.equal(gotFill.fg.kind, 3);
-  assert.equal(gotFill.fg.indexed, 9);
-  assert.equal(gotFill.bg.kind, 4);
+  assert.equal(gotFill.foreground.kind, 3);
+  assert.equal(gotFill.foreground.indexed, 9);
+  assert.equal(gotFill.background.kind, 4);
   const fillAgain = wb.ooxml.addFill(gotFill);
   assert.equal(fillAgain, fill);
 
@@ -385,18 +407,18 @@ test('selector colours survive get/add identity and save/load', async () => {
   assert.equal(borderAgain, border);
 
   const dxf = wb.ooxml.addDxf({
-    font: { name: 'DxfSelector', size: 9, color: automatic },
-    fill: { pattern: 1, fg: indexed },
+    font: { name: 'DxfSelector', sizePt: 9, color: automatic },
+    fill: { pattern: 1, foreground: indexed },
     border: { left: { style: 1, color: theme } },
   });
   const gotDxf = wb.ooxml.getDxf(dxf);
   assert.equal(gotDxf.font.color.kind, 4);
-  assert.equal(gotDxf.fill.fg.kind, 3);
+  assert.equal(gotDxf.fill.foreground.kind, 3);
   assert.equal(gotDxf.border.left.color.kind, 2);
   const dxfAgain = wb.ooxml.addDxf(gotDxf);
-  assert.notEqual(gotDxf.font.size, null);
+  assert.notEqual(gotDxf.font.sizePt, null);
   const bareDxf = wb.ooxml.addDxf({ font: { bold: true } });
-  assert.equal(wb.ooxml.getDxf(bareDxf).font.size, null);
+  assert.equal(wb.ooxml.getDxf(bareDxf).font.sizePt, null);
   assert.equal(dxfAgain, dxf);
 
   const saved = wb.save();
@@ -406,28 +428,41 @@ test('selector colours survive get/add identity and save/load', async () => {
   const loadedBorder = loaded.ooxml.getBorder(border);
   const loadedDxf = loaded.ooxml.getDxf(dxf);
   assert.equal(loadedFont.color.kind, 2);
-  assert.equal(loadedFill.fg.kind, 3);
+  assert.equal(loadedFill.foreground.kind, 3);
   assert.equal(loadedBorder.left.color.kind, 2);
   assert.equal(loadedDxf.font.color.kind, 4);
   loaded.dispose();
   wb.dispose();
 });
 
-test('dxf alignment and protection XML survive get/add identity and save/load', async () => {
+test('dxf alignment and protection records survive get/add identity and save/load', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
-  const protectionXml = '<protection locked="0" hidden="1"/>';
-  const alignment = wb.ooxml.addDxf({ alignmentXml });
-  const protection = wb.ooxml.addDxf({ protectionXml });
+  const alignmentRecord = {
+    horizontal: mod.HorizontalAlign.Center,
+    vertical: mod.VerticalAlign.Bottom,
+    wrapText: true,
+    shrinkToFit: false,
+    indent: 0,
+    textRotation: 0,
+    readingOrder: mod.ReadingOrder.Context,
+    justifyLastLine: false,
+    relativeIndent: 0,
+  };
+  const protectionRecord = { locked: false, hidden: true };
+  const alignment = wb.ooxml.addDxf({ alignment: alignmentRecord });
+  const protection = wb.ooxml.addDxf({ protection: protectionRecord });
   assert.notEqual(alignment, protection);
 
   const gotAlignment = wb.ooxml.getDxf(alignment);
-  assert.equal(gotAlignment.alignmentXml, alignmentXml);
-  assert.equal(gotAlignment.protectionXml, undefined);
+  assert.deepEqual(gotAlignment.alignment, alignmentRecord);
+  assert.equal(gotAlignment.protection, undefined);
   const gotProtection = wb.ooxml.getDxf(protection);
-  assert.equal(gotProtection.alignmentXml, undefined);
-  assert.equal(gotProtection.protectionXml, protectionXml);
+  assert.equal(gotProtection.alignment, undefined);
+  assert.deepEqual(gotProtection.protection, protectionRecord);
+  for (const key of ['alignmentXml', 'protectionXml']) {
+    assert.equal(key in gotAlignment, false, key);
+  }
 
   const alignmentAgain = wb.ooxml.addDxf(gotAlignment);
   assert.equal(alignmentAgain, alignment);
@@ -438,11 +473,11 @@ test('dxf alignment and protection XML survive get/add identity and save/load', 
   const loaded = mod.Workbook.load(saved);
   assert.equal(loaded.disposed, false);
   const loadedAlignment = loaded.ooxml.getDxf(alignment);
-  assert.equal(loadedAlignment.alignmentXml, alignmentXml);
-  assert.equal(loadedAlignment.protectionXml, undefined);
+  assert.deepEqual(loadedAlignment.alignment, alignmentRecord);
+  assert.equal(loadedAlignment.protection, undefined);
   const loadedProtection = loaded.ooxml.getDxf(protection);
-  assert.equal(loadedProtection.alignmentXml, undefined);
-  assert.equal(loadedProtection.protectionXml, protectionXml);
+  assert.equal(loadedProtection.alignment, undefined);
+  assert.deepEqual(loadedProtection.protection, protectionRecord);
   const loadedAlignmentAgain = loaded.ooxml.addDxf(loadedAlignment);
   assert.equal(loadedAlignmentAgain, alignment);
   const loadedProtectionAgain = loaded.ooxml.addDxf(loadedProtection);
@@ -451,10 +486,26 @@ test('dxf alignment and protection XML survive get/add identity and save/load', 
   wb.dispose();
 });
 
+test('a dxf carries its number format as a format code and reads null without one', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const dxf = wb.ooxml.addDxf({ numberFormat: '0.00%' });
+  const read = wb.ooxml.getDxf(dxf);
+  assert.equal(read.numberFormat, '0.00%');
+  for (const key of ['numFmt', 'numFmtId', 'numFmtCode']) assert.equal(key in read, false, key);
+  assert.equal(wb.ooxml.addDxf(read), dxf);
+  const bare = wb.ooxml.addDxf({ font: { bold: true } });
+  assert.equal(wb.ooxml.getDxf(bare).numberFormat, null);
+  const loaded = mod.Workbook.load(wb.save());
+  assert.equal(loaded.ooxml.getDxf(dxf).numberFormat, '0.00%');
+  loaded.dispose();
+  wb.dispose();
+});
+
 test('addFont / getFont preserve superscript and round-trip to the same index', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const superscript = wb.ooxml.addFont({ name: 'Arial', size: 12, vertAlign: 1, color: rgb(0xff112233) });
+  const superscript = wb.ooxml.addFont({ name: 'Arial', sizePt: 12, vertAlign: 1, color: rgb(0xff112233) });
   assert.equal(wb.ooxml.getFont(superscript).vertAlign, 1);
 
   const before = wb.ooxml.listFonts().length;
@@ -468,7 +519,7 @@ test('addFont / getFont preserve superscript and round-trip to the same index', 
   assert.notEqual(recolored, superscript);
   const reread = wb.ooxml.getFont(recolored);
   assert.equal(reread.vertAlign, 1);
-  assert.equal(reread.color.rgb, 0xff00ff00);
+  assert.equal(reread.color.argb, 0xff00ff00);
 });
 
 test('addFont/setFont with a non-numeric field throws and does not commit a coerced value', async () => {
@@ -476,13 +527,13 @@ test('addFont/setFont with a non-numeric field throws and does not commit a coer
   const wb = mod.Workbook.createDefault();
 
   const before = wb.ooxml.listFonts().length;
-  assert.throws(() => wb.ooxml.addFont({ name: 'Arial', size: 'not a number' }), TypeError);
+  assert.throws(() => wb.ooxml.addFont({ name: 'Arial', sizePt: 'not a number' }), TypeError);
   assert.equal(wb.ooxml.listFonts().length, before, 'no font must have been added for the rejected call');
 
-  const font = wb.ooxml.addFont({ name: 'Arial', size: 12 });
-  assert.throws(() => wb.ooxml.setFont(font, { name: 'Arial', size: 'not a number' }), TypeError);
+  const font = wb.ooxml.addFont({ name: 'Arial', sizePt: 12 });
+  assert.throws(() => wb.ooxml.setFont(font, { name: 'Arial', sizePt: 'not a number' }), TypeError);
   // The font slot must still hold its original size, not a coerced 0.
-  assert.equal(wb.ooxml.getFont(font).size, 12);
+  assert.equal(wb.ooxml.getFont(font).sizePt, 12);
 });
 
 test('phonetic runs keep their spans through a save/load round trip', async () => {
@@ -492,8 +543,8 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
   assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), []);
 
   const runs = [
-    { sb: 0, eb: 2, text: 'トウキョウ' },
-    { sb: 2, eb: 3, text: 'ト' },
+    { start: 0, end: 2, text: 'トウキョウ' },
+    { start: 2, end: 3, text: 'ト' },
   ];
   wb.sheet(0).setCellPhoneticRuns(0, 0, runs);
   assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), runs);
@@ -506,13 +557,13 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
 
   // Writing the flattened reading back is the collapse the run API avoids.
   wb.sheet(0).setCellPhonetic(0, 0, 'トウキョウト');
-  assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), [{ sb: 0, eb: 3, text: 'トウキョウト' }]);
+  assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), [{ start: 0, end: 3, text: 'トウキョウト' }]);
 
   assert.throws(
     () =>
       wb.sheet(0).setCellPhoneticRuns(0, 0, [
-        { sb: 2, eb: 3, text: 'ト' },
-        { sb: 0, eb: 2, text: 'トウ' },
+        { start: 2, end: 3, text: 'ト' },
+        { start: 0, end: 2, text: 'トウ' },
       ]),
     isFormulonError,
   );
@@ -525,28 +576,28 @@ test('phonetic properties are independent of the runs and survive a round trip',
   const mod = await getModule();
   // Compare the triple alone: the record carries more fields than the ones under test.
   const props = (book) => {
-    const { fontId, type, alignment } = book.sheet(0).getCellPhoneticProperties(0, 0);
-    return { fontId, type, alignment };
+    const { fontIndex, type, alignment } = book.sheet(0).getCellPhoneticProperties(0, 0);
+    return { fontIndex, type, alignment };
   };
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setText(0, 0, '大阪');
-  assert.deepEqual(props(wb), { fontId: 0, type: 0, alignment: 0 });
+  assert.deepEqual(props(wb), { fontIndex: 0, type: 0, alignment: 0 });
 
-  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 3, type: 2, alignment: 2 });
+  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 3, type: 2, alignment: 2 });
   // Setting the readings must not reset the rendering.
-  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]);
-  assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
+  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ start: 0, end: 2, text: 'おおさか' }]);
+  assert.deepEqual(props(wb), { fontIndex: 3, type: 2, alignment: 2 });
 
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
-  assert.deepEqual(props(loaded), { fontId: 3, type: 2, alignment: 2 });
+  assert.deepEqual(props(loaded), { fontIndex: 3, type: 2, alignment: 2 });
 
   // Two bits each on the binary side, so a wider ordinal is refused.
   assert.throws(
-    () => wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 0, type: 4, alignment: 0 }),
+    () => wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 0, type: 4, alignment: 0 }),
     isFormulonError,
   );
-  assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
+  assert.deepEqual(props(wb), { fontIndex: 3, type: 2, alignment: 2 });
 
   loaded.dispose();
   wb.dispose();
@@ -555,16 +606,18 @@ test('phonetic properties are independent of the runs and survive a round trip',
 test('setDefaultFont declares what an unstyled cell is saved as', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.ooxml.getFont(0).name, 'Calibri');
+  assert.equal(wb.getDefaultFont().name, 'Calibri');
 
   // addFont can only ever append beside the seeded default.
-  const appended = wb.ooxml.addFont({ name: '游ゴシック', size: 11 });
+  const appended = wb.ooxml.addFont({ name: '游ゴシック', sizePt: 11 });
   assert.ok(appended > 0);
-  assert.equal(wb.ooxml.getFont(0).name, 'Calibri');
+  assert.equal(wb.getDefaultFont().name, 'Calibri');
+  assert.deepEqual(wb.getDefaultFont(), wb.ooxml.getFont(0));
 
-  wb.setDefaultFont({ name: '游ゴシック', size: 11, charset: 128 });
-  assert.equal(wb.ooxml.getFont(0).name, '游ゴシック');
-  assert.equal(wb.ooxml.getFont(0).charset, 128);
+  wb.setDefaultFont({ name: '游ゴシック', sizePt: 11, charset: 128 });
+  assert.equal(wb.getDefaultFont().name, '游ゴシック');
+  assert.equal(wb.getDefaultFont().charset, 128);
+  assert.deepEqual(wb.getDefaultFont(), wb.ooxml.getFont(0));
 
   wb.dispose();
 });
@@ -572,13 +625,13 @@ test('setDefaultFont declares what an unstyled cell is saved as', async () => {
 test('setFont overwrites an existing slot and refuses an absent index', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const added = wb.ooxml.addFont({ name: 'Meiryo', size: 12 });
+  const added = wb.ooxml.addFont({ name: 'Meiryo', sizePt: 12 });
 
-  wb.ooxml.setFont(added, { name: 'MS Gothic', size: 9 });
+  wb.ooxml.setFont(added, { name: 'MS Gothic', sizePt: 9 });
   assert.equal(wb.ooxml.getFont(added).name, 'MS Gothic');
 
   const before = wb.ooxml.listFonts().length;
-  assert.throws(() => wb.ooxml.setFont(before, { name: 'MS Gothic', size: 9 }), isFormulonError);
+  assert.throws(() => wb.ooxml.setFont(before, { name: 'MS Gothic', sizePt: 9 }), isFormulonError);
   assert.equal(wb.ooxml.listFonts().length, before);
 
   wb.dispose();
@@ -587,7 +640,7 @@ test('setFont overwrites an existing slot and refuses an absent index', async ()
 test('addDxf / getDxf round-trip a superscript differential font', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const added = wb.ooxml.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
+  const added = wb.ooxml.addDxf({ font: { name: 'Calibri', sizePt: 9, vertAlign: 1 } });
   const readBack = wb.ooxml.getDxf(added);
   assert.equal(readBack.font.vertAlign, 1);
 
@@ -607,8 +660,8 @@ test('addXf rejects out-of-range font_index', async () => {
         fillIndex: 0,
         borderIndex: 0,
         numFmtId: 0,
-        horizontalAlign: 0,
-        verticalAlign: 0,
+        horizontal: 0,
+        vertical: 0,
         wrapText: false,
       }),
     isFormulonError,
@@ -620,17 +673,17 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
   const wb = mod.Workbook.createDefault();
   wb.addSheet('B');
   wb.addSheet('C');
-  assert.equal(wb.getActiveSheet().index, 0);
+  assert.equal(wb.activeSheet().index, 0);
   wb.setActiveSheet(2);
-  const active = wb.getActiveSheet();
+  const active = wb.activeSheet();
   assert.equal(active.index, 2);
   assert.equal(active, wb.sheet(2));
   assert.throws(() => wb.setActiveSheet(9), isFormulonError);
-  assert.equal(wb.getActiveSheet().index, 2);
+  assert.equal(wb.activeSheet().index, 2);
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   try {
-    assert.equal(loaded.getActiveSheet().index, 2);
+    assert.equal(loaded.activeSheet().index, 2);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -662,16 +715,16 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setText(0, 0, '漢字');
-  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
+  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ start: 0, end: 2, text: 'かんじ' }]);
   assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, false);
-  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 0, type: 0, alignment: 0 });
+  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 0, type: 0, alignment: 0 });
   assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, true);
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   try {
     const got = loaded.sheet(0).getCellPhoneticProperties(0, 0);
     assert.equal(got.present, true);
-    assert.deepEqual([got.fontId, got.type, got.alignment], [0, 0, 0]);
+    assert.deepEqual([got.fontIndex, got.type, got.alignment], [0, 0, 0]);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -681,23 +734,22 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setView({ freezeRows: 2, freezeCols: 1 });
+  wb.sheet(0).updateView({ freezeRows: 2, freezeCols: 1 });
   const view = wb.sheet(0).getView();
   assert.equal(view.paneTopLeftRow, 2);
   assert.equal(view.paneTopLeftCol, 1);
-  wb.sheet(0).setView({ topLeftRow: 5, topLeftCol: 0 });
-  wb.sheet(0).setView({ paneTopLeftRow: 40, paneTopLeftCol: 6 });
-  assert.throws(() => wb.sheet(0).setView({ paneTopLeftRow: 1, paneTopLeftCol: 6 }), isFormulonError);
+  wb.sheet(0).updateView({ topLeftRow: 5, topLeftCol: 0 });
+  wb.sheet(0).updateView({ paneTopLeftRow: 40, paneTopLeftCol: 6 });
+  assert.throws(() => wb.sheet(0).updateView({ paneTopLeftRow: 1, paneTopLeftCol: 6 }), isFormulonError);
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
   ];
-  wb.sheet(0).setSelection({ activeRow: 41, activeCol: 7, ranges });
+  wb.sheet(0).setSelection({ active: 'H42', ranges });
   assert.throws(
     () =>
       wb.sheet(0).setSelection({
-        activeRow: 0,
-        activeCol: 0,
+        active: 'A1',
         ranges: [{ firstRow: 3, firstCol: 0, lastRow: 1, lastCol: 0 }],
       }),
     isFormulonError,
@@ -728,29 +780,32 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
-    wb.sheet(0).setView({ splitX: 2000, splitY: 1500 });
+    assert.deepEqual([wb.sheet(0).getView().splitXTwips, wb.sheet(0).getView().splitYTwips], [0, 0]);
+    wb.sheet(0).updateView({ splitXTwips: 2000, splitYTwips: 1500 });
     const view = wb.sheet(0).getView();
-    assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
+    assert.deepEqual([view.splitXTwips, view.splitYTwips, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
     const loaded = mod.Workbook.load(saved);
     try {
       const got = loaded.sheet(0).getView();
-      assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
+      assert.deepEqual([got.splitXTwips, got.splitYTwips, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
     } finally {
       loaded.dispose();
     }
-    wb.sheet(0).setView({ freezeRows: 2, freezeCols: 1 });
-    assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
-    wb.sheet(0).setView({ splitX: 0, splitY: 900 });
+    wb.sheet(0).updateView({ freezeRows: 2, freezeCols: 1 });
+    assert.deepEqual([wb.sheet(0).getView().splitXTwips, wb.sheet(0).getView().splitYTwips], [0, 0]);
+    wb.sheet(0).updateView({ splitXTwips: 0, splitYTwips: 900 });
     const split = wb.sheet(0).getView();
-    assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
-    assert.throws(() => wb.sheet(0).setView({ splitX: -1, splitY: 0 }), isFormulonError);
-    assert.throws(() => wb.sheet(0).setView({ splitX: 0, splitY: Number.NaN }), isFormulonError);
-    assert.throws(() => wb.sheet(0).setView({ splitX: Number.POSITIVE_INFINITY, splitY: 0 }), isFormulonError);
-    assert.equal(wb.sheet(0).getView().splitY, 900);
-    wb.sheet(0).setView({ splitX: 0, splitY: 0 });
-    assert.equal(wb.sheet(0).getView().splitY, 0);
+    assert.deepEqual([split.splitXTwips, split.splitYTwips, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
+    assert.throws(() => wb.sheet(0).updateView({ splitXTwips: -1, splitYTwips: 0 }), isFormulonError);
+    assert.throws(() => wb.sheet(0).updateView({ splitXTwips: 0, splitYTwips: Number.NaN }), isFormulonError);
+    assert.throws(
+      () => wb.sheet(0).updateView({ splitXTwips: Number.POSITIVE_INFINITY, splitYTwips: 0 }),
+      isFormulonError,
+    );
+    assert.equal(wb.sheet(0).getView().splitYTwips, 900);
+    wb.sheet(0).updateView({ splitXTwips: 0, splitYTwips: 0 });
+    assert.equal(wb.sheet(0).getView().splitYTwips, 0);
   } finally {
     wb.dispose();
   }

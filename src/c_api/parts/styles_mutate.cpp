@@ -152,12 +152,11 @@ fm_status_t validate_xf_alignment(const fm_cell_xf_t& record) {
   // are ignored, including malformed alignment enum ordinals. The accepted
   // ordinals are the canonical writer mapping for the corresponding XML
   // string enums (general..distributed and top..distributed).
-  if (record.has_horizontal_align != 0 && record.horizontal_align > 7U) {
-    return invalid_argument("horizontal_align out of range",
-                            "horizontal_align=" + std::to_string(record.horizontal_align));
+  if (record.has_horizontal != 0 && record.horizontal > 7U) {
+    return invalid_argument("horizontal out of range", "horizontal=" + std::to_string(record.horizontal));
   }
-  if (record.has_vertical_align != 0 && record.vertical_align > 4U) {
-    return invalid_argument("vertical_align out of range", "vertical_align=" + std::to_string(record.vertical_align));
+  if (record.has_vertical != 0 && record.vertical > 4U) {
+    return invalid_argument("vertical out of range", "vertical=" + std::to_string(record.vertical));
   }
   if (record.has_text_rotation != 0 && record.text_rotation > 180U && record.text_rotation != 255U) {
     return invalid_argument("text_rotation out of range", "text_rotation=" + std::to_string(record.text_rotation));
@@ -182,13 +181,13 @@ formulon::CellXf cell_xf_from_c(const fm_cell_xf_t& record, std::uint32_t xf_id)
   // The record carries explicit presence bits. Keep values for present
   // attributes and canonicalize omitted ones so Has* does not infer a child
   // from ignored poison values.
-  candidate.horizontal_align = record.has_horizontal_align != 0 ? record.horizontal_align : 0U;
-  candidate.vertical_align = record.has_vertical_align != 0 ? record.vertical_align : 2U;
+  candidate.horizontal_align = record.has_horizontal != 0 ? record.horizontal : 0U;
+  candidate.vertical_align = record.has_vertical != 0 ? record.vertical : 2U;
   candidate.wrap_text = record.has_wrap_text != 0 && record.wrap_text != 0;
   candidate.justify_last_line = record.has_justify_last_line != 0 && record.justify_last_line != 0;
   candidate.has_alignment = record.has_alignment != 0;
-  candidate.has_horizontal_align = record.has_horizontal_align != 0;
-  candidate.has_vertical_align = record.has_vertical_align != 0;
+  candidate.has_horizontal_align = record.has_horizontal != 0;
+  candidate.has_vertical_align = record.has_vertical != 0;
   candidate.has_wrap_text = record.has_wrap_text != 0;
   candidate.has_justify_last_line = record.has_justify_last_line != 0;
 
@@ -227,7 +226,7 @@ formulon::CellXf cell_xf_from_c(const fm_cell_xf_t& record, std::uint32_t xf_id)
 /// attribute; `out_argb` receives the record's legacy ARGB field.
 formulon::ColorSpec color_from_c(fm_color_spec_t src, std::uint32_t* out_argb) {
   if (src.kind > static_cast<uint8_t>(formulon::ColorSpec::Kind::kAuto)) {
-    src.kind = kFmColorNone;
+    src.kind = FM_COLOR_KIND_NONE;
   }
   return formulon::c_api::parts::color_spec_from_c(src, out_argb);
 }
@@ -235,7 +234,7 @@ formulon::ColorSpec color_from_c(fm_color_spec_t src, std::uint32_t* out_argb) {
 formulon::FontRecord font_from_c(const fm_font_record_t& record) {
   formulon::FontRecord out;
   out.name = text_or_empty(record.name);
-  out.size = record.size;
+  out.size = record.size_pt;
   out.bold = record.bold != 0;
   out.italic = record.italic != 0;
   out.strike = record.strike != 0;
@@ -244,7 +243,7 @@ formulon::FontRecord font_from_c(const fm_font_record_t& record) {
   out.has_strike = record.has_strike != 0;
   out.has_family = record.has_family != 0;
   out.has_charset = record.has_charset != 0;
-  out.has_size = record.has_size != 0;
+  out.has_size = record.has_size_pt != 0;
   out.outline = record.outline != 0;
   out.shadow = record.shadow != 0;
   out.condense = record.condense != 0;
@@ -279,8 +278,8 @@ constexpr std::size_t kMaxGradientStops = 1024;
 formulon::FillRecord fill_from_c(const fm_fill_record_t& record) {
   formulon::FillRecord out;
   out.pattern = record.pattern;
-  out.fg = color_from_c(record.fg, &out.fg_argb);
-  out.bg = color_from_c(record.bg, &out.bg_argb);
+  out.fg = color_from_c(record.foreground, &out.fg_argb);
+  out.bg = color_from_c(record.background, &out.bg_argb);
   if (record.has_gradient != 0) {
     out.has_gradient = true;
     // The pattern fields do not exist on a gradient fill; clearing them keeps
@@ -291,7 +290,7 @@ formulon::FillRecord fill_from_c(const fm_fill_record_t& record) {
     out.fg = formulon::ColorSpec{};
     out.bg = formulon::ColorSpec{};
     formulon::GradientFill& gradient = out.gradient;
-    gradient.path = record.gradient_type == FM_GRADIENT_PATH;
+    gradient.path = record.gradient_type == FM_GRADIENT_TYPE_PATH;
     gradient.degree = finite_or_zero(record.gradient_degree);
     gradient.left = finite_or_zero(record.gradient_left);
     gradient.right = finite_or_zero(record.gradient_right);
@@ -410,7 +409,8 @@ extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint32_t* out_num_fmt_id) {
+extern "C" fm_status_t fm_workbook_add_number_format(fm_workbook_t* wb, const char* format_code,
+                                                     uint32_t* out_num_fmt_id) {
   clear_last_error();
   if (wb == nullptr || out_num_fmt_id == nullptr) {
     return null_argument();
@@ -441,8 +441,8 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf_t* record, size
   // A non-zero `xfId` must name an existing `<cellStyleXfs>` entry, or the
   // emitted attribute dangles. Zero stays legal with an empty table, which is
   // what a record that names no parent style looks like.
-  if (record->xf_id != 0) {
-    if (fm_status_t rc = check_index(record->xf_id, styles.cell_style_xfs.size(), "xf_id"); rc != 0) {
+  if (record->style_xf_index != 0) {
+    if (fm_status_t rc = check_index(record->style_xf_index, styles.cell_style_xfs.size(), "style_xf_index"); rc != 0) {
       return rc;
     }
   }
@@ -459,7 +459,7 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf_t* record, size
   static_assert(sizeof(record->num_fmt_id) == sizeof(formulon::CellXf::num_fmt_id),
                 "cell xf field num_fmt_id width must match the engine type");
 
-  formulon::CellXf candidate = cell_xf_from_c(*record, record->xf_id);
+  formulon::CellXf candidate = cell_xf_from_c(*record, record->style_xf_index);
   *out_xf_index = formulon::intern_cell_xf(styles, std::move(candidate));
   return 0;
 }
@@ -499,8 +499,8 @@ extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_ce
     return rc;
   }
   auto& styles = wb->workbook().mutable_styles();
-  if (record->name[0] == '\0' || record->xf_id >= styles.cell_style_xfs.size()) {
-    return invalid_argument("invalid name or xf_id");
+  if (record->name[0] == '\0' || record->style_xf_index >= styles.cell_style_xfs.size()) {
+    return invalid_argument("invalid name or style_xf_index");
   }
   // Anything past the OOXML ordinal space must use the sentinel, which
   // suppresses the attribute instead of writing an unknown ordinal.
@@ -516,7 +516,7 @@ extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_ce
   }
   formulon::CellStyleRecord style;
   style.name = record->name;
-  style.xf_id = record->xf_id;
+  style.xf_id = record->style_xf_index;
   style.builtin_id = builtin_id;
   style.i_level = record->i_level;
   style.hidden = record->hidden != 0;
@@ -677,12 +677,13 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
     // The batch shares the single-record presence-flag contract; `xfId` is
     // staged as given so a batch may point at a named style added earlier,
     // and is rejected when it would dangle.
-    if (record.xf_id != 0) {
-      if (fm_status_t rc = check_index(record.xf_id, staged.cell_style_xfs.size(), "xf_id"); rc != 0) {
+    if (record.style_xf_index != 0) {
+      if (fm_status_t rc = check_index(record.style_xf_index, staged.cell_style_xfs.size(), "style_xf_index");
+          rc != 0) {
         return rc;
       }
     }
-    const formulon::CellXf value = cell_xf_from_c(record, record.xf_id);
+    const formulon::CellXf value = cell_xf_from_c(record, record.style_xf_index);
     const std::string key = formulon::cell_xf_key(value);
     const auto [it, inserted] = xfs.emplace(key, static_cast<uint32_t>(staged.cell_xfs.size()));
     if (inserted)
@@ -712,12 +713,12 @@ extern "C" fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_recor
   if (wb == nullptr || record == nullptr || out_dxf_index == nullptr) {
     return null_argument();
   }
-  if (record->font_engaged != 0 && record->font.has_size != 0) {
-    if (fm_status_t rc = check_finite_non_negative(record->font.size, "font.size"); rc != 0) {
+  if (record->font_engaged != 0 && record->font.has_size_pt != 0) {
+    if (fm_status_t rc = check_finite_non_negative(record->font.size_pt, "font.size_pt"); rc != 0) {
       return rc;
     }
   }
-  if (auto rc = check_utf8({record->font_engaged != 0 ? record->font.name : nullptr, record->num_fmt_code,
+  if (auto rc = check_utf8({record->font_engaged != 0 ? record->font.name : nullptr, record->number_format,
                             record->alignment_xml, record->protection_xml});
       rc != 0) {
     return rc;
@@ -736,10 +737,14 @@ extern "C" fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_recor
   if (candidate.has_border) {
     candidate.border = border_from_c(record->border);
   }
-  candidate.has_num_fmt = record->num_fmt_engaged != 0;
+  candidate.has_num_fmt = record->number_format != nullptr;
   if (candidate.has_num_fmt) {
-    candidate.num_fmt_id = record->num_fmt_id;
-    candidate.num_fmt_code = text_or_empty(record->num_fmt_code);
+    candidate.num_fmt_code = record->number_format;
+    std::uint32_t num_fmt_id = 0;
+    if (fm_status_t rc = add_num_fmt_code(wb->workbook(), candidate.num_fmt_code, &num_fmt_id); rc != 0) {
+      return rc;
+    }
+    candidate.num_fmt_id = static_cast<std::uint16_t>(num_fmt_id);
   }
   candidate.alignment_xml = text_or_empty(record->alignment_xml);
   candidate.protection_xml = text_or_empty(record->protection_xml);

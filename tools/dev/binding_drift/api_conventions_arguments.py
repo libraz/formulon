@@ -40,15 +40,17 @@ from .api_conventions_bindings import (
     _entry_surfaces,
     _field,
     _in_tree,
+    _js_fields,
     _key,
     _lookup,
     _norm,
     _owned,
-    _parse_members,
+    _patch_keys,
     _split_top,
     _top_union,
     _tree_c,
     _violation,
+    _words,
     surfaces,
 )
 from .api_conventions_shapes import _UNCHANGED_DEFAULTS, _public_pool, _strip_null
@@ -307,52 +309,16 @@ def _rule_count_at(ctx: Context) -> Iterable[Violation]:
 # ---------------------------------------------------------------------------
 
 
-_TS_EXTENDS_RE = re.compile(r"^(?:export\s+)?(?:declare\s+)?interface\s+([A-Za-z_$][\w$]*)\s+extends\s+([^{]+)\{", re.M)
-
-
-def _js_fields(decls: Dict[str, TsDecl], raw: str, name: str, seen: Tuple[str, ...] = ()) -> Optional[Dict[str, str]]:
-    """Field name -> type of interface `name`, inherited fields included (from any interface in `decls`, which
-    may hold module-private ones); None when it is not an interface."""
-    decl = decls.get(name)
-    if decl is None or decl.kind != "interface":
-        return None
-    out: Dict[str, str] = {}
-    for match in _TS_EXTENDS_RE.finditer(raw):
-        if match.group(1) == name:
-            for parent in (p.strip() for p in match.group(2).split(",")):
-                if parent not in seen:
-                    out.update(_js_fields(decls, raw, parent, seen + (name,)) or {})
-    out.update({m.name: m.type for m in decl.members if not m.is_method})
-    return out
-
-
-def _patch_keys(decls: Dict[str, TsDecl], raw: str, text: str) -> Optional[Dict[str, str]]:
-    """Key -> type of a patch type expression: an interface, `Patch<T>`, `Pick<T, 'a' | 'b'>` or `{ ... }`."""
-    text = text.strip()
-    inner = re.fullmatch(r"(?:Patch|Partial)<(.*)>", text, re.S)
-    if inner:
-        return _patch_keys(decls, raw, inner.group(1))
-    pick = re.fullmatch(r"Pick<\s*([A-Za-z_$][\w$]*)\s*,(.*)>", text, re.S)
-    if pick:
-        fields = _patch_keys(decls, raw, pick.group(1))
-        keys = re.findall(r"'([^']*)'|\"([^\"]*)\"", pick.group(2))
-        return None if fields is None else {k: fields[k] for k in (a or b for a, b in keys) if k in fields}
-    if text.startswith("{"):
-        return {m.name: m.type for m in _parse_members(text.strip("{} \n")) if not m.is_method}
-    decl = decls.get(text)
-    if decl is not None and decl.kind == "type":
-        return _patch_keys(decls, raw, decl.text)
-    return _js_fields(decls, raw, text)
-
-
 def _same_type(patch_type: str, record_type: str, decls: Optional[Dict[str, TsDecl]] = None) -> bool:
     """The patch key's type is the record field's, `null` aside, the patch of a nested record, a rectangle
-    field that also takes its A1 string, or the record type's declared input alias (`ColorInput = string | Color`
-    for a `Color` field)."""
+    field that also takes its A1 string (a `SheetRect` also a sheet-local `CellRect`), or the record type's
+    declared input alias (`ColorInput = string | Color` for a `Color` field)."""
     patch = sorted(_strip_null(patch_type, True))
     record = sorted(_strip_null(record_type, True))
-    if len(record) == 1 and record[0] in _RECT_RECORDS and patch == sorted([record[0], "string"]):
-        return True
+    if len(record) == 1 and record[0] in _RECT_RECORDS:
+        allowed = {record[0], "string"} | ({"CellRect"} if record[0] == "SheetRect" else set())
+        if record[0] in patch and set(patch) <= allowed:
+            return True
     if len(record) == 1 and patch == [f"{record[0]}Input"]:
         alias = (decls or {}).get(patch[0])
         if alias is not None and alias.kind == "type" and record[0] in _top_union(alias.text):
@@ -405,7 +371,8 @@ def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
     `patch_record` interface with the same types (`null` added, a nested record as its patch); in Python it takes
     keyword-only arguments defaulting to `UNCHANGED`, named after fields of the `patch_record` dataclass. Every
     patch reads back through a getter: `patch_record: none` is a violation. An op named `update` / `update<X>` is
-    always a patch. A rectangle field may take its A1 string as well in the patch.
+    always a patch. A rectangle field may take its A1 string as well in the patch, a `SheetRect` field a
+    sheet-local `CellRect`.
     """
     for key, entry in sorted(ctx.ledger.entries.items()):
         if not isinstance(entry, dict) or entry.get("kind") != "op" or entry.get("internal") is True:
@@ -467,12 +434,17 @@ def _rule_refs(ctx: Context) -> Iterable[Violation]:
     """A table, pivot, CF rule or protected range argument is a reference by index or name: `table: TableRef`,
     `pivot: PivotRef`, `cfRule: CfRuleRef`, `protectedRange: ProtectedRangeRef` in JS, `Union[int, str]` under
     the snake-case name in Python (plus the handle class for a table or pivot, as `TableRef` / `PivotRef` carry
-    it); never `<thing>Index`.
+    it); never `<thing>Index`. The arguments an op's `ref_exempt: {params, reason}` names keep their type.
     """
     for surface in BINDING_SURFACES:
         js = surface != "py"
         for name, member in sorted(_public_pool(ctx, surface).items()):
+            key = _key(ctx, surface, name)
+            exempt = ctx.ledger.entry(key).get("ref_exempt")
+            kept = set(exempt.get("params") or ()) if isinstance(exempt, dict) else set()
             for param, ptype in member.params:
+                if "_".join(_words(param)) in kept:
+                    continue
                 if js and param in _JS_REFS:
                     want, ref = _JS_REFS[param]
                     message = f"`{name}({param})` addresses by position; take `{want}: {ref}`"
@@ -491,7 +463,7 @@ def _rule_refs(ctx: Context) -> Iterable[Violation]:
                     message = f"`{name}({param}: {ptype})` is not `{want}`"
                 else:
                     continue
-                yield _violation(ctx, "R26.ref", surface, _key(ctx, surface, name), param, message)
+                yield _violation(ctx, "R26.ref", surface, key, param, message)
 
 
 @_owned("R27.sheetparam")

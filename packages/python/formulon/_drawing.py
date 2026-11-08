@@ -30,17 +30,23 @@ from ._workbook import (
     ChartAxisPatch,
     ChartBlanksAs,
     ChartData,
+    ChartDataSource,
     ChartDisplayPatch,
+    ChartFill,
     ChartFillPatch,
     ChartGrouping,
     ChartInsertKind,
     ChartLabelsPatch,
+    ChartLegend,
     ChartLegendPosition,
+    ChartLine,
     ChartLinePatch,
     ChartMarkerPatch,
     ChartPlotPatch,
+    ChartPoint,
     ChartPointPatch,
     ChartSeriesDirection,
+    ChartSeriesInput,
     ChartSeriesPatch,
     ChartTitle,
     ColorInput,
@@ -62,7 +68,6 @@ from ._workbook import (
     _id_array,
     _image_anchor_fields,
     _install_workbook_locks,
-    _nullable_enum,
     _pack_shape,
     _pack_slicer,
     _read_chart,
@@ -111,8 +116,8 @@ _SHAPE_UPDATE_NAMES = (
     "fill_color",
     "line_kind",
     "line_color",
-    "line_width_emu",
-    "rotation",
+    "line_width_pt",
+    "rotation_deg",
     "hidden",
 )
 _SHAPE_ANCHOR_NAMES = _SHAPE_UPDATE_NAMES[1:12]
@@ -219,6 +224,22 @@ def _drawing_for(sheet: Sheet, object_id: int) -> Drawing:
         handle = cls(sheet, object_id, kind)
         handles[object_id] = handle
     return handle
+
+
+def _fill_patch_of(fill: ChartFill) -> ChartFillPatch:
+    """The patch that makes a fill equal ``fill``: an absent member is cleared."""
+    return {"color": fill.color, "transparency_pct": fill.transparency_pct}
+
+
+def _line_patch_of(line: ChartLine) -> ChartLinePatch:
+    """The patch that makes an outline equal ``line``: an absent member is cleared."""
+    return {
+        "color": line.color,
+        "transparency_pct": line.transparency_pct,
+        "width_pt": line.width_pt,
+        "dash": line.dash,
+        "none": line.none,
+    }
 
 
 class Drawing:
@@ -371,7 +392,7 @@ class Picture(Drawing):
             bytes_ptr = scope.out_ptr()
             len_ptr = scope.out_ptr()
             info = scope.struct(S.IMAGE_INFO)
-            _check(LIB.fm_sheet_get_image(h, sheet, object_id, present, bytes_ptr, len_ptr, info))
+            _check(LIB.fm_sheet_get_picture(h, sheet, object_id, present, bytes_ptr, len_ptr, info))
             if not LIB.read_u32(present):
                 raise FormulonError(
                     StatusCode.NOT_FOUND, _diagnostic_override=("the picture's media part is missing", "")
@@ -379,8 +400,8 @@ class Picture(Drawing):
             d = S.IMAGE_INFO.unpack(LIB, info)
             return PictureProperties(
                 format=_enum(ImageFormat, d["format"]),
-                px_width=d["px_width"],
-                px_height=d["px_height"],
+                width_px=d["width_px"],
+                height_px=d["height_px"],
                 bytes=LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr)),
             )
 
@@ -549,59 +570,72 @@ class Chart(Drawing):
             S.CHART_TITLE.pack(LIB, ptr, fields)
             _check(LIB.fm_sheet_set_chart_title(h, sheet, object_id, ptr))
 
-    def set_legend(
+    def set_legend(self, legend: Optional[ChartLegend]) -> None:
+        """Replace the legend with ``legend`` (the record :meth:`get_properties` returns), or remove it with ``None``.
+
+        Removing the legend of a chart that has none does nothing.
+        ``legend.hidden_series`` holds series ``c:idx`` values.
+
+        Raises:
+          TypeError: when ``legend`` is neither a :class:`ChartLegend` nor ``None``.
+          InvalidArgumentError: when ``legend.position`` is :attr:`ChartLegendPosition.NONE`.
+        """
+        if legend is not None and not isinstance(legend, ChartLegend):
+            raise TypeError(f"formulon: legend must be a ChartLegend or None, got {type(legend).__name__}")
+        h, sheet, object_id = self._at()
+        with _ArgScope() as scope:
+            ptr = 0
+            if legend is not None:
+                ptr = scope.struct_array(S.CHART_LEGEND, 1)
+                S.CHART_LEGEND.pack(
+                    LIB,
+                    ptr,
+                    {
+                        "position": _sint(legend.position, "position"),
+                        "overlay": 1 if legend.overlay else 0,
+                        "hidden_series": _id_array(legend.hidden_series, "hidden_series", scope),
+                        "hidden_series_count": _uint(len(legend.hidden_series), "hidden_series_count"),
+                    },
+                )
+            _check(LIB.fm_sheet_set_chart_legend(h, sheet, object_id, ptr))
+
+    def update_legend(
         self,
-        legend: None = UNCHANGED,
-        /,
         *,
         position: Union[ChartLegendPosition, Unchanged] = UNCHANGED,
         overlay: Union[bool, Unchanged] = UNCHANGED,
         hidden_series: Union[Sequence[int], Unchanged] = UNCHANGED,
     ) -> None:
-        """Update the chart legend; an omitted argument keeps its value.
+        """Update the chart legend with the arguments given, creating it when the chart has none.
 
-        ``set_legend(None)`` removes the legend. Without a legend, one is
-        created and an omitted argument takes Excel's default
-        (:attr:`ChartLegendPosition.RIGHT`, no overlay, no hidden entries).
+        An omitted argument keeps the legend's value, or takes Excel's default
+        (:attr:`ChartLegendPosition.RIGHT`, no overlay, no hidden entries) when
+        the chart has no legend. No argument has a cleared form;
         ``hidden_series`` replaces the hidden legend entries (series ``c:idx``
-        values); ``[]`` shows them all.
+        values) and ``[]`` shows them all.
 
         Raises:
-          TypeError: when ``position``, ``overlay`` or ``hidden_series`` is
-            ``None``, when the first argument is not ``None``, or when it is
-            ``None`` together with a keyword argument.
+          TypeError: when an argument is ``None`` or ``overlay`` is not a ``bool``.
         """
         given = {
             key: value
             for key, value in (("position", position), ("overlay", overlay), ("hidden_series", hidden_series))
             if value is not UNCHANGED
         }
-        if legend is not UNCHANGED:
-            if legend is not None:
-                raise TypeError(f"formulon: the legend argument removes the legend and must be None, got {legend!r}")
-            if given:
-                raise TypeError("formulon: removing the legend takes no keyword arguments")
         for key, value in given.items():
             if value is None:
                 raise TypeError(f"formulon: {key} cannot be None")
         if overlay is not UNCHANGED and not isinstance(overlay, bool):
             raise TypeError(f"formulon: overlay must be a bool, got {type(overlay).__name__}")
-        if legend is UNCHANGED and not given:
+        if not given:
             return
         h, sheet, object_id = self._at()
-        fields: Dict[str, object]
-        if legend is None:
-            fields = {"position": _sint(_nullable_enum(None, "position"), "position"), "overlay": 0}
-        else:
-            current = self.get_properties().legend
-            if position is UNCHANGED:
-                position = current.position if current is not None else ChartLegendPosition.RIGHT
-            if overlay is UNCHANGED:
-                overlay = current.overlay if current is not None else False
-            fields = {
-                "position": _sint(_nullable_enum(position, "position"), "position"),
-                "overlay": 1 if overlay else 0,
-            }
+        current = self.get_properties().legend
+        if position is UNCHANGED:
+            position = current.position if current is not None else ChartLegendPosition.RIGHT
+        if overlay is UNCHANGED:
+            overlay = current.overlay if current is not None else False
+        fields: Dict[str, object] = {"position": _sint(position, "position"), "overlay": 1 if overlay else 0}
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_LEGEND_PATCH, 1)
             if hidden_series is not UNCHANGED:
@@ -609,9 +643,9 @@ class Chart(Drawing):
                 fields["hidden_series"] = _id_array(hidden_series, "hidden_series", scope)
                 fields["hidden_series_count"] = _uint(len(hidden_series), "hidden_series_count")
             S.CHART_LEGEND_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_sheet_set_chart_legend(h, sheet, object_id, ptr))
+            _check(LIB.fm_sheet_update_chart_legend(h, sheet, object_id, ptr))
 
-    def set_axis(
+    def update_axis(
         self,
         axis_id: int,
         *,
@@ -642,9 +676,9 @@ class Chart(Drawing):
             ptr = scope.struct_array(S.CHART_AXIS_PATCH, 1)
             fields = _encode_axis_patch(patch, scope)
             S.CHART_AXIS_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_sheet_set_chart_axis(h, sheet, object_id, _uint(axis_id, "axis_id"), ptr))
+            _check(LIB.fm_sheet_update_chart_axis(h, sheet, object_id, _uint(axis_id, "axis_id"), ptr))
 
-    def set_display(
+    def update_display(
         self,
         *,
         blanks_as: Union[ChartBlanksAs, None, Unchanged] = UNCHANGED,
@@ -661,19 +695,19 @@ class Chart(Drawing):
             fields = _encode_patch(_DISPLAY_PATCH_SPEC, patch, (), "display patch", scope)
             ptr = scope.struct(S.CHART_DISPLAY_PATCH)
             S.CHART_DISPLAY_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_sheet_set_chart_display(h, sheet, object_id, ptr))
+            _check(LIB.fm_sheet_update_chart_display(h, sheet, object_id, ptr))
 
-    def set_series(
+    def update_series(
         self,
         plot: int,
         series_index: int,
         *,
-        name: Union[str, None, Unchanged] = UNCHANGED,
-        categories: Union[str, None, Unchanged] = UNCHANGED,
-        values: Union[str, None, Unchanged] = UNCHANGED,
-        x: Union[str, None, Unchanged] = UNCHANGED,
-        y: Union[str, None, Unchanged] = UNCHANGED,
-        size: Union[str, None, Unchanged] = UNCHANGED,
+        name: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
+        categories: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
+        values: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
+        x: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
+        y: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
+        size: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
         fill: Union[ChartFillPatch, None, Unchanged] = UNCHANGED,
         line: Union[ChartLinePatch, None, Unchanged] = UNCHANGED,
         marker: Union[ChartMarkerPatch, None, Unchanged] = UNCHANGED,
@@ -682,8 +716,8 @@ class Chart(Drawing):
     ) -> None:
         """Update the series with ``c:idx`` ``series_index`` of plot group ``plot``; an omitted argument keeps its value.
 
-        A reference is its new text; ``""`` removes ``name``, ``categories`` or
-        ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on
+        A reference is its new text or a :class:`ChartDataSource` with a reference; ``""`` removes ``name``,
+        ``categories`` or ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on
         ``marker`` or ``labels`` removes it. A changed reference refreshes its cache.
         """
         patch = _given(dict(locals()), ChartSeriesPatch)
@@ -693,12 +727,53 @@ class Chart(Drawing):
             fields = _encode_series_patch(patch, scope)
             S.CHART_SERIES_PATCH.pack(LIB, ptr, fields)
             _check(
-                LIB.fm_sheet_set_chart_series(
+                LIB.fm_sheet_update_chart_series(
                     h, sheet, object_id, _uint(plot, "plot"), _uint(series_index, "series_index"), ptr
                 )
             )
 
-    def set_point(
+    def set_point(self, plot: int, series_index: int, point_index: int, value: Optional[ChartPoint]) -> None:
+        """Replace the formatting of data point ``point_index`` with ``value``, or remove it with ``None``.
+
+        ``value`` is a :class:`ChartPoint` as :meth:`get_properties` reads it;
+        its ``index`` is ignored. Removing a point that has no formatting does
+        nothing.
+
+        Raises:
+          TypeError: when ``value`` is neither a :class:`ChartPoint` nor ``None``.
+        """
+        if value is None:
+            self.update_point(plot, series_index, point_index)
+            return
+        if not isinstance(value, ChartPoint):
+            raise TypeError(f"formulon: value must be a ChartPoint or None, got {type(value).__name__}")
+        # An absent member is written as ``None``, which clears whatever the point has there; a marker is
+        # cleared only where the point has one, as plots without markers reject any marker key.
+        if value.marker is not None:
+            marker: Union[ChartMarkerPatch, None, Unchanged] = {
+                "symbol": value.marker.symbol,
+                "size_pt": value.marker.size_pt,
+                "fill": _fill_patch_of(value.marker.fill),
+                "line": _line_patch_of(value.marker.line),
+            }
+        else:
+            marker = UNCHANGED
+            plots = self.get_properties().plots
+            for series in plots[plot].series if 0 <= plot < len(plots) else ():
+                if series.index == series_index:
+                    if any(p.index == point_index and p.marker is not None for p in series.points):
+                        marker = None
+                    break
+        self.update_point(
+            plot,
+            series_index,
+            point_index,
+            fill=_fill_patch_of(value.fill),
+            line=_line_patch_of(value.line),
+            marker=marker,
+        )
+
+    def update_point(
         self,
         plot: int,
         series_index: int,
@@ -719,7 +794,7 @@ class Chart(Drawing):
             fields = _encode_point_patch(patch, scope)
             S.CHART_POINT_PATCH.pack(LIB, ptr, fields)
             _check(
-                LIB.fm_sheet_set_chart_point(
+                LIB.fm_sheet_update_chart_point(
                     h,
                     sheet,
                     object_id,
@@ -730,13 +805,13 @@ class Chart(Drawing):
                 )
             )
 
-    def set_plot(
+    def update_plot(
         self,
         plot: int,
         *,
-        gap_width: Union[int, None, Unchanged] = UNCHANGED,
+        gap_width_pct: Union[int, None, Unchanged] = UNCHANGED,
         overlap: Union[int, None, Unchanged] = UNCHANGED,
-        first_slice_angle: Union[int, None, Unchanged] = UNCHANGED,
+        first_slice_angle_deg: Union[int, None, Unchanged] = UNCHANGED,
         vary_colors: Union[bool, None, Unchanged] = UNCHANGED,
         hole_size: Union[int, None, Unchanged] = UNCHANGED,
     ) -> None:
@@ -751,7 +826,7 @@ class Chart(Drawing):
             ptr = scope.struct_array(S.CHART_PLOT_PATCH, 1)
             fields = _encode_patch(_PLOT_PATCH_SPEC, patch, (), "plot patch", scope)
             S.CHART_PLOT_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_sheet_set_chart_plot(h, sheet, object_id, _uint(plot, "plot"), ptr))
+            _check(LIB.fm_sheet_update_chart_plot(h, sheet, object_id, _uint(plot, "plot"), ptr))
 
     def set_filter(self, hidden_series: Sequence[int], hidden_categories: Sequence[int]) -> None:
         """Replace the chart filter: the listed series (by ``c:idx``) and category positions are hidden."""
@@ -769,28 +844,17 @@ class Chart(Drawing):
                 )
             )
 
-    def add_series(
-        self,
-        plot: int,
-        *,
-        name: Union[str, None, Unchanged] = UNCHANGED,
-        categories: Union[str, None, Unchanged] = UNCHANGED,
-        values: Union[str, None, Unchanged] = UNCHANGED,
-        x: Union[str, None, Unchanged] = UNCHANGED,
-        y: Union[str, None, Unchanged] = UNCHANGED,
-        size: Union[str, None, Unchanged] = UNCHANGED,
-        fill: Union[ChartFillPatch, None, Unchanged] = UNCHANGED,
-        line: Union[ChartLinePatch, None, Unchanged] = UNCHANGED,
-        marker: Union[ChartMarkerPatch, None, Unchanged] = UNCHANGED,
-        smooth: Union[bool, None, Unchanged] = UNCHANGED,
-        labels: Union[ChartLabelsPatch, None, Unchanged] = UNCHANGED,
-    ) -> int:
-        """Append a series to plot group ``plot`` and return its ``c:idx``.
+    def add_series(self, plot: int, series: ChartSeriesInput) -> int:
+        """Append ``series`` to plot group ``plot`` and return its ``c:idx``.
 
-        ``values`` is required (``y`` for a scatter plot); the arguments read
-        as in :meth:`set_series`.
+        ``series.values`` is required (``y`` for a scatter plot); the other fields read as in
+        :meth:`update_series`, and a field left ``None`` is not written.
         """
-        patch = _given(dict(locals()), ChartSeriesPatch)
+        if not isinstance(series, ChartSeriesInput):
+            raise TypeError(f"Chart.add_series: series must be a ChartSeriesInput, got {type(series).__name__}")
+        patch = {
+            key: getattr(series, key) for key in ChartSeriesPatch.__annotations__ if getattr(series, key) is not None
+        }
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             out = scope.out_ptr()
@@ -884,8 +948,8 @@ class Shape(Drawing):
         fill_color: Union[ColorInput, None, Unchanged] = UNCHANGED,
         line_kind: Union[ShapePaint, None, Unchanged] = UNCHANGED,
         line_color: Union[ColorInput, None, Unchanged] = UNCHANGED,
-        line_width_emu: Union[int, Unchanged] = UNCHANGED,
-        rotation: Union[int, Unchanged] = UNCHANGED,
+        line_width_pt: Union[float, Unchanged] = UNCHANGED,
+        rotation_deg: Union[float, Unchanged] = UNCHANGED,
         hidden: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Apply the arguments that are given to the shape, the name and anchor included; the rest of its XML is kept.

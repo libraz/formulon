@@ -20,34 +20,34 @@ constexpr int32_t kErrNA = 6;
 
 fm_value_t blank() {
   fm_value_t v{};
-  v.kind = FM_VAL_BLANK;
+  v.kind = FM_VALUE_KIND_BLANK;
   return v;
 }
 
 fm_value_t number(double d) {
   fm_value_t v{};
-  v.kind = FM_VAL_NUMBER;
+  v.kind = FM_VALUE_KIND_NUMBER;
   v.u.number = d;
   return v;
 }
 
 fm_value_t boolean(int32_t b) {
   fm_value_t v{};
-  v.kind = FM_VAL_BOOL;
+  v.kind = FM_VALUE_KIND_BOOL;
   v.u.boolean = b;
   return v;
 }
 
 fm_value_t text(const char* s) {
   fm_value_t v{};
-  v.kind = FM_VAL_TEXT;
+  v.kind = FM_VALUE_KIND_TEXT;
   v.u.text = s;
   return v;
 }
 
 fm_value_t error(int32_t code) {
   fm_value_t v{};
-  v.kind = FM_VAL_ERROR;
+  v.kind = FM_VALUE_KIND_ERROR;
   v.u.error_code = code;
   return v;
 }
@@ -61,14 +61,14 @@ int32_t compare(const char* a, const char* b, const char* profile, fm_collation_
 TEST(FormulonCApiCollation, StrengthAndArgumentOrder) {
   const char* halfwidth = "A";
   const char* fullwidth = "\xEF\xBC\xA1";  // U+FF21
-  EXPECT_NE(compare(halfwidth, fullwidth, "mac-365-zh_CN", FM_COLLATION_COMPARE), 0);
-  EXPECT_EQ(compare(halfwidth, fullwidth, "mac-365-zh_CN", FM_COLLATION_DYNAMIC), 0);
+  EXPECT_NE(compare(halfwidth, fullwidth, "mac-365-zh_CN", FM_COLLATION_STRENGTH_COMPARE), 0);
+  EXPECT_EQ(compare(halfwidth, fullwidth, "mac-365-zh_CN", FM_COLLATION_STRENGTH_DYNAMIC), 0);
 
-  EXPECT_EQ(compare("a", "b", "mac-365-en_US", FM_COLLATION_COMPARE), -1);
-  EXPECT_EQ(compare("b", "a", "mac-365-en_US", FM_COLLATION_COMPARE), 1);
-  EXPECT_EQ(compare("a", "b", "mac-365-en_US", FM_COLLATION_DYNAMIC), -1);
-  EXPECT_EQ(compare("b", "a", "mac-365-en_US", FM_COLLATION_CLASSIC_EXACT), 1);
-  EXPECT_EQ(compare("a", "a", "win-365-en_US", FM_COLLATION_COMPARE), 0);
+  EXPECT_EQ(compare("a", "b", "mac-365-en_US", FM_COLLATION_STRENGTH_COMPARE), -1);
+  EXPECT_EQ(compare("b", "a", "mac-365-en_US", FM_COLLATION_STRENGTH_COMPARE), 1);
+  EXPECT_EQ(compare("a", "b", "mac-365-en_US", FM_COLLATION_STRENGTH_DYNAMIC), -1);
+  EXPECT_EQ(compare("b", "a", "mac-365-en_US", FM_COLLATION_STRENGTH_CLASSIC_EXACT), 1);
+  EXPECT_EQ(compare("a", "a", "win-365-en_US", FM_COLLATION_STRENGTH_COMPARE), 0);
 }
 
 TEST(FormulonCApiCollation, ClassesRoundTrip) {
@@ -79,7 +79,7 @@ TEST(FormulonCApiCollation, ClassesRoundTrip) {
   constexpr size_t kCount = sizeof(values) / sizeof(values[0]);
   uint32_t ids[kCount] = {};
   uint32_t classes = 0;
-  ASSERT_EQ(fm_get_collation_classes(values, kCount, FM_COLLATION_DYNAMIC, "mac-365-en_US", ids, &classes), 0);
+  ASSERT_EQ(fm_get_collation_classes(values, kCount, FM_COLLATION_STRENGTH_DYNAMIC, "mac-365-en_US", ids, &classes), 0);
   // Numbers {0, 1}, text {"1", "a", "b"}, bool {FALSE, TRUE}, errors {#DIV/0!, #VALUE!, #N/A}, blank.
   EXPECT_EQ(classes, 11U);
   EXPECT_EQ(ids[0], 4U);    // "b"
@@ -99,42 +99,43 @@ TEST(FormulonCApiCollation, ClassesRoundTrip) {
   EXPECT_EQ(ids[14], 1U);   // 1
 
   uint32_t empty_classes = 7;
-  EXPECT_EQ(fm_get_collation_classes(nullptr, 0, FM_COLLATION_COMPARE, "mac-365-en_US", nullptr, &empty_classes), 0);
+  EXPECT_EQ(
+      fm_get_collation_classes(nullptr, 0, FM_COLLATION_STRENGTH_COMPARE, "mac-365-en_US", nullptr, &empty_classes), 0);
   EXPECT_EQ(empty_classes, 0U);
 }
 
 TEST(FormulonCApiCollation, RejectsBadInput) {
   const char* profile = "mac-365-en_US";
   int32_t order = 0;
-  EXPECT_EQ(fm_compare_text(nullptr, "b", FM_COLLATION_COMPARE, profile, &order), kNullPtr);
-  EXPECT_EQ(fm_compare_text("a", nullptr, FM_COLLATION_COMPARE, profile, &order), kNullPtr);
-  EXPECT_EQ(fm_compare_text("a", "b", FM_COLLATION_COMPARE, nullptr, &order), kNullPtr);
-  EXPECT_EQ(fm_compare_text("a", "b", FM_COLLATION_COMPARE, profile, nullptr), kNullPtr);
-  EXPECT_EQ(fm_compare_text("a", "b", FM_COLLATION_COMPARE, "mac-365-xx_XX", &order), kInvalid);
+  EXPECT_EQ(fm_compare_text(nullptr, "b", FM_COLLATION_STRENGTH_COMPARE, profile, &order), kNullPtr);
+  EXPECT_EQ(fm_compare_text("a", nullptr, FM_COLLATION_STRENGTH_COMPARE, profile, &order), kNullPtr);
+  EXPECT_EQ(fm_compare_text("a", "b", FM_COLLATION_STRENGTH_COMPARE, nullptr, &order), kNullPtr);
+  EXPECT_EQ(fm_compare_text("a", "b", FM_COLLATION_STRENGTH_COMPARE, profile, nullptr), kNullPtr);
+  EXPECT_EQ(fm_compare_text("a", "b", FM_COLLATION_STRENGTH_COMPARE, "mac-365-xx_XX", &order), kInvalid);
   EXPECT_EQ(fm_compare_text("a", "b", static_cast<fm_collation_strength_t>(3), profile, &order), kInvalid);
 
   const fm_value_t ok[] = {number(1.0), text("a")};
   uint32_t ids[2] = {};
   uint32_t classes = 0;
-  EXPECT_EQ(fm_get_collation_classes(nullptr, 2, FM_COLLATION_COMPARE, profile, ids, &classes), kNullPtr);
-  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_COMPARE, profile, nullptr, &classes), kNullPtr);
-  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_COMPARE, nullptr, ids, &classes), kNullPtr);
-  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_COMPARE, profile, ids, nullptr), kNullPtr);
-  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_COMPARE, "nope", ids, &classes), kInvalid);
+  EXPECT_EQ(fm_get_collation_classes(nullptr, 2, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kNullPtr);
+  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_STRENGTH_COMPARE, profile, nullptr, &classes), kNullPtr);
+  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_STRENGTH_COMPARE, nullptr, ids, &classes), kNullPtr);
+  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_STRENGTH_COMPARE, profile, ids, nullptr), kNullPtr);
+  EXPECT_EQ(fm_get_collation_classes(ok, 2, FM_COLLATION_STRENGTH_COMPARE, "nope", ids, &classes), kInvalid);
   EXPECT_EQ(fm_get_collation_classes(ok, 2, static_cast<fm_collation_strength_t>(3), profile, ids, &classes), kInvalid);
 
   const fm_value_t null_text[] = {number(1.0), text(nullptr)};
   // value_from_fm reports a NULL text pointer as a null-pointer error.
-  EXPECT_EQ(fm_get_collation_classes(null_text, 2, FM_COLLATION_COMPARE, profile, ids, &classes), kNullPtr);
+  EXPECT_EQ(fm_get_collation_classes(null_text, 2, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kNullPtr);
   const fm_value_t infinite[] = {number(std::numeric_limits<double>::infinity())};
-  EXPECT_EQ(fm_get_collation_classes(infinite, 1, FM_COLLATION_COMPARE, profile, ids, &classes), kInvalid);
+  EXPECT_EQ(fm_get_collation_classes(infinite, 1, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kInvalid);
   const fm_value_t nan_value[] = {number(std::numeric_limits<double>::quiet_NaN())};
-  EXPECT_EQ(fm_get_collation_classes(nan_value, 1, FM_COLLATION_COMPARE, profile, ids, &classes), kInvalid);
+  EXPECT_EQ(fm_get_collation_classes(nan_value, 1, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kInvalid);
   fm_value_t array_kind{};
-  array_kind.kind = FM_VAL_ARRAY;
-  EXPECT_EQ(fm_get_collation_classes(&array_kind, 1, FM_COLLATION_COMPARE, profile, ids, &classes), kInvalid);
+  array_kind.kind = FM_VALUE_KIND_ARRAY;
+  EXPECT_EQ(fm_get_collation_classes(&array_kind, 1, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kInvalid);
   const fm_value_t bad_error[] = {error(9999)};
-  EXPECT_EQ(fm_get_collation_classes(bad_error, 1, FM_COLLATION_COMPARE, profile, ids, &classes), kInvalid);
+  EXPECT_EQ(fm_get_collation_classes(bad_error, 1, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kInvalid);
 }
 
 }  // namespace

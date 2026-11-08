@@ -289,7 +289,8 @@ def _mentions(text: str, names: Iterable[str]) -> bool:
 @_owned("R39.py.args")
 def _rule_py_args(ctx: Context) -> Iterable[Violation]:
     """A Python `add_*` / `set_*` whose JS twin takes a record or input takes one positional dataclass argument;
-    an `update_*` takes its keys keyword-only, each defaulting to `UNCHANGED`."""
+    an `update_*` takes its keys keyword-only, each defaulting to `UNCHANGED`. A positional argument is a key when
+    it names a field of the `patch_record` dataclass, or, without one, when it is not a coordinate."""
     dataclasses = _dataclass_names(surfaces(ctx).py.classes)
     for key, entry in _ops(ctx):
         if not isinstance(entry.get("py"), str):
@@ -328,8 +329,10 @@ def _rule_py_args(ctx: Context) -> Iterable[Violation]:
                             f"`{target.name}({param})` defaults to `{defaults.get(param)}`, not `UNCHANGED`",
                         )
                 ref = entry.get("ref_args") or [None]
+                record = surfaces(ctx).py.classes.get(entry.get("patch_record") or "")
                 for position, (param, _) in enumerate(positional):
-                    if position != ref[0] and not _is_coordinate(param, False):
+                    is_key = param in record.fields if record is not None else not _is_coordinate(param, False)
+                    if position != ref[0] and is_key:
                         yield _violation(
                             ctx,
                             "R39.py.args",

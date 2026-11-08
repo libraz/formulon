@@ -244,11 +244,11 @@ Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
   o.Set("lockRevision", JsBool(env, p.lock_revision));
   o.Set("workbookSpinCount", Napi::Number::New(env, p.workbook_spin_count));
   o.Set("revisionsSpinCount", Napi::Number::New(env, p.revisions_spin_count));
-  o.Set("workbookPassword", JsStringOrNull(env, p.workbook_password));
+  o.Set("workbookLegacyPasswordHash", JsStringOrNull(env, p.workbook_legacy_password_hash));
   o.Set("workbookAlgorithmName", JsStringOrNull(env, p.workbook_algorithm_name));
   o.Set("workbookHashValue", JsStringOrNull(env, p.workbook_hash_value));
   o.Set("workbookSaltValue", JsStringOrNull(env, p.workbook_salt_value));
-  o.Set("revisionsPassword", JsStringOrNull(env, p.revisions_password));
+  o.Set("revisionsLegacyPasswordHash", JsStringOrNull(env, p.revisions_legacy_password_hash));
   o.Set("revisionsAlgorithmName", JsStringOrNull(env, p.revisions_algorithm_name));
   o.Set("revisionsHashValue", JsStringOrNull(env, p.revisions_hash_value));
   o.Set("revisionsSaltValue", JsStringOrNull(env, p.revisions_salt_value));
@@ -273,11 +273,11 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   p.lock_revision = reader.Bool(in, "lockRevision", false) ? 1 : 0;
   p.workbook_spin_count = reader.U32(in, "workbookSpinCount", 0U);
   p.revisions_spin_count = reader.U32(in, "revisionsSpinCount", 0U);
-  p.workbook_password = optional("workbookPassword", &text[0]);
+  p.workbook_legacy_password_hash = optional("workbookLegacyPasswordHash", &text[0]);
   p.workbook_algorithm_name = optional("workbookAlgorithmName", &text[1]);
   p.workbook_hash_value = optional("workbookHashValue", &text[2]);
   p.workbook_salt_value = optional("workbookSaltValue", &text[3]);
-  p.revisions_password = optional("revisionsPassword", &text[4]);
+  p.revisions_legacy_password_hash = optional("revisionsLegacyPasswordHash", &text[4]);
   p.revisions_algorithm_name = optional("revisionsAlgorithmName", &text[5]);
   p.revisions_hash_value = optional("revisionsHashValue", &text[6]);
   p.revisions_salt_value = optional("revisionsSaltValue", &text[7]);
@@ -298,7 +298,7 @@ Napi::Object ProtectedRangeToJs(Napi::Env env, const fm_protected_range_t& r) {
     ranges.Set(static_cast<uint32_t>(i), RangeToJs(env, r.ranges[i]));
   }
   item.Set("ranges", ranges);
-  item.Set("password", JsString(env, r.password));
+  item.Set("legacyPasswordHash", JsStringOrNull(env, r.legacy_password_hash));
   item.Set("algorithmName", JsString(env, r.algorithm_name));
   item.Set("hashValue", JsString(env, r.hash_value));
   item.Set("saltValue", JsString(env, r.salt_value));
@@ -327,7 +327,7 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   if (ranges_given) {
     (void)ReadCellRects(reader, ranges_array, "ranges", &ranges);
   }
-  (void)reader.String(in, "password", &text[1]);
+  (void)reader.String(in, "legacyPasswordHash", &text[1]);
   (void)reader.String(in, "algorithmName", &text[2]);
   (void)reader.String(in, "hashValue", &text[3]);
   (void)reader.String(in, "saltValue", &text[4]);
@@ -341,7 +341,7 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   const fm_cell_rect_t empty_sentinel{};
   r.ranges = ranges_given && optional_ranges && ranges.empty() ? &empty_sentinel : ranges.data();
   r.range_count = ranges.size();
-  r.password = text[1].c_str();
+  r.legacy_password_hash = text[1].c_str();
   r.algorithm_name = text[2].c_str();
   r.hash_value = text[3].c_str();
   r.salt_value = text[4].c_str();
@@ -385,10 +385,10 @@ Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Adds a hyperlink over `rect` whose texts are the already type-checked
-// arguments `(target, display, tooltip, location)` from `text_index` on.
+// Sets the hyperlink anchored at the top-left cell of `rect`, replacing the one there, with the already
+// type-checked arguments `(target, display, tooltip, location)` from `text_index` on.
 // Empty strings are forwarded as NULL.
-fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& info, const fm_cell_rect_t& rect,
+fm_status_t SetHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& info, const fm_cell_rect_t& rect,
                                  std::size_t text_index) {
   const uint32_t sheet = Workbook::ArgU32(info, 0);
   // Keep the std::string buffers alive until after the C ABI call so the
@@ -403,12 +403,12 @@ fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& in
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  return fm_sheet_add_hyperlink(wb, sheet, &hl);
+  return fm_sheet_set_hyperlink(wb, sheet, rect.first_row, rect.first_col, &hl);
 }
 
 }  // namespace
 
-Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SetHyperlink(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
@@ -416,17 +416,17 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   if (info.Length() < 7 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsString() ||
       !info[4].IsString() || !info[5].IsString() || !info[6].IsString()) {
     Napi::TypeError::New(env,
-                         "addHyperlink expects (sheet:number, row:number, col:number, "
+                         "setHyperlink expects (sheet:number, row:number, col:number, "
                          "target:string, display:string, tooltip:string, location:string)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
-  return ValueOrThrow(env, AddHyperlinkFromArgs(handle_, info, fm_cell_rect_t{row, col, row, col}, 3), env.Undefined());
+  return ValueOrThrow(env, SetHyperlinkFromArgs(handle_, info, fm_cell_rect_t{row, col, row, col}, 3), env.Undefined());
 }
 
-Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SetHyperlinkRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
@@ -434,7 +434,7 @@ Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
   if (info.Length() < 6 || !info[0].IsNumber() || !info[1].IsObject() || !info[2].IsString() || !info[3].IsString() ||
       !info[4].IsString() || !info[5].IsString()) {
     Napi::TypeError::New(env,
-                         "addHyperlinkRange expects (sheet:number, range:CellRect, target:string, "
+                         "setHyperlinkRange expects (sheet:number, range:CellRect, target:string, "
                          "display:string, tooltip:string, location:string)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
@@ -444,7 +444,7 @@ Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, AddHyperlinkFromArgs(handle_, info, rect, 2), env.Undefined());
+  return ValueOrThrow(env, SetHyperlinkFromArgs(handle_, info, rect, 2), env.Undefined());
 }
 
 namespace {
@@ -501,12 +501,12 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation_t& v) {
   }
   item.Set("ranges", ranges);
   item.Set("type", Napi::Number::New(env, v.type));
-  item.Set("op", Napi::Number::New(env, v.op));
+  item.Set("operator", Napi::Number::New(env, v.op));
   item.Set("errorStyle", Napi::Number::New(env, v.error_style));
-  item.Set("allowBlank", Napi::Boolean::New(env, v.allow_blank != 0));
-  item.Set("showInputMessage", Napi::Boolean::New(env, v.show_input_message != 0));
-  item.Set("showErrorMessage", Napi::Boolean::New(env, v.show_error_message != 0));
-  item.Set("showDropDown", Napi::Boolean::New(env, v.show_dropdown != 0));
+  item.Set("allowBlank", JsTristate(env, v.allow_blank));
+  item.Set("showInputMessage", JsTristate(env, v.show_input_message));
+  item.Set("showErrorMessage", JsTristate(env, v.show_error_message));
+  item.Set("showInCellDropdown", JsTristate(env, v.show_in_cell_dropdown));
   item.Set("formula1", JsString(env, v.formula1));
   item.Set("formula2", JsString(env, v.formula2));
   item.Set("errorTitle", JsString(env, v.error_title));
@@ -576,12 +576,12 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = ranges_buf.size();
   dv.type = reader.U8(v, "type", 0U);
-  dv.op = reader.U8(v, "op", 0U);
+  dv.op = reader.U8(v, "operator", 0U);
   dv.error_style = reader.U8(v, "errorStyle", 0U);
-  dv.allow_blank = reader.Bool(v, "allowBlank", false) ? 1 : 0;
-  dv.show_input_message = reader.Bool(v, "showInputMessage", false) ? 1 : 0;
-  dv.show_error_message = reader.Bool(v, "showErrorMessage", false) ? 1 : 0;
-  dv.show_dropdown = reader.Bool(v, "showDropDown", true) ? 1 : 0;
+  dv.allow_blank = reader.Tristate(v, "allowBlank");
+  dv.show_input_message = reader.Tristate(v, "showInputMessage");
+  dv.show_error_message = reader.Tristate(v, "showErrorMessage");
+  dv.show_in_cell_dropdown = reader.Tristate(v, "showInCellDropdown");
   dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   dv.error_title = error_title.empty() ? nullptr : error_title.c_str();

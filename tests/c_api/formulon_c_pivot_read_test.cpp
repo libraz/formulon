@@ -174,38 +174,38 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   EXPECT_EQ(cols, 2U);
 
   std::vector<fm_pivot_cell_t> cells;
-  const std::size_t cell_count = count_of(fm_pivot_cells_get_cell_count, projected.handle);
+  const std::size_t cell_count = count_of(fm_pivot_report_get_cell_count, projected.handle);
   ASSERT_GT(cell_count, 0U);
   cells.resize(cell_count, FM_STRUCT_INIT(fm_pivot_cell_t));
   for (std::size_t i = 0; i < cell_count; ++i) {
-    ASSERT_EQ(fm_pivot_cells_get_cell_at(projected.handle, i, &cells[i]), 0);
+    ASSERT_EQ(fm_pivot_report_get_cell_at(projected.handle, i, &cells[i]), 0);
   }
 
   const fm_pivot_cell_t* row_labels = FindCell(cells, 0, 3);
   ASSERT_NE(row_labels, nullptr);
-  EXPECT_EQ(row_labels->kind, FM_PIVOT_CELL_HEADER);
-  EXPECT_EQ(row_labels->value.kind, FM_VAL_TEXT);
+  EXPECT_EQ(row_labels->kind, FM_PIVOT_CELL_KIND_HEADER);
+  EXPECT_EQ(row_labels->value.kind, FM_VALUE_KIND_TEXT);
   ASSERT_NE(row_labels->value.u.text, nullptr);
   EXPECT_STREQ(row_labels->value.u.text, "行ラベル");
 
   const fm_pivot_cell_t* north_label = FindCell(cells, 1, 3);
   ASSERT_NE(north_label, nullptr);
-  EXPECT_EQ(north_label->kind, FM_PIVOT_CELL_ROW_LABEL);
-  EXPECT_EQ(north_label->value.kind, FM_VAL_TEXT);
+  EXPECT_EQ(north_label->kind, FM_PIVOT_CELL_KIND_ROW_LABEL);
+  EXPECT_EQ(north_label->value.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(north_label->value.u.text, "North");
 
   const fm_pivot_cell_t* north_sum = FindCell(cells, 1, 4);
   ASSERT_NE(north_sum, nullptr);
-  EXPECT_EQ(north_sum->kind, FM_PIVOT_CELL_DATA);
-  EXPECT_EQ(north_sum->value.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(north_sum->kind, FM_PIVOT_CELL_KIND_DATA);
+  EXPECT_EQ(north_sum->value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(north_sum->value.u.number, 400.0);
   ASSERT_NE(north_sum->field_name, nullptr);
   EXPECT_STREQ(north_sum->field_name, "Sum of Amount");
 
   const fm_pivot_cell_t* grand_total = FindCell(cells, 3, 4);
   ASSERT_NE(grand_total, nullptr);
-  EXPECT_EQ(grand_total->kind, FM_PIVOT_CELL_GRAND_TOTAL);
-  EXPECT_EQ(grand_total->value.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(grand_total->kind, FM_PIVOT_CELL_KIND_GRAND_TOTAL);
+  EXPECT_EQ(grand_total->value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(grand_total->value.u.number, 600.0);
 }
 
@@ -219,13 +219,13 @@ TEST(FormulonCApiPivot, InvalidPivotArgsReturnErrors) {
   EXPECT_EQ(fm_sheet_get_pivot_count(wb.handle, 99, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 
-  fm_pivot_cells_t* cells = nullptr;
+  fm_pivot_report_t* cells = nullptr;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, 0, &cells),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(cells, nullptr);
 
   fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
-  EXPECT_EQ(fm_pivot_cells_get_cell_at(nullptr, 0, &cell),
+  EXPECT_EQ(fm_pivot_report_get_cell_at(nullptr, 0, &cell),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -242,7 +242,7 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   region_spec.source_name = "Region";
   region_spec.custom_name = "";
   region_spec.axis = FM_PIVOT_AXIS_COL;
-  region_spec.subtotal_top = 0;
+  region_spec.subtotal_top = FM_TRISTATE_FALSE;
   region_spec.number_format = "";
   std::size_t added = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 1, 0, &region_spec, &added), 0) << fm_get_last_error_message();
@@ -291,11 +291,11 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   EXPECT_STREQ(region.source_name, "Region");
   EXPECT_STREQ(region.custom_name, "Region");
   EXPECT_EQ(region.axis, FM_PIVOT_AXIS_ROW);
-  EXPECT_EQ(region.subtotal_top, 1);
+  EXPECT_EQ(region.subtotal_top, FM_TRISTATE_TRUE);
   EXPECT_STREQ(region.number_format, "");
   EXPECT_EQ(region.cache_field_index, 0);
   // A field carrying an explicit item list sorts by it, as OOXML's default sortType does.
-  EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_MANUAL);
+  EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_ORDER_MANUAL);
   EXPECT_STREQ(region.sort_by_field, "");
   EXPECT_EQ(region.date_periods, 0U);
   EXPECT_EQ(region.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
@@ -321,7 +321,7 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 1, 0, 0, &data_field), 0);
   EXPECT_STREQ(data_field.name, "Sum of Amount");
   EXPECT_EQ(data_field.field_index, 1U);
-  EXPECT_EQ(data_field.aggregation, FM_PIVOT_AGG_SUM);
+  EXPECT_EQ(data_field.aggregation, FM_PIVOT_AGGREGATION_SUM);
   EXPECT_EQ(data_field.show_as, FM_PIVOT_SHOW_VALUES_AS_NORMAL);
   EXPECT_EQ(data_field.show_as_base_field, -1);
   EXPECT_EQ(data_field.show_as_base_item, -1);

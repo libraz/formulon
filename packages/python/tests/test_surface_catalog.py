@@ -38,7 +38,7 @@ class FunctionCatalogTests(unittest.TestCase):
         base = get_function_metadata("XLOOKUP")
         self.assertIsNotNone(base)
         # The engine leaves display metadata empty.
-        self.assertIsNone(base.signature_template)
+        self.assertIsNone(base.signature)
         self.assertIsNone(base.description)
 
         entry = {
@@ -50,7 +50,7 @@ class FunctionCatalogTests(unittest.TestCase):
 
         # Localized override wins for the matching locale.
         fr = formulon.merge_function_metadata(base, entry, "fr-FR")
-        self.assertEqual(fr.signature_template, "RECHERCHEX(...)")
+        self.assertEqual(fr.signature, "RECHERCHEX(...)")
         self.assertEqual(fr.description, "Recherche.")
         self.assertEqual(fr.localized_name, "RECHERCHEX")
         # Structural fields survive the merge.
@@ -60,7 +60,7 @@ class FunctionCatalogTests(unittest.TestCase):
         # signature/description and the canonical display name.
         de = formulon.merge_function_metadata(base, entry, "de-DE")
         self.assertEqual(
-            de.signature_template,
+            de.signature,
             "XLOOKUP(lookup_value, lookup_array, return_array)",
         )
         self.assertEqual(de.description, "Searches a range or an array.")
@@ -69,7 +69,7 @@ class FunctionCatalogTests(unittest.TestCase):
         # No provider entry -> base returned verbatim; display metadata NULL.
         none = formulon.merge_function_metadata(base, None, "fr-FR")
         self.assertIs(none, base)
-        self.assertIsNone(none.signature_template)
+        self.assertIsNone(none.signature)
         self.assertIsNone(none.description)
 
     def test_shipped_example_document_conforms_to_the_engine(self) -> None:

@@ -108,14 +108,14 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
     type: 3,
     formula1: '"Yes,No"',
   });
-  // A CF rule's dxfId must resolve against a registered dxf.
+  // A CF rule's dxfIndex must resolve against a registered dxf.
   const dxf = wb.ooxml.addDxf({ font: { bold: true } });
   wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 1,
-    op: 5,
+    operator: 5,
     formula1: '10',
-    dxfId: dxf,
+    dxfIndex: dxf,
     stopIfTrue: false,
   });
 
@@ -170,7 +170,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
   const listRule = {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 }],
     type: 3,
-    op: 0,
+    operator: 0,
     errorStyle: 1,
     allowBlank: true,
     showInputMessage: true,
@@ -190,7 +190,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
       { firstRow: 6, firstCol: 0, lastRow: 9, lastCol: 0 },
     ],
     type: 2,
-    op: 0,
+    operator: 0,
     formula1: '0',
     formula2: '100',
     allowBlank: false,
@@ -240,15 +240,15 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.sheet(0).listCfRules().length, 0);
-  // A CF rule's dxfId must resolve against a registered dxf.
+  // A CF rule's dxfIndex must resolve against a registered dxf.
   const dxf = wb.ooxml.addDxf({ font: { bold: true } });
   // cellIs rule (type 1) comparing the cell to a literal.
   const add = wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
     type: 1,
-    op: 5,
+    operator: 5,
     formula1: '10',
-    dxfId: dxf,
+    dxfIndex: dxf,
     stopIfTrue: false,
   });
   assert.equal(typeof add, 'number');
@@ -297,10 +297,10 @@ test('data bar x14 fields survive save and load', async () => {
   const bar = loaded.sheet(0).listCfRules()[0].dataBar;
   assert.equal(bar.gradient, false);
   assert.equal(bar.axisPosition, 1);
-  assert.equal(bar.negativeFill.rgb, 0xffff0000);
-  assert.equal(bar.border.rgb, 0xff090909);
-  assert.equal(bar.negativeBorder.rgb, 0xff080808);
-  assert.equal(bar.axisColor.rgb, 0xff010203);
+  assert.equal(bar.negativeFill.argb, 0xffff0000);
+  assert.equal(bar.border.argb, 0xff090909);
+  assert.equal(bar.negativeBorder.argb, 0xff080808);
+  assert.equal(bar.axisColor.argb, 0xff010203);
   assert.equal(bar.direction, 2);
 
   // The decoded bar fed straight back must reproduce the same rule.
@@ -312,7 +312,7 @@ test('data bar x14 fields survive save and load', async () => {
   const reread = loaded.sheet(0).listCfRules()[1].dataBar;
   assert.equal(reread.gradient, false);
   assert.equal(reread.axisPosition, 1);
-  assert.equal(reread.axisColor.rgb, 0xff010203);
+  assert.equal(reread.axisColor.argb, 0xff010203);
   assert.equal(reread.direction, 2);
 
   loaded.dispose();
@@ -357,7 +357,7 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
   // than as absent keys.
   assert.equal(bar.gradient, true);
   assert.equal(bar.axisPosition, 0);
-  assert.equal(bar.negativeFill.rgb, 0xff0000ff);
+  assert.equal(bar.negativeFill.argb, 0xff0000ff);
   wb.dispose();
 });
 
@@ -366,18 +366,18 @@ test('named cell styles: listCellStyles / getCellStyle / listCellStyleXfs', asyn
   const wb = mod.Workbook.createDefault();
   // A fresh workbook may carry zero named styles; the accessors must
   // still return well-formed values rather than throwing.
-  const count = wb.ooxml.listCellStyles().length;
+  const count = wb.listCellStyles().length;
   assert.equal(typeof count, 'number');
   assert.ok(count >= 0);
   assert.equal(typeof wb.ooxml.listCellStyleXfs().length, 'number');
   if (count > 0) {
-    const cs = wb.ooxml.listCellStyles()[0];
+    const cs = wb.listCellStyles()[0];
     assert.equal(typeof cs.name, 'string');
-    assert.equal(typeof cs.xfId, 'number');
-    assert.deepEqual(wb.ooxml.getCellStyle(cs.name), cs);
+    assert.equal(typeof cs.styleXfIndex, 'number');
+    assert.deepEqual(wb.getCellStyle(cs.name), cs);
   }
   // An unknown name is ok with a null value, not a throw.
-  const none = wb.ooxml.getCellStyle('No Such Style');
+  const none = wb.getCellStyle('No Such Style');
   assert.equal(none, null);
 });
 
@@ -508,7 +508,7 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
   const base = mod.getFunctionMetadata('XLOOKUP');
   assert.equal(base.name, 'XLOOKUP');
   // The engine leaves display metadata empty.
-  assert.equal(base.signatureTemplate, undefined);
+  assert.equal(base.signature, undefined);
   assert.equal(base.description, undefined);
 
   const entry = {
@@ -522,7 +522,7 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
 
   // Localized override wins for the matching locale.
   const fr = mod.mergeFunctionMetadata(base, entry, 'fr-FR');
-  assert.equal(fr.signatureTemplate, 'RECHERCHEX(...)');
+  assert.equal(fr.signature, 'RECHERCHEX(...)');
   assert.equal(fr.description, 'Recherche.');
   assert.equal(fr.localizedName, 'RECHERCHEX');
   // Structural fields survive the merge.
@@ -532,14 +532,14 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
   // A locale with no localized/alias entry falls back to the default
   // signature/description and the canonical display name.
   const de = mod.mergeFunctionMetadata(base, entry, 'de-DE');
-  assert.equal(de.signatureTemplate, 'XLOOKUP(lookup_value, lookup_array, return_array)');
+  assert.equal(de.signature, 'XLOOKUP(lookup_value, lookup_array, return_array)');
   assert.equal(de.description, 'Searches a range or an array.');
   assert.equal(de.localizedName, 'XLOOKUP');
 
   // No provider entry -> base returned verbatim, display metadata stays NULL.
   const none = mod.mergeFunctionMetadata(base, undefined, 'fr-FR');
   assert.equal(none, base);
-  assert.equal(none.signatureTemplate, undefined);
+  assert.equal(none.signature, undefined);
   assert.equal(none.description, undefined);
 });
 
@@ -774,23 +774,60 @@ test('a fresh workbook has no external links', async () => {
   assert.deepEqual(wb.listExternalLinks(), []);
 });
 
-test('getSheetProtection / setSheetProtection round-trip the protection flags', async () => {
+test('sheet protection is a record whose presence is the protection, with dialog defaults', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const before = wb.sheet(0).getSheetProtection();
-  assert.equal(before.enabled, false);
-  // Enable protection and lock cell selection.
-  const next = {
-    ...before,
-    enabled: true,
-    selectLockedCells: true,
-    sort: true,
-  };
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+
+  // An empty input protects the sheet with Excel's dialog defaults.
+  wb.sheet(0).setSheetProtection({});
+  const defaults = wb.sheet(0).getSheetProtection();
+  assert.equal(defaults.allowSelectLockedCells, true);
+  assert.equal(defaults.allowSelectUnlockedCells, true);
+  for (const key of [
+    'allowEditObjects',
+    'allowEditScenarios',
+    'allowFormatCells',
+    'allowFormatColumns',
+    'allowFormatRows',
+    'allowInsertColumns',
+    'allowInsertRows',
+    'allowInsertHyperlinks',
+    'allowDeleteColumns',
+    'allowDeleteRows',
+    'allowSort',
+    'allowAutoFilter',
+    'allowPivotTables',
+  ]) {
+    assert.equal(defaults[key], false, key);
+  }
+  assert.equal('enabled' in defaults, false);
+  assert.equal('sheet' in defaults, false);
+
+  // The record a getter returns is accepted as is; a set replaces the whole protection.
+  const next = { ...defaults, allowSelectLockedCells: false, allowSort: true };
   wb.sheet(0).setSheetProtection(next);
   const after = wb.sheet(0).getSheetProtection();
-  assert.equal(after.enabled, true);
-  assert.equal(after.selectLockedCells, true);
-  assert.equal(after.sort, true);
+  assert.equal(after.allowSelectLockedCells, false);
+  assert.equal(after.allowSort, true);
+
+  // A patch merges into the stored protection; null removes it.
+  wb.sheet(0).updateSheetProtection({ allowFormatRows: true });
+  const patched = wb.sheet(0).getSheetProtection();
+  assert.equal(patched.allowFormatRows, true);
+  assert.equal(patched.allowSort, true);
+  wb.sheet(0).setSheetProtection(null);
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+  wb.sheet(0).setSheetProtection(null);
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+
+  // A patch on an unprotected sheet applies to the defaults and protects it; an empty patch does not.
+  wb.sheet(0).updateSheetProtection({});
+  assert.equal(wb.sheet(0).getSheetProtection(), null);
+  wb.sheet(0).updateSheetProtection({ allowAutoFilter: true });
+  assert.equal(wb.sheet(0).getSheetProtection().allowAutoFilter, true);
+  assert.equal(wb.sheet(0).getSheetProtection().allowSelectLockedCells, true);
+
   // Sheet-out-of-range is rejected.
   assert.throws(() => wb.sheet(999).getSheetProtection(), isFormulonError);
   assert.throws(() => wb.sheet(999).setSheetProtection(next), isFormulonError);

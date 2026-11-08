@@ -26,14 +26,14 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   // border 0. A non-zero index is what proves the reserved slots survived.
   fm_font_record_t font{};
   font.name = "Arial";
-  font.size = 12.0;
+  font.size_pt = 12.0;
   std::size_t font_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), 0);
   EXPECT_GT(font_index, 0U);
 
   fm_fill_record_t fill{};
   fill.pattern = 1U; /* solid */
-  fill.fg = RgbColor(0xFFFF0000U);
+  fill.foreground = RgbColor(0xFFFF0000U);
   std::size_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   EXPECT_GT(fill_index, 1U);
@@ -80,14 +80,14 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
   EXPECT_STREQ(seeded.name, "Calibri");
   fm_font_record_t appended{};
   appended.name = "游ゴシック";
-  appended.size = 11.0;
+  appended.size_pt = 11.0;
   std::size_t appended_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &appended, &appended_index), 0);
   EXPECT_GT(appended_index, 0U);
 
   fm_font_record_t declared{};
   declared.name = "游ゴシック";
-  declared.size = 11.0;
+  declared.size_pt = 11.0;
   declared.has_family = 1;
   declared.family = 2;
   declared.has_charset = 1;
@@ -120,20 +120,20 @@ TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
 
   fm_font_record_t added{};
   added.name = "Meiryo";
-  added.size = 12.0;
+  added.size_pt = 12.0;
   std::size_t index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &added, &index), 0);
   ASSERT_GT(index, 0U);
 
   fm_font_record_t replacement{};
   replacement.name = "MS Gothic";
-  replacement.size = 9.0;
+  replacement.size_pt = 9.0;
   ASSERT_EQ(fm_workbook_set_font(wb.handle, index, &replacement), 0);
 
   fm_font_record_t read_back{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, index, &read_back), 0);
   EXPECT_STREQ(read_back.name, "MS Gothic");
-  EXPECT_DOUBLE_EQ(read_back.size, 9.0);
+  EXPECT_DOUBLE_EQ(read_back.size_pt, 9.0);
 
   // Overwriting does not grow the table, and an index past its end is
   // refused rather than filled in with default records.
@@ -154,7 +154,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
 
   fm_font_record_t body{};
   body.name = "游ゴシック";
-  body.size = 11.0;
+  body.size_pt = 11.0;
   body.has_charset = 1;
   body.charset = 128;
   body.scheme = 2;  // minor: the theme's body font
@@ -165,7 +165,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   fm_font_record_t read_back{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, 0, &read_back), 0);
   EXPECT_EQ(read_back.scheme, 2U);
-  read_back.size = 12.0;
+  read_back.size_pt = 12.0;
   ASSERT_EQ(fm_workbook_set_font(wb.handle, 0, &read_back), 0);
 
   BufferGuard saved;
@@ -177,7 +177,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   // distinct entry rather than folding the two together.
   fm_font_record_t unlinked{};
   unlinked.name = "游ゴシック";
-  unlinked.size = 12.0;
+  unlinked.size_pt = 12.0;
   unlinked.has_charset = 1;
   unlinked.charset = 128;
   std::size_t unlinked_index = 0;
@@ -192,13 +192,13 @@ TEST(FormulonCApiStyles, CreateForProfileSeedsTheLocaleDefaults) {
   fm_font_record_t body{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, 0, &body), 0);
   EXPECT_STREQ(body.name, "游ゴシック");
-  EXPECT_EQ(body.size, 12.0);
+  EXPECT_EQ(body.size_pt, 12.0);
   EXPECT_EQ(body.charset, 128U);
   EXPECT_EQ(body.scheme, 2U);
 
   fm_font_record_t phonetic{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, 1, &phonetic), 0);
-  EXPECT_EQ(phonetic.size, 6.0);
+  EXPECT_EQ(phonetic.size_pt, 6.0);
 
   const char* profile = nullptr;
   ASSERT_EQ(fm_workbook_get_profile_id(wb.handle, &profile), 0);

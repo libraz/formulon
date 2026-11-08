@@ -48,7 +48,7 @@ TEST(FormulonCApiTrace, DirectPrecedentsOfFormula) {
   for (std::size_t i = 0; i < 2; ++i) {
     fm_cell_node_t n = FM_STRUCT_INIT(fm_cell_node_t);
     ASSERT_EQ(fm_cell_nodes_get_node_at(nodes.handle, i, &n), 0);
-    EXPECT_EQ(n.sheet, 0U);
+    EXPECT_EQ(n.sheet_index, 0U);
     EXPECT_EQ(n.row, 0U);
     if (n.col == 0U)
       saw_a1 = true;
@@ -122,7 +122,7 @@ TEST(FormulonCApiTrace, CompactRangeOverFormulaReportsOnlyCells) {
   for (std::size_t i = 0; i < 2U; ++i) {
     fm_cell_node_t n = FM_STRUCT_INIT(fm_cell_node_t);
     ASSERT_EQ(fm_cell_nodes_get_node_at(precedents.handle, i, &n), 0);
-    EXPECT_EQ(n.sheet, 0U);
+    EXPECT_EQ(n.sheet_index, 0U);
     EXPECT_EQ(n.col, 0U);
   }
 
@@ -131,7 +131,7 @@ TEST(FormulonCApiTrace, CompactRangeOverFormulaReportsOnlyCells) {
   ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, dependents.handle), 1U);
   fm_cell_node_t watcher = FM_STRUCT_INIT(fm_cell_node_t);
   ASSERT_EQ(fm_cell_nodes_get_node_at(dependents.handle, 0, &watcher), 0);
-  EXPECT_EQ(watcher.sheet, 0U);
+  EXPECT_EQ(watcher.sheet_index, 0U);
   EXPECT_EQ(watcher.row, 0U);
   EXPECT_EQ(watcher.col, 1U);
 }

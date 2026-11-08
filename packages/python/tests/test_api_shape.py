@@ -573,7 +573,7 @@ _LEDGER = _REPO_ROOT / "tools" / "api" / "names.yaml"
 
 # Hand-written members that are not ledger ops.
 _FACADE_EXTRA = {
-    "Workbook": {"sheet", "list_sheets", "close", "closed", "get_active_sheet", "set_active_sheet", "ooxml"},
+    "Workbook": {"sheet", "list_sheets", "close", "closed", "active_sheet", "set_active_sheet", "ooxml"},
     "Sheet": {"workbook", "index", "name", "ooxml"},
     "WorkbookOoxml": set(),
     "SheetOoxml": set(),
@@ -806,11 +806,11 @@ class SheetHandleTests(unittest.TestCase):
         self.wb.sheet("t2").rename("T3")
         self.assertEqual(ws.name, "T3")
         self.wb.set_active_sheet(ws)
-        self.assertIs(self.wb.get_active_sheet(), ws)
+        self.assertIs(self.wb.active_sheet(), ws)
         self.wb.set_active_sheet("Data")
-        self.assertIs(self.wb.get_active_sheet(), self.wb.sheet(1))
+        self.assertIs(self.wb.active_sheet(), self.wb.sheet(1))
         self.wb.set_active_sheet(0)
-        self.assertIs(self.wb.get_active_sheet(), self.wb.sheet(0))
+        self.assertIs(self.wb.active_sheet(), self.wb.sheet(0))
         with Workbook.create_default() as other:
             with self.assertRaises(TypeError):
                 self.wb.remove_sheet(other.sheet(0))
@@ -902,30 +902,30 @@ class SetterRoundTripTests(unittest.TestCase):
         self.ws = self.wb.sheet(0)
 
     def test_patch_records(self) -> None:
-        self.wb.set_iterative(enabled=True, max_iterations=7, max_change=0.5)
+        self.wb.update_iterative(enabled=True, max_iterations=7, max_change=0.5)
         before = self.wb.get_iterative()
-        self.wb.set_iterative(**dataclasses.asdict(before))
+        self.wb.update_iterative(**dataclasses.asdict(before))
         self.assertEqual(self.wb.get_iterative(), before)
 
-        self.wb.set_table_style_defaults(table_style="TableStyleLight1")
+        self.wb.update_table_style_defaults(table_style="TableStyleLight1")
         before = self.wb.get_table_style_defaults()
-        self.wb.set_table_style_defaults(**dataclasses.asdict(before))
+        self.wb.update_table_style_defaults(**dataclasses.asdict(before))
         self.assertEqual(self.wb.get_table_style_defaults(), before)
 
-        self.ws.pivot(self.pivot).set_grand_totals(rows=False)
+        self.ws.pivot(self.pivot).update_grand_totals(rows=False)
         before = self.ws.pivot(self.pivot).get_grand_totals()
         self.assertEqual(before, formulon.PivotGrandTotals(rows=False, columns=True))
-        self.ws.pivot(self.pivot).set_grand_totals(**dataclasses.asdict(before))
+        self.ws.pivot(self.pivot).update_grand_totals(**dataclasses.asdict(before))
         self.assertEqual(self.ws.pivot(self.pivot).get_grand_totals(), before)
 
-        self.ws.set_page_setup(orientation=formulon.PageOrientation.LANDSCAPE, scale=80)
+        self.ws.update_page_setup(orientation=formulon.PageOrientation.LANDSCAPE, scale_pct=80)
         before = self.ws.get_page_setup()
-        self.ws.set_page_setup(**_stated_kwargs(self.ws.set_page_setup, before))
+        self.ws.update_page_setup(**_stated_kwargs(self.ws.update_page_setup, before))
         self.assertEqual(self.ws.get_page_setup(), before)
 
-        self.ws.set_page_margins(left=0.5)
+        self.ws.update_page_margins(left_in=0.5)
         before = self.ws.get_page_margins()
-        self.ws.set_page_margins(**_stated_kwargs(self.ws.set_page_margins, before))
+        self.ws.update_page_margins(**_stated_kwargs(self.ws.update_page_margins, before))
         self.assertEqual(self.ws.get_page_margins(), before)
 
     def test_whole_records(self) -> None:
@@ -944,7 +944,7 @@ class SetterRoundTripTests(unittest.TestCase):
         self.ws.set_selection(active_row=got.active_row, active_col=got.active_col, ranges=got.ranges)
         self.assertEqual(self.ws.get_selection(), selection)
 
-        protection = formulon.SheetProtection(enabled=True, sheet=True, hash_value="abc")
+        protection = formulon.SheetProtectionInput(hash_value="abc")
         self.ws.set_sheet_protection(protection)
         self.ws.set_sheet_protection(self.ws.get_sheet_protection())
         self.assertEqual(self.ws.get_sheet_protection().hash_value, "abc")
@@ -968,7 +968,7 @@ class SetterRoundTripTests(unittest.TestCase):
         self.wb.set_pinned_now(self.wb.get_pinned_now())
         self.assertEqual(self.wb.get_pinned_now(), datetime.datetime(2026, 4, 23, 15, 30, 45))
 
-        runs = [formulon.PhoneticRun(sb=0, eb=1, text="カ")]
+        runs = [formulon.PhoneticRun(start=0, end=1, text="カ")]
         self.ws.set_text(3, 0, "漢")
         self.ws.set_cell_phonetic_runs(3, 0, runs)
         self.ws.set_cell_phonetic_runs(3, 0, self.ws.get_cell_phonetic_runs(3, 0))
@@ -988,9 +988,9 @@ class SetterRoundTripTests(unittest.TestCase):
         self.wb.set_theme_script_font(major=True, script=script.script, typeface=script.typeface)
         self.assertEqual(self.wb.get_theme_script_font(major=True, script="Jpan"), script)
 
-        style = self.ws.pivot(self.pivot).get_style_info()
-        self.ws.pivot(self.pivot).set_style_info(**dataclasses.asdict(style))
-        self.assertEqual(self.ws.pivot(self.pivot).get_style_info(), style)
+        style = self.ws.pivot(self.pivot).get_style_options()
+        self.ws.pivot(self.pivot).update_style_options(**dataclasses.asdict(style))
+        self.assertEqual(self.ws.pivot(self.pivot).get_style_options(), style)
 
 
 # ---------------------------------------------------------------------------
@@ -1007,9 +1007,11 @@ class AbsentValueTests(unittest.TestCase):
         ws = wb.sheet(0)
         ws.set_text(0, 0, "Region")
         ws.set_text(0, 1, "Amount")
-        ws.add_hyperlink(10, 0, target="https://example.test/")
+        ws.set_hyperlink(10, 0, formulon.HyperlinkInput(target="https://example.test/"))
         ws.add_validation(formulon.DataValidationInput(ranges=[formulon.CellRect(11, 0, 11, 0)], type=1, formula1="1"))
-        table = wb.add_table(range=formulon.SheetRect(0, formulon.CellRect(20, 0, 22, 1)), name="T", columns=["A", "B"])
+        table = ws.add_table(
+            formulon.TableInput(range=formulon.CellRect(20, 0, 22, 1), name="T", columns=["A", "B"], style_name="")
+        )
         wb.set_defined_name(formulon.DefinedNameInput("Rate", "Sheet1!$A$1"))
         chart = ws.add_chart(formulon.ChartInsertKind.COLUMN, "Sheet1!$A$1:$B$3", legend=None)
         ws.add_sparkline_group(
@@ -1038,7 +1040,7 @@ class AbsentValueTests(unittest.TestCase):
         self.assertIsNone(ws.get_print_area())
         self.assertIsNone(wb.pivot_cache(self.cache).list_fields()[0].formula)
         self.assertIsNone(wb.get_defined_name("Rate").comment)
-        self.assertIsNone(wb.list_tables()[self.table.index].get_properties().style_name)
+        self.assertIsNone(ws.list_tables()[self.table.index].get_style_options())
         self.assertEqual(wb.get_table_style_defaults(), formulon.TableStyleDefaults(None, None))
         hyperlink = ws.get_hyperlink(10, 0)
         self.assertEqual((hyperlink.display, hyperlink.tooltip, hyperlink.location), (None, None, None))
@@ -1047,7 +1049,7 @@ class AbsentValueTests(unittest.TestCase):
         chart = ws.chart(self.chart).get_properties()
         self.assertIsNone(chart.legend)
         drawing = ws.drawing(self.chart).get_drawing_properties()
-        self.assertIsNone(drawing.media_path)
+        self.assertFalse(hasattr(drawing, "media_path"))
         self.assertIsNone(ws.list_sparkline_groups()[0].date_axis_ref)
         data_field = ws.pivot(self.pivot).list_data_fields()[0]
         self.assertEqual(
@@ -1058,7 +1060,7 @@ class AbsentValueTests(unittest.TestCase):
         self.assertIsNone(ws.get_page_setup().orientation)
         self.assertEqual(ws.get_view().view_mode, formulon.SheetViewMode.NORMAL)
         protection = wb.get_workbook_protection()
-        self.assertEqual((protection.workbook_hash_value, protection.workbook_password), (None, None))
+        self.assertEqual((protection.workbook_hash_value, protection.workbook_legacy_password_hash), (None, None))
 
     def test_pinned_now_none_releases(self) -> None:
         # A2
@@ -1101,13 +1103,13 @@ class AbsentValueTests(unittest.TestCase):
     def test_patch_omitted_none_and_value(self) -> None:
         # A6
         with Workbook.create_default() as wb:
-            wb.set_table_style_defaults(table_style="TableStyleLight1", pivot_style="PivotStyleLight2")
-            wb.set_table_style_defaults(pivot_style=None)
+            wb.update_table_style_defaults(table_style="TableStyleLight1", pivot_style="PivotStyleLight2")
+            wb.update_table_style_defaults(pivot_style=None)
             self.assertEqual(wb.get_table_style_defaults(), formulon.TableStyleDefaults("TableStyleLight1", None))
-            wb.set_iterative(max_iterations=5)
+            wb.update_iterative(max_iterations=5)
             self.assertEqual(wb.get_iterative().max_iterations, 5)
             with self.assertRaises(TypeError):
-                wb.set_iterative(enabled=None)  # type: ignore[arg-type]
+                wb.update_iterative(enabled=None)  # type: ignore[arg-type]
 
     def test_empty_values(self) -> None:
         # A7, A8
@@ -1129,13 +1131,14 @@ class AbsentValueTests(unittest.TestCase):
             wb.set_workbook_protection(formulon.WorkbookProtection(lock_structure=True))
             wb.set_workbook_protection(None)
             self.assertEqual(wb.get_workbook_protection(), formulon.WorkbookProtection())
-            ws.set_sheet_protection(formulon.SheetProtection(enabled=True))
+            ws.set_sheet_protection(formulon.SheetProtectionInput())
+            self.assertIsNotNone(ws.get_sheet_protection())
             ws.set_sheet_protection(None)
-            self.assertFalse(ws.get_sheet_protection().enabled)
+            self.assertIsNone(ws.get_sheet_protection())
             for clear in (None, []):
                 with self.subTest(clear=clear):
                     ws.set_text(0, 0, "漢")
-                    ws.set_cell_phonetic_runs(0, 0, [formulon.PhoneticRun(sb=0, eb=1, text="カ")])
+                    ws.set_cell_phonetic_runs(0, 0, [formulon.PhoneticRun(start=0, end=1, text="カ")])
                     ws.set_cell_phonetic_runs(0, 0, clear)
                     self.assertEqual(ws.get_cell_phonetic_runs(0, 0), [])
 
@@ -1165,9 +1168,9 @@ class PatchBoundaryTests(unittest.TestCase):
     def test_empty_patch_changes_nothing(self) -> None:
         # P1
         before = (self.wb.get_iterative(), self.wb.get_table_style_defaults(), self.wb.sheet(0).get_page_setup())
-        self.wb.set_iterative()
-        self.wb.set_table_style_defaults()
-        self.wb.sheet(0).set_page_setup()
+        self.wb.update_iterative()
+        self.wb.update_table_style_defaults()
+        self.wb.sheet(0).update_page_setup()
         self.assertEqual(
             (self.wb.get_iterative(), self.wb.get_table_style_defaults(), self.wb.sheet(0).get_page_setup()), before
         )
@@ -1188,10 +1191,10 @@ class PatchBoundaryTests(unittest.TestCase):
         # P3
         for bad in (1.5, math.nan, "3"):
             with self.subTest(bad=bad), self.assertRaises(TypeError):
-                self.wb.set_iterative(max_iterations=bad)  # type: ignore[arg-type]
+                self.wb.update_iterative(max_iterations=bad)  # type: ignore[arg-type]
         for bad in (math.inf, math.nan):
             with self.subTest(bad=bad), self.assertRaises(InvalidArgumentError):
-                self.wb.set_iterative(max_change=bad)
+                self.wb.update_iterative(max_change=bad)
 
     def test_local_sheet_id_range(self) -> None:
         # P4
@@ -1203,9 +1206,9 @@ class PatchBoundaryTests(unittest.TestCase):
     def test_unknown_keyword_is_type_error(self) -> None:
         # O1, O3
         with self.assertRaises(TypeError):
-            self.wb.set_iterative(enabeld=True)  # type: ignore[call-arg]
+            self.wb.update_iterative(enabeld=True)  # type: ignore[call-arg]
         with self.assertRaises(TypeError):
-            self.wb.sheet(0).add_hyperlink(0, 0, target=None)
+            self.wb.sheet(0).set_hyperlink(0, 0, bogus=1)
         with self.assertRaises(TypeError):
             formulon.Comment(author="Ann")  # type: ignore[call-arg]
 
@@ -1245,19 +1248,19 @@ class EnumBoundaryTests(unittest.TestCase):
             ws = wb.sheet(0)
             for bad in (99, -1):
                 with self.subTest(bad=bad), self.assertRaises(InvalidArgumentError):
-                    ws.set_view(view_mode=bad)  # type: ignore[arg-type]
+                    ws.update_view(view_mode=bad)  # type: ignore[arg-type]
             for bad in (1.5, math.nan):
                 with self.subTest(bad=bad), self.assertRaises(ValueError):
-                    ws.set_view(view_mode=bad)  # type: ignore[arg-type]
+                    ws.update_view(view_mode=bad)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                ws.set_view(view_mode="0")  # type: ignore[arg-type]
+                ws.update_view(view_mode="0")  # type: ignore[arg-type]
 
     def test_absent_members_are_gone(self) -> None:
         for enum, member in (
             (formulon.ChartBlanksAs, "ABSENT"),
             (formulon.ChartAxisCrosses, "ABSENT"),
             (formulon.ShapePaint, "UNSET"),
-            (formulon.PivotFilterValueKind, "NONE"),
+            (formulon.PivotFilterOperandKind, "NONE"),
             (formulon.ChartTitleKind, "NONE"),
             (formulon.ChartLegendPosition, "NONE"),
         ):
@@ -1291,7 +1294,7 @@ class PivotDetailsHandleTests(unittest.TestCase):
             self.assertEqual(details.index, 0)
             self.assertEqual(ws.index, 1)
             self.assertIs(wb.sheet(0), details)
-            self.assertIs(wb.get_active_sheet(), details)
+            self.assertIs(wb.active_sheet(), details)
             self.assertEqual([s.name for s in wb.list_sheets()], [wb._sheet_name(i) for i in range(len(wb))])
 
 

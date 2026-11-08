@@ -19,7 +19,7 @@ TEST(FormulonCApiPivotSharedItemLimit, AWiderThan32BitCacheIndexIsAnInvalidArgum
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   const std::size_t wide = static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max()) + 1U;
-  EXPECT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_index, 0, wide, 1, ignored_index()),
+  EXPECT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, wide, 1, ignored_index()),
             FM_STATUS_INVALID_ARGUMENT);
   std::size_t item_count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_index, 0, &item_count), 0);

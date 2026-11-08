@@ -95,24 +95,24 @@ template <typename MutateFn>
 // Rgb colour spec from 8-bit channels.
 [[maybe_unused]] inline fm_color_spec_t CfRgb(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255U) {
   fm_color_spec_t spec{};
-  spec.kind = kFmColorRgb;
-  spec.rgb = (static_cast<std::uint32_t>(a) << 24U) | (static_cast<std::uint32_t>(r) << 16U) |
-             (static_cast<std::uint32_t>(g) << 8U) | static_cast<std::uint32_t>(b);
+  spec.kind = FM_COLOR_KIND_RGB;
+  spec.argb = (static_cast<std::uint32_t>(a) << 24U) | (static_cast<std::uint32_t>(r) << 16U) |
+              (static_cast<std::uint32_t>(g) << 8U) | static_cast<std::uint32_t>(b);
   return spec;
 }
 
 // Channel accessors for an Rgb colour spec.
 [[maybe_unused]] inline std::uint32_t CfA(const fm_color_spec_t& c) {
-  return (c.rgb >> 24U) & 0xFFU;
+  return (c.argb >> 24U) & 0xFFU;
 }
 [[maybe_unused]] inline std::uint32_t CfR(const fm_color_spec_t& c) {
-  return (c.rgb >> 16U) & 0xFFU;
+  return (c.argb >> 16U) & 0xFFU;
 }
 [[maybe_unused]] inline std::uint32_t CfG(const fm_color_spec_t& c) {
-  return (c.rgb >> 8U) & 0xFFU;
+  return (c.argb >> 8U) & 0xFFU;
 }
 [[maybe_unused]] inline std::uint32_t CfB(const fm_color_spec_t& c) {
-  return c.rgb & 0xFFU;
+  return c.argb & 0xFFU;
 }
 
 // Minimal valid DataBar rule. Extension fields stay zero-initialized so

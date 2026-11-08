@@ -25,8 +25,8 @@ namespace {
 emscripten::val image_info_to_val(const fm_image_info_t& info) {
   emscripten::val o = emscripten::val::object();
   o.set("format", info.format);
-  o.set("pxWidth", info.px_width);
-  o.set("pxHeight", info.px_height);
+  o.set("widthPx", info.width_px);
+  o.set("heightPx", info.height_px);
   return o;
 }
 
@@ -46,9 +46,8 @@ emscripten::val drawing_object_to_val(const fm_drawing_object_t& d) {
   o.set("toColOffsetEmu", static_cast<double>(d.to_col_offset_emu));
   o.set("widthEmu", static_cast<double>(d.width_emu));
   o.set("heightEmu", static_cast<double>(d.height_emu));
-  o.set("imageFormat", d.image_format);
+  o.set("format", d.image_format);
   js_set_cstr_fields(o, {{"name", d.name}, {"description", d.description}});
-  js_set_cstr_or_null(o, "mediaPath", d.media_path);
   return o;
 }
 
@@ -77,11 +76,11 @@ fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const ems
   return out;
 }
 
-fm_image_insert_t pull_image_insert(JsNarrowNumericReader& reader, const emscripten::val& input,
-                                    int32_t default_anchor_kind, std::string& name_store,
-                                    std::string& description_store) {
+fm_picture_insert_spec_t pull_image_insert(JsNarrowNumericReader& reader, const emscripten::val& input,
+                                           int32_t default_anchor_kind, std::string& name_store,
+                                           std::string& description_store) {
   const emscripten::val options = js_object_or_empty(input);
-  fm_image_insert_t ins{};
+  fm_picture_insert_spec_t ins{};
   ins.name = reader.optional_string(options, "name", name_store, "name");
   ins.description = reader.optional_string(options, "description", description_store, "description");
   const emscripten::val anchor = reader.value(options, "anchor", "anchor");
@@ -122,15 +121,16 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   const uint8_t* data = nullptr;
   size_t len = 0;
   fm_image_info_t info = FM_STRUCT_INIT(fm_image_info_t);
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_image(handle_, sheet, objectId, &present, &data, &len, &info)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_picture(handle_, sheet, objectId, &present, &data, &len, &info)
+                             : kBindingInvalidHandle;
   if (rc != 0 || present == 0) {
     return optional_or_null(rc, present, emscripten::val::null());
   }
   emscripten::val image = emscripten::val::object();
   image.set("format", info.format);
-  image.set("pxWidth", info.px_width);
-  image.set("pxHeight", info.px_height);
+  image.set("widthPx", info.width_px);
+  image.set("heightPx", info.height_px);
   image.set("bytes", bytes_to_val(data, len));
   return optional_or_null(rc, present, image);
 }
@@ -147,13 +147,13 @@ uint32_t JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscript
   if (!val_to_bytes_checked(bytes, &data)) {
     return 0U;
   }
-  const fm_image_insert_t ins =
+  const fm_picture_insert_spec_t ins =
       pull_image_insert(reader, input, FM_ANCHOR_KIND_ONE_CELL, name_store, description_store);
   if (!reader.ok()) {
     return 0U;
   }
   uint32_t id = 0;
-  if (!succeeded(fm_sheet_add_image(handle_, sheet, data.data(), data.size(), &ins, &id))) {
+  if (!succeeded(fm_sheet_add_picture(handle_, sheet, data.data(), data.size(), &ins, &id))) {
     return 0U;
   }
   return id;
@@ -209,7 +209,8 @@ uint32_t JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscr
   if (!val_to_bytes_checked(bytes, &data)) {
     return 0U;
   }
-  const uint32_t flags = reader.boolean(options, "newId", false, "options.newId") ? FM_DRAWING_RESTORE_NEW_ID : 0U;
+  const uint32_t flags =
+      reader.boolean(options, "assignNewId", false, "options.assignNewId") ? FM_DRAWING_RESTORE_NEW_ID : 0U;
   if (!reader.ok()) {
     return 0U;
   }

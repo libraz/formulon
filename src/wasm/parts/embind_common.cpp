@@ -683,22 +683,22 @@ emscripten::val value_to_val(const fm_value_t& v) {
   emscripten::val out = emscripten::val::object();
   out.set("kind", static_cast<int32_t>(v.kind));
   switch (v.kind) {
-    case FM_VAL_NUMBER:
+    case FM_VALUE_KIND_NUMBER:
       out.set("number", v.u.number);
       break;
-    case FM_VAL_BOOL:
+    case FM_VALUE_KIND_BOOL:
       out.set("boolean", v.u.boolean != 0);
       break;
-    case FM_VAL_TEXT:
+    case FM_VALUE_KIND_TEXT:
       out.set("text", string_from_cstr(v.u.text));
       break;
-    case FM_VAL_ERROR:
+    case FM_VALUE_KIND_ERROR:
       out.set("errorCode", v.u.error_code);
       break;
-    case FM_VAL_BLANK:
-    case FM_VAL_ARRAY:
-    case FM_VAL_REF:
-    case FM_VAL_LAMBDA:
+    case FM_VALUE_KIND_BLANK:
+    case FM_VALUE_KIND_ARRAY:
+    case FM_VALUE_KIND_REF:
+    case FM_VALUE_KIND_LAMBDA:
     default:
       // Other variants carry no payload across this boundary.
       break;
@@ -731,8 +731,8 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m) {
   JsCfMatch out;
   out.kind = static_cast<int32_t>(m.kind);
   out.priority = m.priority;
-  out.dxfIdEngaged = m.dxf_id_engaged;
-  out.dxfId = m.dxf_id;
+  out.dxfIndexEngaged = m.dxf_index_engaged;
+  out.dxfIndex = m.dxf_index;
   out.color = js_color_spec(m.color);
   out.barLengthPct = m.bar_length_pct;
   out.barAxisPositionPct = m.bar_axis_position_pct;
@@ -902,7 +902,7 @@ fm_color_spec_t js_pull_color_spec_value(const emscripten::val& f, const char* f
     return spec;
   }
   spec.kind = reader->u8(f, "kind", 0, "color.kind");
-  spec.rgb = reader->u32(f, "rgb", 0U, "color.rgb");
+  spec.argb = reader->u32(f, "argb", 0U, "color.argb");
   spec.theme = reader->u32(f, "theme", 0U, "color.theme");
   spec.tint = reader->number(f, "tint", 0.0, "color.tint");
   spec.indexed = reader->u32(f, "indexed", 0U, "color.indexed");
@@ -947,8 +947,16 @@ JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& va
   return JsPatchKey::kSet;
 }
 
+int32_t js_tristate(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field) {
+  const emscripten::val value = reader.value(owner, key, field);
+  if (!reader.ok() || !js_value_present(value)) {
+    return FM_TRISTATE_DEFAULT;
+  }
+  return reader.boolean_value(value, false) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+}
+
 emscripten::val print_titles_to_val(const fm_print_titles_t& titles) {
-  if (titles.has_rows == 0 && titles.has_cols == 0) {
+  if (titles.has_rows == 0 && titles.has_columns == 0) {
     return emscripten::val::null();
   }
   const auto span = [](int32_t present, uint32_t first, uint32_t last) {
@@ -962,7 +970,7 @@ emscripten::val print_titles_to_val(const fm_print_titles_t& titles) {
   };
   emscripten::val out = emscripten::val::object();
   out.set("rows", span(titles.has_rows, titles.first_row, titles.last_row));
-  out.set("columns", span(titles.has_cols, titles.first_col, titles.last_col));
+  out.set("columns", span(titles.has_columns, titles.first_col, titles.last_col));
   return out;
 }
 
@@ -991,7 +999,7 @@ void js_set_index_or_null(emscripten::val& o, const char* key, int32_t value) {
 emscripten::val js_color_spec(const fm_color_spec_t& spec) {
   emscripten::val o = emscripten::val::object();
   o.set("kind", static_cast<uint32_t>(spec.kind));
-  o.set("rgb", spec.rgb);
+  o.set("argb", spec.argb);
   o.set("theme", spec.theme);
   o.set("tint", spec.tint);
   o.set("indexed", spec.indexed);
@@ -999,7 +1007,7 @@ emscripten::val js_color_spec(const fm_color_spec_t& spec) {
 }
 
 emscripten::val js_color_spec_or_null(const fm_color_spec_t& spec) {
-  return spec.kind != kFmColorNone ? js_color_spec(spec) : emscripten::val::null();
+  return spec.kind != FM_COLOR_KIND_NONE ? js_color_spec(spec) : emscripten::val::null();
 }
 
 emscripten::val js_border_side(const fm_border_side_t& s) {
@@ -1033,13 +1041,14 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
     return reject_value("Value: `value.kind` must be a ValueKind");
   }
   const double kind_number = kind.as<double>();
-  if (!(kind_number >= static_cast<double>(FM_VAL_BLANK) && kind_number <= static_cast<double>(FM_VAL_LAMBDA)) ||
+  if (!(kind_number >= static_cast<double>(FM_VALUE_KIND_BLANK) &&
+        kind_number <= static_cast<double>(FM_VALUE_KIND_LAMBDA)) ||
       std::floor(kind_number) != kind_number) {
     return reject_value("Value: `value.kind` must be a ValueKind");
   }
   out->kind = static_cast<int32_t>(kind_number);
   switch (out->kind) {
-    case FM_VAL_NUMBER: {
+    case FM_VALUE_KIND_NUMBER: {
       const emscripten::val number = reader.value(in, "number", "value.number");
       if (!reader.ok()) {
         return false;
@@ -1050,7 +1059,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
       out->u.number = number.as<double>();
       return true;
     }
-    case FM_VAL_BOOL: {
+    case FM_VALUE_KIND_BOOL: {
       const emscripten::val flag = reader.value(in, "boolean", "value.boolean");
       if (!reader.ok()) {
         return false;
@@ -1061,7 +1070,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
       out->u.boolean = flag.isTrue() ? 1 : 0;
       return true;
     }
-    case FM_VAL_TEXT: {
+    case FM_VALUE_KIND_TEXT: {
       const emscripten::val string = reader.value(in, "text", "value.text");
       if (!reader.ok()) {
         return false;
@@ -1076,7 +1085,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
       out->u.text = text.c_str();
       return true;
     }
-    case FM_VAL_ERROR: {
+    case FM_VALUE_KIND_ERROR: {
       const emscripten::val code = reader.value(in, "errorCode", "value.errorCode");
       if (!reader.ok()) {
         return false;

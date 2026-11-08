@@ -12,14 +12,14 @@ from formulon import (
     ColorScale,
     ConditionalFormatInput,
     DataBar,
-    DifferentialFormat,
+    DxfInput,
     IconSet,
     Workbook,
 )
 
 
 def _rgb(red: int, green: int, blue: int) -> Color:
-    return Color(ColorKind.RGB, rgb=0xFF000000 | (red << 16) | (green << 8) | blue)
+    return Color(ColorKind.RGB, argb=0xFF000000 | (red << 16) | (green << 8) | blue)
 
 
 class ConditionalFormatTests(unittest.TestCase):
@@ -27,15 +27,15 @@ class ConditionalFormatTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             for r in range(3):
                 wb.sheet(0).set_number(r, 0, float(r * 5))  # A1=0, A2=5, A3=10
-            # A rule's dxf_id must resolve against a registered dxf.
-            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
+            # A rule's dxf_index must resolve against a registered dxf.
+            dxf_index = wb.ooxml.add_dxf(DxfInput())
             wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 2, 0)],
                     type=1,  # cellIs
-                    op=4,  # greaterThan
+                    operator=4,  # greaterThan
                     formula1="4",
-                    dxf_id=dxf_index,
+                    dxf_index=dxf_index,
                 ),
             )
             rules = wb.sheet(0).list_cf_rules()
@@ -57,28 +57,30 @@ class ConditionalFormatTests(unittest.TestCase):
     def test_cell_is_op_alone_is_engaged(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, op=3, formula1="5"),
+                ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5"),
             )
             rule = wb.sheet(0).list_cf_rules()[0]
-            self.assertEqual(rule.op, 3)
+            self.assertEqual(rule.operator, 3)
             self.assertIsNone(rule.rank)
             self.assertIsNone(rule.std_dev)
             self.assertIsNone(rule.time_period)
-            self.assertIsNone(rule.dxf_id)
+            self.assertIsNone(rule.dxf_index)
 
     def test_unset_rank_reads_back_none(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=5))
             rule = wb.sheet(0).list_cf_rules()[0]
             self.assertIsNone(rule.rank)
-            self.assertIsNone(rule.op)
+            self.assertIsNone(rule.operator)
 
     def test_get_then_add_reproduces_engaged_fields(self) -> None:
         with Workbook.create_default() as wb:
-            dxf_index = wb.ooxml.add_dxf(DifferentialFormat())
+            dxf_index = wb.ooxml.add_dxf(DxfInput())
             sqref = [CellRect(0, 0, 2, 0)]
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=1, op=0, formula1="1", dxf_id=dxf_index))
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=5, rank=0, dxf_id=dxf_index))
+            wb.sheet(0).add_cf_rule(
+                ConditionalFormatInput(ranges=sqref, type=1, operator=0, formula1="1", dxf_index=dxf_index)
+            )
+            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=5, rank=0, dxf_index=dxf_index))
             wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=6, std_dev=0.0))
             wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=15, time_period=0))
             first = wb.sheet(0).list_cf_rules()
@@ -90,10 +92,10 @@ class ConditionalFormatTests(unittest.TestCase):
                         type=r.type,
                         priority=r.priority,
                         stop_if_true=r.stop_if_true,
-                        dxf_id=r.dxf_id,
+                        dxf_index=r.dxf_index,
                         formula1=r.formula1,
                         formula2=r.formula2,
-                        op=r.op,
+                        operator=r.operator,
                         rank=r.rank,
                         percent=r.percent,
                         bottom=r.bottom,
@@ -106,7 +108,7 @@ class ConditionalFormatTests(unittest.TestCase):
                 )
             again = wb.sheet(0).list_cf_rules()
             for x, y in zip(first, again):
-                for f in ("op", "rank", "std_dev", "time_period", "dxf_id"):
+                for f in ("operator", "rank", "std_dev", "time_period", "dxf_index"):
                     self.assertEqual(getattr(x, f), getattr(y, f), f)
 
     def test_visual_rules_roundtrip(self) -> None:

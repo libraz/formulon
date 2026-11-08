@@ -45,9 +45,9 @@ extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_i
     return rc;
   }
   const formulon::MergeRange ref{spec->rect.first_row, spec->rect.first_col, spec->rect.last_row, spec->rect.last_col};
-  auto added = wb->workbook().add_data_table(sheet_index, ref,
-                                             input_of(spec->has_row_input, spec->row_input_row, spec->row_input_col),
-                                             input_of(spec->has_col_input, spec->col_input_row, spec->col_input_col));
+  auto added = wb->workbook().add_data_table(
+      sheet_index, ref, input_of(spec->has_row_input, spec->row_input_row, spec->row_input_col),
+      input_of(spec->has_column_input, spec->column_input_row, spec->column_input_col));
   if (!added) {
     return set_last_error(added.error());
   }
@@ -82,15 +82,15 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
   *out_present = 1;
   out->rect = to_cell_rect(table->ref);
   out->has_row_input = row_in.present ? 1 : 0;
-  out->has_col_input = col_in.present ? 1 : 0;
+  out->has_column_input = col_in.present ? 1 : 0;
   out->row_input_row = row_in.row;
   out->row_input_col = row_in.col;
-  out->col_input_row = col_in.row;
-  out->col_input_col = col_in.col;
+  out->column_input_row = col_in.row;
+  out->column_input_col = col_in.col;
   out->two_dimensional = table->two_dimensional ? 1 : 0;
   out->row_oriented = table->row_oriented ? 1 : 0;
   out->row_input_deleted = row_in.deleted ? 1 : 0;
-  out->col_input_deleted = col_in.deleted ? 1 : 0;
+  out->column_input_deleted = col_in.deleted ? 1 : 0;
   return 0;
 }
 

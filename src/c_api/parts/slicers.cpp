@@ -27,6 +27,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::slicer_sort_order_from_c;
 using formulon::c_api::parts::store_cstr;
@@ -45,7 +46,7 @@ fm_status_t to_spec(const fm_slicer_t& slicer, formulon::SlicerSpec& spec) {
     }
   }
   if ((slicer.fields & FM_SLICER_FIELD_CROSS_FILTER) != 0U) {
-    if (auto rc = check_enum_domain(slicer.cross_filter, 0, FM_SLICER_CROSS_NONE, "cross_filter"); rc != 0) {
+    if (auto rc = check_enum_domain(slicer.cross_filter, 0, FM_SLICER_CROSS_FILTER_NONE, "cross_filter"); rc != 0) {
       return rc;
     }
   }
@@ -180,8 +181,9 @@ extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet
   return fm_sheet_get_slicer_at(wb, sheet_index, index, out);
 }
 
-extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                           size_t column_index, const fm_slicer_t* spec, uint32_t* out_object_id) {
+extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_sheet_index,
+                                           size_t table_index, size_t column_index, const fm_slicer_t* spec,
+                                           uint32_t* out_object_id) {
   clear_last_error();
   if (spec == nullptr || out_object_id == nullptr) {
     return null_argument();
@@ -192,11 +194,16 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  // The engine addresses a table by its workbook-wide position.
+  size_t global = 0;
+  if (auto rc = resolve_sheet_table(wb, table_sheet_index, table_index, &global); rc != 0) {
+    return rc;
+  }
   formulon::SlicerSpec model;
   if (auto rc = to_spec(*spec, model); rc != 0) {
     return rc;
   }
-  auto id = formulon::add_slicer(wb->workbook(), sheet_index, table_index, column_index, model);
+  auto id = formulon::add_slicer(wb->workbook(), sheet_index, global, column_index, model);
   if (!id) {
     return set_last_error(id.error());
   }

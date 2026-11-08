@@ -47,7 +47,7 @@ TEST_F(FormulonCApiIndexOutOfRange, StyleCollectionsReportTheSameStatus) {
 
 TEST_F(FormulonCApiIndexOutOfRange, TablePivotAndSparklineIndicesReportTheSameStatus) {
   fm_table_info_t table = FM_STRUCT_INIT(fm_table_info_t);
-  EXPECT_EQ(fm_workbook_get_table_info(wb(), 0, &table), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_info(wb(), 0, 0, &table), FM_STATUS_INDEX_OUT_OF_RANGE);
   uint32_t cache_id = 0;
   EXPECT_EQ(fm_sheet_get_pivot_cache_id(wb(), 0, 0, &cache_id), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_sparkline_group_t group = FM_STRUCT_INIT(fm_sparkline_group_t);

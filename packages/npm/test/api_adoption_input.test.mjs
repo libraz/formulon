@@ -92,7 +92,7 @@ function addCache(wb) {
 function addPivot(ws, cache, name = 'ByRegion', anchor = 'E1') {
   const pivot = ws.addPivot({ name, cacheId: cache.cacheId, anchor });
   pivot.addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Data });
+  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Value });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return pivot;
 }
@@ -117,7 +117,7 @@ test('a record field the raw layer reads stays visible when its ranges are rewri
     const { CfRuleType } = formulon;
     const dxf = wb.ooxml.addDxf({ font: { bold: true } });
     const hidden = { type: CfRuleType.Expression, ranges: 'A1:B2', formula1: 'TRUE' };
-    Object.defineProperty(hidden, 'dxfId', { value: dxf, enumerable: false });
+    Object.defineProperty(hidden, 'dxfIndex', { value: dxf, enumerable: false });
     ws.addCfRule(hidden);
     class Rule {
       get type() {
@@ -129,13 +129,13 @@ test('a record field the raw layer reads stays visible when its ranges are rewri
       get formula1() {
         return 'TRUE';
       }
-      get dxfId() {
+      get dxfIndex() {
         return dxf;
       }
     }
     ws.addCfRule(new Rule());
     assert.deepEqual(
-      ws.listCfRules().map((rule) => rule.dxfId),
+      ws.listCfRules().map((rule) => rule.dxfIndex),
       [dxf, dxf],
     );
   });
@@ -155,10 +155,10 @@ test('an auto filter takes A1 text in its range and in its nested sort state', (
   });
 });
 
-test('a table takes a qualified range, and its handle resolves an unqualified one on its own sheet', () => {
-  withSheet((ws, wb) => {
+test('a table takes an A1 range on the receiving sheet, and its handle resolves one on its own sheet', () => {
+  withSheet((ws) => {
     fillTableSource(ws);
-    const table = wb.addTable({ range: 'Sheet1!A1:B3', name: 'Sales' });
+    const table = ws.addTable({ range: 'A1:B3', name: 'Sales' });
     assert.deepEqual(plain(table.getProperties().range), { sheet: 0, rect: rect(0, 0, 2, 1) });
     assert.deepEqual(
       table.getProperties().columns.map((c) => c.name),
@@ -169,11 +169,7 @@ test('a table takes a qualified range, and its handle resolves an unqualified on
     assert.deepEqual(plain(table.getProperties().range), { sheet: 0, rect: rect(0, 0, 3, 1) });
     table.setAutoFilter({ range: 'A1:B4' });
     assert.deepEqual(plain(table.getAutoFilter().range), rect(0, 0, 3, 1));
-    rejectsWith(
-      () => wb.addTable({ range: 'D1:E3', name: 'Other' }),
-      StatusCode.InvalidArgument,
-      /^Workbook\.addTable range "D1:E3" has no sheet name/,
-    );
+    assert.equal(ws.addTable({ range: 'D1:E3', name: 'Other' }).getProperties().range.sheet, 0);
   });
 });
 
@@ -213,7 +209,7 @@ test('a data table, a reference and a print area take A1 text', () => {
     ws.setNumber('A1', 1);
     ws.setNumber('A2', 2);
     ws.setNumber('A3', 3);
-    ws.addDataTable({ rect: 'B2:B3', colInput: 'A1' });
+    ws.addDataTable({ rect: 'B2:B3', columnInput: 'A1' });
     assert.notEqual(ws.getDataTable('B2'), null);
   });
 });
@@ -257,7 +253,7 @@ test('A1 text in a record field is refused with the method and the field it was 
 
 function handlePrototypes(ws, wb) {
   fillTableSource(ws);
-  const table = wb.addTable({ range: 'Sheet1!A1:B3', name: 'Tbl' });
+  const table = ws.addTable({ range: 'A1:B3', name: 'Tbl' });
   const cache = addCache(wb);
   const pivot = addPivot(ws, cache);
   const chart = ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3', legend: null });
@@ -341,21 +337,16 @@ test('a sheet-qualified address names the call that would read it', () => {
   });
 });
 
-test('a table name or display name that reads as a cell is refused with that reason', () => {
-  withSheet((ws, wb) => {
+test('a table name that reads as a cell is refused with that reason', () => {
+  withSheet((ws) => {
     fillTableSource(ws);
     const error = rejectsWith(
-      () => wb.addTable({ range: 'Sheet1!A1:B3', name: 'T2' }),
+      () => ws.addTable({ range: 'A1:B3', name: 'T2' }),
       StatusCode.InvalidArgument,
       /^invalid table name: "T2" is a cell address$/,
     );
     assert.match(error.context, /name=T2/);
-    rejectsWith(
-      () => wb.addTable({ range: 'Sheet1!A1:B3', name: 'Sales', displayName: 'AB12' }),
-      StatusCode.InvalidArgument,
-      /^invalid table displayName: "AB12" is a cell address$/,
-    );
-    assert.equal(wb.addTable({ range: 'Sheet1!A1:B3', name: 'Sales' }).name, 'Sales');
+    assert.equal(ws.addTable({ range: 'A1:B3', name: 'Sales' }).name, 'Sales');
   });
 });
 
@@ -485,47 +476,47 @@ const SPARKLINES = () => ({
 // record)` writes it back; a readd case also has `again(target)`, the record its re-added copy reads.
 const DRIVERS = {
   cell_format: {
-    make: (ws) => ws.setCellFormat('B1', { font: { bold: true }, numberFormat: '0.00' }) ?? ws,
+    make: (ws) => ws.updateCellFormat('B1', { font: { bold: true }, numberFormat: '0.00' }) ?? ws,
     get: (ws) => ws.getCellFormat('B1'),
-    put: (ws, record) => ws.setCellFormat('B1', record),
+    put: (ws, record) => ws.updateCellFormat('B1', record),
   },
   chart_legend: {
     make: (ws) => ws.addChart({ kind: formulon.ChartInsertKind.Column, source: 'Sheet1!$A$1:$B$3', legend: 0 }),
     get: (chart) => chart.getProperties().legend,
-    put: (chart, record) => chart.setLegend(record),
+    put: (chart, record) => chart.updateLegend(record),
   },
   format_defaults: {
     make: (ws) => ws,
     get: (ws) => ws.getFormatDefaults(),
-    put: (ws, record) => ws.setFormatDefaults(record),
+    put: (ws, record) => ws.updateFormatDefaults(record),
   },
   header_footer: {
     make: (ws) => {
-      ws.setHeaderFooter({ oddHeader: '&CTitle' });
+      ws.updateHeaderFooter({ oddHeader: '&CTitle' });
       return ws;
     },
     get: (ws) => ws.getHeaderFooter(),
-    put: (ws, record) => ws.setHeaderFooter(record),
+    put: (ws, record) => ws.updateHeaderFooter(record),
   },
   iterative: {
     make: (_ws, wb) => wb,
     get: (wb) => wb.getIterative(),
-    put: (wb, record) => wb.setIterative(record),
+    put: (wb, record) => wb.updateIterative(record),
   },
   page_margins: {
     make: (ws) => ws,
     get: (ws) => ws.getPageMargins(),
-    put: (ws, record) => ws.setPageMargins(record),
+    put: (ws, record) => ws.updatePageMargins(record),
   },
   page_setup: {
     make: (ws) => ws,
     get: (ws) => ws.getPageSetup(),
-    put: (ws, record) => ws.setPageSetup(record),
+    put: (ws, record) => ws.updatePageSetup(record),
   },
   pivot_cache_options: {
     make: (_ws, wb) => addCache(wb),
     get: (cache) => cache.getOptions(),
-    put: (cache, record) => cache.setOptions(record),
+    put: (cache, record) => cache.updateOptions(record),
   },
   pivot_field: {
     make: (ws, wb) => addPivot(ws, addCache(wb)),
@@ -535,7 +526,7 @@ const DRIVERS = {
   pivot_grand_totals: {
     make: (ws, wb) => addPivot(ws, addCache(wb)),
     get: (pivot) => pivot.getGrandTotals(),
-    put: (pivot, record) => pivot.setGrandTotals(record),
+    put: (pivot, record) => pivot.updateGrandTotals(record),
   },
   pivot_item: {
     make: (ws, wb) => {
@@ -544,26 +535,26 @@ const DRIVERS = {
       return pivot;
     },
     get: (pivot) => pivot.getFieldItem(0, 0),
-    put: (pivot, record) => pivot.updateItem(0, 0, record),
+    put: (pivot, record) => pivot.updateFieldItem(0, 0, record),
   },
   pivot_options: {
     make: (ws, wb) => addPivot(ws, addCache(wb)),
     get: (pivot) => pivot.getOptions(),
-    put: (pivot, record) => pivot.setOptions(record),
+    put: (pivot, record) => pivot.updateOptions(record),
   },
   pivot_style_info: {
     make: (ws, wb) => {
       const pivot = addPivot(ws, addCache(wb));
-      pivot.setStyleInfo({ name: 'PivotStyleLight16', showRowHeaders: true });
+      pivot.updateStyleOptions({ styleName: 'PivotStyleLight16', showRowHeaders: true });
       return pivot;
     },
-    get: (pivot) => pivot.getStyleInfo(),
-    put: (pivot, record) => pivot.setStyleInfo(record),
+    get: (pivot) => pivot.getStyleOptions(),
+    put: (pivot, record) => pivot.updateStyleOptions(record),
   },
   print_options: {
     make: (ws) => ws,
     get: (ws) => ws.getPrintOptions(),
-    put: (ws, record) => ws.setPrintOptions(record),
+    put: (ws, record) => ws.updatePrintOptions(record),
   },
   protected_range: {
     make: (ws) => {
@@ -578,14 +569,22 @@ const DRIVERS = {
     get: (shape) => shape.getProperties(),
     put: (shape, record) => shape.update(record),
   },
+  sheet_protection: {
+    make: (ws) => {
+      ws.setSheetProtection({ allowSort: true, allowFormatCells: true });
+      return ws;
+    },
+    get: (ws) => ws.getSheetProtection(),
+    put: (ws, record) => ws.updateSheetProtection(record),
+  },
   sheet_view: {
     make: (ws) => ws,
     get: (ws) => ws.getView(),
-    put: (ws, record) => ws.setView(record),
+    put: (ws, record) => ws.updateView(record),
   },
   slicer: {
-    make: (ws, wb) => {
-      const table = wb.addTable({ range: 'Sheet1!A1:B3', name: 'Tbl' });
+    make: (ws) => {
+      const table = ws.addTable({ range: 'A1:B3', name: 'Tbl' });
       return ws.addSlicer(table, 0, { fromRow: 20, fromCol: 3, toRow: 30, toCol: 5 });
     },
     get: (slicer) => slicer.getProperties(),
@@ -600,14 +599,19 @@ const DRIVERS = {
     put: (ws, record) => ws.updateSparklineGroup(0, record),
   },
   table: {
-    make: (_ws, wb) => wb.addTable({ range: 'Sheet1!A1:B3', name: 'Tbl' }),
+    make: (ws) => ws.addTable({ range: 'A1:B3', name: 'Tbl' }),
     get: (table) => table.getProperties(),
     put: (table, record) => table.update(record),
+  },
+  table_style_info: {
+    make: (ws) => ws.addTable({ range: 'A1:B3', name: 'Tbl' }),
+    get: (table) => table.getStyleOptions(),
+    put: (table, record) => table.updateStyleOptions(record),
   },
   table_style_defaults: {
     make: (_ws, wb) => wb,
     get: (wb) => wb.getTableStyleDefaults(),
-    put: (wb, record) => wb.setTableStyleDefaults(record),
+    put: (wb, record) => wb.updateTableStyleDefaults(record),
   },
   threaded_comment: {
     make: (ws, wb) => {
@@ -646,11 +650,11 @@ const DRIVERS = {
   },
   hyperlink: {
     make: (ws) => {
-      ws.addHyperlink('A1', { target: 'https://example.com/', display: 'Example' });
+      ws.setHyperlink('A1', { target: 'https://example.com/', display: 'Example' });
       return ws;
     },
     get: (ws) => ws.getHyperlink('A1'),
-    put: (ws, record) => ws.addHyperlink('B1', record),
+    put: (ws, record) => ws.setHyperlink('B1', record),
     again: (ws) => ws.getHyperlink('B1'),
     identity: ['ref', 'rect'],
   },

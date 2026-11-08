@@ -26,16 +26,16 @@ static_assert(offsetof(fm_cell_xf_t, font_index) == 0U, "fm_cell_xf_t.font_index
 static_assert(offsetof(fm_cell_xf_t, fill_index) == 4U, "fm_cell_xf_t.fill_index offset changed");
 static_assert(offsetof(fm_cell_xf_t, border_index) == 8U, "fm_cell_xf_t.border_index offset changed");
 static_assert(offsetof(fm_cell_xf_t, num_fmt_id) == 12U, "fm_cell_xf_t.num_fmt_id offset changed");
-static_assert(offsetof(fm_cell_xf_t, horizontal_align) == 14U, "fm_cell_xf_t.horizontal_align offset changed");
-static_assert(offsetof(fm_cell_xf_t, vertical_align) == 15U, "fm_cell_xf_t.vertical_align offset changed");
+static_assert(offsetof(fm_cell_xf_t, horizontal) == 14U, "fm_cell_xf_t.horizontal offset changed");
+static_assert(offsetof(fm_cell_xf_t, vertical) == 15U, "fm_cell_xf_t.vertical offset changed");
 static_assert(offsetof(fm_cell_xf_t, wrap_text) == 16U, "fm_cell_xf_t.wrap_text offset changed");
 static_assert(offsetof(fm_cell_xf_t, justify_last_line) == 20U, "fm_cell_xf_t.justify_last_line offset changed");
-static_assert(offsetof(fm_cell_xf_t, xf_id) == 24U, "fm_cell_xf_t.xf_id offset changed");
+static_assert(offsetof(fm_cell_xf_t, style_xf_index) == 24U, "fm_cell_xf_t.style_xf_index offset changed");
 static_assert(offsetof(fm_cell_xf_t, has_alignment) == 28U, "fm_cell_xf_t.has_alignment offset changed");
 static_assert(offsetof(fm_cell_xf_t, has_text_rotation) == 32U, "fm_cell_xf_t.has_text_rotation offset changed");
 static_assert(offsetof(fm_cell_xf_t, reading_order) == 68U, "fm_cell_xf_t.reading_order offset changed");
-static_assert(offsetof(fm_cell_xf_t, has_horizontal_align) == 72U, "fm_cell_xf_t.has_horizontal_align offset changed");
-static_assert(offsetof(fm_cell_xf_t, has_vertical_align) == 76U, "fm_cell_xf_t.has_vertical_align offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_horizontal) == 72U, "fm_cell_xf_t.has_horizontal offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_vertical) == 76U, "fm_cell_xf_t.has_vertical offset changed");
 static_assert(offsetof(fm_cell_xf_t, has_wrap_text) == 80U, "fm_cell_xf_t.has_wrap_text offset changed");
 static_assert(offsetof(fm_cell_xf_t, has_justify_last_line) == 84U,
               "fm_cell_xf_t.has_justify_last_line offset changed");
@@ -43,12 +43,12 @@ static_assert(offsetof(fm_cell_xf_t, apply_number_format) == 88U, "fm_cell_xf_t.
 static_assert(offsetof(fm_cell_xf_t, quote_prefix) == 112U, "fm_cell_xf_t.quote_prefix offset changed");
 static_assert(offsetof(fm_cell_xf_t, has_protection) == 116U, "fm_cell_xf_t.has_protection offset changed");
 static_assert(offsetof(fm_cell_xf_t, hidden) == 124U, "fm_cell_xf_t.hidden offset changed");
-static_assert(sizeof(fm_dxf_record_t) == (sizeof(void*) == 4U ? 448U : 464U), "fm_dxf_record_t ABI layout changed");
-static_assert(offsetof(fm_dxf_record_t, num_fmt_code) == (sizeof(void*) == 4U ? 432U : 440U),
-              "fm_dxf_record_t.num_fmt_code offset changed");
-static_assert(offsetof(fm_dxf_record_t, alignment_xml) == (sizeof(void*) == 4U ? 436U : 448U),
+static_assert(sizeof(fm_dxf_record_t) == (sizeof(void*) == 4U ? 440U : 456U), "fm_dxf_record_t ABI layout changed");
+static_assert(offsetof(fm_dxf_record_t, number_format) == (sizeof(void*) == 4U ? 424U : 432U),
+              "fm_dxf_record_t.number_format offset changed");
+static_assert(offsetof(fm_dxf_record_t, alignment_xml) == (sizeof(void*) == 4U ? 428U : 440U),
               "fm_dxf_record_t.alignment_xml offset changed");
-static_assert(offsetof(fm_dxf_record_t, protection_xml) == (sizeof(void*) == 4U ? 440U : 456U),
+static_assert(offsetof(fm_dxf_record_t, protection_xml) == (sizeof(void*) == 4U ? 432U : 448U),
               "fm_dxf_record_t.protection_xml offset changed");
 static_assert(sizeof(fm_font_record_t) == 120U, "fm_font_record_t ABI layout changed");
 static_assert(sizeof(fm_fill_record_t) == (sizeof(void*) == 4U ? 112U : 120U), "fm_fill_record_t ABI layout changed");
@@ -95,11 +95,11 @@ static_assert(offsetof(fm_styles_batch_t, num_fmt_ids) == 15U * sizeof(void*),
 // rather than silently re-laying the struct out.
 static_assert(sizeof(size_t) == sizeof(void*), "fm_styles_batch_t assumes size_t is pointer-width");
 
-// A literal-RGB colour spec (`kind == kFmColorRgb`).
+// A literal-RGB colour spec (`kind == FM_COLOR_KIND_RGB`).
 [[maybe_unused]] inline fm_color_spec_t RgbColor(uint32_t argb) {
   fm_color_spec_t spec{};
-  spec.kind = static_cast<uint8_t>(kFmColorRgb);
-  spec.rgb = argb;
+  spec.kind = static_cast<uint8_t>(FM_COLOR_KIND_RGB);
+  spec.argb = argb;
   return spec;
 }
 
@@ -176,7 +176,7 @@ struct BufferGuard {
 [[maybe_unused]] inline fm_font_record_t MakeArial() {
   fm_font_record_t r{};
   r.name = "Arial";
-  r.size = 12.0;
+  r.size_pt = 12.0;
   r.color = RgbColor(0xFF112233U);
   r.bold = 1;
   r.italic = 0;
@@ -188,8 +188,8 @@ struct BufferGuard {
 [[maybe_unused]] inline fm_fill_record_t MakeRedFill() {
   fm_fill_record_t r{};
   r.pattern = 1;  // solid
-  r.fg = RgbColor(0xFFFF0000U);
-  r.bg = RgbColor(0xFF000000U);
+  r.foreground = RgbColor(0xFFFF0000U);
+  r.background = RgbColor(0xFF000000U);
   return r;
 }
 

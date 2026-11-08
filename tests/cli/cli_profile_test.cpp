@@ -62,7 +62,8 @@ std::string first_cell_text(const std::string& path) {
   fm_value_t value{};
   const bool read = fm_sheet_get_cell_count(workbook, 0, &cell_count) == 0 && cell_count != 0 &&
                     fm_sheet_get_cell_at(workbook, 0, 0, &row, &col, nullptr, &value) == 0;
-  const std::string text = read && value.kind == FM_VAL_TEXT && value.u.text != nullptr ? value.u.text : std::string{};
+  const std::string text =
+      read && value.kind == FM_VALUE_KIND_TEXT && value.u.text != nullptr ? value.u.text : std::string{};
   fm_workbook_destroy(workbook);
   return text;
 }

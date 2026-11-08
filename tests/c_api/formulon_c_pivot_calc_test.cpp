@@ -67,7 +67,7 @@ void AddField(fm_workbook_t* wb, const char* name, fm_pivot_axis_t axis) {
   spec.source_name = name;
   spec.custom_name = "";
   spec.axis = axis;
-  spec.subtotal_top = 1;
+  spec.subtotal_top = FM_TRISTATE_TRUE;
   spec.number_format = "";
   std::size_t index = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb, 0U, kPivot, &spec, &index), 0) << fm_get_last_error_message();
@@ -105,7 +105,7 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
   AddField(wb.handle, "Region", FM_PIVOT_AXIS_ROW);
   AddField(wb.handle, "Amt", FM_PIVOT_AXIS_VALUE);
   // As Excel creates the field: manual order, its items listed sorted.
-  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kRegion, FM_PIVOT_SORT_MANUAL, nullptr), 0)
+  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kRegion, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0)
       << fm_get_last_error_message();
   std::size_t expected_item = 0;
   for (const char* item : {"East", "North", "South"}) {
@@ -118,7 +118,7 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0U, kPivot, rows, 1U), 0) << fm_get_last_error_message();
   if (product_on_cols) {
     AddField(wb.handle, "Product", FM_PIVOT_AXIS_COL);
-    ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kProduct, FM_PIVOT_SORT_MANUAL, nullptr), 0);
+    ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kProduct, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0);
     for (const char* item : {"A", "B"}) {
       ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kProduct, item, 1, ignored_index()), 0);
     }
@@ -128,10 +128,10 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
     AddField(wb.handle, "Qty", FM_PIVOT_AXIS_VALUE);
   }
   std::size_t data = 99;
-  fm_pivot_data_field_spec_t amt = DataSpec(kAmt, FM_PIVOT_AGG_SUM);
+  fm_pivot_data_field_spec_t amt = DataSpec(kAmt, FM_PIVOT_AGGREGATION_SUM);
   ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, kPivot, &amt, &data), 0) << fm_get_last_error_message();
   if (!product_on_cols) {
-    fm_pivot_data_field_spec_t qty = DataSpec(kQty, FM_PIVOT_AGG_SUM);
+    fm_pivot_data_field_spec_t qty = DataSpec(kQty, FM_PIVOT_AGGREGATION_SUM);
     ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, kPivot, &qty, &data), 0) << fm_get_last_error_message();
   }
   *out_cache = cache;
@@ -150,7 +150,7 @@ void LoadFixture(const std::string& name, WorkbookGuard* out) {
 
 // One report cell, copied out of the layout handle.
 struct Shown {
-  int32_t kind = FM_VAL_BLANK;
+  int32_t kind = FM_VALUE_KIND_BLANK;
   double number = 0.0;
   std::int32_t error = 0;
   std::string text;
@@ -162,11 +162,11 @@ struct Shown {
 Shown Copy(const fm_value_t& value) {
   Shown out;
   out.kind = value.kind;
-  if (value.kind == FM_VAL_NUMBER) {
+  if (value.kind == FM_VALUE_KIND_NUMBER) {
     out.number = value.u.number;
-  } else if (value.kind == FM_VAL_ERROR) {
+  } else if (value.kind == FM_VALUE_KIND_ERROR) {
     out.error = value.u.error_code;
-  } else if (value.kind == FM_VAL_TEXT && value.u.text != nullptr) {
+  } else if (value.kind == FM_VALUE_KIND_TEXT && value.u.text != nullptr) {
     out.text = value.u.text;
   }
   return out;
@@ -184,7 +184,7 @@ Shown ReportAt(fm_workbook_t* wb, const std::string& row_label, const std::strin
   EXPECT_EQ(PivotLayoutExtent(projected.handle, &top, &left, &rows, &cols), 0);
   const std::vector<fm_pivot_cell_t> cells = CollectCells(projected.handle);
   const auto is_text = [](const fm_pivot_cell_t& cell, const std::string& text) {
-    return cell.value.kind == FM_VAL_TEXT && cell.value.u.text != nullptr && text == cell.value.u.text;
+    return cell.value.kind == FM_VALUE_KIND_TEXT && cell.value.u.text != nullptr && text == cell.value.u.text;
   };
   std::optional<std::uint32_t> row;
   std::optional<std::uint32_t> col;
@@ -214,19 +214,19 @@ Shown ReportAt(fm_workbook_t* wb, const std::string& row_label, const std::strin
 
 void ExpectNumber(fm_workbook_t* wb, const std::string& row_label, const std::string& column, double expected) {
   const Shown shown = ReportAt(wb, row_label, column);
-  ASSERT_EQ(shown.kind, FM_VAL_NUMBER) << row_label << " / " << column;
+  ASSERT_EQ(shown.kind, FM_VALUE_KIND_NUMBER) << row_label << " / " << column;
   EXPECT_DOUBLE_EQ(shown.number, expected) << row_label << " / " << column;
   // The sheet holds the same value at the same cell.
   fm_value_t cell{};
   ASSERT_EQ(fm_sheet_get_value(wb, 0U, shown.row, shown.col, &cell), 0);
-  ASSERT_EQ(cell.kind, FM_VAL_NUMBER) << row_label << " / " << column;
+  ASSERT_EQ(cell.kind, FM_VALUE_KIND_NUMBER) << row_label << " / " << column;
   EXPECT_DOUBLE_EQ(cell.u.number, expected) << row_label << " / " << column;
 }
 
 void ExpectError(fm_workbook_t* wb, const std::string& row_label, const std::string& column,
                  formulon::ErrorCode expected) {
   const Shown shown = ReportAt(wb, row_label, column);
-  ASSERT_EQ(shown.kind, FM_VAL_ERROR) << row_label << " / " << column;
+  ASSERT_EQ(shown.kind, FM_VALUE_KIND_ERROR) << row_label << " / " << column;
   EXPECT_EQ(shown.error, static_cast<std::int32_t>(expected)) << row_label << " / " << column;
 }
 
@@ -279,7 +279,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldGridMatchesExcel) {
   EXPECT_EQ(price, 4U);
   // A cache edit leaves the report pending; the table edit projects it.
   EXPECT_EQ(Pending(wb.handle), 1);
-  const std::size_t data = AddDataField(wb.handle, price, FM_PIVOT_AGG_SUM);
+  const std::size_t data = AddDataField(wb.handle, price, FM_PIVOT_AGGREGATION_SUM);
   EXPECT_EQ(Pending(wb.handle), 0);
 
   fm_pivot_data_field_spec_t read = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
@@ -305,7 +305,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldSavesExcelStrings) {
   WorkbookGuard wb;
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
-  AddDataField(wb.handle, AddPrice(wb.handle, cache), FM_PIVOT_AGG_SUM);
+  AddDataField(wb.handle, AddPrice(wb.handle, cache), FM_PIVOT_AGGREGATION_SUM);
 
   const std::string cache_xml = SavedPart(wb.handle, "xl/pivotCache/pivotCacheDefinition1.xml");
   EXPECT_NE(cache_xml.find("<cacheField name=\"Price\" numFmtId=\"0\" formula=\"Amt/Qty\" databaseField=\"0\"/>"),
@@ -343,7 +343,7 @@ TEST(FormulonCApiPivotCalc, DivisionByZeroShowsTheErrorCaption) {
   std::size_t bad = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache, "Bad", "Amt/0", &bad), 0)
       << fm_get_last_error_message();
-  AddDataField(wb.handle, bad, FM_PIVOT_AGG_SUM);
+  AddDataField(wb.handle, bad, FM_PIVOT_AGGREGATION_SUM);
   // CF2: every cell and total is #DIV/0!.
   for (const char* row : {"East", "North", "South", kGrandTotal}) {
     ExpectError(wb.handle, row, SumOf("Bad"), formulon::ErrorCode::Div0);
@@ -353,10 +353,10 @@ TEST(FormulonCApiPivotCalc, DivisionByZeroShowsTheErrorCaption) {
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, kPivot, &options), 0);
   options.show_error = 1;
   options.error_caption = "ERR";
-  ASSERT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, kPivot, &options), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_pivot_options(wb.handle, 0U, kPivot, &options), 0) << fm_get_last_error_message();
   for (const char* row : {"East", "North", "South", kGrandTotal}) {
     const Shown shown = ReportAt(wb.handle, row, SumOf("Bad"));
-    ASSERT_EQ(shown.kind, FM_VAL_TEXT) << row;
+    ASSERT_EQ(shown.kind, FM_VALUE_KIND_TEXT) << row;
     EXPECT_EQ(shown.text, "ERR") << row;
   }
   const std::string pivot_xml = SavedPart(wb.handle, "xl/pivotTables/pivotTable1.xml");
@@ -372,7 +372,7 @@ TEST(FormulonCApiPivotCalc, QuotedNamesAndIfApplyToTheSums) {
   std::size_t cond = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache, "Cond", "=IF(Qty>2,'Amt',0)", &cond), 0)
       << fm_get_last_error_message();
-  AddDataField(wb.handle, cond, FM_PIVOT_AGG_SUM);
+  AddDataField(wb.handle, cond, FM_PIVOT_AGGREGATION_SUM);
   ExpectNumber(wb.handle, "East", SumOf("Cond"), 70.0);
   ExpectNumber(wb.handle, "North", SumOf("Cond"), 210.0);
   ExpectNumber(wb.handle, "South", SumOf("Cond"), 350.0);
@@ -385,13 +385,13 @@ TEST(FormulonCApiPivotCalc, DataFieldFunctionRenamesButKeepsTheSumBasedValues) {
   WorkbookGuard wb;
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
-  const std::size_t data = AddDataField(wb.handle, AddPrice(wb.handle, cache), FM_PIVOT_AGG_SUM);
+  const std::size_t data = AddDataField(wb.handle, AddPrice(wb.handle, cache), FM_PIVOT_AGGREGATION_SUM);
   // CF4: Average and Count rename the data field; the values stay.
   const struct {
     fm_pivot_aggregation_t aggregation;
     const char* name;
-  } cases[] = {{FM_PIVOT_AGG_AVERAGE, "\xE5\xB9\xB3\xE5\x9D\x87 / Price"},  // 平均 / Price
-               {FM_PIVOT_AGG_COUNT, "\xE5\x80\x8B\xE6\x95\xB0 / Price"}};   // 個数 / Price
+  } cases[] = {{FM_PIVOT_AGGREGATION_AVERAGE, "\xE5\xB9\xB3\xE5\x9D\x87 / Price"},  // 平均 / Price
+               {FM_PIVOT_AGGREGATION_COUNT, "\xE5\x80\x8B\xE6\x95\xB0 / Price"}};   // 個数 / Price
   for (const auto& c : cases) {
     fm_pivot_data_field_spec_t spec = DataSpec(4U, c.aggregation);
     ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0U, kPivot, data, &spec), 0) << fm_get_last_error_message();
@@ -411,7 +411,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldOverAnotherCalculatedField) {
   std::size_t price2 = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache, "Price2", "Price*2", &price2), 0)
       << fm_get_last_error_message();
-  AddDataField(wb.handle, price2, FM_PIVOT_AGG_SUM);
+  AddDataField(wb.handle, price2, FM_PIVOT_AGGREGATION_SUM);
   // CF5.
   ExpectNumber(wb.handle, "East", SumOf("Price2"), 140.0 / 6.0);
   ExpectNumber(wb.handle, "North", SumOf("Price2"), 60.0);
@@ -444,7 +444,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldSetFormulaReevaluates) {
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
   const std::size_t price = AddPrice(wb.handle, cache);
-  AddDataField(wb.handle, price, FM_PIVOT_AGG_SUM);
+  AddDataField(wb.handle, price, FM_PIVOT_AGGREGATION_SUM);
   ASSERT_EQ(fm_workbook_set_pivot_cache_calculated_field_formula(wb.handle, cache, price, "=Amt*2"), 0)
       << fm_get_last_error_message();
   const char* formula = nullptr;
@@ -575,7 +575,8 @@ TEST(FormulonCApiPivotCalc, AveragingFunctionsExcludeCalculatedItems) {
       << fm_get_last_error_message();
   // CI2: Average is refused; Max is not.
   for (const fm_pivot_aggregation_t aggregation :
-       {FM_PIVOT_AGG_AVERAGE, FM_PIVOT_AGG_STDDEV, FM_PIVOT_AGG_STDDEVP, FM_PIVOT_AGG_VAR, FM_PIVOT_AGG_VARP}) {
+       {FM_PIVOT_AGGREGATION_AVERAGE, FM_PIVOT_AGGREGATION_STDDEV, FM_PIVOT_AGGREGATION_STDDEVP,
+        FM_PIVOT_AGGREGATION_VAR, FM_PIVOT_AGGREGATION_VARP}) {
     fm_pivot_data_field_spec_t spec = DataSpec(kAmt, aggregation);
     EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0U, kPivot, 0U, &spec), kPreconditionFailed) << aggregation;
     std::size_t index = 99;
@@ -587,14 +588,14 @@ TEST(FormulonCApiPivotCalc, AveragingFunctionsExcludeCalculatedItems) {
   EXPECT_EQ(data_fields, 2U);
 
   // CI2: Count counts the records of the items the formula names.
-  fm_pivot_data_field_spec_t count = DataSpec(kAmt, FM_PIVOT_AGG_COUNT);
+  fm_pivot_data_field_spec_t count = DataSpec(kAmt, FM_PIVOT_AGGREGATION_COUNT);
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0U, kPivot, 0U, &count), 0) << fm_get_last_error_message();
   const std::string count_name = "\xE5\x80\x8B\xE6\x95\xB0 / Amt";  // 個数 / Amt
   ExpectNumber(wb.handle, "East", count_name, 1.0);
   ExpectNumber(wb.handle, "North", count_name, 2.0);
   ExpectNumber(wb.handle, "X", count_name, 4.0);
   ExpectNumber(wb.handle, kGrandTotal, count_name, 9.0);
-  fm_pivot_data_field_spec_t max = DataSpec(kAmt, FM_PIVOT_AGG_MAX);
+  fm_pivot_data_field_spec_t max = DataSpec(kAmt, FM_PIVOT_AGGREGATION_MAX);
   EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0U, kPivot, 0U, &max), 0) << fm_get_last_error_message();
 }
 
@@ -602,7 +603,7 @@ TEST(FormulonCApiPivotCalc, AveragingDataFieldBlocksAddingACalculatedItem) {
   WorkbookGuard wb;
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
-  fm_pivot_data_field_spec_t average = DataSpec(kAmt, FM_PIVOT_AGG_AVERAGE);
+  fm_pivot_data_field_spec_t average = DataSpec(kAmt, FM_PIVOT_AGGREGATION_AVERAGE);
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0U, kPivot, 0U, &average), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "North+South", ignored_index()),
             kPreconditionFailed);

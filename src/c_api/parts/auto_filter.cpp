@@ -38,6 +38,7 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -69,17 +70,14 @@ fm_status_t resolve_sheet(const fm_workbook_t* wb, std::size_t sheet_index, Targ
   return 0;
 }
 
-fm_status_t resolve_table(const fm_workbook_t* wb, std::size_t table_index, Target* out) {
-  if (wb == nullptr) {
-    return null_argument("wb");
-  }
-  const auto& tables = wb->workbook().tables();
-  if (auto rc = check_index(table_index, tables.size(), "table_index"); rc != 0) {
+fm_status_t resolve_table(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t table_index, Target* out) {
+  std::size_t global = 0;
+  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &global); rc != 0) {
     return rc;
   }
-  out->sheet = tables[table_index].sheet_index;
-  out->table = table_index;
-  out->filter = tables[table_index].auto_filter_xml.get();
+  out->sheet = sheet_index;
+  out->table = global;
+  out->filter = wb->workbook().tables()[global].auto_filter_xml.get();
   return 0;
 }
 
@@ -113,7 +111,7 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
   columns.reserve(filter.columns.size());
   for (const formulon::FilterColumn& in : filter.columns) {
     fm_filter_column_t c{};
-    c.col_id = in.col_id;
+    c.column_offset = in.col_id;
     c.hidden_button = in.hidden_button ? 1 : 0;
     c.show_button = in.show_button ? 1 : 0;
     c.kind = static_cast<int32_t>(in.kind);
@@ -166,13 +164,13 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
         c.max_val_iso = keep(in.dynamic.max_val_iso);
         break;
       case formulon::FilterKind::kColor:
-        c.dxf_id = in.color.dxf_id.value_or(kAbsentDxfId);
+        c.dxf_index = in.color.dxf_id.value_or(kAbsentDxfId);
         c.cell_color = in.color.cell_color ? 1 : 0;
         break;
       case formulon::FilterKind::kIcon:
         c.icon_set = static_cast<int32_t>(in.icon.icon_set);
-        c.has_icon_id = in.icon.icon_id.has_value() ? 1 : 0;
-        c.icon_id = static_cast<int32_t>(in.icon.icon_id.value_or(0U));
+        c.has_icon_index = in.icon.icon_id.has_value() ? 1 : 0;
+        c.icon_index = static_cast<int32_t>(in.icon.icon_id.value_or(0U));
         break;
       case formulon::FilterKind::kNone:
         break;
@@ -201,11 +199,11 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
       c.descending = in.descending ? 1 : 0;
       c.sort_by = static_cast<int32_t>(in.sort_by);
       c.custom_list = keep(in.custom_list);
-      c.has_dxf_id = in.dxf_id.has_value() ? 1 : 0;
-      c.dxf_id = in.dxf_id.value_or(0U);
+      c.has_dxf_index = in.dxf_id.has_value() ? 1 : 0;
+      c.dxf_index = in.dxf_id.value_or(0U);
       c.icon_set = static_cast<int32_t>(in.icon_set);
-      c.has_icon_id = in.icon_id.has_value() ? 1 : 0;
-      c.icon_id = static_cast<int32_t>(in.icon_id.value_or(0U));
+      c.has_icon_index = in.icon_id.has_value() ? 1 : 0;
+      c.icon_index = static_cast<int32_t>(in.icon_id.value_or(0U));
       conditions.push_back(c);
     }
     out->condition_count = static_cast<uint32_t>(conditions.size());
@@ -227,7 +225,7 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
   if (auto rc = check_enum_domain(in.kind, 0, static_cast<int64_t>(formulon::FilterKind::kIcon), "kind"); rc != 0) {
     return rc;
   }
-  out->col_id = in.col_id;
+  out->col_id = in.column_offset;
   out->hidden_button = in.hidden_button != 0;
   out->show_button = in.show_button != 0;
   out->kind = static_cast<formulon::FilterKind>(in.kind);
@@ -311,8 +309,8 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       out->dynamic.max_val_iso = text_or_empty(in.max_val_iso);
       return 0;
     case formulon::FilterKind::kColor:
-      if (in.dxf_id != kAbsentDxfId) {
-        out->color.dxf_id = in.dxf_id;
+      if (in.dxf_index != kAbsentDxfId) {
+        out->color.dxf_id = in.dxf_index;
       }
       out->color.cell_color = in.cell_color != 0;
       return 0;
@@ -323,11 +321,11 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
         return rc;
       }
       out->icon.icon_set = static_cast<formulon::cf::IconSetName>(in.icon_set);
-      if (in.has_icon_id != 0) {
-        if (auto rc = check_enum_domain(in.icon_id, 0, std::numeric_limits<int32_t>::max(), "icon_id"); rc != 0) {
+      if (in.has_icon_index != 0) {
+        if (auto rc = check_enum_domain(in.icon_index, 0, std::numeric_limits<int32_t>::max(), "icon_id"); rc != 0) {
           return rc;
         }
-        out->icon.icon_id = static_cast<uint32_t>(in.icon_id);
+        out->icon.icon_id = static_cast<uint32_t>(in.icon_index);
       }
       return 0;
     case formulon::FilterKind::kNone:
@@ -349,16 +347,16 @@ fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, formulon::Sort
   out->descending = in.descending != 0;
   out->sort_by = static_cast<formulon::SortBy>(in.sort_by);
   out->custom_list = text_or_empty(in.custom_list);
-  if (in.has_dxf_id != 0) {
-    out->dxf_id = in.dxf_id;
+  if (in.has_dxf_index != 0) {
+    out->dxf_id = in.dxf_index;
   }
   out->icon_set = static_cast<formulon::cf::IconSetName>(in.icon_set);
-  if (in.has_icon_id != 0) {
-    if (auto rc = check_enum_domain(in.icon_id, 0, std::numeric_limits<int32_t>::max(), "conditions.icon_id");
+  if (in.has_icon_index != 0) {
+    if (auto rc = check_enum_domain(in.icon_index, 0, std::numeric_limits<int32_t>::max(), "conditions.icon_id");
         rc != 0) {
       return rc;
     }
-    out->icon_id = static_cast<uint32_t>(in.icon_id);
+    out->icon_id = static_cast<uint32_t>(in.icon_index);
   }
   return 0;
 }
@@ -474,10 +472,6 @@ fm_status_t store(fm_workbook_t* wb, const Target& target, formulon::AutoFilter 
   return finish_status(result);
 }
 
-fm_status_t null_filter() {
-  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "NULL filter");
-}
-
 fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filter_t* filter) {
   if (auto rc = check_record_size(*filter); rc != 0) {
     return rc;
@@ -493,6 +487,9 @@ fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filt
 }
 
 fm_status_t remove_body(fm_workbook_t* wb, const Target& target) {
+  if (target.filter == nullptr) {
+    return 0;
+  }
   formulon::Workbook& book = wb->workbook();
   auto result = target.table.has_value() ? book.remove_table_auto_filter(*target.table)
                                          : book.remove_sheet_auto_filter(target.sheet);
@@ -565,23 +562,11 @@ extern "C" fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t 
 
 extern "C" fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_index, const fm_auto_filter_t* filter) {
   clear_last_error();
-  if (filter == nullptr) {
-    return null_filter();
-  }
   Target target;
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
-  return set_body(wb, target, filter);
-}
-
-extern "C" fm_status_t fm_sheet_remove_auto_filter(fm_workbook_t* wb, size_t sheet_index) {
-  clear_last_error();
-  Target target;
-  if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
-    return rc;
-  }
-  return remove_body(wb, target);
+  return filter == nullptr ? remove_body(wb, target) : set_body(wb, target, filter);
 }
 
 extern "C" fm_status_t fm_sheet_apply_auto_filter(fm_workbook_t* wb, size_t sheet_index) {
@@ -593,7 +578,7 @@ extern "C" fm_status_t fm_sheet_apply_auto_filter(fm_workbook_t* wb, size_t shee
   return apply_body(wb, target);
 }
 
-extern "C" fm_status_t fm_sheet_clear_auto_filter(fm_workbook_t* wb, size_t sheet_index) {
+extern "C" fm_status_t fm_sheet_clear_auto_filter_criteria(fm_workbook_t* wb, size_t sheet_index) {
   clear_last_error();
   Target target;
   if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
@@ -620,73 +605,63 @@ extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, si
 
 // --- table ------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_get_table_auto_filter(const fm_workbook_t* wb, size_t table_index,
-                                                         fm_auto_filter_t* out, int32_t* out_present) {
+extern "C" fm_status_t fm_sheet_get_table_auto_filter(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                      fm_auto_filter_t* out, int32_t* out_present) {
   clear_last_error();
   if (out == nullptr || out_present == nullptr) {
     return null_argument("out");
   }
   Target target;
-  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
   return get_body(wb, target, out, out_present);
 }
 
-extern "C" fm_status_t fm_workbook_set_table_auto_filter(fm_workbook_t* wb, size_t table_index,
-                                                         const fm_auto_filter_t* filter) {
+extern "C" fm_status_t fm_sheet_set_table_auto_filter(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                      const fm_auto_filter_t* filter) {
   clear_last_error();
-  if (filter == nullptr) {
-    return null_filter();
-  }
   Target target;
-  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
-  return set_body(wb, target, filter);
+  return filter == nullptr ? remove_body(wb, target) : set_body(wb, target, filter);
 }
 
-extern "C" fm_status_t fm_workbook_remove_table_auto_filter(fm_workbook_t* wb, size_t table_index) {
+extern "C" fm_status_t fm_sheet_apply_table_auto_filter(fm_workbook_t* wb, size_t sheet_index, size_t table_index) {
   clear_last_error();
   Target target;
-  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
-    return rc;
-  }
-  return remove_body(wb, target);
-}
-
-extern "C" fm_status_t fm_workbook_apply_table_auto_filter(fm_workbook_t* wb, size_t table_index) {
-  clear_last_error();
-  Target target;
-  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
   return apply_body(wb, target);
 }
 
-extern "C" fm_status_t fm_workbook_clear_table_auto_filter(fm_workbook_t* wb, size_t table_index) {
+extern "C" fm_status_t fm_sheet_clear_table_auto_filter_criteria(fm_workbook_t* wb, size_t sheet_index,
+                                                                 size_t table_index) {
   clear_last_error();
   Target target;
-  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
   return clear_body(wb, target);
 }
 
-extern "C" fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_t* wb, size_t table_index, uint8_t* buf,
-                                                              size_t cap, size_t* out_len, uint32_t* out_first_row) {
+extern "C" fm_status_t fm_sheet_evaluate_table_auto_filter(const fm_workbook_t* wb, size_t sheet_index,
+                                                           size_t table_index, uint8_t* buf, size_t cap,
+                                                           size_t* out_count, uint32_t* out_first_row) {
   clear_last_error();
-  if (evaluate_args_missing(buf, cap, out_len, out_first_row)) {
+  if (evaluate_args_missing(buf, cap, out_count, out_first_row)) {
     return null_argument();
   }
   Target target;
-  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, sheet_index, table_index, &target); rc != 0) {
     return rc;
   }
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
-  return evaluate_body(wb, target, buf, cap, out_len, out_first_row);
+  return evaluate_body(wb, target, buf, cap, out_count, out_first_row);
 }
 
 extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {

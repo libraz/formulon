@@ -81,27 +81,27 @@ void append_json_escaped(std::string& out, std::string_view text) {
 std::string render_value(const fm_value_t& v) {
   std::string out;
   switch (v.kind) {
-    case FM_VAL_BLANK:
+    case FM_VALUE_KIND_BLANK:
       return out;
-    case FM_VAL_NUMBER:
+    case FM_VALUE_KIND_NUMBER:
       format_double(out, v.u.number);
       return out;
-    case FM_VAL_BOOL:
+    case FM_VALUE_KIND_BOOL:
       out.append(v.u.boolean != 0 ? "TRUE" : "FALSE");
       return out;
-    case FM_VAL_TEXT:
+    case FM_VALUE_KIND_TEXT:
       out.append(view_or_empty(v.u.text));
       return out;
-    case FM_VAL_ERROR:
+    case FM_VALUE_KIND_ERROR:
       out.append(error_display(v.u.error_code));
       return out;
-    case FM_VAL_ARRAY:
+    case FM_VALUE_KIND_ARRAY:
       out.append("[array]");
       return out;
-    case FM_VAL_REF:
+    case FM_VALUE_KIND_REF:
       out.append("[ref]");
       return out;
-    case FM_VAL_LAMBDA:
+    case FM_VALUE_KIND_LAMBDA:
       out.append("[lambda]");
       return out;
   }
@@ -136,55 +136,55 @@ std::string escape_single_line(std::string_view text) {
 void append_value_json_members(std::string& out, const fm_value_t& v) {
   out.append("\"kind\":\"");
   switch (v.kind) {
-    case FM_VAL_BLANK:
+    case FM_VALUE_KIND_BLANK:
       out.append("blank");
       break;
-    case FM_VAL_NUMBER:
+    case FM_VALUE_KIND_NUMBER:
       out.append("number");
       break;
-    case FM_VAL_BOOL:
+    case FM_VALUE_KIND_BOOL:
       out.append("bool");
       break;
-    case FM_VAL_TEXT:
+    case FM_VALUE_KIND_TEXT:
       out.append("text");
       break;
-    case FM_VAL_ERROR:
+    case FM_VALUE_KIND_ERROR:
       out.append("error");
       break;
-    case FM_VAL_ARRAY:
+    case FM_VALUE_KIND_ARRAY:
       out.append("array");
       break;
-    case FM_VAL_REF:
+    case FM_VALUE_KIND_REF:
       out.append("ref");
       break;
-    case FM_VAL_LAMBDA:
+    case FM_VALUE_KIND_LAMBDA:
       out.append("lambda");
       break;
   }
   out.append("\",\"value\":");
   switch (v.kind) {
-    case FM_VAL_BLANK:
+    case FM_VALUE_KIND_BLANK:
       out.append("null");
       break;
-    case FM_VAL_NUMBER:
+    case FM_VALUE_KIND_NUMBER:
       format_double(out, v.u.number);
       break;
-    case FM_VAL_BOOL:
+    case FM_VALUE_KIND_BOOL:
       out.append(v.u.boolean != 0 ? "true" : "false");
       break;
-    case FM_VAL_TEXT:
+    case FM_VALUE_KIND_TEXT:
       out.push_back('"');
       append_json_escaped(out, view_or_empty(v.u.text));
       out.push_back('"');
       break;
-    case FM_VAL_ERROR:
+    case FM_VALUE_KIND_ERROR:
       out.push_back('"');
       out.append(error_display(v.u.error_code));
       out.push_back('"');
       break;
-    case FM_VAL_ARRAY:
-    case FM_VAL_REF:
-    case FM_VAL_LAMBDA:
+    case FM_VALUE_KIND_ARRAY:
+    case FM_VALUE_KIND_REF:
+    case FM_VALUE_KIND_LAMBDA:
       out.append("null");
       break;
   }

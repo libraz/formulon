@@ -17,6 +17,7 @@ from formulon import (
     IndexOutOfRangeError,
     NotFoundError,
     Picture,
+    PictureInput,
     Workbook,
     get_image_info,
 )
@@ -57,7 +58,8 @@ class DrawingImageTests(unittest.TestCase):
         try:
             self.assertEqual(wb.sheet(0).list_drawings(), [])
             pic = wb.sheet(0).add_picture(
-                png, name="logo", description="a logo", anchor=DrawingAnchor(row=2, col=1, row_offset_emu=100)
+                png,
+                PictureInput(name="logo", description="a logo", anchor=DrawingAnchor(row=2, col=1, row_offset_emu=100)),
             )
             self.assertIsInstance(pic, Picture)
             objs = wb.sheet(0).list_drawings()
@@ -70,10 +72,9 @@ class DrawingImageTests(unittest.TestCase):
             self.assertEqual((obj.from_row, obj.from_col, obj.from_row_offset_emu), (2, 1, 100))
             self.assertEqual((obj.width_emu, obj.height_emu), (4 * 9525, 3 * 9525))
             self.assertEqual((obj.name, obj.description), ("logo", "a logo"))
-            self.assertEqual(obj.image_format, ImageFormat.PNG)
-            self.assertTrue(obj.media_path)
+            self.assertEqual(obj.format, ImageFormat.PNG)
             props = wb.sheet(0).picture(pic.object_id).get_properties()
-            self.assertEqual((props.format, props.px_width, props.px_height, props.bytes), (ImageFormat.PNG, 4, 3, png))
+            self.assertEqual((props.format, props.width_px, props.height_px, props.bytes), (ImageFormat.PNG, 4, 3, png))
 
             loaded = Workbook.load(wb.save())
             try:
@@ -99,11 +100,13 @@ class DrawingImageTests(unittest.TestCase):
         try:
             wb.sheet(0).add_picture(
                 _png(2, 2),
-                anchor=DrawingAnchor(
-                    anchor_kind=AnchorKind.TWO_CELL,
-                    edit_as=AnchorEditAs.ONE_CELL,
-                    width_emu=1_000_000,
-                    height_emu=2_000_000,
+                PictureInput(
+                    anchor=DrawingAnchor(
+                        anchor_kind=AnchorKind.TWO_CELL,
+                        edit_as=AnchorEditAs.ONE_CELL,
+                        width_emu=1_000_000,
+                        height_emu=2_000_000,
+                    )
                 ),
             )
             obj = wb.sheet(0).list_drawings()[0].get_drawing_properties()
@@ -126,7 +129,7 @@ class DrawingImageTests(unittest.TestCase):
 
     def test_set_drawing_anchor_moves_and_resizes(self) -> None:
         with Workbook.create_default() as wb:
-            pic = wb.sheet(0).add_picture(_png(4, 3), name="logo", anchor=DrawingAnchor(row=1, col=1))
+            pic = wb.sheet(0).add_picture(_png(4, 3), PictureInput(name="logo", anchor=DrawingAnchor(row=1, col=1)))
             wb.sheet(0).drawing(pic.object_id).set_anchor(
                 DrawingAnchor(
                     anchor_kind=AnchorKind.TWO_CELL,
@@ -153,7 +156,7 @@ class DrawingImageTests(unittest.TestCase):
     def test_set_drawing_name_renames_the_object(self) -> None:
         wb = Workbook.create_default()
         try:
-            pic = wb.sheet(0).add_picture(_png(2, 2), name="logo")
+            pic = wb.sheet(0).add_picture(_png(2, 2), PictureInput(name="logo"))
             wb.sheet(0).drawing(pic.object_id).rename("renamed")
             self.assertEqual(wb.sheet(0).list_drawings()[0].get_drawing_properties().name, "renamed")
             with self.assertRaises(FormulonError):
@@ -165,9 +168,9 @@ class DrawingImageTests(unittest.TestCase):
 
     def test_set_drawing_z_order_reorders_the_list(self) -> None:
         with Workbook.create_default() as wb:
-            a = wb.sheet(0).add_picture(_png(2, 2), anchor=DrawingAnchor(row=0))
-            b = wb.sheet(0).add_picture(_png(2, 2), anchor=DrawingAnchor(row=3))
-            c = wb.sheet(0).add_picture(_png(2, 2), anchor=DrawingAnchor(row=6))
+            a = wb.sheet(0).add_picture(_png(2, 2), PictureInput(anchor=DrawingAnchor(row=0)))
+            b = wb.sheet(0).add_picture(_png(2, 2), PictureInput(anchor=DrawingAnchor(row=3)))
+            c = wb.sheet(0).add_picture(_png(2, 2), PictureInput(anchor=DrawingAnchor(row=6)))
             self.assertEqual(
                 [o.object_id for o in wb.sheet(0).list_drawings()], [a.object_id, b.object_id, c.object_id]
             )
@@ -183,8 +186,8 @@ class DrawingImageTests(unittest.TestCase):
     def test_snapshot_and_restore_drawing(self) -> None:
         png = _png(4, 3)
         with Workbook.create_default() as wb:
-            a = wb.sheet(0).add_picture(png, name="A", anchor=DrawingAnchor(row=1))
-            b = wb.sheet(0).add_picture(_png(2, 2), name="B", anchor=DrawingAnchor(row=4))
+            a = wb.sheet(0).add_picture(png, PictureInput(name="A", anchor=DrawingAnchor(row=1)))
+            b = wb.sheet(0).add_picture(_png(2, 2), PictureInput(name="B", anchor=DrawingAnchor(row=4)))
             snap = wb.sheet(0).drawing(a.object_id).snapshot()
             self.assertIsInstance(snap, bytes)
             self.assertGreater(len(snap), 0)
@@ -201,7 +204,7 @@ class DrawingImageTests(unittest.TestCase):
             self.assertEqual([o.object_id for o in wb.sheet(0).list_drawings()], [a.object_id, b.object_id])
             self.assertEqual(wb.sheet(0).list_drawings()[0].get_drawing_properties().from_row, 1)
 
-            copy = wb.sheet(0).restore_drawing(snap, new_id=True)
+            copy = wb.sheet(0).restore_drawing(snap, assign_new_id=True)
             self.assertNotIn(copy.object_id, (a.object_id, b.object_id))
             self.assertEqual(
                 [o.object_id for o in wb.sheet(0).list_drawings()], [a.object_id, b.object_id, copy.object_id]

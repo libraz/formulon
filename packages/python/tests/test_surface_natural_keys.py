@@ -11,8 +11,10 @@ from formulon import (
     DefinedName,
     DefinedNameInput,
     FormulonError,
+    HyperlinkInput,
     NotFoundError,
     Person,
+    ShapeInput,
     ThemeScriptFont,
     ThreadedCommentInput,
     Workbook,
@@ -44,7 +46,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
 
     def test_hyperlinks_people_and_threaded_comments_are_read_by_key(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_hyperlink(2, 1, target="https://example.com/")
+            wb.sheet(0).set_hyperlink(2, 1, HyperlinkInput(target="https://example.com/"))
             link = wb.sheet(0).get_hyperlink(2, 1)
             self.assertIsNotNone(link)
             assert link is not None
@@ -70,11 +72,13 @@ class NaturalKeyLookupTests(unittest.TestCase):
             object_id = (
                 wb.sheet(0)
                 .add_shape(
-                    anchor_kind=AnchorKind.ONE_CELL,
-                    from_row=2,
-                    width_emu=914400,
-                    height_emu=457200,
-                    preset_geometry="rect",
+                    ShapeInput(
+                        anchor_kind=AnchorKind.ONE_CELL,
+                        from_row=2,
+                        width_emu=914400,
+                        height_emu=457200,
+                        preset_geometry="rect",
+                    ),
                 )
                 .object_id
             )
@@ -104,8 +108,8 @@ class NaturalKeyLookupTests(unittest.TestCase):
             )
             self.assertIsNone(wb.get_theme_script_font(major=True, script="Zzzz"))
             path = wb.ooxml.list_passthroughs()[0].path
-            self.assertEqual(wb.ooxml.get_passthrough(path), path)
-            self.assertIsNone(wb.ooxml.get_passthrough("/" + path))
+            self.assertTrue(wb.ooxml.has_passthrough(path))
+            self.assertFalse(wb.ooxml.has_passthrough("/" + path))
 
 
 class IndexKeyedAddTests(unittest.TestCase):

@@ -1,13 +1,4 @@
-py	binding.set_cell_format	patch	`set_cell_format` merges a patch; a merge is `update_cell_format`, `set` replaces
-py	binding.set_view	patch	`set_view` merges a patch; a merge is `update_view`, `set` replaces
 py	cell_phonetic_properties.set	shape	`get_cell_phonetic_properties` returns `PhoneticProperties` but `set_cell_phonetic_properties` takes (type, alignment)
-py	format_defaults.set	patch	`set_format_defaults` merges a patch; a merge is `update_format_defaults`, `set` replaces
-py	header_footer.set	patch	`set_header_footer` merges a patch; a merge is `update_header_footer`, `set` replaces
-py	iterative.set	patch	`set_iterative` merges a patch; a merge is `update_iterative`, `set` replaces
-py	page_margins.set	patch	`set_page_margins` merges a patch; a merge is `update_page_margins`, `set` replaces
-py	page_setup.set	patch	`set_page_setup` merges a patch; a merge is `update_page_setup`, `set` replaces
-py	print_options.set	patch	`set_print_options` merges a patch; a merge is `update_print_options`, `set` replaces
 py	selection.set	shape	`get_selection` returns `SheetSelection` but `set_selection` takes (active_row, active_col, ranges)
-py	table_style_defaults.set	patch	`set_table_style_defaults` merges a patch; a merge is `update_table_style_defaults`, `set` replaces
 py	theme_colors.set	shape	`get_theme_colors` returns `ThemeColors` but `set_theme_colors` takes (colors)
 py	theme_script_font.set	shape	`get_theme_script_font` returns `ThemeScriptFont` but `set_theme_script_font` takes (typeface)

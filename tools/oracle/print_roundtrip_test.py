@@ -214,8 +214,8 @@ class AuthoringTest(unittest.TestCase):
             reloaded.close()
         # A case states 1-based rows, matching the rest of the schema; the
         # break sits before that row, so it reads back at row - 1.
-        self.assertEqual([(b.id, b.manual) for b in rows], [(20, True)])
-        self.assertEqual([(b.id, b.manual) for b in cols], [(3, True)])
+        self.assertEqual([(b.row, b.manual) for b in rows], [(20, True)])
+        self.assertEqual([(b.col, b.manual) for b in cols], [(3, True)])
 
     def test_named_sheet_selects_the_right_index(self):
         case = _case(

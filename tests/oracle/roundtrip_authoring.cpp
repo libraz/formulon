@@ -274,22 +274,22 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
     fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
     patch_orientation(block, &setup.orientation_engaged, &setup.orientation);
     patch_u32(block, "paper_size", &setup.paper_size_engaged, &setup.paper_size);
-    patch_u32(block, "scale", &setup.scale_engaged, &setup.scale);
+    patch_u32(block, "scale", &setup.scale_pct_engaged, &setup.scale_pct);
     patch_u32(block, "fit_to_width", &setup.fit_to_width_engaged, &setup.fit_to_width);
     patch_u32(block, "fit_to_height", &setup.fit_to_height_engaged, &setup.fit_to_height);
     patch_bool(block, "fit_to_page", &setup.fit_to_page_engaged, &setup.fit_to_page);
-    RETURN_IF_ERROR(checked(fm_sheet_set_page_setup(wb, sheet, &setup), "fm_sheet_set_page_setup"));
+    RETURN_IF_ERROR(checked(fm_sheet_update_page_setup(wb, sheet, &setup), "fm_sheet_update_page_setup"));
   }
 
   if (const JsonValue* block = rt.find("page_margins"); block != nullptr && block->is_object()) {
     fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
-    patch_double(block, "left", &margins.left_engaged, &margins.left);
-    patch_double(block, "right", &margins.right_engaged, &margins.right);
-    patch_double(block, "top", &margins.top_engaged, &margins.top);
-    patch_double(block, "bottom", &margins.bottom_engaged, &margins.bottom);
-    patch_double(block, "header", &margins.header_engaged, &margins.header);
-    patch_double(block, "footer", &margins.footer_engaged, &margins.footer);
-    RETURN_IF_ERROR(checked(fm_sheet_set_page_margins(wb, sheet, &margins), "fm_sheet_set_page_margins"));
+    patch_double(block, "left", &margins.left_in_engaged, &margins.left_in);
+    patch_double(block, "right", &margins.right_in_engaged, &margins.right_in);
+    patch_double(block, "top", &margins.top_in_engaged, &margins.top_in);
+    patch_double(block, "bottom", &margins.bottom_in_engaged, &margins.bottom_in);
+    patch_double(block, "header", &margins.header_in_engaged, &margins.header_in);
+    patch_double(block, "footer", &margins.footer_in_engaged, &margins.footer_in);
+    RETURN_IF_ERROR(checked(fm_sheet_update_page_margins(wb, sheet, &margins), "fm_sheet_update_page_margins"));
   }
 
   if (const JsonValue* block = rt.find("print_options"); block != nullptr && block->is_object()) {
@@ -298,7 +298,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
     patch_bool(block, "headings", &options.headings_engaged, &options.headings);
     patch_bool(block, "horizontal_centered", &options.horizontal_centered_engaged, &options.horizontal_centered);
     patch_bool(block, "vertical_centered", &options.vertical_centered_engaged, &options.vertical_centered);
-    RETURN_IF_ERROR(checked(fm_sheet_set_print_options(wb, sheet, &options), "fm_sheet_set_print_options"));
+    RETURN_IF_ERROR(checked(fm_sheet_update_print_options(wb, sheet, &options), "fm_sheet_update_print_options"));
   }
 
   if (const JsonValue* block = rt.find("header_footer"); block != nullptr && block->is_object()) {
@@ -313,7 +313,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
     patch_bool(block, "different_first", &hf.different_first_engaged, &hf.different_first);
     patch_bool(block, "scale_with_doc", &hf.scale_with_doc_engaged, &hf.scale_with_doc);
     patch_bool(block, "align_with_margins", &hf.align_with_margins_engaged, &hf.align_with_margins);
-    RETURN_IF_ERROR(checked(fm_sheet_set_header_footer(wb, sheet, &hf), "fm_sheet_set_header_footer"));
+    RETURN_IF_ERROR(checked(fm_sheet_update_header_footer(wb, sheet, &hf), "fm_sheet_update_header_footer"));
   }
 
   const JsonValue* area = rt.find("print_area");
@@ -355,7 +355,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
     spans.has_rows = rows.valid;
     spans.first_row = rows.rect.first_row;
     spans.last_row = rows.rect.last_row;
-    spans.has_cols = cols.valid;
+    spans.has_columns = cols.valid;
     spans.first_col = cols.rect.first_col;
     spans.last_col = cols.rect.last_col;
     RETURN_IF_ERROR(checked(fm_sheet_set_print_titles(wb, sheet, &spans), "fm_sheet_set_print_titles"));
@@ -369,7 +369,9 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
       // Case rows are 1-based, matching every other A1-shaped field in the
       // schema; the API takes the 0-based index the break precedes.
       const auto row = static_cast<std::uint32_t>(entry.as_number()) - 1U;
-      RETURN_IF_ERROR(checked(fm_sheet_add_row_break(wb, sheet, row, 1), "fm_sheet_add_row_break"));
+      fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+      brk.manual = 1;
+      RETURN_IF_ERROR(checked(fm_sheet_set_row_break(wb, sheet, row, &brk), "fm_sheet_set_row_break"));
     }
   }
 
@@ -379,7 +381,9 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
       if (!entry.is_string() || !column_index(entry.as_string(), &col)) {
         return invalid("col_breaks entries are column letters");
       }
-      RETURN_IF_ERROR(checked(fm_sheet_add_column_break(wb, sheet, col, 1), "fm_sheet_add_column_break"));
+      fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
+      brk.manual = 1;
+      RETURN_IF_ERROR(checked(fm_sheet_set_column_break(wb, sheet, col, &brk), "fm_sheet_set_column_break"));
     }
   }
 

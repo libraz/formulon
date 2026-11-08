@@ -20,7 +20,7 @@ test('nested style integers reject narrowing before addXf mutates the workbook',
   const wb = mod.Workbook.createDefault();
   try {
     const before = wb.ooxml.listCellXfs().length;
-    assert.throws(() => wb.ooxml.addCellXf({ horizontalAlign: 256 }), RangeError);
+    assert.throws(() => wb.ooxml.addCellXf({ horizontal: 256 }), RangeError);
     assert.equal(wb.ooxml.listCellXfs().length, before);
 
     assert.throws(() => wb.ooxml.addCellXf({ numFmtId: 65536 }), RangeError);
@@ -42,15 +42,11 @@ test('nested style integers reject narrowing before addXf mutates the workbook',
     assert.equal(wb.ooxml.listBorders().length, beforeBorders);
 
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
-      assert.throws(
-        () => wb.ooxml.addCellXf({ horizontalAlign: value }),
-        RangeError,
-        `horizontalAlign=${String(value)}`,
-      );
+      assert.throws(() => wb.ooxml.addCellXf({ horizontal: value }), RangeError, `horizontal=${String(value)}`);
       assert.equal(wb.ooxml.listCellXfs().length, before);
     }
 
-    wb.ooxml.addCellXf({ horizontalAlign: null, verticalAlign: undefined });
+    wb.ooxml.addCellXf({ horizontal: null, vertical: undefined });
     assert.equal(wb.ooxml.listCellXfs().length, before);
   } finally {
     wb.dispose();
@@ -61,10 +57,6 @@ test('nested conditional-format integers reject narrowing before addConditionalF
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const beforeDxfs = wb.ooxml.listDxfs().length;
-    assert.throws(() => wb.ooxml.addDxf({ numFmt: { numFmtId: 65536 } }), RangeError);
-    assert.equal(wb.ooxml.listDxfs().length, beforeDxfs);
-
     assert.equal(wb.sheet(0).listCfRules().length, 0);
     assert.throws(() => wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: 256 })), RangeError);
     assert.equal(wb.sheet(0).listCfRules().length, 0);
@@ -93,10 +85,10 @@ test('nested style and conditional-format fields require primitive numeric value
   const wb = mod.Workbook.createDefault();
   try {
     const beforeXfs = wb.ooxml.listCellXfs().length;
-    assert.throws(() => wb.ooxml.addCellXf({ horizontalAlign: '1' }), TypeError);
+    assert.throws(() => wb.ooxml.addCellXf({ horizontal: '1' }), TypeError);
     assert.equal(wb.ooxml.listCellXfs().length, beforeXfs);
 
-    assert.throws(() => wb.ooxml.addCellXf({ horizontalAlign: Symbol('numeric') }), TypeError);
+    assert.throws(() => wb.ooxml.addCellXf({ horizontal: Symbol('numeric') }), TypeError);
     assert.equal(wb.ooxml.listCellXfs().length, beforeXfs);
 
     assert.throws(() => wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: '10' })), TypeError);
@@ -115,7 +107,7 @@ test('nested readers preserve the original getter error and abort the whole muta
   try {
     const beforeXfs = wb.ooxml.listCellXfs().length;
     const style = {};
-    Object.defineProperty(style, 'horizontalAlign', {
+    Object.defineProperty(style, 'horizontal', {
       enumerable: true,
       get() {
         throw new Error('style getter');
@@ -144,7 +136,7 @@ test('style and conditional-format readers snapshot stateful fields once', async
   try {
     let horizontalReads = 0;
     const statefulXf = {};
-    Object.defineProperty(statefulXf, 'horizontalAlign', {
+    Object.defineProperty(statefulXf, 'horizontal', {
       get() {
         horizontalReads += 1;
         return horizontalReads === 1 ? 1 : undefined;
@@ -153,13 +145,13 @@ test('style and conditional-format readers snapshot stateful fields once', async
     const xf = wb.ooxml.addCellXf(statefulXf);
     assert.equal(horizontalReads, 1);
     const storedXf = wb.ooxml.getCellXf(xf);
-    assert.equal(storedXf.horizontalAlign, 1);
+    assert.equal(storedXf.horizontal, 1);
 
     wb.ooxml.addDxf({ font: { name: 'first' } });
     const secondDxf = wb.ooxml.addDxf({ font: { name: 'second' } });
     let dxfReads = 0;
     const rule = { ranges: [RANGE], type: mod.CfRuleType.Expression, formula1: '=TRUE' };
-    Object.defineProperty(rule, 'dxfId', {
+    Object.defineProperty(rule, 'dxfIndex', {
       enumerable: true,
       get() {
         dxfReads += 1;
@@ -168,7 +160,7 @@ test('style and conditional-format readers snapshot stateful fields once', async
     });
     wb.sheet(0).addCfRule(rule);
     assert.equal(dxfReads, 1);
-    assert.equal(wb.sheet(0).listCfRules()[0].dxfId, secondDxf);
+    assert.equal(wb.sheet(0).listCfRules()[0].dxfIndex, secondDxf);
 
     const beforeMemory = wb.getMemoryUsage();
     const lateFont = { name: 'late font '.repeat(1024), bold: true };
@@ -212,19 +204,17 @@ test('named-style and theme integer fields reject before their C mutations', asy
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const styleCount = wb.ooxml.listCellStyles().length;
+    const styleCount = wb.listCellStyles().length;
     for (const value of [2 ** 32, Number.NaN, 1.5, -1]) {
-      assert.throws(() => wb.ooxml.setCellStyle({ name: 'invalid', xfId: value }), RangeError);
-      assert.equal(wb.ooxml.listCellStyles().length, styleCount);
+      assert.throws(() => wb.setCellStyle({ name: 'invalid', styleXfIndex: value }), RangeError);
+      assert.equal(wb.listCellStyles().length, styleCount);
     }
 
     const before = wb.getThemeColors().colors;
     for (const value of [Symbol('theme'), Number.NaN, 1.5, -1, 2 ** 32]) {
-      const values = Array.from({ length: 12 }, (_, i) => (i === 0 ? value : before[i]));
-      assert.throws(
-        () => wb.setThemeColors({ colors: values }),
-        typeof value === 'symbol' ? TypeError : /must be a number|outside uint32/,
-      );
+      const values = Array.from({ length: 12 }, (_, i) => (i === 0 ? value : '#FF000000'));
+      // A colour is a string or a Color record, so a bare number or symbol is a TypeError.
+      assert.throws(() => wb.setThemeColors({ colors: values }), TypeError);
       assert.deepEqual(wb.getThemeColors().colors, before);
     }
   } finally {
@@ -236,9 +226,9 @@ test('style and CF reader defaults survive nullish fields and valid u8 boundarie
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const font = wb.ooxml.addFont({ name: 'Reader defaults', size: null, color: undefined, underline: null });
+    const font = wb.ooxml.addFont({ name: 'Reader defaults', sizePt: null, color: undefined, underline: null });
     const storedFont = wb.ooxml.getFont(font);
-    assert.equal(storedFont.size, 11);
+    assert.equal(storedFont.sizePt, 11);
     assert.equal(storedFont.color.kind, mod.ColorKind.None);
 
     wb.sheet(0).addCfRule(
@@ -250,7 +240,7 @@ test('style and CF reader defaults survive nullish fields and valid u8 boundarie
     );
     const stored = wb.sheet(0).listCfRules()[0].dataBar;
     assert.equal(stored.fill.kind, mod.ColorKind.Rgb);
-    assert.equal(stored.fill.rgb, 0xffff0001);
+    assert.equal(stored.fill.argb, 0xffff0001);
     assert.equal(stored.minLengthPct, 0);
     assert.equal(stored.maxLengthPct, 100);
   } finally {

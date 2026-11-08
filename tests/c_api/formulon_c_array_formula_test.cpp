@@ -62,7 +62,7 @@ TEST(FormulonCApiArrayFormula, SetThenGetFromEveryCellAndRecalcDistributes) {
     EXPECT_EQ(expected, info.formula);
     fm_value_t v{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, r, 2, &v), 0);
-    ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+    ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
     EXPECT_DOUBLE_EQ(v.u.number, 2.0 * (r + 1));
   }
 }
@@ -83,7 +83,7 @@ TEST(FormulonCApiArrayFormula, AnchorBlankClearsTheBlockAndNonAnchorWriteIsRefus
     EXPECT_EQ(info.engaged, 0) << r;
     fm_value_t v{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, r, 2, &v), 0);
-    EXPECT_EQ(v.kind, FM_VAL_BLANK) << r;
+    EXPECT_EQ(v.kind, FM_VALUE_KIND_BLANK) << r;
   }
 }
 

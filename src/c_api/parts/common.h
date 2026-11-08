@@ -231,12 +231,12 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 
 // Projects an engine colour onto the C spec. A `kNone` colour with a
 // nonzero `fallback_argb` (a style record's legacy ARGB field) reads as
-// `kFmColorRgb` carrying that value.
+// `FM_COLOR_KIND_RGB` carrying that value.
 fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb = 0U);
 
 // Inverse of `color_spec_to_c`. When `out_argb` is non-NULL it receives the
 // legacy ARGB field the record keeps beside the spec: `rgb` for
-// `kFmColorRgb`, otherwise 0. The kind is not range-checked here.
+// `FM_COLOR_KIND_RGB`, otherwise 0. The kind is not range-checked here.
 formulon::ColorSpec color_spec_from_c(const fm_color_spec_t& src, std::uint32_t* out_argb = nullptr);
 
 // Validates a required `const fm_cell_rect_t* ranges, size_t range_count`
@@ -448,6 +448,14 @@ fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col);
 // `"<field> <index> is out of range (<size> items)"` and an
 // `<field>=<index> count=<size>` context, and returns the error status.
 fm_status_t check_index(std::size_t index, std::size_t size, const char* field);
+
+// Global index (into `Workbook::tables()`) of table `table_index` among the tables of `sheet_index`,
+// after checking both indices: SHEET_INDEX_OUT_OF_RANGE, then INDEX_OUT_OF_RANGE.
+fm_status_t resolve_sheet_table(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t table_index,
+                                std::size_t* out_global);
+
+// Position of global table `global` among the tables of its own sheet.
+std::size_t local_table_index(const formulon::Workbook& book, std::size_t global);
 
 // Bounds-checks a caller-supplied limit value (freeze counts, outline level)
 // against the exclusive `bound` it must stay below. Unlike `check_index` the

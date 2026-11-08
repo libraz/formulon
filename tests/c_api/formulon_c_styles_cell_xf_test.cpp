@@ -91,8 +91,8 @@ TEST(FormulonCApiStyles, CellXfAdderRecordsDiagnostics) {
   expect_diagnostic(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "font_index");
 
   cell_xf = fm_cell_xf_t{};
-  cell_xf.xf_id = 1U;
-  expect_diagnostic(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "xf_id");
+  cell_xf.style_xf_index = 1U;
+  expect_diagnostic(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "style_xf_index");
 
   cell_xf = fm_cell_xf_t{};
   cell_xf.has_text_rotation = 1;
@@ -140,8 +140,8 @@ TEST(FormulonCApiStyles, AddCellXfDedupReturnsExistingIndex) {
   xf.fill_index = static_cast<uint32_t>(fill_index);
   xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 0;  // built-in General
-  xf.horizontal_align = 1;
-  xf.vertical_align = 2;
+  xf.horizontal = 1;
+  xf.vertical = 2;
   xf.wrap_text = 1;
 
   std::size_t a = 0xFFFFFFFFU;
@@ -166,8 +166,8 @@ TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
   xf.fill_index = static_cast<uint32_t>(fill_index);
   xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 0;
-  xf.horizontal_align = 1;
-  xf.vertical_align = 2;
+  xf.horizontal = 1;
+  xf.vertical = 2;
   xf.wrap_text = 1;
 
   xf.has_wrap_text = 1;
@@ -294,8 +294,8 @@ TEST(FormulonCApiStyles, AddNullArgumentRejected) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_NE(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), nullptr), 0);
   uint32_t id = 0;
-  EXPECT_NE(fm_workbook_add_num_fmt(nullptr, "General", &id), 0);
-  EXPECT_NE(fm_workbook_add_num_fmt(wb.handle, "General", nullptr), 0);
+  EXPECT_NE(fm_workbook_add_number_format(nullptr, "General", &id), 0);
+  EXPECT_NE(fm_workbook_add_number_format(wb.handle, "General", nullptr), 0);
   EXPECT_NE(fm_workbook_add_dxf(nullptr, record_arg(fm_dxf_record_t{}), &idx), 0);
   EXPECT_NE(fm_workbook_add_dxf(wb.handle, record_arg(fm_dxf_record_t{}), nullptr), 0);
 }
@@ -318,7 +318,7 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   EXPECT_EQ(fm_workbook_add_dxf(wb.handle, nullptr, &idx), kNull);
   EXPECT_EQ(fm_workbook_resolve_color(wb.handle, nullptr, 0, &argb, &resolution), kNull);
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, nullptr, &idx), kNull);
-  EXPECT_EQ(fm_sheet_add_hyperlink(wb.handle, 0, nullptr), kNull);
+  EXPECT_EQ(fm_sheet_set_hyperlink(nullptr, 0, 0, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_add_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_remove_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, nullptr, nullptr, 0, &merges_found), kNull);
@@ -424,11 +424,11 @@ TEST(FormulonCApiStyles, XfProtectionDistinguishesDedup) {
   EXPECT_EQ(got.hidden, 0);
 }
 
-TEST(FormulonCApiStyles, ClearXfIndexRestoresColumnInheritance) {
+TEST(FormulonCApiStyles, ResetXfIndexRestoresColumnInheritance) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
-  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 0, 0, 1), 0);
 
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, 2), 0);
@@ -436,7 +436,7 @@ TEST(FormulonCApiStyles, ClearXfIndexRestoresColumnInheritance) {
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, 2U);
 
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 0, 0), 0);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
   EXPECT_EQ(style.source, 2);
   EXPECT_EQ(style.xf_index, 1U);
@@ -448,34 +448,34 @@ TEST(FormulonCApiStyles, ClearXfIndexRestoresColumnInheritance) {
   EXPECT_EQ(style.xf_index, 0U);
 
   // The cleared cell follows a later column restyle.
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0, 0, 2), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 0, 0, 2), 0);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
   EXPECT_EQ(style.source, 2);
   EXPECT_EQ(style.xf_index, 2U);
 }
 
-TEST(FormulonCApiStyles, ClearXfIndexRestoresRowAndDefaultInheritance) {
+TEST(FormulonCApiStyles, ResetXfIndexRestoresRowAndDefaultInheritance) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
-  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4, 4, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_xf_index(wb.handle, 0, 4, 4, 1), 0);
   fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
 
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 4, 3, 2), 0);
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 4, 3), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 4, 3), 0);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 4, 3, &style), 0);
   EXPECT_EQ(style.source, 1);
   EXPECT_EQ(style.xf_index, 1U);
 
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 7, 3, 2), 0);
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 7, 3), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 7, 3), 0);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 7, 3, &style), 0);
   EXPECT_EQ(style.source, 3);
   EXPECT_EQ(style.xf_index, 0U);
 }
 
-TEST(FormulonCApiStyles, ClearXfIndexKeepsValueAndFormula) {
+TEST(FormulonCApiStyles, ResetXfIndexKeepsValueAndFormula) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
@@ -483,8 +483,8 @@ TEST(FormulonCApiStyles, ClearXfIndexKeepsValueAndFormula) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1*2"), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, 2), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 1, 2), 0);
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 0, 1), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   const formulon::Sheet& sheet = wb.handle->workbook().sheet(0);
@@ -500,30 +500,30 @@ TEST(FormulonCApiStyles, ClearXfIndexKeepsValueAndFormula) {
   EXPECT_EQ(style.xf_index, 0U);
 }
 
-TEST(FormulonCApiStyles, ClearXfIndexOnAbsentCellIsNoOp) {
+TEST(FormulonCApiStyles, ResetXfIndexOnAbsentCellIsNoOp) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 9, 9), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 9, 9), 0);
   EXPECT_EQ(wb.handle->workbook().sheet(0).cell_at(9, 9), nullptr);
 }
 
-TEST(FormulonCApiStyles, ClearXfIndexRejectsBadArguments) {
-  EXPECT_EQ(fm_sheet_clear_cell_xf_index(nullptr, 0, 0, 0),
+TEST(FormulonCApiStyles, ResetXfIndexRejectsBadArguments) {
+  EXPECT_EQ(fm_sheet_reset_cell_xf_index(nullptr, 0, 0, 0),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 99, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, formulon::Sheet::kMaxRows, 0), invalid);
+  EXPECT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 99, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, formulon::Sheet::kMaxRows, 0), invalid);
 }
 
-TEST(FormulonCApiStyles, ClearedCellKeepsInheritanceAcrossSaveLoad) {
+TEST(FormulonCApiStyles, ResetCellKeepsInheritanceAcrossSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
-  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 0, 0, 1), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, 2), 0);
-  ASSERT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 0, 0), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);

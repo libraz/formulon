@@ -51,7 +51,7 @@ function checkedPivotGrid(wb, pivot) {
 const CHECKED_PIVOT_GRID = ['Row Labels|Sum of Amount', 'East|10', 'West|30', 'Grand Total|40'];
 
 export function registerPivotRegressions(Module, test) {
-  test('pivotFieldAddItemAt hides the blank item an empty label cannot name', () => {
+  test('addPivotFieldItem by cache index hides the blank item an empty label cannot name', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const cache = wb.addPivotCache(0);
@@ -92,7 +92,7 @@ export function registerPivotRegressions(Module, test) {
       assert.equal(sumDataCells(), 300);
 
       wb.addPivotFieldItem(0, pivot, regionField, 'North', true);
-      wb.addPivotFieldSharedItem(0, pivot, regionField, 1, false);
+      wb.addPivotFieldItem(0, pivot, regionField, { cacheIndex: 1 }, false);
       assert.equal(sumDataCells(), 100);
     } finally {
       wb.delete();
@@ -248,8 +248,8 @@ export function registerPivotRegressions(Module, test) {
       assert.ok(stale.message.length > 0);
 
       const rejected = caught(() =>
-        wb.addTable({
-          range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
+        wb.addTable(0, {
+          range: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 },
           name: 'T',
         }),
       );
@@ -355,6 +355,53 @@ export function registerPivotRegressions(Module, test) {
         assert.equal(out.number, 7, `depth=${depth}`);
       }
       assert.ok(rejectedAt > 0, `no nesting depth up to ${searchCeiling} was rejected; the depth cap did not engage`);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('pivot anchor, grand totals, style info, name and subtotal functions use the update vocabulary', () => {
+    const { wb, pivot, region } = makeCheckedPivot(Module);
+    try {
+      // The anchor is one cell.
+      wb.setPivotAnchor(0, pivot, { row: 12, col: 6 });
+      const rect = wb.getPivotLayout(0, pivot).rect;
+      assert.equal(rect.firstRow, 12);
+      assert.equal(rect.firstCol, 6);
+      assert.throws(() => wb.setPivotAnchor(0, pivot, { row: 1.5, col: 0 }), TypeError);
+
+      wb.updatePivotGrandTotals(0, pivot, false, true);
+      assert.deepEqual({ ...wb.getPivotGrandTotals(0, pivot) }, { rows: false, columns: true });
+
+      const style = wb.getPivotStyleOptions(0, pivot);
+      assert.equal(style.styleName, 'PivotStyleLight16');
+      wb.updatePivotStyleOptions(0, pivot, {
+        styleName: 'PivotStyleMedium9',
+        showRowHeaders: true,
+        showColumnHeaders: false,
+        showRowStripes: true,
+        showColumnStripes: true,
+        showLastColumn: false,
+      });
+      assert.deepEqual(
+        { ...wb.getPivotStyleOptions(0, pivot) },
+        {
+          styleName: 'PivotStyleMedium9',
+          showRowHeaders: true,
+          showColumnHeaders: false,
+          showRowStripes: true,
+          showColumnStripes: true,
+          showLastColumn: false,
+        },
+      );
+
+      wb.renamePivot(0, pivot, 'Renamed');
+      assert.equal(wb.getPivotName(0, pivot), 'Renamed');
+
+      wb.addPivotFieldSubtotalFunction(0, pivot, region, 0);
+      assert.deepEqual([...wb.getPivotField(0, pivot, region).subtotalFunctions], [0]);
+      wb.clearPivotFieldSubtotalFunctions(0, pivot, region);
+      assert.deepEqual([...wb.getPivotField(0, pivot, region).subtotalFunctions], []);
     } finally {
       wb.delete();
     }

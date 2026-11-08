@@ -265,7 +265,7 @@ TEST(FormulonCApiExternalLinks, FileNameBracketedSelfBookDropsToTheSheet) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &v), 0);
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 7.0);
 }
 
@@ -388,7 +388,8 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   thresholds[0].gte = 1;
   thresholds[1].type = 4;  // Max
   thresholds[1].gte = 1;
-  fm_color_spec_t colors[2]{{0.0, 0xFFFF0000U, 0U, 0U, kFmColorRgb}, {0.0, 0xFF00FF00U, 0U, 0U, kFmColorRgb}};
+  fm_color_spec_t colors[2]{{0.0, 0xFFFF0000U, 0U, 0U, FM_COLOR_KIND_RGB},
+                            {0.0, 0xFF00FF00U, 0U, 0U, FM_COLOR_KIND_RGB}};
   fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
   scale.type = 2;  // ColorScale
   scale.ranges = &sqref;
@@ -416,18 +417,18 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   const char* names[] = {"a", "b"};
   std::size_t table = 99;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", "Tbl", names, 2, nullptr,
-                                  1, 1, &table),
-            0)
+  ASSERT_EQ(
+      fm_sheet_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", names, 2, nullptr, 1, 1, &table),
+      0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, table, 0, "custom", nullptr, "M5.xlsx!LN+1"), 0)
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 0, "custom", nullptr, "M5.xlsx!LN+1"), 0)
       << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-    ASSERT_EQ(fm_workbook_get_table_column(wb.handle, table, 0, &column), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 0, &column), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(column.totals_row_formula), "=" + book + "LN+1");
     EXPECT_EQ(Formula(wb.handle, 3, 3), "=" + book + "LN+1");
   }
@@ -444,9 +445,9 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
   }
   ASSERT_EQ(SetDefinedName(wb.handle, "LR", "Sheet1!$C$2:$C$5"), 0) << fm_get_last_error_message();
   fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
-  opts.kind = FM_CHART_INSERT_COLUMN;
+  opts.kind = FM_CHART_INSERT_KIND_COLUMN;
   opts.source = "Sheet1!$A$1:$B$5";
-  opts.legend = FM_CHART_LEGEND_RIGHT;
+  opts.legend = FM_CHART_LEGEND_POSITION_RIGHT;
   opts.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
   opts.placement.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
   opts.placement.anchor.row = 6;
@@ -455,7 +456,7 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.values = "M5.xlsx!LR";
-  ASSERT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
@@ -476,11 +477,11 @@ TEST(FormulonCApiExternalLinks, FileNameAdHocEvaluationReadsTheName) {
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=M5.xlsx!LN*3", &v), 0) << fm_get_last_error_message();
-  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_EQ(v.u.number, 30.0);
   ASSERT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, "M5.xlsx!LN>5", &v), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(v.kind, FM_VAL_BOOL);
+  ASSERT_EQ(v.kind, FM_VALUE_KIND_BOOL);
   EXPECT_EQ(v.u.boolean, 1);
   EXPECT_EQ(LinkCount(wb.handle), 0U);
 }
@@ -496,7 +497,7 @@ TEST(FormulonCApiExternalLinks, FileNameFormulaTextSpellsTheName) {
     ASSERT_EQ(fm_workbook_recalc(wb.handle), 0) << fm_get_last_error_message();
     fm_value_t v{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);
-    ASSERT_EQ(v.kind, FM_VAL_TEXT);
+    ASSERT_EQ(v.kind, FM_VALUE_KIND_TEXT);
     EXPECT_EQ(Str(v.u.text), std::string(named ? "=M10a.xlsx!" : "=[0]!") + "LN+1");
   }
 }

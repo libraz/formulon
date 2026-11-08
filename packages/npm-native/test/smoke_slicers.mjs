@@ -40,8 +40,8 @@ const salesWorkbook = (mod) => {
   wb.sheet(0).setText(0, 0, 'Product');
   wb.sheet(0).setText(0, 1, 'Amount');
   wb.sheet(0).setNumber(1, 1, 10);
-  wb.addTable({
-    range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
+  wb.sheet(0).addTable({
+    range: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 },
     name: 'Sales',
     columns: ['Product', 'Amount'],
   });
@@ -54,7 +54,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
   assert.equal(wb.sheet(0).listSlicers().length, 0);
-  const added = wb.sheet(0).addSlicer(0, 0, {
+  const added = wb.sheet(0).addSlicer('Sales', 0, {
     ...anchor,
     caption: 'Pick a product',
     style: 'SlicerStyleLight3',
@@ -122,10 +122,10 @@ test('slicers add, list, update, remove and round-trip', async () => {
 test('removing a table removes its slicers and caches', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
-  wb.sheet(0).addSlicer(0, 0, anchor);
-  wb.sheet(0).addSlicer(0, 1, anchor);
+  wb.sheet(0).addSlicer('Sales', 0, anchor);
+  wb.sheet(0).addSlicer('Sales', 1, anchor);
   assert.equal(wb.sheet(0).listSlicers().length, 2);
-  wb.removeTable(0);
+  wb.sheet(0).removeTable(0);
   assert.equal(wb.sheet(0).listSlicers().length, 0);
   const bytes = saveBytes(wb);
   for (const part of [
@@ -142,15 +142,15 @@ test('removing a table removes its slicers and caches', async () => {
 test('slicer arguments are validated', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
-  assert.throws(() => wb.sheet(0).addSlicer(0, 0, {}), isFormulonError);
-  assert.throws(() => wb.sheet(0).addSlicer(1, 0, anchor), isFormulonError);
-  assert.throws(() => wb.sheet(0).addSlicer(0, 2, anchor), isFormulonError);
-  assert.throws(() => wb.sheet(5).addSlicer(0, 0, anchor), isFormulonError);
-  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, toRow: 1 }), isFormulonError);
-  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, columnCount: 0 }), isFormulonError);
-  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, sortOrder: 5 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, {}), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer('Missing', 0, anchor), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 2, anchor), isFormulonError);
+  assert.throws(() => wb.sheet(5).addSlicer('Sales', 0, anchor), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, toRow: 1 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, columnCount: 0 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, sortOrder: 5 }), isFormulonError);
   assert.equal(wb.sheet(0).listSlicers().length, 0);
-  const added = wb.sheet(0).addSlicer(0, 0, anchor);
+  const added = wb.sheet(0).addSlicer('Sales', 0, anchor);
   assert.throws(
     () =>
       wb
@@ -168,6 +168,6 @@ test('slicer arguments are validated', async () => {
   assert.throws(() => wb.sheet(0).slicer(added).update({ caption: null }), TypeError);
   assert.throws(() => wb.sheet(0).removeDrawing(added.objectId + 1), isFormulonError);
   assert.throws(() => wb.sheet(5).slicer(added).getProperties(), isFormulonError);
-  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, fromRow: -1 }), RangeError);
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, fromRow: -1 }), RangeError);
   release(wb);
 });

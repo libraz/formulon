@@ -207,11 +207,11 @@ emscripten::val JsWorkbook::getWorkbookProtection() const {
   protection.set("lockRevision", p.lock_revision != 0);
   protection.set("workbookSpinCount", p.workbook_spin_count);
   protection.set("revisionsSpinCount", p.revisions_spin_count);
-  js_set_cstr_or_null_fields(protection, {{"workbookPassword", p.workbook_password},
+  js_set_cstr_or_null_fields(protection, {{"workbookLegacyPasswordHash", p.workbook_legacy_password_hash},
                                           {"workbookAlgorithmName", p.workbook_algorithm_name},
                                           {"workbookHashValue", p.workbook_hash_value},
                                           {"workbookSaltValue", p.workbook_salt_value},
-                                          {"revisionsPassword", p.revisions_password},
+                                          {"revisionsLegacyPasswordHash", p.revisions_legacy_password_hash},
                                           {"revisionsAlgorithmName", p.revisions_algorithm_name},
                                           {"revisionsHashValue", p.revisions_hash_value},
                                           {"revisionsSaltValue", p.revisions_salt_value}});
@@ -231,15 +231,16 @@ void JsWorkbook::setWorkbookProtection(emscripten::val protection) {
   p.workbook_spin_count = reader.u32(protection, "workbookSpinCount", 0U, "protection.workbookSpinCount");
   p.revisions_spin_count = reader.u32(protection, "revisionsSpinCount", 0U, "protection.revisionsSpinCount");
   std::string text[8];
-  p.workbook_password = reader.optional_string(protection, "workbookPassword", text[0], "protection.workbookPassword");
+  p.workbook_legacy_password_hash = reader.optional_string(protection, "workbookLegacyPasswordHash", text[0],
+                                                           "protection.workbookLegacyPasswordHash");
   p.workbook_algorithm_name =
       reader.optional_string(protection, "workbookAlgorithmName", text[1], "protection.workbookAlgorithmName");
   p.workbook_hash_value =
       reader.optional_string(protection, "workbookHashValue", text[2], "protection.workbookHashValue");
   p.workbook_salt_value =
       reader.optional_string(protection, "workbookSaltValue", text[3], "protection.workbookSaltValue");
-  p.revisions_password =
-      reader.optional_string(protection, "revisionsPassword", text[4], "protection.revisionsPassword");
+  p.revisions_legacy_password_hash = reader.optional_string(protection, "revisionsLegacyPasswordHash", text[4],
+                                                            "protection.revisionsLegacyPasswordHash");
   p.revisions_algorithm_name =
       reader.optional_string(protection, "revisionsAlgorithmName", text[5], "protection.revisionsAlgorithmName");
   p.revisions_hash_value =
@@ -258,9 +259,9 @@ emscripten::val protected_range_to_val(const fm_protected_range_t& r) {
   emscripten::val o = emscripten::val::object();
   o.set("spinCount", r.spin_count);
   o.set("ranges", cell_rects_to_val(r.ranges, r.range_count));
-  js_set_cstr_fields(o, {{"name", r.name},
-                         {"password", r.password},
-                         {"algorithmName", r.algorithm_name},
+  js_set_cstr(o, "name", r.name);
+  js_set_cstr_or_null(o, "legacyPasswordHash", r.legacy_password_hash);
+  js_set_cstr_fields(o, {{"algorithmName", r.algorithm_name},
                          {"hashValue", r.hash_value},
                          {"saltValue", r.salt_value},
                          {"securityDescriptor", r.security_descriptor}});
@@ -301,7 +302,7 @@ bool pull_protected_range(const emscripten::val& range, const char* operation, s
   }
   out->ranges = ranges_given && optional_ranges && ranges.empty() ? empty_sentinel : ranges.data();
   out->range_count = ranges.size();
-  out->password = reader.optional_string(range, "password", text[1], "range.password");
+  out->legacy_password_hash = reader.optional_string(range, "legacyPasswordHash", text[1], "range.legacyPasswordHash");
   out->algorithm_name = reader.optional_string(range, "algorithmName", text[2], "range.algorithmName");
   out->hash_value = reader.optional_string(range, "hashValue", text[3], "range.hashValue");
   out->salt_value = reader.optional_string(range, "saltValue", text[4], "range.saltValue");
@@ -352,7 +353,7 @@ void JsWorkbook::removeProtectedRange(uint32_t sheet, uint32_t index) {
 
 namespace {
 
-fm_status_t add_hyperlink_rect(fm_workbook_t* wb, uint32_t sheet, const fm_cell_rect_t& rect, const std::string& target,
+fm_status_t set_hyperlink_rect(fm_workbook_t* wb, uint32_t sheet, const fm_cell_rect_t& rect, const std::string& target,
                                const std::string& display, const std::string& tooltip, const std::string& location) {
   fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
   hl.rect = rect;
@@ -360,7 +361,7 @@ fm_status_t add_hyperlink_rect(fm_workbook_t* wb, uint32_t sheet, const fm_cell_
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  return fm_sheet_add_hyperlink(wb, sheet, &hl);
+  return fm_sheet_set_hyperlink(wb, sheet, rect.first_row, rect.first_col, &hl);
 }
 
 }  // namespace
@@ -371,7 +372,7 @@ void JsWorkbook::addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const 
     record_invalid_handle();
     return;
   }
-  succeeded(add_hyperlink_rect(handle_, sheet, fm_cell_rect_t{row, col, row, col}, target, display, tooltip, location));
+  succeeded(set_hyperlink_rect(handle_, sheet, fm_cell_rect_t{row, col, row, col}, target, display, tooltip, location));
 }
 
 void JsWorkbook::addHyperlinkRange(uint32_t sheet, emscripten::val range, const std::string& target,
@@ -381,12 +382,12 @@ void JsWorkbook::addHyperlinkRange(uint32_t sheet, emscripten::val range, const 
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("addHyperlinkRange");
+  JsNarrowNumericReader reader("setHyperlinkRange");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return;
   }
-  succeeded(add_hyperlink_rect(handle_, sheet, rect, target, display, tooltip, location));
+  succeeded(set_hyperlink_rect(handle_, sheet, rect, target, display, tooltip, location));
 }
 
 void JsWorkbook::removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col) {
@@ -443,12 +444,13 @@ emscripten::val validation_to_val(const fm_data_validation_t& v) {
   emscripten::val item = emscripten::val::object();
   item.set("ranges", cell_rects_to_val(v.ranges, v.range_count));
   item.set("type", v.type);
-  item.set("op", v.op);
+  item.set("operator", v.op);
   item.set("errorStyle", v.error_style);
-  item.set("allowBlank", v.allow_blank != 0);
-  item.set("showInputMessage", v.show_input_message != 0);
-  item.set("showErrorMessage", v.show_error_message != 0);
-  item.set("showDropDown", v.show_dropdown != 0);
+  // Getters report a tristate as FALSE or TRUE, never DEFAULT.
+  item.set("allowBlank", v.allow_blank == FM_TRISTATE_TRUE);
+  item.set("showInputMessage", v.show_input_message == FM_TRISTATE_TRUE);
+  item.set("showErrorMessage", v.show_error_message == FM_TRISTATE_TRUE);
+  item.set("showInCellDropdown", v.show_in_cell_dropdown == FM_TRISTATE_TRUE);
   js_set_cstr_fields(item, {{"formula1", v.formula1},
                             {"formula2", v.formula2},
                             {"errorTitle", v.error_title},
@@ -504,15 +506,16 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = ranges_buf.size();
   dv.type = reader.u8(v, "type", 0U, "validation.type");
-  dv.op = reader.u8(v, "op", 0U, "validation.op");
+  dv.op = reader.u8(v, "operator", 0U, "validation.operator");
   dv.error_style = reader.u8(v, "errorStyle", 0U, "validation.errorStyle");
   if (!reader.ok()) {
     return 0U;
   }
-  dv.allow_blank = reader.boolean(v, "allowBlank", false, "validation.allowBlank") ? 1 : 0;
-  dv.show_input_message = reader.boolean(v, "showInputMessage", false, "validation.showInputMessage") ? 1 : 0;
-  dv.show_error_message = reader.boolean(v, "showErrorMessage", false, "validation.showErrorMessage") ? 1 : 0;
-  dv.show_dropdown = reader.boolean(v, "showDropDown", true, "validation.showDropDown") ? 1 : 0;
+  // An omitted flag takes Excel's dialog default.
+  dv.allow_blank = js_tristate(reader, v, "allowBlank", "validation.allowBlank");
+  dv.show_input_message = js_tristate(reader, v, "showInputMessage", "validation.showInputMessage");
+  dv.show_error_message = js_tristate(reader, v, "showErrorMessage", "validation.showErrorMessage");
+  dv.show_in_cell_dropdown = js_tristate(reader, v, "showInCellDropdown", "validation.showInCellDropdown");
   if (!reader.ok()) {
     return 0U;
   }

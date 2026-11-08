@@ -32,7 +32,7 @@ struct WorkbookGuard {
 fm_cell_style_record_t StyleRecord(const char* name, uint32_t xf_id, uint32_t builtin_id) {
   fm_cell_style_record_t record{};
   record.name = name;
-  record.xf_id = xf_id;
+  record.style_xf_index = xf_id;
   record.builtin_id = builtin_id;
   return record;
 }
@@ -54,7 +54,7 @@ uint32_t FindStyle(fm_workbook_t* wb, const char* name, fm_cell_style_record_t* 
 uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, std::size_t* out_font) {
   fm_font_record_t font{};
   font.name = "Calibri";
-  font.size = 11.0;
+  font.size_pt = 11.0;
   font.bold = 1;
   font.has_bold = 1;
   EXPECT_EQ(fm_workbook_add_font(wb, &font, out_font), 0);
@@ -158,7 +158,7 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
   ASSERT_EQ(fm_workbook_get_cell_style_at(wb2.handle, 0, &normal), 0);
   ASSERT_NE(normal.name, nullptr);
   EXPECT_STREQ(normal.name, "Normal");
-  EXPECT_EQ(normal.xf_id, 0U);
+  EXPECT_EQ(normal.style_xf_index, 0U);
   EXPECT_EQ(normal.builtin_id, 0U);
   EXPECT_EQ(normal.i_level, 0U);
   EXPECT_EQ(normal.hidden, 0);
@@ -170,8 +170,8 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
   EXPECT_EQ(normal_xf.fill_index, 0U);
   EXPECT_EQ(normal_xf.border_index, 0U);
   EXPECT_EQ(normal_xf.num_fmt_id, 0U);
-  EXPECT_EQ(normal_xf.horizontal_align, 0U);
-  EXPECT_EQ(normal_xf.vertical_align, 2U);
+  EXPECT_EQ(normal_xf.horizontal, 0U);
+  EXPECT_EQ(normal_xf.vertical, 2U);
   EXPECT_EQ(normal_xf.wrap_text, 0);
 }
 
@@ -214,7 +214,7 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   fm_buffer_destroy(saved_data);
   fm_cell_style_record_t reread{};
   ASSERT_NE(FindStyle(loaded.handle, "RowLevel_4", &reread), UINT32_MAX);
-  EXPECT_EQ(reread.xf_id, xf_id);
+  EXPECT_EQ(reread.style_xf_index, xf_id);
   EXPECT_EQ(reread.builtin_id, 1U);
   EXPECT_EQ(reread.i_level, 3U);
   EXPECT_EQ(reread.hidden, 1);
@@ -229,7 +229,7 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &after), 0);
   EXPECT_EQ(after, before);
   ASSERT_NE(FindStyle(wb.handle, "RowLevel_4", &reread), UINT32_MAX);
-  EXPECT_EQ(reread.xf_id, 0U);
+  EXPECT_EQ(reread.style_xf_index, 0U);
   EXPECT_EQ(reread.builtin_id, FM_CELL_STYLE_BUILTIN_ID_NONE);
   EXPECT_EQ(reread.i_level, 0U);
   EXPECT_EQ(reread.hidden, 0);
@@ -275,7 +275,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
 
   // The font is the cell's own (apply_font); the number format is inherited.
   fm_cell_xf_t cell_xf{};
-  cell_xf.xf_id = xf_id;
+  cell_xf.style_xf_index = xf_id;
   cell_xf.font_index = static_cast<uint32_t>(bold);
   cell_xf.num_fmt_id = 14;
   cell_xf.apply_font = 1;
@@ -293,7 +293,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
 
   fm_cell_xf_t reread{};
   ASSERT_EQ(fm_workbook_get_cell_xf(wb.handle, cell_xf_index, &reread), 0);
-  EXPECT_EQ(reread.xf_id, 0U);
+  EXPECT_EQ(reread.style_xf_index, 0U);
   EXPECT_EQ(reread.font_index, bold);
   EXPECT_EQ(reread.num_fmt_id, 0U);
   EXPECT_EQ(reread.apply_font, 1);
@@ -321,7 +321,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleKeepsXfsOfASharedStyleXf) {
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &first), 0);
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &second), 0);
   fm_cell_xf_t cell_xf{};
-  cell_xf.xf_id = xf_id;
+  cell_xf.style_xf_index = xf_id;
   cell_xf.font_index = static_cast<uint32_t>(bold);
   cell_xf.num_fmt_id = 14;
   std::size_t cell_xf_index = 0;
@@ -330,7 +330,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleKeepsXfsOfASharedStyleXf) {
   ASSERT_EQ(fm_workbook_remove_cell_style(wb.handle, "First"), 0);
   fm_cell_xf_t reread{};
   ASSERT_EQ(fm_workbook_get_cell_xf(wb.handle, cell_xf_index, &reread), 0);
-  EXPECT_EQ(reread.xf_id, xf_id);
+  EXPECT_EQ(reread.style_xf_index, xf_id);
   EXPECT_EQ(reread.num_fmt_id, 14U);
 }
 

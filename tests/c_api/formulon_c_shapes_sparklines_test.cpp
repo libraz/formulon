@@ -44,11 +44,11 @@ fm_shape_t Callout() {
   s.to_row = 6;
   s.to_col = 4;
   s.fill_kind = FM_SHAPE_PAINT_SOLID;
-  s.fill_color.kind = kFmColorRgb;
-  s.fill_color.rgb = 0xFFFFCC00U;
+  s.fill_color.kind = FM_COLOR_KIND_RGB;
+  s.fill_color.argb = 0xFFFFCC00U;
   s.line_kind = FM_SHAPE_PAINT_NONE;
-  s.line_width_emu = 12700;
-  s.rotation = 300000;
+  s.line_width_pt = 1.0;
+  s.rotation_deg = 5.0;
   return s;
 }
 
@@ -58,9 +58,9 @@ TEST(FormulonCApiShapes, EnumOrdinalsAndFieldBits) {
   EXPECT_EQ(FM_SHAPE_PAINT_NONE, 1);
   EXPECT_EQ(FM_SHAPE_PAINT_OTHER, 2);
   EXPECT_EQ(FM_SHAPE_FIELD_HIDDEN, 0x200u);
-  EXPECT_EQ(FM_SPARKLINE_STACKED, 2);
-  EXPECT_EQ(FM_SPARKLINE_AXIS_CUSTOM, 2);
-  EXPECT_EQ(FM_SPARKLINE_EMPTY_SPAN, 2);
+  EXPECT_EQ(FM_SPARKLINE_TYPE_STACKED, 2);
+  EXPECT_EQ(FM_SPARKLINE_AXIS_TYPE_CUSTOM, 2);
+  EXPECT_EQ(FM_SPARKLINE_EMPTY_CELLS_SPAN, 2);
 }
 
 TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
@@ -84,8 +84,8 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   connector.width_emu = 914400;
   connector.height_emu = 0;
   connector.line_kind = FM_SHAPE_PAINT_SOLID;
-  connector.line_color.kind = kFmColorRgb;
-  connector.line_color.rgb = 0xFF00FF00U;
+  connector.line_color.kind = FM_COLOR_KIND_RGB;
+  connector.line_color.argb = 0xFF00FF00U;
   uint32_t line_id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &connector, &line_id), 0) << fm_get_last_error_message();
 
@@ -96,7 +96,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   fm_shape_t out = FM_STRUCT_INIT(fm_shape_t);
   ASSERT_EQ(fm_sheet_get_shape_at(again.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.object_id, id);
-  EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_SHAPE);
+  EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_KIND_SHAPE);
   EXPECT_STREQ(out.name, "Callout");
   EXPECT_STREQ(out.preset_geometry, "wedgeRectCallout");
   EXPECT_STREQ(out.text, "Hello\nWorld");
@@ -105,18 +105,18 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(out.from_row, 2U);
   EXPECT_EQ(out.to_col, 4U);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_SOLID);
-  EXPECT_EQ(out.fill_color.kind, kFmColorRgb);
-  EXPECT_EQ(out.fill_color.rgb, 0xFFFFCC00U);
+  EXPECT_EQ(out.fill_color.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(out.fill_color.argb, 0xFFFFCC00U);
   EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_NONE);
-  EXPECT_EQ(out.line_width_emu, 12700);
-  EXPECT_EQ(out.rotation, 300000);
+  EXPECT_DOUBLE_EQ(out.line_width_pt, 1.0);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
   EXPECT_EQ(out.fields, 0U);
   ASSERT_EQ(fm_sheet_get_shape_at(again.handle, 0, 1, &out), 0);
-  EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_CONNECTOR);
+  EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_KIND_CONNECTOR);
   EXPECT_EQ(out.from_col_offset_emu, 500);
   EXPECT_EQ(out.width_emu, 914400);
-  EXPECT_EQ(out.line_color.kind, kFmColorRgb);
-  EXPECT_EQ(out.line_color.rgb, 0xFF00FF00U);
+  EXPECT_EQ(out.line_color.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(out.line_color.argb, 0xFF00FF00U);
 
   fm_shape_t patch = FM_STRUCT_INIT(fm_shape_t);
   patch.fields = FM_SHAPE_FIELD_NAME | FM_SHAPE_FIELD_HIDDEN | FM_SHAPE_FIELD_FILL;
@@ -129,7 +129,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(out.hidden, 1);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_NONE);
   EXPECT_STREQ(out.preset_geometry, "wedgeRectCallout");  // unnamed fields stay
-  EXPECT_EQ(out.rotation, 300000);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
 
   ASSERT_EQ(fm_sheet_remove_shape(again.handle, 0, id), 0);
   ASSERT_EQ(fm_sheet_get_shape_count(again.handle, 0, &count), 0);
@@ -137,16 +137,72 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(fm_sheet_remove_shape(again.handle, 0, id), FM_STATUS_NOT_FOUND);
 }
 
+TEST(FormulonCApiShapes, RotationDegreesAndLineWidthPointsSurviveReload) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_shape_t spec = Callout();
+  spec.rotation_deg = 12.5;
+  spec.line_kind = FM_SHAPE_PAINT_SOLID;
+  spec.line_color.kind = FM_COLOR_KIND_RGB;
+  spec.line_color.argb = 0xFF102030U;
+  spec.line_width_pt = 2.25;
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+
+  fm_shape_t out = FM_STRUCT_INIT(fm_shape_t);
+  ASSERT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 12.5);
+  EXPECT_DOUBLE_EQ(out.line_width_pt, 2.25);
+
+  WorkbookGuard again;
+  SaveAndReload(wb.handle, &again);
+  ASSERT_EQ(fm_sheet_get_shape_at(again.handle, 0, 0, &out), 0);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 12.5);
+  EXPECT_DOUBLE_EQ(out.line_width_pt, 2.25);
+
+  // An update that names only the rotation turns the shape and leaves the width.
+  fm_shape_t patch = FM_STRUCT_INIT(fm_shape_t);
+  patch.fields = FM_SHAPE_FIELD_ROTATION;
+  patch.rotation_deg = 90.0;
+  ASSERT_EQ(fm_sheet_update_shape(again.handle, 0, id, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_shape_at(again.handle, 0, 0, &out), 0);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 90.0);
+  EXPECT_DOUBLE_EQ(out.line_width_pt, 2.25);
+}
+
+TEST(FormulonCApiShapes, RotationIsNormalisedAndRangeChecked) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_shape_t spec = Callout();
+  spec.rotation_deg = -90.0;
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+  fm_shape_t out = FM_STRUCT_INIT(fm_shape_t);
+  ASSERT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 270.0);
+
+  spec.rotation_deg = 450.0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 1, &out), 0);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 90.0);
+
+  for (const double bad :
+       {3601.0, -3601.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+    spec.rotation_deg = bad;
+    EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument) << bad;
+  }
+}
+
 TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_shape_t spec = Callout();
   spec.fill_color = fm_color_spec_t{};
-  spec.fill_color.kind = kFmColorTheme;
+  spec.fill_color.kind = FM_COLOR_KIND_THEME;
   spec.fill_color.theme = 4;
   spec.fill_color.tint = 0.4;
   spec.line_kind = FM_SHAPE_PAINT_SOLID;
-  spec.line_color.kind = kFmColorTheme;
+  spec.line_color.kind = FM_COLOR_KIND_THEME;
   spec.line_color.theme = 1;
   spec.line_color.tint = -0.25;
   uint32_t id = 0;
@@ -155,10 +211,10 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   fm_shape_t out = FM_STRUCT_INIT(fm_shape_t);
   ASSERT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_SOLID);
-  EXPECT_EQ(out.fill_color.kind, kFmColorTheme);
+  EXPECT_EQ(out.fill_color.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(out.fill_color.theme, 4U);
   EXPECT_DOUBLE_EQ(out.fill_color.tint, 0.4);
-  EXPECT_EQ(out.line_color.kind, kFmColorTheme);
+  EXPECT_EQ(out.line_color.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(out.line_color.theme, 1U);
   EXPECT_DOUBLE_EQ(out.line_color.tint, -0.25);
 
@@ -168,8 +224,9 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
     double tint;
   };
   const Bad bad[] = {
-      {kFmColorIndexed, 0, 0.0}, {kFmColorAuto, 0, 0.0},   {kFmColorTheme, 12, 0.0},
-      {kFmColorTheme, 4, 1.5},   {kFmColorTheme, 4, -1.5}, {kFmColorTheme, 4, std::numeric_limits<double>::quiet_NaN()},
+      {FM_COLOR_KIND_INDEXED, 0, 0.0}, {FM_COLOR_KIND_AUTO, 0, 0.0},
+      {FM_COLOR_KIND_THEME, 12, 0.0},  {FM_COLOR_KIND_THEME, 4, 1.5},
+      {FM_COLOR_KIND_THEME, 4, -1.5},  {FM_COLOR_KIND_THEME, 4, std::numeric_limits<double>::quiet_NaN()},
   };
   for (const Bad& b : bad) {
     fm_shape_t s = Callout();
@@ -186,8 +243,8 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   none.fill_kind = FM_SHAPE_PAINT_NONE;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
   none = Callout();
-  none.line_color.kind = kFmColorRgb;
-  none.line_color.rgb = 0xFF000000U;
+  none.line_color.kind = FM_COLOR_KIND_RGB;
+  none.line_color.argb = 0xFF000000U;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
   // Without the field bit the colour is not read at all.
   none.fields &= ~FM_SHAPE_FIELD_LINE;
@@ -227,23 +284,23 @@ TEST(FormulonCApiShapes, Validation) {
 
 fm_sparkline_group_t ColumnGroup() {
   fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
-  g.type = FM_SPARKLINE_COLUMN;
+  g.type = FM_SPARKLINE_TYPE_COLUMN;
   g.negative = 1;
   g.markers = 1;
   g.display_x_axis = 1;
-  g.min_axis_type = FM_SPARKLINE_AXIS_CUSTOM;
+  g.min_axis_type = FM_SPARKLINE_AXIS_TYPE_CUSTOM;
   g.has_manual_min = 1;
   g.manual_min = -1.5;
   g.line_weight = 1.25;
-  g.empty_cells_as = FM_SPARKLINE_EMPTY_ZERO;
-  g.color_series.kind = kFmColorRgb;
-  g.color_series.rgb = 0xFF336699U;
-  g.color_negative.kind = kFmColorTheme;
+  g.empty_cells_as = FM_SPARKLINE_EMPTY_CELLS_ZERO;
+  g.color_series.kind = FM_COLOR_KIND_RGB;
+  g.color_series.argb = 0xFF336699U;
+  g.color_negative.kind = FM_COLOR_KIND_THEME;
   g.color_negative.theme = 5;
   g.color_negative.tint = -0.25;
-  g.color_low.kind = kFmColorIndexed;
+  g.color_low.kind = FM_COLOR_KIND_INDEXED;
   g.color_low.indexed = 12;
-  g.color_first.kind = kFmColorAuto;
+  g.color_first.kind = FM_COLOR_KIND_AUTO;
   return g;
 }
 
@@ -259,7 +316,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   std::size_t group_index = 99;
   ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, &group_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(group_index, 0U);
-  g.type = FM_SPARKLINE_LINE;
+  g.type = FM_SPARKLINE_TYPE_LINE;
   g.markers = 0;
   g.has_manual_min = 0;
   g.color_series = fm_color_spec_t{};
@@ -273,26 +330,26 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(count, 2U);
   fm_sparkline_group_t out = FM_STRUCT_INIT(fm_sparkline_group_t);
   ASSERT_EQ(fm_sheet_get_sparkline_group(again.handle, 0, 0, &out), 0);
-  EXPECT_EQ(out.type, FM_SPARKLINE_COLUMN);
+  EXPECT_EQ(out.type, FM_SPARKLINE_TYPE_COLUMN);
   EXPECT_EQ(out.negative, 1);
   EXPECT_EQ(out.markers, 1);
   EXPECT_EQ(out.high, 0);
   EXPECT_EQ(out.display_x_axis, 1);
-  EXPECT_EQ(out.min_axis_type, FM_SPARKLINE_AXIS_CUSTOM);
-  EXPECT_EQ(out.max_axis_type, FM_SPARKLINE_AXIS_INDIVIDUAL);
+  EXPECT_EQ(out.min_axis_type, FM_SPARKLINE_AXIS_TYPE_CUSTOM);
+  EXPECT_EQ(out.max_axis_type, FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL);
   EXPECT_EQ(out.has_manual_min, 1);
   EXPECT_DOUBLE_EQ(out.manual_min, -1.5);
   EXPECT_EQ(out.has_manual_max, 0);
   EXPECT_DOUBLE_EQ(out.line_weight, 1.25);
-  EXPECT_EQ(out.empty_cells_as, FM_SPARKLINE_EMPTY_ZERO);
-  EXPECT_EQ(out.color_series.kind, kFmColorRgb);
-  EXPECT_EQ(out.color_series.rgb, 0xFF336699U);
-  EXPECT_EQ(out.color_negative.kind, kFmColorTheme);
+  EXPECT_EQ(out.empty_cells_as, FM_SPARKLINE_EMPTY_CELLS_ZERO);
+  EXPECT_EQ(out.color_series.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(out.color_series.argb, 0xFF336699U);
+  EXPECT_EQ(out.color_negative.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(out.color_negative.theme, 5U);
   EXPECT_DOUBLE_EQ(out.color_negative.tint, -0.25);
   EXPECT_EQ(out.color_low.indexed, 12U);
-  EXPECT_EQ(out.color_first.kind, kFmColorAuto);
-  EXPECT_EQ(out.color_high.kind, kFmColorNone);
+  EXPECT_EQ(out.color_first.kind, FM_COLOR_KIND_AUTO);
+  EXPECT_EQ(out.color_high.kind, FM_COLOR_KIND_NONE);
   EXPECT_STREQ(out.date_axis_ref, "");
   ASSERT_EQ(out.sparkline_count, 2U);
   fm_sparkline_t sp{};
@@ -303,7 +360,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 5, 0, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   // Update without items rewrites the group's modelled fields and keeps its sparklines.
-  out.type = FM_SPARKLINE_STACKED;
+  out.type = FM_SPARKLINE_TYPE_STACKED;
   out.date_axis = 1;
   const char* date_ref = "Sheet1!A1:D1";
   out.date_axis_ref = date_ref;
@@ -311,7 +368,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &out, nullptr, 0), 0) << fm_get_last_error_message();
   fm_sparkline_group_t changed = FM_STRUCT_INIT(fm_sparkline_group_t);
   ASSERT_EQ(fm_sheet_get_sparkline_group(again.handle, 0, 0, &changed), 0);
-  EXPECT_EQ(changed.type, FM_SPARKLINE_STACKED);
+  EXPECT_EQ(changed.type, FM_SPARKLINE_TYPE_STACKED);
   EXPECT_EQ(changed.high, 1);
   EXPECT_EQ(changed.date_axis, 1);
   EXPECT_STREQ(changed.date_axis_ref, "Sheet1!A1:D1");
@@ -324,7 +381,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
       << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_sparkline_group(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.sparkline_count, 1U);
-  EXPECT_EQ(changed.type, FM_SPARKLINE_STACKED);
+  EXPECT_EQ(changed.type, FM_SPARKLINE_TYPE_STACKED);
   EXPECT_EQ(changed.high, 1);
   EXPECT_STREQ(changed.date_axis_ref, "Sheet1!A1:D1");
   ASSERT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 0, &sp), 0);
@@ -378,7 +435,7 @@ TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
       << fm_get_last_error_message();
 
   fm_sparkline_group_t changed = g;
-  changed.type = FM_SPARKLINE_LINE;
+  changed.type = FM_SPARKLINE_TYPE_LINE;
   // A group cannot hold zero sparklines (CT_Sparklines requires one), so a
   // zero count is rejected like an invalid item, and neither half lands.
   const fm_sparkline_t none[] = {{"Sheet1!A1:D1", "F1"}};
@@ -393,7 +450,7 @@ TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
 
   fm_sparkline_group_t read = FM_STRUCT_INIT(fm_sparkline_group_t);
   ASSERT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, &read), 0);
-  EXPECT_EQ(read.type, FM_SPARKLINE_COLUMN);
+  EXPECT_EQ(read.type, FM_SPARKLINE_TYPE_COLUMN);
   EXPECT_EQ(read.sparkline_count, 2U);
 }
 

@@ -45,7 +45,7 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
       range: RANGE,
       columns: [
         {
-          colId: 0,
+          columnOffset: 0,
           kind: mod.FilterKind.Values,
           values: ['a'],
           dateGroups: [{ year: 2026, month: 3, grouping: mod.DateTimeGrouping.Month }],
@@ -65,14 +65,17 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
     assert.equal(col.dateGroups[0].year, 2026);
     assert.equal(col.dateGroups[0].month, 3);
     assert.equal(col.dateGroups[0].grouping, mod.DateTimeGrouping.Month);
-    assert.equal(col.dxfId, 0);
+    assert.equal(col.dxfIndex, 0);
     assert.equal(got.sort, null);
     // Setting the unchanged record back is accepted.
     wb.sheet(0).setAutoFilter(got);
     assert.deepEqual(wb.sheet(0).getAutoFilter(), got);
 
     // Replace the date group with a plain value filter: dateGroups drops out.
-    wb.sheet(0).setAutoFilter({ range: RANGE, columns: [{ colId: 0, kind: mod.FilterKind.Values, values: ['a'] }] });
+    wb.sheet(0).setAutoFilter({
+      range: RANGE,
+      columns: [{ columnOffset: 0, kind: mod.FilterKind.Values, values: ['a'] }],
+    });
 
     const ev = wb.sheet(0).evaluateAutoFilter();
     assert.equal(ev.firstRow, 1);
@@ -81,14 +84,22 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
 
     wb.sheet(0).applyAutoFilter();
     assert.deepEqual(hiddenRows(wb), [2]);
-    wb.sheet(0).clearAutoFilter();
+    wb.sheet(0).clearAutoFilterCriteria();
     assert.deepEqual(hiddenRows(wb), []);
     assert.equal(wb.sheet(0).getAutoFilter().columns.length, 0);
 
     // A custom criterion and a sort state survive a round trip.
     wb.sheet(0).setAutoFilter({
       range: RANGE,
-      columns: [{ colId: 0, kind: mod.FilterKind.Custom, customCount: 1, op1: mod.FilterOperator.NotEqual, val1: 'b' }],
+      columns: [
+        {
+          columnOffset: 0,
+          kind: mod.FilterKind.Custom,
+          customCount: 1,
+          operator1: mod.FilterOperator.NotEqual,
+          value1: 'b',
+        },
+      ],
       sort: {
         ref: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 },
         conditions: [{ ref: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 }, descending: true }],
@@ -96,18 +107,21 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
     });
     const custom = wb.sheet(0).getAutoFilter();
     assert.equal(custom.columns[0].kind, 2);
-    assert.equal(custom.columns[0].op1, mod.FilterOperator.NotEqual);
-    assert.equal(custom.columns[0].val1, 'b');
+    assert.equal(custom.columns[0].operator1, mod.FilterOperator.NotEqual);
+    assert.equal(custom.columns[0].value1, 'b');
     assert.equal(custom.sort.conditions.length, 1);
     assert.equal(custom.sort.conditions[0].descending, true);
     assert.equal(custom.sort.columnSort, false);
     assert.deepEqual(wb.sheet(0).evaluateAutoFilter().match, [true, false, true]);
 
     // An omitted `top` reads as true (the schema default).
-    wb.sheet(0).setAutoFilter({ range: RANGE, columns: [{ colId: 0, kind: mod.FilterKind.Top10, topVal: 2 }] });
+    wb.sheet(0).setAutoFilter({
+      range: RANGE,
+      columns: [{ columnOffset: 0, kind: mod.FilterKind.Top10, topValue: 2 }],
+    });
     assert.equal(wb.sheet(0).getAutoFilter().columns[0].top, true);
 
-    wb.sheet(0).removeAutoFilter();
+    wb.sheet(0).setAutoFilter(null);
     assert.equal(wb.sheet(0).getAutoFilter(), null);
     assert.throws(() => wb.sheet(0).evaluateAutoFilter(), isFormulonError);
 
@@ -116,12 +130,14 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
       () =>
         wb.sheet(0).setAutoFilter({
           range: RANGE,
-          columns: [{ colId: 5, kind: mod.FilterKind.Values, values: ['a'] }],
+          columns: [{ columnOffset: 5, kind: mod.FilterKind.Values, values: ['a'] }],
         }),
       isFormulonError,
     );
     assert.equal(wb.sheet(0).getAutoFilter(), null);
-    assert.throws(() => wb.sheet(0).setAutoFilter(null), TypeError);
+    // Removing a filter that is not there is a no-op.
+    wb.sheet(0).setAutoFilter(null);
+    assert.equal(wb.sheet(0).getAutoFilter(), null);
   } finally {
     wb.dispose();
   }
@@ -131,13 +147,13 @@ test('table AutoFilter entry points reject a table index that does not exist', a
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.listTables().length, 0);
-    assert.throws(() => wb.table(0).getAutoFilter(), isFormulonError);
-    assert.throws(() => wb.table(0).evaluateAutoFilter(), isFormulonError);
-    assert.throws(() => wb.table(0).setAutoFilter({ range: RANGE, columns: [] }), isFormulonError);
-    assert.throws(() => wb.table(0).removeAutoFilter(), isFormulonError);
-    assert.throws(() => wb.table(0).applyAutoFilter(), isFormulonError);
-    assert.throws(() => wb.table(0).clearAutoFilter(), isFormulonError);
+    assert.equal(wb.sheet(0).listTables().length, 0);
+    assert.throws(() => wb.sheet(0).table(0).getAutoFilter(), isFormulonError);
+    assert.throws(() => wb.sheet(0).table(0).evaluateAutoFilter(), isFormulonError);
+    assert.throws(() => wb.sheet(0).table(0).setAutoFilter({ range: RANGE, columns: [] }), isFormulonError);
+    assert.throws(() => wb.sheet(0).table(0).setAutoFilter(null), isFormulonError);
+    assert.throws(() => wb.sheet(0).table(0).applyAutoFilter(), isFormulonError);
+    assert.throws(() => wb.sheet(0).table(0).clearAutoFilterCriteria(), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -154,7 +170,7 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     wb.sheet(0).addValidation({
       ranges: [{ firstRow: 0, lastRow: 3, firstCol: 1, lastCol: 1 }],
       type: 1,
-      op: 0,
+      operator: 0,
       errorStyle: mod.ValidationErrorStyle.Warning,
       formula1: '1',
       formula2: '10',

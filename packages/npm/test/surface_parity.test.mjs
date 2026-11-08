@@ -117,11 +117,8 @@ function makeHandles(formulon, wb) {
   ws.setText(0, 0, 'Product');
   ws.setText(0, 1, 'Amount');
   ws.setNumber(1, 1, 5);
-  const table = wb.addTable({
-    range: {
-      sheet: 0,
-      rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 },
-    },
+  const table = ws.addTable({
+    range: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 },
     name: 'Tbl',
     columns: ['Product', 'Amount'],
   });
@@ -129,8 +126,7 @@ function makeHandles(formulon, wb) {
   const pivot = ws.addPivot({
     name: 'P1',
     cacheId: cache.cacheId,
-    anchorRow: 10,
-    anchorCol: 4,
+    anchor: { row: 10, col: 4 },
   });
   const chart = ws.addChart({
     kind: formulon.ChartInsertKind.Column,

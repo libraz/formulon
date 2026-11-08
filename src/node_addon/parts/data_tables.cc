@@ -44,7 +44,8 @@ Napi::Value Workbook::AddDataTable(const Napi::CallbackInfo& info) {
           ReadCellRect(reader, rect, &table.rect);
         }
         PullInput(reader, spec, "rowInput", &table.has_row_input, &table.row_input_row, &table.row_input_col);
-        PullInput(reader, spec, "colInput", &table.has_col_input, &table.col_input_row, &table.col_input_col);
+        PullInput(reader, spec, "columnInput", &table.has_column_input, &table.column_input_row,
+                  &table.column_input_col);
       },
       [&](fm_workbook_t* handle) { return fm_sheet_add_data_table(handle, ArgU32(info, 0), &table); });
 }
@@ -66,7 +67,8 @@ Napi::Value Workbook::GetDataTable(const Napi::CallbackInfo& info) {
   table.Set("twoDimensional", JsBool(env, t.two_dimensional));
   table.Set("rowOriented", JsBool(env, t.row_oriented));
   table.Set("rowInput", InputToJs(env, t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));
-  table.Set("colInput", InputToJs(env, t.has_col_input, t.col_input_row, t.col_input_col, t.col_input_deleted));
+  table.Set("columnInput",
+            InputToJs(env, t.has_column_input, t.column_input_row, t.column_input_col, t.column_input_deleted));
   return OptionalOrNull(env, rc, present, table);
 }
 

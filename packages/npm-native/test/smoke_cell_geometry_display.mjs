@@ -11,8 +11,8 @@ test('getCellXf carries apply flags, quotePrefix and protection', async () => {
     fillIndex: 0,
     borderIndex: 0,
     numFmtId: 0,
-    horizontalAlign: 0,
-    verticalAlign: 2,
+    horizontal: 0,
+    vertical: 2,
     wrapText: false,
     applyNumberFormat: true,
     applyFont: true,
@@ -41,22 +41,22 @@ test('getCellXf carries apply flags, quotePrefix and protection', async () => {
   assert.throws(() => wb.ooxml.getCellXf(99999), isFormulonError);
 });
 
-test('row overrides report height / customHeight and clearRowHeight drops the height', async () => {
+test('row overrides report height / customHeight and resetRowHeight drops the height', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setRowHeight(3, 3, 30);
   let rows = wb.sheet(0).listRowOverrides();
   const row = rows.find((r) => r.row === 3);
   assert.ok(row);
-  assert.equal(row.height, 30);
+  assert.equal(row.heightPt, 30);
   assert.equal(row.customHeight, true);
-  wb.sheet(0).clearRowHeight(3, 3);
+  wb.sheet(0).resetRowHeight(3, 3);
   rows = wb.sheet(0).listRowOverrides();
   assert.equal(
     rows.find((r) => r.row === 3),
     undefined,
   );
-  assert.throws(() => wb.sheet(0).clearRowHeight(2000000, 2000000), isFormulonError);
+  assert.throws(() => wb.sheet(0).resetRowHeight(2000000, 2000000), isFormulonError);
 });
 
 test('setRowAutoHeight caches the height and keeps the row automatic', async () => {
@@ -68,37 +68,37 @@ test('setRowAutoHeight caches the height and keeps the row automatic', async () 
     .listRowOverrides()
     .find((r) => r.row === 4);
   assert.ok(row);
-  assert.equal(row.height, 31.5);
+  assert.equal(row.heightPt, 31.5);
   assert.equal(row.customHeight, false);
 });
 
-test('clearColumnWidth follows later default changes and keeps hidden / outline state', async () => {
+test('resetColumnWidth follows later default changes and keeps hidden / outline state', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setFormatDefaults({ defaultColWidth: 10 });
+  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 10 });
   wb.sheet(0).setColumnWidth(0, 0, 10);
-  wb.sheet(0).clearColumnWidth(0, 0);
-  wb.sheet(0).setFormatDefaults({ defaultColWidth: 20 });
+  wb.sheet(0).resetColumnWidth(0, 0);
+  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 20 });
   assert.equal(wb.sheet(0).getColumnWidthPt(0, 0), wb.sheet(0).getColumnWidthPt(1, 0));
   assert.equal(wb.sheet(0).listColumnOverrides().length, 0);
 
   wb.sheet(0).setColumnWidth(0, 4, 20);
   wb.sheet(0).setColumnHidden(2, 2, true);
   wb.sheet(0).setColumnOutline(2, 2, 3);
-  wb.sheet(0).clearColumnWidth(1, 3);
+  wb.sheet(0).resetColumnWidth(1, 3);
   assert.deepEqual(
     wb
       .sheet(0)
       .listColumnOverrides()
-      .map((c) => [c.first, c.last, c.width !== null, c.hidden, c.outlineLevel]),
+      .map((c) => [c.first, c.last, c.widthChars !== null, c.hidden, c.outlineLevel]),
     [
       [0, 0, true, false, 0],
       [2, 2, false, true, 3],
       [4, 4, true, false, 0],
     ],
   );
-  assert.throws(() => wb.sheet(0).clearColumnWidth(5, 3), isFormulonError);
-  assert.throws(() => wb.sheet(0).clearColumnWidth(0, 16384), isFormulonError);
+  assert.throws(() => wb.sheet(0).resetColumnWidth(5, 3), isFormulonError);
+  assert.throws(() => wb.sheet(0).resetColumnWidth(0, 16384), isFormulonError);
 });
 
 test('getSheetFormatDefaults reports the effective default width and height', async () => {
@@ -106,23 +106,23 @@ test('getSheetFormatDefaults reports the effective default width and height', as
   const wb = mod.Workbook.createDefault();
   let d = wb.sheet(0).getFormatDefaults();
   // Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
-  assert.equal(d.effectiveDefaultColWidth, 2340 / 256);
-  assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
-  wb.sheet(0).setFormatDefaults({ defaultColWidth: 12.5, defaultRowHeight: 20.25 });
+  assert.equal(d.effectiveDefaultColWidthChars, 2340 / 256);
+  assert.equal(d.effectiveDefaultRowHeightPt, 102 / 7);
+  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 12.5, defaultRowHeightPt: 20.25 });
   d = wb.sheet(0).getFormatDefaults();
-  assert.equal(d.effectiveDefaultColWidth, 12.5);
-  assert.equal(d.effectiveDefaultRowHeight, 20.25);
+  assert.equal(d.effectiveDefaultColWidthChars, 12.5);
+  assert.equal(d.effectiveDefaultRowHeightPt, 20.25);
 });
 
 test('sheet format defaults round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setFormatDefaults({ defaultColWidth: 12.5, defaultRowHeight: 18, baseColWidth: 10 });
+  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 12.5, defaultRowHeightPt: 18, baseColWidthChars: 10 });
   const d = wb.sheet(0).getFormatDefaults();
-  assert.equal(d.defaultColWidth, 12.5);
-  assert.equal(d.defaultRowHeight, 18);
-  assert.equal(d.baseColWidth, 10);
-  assert.throws(() => wb.sheet(0).setFormatDefaults({ defaultColWidth: -1 }), isFormulonError);
+  assert.equal(d.defaultColWidthChars, 12.5);
+  assert.equal(d.defaultRowHeightPt, 18);
+  assert.equal(d.baseColWidthChars, 10);
+  assert.throws(() => wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: -1 }), isFormulonError);
   assert.throws(() => wb.sheet(99).getFormatDefaults(), isFormulonError);
 });
 
@@ -145,8 +145,8 @@ test('geometry accessors agree with each other', async () => {
   const rect = wb.sheet(0).getCellRectPt(A1_B2, 0);
   assert.equal(rect.x, 0);
   assert.equal(rect.y, 0);
-  assert.ok(Math.abs(rect.width - (c0 + c1)) < 1e-9);
-  assert.equal(rect.height, 50);
+  assert.ok(Math.abs(rect.widthPt - (c0 + c1)) < 1e-9);
+  assert.equal(rect.heightPt, 50);
   // The mode is optional and defaults to Display.
   assert.deepEqual(wb.sheet(0).getCellRectPt(A1_B2), rect);
   assert.deepEqual(wb.sheet(0).getWidthModel(), model);
@@ -243,14 +243,14 @@ test('getMergesInRange lists only intersecting merges', async () => {
 test('getDisplayText and formatValue render through the number format', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const fmt = wb.ooxml.addNumFmt('0.00');
+  const fmt = wb.ooxml.addNumberFormat('0.00');
   const xf = wb.ooxml.addCellXf({
     fontIndex: 0,
     fillIndex: 0,
     borderIndex: 0,
     numFmtId: fmt,
-    horizontalAlign: 0,
-    verticalAlign: 2,
+    horizontal: 0,
+    vertical: 2,
     wrapText: false,
   });
   wb.sheet(0).setNumber(0, 0, 3.14159);
@@ -288,9 +288,9 @@ test('paginate reports paper, margins, printable area, pages and break provenanc
   assert.ok(p.paper.widthPt > 0 && p.paper.heightPt > 0);
   assert.equal(typeof p.paper.landscape, 'boolean');
   assert.equal(typeof p.paper.known, 'boolean');
-  assert.ok(p.margins.left > 0);
-  assert.ok(p.printable.width > 0 && p.printable.height > 0);
-  assert.ok(p.scale > 0);
+  assert.ok(p.margins.leftIn > 0);
+  assert.ok(p.printable.widthPt > 0 && p.printable.heightPt > 0);
+  assert.ok(p.scalePct > 0);
   assert.ok(p.pageOrder === 0 || p.pageOrder === 1);
   assert.equal(p.printTitles, null);
   assert.equal(p.pages.length, p.pageCount);
@@ -298,9 +298,11 @@ test('paginate reports paper, margins, printable area, pages and break provenanc
   assert.equal(p.pages[0].rect.firstRow, 0);
   assert.equal(p.pages[0].rect.firstCol, 0);
   assert.ok(p.pages[0].widthPt > 0 && p.pages[0].heightPt > 0);
-  assert.equal(p.rowBreakManual.length, p.rowBreaks.length);
-  assert.equal(p.columnBreakManual.length, p.columnBreaks.length);
-  assert.ok(p.rowBreakManual.every((m) => typeof m === 'boolean'));
+  // Break provenance travels on each break; the parallel manual arrays are gone.
+  assert.ok(p.rowBreaks.every((b) => typeof b.manual === 'boolean'));
+  assert.ok(p.columnBreaks.every((b) => typeof b.manual === 'boolean'));
+  assert.equal('rowBreakManual' in p, false);
+  assert.equal('columnBreakManual' in p, false);
 
   assert.throws(() => wb.sheet(99).getPagination(), isFormulonError);
 });

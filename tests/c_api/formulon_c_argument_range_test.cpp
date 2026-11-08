@@ -74,10 +74,10 @@ TEST(FormulonCApiArgumentRange, OutlineLevelAboveSevenIsRejected) {
     EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 2U, 4U, level), kInvalidArgument) << int{level};
   }
   std::size_t rows = 99U;
-  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
+  ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &rows), 0);
   EXPECT_EQ(rows, 0U);
   std::size_t columns = 99U;
-  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &columns), 0);
+  ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &columns), 0);
   EXPECT_EQ(columns, 0U);
 }
 
@@ -91,11 +91,11 @@ TEST(FormulonCApiArgumentRange, OutlineLevelSevenRoundTripsThroughBothFormats) {
     WorkbookGuard reloaded;
     SaveAndReload(wb, format, &reloaded);
     fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
-    ASSERT_EQ(fm_sheet_get_row_override_at(reloaded.handle, 0, 0U, &row), 0) << format;
+    ASSERT_EQ(fm_sheet_get_row_layout_at(reloaded.handle, 0, 0U, &row), 0) << format;
     EXPECT_EQ(row.row, 3U) << format;
     EXPECT_EQ(row.outline_level, 7U) << format;
     fm_column_layout_t column = FM_STRUCT_INIT(fm_column_layout_t);
-    ASSERT_EQ(fm_sheet_get_column_override_at(reloaded.handle, 0, 0U, &column), 0) << format;
+    ASSERT_EQ(fm_sheet_get_column_layout_at(reloaded.handle, 0, 0U, &column), 0) << format;
     EXPECT_EQ(column.first, 2U) << format;
     EXPECT_EQ(column.outline_level, 7U) << format;
   }
@@ -140,7 +140,7 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
   fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
   spec.name = "Explicit";
   spec.field_index = 1U;
-  spec.aggregation = FM_PIVOT_AGG_SUM;
+  spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   spec.show_as_base_field = -1;
   spec.show_as_base_item = -1;
@@ -173,26 +173,26 @@ TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeHidden) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
 
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_HIDDEN), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), kInvalidArgument);
-  EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBLE);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), kInvalidArgument);
+  EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBILITY_VISIBLE);
   EXPECT_EQ(ActiveSheet(wb), 0U);
 
   // Re-stating a hidden sheet's state leaves the visible one alone, so it passes.
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VERY_HIDDEN), 0);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
 }
 
 TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeRemoved) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
 
   EXPECT_EQ(fm_workbook_remove_sheet(wb.handle, 0), kInvalidArgument);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
-  EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBLE);
+  EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBILITY_VISIBLE);
   EXPECT_EQ(ActiveSheet(wb), 0U);
 
   // A hidden sheet can still go, which leaves the visible one in place.
@@ -270,7 +270,7 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     const char* text = nullptr;
     std::size_t count = 0;
     fm_phonetic_run_t run{};
-    std::uint32_t font = 0;
+    std::size_t font = 0;
     std::uint32_t type = 0;
     std::uint32_t alignment = 0;
     std::int32_t flag = 0;
@@ -298,13 +298,13 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, row, col, &flag), kInvalidArgument);
     EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, row, col, 1), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, row, col, &xf), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, row, col), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, row, col), kInvalidArgument);
     fm_cell_nodes_t* nodes = nullptr;
     EXPECT_EQ(fm_sheet_get_precedents(wb.handle, 0, row, col, 1U, &nodes), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_dependents(wb.handle, 0, row, col, 1U, &nodes), kInvalidArgument);
     EXPECT_EQ(nodes, nullptr);
     fm_value_t proposed{};
-    proposed.kind = FM_VAL_NUMBER;
+    proposed.kind = FM_VALUE_KIND_NUMBER;
     proposed.u.number = 1.0;
     fm_validation_outcome_t outcome = FM_STRUCT_INIT(fm_validation_outcome_t);
     EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, row, col, &proposed, &outcome), kInvalidArgument);
@@ -317,7 +317,7 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* text = nullptr;
   std::size_t count = 0;
-  std::uint32_t font = 0;
+  std::size_t font = 0;
   std::uint32_t type = 0;
   std::uint32_t alignment = 0;
   std::int32_t flag = 0;
@@ -343,7 +343,7 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, kLastRow, kLastCol, &flag), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, kLastRow, kLastCol, 1), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, kLastRow, kLastCol, &xf), 0);
-  EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, kLastRow, kLastCol), 0);
+  EXPECT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, kLastRow, kLastCol), 0);
   fm_cell_nodes_t* nodes = nullptr;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, kLastRow, kLastCol, 1U, &nodes), 0);
   fm_cell_nodes_destroy(nodes);
@@ -351,7 +351,7 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   ASSERT_EQ(fm_sheet_get_dependents(wb.handle, 0, kLastRow, kLastCol, 1U, &nodes), 0);
   fm_cell_nodes_destroy(nodes);
   fm_value_t proposed{};
-  proposed.kind = FM_VAL_NUMBER;
+  proposed.kind = FM_VALUE_KIND_NUMBER;
   proposed.u.number = 1.0;
   fm_validation_outcome_t outcome = FM_STRUCT_INIT(fm_validation_outcome_t);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, kLastRow, kLastCol, &proposed, &outcome), 0);

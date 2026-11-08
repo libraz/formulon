@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <utility>
 #include <vector>
@@ -23,7 +24,7 @@ namespace {
 Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record_t& f) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, f.name));
-  out.Set("size", JsNumberOrNull(env, f.has_size, f.size));
+  out.Set("sizePt", JsNumberOrNull(env, f.has_size_pt, f.size_pt));
   out.Set("bold", JsBoolOrNull(env, f.has_bold, f.bold));
   out.Set("italic", JsBoolOrNull(env, f.has_italic, f.italic));
   out.Set("strike", JsBoolOrNull(env, f.has_strike, f.strike));
@@ -52,8 +53,8 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
   };
   reader.String(record, "name", name_storage);
   out->name = name_storage->c_str();
-  out->size = reader.Double(record, "size", 11.0, &present);
-  out->has_size = present ? 1 : 0;
+  out->size_pt = reader.Double(record, "sizePt", 11.0, &present);
+  out->has_size_pt = present ? 1 : 0;
   flag("bold", &out->has_bold, &out->bold);
   flag("italic", &out->has_italic, &out->italic);
   flag("strike", &out->has_strike, &out->strike);
@@ -71,11 +72,152 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
   out->color = PullColorSpec(reader, record, "color");
 }
 
+// ---- <dxf> alignment and protection ----------------------------------
+//
+// The engine keeps a differential format's `<alignment>` and `<protection>` as serialized elements; the
+// JS records are typed, so the attributes are read and written here.
+
+constexpr const char* kHorizontalAlignNames[] = {"general", "left",    "center",           "right",
+                                                 "fill",    "justify", "centerContinuous", "distributed"};
+constexpr const char* kVerticalAlignNames[] = {"top", "center", "bottom", "justify", "distributed"};
+
+/// The value of attribute `name` in the serialized element `xml`; false when the attribute is absent.
+bool XmlAttribute(const std::string& xml, const char* name, std::string* out) {
+  const std::string needle = std::string(" ") + name + "=";
+  const std::size_t at = xml.find(needle);
+  if (at == std::string::npos) {
+    return false;
+  }
+  const std::size_t quote = at + needle.size();
+  if (quote >= xml.size() || (xml[quote] != '"' && xml[quote] != '\'')) {
+    return false;
+  }
+  const std::size_t end = xml.find(xml[quote], quote + 1);
+  if (end == std::string::npos) {
+    return false;
+  }
+  *out = xml.substr(quote + 1, end - quote - 1);
+  return true;
+}
+
+bool XmlFlag(const std::string& xml, const char* name, bool dflt) {
+  std::string value;
+  if (!XmlAttribute(xml, name, &value)) {
+    return dflt;
+  }
+  return value == "1" || value == "true";
+}
+
+double XmlNumber(const std::string& xml, const char* name, double dflt) {
+  std::string value;
+  if (!XmlAttribute(xml, name, &value) || value.empty()) {
+    return dflt;
+  }
+  char* end = nullptr;
+  const double number = std::strtod(value.c_str(), &end);
+  return end != value.c_str() ? number : dflt;
+}
+
+template <std::size_t N>
+uint32_t XmlEnumOrdinal(const std::string& xml, const char* name, const char* const (&names)[N], uint32_t dflt) {
+  std::string value;
+  if (!XmlAttribute(xml, name, &value)) {
+    return dflt;
+  }
+  for (std::size_t i = 0; i < N; ++i) {
+    if (value == names[i]) {
+      return static_cast<uint32_t>(i);
+    }
+  }
+  return dflt;
+}
+
+/// The `Alignment` record of a serialized `<alignment/>`; an absent attribute reads as its schema default.
+Napi::Object AlignmentXmlToJs(Napi::Env env, const std::string& xml) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("horizontal", Napi::Number::New(env, XmlEnumOrdinal(xml, "horizontal", kHorizontalAlignNames, 0U)));
+  out.Set("vertical", Napi::Number::New(env, XmlEnumOrdinal(xml, "vertical", kVerticalAlignNames, 2U)));
+  out.Set("wrapText", Napi::Boolean::New(env, XmlFlag(xml, "wrapText", false)));
+  out.Set("shrinkToFit", Napi::Boolean::New(env, XmlFlag(xml, "shrinkToFit", false)));
+  out.Set("indent", Napi::Number::New(env, XmlNumber(xml, "indent", 0.0)));
+  out.Set("textRotation", Napi::Number::New(env, XmlNumber(xml, "textRotation", 0.0)));
+  out.Set("readingOrder", Napi::Number::New(env, XmlNumber(xml, "readingOrder", 0.0)));
+  out.Set("justifyLastLine", Napi::Boolean::New(env, XmlFlag(xml, "justifyLastLine", false)));
+  out.Set("relativeIndent", Napi::Number::New(env, XmlNumber(xml, "relativeIndent", 0.0)));
+  return out;
+}
+
+/// The `CellProtection` record of a serialized `<protection/>`.
+Napi::Object ProtectionXmlToJs(Napi::Env env, const std::string& xml) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("locked", Napi::Boolean::New(env, XmlFlag(xml, "locked", true)));
+  out.Set("hidden", Napi::Boolean::New(env, XmlFlag(xml, "hidden", false)));
+  return out;
+}
+
+/// Appends ` name="ordinal-name"` for the enum key `key` of `record` when it is present; an ordinal past the
+/// table is a RangeError.
+template <std::size_t N>
+void AppendEnumAttribute(CheckedSpecReader& reader, const Napi::Object& record, const char* key,
+                         const char* const (&names)[N], std::string* xml) {
+  bool present = false;
+  const uint32_t ordinal = reader.U32(record, key, 0U, &present);
+  if (!present) {
+    return;
+  }
+  if (ordinal >= N) {
+    reader.FailRange(key, "enumeration");
+    return;
+  }
+  *xml += std::string(" ") + key + "=\"" + names[ordinal] + "\"";
+}
+
+void AppendFlagAttribute(CheckedSpecReader& reader, const Napi::Object& record, const char* key, std::string* xml) {
+  bool present = false;
+  const bool value = reader.Bool(record, key, false, &present);
+  if (present) {
+    *xml += std::string(" ") + key + "=\"" + (value ? "1" : "0") + "\"";
+  }
+}
+
+void AppendNumberAttribute(CheckedSpecReader& reader, const Napi::Object& record, const char* key, bool is_signed,
+                           std::string* xml) {
+  bool present = false;
+  const int64_t value = is_signed ? static_cast<int64_t>(reader.I32(record, key, 0, &present))
+                                  : static_cast<int64_t>(reader.U32(record, key, 0U, &present));
+  if (present) {
+    *xml += std::string(" ") + key + "=\"" + std::to_string(value) + "\"";
+  }
+}
+
+/// The serialized `<alignment/>` of the `Alignment` record `record`: only the attributes it carries.
+std::string AlignmentToXml(CheckedSpecReader& reader, const Napi::Object& record) {
+  std::string xml = "<alignment";
+  AppendEnumAttribute(reader, record, "horizontal", kHorizontalAlignNames, &xml);
+  AppendEnumAttribute(reader, record, "vertical", kVerticalAlignNames, &xml);
+  AppendFlagAttribute(reader, record, "wrapText", &xml);
+  AppendFlagAttribute(reader, record, "shrinkToFit", &xml);
+  AppendNumberAttribute(reader, record, "indent", false, &xml);
+  AppendNumberAttribute(reader, record, "textRotation", false, &xml);
+  AppendNumberAttribute(reader, record, "readingOrder", false, &xml);
+  AppendFlagAttribute(reader, record, "justifyLastLine", &xml);
+  AppendNumberAttribute(reader, record, "relativeIndent", true, &xml);
+  return xml + "/>";
+}
+
+/// The serialized `<protection/>` of the `CellProtection` record `record`.
+std::string ProtectionToXml(CheckedSpecReader& reader, const Napi::Object& record) {
+  std::string xml = "<protection";
+  AppendFlagAttribute(reader, record, "locked", &xml);
+  AppendFlagAttribute(reader, record, "hidden", &xml);
+  return xml + "/>";
+}
+
 Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record_t& f) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(f.pattern)));
-  out.Set("fg", ColorSpecToJs(env, f.fg));
-  out.Set("bg", ColorSpecToJs(env, f.bg));
+  out.Set("foreground", ColorSpecToJs(env, f.foreground));
+  out.Set("background", ColorSpecToJs(env, f.background));
   if (f.has_gradient != 0) {
     Napi::Object gradient = Napi::Object::New(env);
     gradient.Set("type", Napi::Number::New(env, f.gradient_type));
@@ -103,8 +245,8 @@ fm_fill_record_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& r
                                 std::vector<fm_gradient_stop_t>* stops) {
   fm_fill_record_t out{};
   out.pattern = reader.U8(record, "pattern", 0U);
-  out.fg = PullColorSpec(reader, record, "fg");
-  out.bg = PullColorSpec(reader, record, "bg");
+  out.foreground = PullColorSpec(reader, record, "foreground");
+  out.background = PullColorSpec(reader, record, "background");
   Napi::Object gradient;
   if (reader.Object(record, "gradient", &gradient)) {
     out.has_gradient = 1;
@@ -192,8 +334,8 @@ Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf_t& xf) {
   out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
   out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
   out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
-  out.Set("horizontalAlign", JsNumberOrNull(env, xf.has_horizontal_align, static_cast<uint32_t>(xf.horizontal_align)));
-  out.Set("verticalAlign", JsNumberOrNull(env, xf.has_vertical_align, static_cast<uint32_t>(xf.vertical_align)));
+  out.Set("horizontal", JsNumberOrNull(env, xf.has_horizontal, static_cast<uint32_t>(xf.horizontal)));
+  out.Set("vertical", JsNumberOrNull(env, xf.has_vertical, static_cast<uint32_t>(xf.vertical)));
   out.Set("wrapText", JsBoolOrNull(env, xf.has_wrap_text, xf.wrap_text));
   out.Set("justifyLastLine", JsBoolOrNull(env, xf.has_justify_last_line, xf.justify_last_line));
   out.Set("applyNumberFormat", Napi::Boolean::New(env, xf.apply_number_format != 0));
@@ -243,23 +385,22 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
   bool vertical_align_present = false;
   bool wrap_text_present = false;
   bool justify_last_line_present = false;
-  xf.horizontal_align = reader.U8(record, "horizontalAlign", 0U, &horizontal_align_present);
-  xf.vertical_align = reader.U8(record, "verticalAlign", 2U, &vertical_align_present);
+  xf.horizontal = reader.U8(record, "horizontal", 0U, &horizontal_align_present);
+  xf.vertical = reader.U8(record, "vertical", 2U, &vertical_align_present);
   xf.wrap_text = reader.Bool(record, "wrapText", false, &wrap_text_present) ? 1 : 0;
   xf.justify_last_line = reader.Bool(record, "justifyLastLine", false, &justify_last_line_present) ? 1 : 0;
-  xf.xf_id = reader.U32(record, "xfId", 0U);
+  xf.style_xf_index = reader.U32(record, "styleXfIndex", 0U);
   bool has_horizontal_align_present = false;
   bool has_vertical_align_present = false;
   bool has_wrap_text_present = false;
   bool has_justify_last_line_present = false;
-  const bool has_horizontal_align_value =
-      reader.Bool(record, "hasHorizontalAlign", false, &has_horizontal_align_present);
-  const bool has_vertical_align_value = reader.Bool(record, "hasVerticalAlign", false, &has_vertical_align_present);
+  const bool has_horizontal_align_value = reader.Bool(record, "hasHorizontal", false, &has_horizontal_align_present);
+  const bool has_vertical_align_value = reader.Bool(record, "hasVertical", false, &has_vertical_align_present);
   const bool has_wrap_text_value = reader.Bool(record, "hasWrapText", false, &has_wrap_text_present);
   const bool has_justify_last_line_value =
       reader.Bool(record, "hasJustifyLastLine", false, &has_justify_last_line_present);
-  xf.has_horizontal_align = Implied(has_horizontal_align_present, has_horizontal_align_value, horizontal_align_present);
-  xf.has_vertical_align = Implied(has_vertical_align_present, has_vertical_align_value, vertical_align_present);
+  xf.has_horizontal = Implied(has_horizontal_align_present, has_horizontal_align_value, horizontal_align_present);
+  xf.has_vertical = Implied(has_vertical_align_present, has_vertical_align_value, vertical_align_present);
   xf.has_wrap_text = Implied(has_wrap_text_present, has_wrap_text_value, wrap_text_present);
   xf.has_justify_last_line =
       Implied(has_justify_last_line_present, has_justify_last_line_value, justify_last_line_present);
@@ -311,7 +452,7 @@ namespace detail {
 /// Builds the `getCellXf` / `getCellStyleXf` record.
 Napi::Object CellXfResultToJs(Napi::Env env, const fm_cell_xf_t& xf) {
   Napi::Object out = CellXfToJs(env, xf);
-  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
+  out.Set("styleXfIndex", Napi::Number::New(env, xf.style_xf_index));
   SetCellXfAlignment(env, xf, &out);
   return out;
 }
@@ -347,7 +488,7 @@ Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::ClearCellXfIndex(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_clear_cell_xf_index);
+  return InvokeSheetCall(info, &fm_sheet_reset_cell_xf_index);
 }
 
 Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
@@ -378,6 +519,13 @@ Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
       FontRecordToJs);
 }
 
+// The workbook default font is font 0, the one `setDefaultFont` writes.
+Napi::Value Workbook::GetDefaultFont(const Napi::CallbackInfo& info) {
+  return RecordGetter<fm_font_record_t>(
+      info, [&](fm_workbook_t* handle, fm_font_record_t* f) { return fm_workbook_get_font(handle, 0U, f); },
+      FontRecordToJs);
+}
+
 Napi::Value Workbook::GetFill(const Napi::CallbackInfo& info) {
   return RecordGetter<fm_fill_record_t>(
       info,
@@ -399,7 +547,7 @@ Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
   }
   int32_t present = 0;
   const char* s = nullptr;
-  const fm_status_t rc = fm_workbook_get_num_fmt_string(handle_, ArgU32(info, 0), &present, &s);
+  const fm_status_t rc = fm_workbook_get_number_format(handle_, ArgU32(info, 0), &present, &s);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(JsString(env, s)) : env.Null());
 }
 
@@ -424,17 +572,12 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
   if (d.border_engaged != 0) {
     out.Set("border", BorderRecordToJs(env, d.border));
   }
-  if (d.num_fmt_engaged != 0) {
-    Napi::Object num_fmt = Napi::Object::New(env);
-    num_fmt.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(d.num_fmt_id)));
-    num_fmt.Set("formatCode", JsString(env, d.num_fmt_code));
-    out.Set("numFmt", num_fmt);
-  }
+  out.Set("numberFormat", JsStringOrNull(env, d.number_format));
   if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
-    out.Set("alignmentXml", Napi::String::New(env, d.alignment_xml));
+    out.Set("alignment", AlignmentXmlToJs(env, d.alignment_xml));
   }
   if (d.protection_xml != nullptr && d.protection_xml[0] != '\0') {
-    out.Set("protectionXml", Napi::String::New(env, d.protection_xml));
+    out.Set("protection", ProtectionXmlToJs(env, d.protection_xml));
   }
   return out;
 }
@@ -489,7 +632,7 @@ Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
   }
   const std::string code = ArgString(info, 0);
   uint32_t id = 0;
-  fm_status_t rc = fm_workbook_add_num_fmt(handle_, code.c_str(), &id);
+  fm_status_t rc = fm_workbook_add_number_format(handle_, code.c_str(), &id);
   return ValueOrThrow(env, rc, Napi::Number::New(env, id));
 }
 
@@ -509,7 +652,7 @@ Napi::Value Workbook::AddCellStyleXf(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   std::string font_name;
-  std::string num_fmt_code;
+  std::string number_format;
   std::string alignment_xml;
   std::string protection_xml;
   std::vector<fm_gradient_stop_t> fill_stops;
@@ -535,16 +678,19 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
           dxf.border = PullBorderRecord(reader, border);
         }
 
-        Napi::Object num_fmt;
-        if (reader.Object(record, "numFmt", &num_fmt)) {
-          dxf.num_fmt_engaged = 1;
-          dxf.num_fmt_id = reader.U16(num_fmt, "numFmtId", 0U);
-          reader.String(num_fmt, "formatCode", &num_fmt_code);
-          dxf.num_fmt_code = num_fmt_code.c_str();
+        // An omitted or `null` number format is not set.
+        if (reader.String(record, "numberFormat", &number_format)) {
+          dxf.number_format = number_format.c_str();
         }
 
-        reader.String(record, "alignmentXml", &alignment_xml);
-        reader.String(record, "protectionXml", &protection_xml);
+        Napi::Object alignment;
+        if (reader.Object(record, "alignment", &alignment)) {
+          alignment_xml = AlignmentToXml(reader, alignment);
+        }
+        Napi::Object protection;
+        if (reader.Object(record, "protection", &protection)) {
+          protection_xml = ProtectionToXml(reader, protection);
+        }
         dxf.alignment_xml = alignment_xml.c_str();
         dxf.protection_xml = protection_xml.c_str();
       },

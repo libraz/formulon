@@ -219,7 +219,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     enable.enabled = 1;
     enable.max_iterations = -1;
     enable.max_change = -1.0;
-    if (auto rc = fm_workbook_set_iterative(wb.handle, &enable); rc != 0) {
+    if (auto rc = fm_workbook_update_iterative(wb.handle, &enable); rc != 0) {
       emit_last_error(err, "recalc");
       return rc;
     }

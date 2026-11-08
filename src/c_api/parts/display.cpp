@@ -26,12 +26,13 @@ using formulon::c_api::parts::value_from_fm;
 
 namespace {
 
-static_assert(FM_DISPLAY_OK == static_cast<int>(formulon::text_format::DisplayStatus::kOk),
-              "FM_DISPLAY_OK must match DisplayStatus::kOk");
-static_assert(FM_DISPLAY_OVERFLOW == static_cast<int>(formulon::text_format::DisplayStatus::kOverflow),
-              "FM_DISPLAY_OVERFLOW must match DisplayStatus::kOverflow");
-static_assert(FM_DISPLAY_INVALID_FORMAT == static_cast<int>(formulon::text_format::DisplayStatus::kInvalidFormat),
-              "FM_DISPLAY_INVALID_FORMAT must match DisplayStatus::kInvalidFormat");
+static_assert(FM_DISPLAY_STATUS_OK == static_cast<int>(formulon::text_format::DisplayStatus::kOk),
+              "FM_DISPLAY_STATUS_OK must match DisplayStatus::kOk");
+static_assert(FM_DISPLAY_STATUS_OVERFLOW == static_cast<int>(formulon::text_format::DisplayStatus::kOverflow),
+              "FM_DISPLAY_STATUS_OVERFLOW must match DisplayStatus::kOverflow");
+static_assert(FM_DISPLAY_STATUS_INVALID_FORMAT ==
+                  static_cast<int>(formulon::text_format::DisplayStatus::kInvalidFormat),
+              "FM_DISPLAY_STATUS_INVALID_FORMAT must match DisplayStatus::kInvalidFormat");
 
 // Publishes a rendering through the handle's read scratch.
 void publish(const fm_workbook_t* wb, formulon::text_format::DisplayText display, const char** out_text,

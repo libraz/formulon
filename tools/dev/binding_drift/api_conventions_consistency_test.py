@@ -216,6 +216,23 @@ class BindingSurfaceRuleTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r39_a_positional_key_is_a_field_of_the_patch_record(self) -> None:
+        ledger = {
+            "entries": {
+                "plot.update": _op(js="updatePlot", py="update_plot", surfaces=["py"], patch=True,
+                                   patch_record="ChartPlot"),
+            }
+        }  # fmt: skip
+        record = "@dataclass(frozen=True)\nclass ChartPlot:\n    gap_width_pct: Optional[float]\n\n"
+        bad = "class Sheet:\n    def update_plot(self, gap_width_pct: float, *, plot: int = UNCHANGED) -> None: ...\n"
+        good = "class Sheet:\n    def update_plot(self, plot: int, *, gap_width_pct: float = UNCHANGED) -> None: ...\n"
+        self.assert_rule(
+            "R39.py.args",
+            self.fixture.context("", ledger, py_workbook=record, py_sheet=bad),
+            self.fixture.context("", ledger, py_workbook=record, py_sheet=good),
+            [("py", "plot.update", "positional:gap_width_pct")],
+        )
+
     def test_r41_protection_booleans_name_what_true_allows(self) -> None:
         ledger = {"entries": {"fixture.present": {"kind": "op"}}}
         cell = "export interface CellProtection {\n  readonly locked: boolean;\n  readonly hidden: boolean;\n}\n"
@@ -386,6 +403,24 @@ class ValidateNamesVocabularyTest(unittest.TestCase):
         self.assertTrue(any("clearable belongs to a record" in p for p in problems), problems)
         self.assertTrue(any("clearable lists distinct field names" in p for p in problems), problems)
         self.assertTrue(any("unitless: gap_width is listed in two casings" in p for p in problems), problems)
+
+    def test_ref_exempt_names_arguments_and_a_reason(self) -> None:
+        def add(exempt: object) -> dict:
+            return {"slicer.add": {"kind": "op", "scope": "sheet", "js": "addSlicer", "surfaces": ["wasm"],
+                                   "ref_exempt": exempt}}  # fmt: skip
+
+        self.assertEqual(self.schema(add({"params": ["table"], "reason": "a table on another sheet"})), [])
+        for exempt in ({"params": ["table"]}, {"params": [], "reason": "x"}, ["table"]):
+            problems = self.schema(add(exempt))
+            self.assertTrue(any("ref_exempt is `{params: [name, ...], reason}`" in p for p in problems), problems)
+
+    def test_one_entry_naming_a_field_alike_in_every_language_is_one_claim(self) -> None:
+        entries = {
+            "field.xf_vertical": {"kind": "field", "record": "record.xf", "c": "vertical", "js": "vertical",
+                                  "py": "vertical", "surfaces": ["c", "wasm", "py"],
+                                  "was": {"c": "vertical_align", "js": "verticalAlign", "py": "vertical_align"}},
+        }  # fmt: skip
+        self.assertEqual(self.validate.check_chains(entries), [])
 
     def test_clearable_names_fields_of_the_record_interface(self) -> None:
         entries = {

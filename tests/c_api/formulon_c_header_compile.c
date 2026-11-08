@@ -39,7 +39,7 @@ int main(void) {
   fm_status_t (*get_view)(const fm_workbook_t*, size_t, fm_sheet_view_t*) = fm_sheet_get_view;
   fm_status_t (*defined_name_at)(const fm_workbook_t*, size_t, fm_defined_name_t*) = fm_workbook_get_defined_name_at;
   fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, size_t, int32_t, size_t*) =
-      fm_sheet_add_pivot_field_shared_item;
+      fm_sheet_add_pivot_field_item_by_cache_index;
   // The two entry points whose records no binding marshals, written out in
   // full so a parameter added to either is a compile error here rather than a
   // silently-wrong C caller.
@@ -53,7 +53,7 @@ int main(void) {
   // Pinned from C as well as C++: a C consumer built against a narrower
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf_t) == 128, "fm_cell_xf_t ABI layout changed");
-  _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
+  _Static_assert(sizeof(fm_row_layout_t) == 48, "fm_row_layout_t ABI layout changed");
   _Static_assert(sizeof(fm_sheet_view_t) == 88, "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_cell_rect_t` from
@@ -96,7 +96,8 @@ int main(void) {
   _Static_assert(sizeof(fm_image_info_t) == 16, "fm_image_info_t ABI layout changed");
   _Static_assert(sizeof(fm_drawing_object_t) == (sizeof(void*) == 4 ? 104 : 120),
                  "fm_drawing_object_t ABI layout changed");
-  _Static_assert(sizeof(fm_image_insert_t) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert_t ABI layout changed");
+  _Static_assert(sizeof(fm_picture_insert_spec_t) == (sizeof(void*) == 4 ? 56 : 64),
+                 "fm_picture_insert_spec_t ABI layout changed");
   _Static_assert(sizeof(fm_drawing_anchor_t) == 48, "fm_drawing_anchor_t ABI layout changed");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
   _Static_assert(sizeof(fm_shape_t) == (sizeof(void*) == 4 ? 192 : 200), "fm_shape_t ABI layout changed");
@@ -117,8 +118,8 @@ int main(void) {
   _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 40 : 72),
                  "fm_protected_range_t ABI layout changed");
   fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter_t*, int32_t*) = fm_sheet_get_auto_filter;
-  fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter_t*) =
-      fm_workbook_set_table_auto_filter;
+  fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, size_t, const fm_auto_filter_t*) =
+      fm_sheet_set_table_auto_filter;
   fm_status_t (*evaluate_auto_filter)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*) =
       fm_sheet_evaluate_auto_filter;
   fm_status_t (*validate_value)(const fm_workbook_t*, size_t, uint32_t, uint32_t, const fm_value_t*,
@@ -130,10 +131,10 @@ int main(void) {
   fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const fm_threaded_comment_patch_t*) =
       fm_sheet_update_threaded_comment;
   fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person_t*) = fm_workbook_get_person_at;
-  fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_image_insert_t*, uint32_t*) =
-      fm_sheet_add_image;
+  fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_picture_insert_spec_t*,
+                              uint32_t*) = fm_sheet_add_picture;
   fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, int32_t*, const uint8_t**, size_t*,
-                           fm_image_info_t*) = fm_sheet_get_image;
+                           fm_image_info_t*) = fm_sheet_get_picture;
   fm_status_t (*set_drawing_anchor)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_anchor_t*) =
       fm_sheet_set_drawing_anchor;
   fm_status_t (*set_drawing_z_order)(fm_workbook_t*, size_t, uint32_t, size_t) = fm_sheet_set_drawing_z_order;
@@ -141,10 +142,10 @@ int main(void) {
       fm_sheet_snapshot_drawing;
   fm_status_t (*restore_drawing)(fm_workbook_t*, size_t, const uint8_t*, size_t, uint32_t, uint32_t*) =
       fm_sheet_restore_drawing;
-  fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_clear_theme;
+  fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_reset_theme;
   fm_status_t (*set_table_style)(fm_workbook_t*, const fm_table_style_t*) = fm_workbook_set_table_style;
-  fm_status_t (*set_column_totals)(fm_workbook_t*, size_t, size_t, const char*, const char*, const char*) =
-      fm_workbook_set_table_column_totals;
+  fm_status_t (*set_column_totals)(fm_workbook_t*, size_t, size_t, size_t, const char*, const char*, const char*) =
+      fm_sheet_set_table_column_totals;
   (void)cells_in_range;
   (void)set_table_style;
   (void)set_column_totals;

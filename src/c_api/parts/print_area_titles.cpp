@@ -122,7 +122,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
     return rc;
   }
   const bool has_rows = titles != nullptr && titles->has_rows != 0;
-  const bool has_cols = titles != nullptr && titles->has_cols != 0;
+  const bool has_cols = titles != nullptr && titles->has_columns != 0;
   if (has_rows) {
     if (auto rc = check_row_span(titles->first_row, titles->last_row); rc != 0) {
       return rc;
@@ -186,7 +186,7 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
     out->last_row = titles.value().repeat_rows->second;
   }
   if (titles.value().repeat_cols.has_value()) {
-    out->has_cols = 1;
+    out->has_columns = 1;
     out->first_col = titles.value().repeat_cols->first;
     out->last_col = titles.value().repeat_cols->second;
   }

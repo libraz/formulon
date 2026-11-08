@@ -22,8 +22,8 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   rule.op = 5;  // GreaterThan
   std::string formula = "50";
   rule.formula1 = formula.c_str();
-  rule.dxf_id_engaged = 1;
-  rule.dxf_id = 0;
+  rule.dxf_index_engaged = 1;
+  rule.dxf_index = 0;
   rule.ranges = &sqref;
   rule.range_count = 1;
   std::size_t rule_index = 0;
@@ -40,8 +40,8 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   EXPECT_EQ(out.op_engaged, 1);
   EXPECT_EQ(out.op, 5U);
   EXPECT_EQ(out.priority, 1);  // auto-assigned since input <= 0
-  EXPECT_EQ(out.dxf_id_engaged, 1);
-  EXPECT_EQ(out.dxf_id, 0U);
+  EXPECT_EQ(out.dxf_index_engaged, 1);
+  EXPECT_EQ(out.dxf_index, 0U);
   ASSERT_NE(out.formula1, nullptr);
   EXPECT_STREQ(out.formula1, "=50");
   ASSERT_NE(out.ranges, nullptr);
@@ -63,15 +63,15 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
   rule.op_engaged = 1;
   rule.op = 5;  // GreaterThan
   rule.formula1 = "50";
-  rule.dxf_id_engaged = 1;
-  rule.dxf_id = 2;  // one past the last registered `<dxf>`
+  rule.dxf_index_engaged = 1;
+  rule.dxf_index = 2;  // one past the last registered `<dxf>`
   rule.ranges = &sqref;
   rule.range_count = 1;
 
   std::size_t rule_index = 99U;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_STREQ(fm_get_last_error_message(), "dxf_id out of range");
+  EXPECT_STREQ(fm_get_last_error_message(), "dxf_index out of range");
 
   // The rejected rule is not appended, so a workbook saved after the failed
   // call carries no `<cfRule>` whose `dxfId` Excel cannot resolve.
@@ -80,7 +80,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
   EXPECT_EQ(count, 0U);
 
   // The last in-range index is still accepted.
-  rule.dxf_id = 1;
+  rule.dxf_index = 1;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
@@ -107,7 +107,7 @@ TEST(FormulonCApiCfMutate, AddRuleWithoutDxfIdIgnoresTheEmptyStylesTable) {
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
-  EXPECT_EQ(out.dxf_id_engaged, 0);
+  EXPECT_EQ(out.dxf_index_engaged, 0);
 }
 
 TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {

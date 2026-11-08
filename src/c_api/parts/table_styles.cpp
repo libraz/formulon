@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "c_api/parts/table_style_defaults.h"
 #include "styles.h"
 #include "utils/error.h"
 #include "utils/strings.h"
@@ -120,6 +121,20 @@ constexpr std::string_view kDefaultPivotStyle = "PivotStyleLight16";
 
 }  // namespace
 
+namespace formulon::c_api::parts {
+
+std::string_view default_table_style_name(const formulon::Workbook& book) {
+  const std::string& name = book.styles().table_styles.default_table_style;
+  return name.empty() ? kDefaultTableStyle : std::string_view(name);
+}
+
+std::string_view default_pivot_style_name(const formulon::Workbook& book) {
+  const std::string& name = book.styles().table_styles.default_pivot_style;
+  return name.empty() ? kDefaultPivotStyle : std::string_view(name);
+}
+
+}  // namespace formulon::c_api::parts
+
 extern "C" fm_status_t fm_workbook_get_table_style_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
@@ -148,8 +163,8 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
     fm_table_style_element_t c{};
     c.type = element.type.c_str();
     c.size = element.size;
-    c.has_dxf_id = element.dxf_id.has_value() ? 1 : 0;
-    c.dxf_id = element.dxf_id.value_or(0U);
+    c.has_dxf_index = element.dxf_id.has_value() ? 1 : 0;
+    c.dxf_index = element.dxf_id.value_or(0U);
     elements.push_back(c);
   }
   fresh_read_scratch(wb);
@@ -227,14 +242,14 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     if (in.size == 0U) {
       return invalid_argument("element size must be at least 1", context);
     }
-    if (in.has_dxf_id != 0 && in.dxf_id >= styles.dxfs.size()) {
-      return invalid_argument("dxf_id out of range", context + " dxf_id=" + std::to_string(in.dxf_id));
+    if (in.has_dxf_index != 0 && in.dxf_index >= styles.dxfs.size()) {
+      return invalid_argument("dxf_index out of range", context + " dxf_index=" + std::to_string(in.dxf_index));
     }
     formulon::TableStyleElement element;
     element.type = std::string(type);
     element.size = in.size;
-    if (in.has_dxf_id != 0) {
-      element.dxf_id = in.dxf_id;
+    if (in.has_dxf_index != 0) {
+      element.dxf_id = in.dxf_index;
     }
     next.elements.push_back(std::move(element));
   }
@@ -291,8 +306,8 @@ extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t*
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_table_style_defaults(fm_workbook_t* wb, const char* table_style,
-                                                            const char* pivot_style) {
+extern "C" fm_status_t fm_workbook_update_table_style_defaults(fm_workbook_t* wb, const char* table_style,
+                                                               const char* pivot_style) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");

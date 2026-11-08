@@ -97,7 +97,7 @@ std::string EntryText(const Bytes& package, const std::string& name) {
 
 fm_color_spec_t ThemeSpec(uint32_t index, double tint) {
   fm_color_spec_t spec{};
-  spec.kind = kFmColorTheme;
+  spec.kind = FM_COLOR_KIND_THEME;
   spec.theme = index;
   spec.tint = tint;
   return spec;
@@ -105,7 +105,7 @@ fm_color_spec_t ThemeSpec(uint32_t index, double tint) {
 
 fm_color_spec_t IndexedSpec(uint32_t index) {
   fm_color_spec_t spec{};
-  spec.kind = kFmColorIndexed;
+  spec.kind = FM_COLOR_KIND_INDEXED;
   spec.indexed = index;
   return spec;
 }
@@ -248,7 +248,7 @@ TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
   const Bytes edited = Save(wb.handle);
   ASSERT_FALSE(EntryText(edited, "xl/theme/theme1.xml").empty());
 
-  ASSERT_EQ(fm_workbook_clear_theme(wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_reset_theme(wb.handle), 0) << fm_get_last_error_message();
   const fm_theme_colors_t reset = ReadColors(wb.handle, &source);
   EXPECT_EQ(source, kSourceDefault);
   for (std::size_t i = 0; i < 12U; ++i) {
@@ -276,7 +276,7 @@ TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
 TEST(FormulonCApiTheme, ResetOnWorkbookWithoutThemeSucceeds) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_clear_theme(wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_reset_theme(wb.handle), 0) << fm_get_last_error_message();
   int32_t source = -1;
   ReadColors(wb.handle, &source);
   EXPECT_EQ(source, kSourceDefault);
@@ -294,12 +294,12 @@ TEST(FormulonCApiTheme, ResetRemovesUnparseablePartAndRejectsNull) {
   int32_t source = -1;
   ReadColors(loaded.handle, &source);
   ASSERT_EQ(source, kSourceUnparseable);
-  ASSERT_EQ(fm_workbook_clear_theme(loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_reset_theme(loaded.handle), 0) << fm_get_last_error_message();
   ReadColors(loaded.handle, &source);
   EXPECT_EQ(source, kSourceDefault);
   EXPECT_TRUE(EntryText(Save(loaded.handle), "xl/theme/theme1.xml").empty());
 
-  EXPECT_EQ(fm_workbook_clear_theme(nullptr), kNullPointer);
+  EXPECT_EQ(fm_workbook_reset_theme(nullptr), kNullPointer);
 }
 
 TEST(FormulonCApiTheme, ThemeAccessorsRejectNullArguments) {
@@ -329,8 +329,8 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_color_spec_t rgb{};
-  rgb.kind = kFmColorRgb;
-  rgb.rgb = 0xFF123456U;
+  rgb.kind = FM_COLOR_KIND_RGB;
+  rgb.argb = 0xFF123456U;
   Resolved got = Resolve(wb.handle, rgb, FM_COLOR_CONTEXT_FILL_FG);
   ASSERT_EQ(got.status, 0);
   EXPECT_EQ(got.argb, 0xFF123456U);
@@ -371,7 +371,7 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
 
   // System foreground (64) and automatic colours depend on the context.
   fm_color_spec_t automatic{};
-  automatic.kind = kFmColorAuto;
+  automatic.kind = FM_COLOR_KIND_AUTO;
   const struct {
     int32_t context;
     uint32_t argb;
@@ -423,21 +423,21 @@ struct PrecedenceXfs {
 PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   fm_font_record_t font{};
   font.name = "Calibri";
-  font.size = 11.0;
-  font.color.kind = kFmColorTheme;
+  font.size_pt = 11.0;
+  font.color.kind = FM_COLOR_KIND_THEME;
   font.color.theme = 4;
   font.color.tint = 0.4;
   std::size_t font_index = 0;
   EXPECT_EQ(fm_workbook_add_font(wb, &font, &font_index), 0);
   fm_fill_record_t fill{};
   fill.pattern = 1;
-  fill.fg.kind = kFmColorRgb;
-  fill.fg.rgb = 0xFFFF0000U;
+  fill.foreground.kind = FM_COLOR_KIND_RGB;
+  fill.foreground.argb = 0xFFFF0000U;
   std::size_t fill_index = 0;
   EXPECT_EQ(fm_workbook_add_fill(wb, &fill, &fill_index), 0);
   fm_border_record_t border{};
   border.left.style = 1;
-  border.left.color.kind = kFmColorIndexed;
+  border.left.color.kind = FM_COLOR_KIND_INDEXED;
   border.left.color.indexed = 12;
   std::size_t border_index = 0;
   EXPECT_EQ(fm_workbook_add_border(wb, &border, &border_index), 0);

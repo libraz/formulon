@@ -19,8 +19,8 @@
       },
       "set": {
         "op": "binding.set_cell_format",
-        "js": "setCellFormat",
-        "py": "set_cell_format"
+        "js": "updateCellFormat",
+        "py": "update_cell_format"
       },
       "create": [],
       "surfaces": [
@@ -41,9 +41,9 @@
         "path": "legend"
       },
       "set": {
-        "op": "chart_legend.set",
-        "js": "setChartLegend",
-        "py": "set_chart_legend"
+        "op": "chart_legend.update",
+        "js": "updateChartLegend",
+        "py": "update_chart_legend"
       },
       "create": [
         "chart.add"
@@ -67,8 +67,8 @@
       },
       "set": {
         "op": "format_defaults.set",
-        "js": "setFormatDefaults",
-        "py": "set_format_defaults"
+        "js": "updateFormatDefaults",
+        "py": "update_format_defaults"
       },
       "create": [],
       "surfaces": [
@@ -89,8 +89,8 @@
       },
       "set": {
         "op": "header_footer.set",
-        "js": "setHeaderFooter",
-        "py": "set_header_footer"
+        "js": "updateHeaderFooter",
+        "py": "update_header_footer"
       },
       "create": [],
       "surfaces": [
@@ -111,8 +111,8 @@
       },
       "set": {
         "op": "iterative.set",
-        "js": "setIterative",
-        "py": "set_iterative"
+        "js": "updateIterative",
+        "py": "update_iterative"
       },
       "create": [],
       "surfaces": [
@@ -133,8 +133,8 @@
       },
       "set": {
         "op": "page_margins.set",
-        "js": "setPageMargins",
-        "py": "set_page_margins"
+        "js": "updatePageMargins",
+        "py": "update_page_margins"
       },
       "create": [],
       "surfaces": [
@@ -155,8 +155,8 @@
       },
       "set": {
         "op": "page_setup.set",
-        "js": "setPageSetup",
-        "py": "set_page_setup"
+        "js": "updatePageSetup",
+        "py": "update_page_setup"
       },
       "create": [],
       "surfaces": [
@@ -177,8 +177,8 @@
       },
       "set": {
         "op": "pivot_cache_options.set",
-        "js": "setPivotCacheOptions",
-        "py": "set_pivot_cache_options"
+        "js": "updatePivotCacheOptions",
+        "py": "update_pivot_cache_options"
       },
       "create": [
         "pivot_cache.create"
@@ -228,8 +228,8 @@
       },
       "set": {
         "op": "pivot_grand_totals.set",
-        "js": "setPivotGrandTotals",
-        "py": "set_pivot_grand_totals"
+        "js": "updatePivotGrandTotals",
+        "py": "update_pivot_grand_totals"
       },
       "create": [
         "pivot_cache.create",
@@ -254,8 +254,8 @@
       },
       "set": {
         "op": "binding.update_pivot_item",
-        "js": "updatePivotItem",
-        "py": "update_pivot_item"
+        "js": "updatePivotFieldItem",
+        "py": "update_pivot_field_item"
       },
       "create": [
         "pivot_cache.create",
@@ -280,8 +280,8 @@
       },
       "set": {
         "op": "pivot_options.set",
-        "js": "setPivotOptions",
-        "py": "set_pivot_options"
+        "js": "updatePivotOptions",
+        "py": "update_pivot_options"
       },
       "create": [
         "pivot_cache.create",
@@ -298,16 +298,16 @@
       "id": "pivot_style_info",
       "kind": "patch",
       "scope": "sheet",
-      "record": "PivotStyle",
+      "record": "PivotStyleOptions",
       "get": {
         "op": "pivot_style_info.get",
-        "js": "getPivotStyleInfo",
-        "py": "get_pivot_style_info"
+        "js": "getPivotStyleOptions",
+        "py": "get_pivot_style_options"
       },
       "set": {
         "op": "pivot_style_info.set",
-        "js": "setPivotStyleInfo",
-        "py": "set_pivot_style_info"
+        "js": "updatePivotStyleOptions",
+        "py": "update_pivot_style_options"
       },
       "create": [
         "pivot_cache.create",
@@ -332,8 +332,8 @@
       },
       "set": {
         "op": "print_options.set",
-        "js": "setPrintOptions",
-        "py": "set_print_options"
+        "js": "updatePrintOptions",
+        "py": "update_print_options"
       },
       "create": [],
       "surfaces": [
@@ -396,6 +396,28 @@
       "handle": "Shape"
     },
     {
+      "id": "sheet_protection",
+      "kind": "patch",
+      "scope": "sheet",
+      "record": "SheetProtection",
+      "get": {
+        "op": "sheet_protection.get",
+        "js": "getSheetProtection",
+        "py": "get_sheet_protection"
+      },
+      "set": {
+        "op": "sheet_protection.update",
+        "js": "updateSheetProtection",
+        "py": "update_sheet_protection"
+      },
+      "create": [],
+      "surfaces": [
+        "wasm",
+        "native",
+        "py"
+      ]
+    },
+    {
       "id": "sheet_view",
       "kind": "patch",
       "scope": "sheet",
@@ -407,8 +429,8 @@
       },
       "set": {
         "op": "binding.set_view",
-        "js": "setView",
-        "py": "set_view"
+        "js": "updateView",
+        "py": "update_view"
       },
       "create": [],
       "surfaces": [
@@ -471,7 +493,7 @@
     {
       "id": "table",
       "kind": "patch",
-      "scope": "workbook",
+      "scope": "sheet",
       "record": "TableProperties",
       "get": {
         "op": "table.get",
@@ -505,8 +527,8 @@
       },
       "set": {
         "op": "table_style_defaults.set",
-        "js": "setTableStyleDefaults",
-        "py": "set_table_style_defaults"
+        "js": "updateTableStyleDefaults",
+        "py": "update_table_style_defaults"
       },
       "create": [],
       "surfaces": [
@@ -514,6 +536,29 @@
         "native",
         "py"
       ]
+    },
+    {
+      "id": "table_style_info",
+      "kind": "patch",
+      "scope": "sheet",
+      "record": "TableStyleOptions",
+      "get": {
+        "op": "table_style_info.get",
+        "js": "getTableStyleOptions",
+        "py": "get_table_style_options"
+      },
+      "set": {
+        "op": "table_style_info.set",
+        "js": "updateTableStyleOptions",
+        "py": "update_table_style_options"
+      },
+      "create": [],
+      "surfaces": [
+        "wasm",
+        "native",
+        "py"
+      ],
+      "handle": "Table"
     },
     {
       "id": "threaded_comment",
@@ -614,8 +659,8 @@
       },
       "set": {
         "op": "hyperlink.add",
-        "js": "addHyperlink",
-        "py": "add_hyperlink",
+        "js": "setHyperlink",
+        "py": "set_hyperlink",
         "cell_args": [
           [
             0,

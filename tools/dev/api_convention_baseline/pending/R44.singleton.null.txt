@@ -1,12 +1,7 @@
 ledger	auto_filter.clear	clear	`auto_filter` is a singleton; remove it with `set` and `null`, not `clear`
 ledger	auto_filter.remove	remove	`auto_filter` is a singleton; remove it with `set` and `null`, not `remove`
-ledger	cell_xf_index.clear	clear	`cell_xf_index` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	column_style.clear	clear	`column_style` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	column_width.clear	clear	`column_width` is a singleton; remove it with `set` and `null`, not `clear`
 ledger	pinned_now.clear	clear	`pinned_now` is a singleton; remove it with `set` and `null`, not `clear`
 ledger	pivot_field_date_group.clear	clear	`pivot_field_date_group` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	row_height.clear	clear	`row_height` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	row_style.clear	clear	`row_style` is a singleton; remove it with `set` and `null`, not `clear`
 ledger	table_auto_filter.clear	clear	`table_auto_filter` is a singleton; remove it with `set` and `null`, not `clear`
 ledger	table_auto_filter.remove	remove	`table_auto_filter` is a singleton; remove it with `set` and `null`, not `remove`
 ledger	theme.clear	clear	`theme` is a singleton; remove it with `set` and `null`, not `clear`

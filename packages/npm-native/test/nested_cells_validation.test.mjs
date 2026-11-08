@@ -12,8 +12,8 @@ function withWorkbook(Workbook, fn) {
 
 function validRuns() {
   return [
-    { sb: 0, eb: 2, text: 'トウキョウ' },
-    { sb: 2, eb: 3, text: 'ト' },
+    { start: 0, end: 2, text: 'トウキョウ' },
+    { start: 2, end: 3, text: 'ト' },
   ];
 }
 
@@ -29,7 +29,7 @@ test('cell phonetic run integers reject narrowing before replacing existing runs
       wb.sheet(0).setText(0, 0, '東京都');
       wb.sheet(0).setCellPhoneticRuns(0, 0, validRuns());
       const before = wb.sheet(0).getCellPhoneticRuns(0, 0);
-      for (const key of ['sb', 'eb']) {
+      for (const key of ['start', 'end']) {
         assert.throws(
           () => wb.sheet(0).setCellPhoneticRuns(0, 0, [{ ...validRuns()[0], [key]: value }, validRuns()[1]]),
           RangeError,
@@ -67,18 +67,18 @@ test('cell phonetic properties reject narrowing before changing the stored prope
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
       wb.sheet(0).setText(0, 0, '大阪');
-      wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 3, type: 2, alignment: 2 });
+      wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 3, type: 2, alignment: 2 });
       const before = wb.sheet(0).getCellPhoneticProperties(0, 0);
-      for (const key of ['fontId', 'type', 'alignment']) {
+      for (const key of ['fontIndex', 'type', 'alignment']) {
         assert.throws(
-          () => wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 3, type: 2, alignment: 2, [key]: value }),
+          () => wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 3, type: 2, alignment: 2, [key]: value }),
           RangeError,
           `setCellPhoneticProperties ${key}=${String(value)}`,
         );
         const after = wb.sheet(0).getCellPhoneticProperties(0, 0);
         assert.deepEqual(
-          { fontId: after.fontId, type: after.type, alignment: after.alignment },
-          { fontId: before.fontId, type: before.type, alignment: before.alignment },
+          { fontIndex: after.fontIndex, type: after.type, alignment: after.alignment },
+          { fontIndex: before.fontIndex, type: before.type, alignment: before.alignment },
         );
       }
     });

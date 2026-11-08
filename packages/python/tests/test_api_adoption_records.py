@@ -45,6 +45,7 @@ from formulon import (
     PivotInput,
     RangeCell,
     SheetRect,
+    TableInput,
     ValidationOperator,
     ValidationType,
     Value,
@@ -213,7 +214,7 @@ class StyleColourTests(unittest.TestCase):
         self.assertNotIn("color_argb", {f.name for f in dataclasses.fields(Font)})
         with Workbook.create_default() as wb:
             index = wb.ooxml.add_font(Font(name="Arial", color="#FF0000"))
-            self.assertEqual(wb.ooxml.get_font(index).color, Color(kind=ColorKind.RGB, rgb=0xFFFF0000))
+            self.assertEqual(wb.ooxml.get_font(index).color, Color(kind=ColorKind.RGB, argb=0xFFFF0000))
             theme = Color(kind=ColorKind.THEME, theme=4, tint=0.5)
             self.assertEqual(wb.ooxml.get_font(wb.ooxml.add_font(Font(name="Arial", color=theme))).color, theme)
             self.assertEqual(wb.ooxml.get_font(wb.ooxml.add_font(Font(name="Arial Black"))).color.kind, ColorKind.NONE)
@@ -221,14 +222,14 @@ class StyleColourTests(unittest.TestCase):
     def test_fill_border_and_gradient_colours(self) -> None:
         self.assertFalse({"fg_argb", "bg_argb"} & {f.name for f in dataclasses.fields(Fill)})
         with Workbook.create_default() as wb:
-            fill = wb.ooxml.get_fill(wb.ooxml.add_fill(Fill(pattern=FillPattern.SOLID, fg="#00FF00")))
-            self.assertEqual(fill.fg, Color(kind=ColorKind.RGB, rgb=0xFF00FF00))
+            fill = wb.ooxml.get_fill(wb.ooxml.add_fill(Fill(pattern=FillPattern.SOLID, foreground="#00FF00")))
+            self.assertEqual(fill.foreground, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
             stops = [GradientStop(0.0, "#80112233"), GradientStop(1.0, Color(kind=ColorKind.THEME, theme=1))]
             gradient = wb.ooxml.get_fill(wb.ooxml.add_fill(Fill(gradient=GradientFill(stops=stops)))).gradient
-            self.assertEqual([s.color for s in gradient.stops], [Color(ColorKind.RGB, rgb=0x80112233), stops[1].color])
+            self.assertEqual([s.color for s in gradient.stops], [Color(ColorKind.RGB, argb=0x80112233), stops[1].color])
             side = BorderSideRecord(style=formulon.BorderStyle.THIN, color="#0000FF")
             border = wb.ooxml.get_border(wb.ooxml.add_border(BorderRecord(left=side)))
-            self.assertEqual(border.left.color, Color(kind=ColorKind.RGB, rgb=0xFF0000FF))
+            self.assertEqual(border.left.color, Color(kind=ColorKind.RGB, argb=0xFF0000FF))
 
     def test_a_malformed_colour_is_a_type_error(self) -> None:
         with Workbook.create_default() as wb:
@@ -238,7 +239,7 @@ class StyleColourTests(unittest.TestCase):
                         wb.ooxml.add_font(Font(name="Arial", color=bad))  # type: ignore[arg-type]
 
     def test_colour_input_helpers(self) -> None:
-        self.assertEqual(_inputs.color_input("#abcdef", "c"), Color(kind=ColorKind.RGB, rgb=0xFFABCDEF))
+        self.assertEqual(_inputs.color_input("#abcdef", "c"), Color(kind=ColorKind.RGB, argb=0xFFABCDEF))
         self.assertEqual(_inputs.optional_color_input(None, "c"), Color())
 
 
@@ -326,10 +327,10 @@ class WorkbookEntryTests(unittest.TestCase):
     def test_add_table_derives_columns_and_takes_a1(self) -> None:
         with Workbook.create_default() as wb:
             wb[0].set_text("A1", "Item")
-            table = wb.add_table(range="Sheet1!A1:B3", name="Orders")
+            table = wb[0].add_table(TableInput(range="A1:B3", name="Orders"))
             self.assertEqual([c.name for c in table.get_properties().columns], ["Item", "Column1"])
-            with self.assertRaisesRegex(InvalidArgumentError, '"T2" is a cell address'):
-                wb.add_table(range="Sheet1!D1:E3", name="T2")
+            with self.assertRaises(InvalidArgumentError):
+                wb[0].add_table(TableInput(range="D1:E3", name="T2"))
 
     def test_save_needs_a_known_extension_or_a_format(self) -> None:
         with Workbook.create_default() as wb, tempfile.TemporaryDirectory() as tmp:

@@ -80,14 +80,20 @@ void JsWorkbook::setThemeColors(emscripten::val colors) {
   fm_theme_colors_t tc = FM_STRUCT_INIT(fm_theme_colors_t);
   JsNarrowNumericReader reader("setThemeColors");
   if (!reader.is_array(colors, "colors") || reader.length(colors, "colors") != std::size(tc.argb)) {
-    record_type_error("setThemeColors: `colors` must be an array of 12 ARGB numbers");
+    record_type_error("setThemeColors: `colors` must be an array of 12 RGB colours");
     return;
   }
   for (uint32_t i = 0; i < std::size(tc.argb); ++i) {
-    tc.argb[i] = reader.u32_value(reader.array_element(colors, i, "colors[]"), 0U, "colors[]");
-  }
-  if (!reader.ok()) {
-    return;
+    const fm_color_spec_t color =
+        js_pull_color_spec_value(reader.array_element(colors, i, "colors[]"), "colors[]", &reader);
+    if (!reader.ok()) {
+      return;
+    }
+    if (color.kind != FM_COLOR_KIND_RGB) {
+      record_type_error("setThemeColors: each colour must be an RGB colour");
+      return;
+    }
+    tc.argb[i] = color.argb;
   }
   succeeded(fm_workbook_set_theme_colors(handle_, &tc));
 }
@@ -120,7 +126,7 @@ void JsWorkbook::setThemeScriptFont(bool major, const std::string& script, const
 }
 
 void JsWorkbook::resetTheme() {
-  succeeded(handle_ != nullptr ? fm_workbook_clear_theme(handle_) : kBindingInvalidHandle);
+  succeeded(handle_ != nullptr ? fm_workbook_reset_theme(handle_) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) const {
@@ -155,7 +161,7 @@ emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint
   o.set("fontIndex", e.font_index);
   o.set("fillIndex", e.fill_index);
   o.set("borderIndex", e.border_index);
-  o.set("font", js_resolved_color(e.font_argb, e.font_resolution));
+  o.set("fontColor", js_resolved_color(e.font_argb, e.font_resolution));
   o.set("fillForeground", js_resolved_color(e.fill_fg_argb, e.fill_fg_resolution));
   o.set("fillBackground", js_resolved_color(e.fill_bg_argb, e.fill_bg_resolution));
   static const char* const kSides[5] = {"left", "right", "top", "bottom", "diagonal"};
@@ -164,9 +170,11 @@ emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint
     borders.set(kSides[i], js_resolved_color(e.border_argb[i], e.border_resolution[i]));
   }
   o.set("borders", borders);
-  o.set("locked", e.locked != 0);
-  o.set("hidden", e.hidden != 0);
-  js_set_cstr(o, "numFmtCode", e.num_fmt_code);
+  emscripten::val protection = emscripten::val::object();
+  protection.set("locked", e.locked != 0);
+  protection.set("hidden", e.hidden != 0);
+  o.set("protection", protection);
+  js_set_cstr(o, "numberFormat", e.num_fmt_code);
   return o;
 }
 }  // namespace parts

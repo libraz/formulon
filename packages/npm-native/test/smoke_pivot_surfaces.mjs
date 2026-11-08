@@ -20,7 +20,7 @@ function makePivotWorkbook(Workbook) {
     cache.setRecordValue(rec, 0, region);
     cache.setRecordValue(rec, 1, amount);
   }
-  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 4 });
+  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 4 } });
   pivot.addField({ sourceName: 'Region', axis: 0 });
   const amountField = pivot.addField({ sourceName: 'Amount', axis: 2 });
   pivot.addDataField({
@@ -145,7 +145,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
       rows: true,
       columns: true,
     });
-    pivot.setGrandTotals({ rows: false, columns: true });
+    pivot.updateGrandTotals({ rows: false, columns: true });
     const totals = pivot.getGrandTotals();
     assert.equal(totals.rows, false);
     assert.equal(totals.columns, true);
@@ -166,7 +166,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
 
     pivot.addFieldItem(0, 'East');
     pivot.addFieldItem(0, 'West');
-    pivot.updateItem(0, 1, { visible: false });
+    pivot.updateFieldItem(0, 1, { visible: false });
     assert.equal(pivot.listFieldItems(0).length, 2);
     const east = pivot.getFieldItem(0, 0);
     assert.equal(east.name, 'East');
@@ -174,10 +174,10 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(east.cacheIndex, null);
     assert.equal(east.visible, true);
     assert.equal(pivot.getFieldItem(0, 1).visible, false);
-    pivot.addFieldSharedItem(0, 5, { visible: true });
+    pivot.addFieldItem(0, { cacheIndex: 5 }, { visible: true });
     const bound = pivot.getFieldItem(0, 2);
     assert.equal(bound.cacheIndex, 5);
-    assert.equal(bound.name, '');
+    assert.equal(bound.name, null);
 
     const dataField = pivot.listDataFields()[0];
     assert.equal(dataField.name, 'Sum of Amount');
@@ -194,21 +194,21 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
   const mod = await getModule();
   const { wb, pivot } = makePivotWorkbook(mod.Workbook);
   try {
-    const initial = pivot.getStyleInfo();
+    const initial = pivot.getStyleOptions();
     assert.notEqual(initial, null);
-    assert.equal(initial.name, 'PivotStyleLight16');
+    assert.equal(initial.styleName, 'PivotStyleLight16');
     assert.deepEqual(
-      [initial.showRowHeaders, initial.showColHeaders, initial.showRowStripes, initial.showColStripes],
+      [initial.showRowHeaders, initial.showColumnHeaders, initial.showRowStripes, initial.showColumnStripes],
       [true, true, false, false],
     );
     assert.equal(initial.showLastColumn, true);
 
     // A patch: the omitted flags keep their values.
-    pivot.setStyleInfo({ name: 'PivotStyleDark3', showRowStripes: true });
-    const set = pivot.getStyleInfo();
-    assert.equal(set.name, 'PivotStyleDark3');
+    pivot.updateStyleOptions({ styleName: 'PivotStyleDark3', showRowStripes: true });
+    const set = pivot.getStyleOptions();
+    assert.equal(set.styleName, 'PivotStyleDark3');
     assert.deepEqual(
-      [set.showRowHeaders, set.showColHeaders, set.showRowStripes, set.showColStripes, set.showLastColumn],
+      [set.showRowHeaders, set.showColumnHeaders, set.showRowStripes, set.showColumnStripes, set.showLastColumn],
       [true, true, true, false, true],
     );
 
@@ -216,22 +216,22 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     const saved = wb.save();
     const reloaded = mod.Workbook.load(saved);
     try {
-      assert.equal(reloaded.sheet(0).pivot(0).getStyleInfo().name, 'PivotStyleDark3');
-      assert.equal(reloaded.sheet(0).pivot(0).getStyleInfo().showRowStripes, true);
+      assert.equal(reloaded.sheet(0).pivot(0).getStyleOptions().styleName, 'PivotStyleDark3');
+      assert.equal(reloaded.sheet(0).pivot(0).getStyleOptions().showRowStripes, true);
     } finally {
       reloaded.dispose();
     }
 
-    // An empty patch changes nothing; an empty name leaves the element without a style name.
-    pivot.setStyleInfo({});
-    assert.equal(pivot.getStyleInfo().name, 'PivotStyleDark3');
-    pivot.setStyleInfo({ name: '' });
-    const bare = pivot.getStyleInfo();
+    // An empty patch changes nothing; a null name leaves the element without a style name.
+    pivot.updateStyleOptions({});
+    assert.equal(pivot.getStyleOptions().styleName, 'PivotStyleDark3');
+    pivot.updateStyleOptions({ styleName: null });
+    const bare = pivot.getStyleOptions();
     assert.notEqual(bare, null);
-    assert.equal(bare.name, '');
+    assert.equal(bare.styleName, null);
 
-    assert.throws(() => wb.sheet(0).pivot(9).getStyleInfo(), isFormulonError);
-    assert.throws(() => wb.sheet(0).pivot(9).setStyleInfo({ name: 'X' }), isFormulonError);
+    assert.throws(() => wb.sheet(0).pivot(9).getStyleOptions(), isFormulonError);
+    assert.throws(() => wb.sheet(0).pivot(9).updateStyleOptions({ styleName: 'X' }), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -297,7 +297,7 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
       const rec = cache.addRecord();
       for (const [col, value] of [0, 0, sales, 1].entries()) cache.setRecordValue(rec, col, value);
     }
-    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchorRow: 0, anchorCol: 6 });
+    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchor: { row: 0, col: 6 } });
     const region = pivot.addField({ sourceName: 'Region', axis: 0 });
     const sales = pivot.addField({ sourceName: 'Sales', axis: 2 });
     assert.equal(region, 0);

@@ -185,16 +185,16 @@ class ParseErrorPositionTest(unittest.TestCase):
 
 class ColorSpecRoundTripTest(unittest.TestCase):
     CASES = (
-        {"kind": 0, "rgb": 0, "theme": 0, "indexed": 0, "tint": 0.0},
-        {"kind": 1, "rgb": 0xFF336699, "theme": 0, "indexed": 0, "tint": 0.0},
-        {"kind": 2, "rgb": 0, "theme": 5, "indexed": 0, "tint": -0.25},
-        {"kind": 3, "rgb": 0, "theme": 0, "indexed": 12, "tint": 0.0},
-        {"kind": 4, "rgb": 0, "theme": 0, "indexed": 0, "tint": 0.0},
+        {"kind": 0, "argb": 0, "theme": 0, "indexed": 0, "tint": 0.0},
+        {"kind": 1, "argb": 0xFF336699, "theme": 0, "indexed": 0, "tint": 0.0},
+        {"kind": 2, "argb": 0, "theme": 5, "indexed": 0, "tint": -0.25},
+        {"kind": 3, "argb": 0, "theme": 0, "indexed": 12, "tint": 0.0},
+        {"kind": 4, "argb": 0, "theme": 0, "indexed": 0, "tint": 0.0},
     )
 
     def test_layout_is_the_value_type_size(self) -> None:
         self.assertEqual(S.COLOR_SPEC.size, 24)
-        self.assertEqual([name for name, _ in S.COLOR_SPEC.fields], ["tint", "rgb", "theme", "indexed", "kind"])
+        self.assertEqual([name for name, _ in S.COLOR_SPEC.fields], ["tint", "argb", "theme", "indexed", "kind"])
 
     def test_tab_color_round_trips_every_kind(self) -> None:
         with _RawWorkbook() as wb:

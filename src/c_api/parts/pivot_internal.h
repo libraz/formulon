@@ -142,7 +142,7 @@ formulon::pivot::PivotAxis pivot_axis_from_fm(fm_pivot_axis_t axis);
 formulon::pivot::Aggregation pivot_agg_from_fm(fm_pivot_aggregation_t agg);
 formulon::pivot::SubtotalFn pivot_subtotal_from_fm(fm_pivot_aggregation_t agg);
 formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_values_as_t show_as);
-formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_type_t t);
+formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_kind_t t);
 formulon::pivot::CalendarSystem pivot_calendar_from_fm(fm_pivot_calendar_t c);
 
 // Engine axis to `fm_pivot_axis_t`; `nullopt` for `PivotAxis::None`.

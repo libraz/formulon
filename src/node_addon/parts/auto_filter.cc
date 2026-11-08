@@ -1,5 +1,5 @@
-// Typed AutoFilter bindings for sheets and tables: read, evaluate, set,
-// remove, apply and clear.
+// Typed AutoFilter bindings for sheets and tables: read, evaluate, set
+// (a null filter removes), apply and clear.
 
 #include <cstddef>
 #include <cstdint>
@@ -48,7 +48,7 @@ bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* 
 
 Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("colId", JsNumber(env, c.col_id));
+  o.Set("columnOffset", JsNumber(env, c.column_offset));
   o.Set("hiddenButton", JsBool(env, c.hidden_button));
   o.Set("showButton", JsBool(env, c.show_button));
   o.Set("kind", JsNumber(env, c.kind));
@@ -74,23 +74,23 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {
   o.Set("dateGroups", groups);
   o.Set("customAnd", JsBool(env, c.custom_and));
   o.Set("customCount", JsNumber(env, c.custom_count));
-  o.Set("op1", JsNumber(env, c.op1));
-  o.Set("val1", JsString(env, c.val1));
-  o.Set("op2", JsNumber(env, c.op2));
-  o.Set("val2", JsString(env, c.val2));
+  o.Set("operator1", JsNumber(env, c.op1));
+  o.Set("value1", JsString(env, c.val1));
+  o.Set("operator2", JsNumber(env, c.op2));
+  o.Set("value2", JsString(env, c.val2));
   o.Set("top", JsBool(env, c.top));
   o.Set("percent", JsBool(env, c.percent));
-  o.Set("topVal", JsNumber(env, c.top_val));
-  o.Set("filterVal", JsNumberOrNull(env, c.has_filter_val, c.filter_val));
+  o.Set("topValue", JsNumber(env, c.top_val));
+  o.Set("filterValue", JsNumberOrNull(env, c.has_filter_val, c.filter_val));
   o.Set("dynamicType", JsNumber(env, c.dynamic_type));
-  o.Set("dynVal", JsNumberOrNull(env, c.has_dyn_val, c.dyn_val));
-  o.Set("dynMaxVal", JsNumberOrNull(env, c.has_dyn_max_val, c.dyn_max_val));
-  o.Set("valIso", JsString(env, c.val_iso));
-  o.Set("maxValIso", JsString(env, c.max_val_iso));
-  o.Set("dxfId", JsNumber(env, c.dxf_id));
+  o.Set("dynamicValue", JsNumberOrNull(env, c.has_dyn_val, c.dyn_val));
+  o.Set("dynamicMaxValue", JsNumberOrNull(env, c.has_dyn_max_val, c.dyn_max_val));
+  o.Set("valueIso", JsString(env, c.val_iso));
+  o.Set("maxValueIso", JsString(env, c.max_val_iso));
+  o.Set("dxfIndex", JsNumber(env, c.dxf_index));
   o.Set("cellColor", JsBool(env, c.cell_color));
   o.Set("iconSet", JsNumber(env, c.icon_set));
-  o.Set("iconId", JsNumberOrNull(env, c.has_icon_id, c.icon_id));
+  o.Set("iconIndex", JsNumberOrNull(env, c.has_icon_index, c.icon_index));
   return o;
 }
 
@@ -119,9 +119,9 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter_t& f) {
     item.Set("descending", JsBool(env, c.descending));
     item.Set("sortBy", JsNumber(env, c.sort_by));
     item.Set("customList", JsString(env, c.custom_list));
-    item.Set("dxfId", JsNumberOrNull(env, c.has_dxf_id, c.dxf_id));
+    item.Set("dxfIndex", JsNumberOrNull(env, c.has_dxf_index, c.dxf_index));
     item.Set("iconSet", JsNumber(env, c.icon_set));
-    item.Set("iconId", JsNumberOrNull(env, c.has_icon_id, c.icon_id));
+    item.Set("iconIndex", JsNumberOrNull(env, c.has_icon_index, c.icon_index));
     conditions.Set(i, item);
   }
   sort.Set("conditions", conditions);
@@ -147,7 +147,7 @@ struct AutoFilterInput {
 
 void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_filter_column_t& c) {
   c = fm_filter_column_t{};
-  c.col_id = reader.U32(spec, "colId", 0U);
+  c.column_offset = reader.U32(spec, "columnOffset", 0U);
   c.hidden_button = reader.Bool(spec, "hiddenButton", false) ? 1 : 0;
   c.show_button = reader.Bool(spec, "showButton", true) ? 1 : 0;
   c.kind = reader.I32(spec, "kind", 0);
@@ -202,37 +202,37 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.date_group_count = static_cast<uint32_t>(groups.size());
   c.custom_and = reader.Bool(spec, "customAnd", false) ? 1 : 0;
   c.custom_count = reader.I32(spec, "customCount", 0);
-  c.op1 = reader.I32(spec, "op1", 0);
+  c.op1 = reader.I32(spec, "operator1", 0);
   std::string val1;
-  reader.String(spec, "val1", &val1);
+  reader.String(spec, "value1", &val1);
   c.val1 = in.Keep(std::move(val1));
-  c.op2 = reader.I32(spec, "op2", 0);
+  c.op2 = reader.I32(spec, "operator2", 0);
   std::string val2;
-  reader.String(spec, "val2", &val2);
+  reader.String(spec, "value2", &val2);
   c.val2 = in.Keep(std::move(val2));
   c.top = reader.Bool(spec, "top", true) ? 1 : 0;
   c.percent = reader.Bool(spec, "percent", false) ? 1 : 0;
   // A nullable member is absent when omitted or `null`.
   bool present = false;
-  c.top_val = reader.Double(spec, "topVal", 0.0);
-  c.filter_val = reader.Double(spec, "filterVal", 0.0, &present);
+  c.top_val = reader.Double(spec, "topValue", 0.0);
+  c.filter_val = reader.Double(spec, "filterValue", 0.0, &present);
   c.has_filter_val = present ? 1 : 0;
   c.dynamic_type = reader.I32(spec, "dynamicType", 0);
-  c.dyn_val = reader.Double(spec, "dynVal", 0.0, &present);
+  c.dyn_val = reader.Double(spec, "dynamicValue", 0.0, &present);
   c.has_dyn_val = present ? 1 : 0;
-  c.dyn_max_val = reader.Double(spec, "dynMaxVal", 0.0, &present);
+  c.dyn_max_val = reader.Double(spec, "dynamicMaxValue", 0.0, &present);
   c.has_dyn_max_val = present ? 1 : 0;
   std::string val_iso;
   std::string max_val_iso;
-  reader.String(spec, "valIso", &val_iso);
-  reader.String(spec, "maxValIso", &max_val_iso);
+  reader.String(spec, "valueIso", &val_iso);
+  reader.String(spec, "maxValueIso", &max_val_iso);
   c.val_iso = in.Keep(std::move(val_iso));
   c.max_val_iso = in.Keep(std::move(max_val_iso));
-  c.dxf_id = reader.U32(spec, "dxfId", kAbsentDxfId);
+  c.dxf_index = reader.U32(spec, "dxfIndex", kAbsentDxfId);
   c.cell_color = reader.Bool(spec, "cellColor", false) ? 1 : 0;
   c.icon_set = reader.I32(spec, "iconSet", 0);
-  c.icon_id = reader.I32(spec, "iconId", 0, &present);
-  c.has_icon_id = present ? 1 : 0;
+  c.icon_index = reader.I32(spec, "iconIndex", 0, &present);
+  c.has_icon_index = present ? 1 : 0;
 }
 
 void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in,
@@ -246,11 +246,11 @@ void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, Auto
   c.custom_list = in.Keep(std::move(custom_list));
   // A nullable member is absent when omitted or `null`.
   bool present = false;
-  c.dxf_id = reader.U32(spec, "dxfId", 0U, &present);
-  c.has_dxf_id = present ? 1 : 0;
+  c.dxf_index = reader.U32(spec, "dxfIndex", 0U, &present);
+  c.has_dxf_index = present ? 1 : 0;
   c.icon_set = reader.I32(spec, "iconSet", 0);
-  c.icon_id = reader.I32(spec, "iconId", 0, &present);
-  c.has_icon_id = present ? 1 : 0;
+  c.icon_index = reader.I32(spec, "iconIndex", 0, &present);
+  c.has_icon_index = present ? 1 : 0;
 }
 
 // Reads the `AutoFilter` record at `info[idx]`; false when it is not an object.
@@ -314,17 +314,19 @@ bool ReadAutoFilter(CheckedSpecReader& reader, const Napi::CallbackInfo& info, s
 }
 
 // Shared by the sheet and table entry points: `table` selects which C
-// function family a call goes to, `info[0]` being the sheet or table index.
+// function family a call goes to. A sheet call is (sheet, ...); a table call
+// is (sheet, table, ...).
 Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_t* wb, bool table) {
   Napi::Env env = info.Env();
   if (wb == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const size_t idx = Workbook::ArgU32(info, 0);
+  const size_t sheet = Workbook::ArgU32(info, 0);
+  const size_t table_index = table ? Workbook::ArgU32(info, 1) : 0;
   fm_auto_filter_t af = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
-  const fm_status_t rc = table ? fm_workbook_get_table_auto_filter(wb, idx, &af, &present)
-                               : fm_sheet_get_auto_filter(wb, idx, &af, &present);
+  const fm_status_t rc = table ? fm_sheet_get_table_auto_filter(wb, sheet, table_index, &af, &present)
+                               : fm_sheet_get_auto_filter(wb, sheet, &af, &present);
   const bool has = rc == 0 && present != 0;
   return OptionalOrNull(env, rc, present, has ? static_cast<Napi::Value>(AutoFilterToJs(env, af)) : env.Null());
 }
@@ -334,10 +336,11 @@ Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_work
   if (wb == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const size_t idx = Workbook::ArgU32(info, 0);
-  auto call = [&](uint8_t* buf, size_t cap, size_t* len, uint32_t* first) {
-    return table ? fm_workbook_evaluate_table_auto_filter(wb, idx, buf, cap, len, first)
-                 : fm_sheet_evaluate_auto_filter(wb, idx, buf, cap, len, first);
+  const size_t sheet = Workbook::ArgU32(info, 0);
+  const size_t table_index = table ? Workbook::ArgU32(info, 1) : 0;
+  auto call = [&](uint8_t* buf, size_t cap, size_t* count, uint32_t* first) {
+    return table ? fm_sheet_evaluate_table_auto_filter(wb, sheet, table_index, buf, cap, count, first)
+                 : fm_sheet_evaluate_auto_filter(wb, sheet, buf, cap, count, first);
   };
   size_t len = 0;
   uint32_t first = 0;
@@ -359,21 +362,26 @@ Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_work
   return out;
 }
 
-// Shared bodies of the sheet / table AutoFilter mutators.
-using AutoFilterSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const fm_auto_filter_t*);
-using AutoFilterOpFn = fm_status_t (*)(fm_workbook_t*, size_t);
-
+// `filter` is the record at `info[filter_idx]`, or `null` to remove the filter.
 // `handle` aliases the wrapper's member, so the C call sees the handle as it
 // is after the spec getters ran, not a copy taken before them.
-Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, AutoFilterSetFn fn,
-                              const char* usage) {
+Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, size_t filter_idx,
+                              bool table, const char* usage) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  const size_t sheet = Workbook::ArgU32(info, 0);
+  const size_t table_index = table ? Workbook::ArgU32(info, 1) : 0;
+  if (info[filter_idx].IsNull()) {
+    return ValueOrThrow(env,
+                        table ? fm_sheet_set_table_auto_filter(handle, sheet, table_index, nullptr)
+                              : fm_sheet_set_auto_filter(handle, sheet, nullptr),
+                        env.Undefined());
+  }
   CheckedSpecReader reader(env);
   AutoFilterInput in;
-  if (!ReadAutoFilter(reader, info, 1, in)) {
+  if (!ReadAutoFilter(reader, info, filter_idx, in)) {
     if (!reader.ok()) {
       return env.Undefined();
     }
@@ -383,15 +391,10 @@ Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* con
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fn(handle, Workbook::ArgU32(info, 0), &in.filter), env.Undefined());
-}
-
-Napi::Value InvokeAutoFilterOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, AutoFilterOpFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  return ValueOrThrow(env, fn(handle, Workbook::ArgU32(info, 0)), env.Undefined());
+  return ValueOrThrow(env,
+                      table ? fm_sheet_set_table_auto_filter(handle, sheet, table_index, &in.filter)
+                            : fm_sheet_set_auto_filter(handle, sheet, &in.filter),
+                      env.Undefined());
 }
 
 }  // namespace
@@ -405,37 +408,33 @@ Napi::Value Workbook::GetTableAutoFilter(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetAutoFilter(const Napi::CallbackInfo& info) {
-  return SetAutoFilterImpl(info, handle_, &fm_sheet_set_auto_filter,
-                           "setAutoFilter expects (sheet:number, autoFilter:object)");
+  return SetAutoFilterImpl(info, handle_, 1, false, "setAutoFilter expects (sheet:number, autoFilter:object|null)");
 }
 
 Napi::Value Workbook::SetTableAutoFilter(const Napi::CallbackInfo& info) {
-  return SetAutoFilterImpl(info, handle_, &fm_workbook_set_table_auto_filter,
-                           "setTableAutoFilter expects (tableIndex:number, autoFilter:object)");
-}
-
-Napi::Value Workbook::RemoveAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_sheet_remove_auto_filter);
-}
-
-Napi::Value Workbook::RemoveTableAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_workbook_remove_table_auto_filter);
+  return SetAutoFilterImpl(info, handle_, 2, true,
+                           "setTableAutoFilter expects (sheet:number, tableIndex:number, autoFilter:object|null)");
 }
 
 Napi::Value Workbook::ApplyAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_sheet_apply_auto_filter);
+  return StatusCall(info, [&](fm_workbook_t* handle) { return fm_sheet_apply_auto_filter(handle, ArgU32(info, 0)); });
 }
 
 Napi::Value Workbook::ApplyTableAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_workbook_apply_table_auto_filter);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_sheet_apply_table_auto_filter(handle, ArgU32(info, 0), ArgU32(info, 1));
+  });
 }
 
 Napi::Value Workbook::ClearAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_sheet_clear_auto_filter);
+  return StatusCall(
+      info, [&](fm_workbook_t* handle) { return fm_sheet_clear_auto_filter_criteria(handle, ArgU32(info, 0)); });
 }
 
 Napi::Value Workbook::ClearTableAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_workbook_clear_table_auto_filter);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_sheet_clear_table_auto_filter_criteria(handle, ArgU32(info, 0), ArgU32(info, 1));
+  });
 }
 
 Napi::Value Workbook::EvaluateAutoFilter(const Napi::CallbackInfo& info) {

@@ -58,7 +58,7 @@ TEST(FormulonCApiLambdaText, BareLambdaProjectsToCalcError) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
-  EXPECT_EQ(v.kind, FM_VAL_ERROR);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_ERROR);
   // A #CALC! cell has no lambda surface to render.
   const char* text = nullptr;
   int32_t present = 1;

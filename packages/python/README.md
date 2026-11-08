@@ -82,20 +82,20 @@ import formulon
 
 with formulon.Workbook.create_default() as wb:
     ws = wb.sheet(0)
-    ws.set_cell_format(
+    ws.update_cell_format(
         "A1:B2",
         number_format="0.00%",
         font={"bold": True, "color": "#C00000"},
-        fill={"fg": "#FFF2CC"},
+        fill={"foreground": "#FFF2CC"},
         alignment={"horizontal": formulon.HorizontalAlign.CENTER},
     )
-    ws.set_cell_format("D:D", border={"left": {"style": formulon.BorderStyle.THIN}})
+    ws.update_cell_format("D:D", border={"left": {"style": formulon.BorderStyle.THIN}})
 
     fmt = ws.get_cell_format("A1")
     print(fmt.number_format, fmt.font.bold, fmt.fill.pattern.name)  # 0.00% True SOLID
 ```
 
-`set_cell_format` merges only the groups and keys it is given into each cell's format; a column (`"D:D"`), row (`"3:3"`) or whole-sheet range formats that axis, so cells entered there later take the format too. Equal formats share one style record.
+`update_cell_format` merges only the groups and keys it is given into each cell's format; a column (`"D:D"`), row (`"3:3"`) or whole-sheet range formats that axis, so cells entered there later take the format too. Equal formats share one style record.
 
 ## Threads and memory
 

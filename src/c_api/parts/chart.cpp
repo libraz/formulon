@@ -121,8 +121,8 @@ fm_chart_line_t to_fm(const formulon::ChartLine& l) {
 fm_chart_marker_t to_fm(const formulon::ChartMarker& m) {
   fm_chart_marker_t out{};
   out.symbol = static_cast<std::int32_t>(m.symbol);
-  out.has_size = m.size ? 1 : 0;
-  out.size = m.size.value_or(0U);
+  out.has_size_pt = m.size ? 1 : 0;
+  out.size_pt = m.size.value_or(0U);
   out.fill = to_fm(m.fill);
   out.line = to_fm(m.line);
   return out;
@@ -170,6 +170,38 @@ void spell_formulas(const formulon::Workbook& book, formulon::ChartModel& model)
       }
     }
   }
+}
+
+/// Extended-chart layout of `p`, or -1 for a plot that is not extended or has an unknown layout.
+std::int32_t extended_layout_from(const formulon::ChartPlot& p) {
+  if (p.type != formulon::ChartPlotType::kChartex) {
+    return -1;
+  }
+  static const char* const kLayouts[] = {"boxWhisker", "clusteredColumn", "funnel",  "paretoLine",
+                                         "regionMap",  "sunburst",        "treemap", "waterfall"};
+  for (std::int32_t i = 0; i < 8; ++i) {
+    if (p.chartex_layout == kLayouts[i]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/// Role of an unresolved input, from the engine's input label.
+std::int32_t unresolved_role(const std::string& source) {
+  static const struct {
+    const char* label;
+    std::int32_t role;
+  } kRoles[] = {{"name", FM_CHART_ROLE_NAME},   {"cat", FM_CHART_ROLE_CATEGORIES},
+                {"val", FM_CHART_ROLE_VALUES},  {"x", FM_CHART_ROLE_X},
+                {"y", FM_CHART_ROLE_Y},         {"size", FM_CHART_ROLE_SIZE},
+                {"title", FM_CHART_ROLE_TITLE}, {"axis_title", FM_CHART_ROLE_AXIS_TITLE}};
+  for (const auto& r : kRoles) {
+    if (source == r.label) {
+      return r.role;
+    }
+  }
+  return FM_CHART_ROLE_VALUES;
 }
 
 const formulon::ChartDataSource* source_of(const formulon::ChartSeries& s, std::int32_t role) {
@@ -297,7 +329,7 @@ extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_
   out->object_id = m.object_id;
   out->name = m.name.c_str();
   out->description = m.descr.c_str();
-  out->is_chartex = m.is_chartex ? 1 : 0;
+  out->is_extended = m.is_chartex ? 1 : 0;
   out->is_pivot_chart = m.is_pivot_chart ? 1 : 0;
   out->on_chartsheet = m.on_chartsheet ? 1 : 0;
   out->edit_as = to_c(m.edit_as);
@@ -306,11 +338,12 @@ extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_
   out->height_emu = m.cy;
   out->title = to_fm(m.title);
   out->auto_title_deleted = tri(m.auto_title_deleted);
-  out->legend_position = m.legend.present ? to_c(m.legend.position) : static_cast<std::int32_t>(FM_CHART_LEGEND_NONE);
+  out->legend_position =
+      m.legend.present ? to_c(m.legend.position) : static_cast<std::int32_t>(FM_CHART_LEGEND_POSITION_NONE);
   out->legend_overlay = m.legend.overlay ? 1 : 0;
   out->legend_hidden_count = static_cast<std::uint32_t>(m.legend.hidden_series_idx.size());
   out->blanks_as = to_c(m.disp_blanks_as);
-  out->plot_vis_only = tri(m.plot_vis_only);
+  out->plot_visible_only = tri(m.plot_vis_only);
   out->date1904 = m.date1904 ? 1 : 0;
   out->has_style = m.style ? 1 : 0;
   out->style = m.style.value_or(0);
@@ -367,19 +400,19 @@ extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot
     return rc;
   }
   out->type = static_cast<std::int32_t>(p.type);
-  out->chartex_layout = p.chartex_layout.c_str();
-  out->bar_dir = to_c(p.bar_dir);
+  out->extended_layout = extended_layout_from(p);
+  out->bar_direction = to_c(p.bar_dir);
   out->has_grouping = p.grouping ? 1 : 0;
   out->grouping = p.grouping ? static_cast<std::int32_t>(*p.grouping) : 0;
   out->vary_colors = tri(p.vary_colors);
-  out->has_gap_width = p.gap_width ? 1 : 0;
-  out->gap_width = p.gap_width.value_or(0U);
+  out->has_gap_width_pct = p.gap_width ? 1 : 0;
+  out->gap_width_pct = p.gap_width.value_or(0U);
   out->has_overlap = p.overlap ? 1 : 0;
   out->overlap = p.overlap.value_or(0);
   out->has_hole_size = p.hole_size ? 1 : 0;
   out->hole_size = p.hole_size.value_or(0U);
-  out->has_first_slice_angle = p.first_slice_angle ? 1 : 0;
-  out->first_slice_angle = p.first_slice_angle.value_or(0U);
+  out->has_first_slice_angle_deg = p.first_slice_angle ? 1 : 0;
+  out->first_slice_angle_deg = p.first_slice_angle.value_or(0U);
   out->axis_id_count = static_cast<std::uint32_t>(p.axis_ids.size());
   out->series_count = static_cast<std::uint32_t>(p.series.size());
   return 0;
@@ -509,7 +542,7 @@ extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx,
   out->id = a.id;
   out->kind = static_cast<std::int32_t>(a.kind);
   out->position = to_c(a.position);
-  out->deleted = a.deleted ? 1 : 0;
+  out->visible = a.deleted ? 0 : 1;
   out->cross_axis = a.cross_ax;
   out->crosses = to_c(a.crosses);
   out->crosses_at = a.crosses_at;
@@ -524,7 +557,7 @@ extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx,
   out->title = to_fm(a.title);
   out->major_gridlines = a.major_gridlines ? 1 : 0;
   out->minor_gridlines = a.minor_gridlines ? 1 : 0;
-  out->tick_label_pos = nonempty_cstr(a.tick_label_pos);
+  out->tick_label_position = nonempty_cstr(a.tick_label_pos);
   return 0;
 }
 
@@ -606,9 +639,9 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
                   "direction");
   r.flag(overrides->header_row_op, overrides->header_row, model.header_row, "header_row_op");
   r.flag(overrides->header_column_op, overrides->header_column, model.header_column, "header_column_op");
-  r.enum_optional(overrides->blanks_as_op, overrides->blanks_as, FM_CHART_BLANKS_ABSENT, FM_CHART_BLANKS_SPAN,
+  r.enum_optional(overrides->blanks_as_op, overrides->blanks_as, FM_CHART_BLANKS_AS_ABSENT, FM_CHART_BLANKS_AS_SPAN,
                   chart_blanks_as_from_c, model.blanks_as, "blanks_as");
-  r.flag(overrides->plot_vis_only_op, overrides->plot_vis_only, model.plot_vis_only, "plot_vis_only_op");
+  r.flag(overrides->plot_visible_only_op, overrides->plot_visible_only, model.plot_vis_only, "plot_visible_only_op");
   r.flag(overrides->na_as_blank_op, overrides->na_as_blank, model.na_as_blank, "na_as_blank_op");
   if (r.status() != 0) {
     return r.status();
@@ -666,8 +699,8 @@ extern "C" fm_status_t fm_chart_data_get_category_at(const fm_chart_data_t* data
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_get_category_level_size(const fm_chart_data_t* data, size_t level,
-                                                             size_t* out_count) {
+extern "C" fm_status_t fm_chart_data_get_category_level_count(const fm_chart_data_t* data, size_t level,
+                                                              size_t* out_count) {
   clear_last_error();
   if (data == nullptr || out_count == nullptr) {
     return null_argument();
@@ -799,7 +832,7 @@ extern "C" fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* da
     return rc;
   }
   out->series_index = list[idx].series_idx;
-  out->source = list[idx].source.c_str();
+  out->source = unresolved_role(list[idx].source);
   out->axis_id = list[idx].axis_id;
   return 0;
 }

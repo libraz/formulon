@@ -58,14 +58,17 @@ Napi::Value Workbook::SetThemeColors(const Napi::CallbackInfo& info) {
   }
   Napi::Array arr;
   if (!ArrayArg(info, 0, &arr) || arr.Length() != 12) {
-    Napi::TypeError::New(env, "setThemeColors expects an array of 12 ARGB numbers").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "setThemeColors expects an array of 12 colors").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Each scheme colour is a `Color` record; only its `argb` is stored.
   CheckedSpecReader reader(env);
   fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
-  for (uint32_t i = 0; i < 12; ++i) {
-    const std::string key = std::to_string(i);
-    colors.argb[i] = reader.U32(arr, key.c_str(), 0U);
+  for (uint32_t i = 0; i < 12 && reader.ok(); ++i) {
+    Napi::Value element;
+    if (reader.ArrayElement(arr, i, &element)) {
+      colors.argb[i] = ReadColorSpec(reader, element, "colors[]").argb;
+    }
   }
   if (!reader.ok()) {
     return env.Undefined();
@@ -136,7 +139,7 @@ Napi::Value Workbook::ResetTheme(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  return ValueOrThrow(env, fm_workbook_clear_theme(handle_), env.Undefined());
+  return ValueOrThrow(env, fm_workbook_reset_theme(handle_), env.Undefined());
 }
 
 Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
@@ -193,13 +196,15 @@ Napi::Value Workbook::GetEffectiveStyle(const Napi::CallbackInfo& info) {
   out.Set("fontIndex", Napi::Number::New(env, es.font_index));
   out.Set("fillIndex", Napi::Number::New(env, es.fill_index));
   out.Set("borderIndex", Napi::Number::New(env, es.border_index));
-  out.Set("font", colorOf(es.font_argb, es.font_resolution));
+  out.Set("fontColor", colorOf(es.font_argb, es.font_resolution));
   out.Set("fillForeground", colorOf(es.fill_fg_argb, es.fill_fg_resolution));
   out.Set("fillBackground", colorOf(es.fill_bg_argb, es.fill_bg_resolution));
   out.Set("borders", borders);
-  out.Set("locked", Napi::Boolean::New(env, es.locked != 0));
-  out.Set("hidden", Napi::Boolean::New(env, es.hidden != 0));
-  out.Set("numFmtCode", JsString(env, es.num_fmt_code));
+  Napi::Object protection = Napi::Object::New(env);
+  protection.Set("locked", Napi::Boolean::New(env, es.locked != 0));
+  protection.Set("hidden", Napi::Boolean::New(env, es.hidden != 0));
+  out.Set("protection", protection);
+  out.Set("numberFormat", JsString(env, es.num_fmt_code));
   return out;
 }
 

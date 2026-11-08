@@ -82,7 +82,7 @@ extern "C" fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t shee
   return finish_status(wb->workbook().set_cell_xf_index(sheet_index, row, col, static_cast<std::uint32_t>(xf_index)));
 }
 
-extern "C" fm_status_t fm_sheet_clear_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
+extern "C" fm_status_t fm_sheet_reset_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");
@@ -139,11 +139,11 @@ void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf_t* out) {
   out->fill_index = xf.fill_index;
   out->border_index = xf.border_index;
   out->num_fmt_id = xf.num_fmt_id;
-  out->horizontal_align = xf.horizontal_align;
-  out->vertical_align = xf.vertical_align;
+  out->horizontal = xf.horizontal_align;
+  out->vertical = xf.vertical_align;
   out->wrap_text = xf.wrap_text ? 1 : 0;
   out->justify_last_line = xf.justify_last_line ? 1 : 0;
-  out->xf_id = xf.xf_id;
+  out->style_xf_index = xf.xf_id;
   out->has_alignment = xf.has_alignment ? 1 : 0;
   out->has_text_rotation = xf.has_text_rotation ? 1 : 0;
   out->text_rotation = xf.text_rotation;
@@ -155,8 +155,8 @@ void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf_t* out) {
   out->shrink_to_fit = xf.shrink_to_fit ? 1 : 0;
   out->has_reading_order = xf.has_reading_order ? 1 : 0;
   out->reading_order = static_cast<int32_t>(xf.reading_order);
-  out->has_horizontal_align = xf.has_horizontal_align ? 1 : 0;
-  out->has_vertical_align = xf.has_vertical_align ? 1 : 0;
+  out->has_horizontal = xf.has_horizontal_align ? 1 : 0;
+  out->has_vertical = xf.has_vertical_align ? 1 : 0;
   out->has_wrap_text = xf.has_wrap_text ? 1 : 0;
   out->has_justify_last_line = xf.has_justify_last_line ? 1 : 0;
   out->apply_number_format = xf.apply_number_format ? 1 : 0;
@@ -195,7 +195,7 @@ namespace {
 /// record it was read from instead of appending a lossy copy of it.
 void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
   out->name = f.name.c_str();
-  out->size = f.size;
+  out->size_pt = f.size;
   out->bold = f.bold ? 1 : 0;
   out->italic = f.italic ? 1 : 0;
   out->strike = f.strike ? 1 : 0;
@@ -204,7 +204,7 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
   out->has_strike = f.has_strike ? 1 : 0;
   out->has_family = f.has_family ? 1 : 0;
   out->has_charset = f.has_charset ? 1 : 0;
-  out->has_size = f.has_size ? 1 : 0;
+  out->has_size_pt = f.has_size ? 1 : 0;
   out->outline = f.outline ? 1 : 0;
   out->shadow = f.shadow ? 1 : 0;
   out->condense = f.condense ? 1 : 0;
@@ -224,10 +224,10 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
 void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out,
                formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t>& stop_arena) {
   out->pattern = f.pattern;
-  out->fg = formulon::c_api::parts::color_spec_to_c(f.fg, f.fg_argb);
-  out->bg = formulon::c_api::parts::color_spec_to_c(f.bg, f.bg_argb);
+  out->foreground = formulon::c_api::parts::color_spec_to_c(f.fg, f.fg_argb);
+  out->background = formulon::c_api::parts::color_spec_to_c(f.bg, f.bg_argb);
   out->has_gradient = f.has_gradient ? 1 : 0;
-  out->gradient_type = f.gradient.path ? FM_GRADIENT_PATH : FM_GRADIENT_LINEAR;
+  out->gradient_type = f.gradient.path ? FM_GRADIENT_TYPE_PATH : FM_GRADIENT_TYPE_LINEAR;
   out->gradient_degree = f.gradient.degree;
   out->gradient_left = f.gradient.left;
   out->gradient_right = f.gradient.right;
@@ -280,8 +280,8 @@ extern "C" fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, uint32_t num_fmt_id,
-                                                      int32_t* out_present, const char** out) {
+extern "C" fm_status_t fm_workbook_get_number_format(const fm_workbook_t* wb, uint32_t num_fmt_id, int32_t* out_present,
+                                                     const char** out) {
   clear_last_error();
   if (wb == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
@@ -360,9 +360,13 @@ extern "C" fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_i
   if (dxf.has_border) {
     border_to_c(dxf.border, &out->border);
   }
-  out->num_fmt_engaged = dxf.has_num_fmt ? 1 : 0;
-  out->num_fmt_id = dxf.num_fmt_id;
-  out->num_fmt_code = dxf.num_fmt_code.c_str();
+  if (dxf.has_num_fmt) {
+    if (!dxf.num_fmt_code.empty()) {
+      out->number_format = dxf.num_fmt_code.c_str();
+    } else if (auto resolved = resolve_num_fmt_code(wb->workbook(), dxf.num_fmt_id); resolved.has_value()) {
+      out->number_format = resolved->data();
+    }
+  }
   out->alignment_xml = dxf.alignment_xml.c_str();
   out->protection_xml = dxf.protection_xml.c_str();
   return 0;
@@ -396,7 +400,7 @@ extern "C" fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, si
   }
   const formulon::CellStyleRecord& cs = styles.cell_styles[index];
   out->name = cs.name.c_str();
-  out->xf_id = cs.xf_id;
+  out->style_xf_index = cs.xf_id;
   out->builtin_id = cs.builtin_id;
   out->i_level = cs.i_level;
   out->hidden = cs.hidden ? 1 : 0;
@@ -445,6 +449,6 @@ extern "C" fm_status_t fm_workbook_get_cell_style_xf(const fm_workbook_t* wb, si
   }
   cell_xf_to_c(styles.cell_style_xfs[index], out);
   // A named-style xf is itself the parent, so it never carries an `xfId`.
-  out->xf_id = 0;
+  out->style_xf_index = 0;
   return 0;
 }

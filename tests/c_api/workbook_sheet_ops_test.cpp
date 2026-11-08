@@ -346,7 +346,7 @@ TEST(WorkbookSheetOpsCApi, DeleteRejectsCountPastSheetBoundWithoutMutatingCells)
 
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
-  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 42.0);
 }
 
@@ -360,21 +360,19 @@ TEST(WorkbookSheetOpsCApi, InsertRowsAndColumnsShiftCells) {
 
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 3, 2, &value), 0);  // C4
-  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 42.0);
 }
 
 TEST(WorkbookSheetOpsCApi, EmptyMetadataListsExposeTheirCAbiContracts) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, std::size_t{0}), 0U);
   EXPECT_EQ(count_of(fm_workbook_get_passthrough_count, wb.handle), 0U);
 
   const char* name = nullptr;
-  const char* display_name = nullptr;
   fm_cell_rect_t rect{};
-  std::size_t sheet_index = 99;
-  EXPECT_NE(fm_workbook_get_table(wb.handle, 0, &name, &display_name, &rect, &sheet_index), 0);
+  EXPECT_NE(fm_sheet_get_table(wb.handle, 0, 0, &name, &rect), 0);
 
   const char* path = nullptr;
   EXPECT_NE(fm_workbook_get_passthrough_at(wb.handle, 0, &path), 0);
@@ -401,7 +399,7 @@ TEST(WorkbookSheetOpsCApi, RenameAndRemoveRewriteFormulaThroughPublicPath) {
   EXPECT_EQ(col, 0U);
   ASSERT_NE(formula, nullptr);
   EXPECT_STREQ(formula, "=Delta!A1");
-  EXPECT_EQ(cached.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(cached.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(cached.u.number, 42.0);
 
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 2), 0);
@@ -412,6 +410,6 @@ TEST(WorkbookSheetOpsCApi, RenameAndRemoveRewriteFormulaThroughPublicPath) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 2, 0, 0, 99.0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &cached), 0);
-  EXPECT_EQ(cached.kind, FM_VAL_ERROR);
+  EXPECT_EQ(cached.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(cached.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Ref));
 }
