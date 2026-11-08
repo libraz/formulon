@@ -85,11 +85,31 @@ struct WorksheetProperties {
   std::uint32_t color_argb = 0U;
 };
 
-/// Reads the sheet's retained `<sheetPr>` fragment back into the fields
-/// `BrtWsProp` can express. The fragment is the same string the OOXML
-/// writer emits and the XLSB reader synthesises, so this is the inverse of
-/// `decode_ws_prop` and the two containers agree
-/// on a sheet's code name and tab colour whichever one it was loaded from.
+/// Fills the colour fields of `out` from the typed tab colour.
+void ApplyTabColor(const ColorSpec& spec, WorksheetProperties& out) {
+  switch (spec.kind) {
+    case ColorSpec::Kind::kRgb:
+      out.color_type = 2U;
+      out.color_index = 0U;
+      out.color_argb = spec.rgb;
+      break;
+    case ColorSpec::Kind::kTheme:
+      out.color_type = 3U;
+      out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(spec.theme, 0xFFU));
+      out.color_tint = encode_brt_tint(spec.tint);
+      break;
+    case ColorSpec::Kind::kIndexed:
+      out.color_type = 1U;
+      out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(spec.indexed, 0xFFU));
+      break;
+    case ColorSpec::Kind::kAuto:
+    case ColorSpec::Kind::kNone:
+      break;
+  }
+}
+
+/// Reads the code name back out of the sheet's retained `<sheetPr>` fragment,
+/// the inverse of `decode_ws_prop`. The tab colour comes from the typed field.
 ///
 /// Members `<sheetPr>` can carry that `BrtWsProp` has no field for --
 /// `<outlinePr>`, `<pageSetUpPr>`, `filterMode` -- stay in the fragment
@@ -109,27 +129,6 @@ WorksheetProperties ParseSheetProperties(std::string_view raw) {
     return out;
   }
   out.code_name = sheet_pr.attribute("codeName").value();
-  const pugi::xml_node tab = sheet_pr.child("tabColor");
-  if (!tab) {
-    return out;
-  }
-  if (const pugi::xml_attribute rgb = tab.attribute("rgb")) {
-    out.color_type = 2U;
-    out.color_index = 0U;
-    out.color_argb = static_cast<std::uint32_t>(std::strtoul(rgb.value(), nullptr, 16));
-    return out;
-  }
-  if (const pugi::xml_attribute theme = tab.attribute("theme")) {
-    out.color_type = 3U;
-    out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(theme.as_uint(0U), 0xFFU));
-    out.color_tint = encode_brt_tint(tab.attribute("tint").as_double(0.0));
-    return out;
-  }
-  if (const pugi::xml_attribute indexed = tab.attribute("indexed")) {
-    out.color_type = 1U;
-    out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(indexed.as_uint(0U), 0xFFU));
-    return out;
-  }
   return out;
 }
 
@@ -205,7 +204,13 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
     }
   }
   if (!sheet_pr.empty()) {
-    sheet.mutable_print_settings().sheet_pr_xml = std::move(sheet_pr);
+    SheetPrintSettings& print = sheet.mutable_print_settings();
+    print.sheet_pr_xml = std::move(sheet_pr);
+    // The automatic tab emits no `<tabColor>`, so the typed field is absent too.
+    print.tab_color = body.empty() ? ColorSpec{} : tab;
+    if (print.tab_color.kind == ColorSpec::Kind::kRgb) {
+      print.tab_color.rgb = argb;
+    }
   }
 
   return flags_or.value() == kDefaultWsPropFlags && flags2_or.value() == kDefaultWsPropFlags2 &&
@@ -215,7 +220,8 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
 /// Emits the worksheet-properties record which starts the mandatory worksheet
 /// prefix. `BrtWsDim` must follow this record before the view collection.
 void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
-  const WorksheetProperties properties_model = ParseSheetProperties(sheet.print_settings().sheet_pr_xml);
+  WorksheetProperties properties_model = ParseSheetProperties(sheet.print_settings().sheet_pr_xml);
+  ApplyTabColor(sheet.print_settings().tab_color, properties_model);
   std::vector<std::uint8_t> properties;
   emit_u16(properties, kDefaultWsPropFlags);  // page breaks, publish, outline defaults
   emit_u8(properties, kDefaultWsPropFlags2);  // evaluate conditional formatting

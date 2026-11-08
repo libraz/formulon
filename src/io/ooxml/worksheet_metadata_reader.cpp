@@ -180,6 +180,7 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
     // populated additionally when `<pageSetUpPr>` is present.
     print.sheet_pr_xml = raw_xml(sheet_pr);
     print.page_setup.fit_to_page = read_fit_to_page(sheet_pr);
+    print.tab_color = read_tab_color(sheet_pr);
   }
   if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
     print.page_margins_xml = raw_xml(page_margins);

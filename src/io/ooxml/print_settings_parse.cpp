@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/color_spec_xml.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
@@ -117,6 +118,15 @@ bool read_fit_to_page(const pugi::xml_node& sheet_pr) {
   return page_setup_pr.attribute("fitToPage").as_bool(false);
 }
 
+ColorSpec read_tab_color(const pugi::xml_node& sheet_pr) {
+  const pugi::xml_node tab = sheet_pr.child("tabColor");
+  ColorSpec color = read_color_spec(tab);
+  if (color.kind == ColorSpec::Kind::kAuto && !tab.attribute("auto").as_bool(false)) {
+    color = ColorSpec{};
+  }
+  return color;
+}
+
 void refresh_structured_views(std::string_view element_name, std::string_view fragment, SheetPrintSettings& settings) {
   // `printOptions` and `headerFooter` have no structured projection; their
   // raw fragment is the whole model, so there is nothing to re-derive.
@@ -143,6 +153,7 @@ void refresh_structured_views(std::string_view element_name, std::string_view fr
     settings.page_margins = PageMargins{};
   } else {
     settings.page_setup.fit_to_page = defaults.fit_to_page;
+    settings.tab_color = ColorSpec{};
   }
 
   if (fragment.empty()) {
@@ -163,6 +174,7 @@ void refresh_structured_views(std::string_view element_name, std::string_view fr
     apply_structured_page_margins(root, settings.page_margins);
   } else {
     settings.page_setup.fit_to_page = read_fit_to_page(root);
+    settings.tab_color = read_tab_color(root);
   }
 }
 

@@ -323,6 +323,7 @@ void set_tab_color(SheetPrintSettings& print, const formulon::ColorSpec& color) 
     }
   }
   print.sheet_pr_xml = (root.first_child() || root.first_attribute()) ? raw_xml(root) : std::string();
+  print.tab_color = color;
 }
 
 /// Loads a stored print fragment for a getter; false when it is absent.
@@ -900,28 +901,7 @@ extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  formulon::ColorSpec color;
-  pugi::xml_document doc;
-  if (load_fragment(doc, wb->workbook().sheet(sheet_index).print_settings().sheet_pr_xml)) {
-    const pugi::xml_node node = doc.first_child().child("tabColor");
-    if (const pugi::xml_attribute rgb = node.attribute("rgb")) {
-      color.kind = formulon::ColorSpec::Kind::kRgb;
-      color.rgb = static_cast<std::uint32_t>(std::strtoul(rgb.value(), nullptr, 16));
-      // A 6-digit value is RRGGBB with full alpha.
-      if (std::string_view(rgb.value()).size() <= 6U) {
-        color.rgb |= 0xFF000000U;
-      }
-    } else if (node.attribute("theme")) {
-      color.kind = formulon::ColorSpec::Kind::kTheme;
-      color.theme = node.attribute("theme").as_uint();
-      color.tint = node.attribute("tint").as_double(0.0);
-    } else if (node.attribute("indexed")) {
-      color.kind = formulon::ColorSpec::Kind::kIndexed;
-      color.indexed = node.attribute("indexed").as_uint();
-    } else if (node.attribute("auto").as_bool(false)) {
-      color.kind = formulon::ColorSpec::Kind::kAuto;
-    }
-  }
+  const formulon::ColorSpec& color = wb->workbook().sheet(sheet_index).print_settings().tab_color;
   *out = formulon::c_api::parts::color_spec_to_c(color);
   return 0;
 }

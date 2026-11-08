@@ -805,6 +805,22 @@ TEST(XlsbWorksheetProperties, TabColorAndCodeNameReachTheSheetPrFragment) {
   EXPECT_EQ(result.value().dropped_record_count, 0U);
 }
 
+TEST(XlsbWorksheetProperties, TabColorFieldIsPopulatedAndAutomaticIsAbsent) {
+  const std::vector<std::uint8_t> archive = BuildPackage(SheetBinFramed(
+      WsPropPayload(kDefaultWsPropFlags, /*color_type=*/2U, /*color_index=*/0U, 0xFFFF0000U, "AlphaCode")));
+  auto result = io::xlsb::read_xlsb(test::span_of(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  const ColorSpec& tab = result.value().workbook.sheet(0).print_settings().tab_color;
+  EXPECT_EQ(tab.kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(tab.rgb, 0xFFFF0000U);
+
+  const std::vector<std::uint8_t> plain =
+      BuildPackage(SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, "Code")));
+  auto plain_result = io::xlsb::read_xlsb(test::span_of(plain));
+  ASSERT_TRUE(static_cast<bool>(plain_result)) << plain_result.error().message;
+  EXPECT_EQ(plain_result.value().workbook.sheet(0).print_settings().tab_color.kind, ColorSpec::Kind::kNone);
+}
+
 TEST(XlsbWorksheetProperties, AnAutomaticTabWithNoCodeNameLeavesNoFragment) {
   // An `.xlsx` sheet with nothing to say writes no `<sheetPr>` at all, so
   // neither may the binary path -- otherwise the same workbook answers

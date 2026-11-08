@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "styles.h"
+
 namespace formulon {
 
 /// Layout overrides for a contiguous column span.
@@ -232,6 +234,10 @@ struct SheetPrintSettings {
   std::string header_footer_xml;  ///< Raw `<headerFooter>...</headerFooter>` (odd/even/first page strings).
   std::string printer_settings_rid;
   std::string printer_settings_path;  ///< Package path, e.g. `xl/printerSettings/printerSettings1.bin`.
+
+  /// Structured view of `<sheetPr><tabColor>`; `kNone` when absent. Kept in
+  /// step with `sheet_pr_xml` by every writer of either.
+  ColorSpec tab_color;
 
   PageSetup page_setup;      ///< Structured view of `<pageSetup>` + `<pageSetUpPr>`.
   PageMargins page_margins;  ///< Structured view of `<pageMargins>`.

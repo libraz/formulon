@@ -117,6 +117,45 @@ TEST(FormulonCApiTabColor, ReadsAnExistingSixDigitRgb) {
   EXPECT_EQ(got.rgb, 0xFF336699U);
 }
 
+TEST(FormulonCApiTabColor, SetSheetPrXmlWithAndWithoutTabColorSetsAndClears) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr><tabColor theme=\"5\" tint=\"0.5\"/></sheetPr>"), 0);
+  fm_color_spec_t got = GetColor(wb.handle);
+  EXPECT_EQ(got.kind, kFmColorTheme);
+  EXPECT_EQ(got.theme, 5U);
+  EXPECT_DOUBLE_EQ(got.tint, 0.5);
+  ASSERT_EQ(fm_sheet_set_sheet_pr_xml(wb.handle, 0, "<sheetPr codeName=\"S1\"/>"), 0);
+  EXPECT_EQ(GetColor(wb.handle).kind, kFmColorNone);
+}
+
+TEST(FormulonCApiTabColor, SurvivesSaveLoadInBothContainersAndCopySheet) {
+  for (const int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    fm_color_spec_t color{};
+    color.kind = kFmColorRgb;
+    color.rgb = 0xFF1A2B3CU;
+    ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &color), 0);
+    uint8_t* bytes = nullptr;
+    size_t len = 0;
+    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &bytes, &len), 0);
+    WorkbookGuard loaded;
+    ASSERT_EQ(fm_workbook_load(bytes, len, &loaded.handle), 0);
+    fm_buffer_destroy(bytes);
+    const fm_color_spec_t got = GetColor(loaded.handle);
+    EXPECT_EQ(got.kind, kFmColorRgb);
+    EXPECT_EQ(got.rgb, 0xFF1A2B3CU);
+
+    size_t copy_index = 0;
+    ASSERT_EQ(fm_workbook_copy_sheet(loaded.handle, 0, 1, "Copy", &copy_index), 0);
+    fm_color_spec_t copied{};
+    ASSERT_EQ(fm_sheet_get_tab_color(loaded.handle, copy_index, &copied), 0);
+    EXPECT_EQ(copied.kind, kFmColorRgb);
+    EXPECT_EQ(copied.rgb, 0xFF1A2B3CU);
+  }
+}
+
 TEST(FormulonCApiTabColor, RejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
