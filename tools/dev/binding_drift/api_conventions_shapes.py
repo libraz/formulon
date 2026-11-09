@@ -17,7 +17,6 @@ import re
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
 from .api_conventions import (
-    _COMMENT_RE,
     _HEADER_DEFINE_RE,
     MEANINGLESS_SUFFIXES,
     Context,
@@ -54,7 +53,7 @@ from .api_conventions_bindings import (
     handle_in_tree,
     surfaces,
 )
-from .surface_files import NPM_COMMON_MJS, PYTHON_SHEET, REPO_ROOT
+from .surface_files import COMMENT_RE, NPM_COMMON_MJS, PYTHON_SHEET, REPO_ROOT
 
 # Arguments that address something rather than carry a value; they stay positional (R7.opts) and are not the
 # value argument of a setter (R18).
@@ -1023,7 +1022,7 @@ def _norm_member(name: str) -> str:
 def c_enum_members(ctx: Context) -> Dict[str, Dict[str, int]]:
     """C enum typedef -> normalized member name (common prefix removed) -> value."""
     out: Dict[str, Dict[str, int]] = {}
-    header = _COMMENT_RE.sub(" ", ctx.header)
+    header = COMMENT_RE.sub(" ", ctx.header)
     for match in re.finditer(r"typedef\s+enum\s*\{([^}]*)\}\s*(\w+)\s*;", header):
         names: List[str] = []
         values: List[Optional[int]] = []

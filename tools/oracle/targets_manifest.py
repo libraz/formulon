@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as _dt
 import platform
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -26,6 +27,39 @@ def _load_targets(path: Path) -> Dict[str, Any]:
     if not isinstance(targets, dict) or not targets:
         raise RuntimeError(f"{path} has no `targets:` mapping")
     return doc
+
+
+def utc_timestamp() -> str:
+    """Returns the current UTC time as ``YYYY-MM-DDTHH:MM:SSZ``."""
+
+    return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def track_primary(doc: Dict[str, Any], track: str) -> Optional[str]:
+    """Returns the primary target `tracks.<track>` declares, or None."""
+
+    tracks = doc.get("tracks")
+    record = tracks.get(track) if isinstance(tracks, dict) else None
+    primary = record.get("primary") if isinstance(record, dict) else None
+    return primary if isinstance(primary, str) and primary else None
+
+
+def track_variants(doc: Dict[str, Any], track: str) -> List[str]:
+    """Returns the variant target names `tracks.<track>` lists."""
+
+    tracks = doc.get("tracks")
+    record = tracks.get(track) if isinstance(tracks, dict) else None
+    variants = record.get("variants") if isinstance(record, dict) else None
+    return [str(name) for name in variants] if isinstance(variants, list) else []
+
+
+def target_root(repo_root: Path, name: str, record: Dict[str, Any]) -> Path:
+    """Returns the target directory containing its track directories."""
+
+    output = record.get("output_dir")
+    if isinstance(output, str) and output:
+        return repo_root / Path(output).parent
+    return repo_root / "tests" / "oracle" / "targets" / name
 
 
 def _runs_on_current(target: Dict[str, Any]) -> bool:

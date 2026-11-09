@@ -9,6 +9,7 @@ from .api_conventions import LEDGER_PATH, handle_class_names, load_ledger
 from .c_header import _c_struct_fields
 from .surface_files import (
     CAPI_HEADER,
+    COMMENT_RE,
     NODE_DTS,
     PYTHON_SHEET,
     PYTHON_WORKBOOK,
@@ -47,7 +48,6 @@ _DTS_SURFACE_ONLY_TYPES: set = set()
 # difference that should not exist.
 _DTS_RETURN_TYPE_EXEMPT_METHODS: dict[str, str] = {}
 
-_TS_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
 _TS_MEMBER_KEY_RE = re.compile(r"(?:readonly\s+)?([A-Za-z_$][A-Za-z0-9_$]*)")
 
 
@@ -60,7 +60,7 @@ def _ts_member_declarations(body: str) -> dict[str, List[str]]:
     compiles against rather than its formatting. Overloads keep one entry
     each, sorted.
     """
-    text = _TS_COMMENT_RE.sub("", body)
+    text = COMMENT_RE.sub("", body)
     out: dict[str, List[str]] = {}
     depth = 0
     current: List[str] = []

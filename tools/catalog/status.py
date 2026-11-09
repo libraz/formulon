@@ -23,11 +23,12 @@ Stdlib only. Works on CPython 3.8+.
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
+
+from _ansi import bold, green, red, yellow
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = REPO_ROOT / "tools" / "catalog" / "functions.txt"
@@ -56,40 +57,6 @@ LAZY_ENTRY_RE = re.compile(r'\{\s*"([A-Z_][A-Z0-9_.]*)"\s*,\s*&eval_')
 SPECIAL_FORMS_BLOCK_RE = re.compile(r"kSpecialForms\s*\[\s*\]\s*=\s*\{(.*?)\n\s*\};", re.DOTALL)
 SPECIAL_FORMS_NAME_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,')
 C_API_AVAILABILITY_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*FM_FUNCTION_AVAILABILITY_([A-Z_]+)\s*\}')
-
-
-# ---- ANSI helpers --------------------------------------------------------
-
-
-def _supports_color() -> bool:
-    if os.environ.get("NO_COLOR"):
-        return False
-    return sys.stdout.isatty()
-
-
-_ANSI = _supports_color()
-
-
-def _c(code: str, text: str) -> str:
-    if not _ANSI:
-        return text
-    return f"\033[{code}m{text}\033[0m"
-
-
-def green(s: str) -> str:
-    return _c("32", s)
-
-
-def red(s: str) -> str:
-    return _c("31", s)
-
-
-def yellow(s: str) -> str:
-    return _c("33", s)
-
-
-def bold(s: str) -> str:
-    return _c("1", s)
 
 
 # ---- Catalog parsing -----------------------------------------------------

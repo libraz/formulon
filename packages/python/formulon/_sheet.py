@@ -764,8 +764,6 @@ CellValueInput = Union[
     None, bool, int, float, decimal.Decimal, str, ExcelError, Value, datetime.date, datetime.datetime, datetime.time
 ]
 
-# `fm_tristate_t` TRUE: reads return FALSE (1) or TRUE (2), never DEFAULT.
-_TRISTATE_TRUE = 2
 _LAST_ROW = 1048575
 _LAST_COL = 16383
 # The built-in number format each en-US date code a date write gives a General cell names.
@@ -3243,10 +3241,10 @@ class Sheet(_NoCopy):
             type=d["type"],
             operator=d["op"],
             error_style=d["error_style"],
-            allow_blank=d["allow_blank"] == _TRISTATE_TRUE,
-            show_input_message=d["show_input_message"] == _TRISTATE_TRUE,
-            show_error_message=d["show_error_message"] == _TRISTATE_TRUE,
-            show_in_cell_dropdown=d["show_in_cell_dropdown"] == _TRISTATE_TRUE,
+            allow_blank=d["allow_blank"] == S.TRISTATE_TRUE,
+            show_input_message=d["show_input_message"] == S.TRISTATE_TRUE,
+            show_error_message=d["show_error_message"] == S.TRISTATE_TRUE,
+            show_in_cell_dropdown=d["show_in_cell_dropdown"] == S.TRISTATE_TRUE,
             formula1=LIB.read_cstr(d["formula1"]) or None,
             formula2=LIB.read_cstr(d["formula2"]) or None,
             error_title=LIB.read_cstr(d["error_title"]) or None,
@@ -3458,7 +3456,7 @@ class Sheet(_NoCopy):
                 spin_count=d["spin_count"],
                 legacy_password_hash=LIB.read_cstr(d["legacy_password_hash"]) or None,
                 **{
-                    flag: d[flag] == 2 if flag in self._PROTECT_TRISTATE else d[flag] != 0
+                    flag: d[flag] == S.TRISTATE_TRUE if flag in self._PROTECT_TRISTATE else d[flag] != 0
                     for flag in S.SHEET_PROTECTION_ALLOW_FLAGS
                 },
             )
@@ -5449,7 +5447,7 @@ class Sheet(_NoCopy):
             for i in range(count):
                 _check(at_fn(h, _uint(sheet, "sheet_index", role="sheet"), _uint(i, "index", role="position"), ptr))
                 d = layout.unpack(LIB, ptr)
-                manual = d["manual"] == _TRISTATE_TRUE
+                manual = d["manual"] == S.TRISTATE_TRUE
                 out.append(record(**{key: d[key]}, first=d["first"], last=d["last"], manual=manual))
         return out
 
@@ -6099,7 +6097,7 @@ class Sheet(_NoCopy):
     def _decode_cfvo(ptr: int) -> CfValueObject:
         d = S.CFVO.unpack(LIB, ptr)
         return CfValueObject(
-            type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=d["gte"] == _TRISTATE_TRUE
+            type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=d["gte"] == S.TRISTATE_TRUE
         )
 
     @staticmethod

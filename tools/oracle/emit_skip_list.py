@@ -34,11 +34,13 @@ from typing import Dict
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import case_schema
     from tools.oracle.oracle_gen import _load_divergence_skips
+    from tools.oracle.targets_manifest import track_primary as _declared_track_primary
     from tools.oracle.workbook_oracle_gen import _load_targets, _workbook_primary
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import case_schema  # type: ignore
     from oracle_gen import _load_divergence_skips  # type: ignore
+    from targets_manifest import track_primary as _declared_track_primary  # type: ignore
     from workbook_oracle_gen import _load_targets, _workbook_primary  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -58,11 +60,9 @@ def track_primary(targets_doc: dict, track: str) -> str:
 
     if track == "workbook":
         return _workbook_primary(targets_doc)
-    tracks = targets_doc.get("tracks")
-    if isinstance(tracks, dict) and isinstance(tracks.get(track), dict):
-        primary = tracks[track].get("primary")
-        if isinstance(primary, str) and primary:
-            return primary
+    primary = _declared_track_primary(targets_doc, track)
+    if primary is not None:
+        return primary
     primary = targets_doc.get("primary")
     if isinstance(primary, str) and primary:
         return primary

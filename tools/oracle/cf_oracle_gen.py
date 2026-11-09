@@ -65,7 +65,6 @@ platform.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import hashlib
 import json
 import platform
@@ -76,18 +75,21 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:  # pragma: no cover - trivial fallback
     from tools.oracle.cf_visual_semantics import _ICON_SET_FORMULON_TO_OOXML, _cell_in_block, _compute_visual_matches
+    from tools.oracle.provenance import _M365_SENTINEL
+    from tools.oracle.targets_manifest import target_root, track_primary, track_variants, utc_timestamp
 except ImportError:  # pragma: no cover
     from cf_visual_semantics import (  # type: ignore
         _ICON_SET_FORMULON_TO_OOXML,
         _cell_in_block,
         _compute_visual_matches,
     )
+    from provenance import _M365_SENTINEL  # type: ignore
+    from targets_manifest import target_root, track_primary, track_variants, utc_timestamp  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_cf"
 DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden_cf"
 DEFAULT_TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
-_M365_SENTINEL = "ARRAYTOTEXT(1) == text '1'"
 
 
 def _load_targets(path: Path) -> Dict[str, Any]:
@@ -111,10 +113,8 @@ def _load_targets(path: Path) -> Dict[str, Any]:
 def _cf_primary(targets_doc: Dict[str, Any]) -> str:
     """Return the manifest-declared CF primary, failing closed."""
 
-    tracks = targets_doc.get("tracks")
-    cf_track = tracks.get("cf") if isinstance(tracks, dict) else None
-    primary = cf_track.get("primary") if isinstance(cf_track, dict) else None
-    if not isinstance(primary, str) or not primary:
+    primary = track_primary(targets_doc, "cf")
+    if primary is None:
         raise RuntimeError("targets.yaml: tracks.cf.primary is required")
     return primary
 
@@ -123,10 +123,7 @@ def _resolve_cf_target(targets_doc: Dict[str, Any], requested: Optional[str]) ->
     """Resolve and validate one CF target from the manifest."""
 
     primary = _cf_primary(targets_doc)
-    track = targets_doc.get("tracks", {}).get("cf", {})
-    names = [primary]
-    if isinstance(track, dict) and isinstance(track.get("variants"), list):
-        names.extend(str(name) for name in track["variants"])
+    names = [primary, *track_variants(targets_doc, "cf")]
     name = requested or primary
     if name not in names:
         raise RuntimeError(f"target {name!r} is not listed in tracks.cf")
@@ -147,17 +144,10 @@ def _resolve_cf_target(targets_doc: Dict[str, Any], requested: Optional[str]) ->
     return {"_name": name, **record}
 
 
-def _cf_golden_dir(targets_doc: Dict[str, Any], target: Dict[str, Any]) -> Path:
+def _cf_golden_dir(target: Dict[str, Any]) -> Path:
     """Return the CF output directory for a target."""
 
-    output = target.get("output_dir")
-    if isinstance(output, str) and output:
-        return REPO_ROOT / Path(output).parent / "golden_cf"
-    return REPO_ROOT / "tests" / "oracle" / "targets" / target["_name"] / "golden_cf"
-
-
-def _iso_now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return target_root(REPO_ROOT, target["_name"], target) / "golden_cf"
 
 
 def _ensure_darwin() -> None:
@@ -1011,7 +1001,7 @@ def main() -> int:
         return 2
 
     cases_dir: Path = args.cases_dir
-    golden_dir: Path = args.golden_dir or _cf_golden_dir(targets_doc, target)
+    golden_dir: Path = args.golden_dir or _cf_golden_dir(target)
 
     files = sorted(cases_dir.glob("*.case.json"))
     if args.suite:
@@ -1024,7 +1014,7 @@ def main() -> int:
     required_suites = sorted(path.name.removesuffix(".case.json") for path in cases_dir.glob("*.case.json"))
     captured_suites: List[str] = []
     suite_counts: Dict[str, int] = {}
-    generated_at = _iso_now()
+    generated_at = utc_timestamp()
     capture_id = f"{target['_name']}:{environment['excel_version']}:{declared_locale}:{generated_at}"
     for case_path in files:
         suite = case_path.name.removesuffix(".case.json")

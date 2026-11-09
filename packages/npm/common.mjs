@@ -4973,9 +4973,9 @@ function withMessage(error, message) {
  * `error` as the call `where` (`Class.method`) words it: a binding-layer message that leads with another call is
  * rewritten to lead with `where`, and an engine body `<c_path> <rest>` (an InvalidArgument or out-of-range
  * `FormulonError` that leads with no call) to `where`, the public path of `c_path`, and `rest`. Anything else
- * passes as it is. `args` are the arguments of the call.
+ * passes as it is.
  */
-function relabelArgumentError(error, where, _args) {
+function relabelArgumentError(error, where) {
   if (calledBackErrors.has(error)) return error;
   if (typeof error?.message !== 'string') return error;
   const { message } = error;
@@ -5008,7 +5008,7 @@ function installErrorLabels(proto, owner, accept = () => true) {
         try {
           return inner.apply(this, args);
         } catch (e) {
-          throw relabelArgumentError(e, `${classOf(this)}.${name}`, args);
+          throw relabelArgumentError(e, `${classOf(this)}.${name}`);
         }
       }),
     );

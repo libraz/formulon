@@ -41,7 +41,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import hashlib
 import json
 import os
@@ -56,12 +55,20 @@ from typing import Any, Dict, List, Optional, Tuple
 try:  # pragma: no cover - trivial fallback
     from tools.oracle.drivers import select_driver
     from tools.oracle.oracle_gen import _load_divergence_reprobes, _load_divergence_skips
-    from tools.oracle.targets_manifest import _load_targets
+    from tools.oracle.provenance import _M365_SENTINEL
+    from tools.oracle.targets_manifest import _load_targets, target_root, track_primary, track_variants, utc_timestamp
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from drivers import select_driver  # type: ignore
     from oracle_gen import _load_divergence_reprobes, _load_divergence_skips  # type: ignore
-    from targets_manifest import _load_targets  # type: ignore
+    from provenance import _M365_SENTINEL  # type: ignore
+    from targets_manifest import (  # type: ignore
+        _load_targets,
+        target_root,
+        track_primary,
+        track_variants,
+        utc_timestamp,
+    )
 try:
     from tools.oracle import print_roundtrip, workbook_case_schema
 except ImportError:  # pragma: no cover
@@ -118,28 +125,16 @@ def staging_dir_for(track: str, target_name: str) -> Path:
 def _workbook_primary(targets_doc: Dict[str, Any]) -> str:
     """Return the manifest-declared workbook primary, failing closed."""
 
-    tracks = targets_doc.get("tracks")
-    if isinstance(tracks, dict):
-        workbook = tracks.get("workbook")
-        if isinstance(workbook, dict):
-            primary = workbook.get("primary")
-            if isinstance(primary, str) and primary:
-                return primary
-    raise RuntimeError("targets.yaml: tracks.workbook.primary is required")
+    primary = track_primary(targets_doc, "workbook")
+    if primary is None:
+        raise RuntimeError("targets.yaml: tracks.workbook.primary is required")
+    return primary
 
 
 def _workbook_track_targets(targets_doc: Dict[str, Any]) -> List[str]:
     """Returns the workbook track's `[primary, *variants]` target names."""
 
-    names: List[str] = [_workbook_primary(targets_doc)]
-    tracks = targets_doc.get("tracks")
-    if isinstance(tracks, dict):
-        workbook = tracks.get("workbook")
-        if isinstance(workbook, dict):
-            variants = workbook.get("variants")
-            if isinstance(variants, list):
-                names.extend(str(v) for v in variants)
-    return names
+    return [_workbook_primary(targets_doc), *track_variants(targets_doc, "workbook")]
 
 
 def _autodetect_target(targets_doc: Dict[str, Any]) -> str:
@@ -210,17 +205,14 @@ def partial_capture_refusal(
     )
 
 
-def _golden_dir_for_target(targets_doc: Dict[str, Any], target: Dict[str, Any]) -> Path:
+def _golden_dir_for_target(target: Dict[str, Any]) -> Path:
     """Returns the golden_wb directory for `target`.
 
     Every target writes its workbook track beside its formula track under
     `tests/oracle/targets/<target>/golden_wb/`.
     """
 
-    output = target.get("output_dir")
-    if isinstance(output, str) and output:
-        return REPO_ROOT / Path(output).parent / "golden_wb"
-    return REPO_ROOT / "tests" / "oracle" / "targets" / target["_name"] / "golden_wb"
+    return target_root(REPO_ROOT, target["_name"], target) / "golden_wb"
 
 
 def _resolve_skips(
@@ -438,7 +430,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 2
         golden_dir = args.golden_dir
     else:
-        golden_dir = _golden_dir_for_target(targets_doc, target)
+        golden_dir = _golden_dir_for_target(target)
     refusal = partial_capture_refusal(target["_name"], golden_dir, args.suite, args.allow_partial)
     if refusal:
         print(f"workbook-oracle-gen: {refusal}", file=sys.stderr)
@@ -481,7 +473,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"workbook-oracle-gen: {exc}", file=sys.stderr)
         return 2
 
-    iso_now = _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    iso_now = utc_timestamp()
 
     with oracle_cm as oracle:
         # Sentinel: refuse to start when Excel is pre-M365. Mirrors the
@@ -614,7 +606,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "all_suites_same_capture": True,
                 "product": env.excel_version,
                 "locale": env.excel_locale,
-                "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+                "m365_sentinel": _M365_SENTINEL,
                 "required_suites": required_suites,
                 "captured_suites": captured_suites,
                 "suite_inventory": inventory,

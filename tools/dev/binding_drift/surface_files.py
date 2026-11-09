@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import List, Set
@@ -47,6 +48,9 @@ PYTHON_STRUCTS = PYTHON_PKG_DIR / "_structs.py"
 # is visible in the output and can never be read as "checked and clean" -- a
 # guard that quietly passes when its input is missing is not a guard.
 _SKIPPED: List[str] = []
+
+# C-style block and line comments.
+COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 
 
 def _read(path: Path) -> str:

@@ -22,7 +22,6 @@ refuses to start on any other platform.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import json
 import sys
 import time
@@ -38,7 +37,7 @@ try:  # pragma: no cover - trivial fallback
     from tools.oracle.drivers import select_driver
     from tools.oracle.drivers.base import CaseResult, EnvironmentInfo
     from tools.oracle.drivers.base import excel_version_tuple as _version_tuple
-    from tools.oracle.targets_manifest import _load_targets
+    from tools.oracle.targets_manifest import _load_targets, utc_timestamp
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import case_schema  # type: ignore
@@ -46,7 +45,7 @@ except ImportError:  # pragma: no cover
     from drivers import select_driver  # type: ignore
     from drivers.base import CaseResult, EnvironmentInfo  # type: ignore
     from drivers.base import excel_version_tuple as _version_tuple  # type: ignore
-    from targets_manifest import _load_targets  # type: ignore
+    from targets_manifest import _load_targets, utc_timestamp  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -842,7 +841,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"oracle-gen: refreshed metadata in {golden_path}")
         return 0
 
-    iso_now = _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    iso_now = utc_timestamp()
 
     # Driver factory errors (wrong host OS, missing config) are fatal --
     # we'd rather refuse to start than dump a confusing traceback halfway

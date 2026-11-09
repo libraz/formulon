@@ -56,6 +56,7 @@ from .ts_decl import (
     _js_common_namespaces,
     _js_common_wired_function_source,
     _js_exported_function_source,
+    _optional_interface_body,
     _parse_js_constants,
 )
 
@@ -93,12 +94,6 @@ NODE_ADDON_INTERNAL_EXPORTS = {"__setErrorClass"}
 ENTRY_INTERFACE = "Formulon"
 
 _READONLY_FIELD_RE = re.compile(r"^\s*readonly\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*:", re.MULTILINE)
-
-
-def _optional_interface_body(text: str, name: str) -> str:
-    """The body of `export interface <name>`, or "" when the file does not declare it."""
-    match = re.search(r"export interface %s(?:\s+extends\s+[^{]+?)?\s*\{" % re.escape(name), text)
-    return _find_interface_body(text, name, Path(name)) if match else ""
 
 
 def _ledger() -> Ledger:

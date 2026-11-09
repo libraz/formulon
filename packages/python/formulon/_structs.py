@@ -422,6 +422,11 @@ DATA_VALIDATION_PATCH = Struct(
     ],
 )
 
+# ``fm_tristate_t`` values.
+TRISTATE_DEFAULT = 0
+TRISTATE_FALSE = 1
+TRISTATE_TRUE = 2
+
 # The ``allow_*`` flags of ``fm_sheet_protection_t`` in field order. The two
 # select flags are ``fm_tristate_t``; the others are 0 / 1.
 SHEET_PROTECTION_ALLOW_FLAGS = (

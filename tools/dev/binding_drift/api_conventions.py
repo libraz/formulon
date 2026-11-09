@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 from .c_header import _C_FUNCTION_DECL_RE, _C_STRUCT_RE, _split_c_params
-from .surface_files import CAPI_HEADER, REPO_ROOT
+from .surface_files import CAPI_HEADER, COMMENT_RE, REPO_ROOT
 
 BASELINE_DIR = Path(__file__).resolve().parents[1] / "api_convention_baseline"
 PENDING_DIR_NAME = "pending"
@@ -540,7 +540,6 @@ class CTypedef(NamedTuple):
     line: int
 
 
-_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 _ENUM_TYPEDEF_RE = re.compile(r"typedef\s+enum\s*\{[^}]*\}\s*([A-Za-z_][A-Za-z0-9_]*)\s*;")
 _OPAQUE_TYPEDEF_RE = re.compile(r"typedef\s+struct\s+[A-Za-z_][A-Za-z0-9_]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*;")
 _SCALAR_TYPEDEF_RE = re.compile(r"typedef\s+(?:u?int(?:8|16|32|64)_t|size_t|double)\s+([A-Za-z_][A-Za-z0-9_]*)\s*;")
@@ -559,7 +558,7 @@ def _parse_param(text: str) -> Optional[CParam]:
 
 
 def _struct_fields(body: str) -> Tuple[CParam, ...]:
-    body = _UNION_CLOSE_RE.sub(";", _UNION_OPEN_RE.sub("", _COMMENT_RE.sub(" ", body)))
+    body = _UNION_CLOSE_RE.sub(";", _UNION_OPEN_RE.sub("", COMMENT_RE.sub(" ", body)))
     fields: List[CParam] = []
     for declaration in body.split(";"):
         declaration = " ".join(declaration.split())
@@ -1278,7 +1277,6 @@ _PROCESS_PHRASES = (
     ("FIXME", re.compile(r"\bFIXME\b")),
     ("temporar", re.compile(r"\btemporar", re.I)),
 )
-_HEADER_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 _HEADER_REF_RE = re.compile(r"(?<![\w])(fm_[a-z0-9_]*[a-z0-9_])(\*?)")
 _STRUCT_TAG_RE = re.compile(r"\b(?:struct|enum|union)\s+(fm_[a-z0-9_]+)")
 
@@ -1294,7 +1292,7 @@ def _rule_header_references(ctx: Context) -> Iterable[Violation]:
     declarations = sorted((fn.line, fn.name) for fn in ctx.functions)
     declarations += sorted((t.line, t.name) for t in ctx.typedefs)
     declarations.sort()
-    for match in _HEADER_COMMENT_RE.finditer(ctx.header):
+    for match in COMMENT_RE.finditer(ctx.header):
         text = match.group(0)
         line = _line_of(ctx.header, match.start())
         for token, star in _HEADER_REF_RE.findall(text):

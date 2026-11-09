@@ -36,6 +36,12 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+try:  # pragma: no cover - trivial fallback
+    from tools.oracle.targets_manifest import target_root as _target_root
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from targets_manifest import target_root as _target_root  # type: ignore
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGETS = Path(__file__).resolve().parent / "targets.yaml"
 _VALID_STATUSES = {"primary", "scaffolded", "wanted"}
@@ -67,15 +73,6 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
 def _record_status(record: Mapping[str, Any]) -> str:
     status = record.get("status")
     return status if isinstance(status, str) else ""
-
-
-def _target_root(repo_root: Path, target: str, record: Mapping[str, Any]) -> Path:
-    """Return the target directory containing its track directories."""
-
-    output = record.get("output_dir")
-    if isinstance(output, str) and output:
-        return repo_root / Path(output).parent
-    return repo_root / "tests" / "oracle" / "targets" / target
 
 
 def _provenance_path(repo_root: Path, target: str, record: Mapping[str, Any]) -> Path:

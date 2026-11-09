@@ -26,12 +26,13 @@ green without a hard dependency.
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
+
+from _ansi import bold, dim, green, red, yellow
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BEHAVIORS_PATH = REPO_ROOT / "tools" / "catalog" / "behaviors.yaml"
@@ -39,44 +40,6 @@ CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 DIVERGENCE_PATH = REPO_ROOT / "tests" / "divergence.yaml"
 
 VALID_EXPECTED = ("impl", "diverged", "missing")
-
-
-# ---- ANSI helpers --------------------------------------------------------
-
-
-def _supports_color() -> bool:
-    if os.environ.get("NO_COLOR"):
-        return False
-    return sys.stdout.isatty()
-
-
-_ANSI = _supports_color()
-
-
-def _c(code: str, text: str) -> str:
-    if not _ANSI:
-        return text
-    return f"\033[{code}m{text}\033[0m"
-
-
-def green(s: str) -> str:
-    return _c("32", s)
-
-
-def red(s: str) -> str:
-    return _c("31", s)
-
-
-def yellow(s: str) -> str:
-    return _c("33", s)
-
-
-def bold(s: str) -> str:
-    return _c("1", s)
-
-
-def dim(s: str) -> str:
-    return _c("2", s)
 
 
 # ---- Data classes --------------------------------------------------------

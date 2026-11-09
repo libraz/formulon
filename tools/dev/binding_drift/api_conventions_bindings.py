@@ -39,7 +39,7 @@ from .api_conventions import (
     handle_name,
     rule,
 )
-from .surface_files import _SKIPPED, NODE_DTS, NPM_COMMON_MJS, PYTHON_PKG_DIR, REPO_ROOT, WASM_DTS
+from .surface_files import _SKIPPED, COMMENT_RE, NODE_DTS, NPM_COMMON_MJS, PYTHON_PKG_DIR, REPO_ROOT, WASM_DTS
 from .ts_decl import _extract_braced_block
 
 JS_SURFACES = ("wasm", "native")
@@ -119,7 +119,6 @@ class TsDecl(NamedTuple):
     members: Tuple[TsMember, ...]
 
 
-_TS_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 _TS_DECL_RE = re.compile(
     r"^export\s+(?:declare\s+)?(?:default\s+)?(interface|type|enum|const|function|class)\s+([A-Za-z_$][\w$]*)",
     re.M,
@@ -203,7 +202,7 @@ class JsSurface:
 
     def __init__(self, text: str) -> None:
         self.raw = text
-        text = _TS_COMMENT_RE.sub(" ", text)
+        text = COMMENT_RE.sub(" ", text)
         self.decls: Dict[str, TsDecl] = {}
         for match in _TS_DECL_RE.finditer(text):
             kind, name = match.groups()
@@ -2014,7 +2013,6 @@ _ENTRY_REQUIRED_EXPORTS = frozenset({"FormulonError", "createFormulon"})
 _ENTRY_SHARED_EXPORTS = frozenset({"ExcelError", "enumName", "mergeFunctionMetadata", "toNative"})
 _SCALAR_CONSTANT_RE = re.compile(r"=?\s*-?\d+")
 _MEMBERS_LIST_RE = re.compile(r"\bFORMULON_MEMBERS\s*=\s*(?:Object\.freeze\(\s*)?\[(.*?)\]", re.S)
-_MJS_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 
 
 def _is_constant(decl: TsDecl) -> bool:
@@ -2035,7 +2033,7 @@ def _formulon_members(ctx: Context) -> Optional[Set[str]]:
     match = _MEMBERS_LIST_RE.search(path.read_text(encoding="utf-8"))
     if match is None:
         return None
-    body = _MJS_COMMENT_RE.sub(" ", match.group(1))
+    body = COMMENT_RE.sub(" ", match.group(1))
     return {a or b for a, b in re.findall(r"'([^']*)'|\"([^\"]*)\"", body)}
 
 

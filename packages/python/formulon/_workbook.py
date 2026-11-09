@@ -5772,14 +5772,11 @@ def _cell_xf_fields(record: Union[CellXfInput, CellXf]) -> Dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
-_TRISTATE_FALSE = 1
-
-
 def _tristate_default(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
     """Map an optional flag to ``fm_tristate_t``: ``None`` is ``DEFAULT`` (Excel's default), then ``FALSE`` / ``TRUE``."""
     if flag is None:
-        return 0
-    return 2 if flag else 1
+        return S.TRISTATE_DEFAULT
+    return S.TRISTATE_TRUE if flag else S.TRISTATE_FALSE
 
 
 def _tristate(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
@@ -6418,7 +6415,7 @@ def _enum_or_none(cls, value: int):
 
 def _tri(value: int) -> Optional[bool]:
     """Decode a chart tri-state (absent / false / true)."""
-    return None if value == 0 else value == 2
+    return None if value == S.TRISTATE_DEFAULT else value == S.TRISTATE_TRUE
 
 
 def _opt_cstr(ptr: int) -> Optional[str]:
@@ -7224,8 +7221,8 @@ def _table_style_from(d: Dict[str, Any]) -> TableStyle:
         )
     return TableStyle(
         name=LIB.read_cstr(d["name"]),
-        pivot=d["pivot"] != _TRISTATE_FALSE,
-        table=d["table"] != _TRISTATE_FALSE,
+        pivot=d["pivot"] != S.TRISTATE_FALSE,
+        table=d["table"] != S.TRISTATE_FALSE,
         elements=list(elements),
     )
 

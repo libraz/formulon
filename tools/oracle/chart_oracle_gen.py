@@ -38,7 +38,6 @@ container, so files are staged there.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import hashlib
 import json
 import os
@@ -56,17 +55,22 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import chart_case_schema as schema
+    from tools.oracle.cf_oracle_gen import _assert_m365_or_abort
     from tools.oracle.oracle_gen import _load_divergence_reprobes, _load_divergence_skips
+    from tools.oracle.provenance import _M365_SENTINEL
+    from tools.oracle.targets_manifest import target_root, track_primary, utc_timestamp
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import chart_case_schema as schema  # type: ignore
+    from cf_oracle_gen import _assert_m365_or_abort  # type: ignore
     from oracle_gen import _load_divergence_reprobes, _load_divergence_skips  # type: ignore
+    from provenance import _M365_SENTINEL  # type: ignore
+    from targets_manifest import target_root, track_primary, utc_timestamp  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
 DEFAULT_DUMP = REPO_ROOT / "build" / "tests" / "oracle" / "chart_model_dump"
 CONTAINER_DIR = Path.home() / "Library/Containers/com.microsoft.Excel/Data/formulon_chart_oracle"
-_M365_SENTINEL = "ARRAYTOTEXT(1) == text '1'"
 _TRACK = "chart"
 
 _REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
@@ -107,38 +111,19 @@ class CaptureError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 
-def _iso_now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
 def _resolve_target(targets_file: Path) -> Dict[str, Any]:
     import yaml
 
     doc = yaml.safe_load(targets_file.read_text(encoding="utf-8")) or {}
-    track = (doc.get("tracks") or {}).get(_TRACK) or {}
-    name = track.get("primary")
+    name = track_primary(doc, _TRACK)
     record = (doc.get("targets") or {}).get(name)
-    if not isinstance(name, str) or not isinstance(record, dict):
+    if name is None or not isinstance(record, dict):
         raise CaptureError("targets.yaml: tracks.chart.primary must name a target")
     if record.get("status") not in {"primary", "scaffolded"}:
         raise CaptureError(f"chart target {name!r} has non-generating status {record.get('status')!r}")
     if record.get("driver") != "macos_excel" or platform.system() not in (record.get("runs_on") or []):
         raise CaptureError(f"chart target {name!r} needs the macos_excel driver on this host")
-    output = record.get("output_dir")
-    root = (
-        REPO_ROOT / Path(output).parent
-        if isinstance(output, str) and output
-        else REPO_ROOT / "tests/oracle/targets" / name
-    )
-    return {"_name": name, "_golden_dir": root / "golden_chart", **record}
-
-
-def _assert_m365() -> Dict[str, str]:
-    try:
-        from tools.oracle.cf_oracle_gen import _assert_m365_or_abort
-    except ImportError:  # pragma: no cover
-        from cf_oracle_gen import _assert_m365_or_abort  # type: ignore
-    return _assert_m365_or_abort()
+    return {"_name": name, "_golden_dir": target_root(REPO_ROOT, name, record) / "golden_chart", **record}
 
 
 # ---------------------------------------------------------------------------
@@ -652,12 +637,12 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         raise CaptureError(f"unknown suite(s): {unknown}")
     skips = _load_divergence_skips(args.divergence, target["_name"])
     reprobes = _load_divergence_reprobes(args.divergence, target["_name"])
-    environment = _assert_m365()
+    environment = _assert_m365_or_abort()
     if environment.get("excel_locale") and environment["excel_locale"] != target.get("locale"):
         raise CaptureError(f"Excel locale {environment['excel_locale']!r} != target locale {target.get('locale')!r}")
     golden_dir: Path = args.golden_dir or target["_golden_dir"]
     golden_dir.mkdir(parents=True, exist_ok=True)
-    generated_at = _iso_now()
+    generated_at = utc_timestamp()
     capture_id = f"{target['_name']}:{environment['excel_version']}:{target.get('locale')}:{generated_at}"
     excel = Excel()
     counts: Dict[str, int] = {}
