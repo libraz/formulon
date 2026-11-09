@@ -2255,6 +2255,30 @@ TEST(ChartEdit, NaAsBlankPatchWritesOnlyTheExtension) {
   }
 }
 
+// A non-element node left beside the removed extension must not keep an otherwise empty c:extLst alive.
+TEST(ChartEdit, NaAsBlankClearDropsExtLstHoldingOnlyNonElementNodes) {
+  Workbook wb = GridBook();
+  Insert(wb, K::kLine);
+  const Located c = Find(wb);
+  ChartDisplayPatch set;
+  set.na_as_blank = ChartPatchField<bool>::Set(true);
+  MustOk(set_chart_display(wb, c.sheet, c.id, set));
+  std::string xml = PartText(wb, c.path);
+  const std::size_t close = xml.find("</c:extLst></c:chart>");
+  ASSERT_NE(close, std::string::npos);
+  xml.insert(close, "<![CDATA[ ]]>");
+  ASSERT_TRUE(
+      static_cast<bool>(wb.replace_passthrough_part(c.path, std::vector<std::uint8_t>(xml.begin(), xml.end()))));
+  ASSERT_NE(PartText(wb, c.path).find("<![CDATA["), std::string::npos);
+
+  ChartDisplayPatch clear;
+  clear.na_as_blank = ChartPatchField<bool>::Clear();
+  MustOk(set_chart_display(wb, c.sheet, c.id, clear));
+  const std::string after = PartText(wb, c.path);
+  EXPECT_EQ(after.find("</c:extLst></c:chart>"), std::string::npos);
+  EXPECT_EQ(after.find("<![CDATA["), std::string::npos);
+}
+
 TEST(ChartEdit, DisplayKeepLeavesOtherElementsUntouched) {
   Workbook wb = GridBook();
   Insert(wb, K::kLine);

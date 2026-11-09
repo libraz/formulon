@@ -471,7 +471,7 @@ void patch_na_as_blank(xml_node chart, const ChartPatchField<bool>& field) {
   }
   if (ext) {
     ext_list.remove_child(ext);
-    if (!ext_list.first_child()) {
+    if (!io::first_element_child(ext_list)) {
       chart.remove_child(ext_list);
     }
   }
