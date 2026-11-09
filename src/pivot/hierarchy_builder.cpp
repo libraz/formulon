@@ -219,8 +219,7 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
     AxisHierarchyNode node;
     node.label = node_label(key, child);
     if (key.value.is_text()) {
-      text_storage.emplace_back(key.value.as_text());
-      node.identity = Value::text(text_storage.back());
+      node.identity = intern_text(text_storage, key.value.as_text());
     } else {
       node.identity = key.value;
     }

@@ -77,8 +77,7 @@ Value keep(const Value& value, PivotResult& result) {
   if (!value.is_text()) {
     return value;
   }
-  result.text_storage.emplace_back(value.as_text());
-  return Value::text(result.text_storage.back());
+  return intern_text(result.text_storage, value.as_text());
 }
 
 struct PathLess {

@@ -9,6 +9,7 @@
 
 #include "eval/collation.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_errors.h"
 #include "pivot/pivot_index.h"
 #include "utils/status_macros.h"
 #include "utils/utf8_length.h"
@@ -16,14 +17,6 @@
 
 namespace formulon::pivot {
 namespace {
-
-Error invalid(const char* message) {
-  return make_error(FormulonErrorCode::kInvalidArgument, message);
-}
-
-Error name_taken(const char* message, std::string context) {
-  return make_error(FormulonErrorCode::kAlreadyExists, message, std::move(context));
-}
 
 Expected<void, Error> ok() {
   return Expected<void, Error>::Ok();

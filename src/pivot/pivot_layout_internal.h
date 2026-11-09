@@ -104,14 +104,13 @@ struct LayoutPlan {
   std::size_t row_levels = 0;
   std::size_t col_levels = 0;
 
-  std::vector<AxisLeaf> row_leaves;
-  std::vector<AxisLeaf> col_leaves;
+  std::size_t row_leaf_count = 0;
+  std::size_t col_leaf_count = 0;
   std::vector<AxisEntry> row_entries;
   std::vector<AxisEntry> col_entries;
   std::size_t data_cols = 0;
 
   std::size_t row_header_cols = 0;
-  std::size_t header_rows = 0;
   /// Compact / tabular / outline with column fields: the row above the column
   /// levels holding the "Column Labels" caption or the level names.
   bool caption_row = false;
@@ -120,7 +119,6 @@ struct LayoutPlan {
   /// `gridDropZones` over a report with data fields and an empty row axis.
   bool grid_without_rows = false;
   bool emit_grand_totals_rows_strip = false;
-  bool emit_grand_totals_cols_strip = false;
   std::size_t total_strip_cols = 0;
   std::size_t total_strip_rows = 0;
   std::size_t page_rows = 0;
@@ -145,6 +143,8 @@ struct LayoutPlan {
 
 // Axis planning (pivot_layout_axis.cpp).
 std::vector<AxisLeaf> collect_axis_leaves(const std::vector<AxisHierarchyNode>& roots, std::size_t depth);
+/// The number of leaves `collect_axis_leaves` would return.
+std::size_t count_axis_leaves(const std::vector<AxisHierarchyNode>& roots, std::size_t depth);
 std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
                                                   const std::vector<std::uint32_t>& field_order);
 std::vector<const PivotField*> fields_for_axis(const PivotTable& table, const std::vector<std::uint32_t>& field_order);

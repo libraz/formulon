@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <numeric>
 #include <optional>
 #include <utility>
 #include <variant>
@@ -23,11 +22,6 @@
 
 namespace formulon::pivot {
 namespace {
-
-// A custom subtotal's aggregation, else the data field's own.
-Aggregation aggregation_for(const std::optional<Aggregation>& subtotal, const PivotDataField& df) {
-  return subtotal.value_or(df.aggregation);
-}
 
 // Maps a subtotal's leaf set (in current, post-filter leaf-position
 // space) to `buckets` coordinates via `original_of_position`.
@@ -220,8 +214,7 @@ Value displayed_group_value(const ValueFilterState& state, bool row_axis, const 
                             const RecordIndexView& records, std::size_t slot) {
   const PivotTable& table = state.table;
   const std::size_t cross_count = row_axis ? state.surviving_col_leaves.size() : state.surviving_row_leaves.size();
-  std::vector<std::size_t> cross(cross_count);
-  std::iota(cross.begin(), cross.end(), std::size_t{0});
+  const std::vector<std::size_t> cross = identity_indices(cross_count);
   const std::vector<bool>& calculated = state.plan.calculated_slots();
   std::vector<Value> slots(table.data_fields().size(), Value::blank());
   for (std::size_t j = 0; j < slots.size(); ++j) {
@@ -367,10 +360,8 @@ bool apply_value_filters(const PivotTable& table, const PivotCache& cache, const
   ValueFilterState state{
       table, cache, buckets, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets, plan, has_calculated_cells,
       {},    {}};
-  state.surviving_row_leaves.resize(row_leaf_count);
-  std::iota(state.surviving_row_leaves.begin(), state.surviving_row_leaves.end(), std::size_t{0});
-  state.surviving_col_leaves.resize(col_leaf_count);
-  std::iota(state.surviving_col_leaves.begin(), state.surviving_col_leaves.end(), std::size_t{0});
+  state.surviving_row_leaves = identity_indices(row_leaf_count);
+  state.surviving_col_leaves = identity_indices(col_leaf_count);
 
   // Each filter prunes what the previous ones left, in document order.
   if (!table.data_fields().empty()) {

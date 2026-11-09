@@ -39,6 +39,17 @@ void collect_axis_leaves_impl(const AxisHierarchyNode& node, std::vector<std::st
   path.pop_back();
 }
 
+std::size_t count_node_leaves(const AxisHierarchyNode& node) {
+  if (node.children.empty()) {
+    return 1;
+  }
+  std::size_t count = 0;
+  for (const AxisHierarchyNode& child : node.children) {
+    count += count_node_leaves(child);
+  }
+  return count;
+}
+
 }  // namespace
 
 std::vector<AxisLeaf> collect_axis_leaves(const std::vector<AxisHierarchyNode>& roots, std::size_t depth) {
@@ -52,6 +63,17 @@ std::vector<AxisLeaf> collect_axis_leaves(const std::vector<AxisHierarchyNode>& 
     collect_axis_leaves_impl(root, path, leaves);
   }
   return leaves;
+}
+
+std::size_t count_axis_leaves(const std::vector<AxisHierarchyNode>& roots, std::size_t depth) {
+  if (depth == 0) {
+    return 1;
+  }
+  std::size_t count = 0;
+  for (const AxisHierarchyNode& root : roots) {
+    count += count_node_leaves(root);
+  }
+  return count;
 }
 
 namespace {

@@ -17,6 +17,7 @@
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_errors.h"
 #include "pivot/pivot_formula_host.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -31,10 +32,6 @@ using namespace detail;
 
 namespace {
 
-Error invalid(std::string message, std::string_view context = {}) {
-  return make_error(FormulonErrorCode::kInvalidArgument, std::move(message), std::string(context));
-}
-
 // Same wording and context as the C API's collection-index check.
 Error out_of_range(std::string_view field, std::size_t index, std::size_t count) {
   const std::string i = std::to_string(index);
@@ -42,10 +39,6 @@ Error out_of_range(std::string_view field, std::size_t index, std::size_t count)
   return make_error(FormulonErrorCode::kIndexOutOfRange,
                     std::string(field) + " " + i + " is out of range (" + n + " items)",
                     std::string(field) + "=" + i + " count=" + n);
-}
-
-Error name_taken(std::string message, std::string_view name) {
-  return make_error(FormulonErrorCode::kAlreadyExists, std::move(message), std::string(name));
 }
 
 Error precondition(std::string message) {
@@ -258,13 +251,13 @@ Expected<std::size_t, Error> add_calculated_field(PivotCache& cache, const std::
   RETURN_IF_ERROR(check_name(name));
   for (const PivotCacheField& field : cache.fields()) {
     if (same_name(field.name, name)) {
-      return name_taken("calculated field name is already a field", name);
+      return name_taken("calculated field name is already a field", std::string(name));
     }
   }
   for (const PivotTable* table : tables) {
     for (const PivotField& field : table->fields()) {
       if (!field.custom_name.empty() && same_name(field.custom_name, name)) {
-        return name_taken("calculated field name is already a field", name);
+        return name_taken("calculated field name is already a field", std::string(name));
       }
     }
   }
@@ -396,7 +389,7 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
   RETURN_IF_ERROR(check_name(name));
   for (const Value& item : cache_field.shared_items) {
     if (same_name(display_string(item), name)) {
-      return name_taken("calculated item name is already an item", name);
+      return name_taken("calculated item name is already an item", std::string(name));
     }
   }
   std::string canonical;
@@ -404,8 +397,7 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
 
   PivotCacheField& field = cache.mutable_fields()[field_index];
   const auto item = static_cast<std::uint32_t>(field.shared_items.size());
-  cache.mutable_text_storage().emplace_back(name);
-  field.shared_items.push_back(Value::text(cache.mutable_text_storage().back()));
+  field.shared_items.push_back(intern_text(cache.mutable_text_storage(), name));
   field.shared_item_is_calculated.resize(item, false);
   field.shared_item_is_calculated.push_back(true);
 

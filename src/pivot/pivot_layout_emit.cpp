@@ -739,7 +739,6 @@ void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
   const PivotTable& table = plan.table;
   const PivotResult& result = plan.result;
   const std::vector<AxisEntry>& row_entries = plan.row_entries;
-  const std::vector<AxisLeaf>& col_leaves = plan.col_leaves;
   const std::uint32_t data_top = plan.data_top;
   const std::uint32_t total_left = plan.total_left;
   const std::size_t total_strip_cols = plan.total_strip_cols;
@@ -779,7 +778,7 @@ void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
       // all-numeric row sums, and an aggregate that cannot be summed
       // reports blank rather than leaving a hole in the total column.
       StripTotal strip;
-      for (std::size_t c_leaf = 0; c_leaf < col_leaves.size(); ++c_leaf) {
+      for (std::size_t c_leaf = 0; c_leaf < plan.col_leaf_count; ++c_leaf) {
         if (!strip.add(result.values[leaf][c_leaf][df])) {
           break;
         }
@@ -801,8 +800,8 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
   const PivotResult& result = plan.result;
   const std::vector<AxisEntry>& row_entries = plan.row_entries;
   const std::vector<AxisEntry>& col_entries = plan.col_entries;
-  const std::vector<AxisLeaf>& row_leaves = plan.row_leaves;
-  const std::vector<AxisLeaf>& col_leaves = plan.col_leaves;
+  const std::size_t row_leaf_count = plan.row_leaf_count;
+  const std::size_t col_leaf_count = plan.col_leaf_count;
   const std::uint32_t left = plan.left;
   const std::uint32_t data_top = plan.data_top;
   const std::uint32_t data_left = plan.data_left;
@@ -868,7 +867,7 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
         }
       }
       StripTotal strip;
-      for (std::size_t r_leaf = 0; r_leaf < row_leaves.size(); ++r_leaf) {
+      for (std::size_t r_leaf = 0; r_leaf < row_leaf_count; ++r_leaf) {
         const Value* value = nullptr;
         if (col_subtotal) {
           const ColSubtotal& subtotal = result.col_subtotals[col_entry.subtotal_index];
@@ -897,8 +896,8 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
       } else if (!total_is_derived(table, df)) {
         StripTotal strip;
         bool open = true;
-        for (std::size_t r_leaf = 0; open && r_leaf < row_leaves.size(); ++r_leaf) {
-          for (std::size_t c_leaf = 0; open && c_leaf < col_leaves.size(); ++c_leaf) {
+        for (std::size_t r_leaf = 0; open && r_leaf < row_leaf_count; ++r_leaf) {
+          for (std::size_t c_leaf = 0; open && c_leaf < col_leaf_count; ++c_leaf) {
             open = strip.add(result.values[r_leaf][c_leaf][df]);
           }
         }

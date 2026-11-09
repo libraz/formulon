@@ -30,7 +30,9 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <string>
+#include <string_view>
 
 #include "eval/collation.h"
 #include "eval/eval_profile_scope.h"
@@ -112,6 +114,13 @@ inline std::string display_string(const Value& v) {
     default:
       return std::string{};
   }
+}
+
+/// Copies `text` into `storage` and returns a text `Value` viewing the copy.
+/// The deque keeps the view valid across later appends.
+inline Value intern_text(std::deque<std::string>& storage, std::string_view text) {
+  storage.emplace_back(text);
+  return Value::text(storage.back());
 }
 
 }  // namespace formulon::pivot

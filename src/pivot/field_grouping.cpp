@@ -36,6 +36,19 @@ namespace {
 // 1900-03-01, the first serial past Excel's phantom 1900-02-29 (serial 60).
 constexpr double kFirstSerialAfterPhantomDay = 61.0;
 
+// The smallest and largest serial added; both 0 until the first.
+struct SerialRange {
+  bool any = false;
+  double lo = 0.0;
+  double hi = 0.0;
+
+  void add(double serial) {
+    lo = any ? std::min(lo, serial) : serial;
+    hi = any ? std::max(hi, serial) : serial;
+    any = true;
+  }
+};
+
 date_time::YMD ymd_of_day(double day, bool date1904) noexcept {
   return date1904 ? date_time::ymd_from_serial(day, /*date1904=*/true) : date_time::legacy_1900_ymd(day);
 }
@@ -58,19 +71,16 @@ GroupBounds resolve_bounds(const PivotCache& cache, std::size_t base, const Rang
   }
   const std::optional<double> start = group_date_serial(range.start_date, date1904);
   const std::optional<double> end = group_date_serial(range.end_date, date1904);
-  bool have_data = false;
-  double data_min = 0.0;
-  double data_max = 0.0;
+  SerialRange data_range;
   for (const PivotCacheRecord& record : cache.records()) {
     const Value v = cell_value(cache, record, base);
     if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904)) {
       continue;
     }
-    data_min = have_data ? std::min(data_min, v.as_number()) : v.as_number();
-    data_max = have_data ? std::max(data_max, v.as_number()) : v.as_number();
-    have_data = true;
+    data_range.add(v.as_number());
   }
-  const GroupBounds data = have_data ? auto_date_group_bounds(data_min, data_max, date1904) : GroupBounds{};
+  const bool have_data = data_range.any;
+  const GroupBounds data = have_data ? auto_date_group_bounds(data_range.lo, data_range.hi, date1904) : GroupBounds{};
   GroupBounds bounds;
   bounds.start = start.has_value() ? *start : data.start;
   bounds.end = end.has_value() ? *end : (have_data ? data.end : bounds.start);
@@ -370,22 +380,18 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
   for (const PivotCacheRecord& record : cache.records()) {
     typed = typed || flag_at(record.cell_is_date, base);
   }
-  bool have_value = false;
-  double lo = 0.0;
-  double hi = 0.0;
+  SerialRange range;
   for (const BaseValue& v : base_values(cache, base)) {
     if (!v.value.is_number() || !is_valid_date_serial(v.value.as_number(), date1904) || (typed && !v.is_date)) {
       return group_error(FormulonErrorCode::kInvalidArgument, "only a field holding nothing but dates can be grouped",
                          "field=" + field.name);
     }
-    lo = have_value ? std::min(lo, v.value.as_number()) : v.value.as_number();
-    hi = have_value ? std::max(hi, v.value.as_number()) : v.value.as_number();
-    have_value = true;
+    range.add(v.value.as_number());
   }
-  if (!have_value) {
+  if (!range.any) {
     return group_error(FormulonErrorCode::kInvalidArgument, "the field holds no date to group", "field=" + field.name);
   }
-  GroupBounds bounds = auto_date_group_bounds(lo, hi, date1904);
+  GroupBounds bounds = auto_date_group_bounds(range.lo, range.hi, date1904);
   const SharedItemsHints& hints = field.shared_items_hints;
   if (hints.has_min_date && hints.has_max_date) {
     const std::optional<double> min_date = group_date_serial(hints.min_date, date1904);
@@ -507,11 +513,9 @@ void share_base_items(PivotCache& cache, std::size_t base, bool date1904) {
     }
   }
   PivotCacheField& field = fields[base];
-  double lo = 0.0;
-  double hi = 0.0;
-  for (std::size_t i = 0; i < items.size(); ++i) {
-    lo = i == 0U ? items[i].as_number() : std::min(lo, items[i].as_number());
-    hi = i == 0U ? items[i].as_number() : std::max(hi, items[i].as_number());
+  SerialRange range;
+  for (const Value& item : items) {
+    range.add(item.as_number());
   }
   field.shared_item_is_date.assign(items.size(), true);
   field.shared_items = std::move(items);
@@ -522,7 +526,7 @@ void share_base_items(PivotCache& cache, std::size_t base, bool date1904) {
   h.has_contains_date = true;
   h.contains_date = true;
   h.has_contains_string = true;
-  const GroupBounds bounds = auto_date_group_bounds(lo, hi, date1904);
+  const GroupBounds bounds = auto_date_group_bounds(range.lo, range.hi, date1904);
   h.has_min_date = true;
   h.min_date = group_date_iso(bounds.start, date1904);
   h.has_max_date = true;

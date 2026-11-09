@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <numeric>
 #include <optional>
 #include <vector>
 
@@ -79,6 +80,18 @@ class RecordIndexView {
   mutable std::size_t cached_begin_ = 0;
   mutable std::size_t cached_end_ = 0;
 };
+
+/// A custom subtotal's aggregation, else the data field's own.
+inline Aggregation aggregation_for(const std::optional<Aggregation>& subtotal, const PivotDataField& df) {
+  return subtotal.value_or(df.aggregation);
+}
+
+/// The indices 0, 1, ..., `count - 1`.
+inline std::vector<std::size_t> identity_indices(std::size_t count) {
+  std::vector<std::size_t> indices(count);
+  std::iota(indices.begin(), indices.end(), std::size_t{0});
+  return indices;
+}
 
 /// Applies the named aggregation to `values`. The dispatch handles
 /// blank-skip, error-propagation (arithmetic aggregations only, see

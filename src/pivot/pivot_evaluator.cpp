@@ -1,8 +1,7 @@
 //
-// Pivot evaluator orchestration. See header / §15.1.3 of the design
-// corpus for the algorithm overview. The MVP path implemented here
-// produces enough of a `PivotResult` that GETPIVOTDATA can resolve
-// label/data tuples against the freshest evaluation snapshot.
+// Pivot evaluator orchestration. Produces the `PivotResult` that
+// GETPIVOTDATA resolves label/data tuples against and that the layout
+// projects into cells.
 //
 // This translation unit owns the eight-step pipeline:
 //
@@ -27,7 +26,6 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <numeric>
 #include <optional>
 #include <set>
 #include <string>
@@ -220,8 +218,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   const PreparedRecordFilter record_filter(table, cache, resolved_env);
   // Excel compacts the record order in one forward pass: a filtered entry is
   // replaced by the current last one and the slot is checked again.
-  std::vector<std::size_t> surviving(cache.records().size());
-  std::iota(surviving.begin(), surviving.end(), std::size_t{0});
+  std::vector<std::size_t> surviving = identity_indices(cache.records().size());
   for (std::size_t i = 0; i < surviving.size();) {
     if (record_filter.passes(cache.records()[surviving[i]])) {
       ++i;
@@ -484,10 +481,8 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   // rendered "Grand Total" row/column reads these instead. Computed from
   // the pre-value-filter buckets; the value-filter step below compacts
   // them in lock-step with `result.values`.
-  std::vector<std::size_t> all_row_leaves(row_leaf_count);
-  std::iota(all_row_leaves.begin(), all_row_leaves.end(), std::size_t{0});
-  std::vector<std::size_t> all_col_leaves(col_leaf_count);
-  std::iota(all_col_leaves.begin(), all_col_leaves.end(), std::size_t{0});
+  const std::vector<std::size_t> all_row_leaves = identity_indices(row_leaf_count);
+  const std::vector<std::size_t> all_col_leaves = identity_indices(col_leaf_count);
   // A total across both axes combines row partials; a one-axis layout chains its records.
   const bool both_axes = !row_levels.empty() && !col_levels.empty();
   if (data_field_count > 0) {
@@ -516,9 +511,8 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   //
   // Walk the row hierarchy; at each non-leaf level whose field declares
   // `subtotal_top` or any `subtotal_fns`, aggregate the union of all
-  // descendant leaves' records using the data field's own aggregation.
-  // For MVP we surface one subtotal slot per data field. Column-axis
-  // subtotals are deferred.
+  // descendant leaves' records, once per custom function or else with each
+  // data field's own aggregation. Column-axis subtotals follow in 5b.
   //
   // The flat-list shape (`subtotals[i]` is one row of the result, no
   // tree mirror) is convenient for GETPIVOTDATA, which addresses
@@ -557,7 +551,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
             std::vector<std::vector<Value>> col_values(col_leaf_count,
                                                        std::vector<Value>(data_field_count, Value::blank()));
             for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
-              const Aggregation agg = spec.has_value() ? *spec : table.data_fields()[df_idx].aggregation;
+              const Aggregation agg = aggregation_for(spec, table.data_fields()[df_idx]);
               const std::uint32_t field_index = table.data_fields()[df_idx].field_index;
               const MissingStats missing =
                   spec.has_value()
@@ -620,7 +614,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
             for (std::size_t r = 0; r < row_leaf_count; ++r) {
               for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
                 const PivotDataField& df = table.data_fields()[df_idx];
-                const Aggregation aggregation = spec.has_value() ? *spec : df.aggregation;
+                const Aggregation aggregation = aggregation_for(spec, df);
                 subtotal.values[r][df_idx] =
                     aggregate_records_or_blank(aggregation, cache, row_records[r], df.field_index, result);
               }
@@ -631,7 +625,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
             // would be wrong for a non-additive aggregation).
             for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
               const PivotDataField& df = table.data_fields()[df_idx];
-              const Aggregation aggregation = spec.has_value() ? *spec : df.aggregation;
+              const Aggregation aggregation = aggregation_for(spec, df);
               subtotal.total[df_idx] =
                   both_axes ? aggregate_row_partials_or_blank(aggregation, cache, buckets, all_row_leaves,
                                                               subtotal_cols, df.field_index, result)
@@ -658,8 +652,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
         for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
           const PivotDataField& df = table.data_fields()[df_idx];
           const ColSubtotal& col_subtotal = result.col_subtotals[cs];
-          const Aggregation aggregation =
-              col_subtotal.aggregation.has_value() ? *col_subtotal.aggregation : df.aggregation;
+          const Aggregation aggregation = aggregation_for(col_subtotal.aggregation, df);
           row_subtotal.col_subtotal_values[cs][df_idx] =
               aggregate_row_partials_or_blank(aggregation, cache, buckets, row_subtotal_leaf_sets[rs],
                                               col_subtotal_leaf_sets[cs], df.field_index, result);

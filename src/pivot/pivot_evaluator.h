@@ -4,16 +4,7 @@
 // row/col hierarchies, the aggregated values matrix, subtotals, and
 // the grand total.
 //
-// MVP scope (for GETPIVOTDATA): SUM / COUNT / AVERAGE / MAX / MIN /
-// PRODUCT / CountNumbers aggregations; manual-filter visibility
-// (PivotItem::visible); row/col hierarchies built from
-// `row_field_order` / `col_field_order`; subtotals when the field
-// declares `subtotal_top` or `subtotal_fns`; grand totals when the
-// table flags request them. STDEV / VAR / "% of row" / running total /
-// date grouping / slicer filters are deferred.
-//
-// Design references:
-//   * src/pivot/pivot_result.h (output structure)
+// The output structure is declared in `pivot/pivot_result.h`.
 
 #ifndef FORMULON_PIVOT_PIVOT_EVALUATOR_H_
 #define FORMULON_PIVOT_PIVOT_EVALUATOR_H_

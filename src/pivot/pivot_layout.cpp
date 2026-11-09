@@ -125,9 +125,9 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   const std::size_t row_levels = row_depth + (values_on_rows ? 1 : 0);
   const std::size_t col_levels = col_depth + (values_on_cols ? 1 : 0);
 
-  std::vector<AxisLeaf> row_leaves = collect_axis_leaves(result.rows, row_depth);
-  std::vector<AxisLeaf> col_leaves = collect_axis_leaves(result.cols, col_depth);
-  RETURN_IF_ERROR(validate_result_shape(table, result, row_leaves.size(), col_leaves.size()));
+  const std::size_t row_leaf_count = count_axis_leaves(result.rows, row_depth);
+  const std::size_t col_leaf_count = count_axis_leaves(result.cols, col_depth);
+  RETURN_IF_ERROR(validate_result_shape(table, result, row_leaf_count, col_leaf_count));
   ASSIGN_OR_RETURN(std::vector<AxisEntry> row_entries,
                    collect_axis_entries(table, result.rows, result.row_subtotals, row_shape, "row"));
   ASSIGN_OR_RETURN(std::vector<AxisEntry> col_entries_all,
@@ -253,18 +253,16 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   plan.col_shape = std::move(col_shape);
   plan.row_levels = row_levels;
   plan.col_levels = col_levels;
-  plan.row_leaves = std::move(row_leaves);
-  plan.col_leaves = std::move(col_leaves);
+  plan.row_leaf_count = row_leaf_count;
+  plan.col_leaf_count = col_leaf_count;
   plan.row_entries = std::move(row_entries);
   plan.col_entries = std::move(col_entries);
   plan.data_cols = data_cols;
   plan.row_header_cols = row_header_cols;
-  plan.header_rows = header_rows;
   plan.caption_row = caption_row;
   plan.drop_zone_rows = drop_zone_rows;
   plan.grid_without_rows = grid_without_rows;
   plan.emit_grand_totals_rows_strip = emit_grand_totals_rows_strip;
-  plan.emit_grand_totals_cols_strip = emit_grand_totals_cols_strip;
   plan.total_strip_cols = total_strip_cols;
   plan.total_strip_rows = total_strip_rows;
   plan.page_rows = page_rows;
@@ -291,8 +289,7 @@ Expected<void, Error> append_item_refs(const AxisEntry& entry, const std::vector
     ref.field_index = field_order[depth++];
     ref.identity = *node->identity;
     if (ref.identity.is_text()) {
-      text_storage.emplace_back(ref.identity.as_text());
-      ref.identity = Value::text(text_storage.back());
+      ref.identity = intern_text(text_storage, ref.identity.as_text());
     }
     ref.is_group_item = node->identity_is_group_item;
     out.push_back(std::move(ref));
