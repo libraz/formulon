@@ -37,7 +37,7 @@ TEST(CheckedMulSizeT, OverflowAtBoundary) {
   const std::size_t half_plus_one = (kMax / 2U) + 1U;
   auto result = checked_mul_size_t(half_plus_one, 2U);
   ASSERT_FALSE(result);
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kFnOverflow);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kFunctionOverflow);
 }
 
 TEST(CheckedMulSizeT, OverflowFromLargeFactors) {
@@ -45,7 +45,7 @@ TEST(CheckedMulSizeT, OverflowFromLargeFactors) {
   // (kMax / 2) * 3 strictly exceeds kMax (it is roughly 1.5 * kMax).
   auto result = checked_mul_size_t(kMax / 2U, 3U);
   ASSERT_FALSE(result);
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kFnOverflow);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kFunctionOverflow);
 }
 
 }  // namespace

@@ -371,7 +371,7 @@ void JsWorkbook::updateSheetView(uint32_t sheet, emscripten::val patch) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updateView");
+  JsNarrowNumericReader reader("Sheet.updateView");
   fm_sheet_view_patch_t p = FM_STRUCT_INIT(fm_sheet_view_patch_t);
   const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
     js_patch_value(reader, patch, key, key, op, value,
@@ -439,7 +439,7 @@ void JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setSelection");
+  JsNarrowNumericReader reader("Sheet.setSelection");
   const emscripten::val active = reader.value(selection, "active", "selection.active");
   uint32_t row = 0;
   uint32_t col = 0;
@@ -555,7 +555,7 @@ emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, emscripten::val rang
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("getRangeXfBases");
+  JsNarrowNumericReader reader("Sheet.getRangeXfBases");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();
@@ -569,20 +569,20 @@ emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, emscripten:
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("getRangeXfBasesExcluding");
+  JsNarrowNumericReader reader("Sheet.getRangeXfBasesExcluding");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
   if (!reader.is_array(excludedRows, "excludedRows") || !reader.is_array(excludedCols, "excludedCols")) {
     record_type_error(
-        "getRangeXfBasesExcluding: `excludedRows` and `excludedCols` must be arrays "
+        "Sheet.getRangeXfBasesExcluding: `excludedRows` and `excludedCols` must be arrays "
         "of numbers");
     return emscripten::val::undefined();
   }
   const uint32_t count = reader.length(excludedRows, "excludedRows");
   if (reader.ok() && count != reader.length(excludedCols, "excludedCols")) {
-    record_type_error("getRangeXfBasesExcluding: `excludedRows` and `excludedCols` must have the same length");
+    record_type_error("Sheet.getRangeXfBasesExcluding: `excludedRows` and `excludedCols` must have the same length");
     return emscripten::val::undefined();
   }
   std::vector<uint32_t> rows(count);
@@ -603,18 +603,18 @@ void JsWorkbook::remapRangeStyle(uint32_t sheet, emscripten::val range, emscript
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("remapRangeStyle");
+  JsNarrowNumericReader reader("Sheet.remapRangeXfs");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return;
   }
   if (!reader.is_array(fromXfs, "fromXfs") || !reader.is_array(toXfs, "toXfs")) {
-    record_type_error("remapRangeStyle: `fromXfs` and `toXfs` must be arrays of numbers");
+    record_type_error("Sheet.remapRangeXfs: `fromXfs` and `toXfs` must be arrays of numbers");
     return;
   }
   const uint32_t count = reader.length(fromXfs, "fromXfs");
   if (reader.ok() && count != reader.length(toXfs, "toXfs")) {
-    record_type_error("remapRangeStyle: `fromXfs` and `toXfs` must have the same length");
+    record_type_error("Sheet.remapRangeXfs: `fromXfs` and `toXfs` must have the same length");
     return;
   }
   std::vector<uint32_t> from(count);
@@ -634,7 +634,7 @@ emscripten::val JsWorkbook::snapshotRangeStyle(uint32_t sheet, emscripten::val r
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("snapshotRangeStyle");
+  JsNarrowNumericReader reader("Sheet.snapshotRangeXfs");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();
@@ -724,7 +724,7 @@ emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range,
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("getCellRectPt");
+  JsNarrowNumericReader reader("Sheet.getCellRectPt");
   const fm_cell_rect_t b = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();

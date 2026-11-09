@@ -85,6 +85,9 @@ def qualified(entry: dict, language: str, collections: Dict[str, dict]) -> List[
     if not _on_language(entry, language):
         return []
     if entry_handle(entry) is not None:
+        dropped = _dropped(entry, language)
+        if dropped is not None and dropped == entry.get(language):
+            return []
         name = handle_name(entry, language, collections)
         return [f"{cls}.{name}" for cls in handle_classes(entry)] if name else []
     name = public_name(entry, language)
@@ -246,6 +249,8 @@ def handle_methods(ledger: Ledger) -> List[Tuple[str, str, int]]:
         name = handle_name(entry, "js", ledger.collections) if handle is not None else None
         # Only an op a C function backs has a raw registration; a handwritten one still calls it.
         if handle is None or raw is None or name is None or entry.get("kind") != "op":
+            continue
+        if _dropped(entry, "js") == raw:
             continue
         if not isinstance(entry.get("c"), str):
             continue

@@ -441,14 +441,13 @@ CF_MATCH = Struct(
     [
         ("kind", I32),
         ("priority", I32),
-        ("dxf_index_engaged", I32),
+        ("has_dxf_index", I32),
         ("dxf_index", U32),
         ("color", COLOR_SPEC_BLOB),
         ("bar_length_pct", F64),
         ("bar_axis_position_pct", F64),
         ("bar_is_negative", I32),
         ("bar_fill", COLOR_SPEC_BLOB),
-        ("bar_border_engaged", I32),
         ("bar_border", COLOR_SPEC_BLOB),
         ("bar_gradient", I32),
         ("icon_set_name", I32),
@@ -466,55 +465,51 @@ CF_RULE = Struct(
         ("time_period", I32),
         ("priority", I32),
         ("stop_if_true", I32),
-        ("dxf_index_engaged", I32),
+        ("has_dxf_index", I32),
         ("dxf_index", U32),
         ("ranges", PTR),
         ("range_count", U32),
         ("formula1", PTR),
         ("formula2", PTR),
-        ("op_engaged", I32),
-        ("rank_engaged", I32),
+        ("has_op", I32),
+        ("has_rank", I32),
         ("rank", I32),
         ("percent", I32),
         ("bottom", I32),
         ("above_average", I32),
         ("equal_average", I32),
-        ("std_dev_engaged", I32),
+        ("has_std_dev", I32),
         ("std_dev", F64),
         ("text", PTR),
-        ("time_period_engaged", I32),
+        ("has_time_period", I32),
         ("color_scale_thresholds", PTR),
         ("color_scale_colors", PTR),
         ("color_scale_count", U32),
-        ("data_bar_engaged", I32),
+        ("has_data_bar", I32),
         ("data_bar_min", CFVO_BLOB),
         ("data_bar_max", CFVO_BLOB),
         ("data_bar_fill", COLOR_SPEC_BLOB),
         ("data_bar_show_value", I32),
         ("data_bar_min_length_pct", U8),
         ("data_bar_max_length_pct", U8),
-        ("icon_set_engaged", I32),
+        ("has_icon_set", I32),
         ("icon_set_name", I32),
         ("icon_set_thresholds", PTR),
         ("icon_set_threshold_count", U32),
         ("icon_set_reverse", I32),
         ("icon_set_show_value", I32),
         ("icon_set_percent", I32),
-        # Data-bar attributes carried as engaged-flag / value pairs: an
-        # unengaged flag means "use the model default" rather than "zero".
-        ("data_bar_gradient_engaged", I32),
+        # Data-bar attributes carried as has-flag / value pairs: a clear
+        # flag means "use the model default" rather than "zero".
+        ("has_data_bar_gradient", I32),
         ("data_bar_gradient", I32),
-        ("data_bar_axis_position_engaged", I32),
+        ("has_data_bar_axis_position", I32),
         ("data_bar_axis_position", I32),
-        ("data_bar_negative_fill_engaged", I32),
         ("data_bar_negative_fill", COLOR_SPEC_BLOB),
-        ("data_bar_border_engaged", I32),
         ("data_bar_border", COLOR_SPEC_BLOB),
-        ("data_bar_negative_border_engaged", I32),
         ("data_bar_negative_border", COLOR_SPEC_BLOB),
-        ("data_bar_axis_color_engaged", I32),
         ("data_bar_axis_color", COLOR_SPEC_BLOB),
-        ("icon_set_floor_engaged", I32),
+        ("has_icon_set_floor", I32),
         ("icon_set_floor", CFVO_BLOB),
         ("data_bar_direction", I32),
         ("icon_set_icons", PTR),
@@ -578,8 +573,10 @@ PIVOT_DATA_FIELD_SPEC = Struct(
         ("aggregation", I32),
         ("number_format", PTR),
         ("show_as", I32),
-        ("show_as_base_field", I32),
-        ("show_as_base_item", I32),
+        ("has_show_as_base_field", I32),
+        ("show_as_base_field", U32),
+        ("has_show_as_base_item", I32),
+        ("show_as_base_item", U32),
     ],
 )
 
@@ -591,12 +588,14 @@ PIVOT_FIELD_INFO = Struct(
         ("axis", I32),
         ("subtotal_top", I32),
         ("number_format", PTR),
-        ("cache_field_index", I32),
+        ("has_cache_field_index", I32),
+        ("cache_field_index", U32),
         ("sort_order", I32),
         ("sort_by_field", PTR),
         ("date_periods", U32),
         ("date_calendar", I32),
-        ("group_base_index", I32),
+        ("has_group_base_index", I32),
+        ("group_base_index", U32),
         ("default_subtotal", I32),
         ("subtotal_functions", U32),
         ("insert_blank_row", I32),
@@ -608,7 +607,14 @@ PIVOT_FIELD_INFO = Struct(
 
 PIVOT_ITEM_INFO = Struct(
     "fm_pivot_item_info_t",
-    [("name", PTR), ("cache_index", I32), ("visible", I32), ("caption", PTR), ("show_detail", I32)],
+    [
+        ("name", PTR),
+        ("has_cache_index", I32),
+        ("cache_index", U32),
+        ("visible", I32),
+        ("caption", PTR),
+        ("show_detail", I32),
+    ],
 )
 
 TABLE_INFO = Struct(
@@ -648,7 +654,6 @@ TABLE_STYLE_OPTIONS = Struct(
     "fm_table_style_options_t",
     [
         ("style_name", PTR),
-        ("present", I32),
         ("show_first_column", I32),
         ("show_last_column", I32),
         ("show_row_stripes", I32),
@@ -696,7 +701,6 @@ PIVOT_STYLE_OPTIONS = Struct(
     "fm_pivot_style_options_t",
     [
         ("style_name", PTR),
-        ("present", I32),
         ("show_row_headers", I32),
         ("show_column_headers", I32),
         ("show_row_stripes", I32),
@@ -836,7 +840,7 @@ PIVOT_OPTIONS = Struct(
 
 PIVOT_CACHE_OPTIONS = Struct(
     "fm_pivot_cache_options_t",
-    [("save_data", I32), ("missing_items_limit", I32), ("refresh_on_load", I32)],
+    [("save_data", I32), ("has_missing_items_limit", I32), ("missing_items_limit", U32), ("refresh_on_load", I32)],
 )
 
 PIVOT_CALCULATED_ITEM = Struct(
@@ -870,7 +874,6 @@ SPILL_INFO = Struct(
     "fm_spill_info_t",
     [
         ("rect", nested(CELL_RECT)),
-        ("engaged", I32),
         ("blocked", I32),
     ],
 )
@@ -893,7 +896,6 @@ ARRAY_FORMULA = Struct(
     [
         ("rect", nested(CELL_RECT)),
         ("formula", PTR),
-        ("engaged", I32),
     ],
 )
 
@@ -902,6 +904,7 @@ FUNCTION_METADATA = Struct(
     [
         ("canonical_name", PTR),
         ("min_arity", U32),
+        ("has_max_arity", I32),
         ("max_arity", U32),
         ("availability", I32),
         ("signature_template", PTR),
@@ -1217,11 +1220,11 @@ BORDER_RECORD_BLOB = ("blob_border_record", BORDER_RECORD.size, 8)
 DXF_RECORD = Struct(
     "fm_dxf_t",
     [
-        ("font_engaged", I32),
+        ("has_font", I32),
         ("font", FONT_RECORD_BLOB),
-        ("fill_engaged", I32),
+        ("has_fill", I32),
         ("fill", FILL_RECORD_BLOB),
-        ("border_engaged", I32),
+        ("has_border", I32),
         ("border", BORDER_RECORD_BLOB),
         ("number_format", PTR),
         ("alignment_xml", PTR),
@@ -1309,7 +1312,7 @@ COLUMN_BREAK = Struct(
 )
 
 # The three print patch structs pair every value field with an
-# ``*_engaged`` flag: on the write path the flag selects which attributes
+# ``has_*`` flag: on the write path the flag selects which attributes
 # the engine touches, on the read path it reports whether the attribute is
 # stated in the XML at all. Field order must match the C declaration
 # exactly -- ``Struct`` derives offsets from declaration order, so a
@@ -1317,17 +1320,17 @@ COLUMN_BREAK = Struct(
 PAGE_SETUP = Struct(
     "fm_page_setup_t",
     [
-        ("orientation_engaged", I32),
+        ("has_orientation", I32),
         ("orientation", I32),
-        ("paper_size_engaged", I32),
+        ("has_paper_size", I32),
         ("paper_size", U32),
-        ("scale_pct_engaged", I32),
+        ("has_scale_pct", I32),
         ("scale_pct", U32),
-        ("fit_to_width_engaged", I32),
+        ("has_fit_to_width", I32),
         ("fit_to_width", U32),
-        ("fit_to_height_engaged", I32),
+        ("has_fit_to_height", I32),
         ("fit_to_height", U32),
-        ("fit_to_page_engaged", I32),
+        ("has_fit_to_page", I32),
         ("fit_to_page", I32),
     ],
 )
@@ -1337,17 +1340,17 @@ PAGE_SETUP = Struct(
 PAGE_MARGINS = Struct(
     "fm_page_margins_t",
     [
-        ("left_in_engaged", I32),
+        ("has_left_in", I32),
         ("left_in", F64),
-        ("right_in_engaged", I32),
+        ("has_right_in", I32),
         ("right_in", F64),
-        ("top_in_engaged", I32),
+        ("has_top_in", I32),
         ("top_in", F64),
-        ("bottom_in_engaged", I32),
+        ("has_bottom_in", I32),
         ("bottom_in", F64),
-        ("header_in_engaged", I32),
+        ("has_header_in", I32),
         ("header_in", F64),
-        ("footer_in_engaged", I32),
+        ("has_footer_in", I32),
         ("footer_in", F64),
     ],
 )
@@ -1355,13 +1358,13 @@ PAGE_MARGINS = Struct(
 PRINT_OPTIONS = Struct(
     "fm_print_options_t",
     [
-        ("grid_lines_engaged", I32),
+        ("has_grid_lines", I32),
         ("grid_lines", I32),
-        ("headings_engaged", I32),
+        ("has_headings", I32),
         ("headings", I32),
-        ("horizontal_centered_engaged", I32),
+        ("has_horizontal_centered", I32),
         ("horizontal_centered", I32),
-        ("vertical_centered_engaged", I32),
+        ("has_vertical_centered", I32),
         ("vertical_centered", I32),
     ],
 )
@@ -1375,13 +1378,13 @@ HEADER_FOOTER = Struct(
         ("even_footer", PTR),
         ("first_header", PTR),
         ("first_footer", PTR),
-        ("different_odd_even_engaged", I32),
+        ("has_different_odd_even", I32),
         ("different_odd_even", I32),
-        ("different_first_engaged", I32),
+        ("has_different_first", I32),
         ("different_first", I32),
-        ("scale_with_doc_engaged", I32),
+        ("has_scale_with_doc", I32),
         ("scale_with_doc", I32),
-        ("align_with_margins_engaged", I32),
+        ("has_align_with_margins", I32),
         ("align_with_margins", I32),
     ],
 )
@@ -1464,6 +1467,7 @@ FILTER_COLUMN = Struct(
         ("dyn_max_val", F64),
         ("val_iso", PTR),
         ("max_val_iso", PTR),
+        ("has_dxf_index", I32),
         ("dxf_index", U32),
         ("cell_color", I32),
         ("icon_set", I32),
@@ -2286,7 +2290,7 @@ PIVOT_CACHE_OPTIONS_PATCH = Struct(
         ("save_data_op", I32),
         ("save_data", I32),
         ("missing_items_limit_op", I32),
-        ("missing_items_limit", I32),
+        ("missing_items_limit", U32),
         ("refresh_on_load_op", I32),
         ("refresh_on_load", I32),
     ],

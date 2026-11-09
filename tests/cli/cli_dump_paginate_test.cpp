@@ -173,7 +173,7 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   fm_defined_name_t workbook_const = FM_STRUCT_INIT(fm_defined_name_t);
   workbook_const.name = "WorkbookConst";
   workbook_const.formula = "=1";
-  workbook_const.local_sheet_id = -1;
+  workbook_const.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
   fm_defined_name_t sheet_local = FM_STRUCT_INIT(fm_defined_name_t);
   sheet_local.name = "SheetLocal";
   sheet_local.formula = "=Sheet1!$A$1";

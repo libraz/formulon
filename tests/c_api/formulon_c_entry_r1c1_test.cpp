@@ -308,8 +308,9 @@ TEST(FormulonCApiEntryR1C1, ArrayFormulaReadsR1C1AtItsTopLeft) {
   const fm_cell_rect_t rect{2, 4, 3, 4};
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, &rect, "=RC[-1]"), 0) << fm_get_last_error_message();
   fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 3, 4, &info), 0);
-  ASSERT_EQ(info.engaged, 1);
+  int32_t array_present = 0;
+  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 3, 4, &array_present, &info), 0);
+  ASSERT_EQ(array_present, 1);
   EXPECT_STREQ(info.formula, "=D3");
 }
 

@@ -164,7 +164,8 @@ test('data table arguments are validated', async () => {
   expectFailure(() => wb.sheet(5).addDataTable(squares));
   expectFailure(() => wb.sheet(5).getDataTable(0, 0));
   expectFailure(() => wb.sheet(5).removeDataTable(0, 0));
-  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: -1, col: 1 } }), RangeError);
+  expectFailure(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: -1, col: 1 } }));
+  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: 1.5, col: 1 } }), RangeError);
   wb.sheet(0).addDataTable(squares);
   expectFailure(() => wb.sheet(0).addDataTable(squares));
   release(wb);

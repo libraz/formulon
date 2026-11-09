@@ -508,8 +508,8 @@ test('mergeFunctionMetadata overlays provider metadata; without a provider it ad
   const base = mod.getFunctionMetadata('XLOOKUP');
   assert.equal(base.name, 'XLOOKUP');
   // The engine leaves display metadata empty.
-  assert.equal(base.signature, undefined);
-  assert.equal(base.description, undefined);
+  assert.equal(base.signature, null);
+  assert.equal(base.description, null);
 
   const entry = {
     signature: 'XLOOKUP(lookup_value, lookup_array, return_array)',
@@ -539,8 +539,8 @@ test('mergeFunctionMetadata overlays provider metadata; without a provider it ad
   // No provider entry -> the base fields plus localizedName = name; display metadata stays absent.
   const none = mod.mergeFunctionMetadata(base, undefined, 'fr-FR');
   assert.deepEqual({ ...none }, { ...base, localizedName: 'XLOOKUP' });
-  assert.equal(none.signature, undefined);
-  assert.equal(none.description, undefined);
+  assert.equal(none.signature, null);
+  assert.equal(none.description, null);
 });
 
 test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
@@ -709,15 +709,14 @@ test('precedents / dependents return arrays for a small formula graph', async ()
 test('spillInfo reports a dynamic-array region', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  // Non-spill cell: engaged is false, fields zeroed.
-  const none = wb.sheet(0).getSpillInfo(0, 0);
-  assert.equal(typeof none.engaged, 'boolean');
-  assert.equal(none.engaged, false);
+  // A cell outside any spill reads null.
+  assert.equal(wb.sheet(0).getSpill(0, 0), null);
   // A spilling dynamic array anchored at A1.
   wb.sheet(0).setFormula(0, 0, '=SEQUENCE(3,1)');
   wb.recalc();
-  const info = wb.sheet(0).getSpillInfo(0, 0);
-  assert.equal(info.engaged, true);
+  const info = wb.sheet(0).getSpill(0, 0);
+  assert.equal(info.blocked, false);
+  assert.equal('engaged' in info, false);
   assert.deepEqual(info.range, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 });
 });
 

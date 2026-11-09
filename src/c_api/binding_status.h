@@ -46,6 +46,14 @@ inline const char* status_name(std::int32_t status) {
       return "INTERNAL_ERROR";
     case FM_STATUS_PRECONDITION_FAILED:
       return "PRECONDITION_FAILED";
+    case FM_STATUS_SHEET_INDEX_OUT_OF_RANGE:
+      return "SHEET_INDEX_OUT_OF_RANGE";
+    case FM_STATUS_INVALID_SHEET_NAME:
+      return "INVALID_SHEET_NAME";
+    case FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED:
+      return "SHEET_COUNT_LIMIT_EXCEEDED";
+    case FM_STATUS_INDEX_OUT_OF_RANGE:
+      return "INDEX_OUT_OF_RANGE";
     case FM_STATUS_PARSER_UNEXPECTED_TOKEN:
       return "PARSER_UNEXPECTED_TOKEN";
     case FM_STATUS_PARSER_UNTERMINATED_STRING:
@@ -72,8 +80,8 @@ inline const char* status_name(std::int32_t status) {
       return "EVAL_PIVOT_MISSING";
     case FM_STATUS_EVAL_PIVOT_INVALID:
       return "EVAL_PIVOT_INVALID";
-    case FM_STATUS_FN_OVERFLOW:
-      return "FN_OVERFLOW";
+    case FM_STATUS_FUNCTION_OVERFLOW:
+      return "FUNCTION_OVERFLOW";
     case FM_STATUS_GRAPH_SCHEDULE_FAILED:
       return "GRAPH_SCHEDULE_FAILED";
     case FM_STATUS_GRAPH_RECALC_REENTRANT:
@@ -122,8 +130,8 @@ inline const char* status_name(std::int32_t status) {
       return "IO_CHART_INVALID_REFERENCE";
     case FM_STATUS_IO_CHART_UNSUPPORTED_KIND:
       return "IO_CHART_UNSUPPORTED_KIND";
-    case FM_STATUS_SEC_RESOURCE_LIMIT:
-      return "SEC_RESOURCE_LIMIT";
+    case FM_STATUS_SECURITY_RESOURCE_LIMIT:
+      return "SECURITY_RESOURCE_LIMIT";
     case FM_STATUS_BINDING_INVALID_HANDLE:
       return "BINDING_INVALID_HANDLE";
     case FM_STATUS_BINDING_NULL_POINTER:
@@ -142,14 +150,6 @@ inline const char* status_name(std::int32_t status) {
       return "PRINT_PAGE_COUNT_OVERFLOW";
     case FM_STATUS_THREADED_COMMENT_INVALID:
       return "THREADED_COMMENT_INVALID";
-    case FM_STATUS_SHEET_INDEX_OUT_OF_RANGE:
-      return "SHEET_INDEX_OUT_OF_RANGE";
-    case FM_STATUS_INVALID_SHEET_NAME:
-      return "INVALID_SHEET_NAME";
-    case FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED:
-      return "SHEET_COUNT_LIMIT_EXCEEDED";
-    case FM_STATUS_INDEX_OUT_OF_RANGE:
-      return "INDEX_OUT_OF_RANGE";
     default:
       return nullptr;
   }

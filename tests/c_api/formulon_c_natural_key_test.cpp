@@ -29,17 +29,18 @@ void CreateDefault(WorkbookGuard& wb) {
 TEST(FormulonCApiNaturalKey, DefinedNameByNameAndScope) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  const fm_defined_name_t rate{sizeof(fm_defined_name_t), "Rate", "Sheet1!$A$1", -1, "the rate", 1};
+  const fm_defined_name_t rate{sizeof(fm_defined_name_t),      "Rate",     "Sheet1!$A$1",
+                               FM_DEFINED_NAME_SCOPE_WORKBOOK, "the rate", 1};
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &rate), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "Sheet1!$B$1", 0), 0);
 
   int32_t present = 0;
   fm_defined_name_t found = FM_STRUCT_INIT(fm_defined_name_t);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "rate", -1, &present, &found), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "rate", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &found), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(found.name, "Rate");
   EXPECT_STREQ(found.formula, "=Sheet1!$A$1");
-  EXPECT_EQ(found.local_sheet_id, -1);
+  EXPECT_EQ(found.local_sheet_id, FM_DEFINED_NAME_SCOPE_WORKBOOK);
   EXPECT_STREQ(found.comment, "the rate");
   EXPECT_EQ(found.hidden, 1);
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &found), 0);
@@ -48,20 +49,33 @@ TEST(FormulonCApiNaturalKey, DefinedNameByNameAndScope) {
   EXPECT_EQ(found.local_sheet_id, 0);
   EXPECT_EQ(found.hidden, 0);
 
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Missing", -1, &present, &found), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Missing", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &found), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(found.name, nullptr);
   EXPECT_EQ(found.formula, nullptr);
-  EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, nullptr, &found), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, &present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", FM_DEFINED_NAME_SCOPE_WORKBOOK, nullptr, &found),
+            kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, nullptr),
+            kBindingNullPointer);
 
-  ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "RATE", -1), 0);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, &present, &found), 0);
+  ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "RATE", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &found), 0);
   EXPECT_EQ(present, 0);
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &found), 0);
   EXPECT_EQ(present, 1);
-  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "Rate", -1), FM_STATUS_NOT_FOUND);
-  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, nullptr, -1), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "Rate", FM_DEFINED_NAME_SCOPE_WORKBOOK), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, nullptr, FM_DEFINED_NAME_SCOPE_WORKBOOK), kBindingNullPointer);
+}
+
+TEST(FormulonCApiNaturalKey, DefinedNameScopeRefusalNamesTheScopeInContext) {
+  WorkbookGuard wb;
+  CreateDefault(wb);
+  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "Missing", FM_DEFINED_NAME_SCOPE_WORKBOOK), FM_STATUS_NOT_FOUND);
+  EXPECT_NE(std::string(fm_get_last_error_context()).find("scope=workbook"), std::string::npos);
+
+  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "Missing", 7),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
+  EXPECT_NE(std::string(fm_get_last_error_context()).find("scope=7"), std::string::npos);
 }
 
 TEST(FormulonCApiNaturalKey, RemovingADefinedNameRefreshesItsReaders) {
@@ -71,7 +85,7 @@ TEST(FormulonCApiNaturalKey, RemovingADefinedNameRefreshesItsReaders) {
   ASSERT_EQ(SetDefinedName(wb.handle, "Five", "Sheet1!$A$1"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=Five"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
-  ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "Five", -1), 0);
+  ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "Five", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);

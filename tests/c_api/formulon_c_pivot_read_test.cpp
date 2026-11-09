@@ -294,18 +294,20 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   EXPECT_EQ(region.axis, FM_PIVOT_AXIS_ROW);
   EXPECT_EQ(region.subtotal_top, FM_TRISTATE_TRUE);
   EXPECT_EQ(region.number_format, nullptr);
-  EXPECT_EQ(region.cache_field_index, 0);
+  EXPECT_EQ(region.has_cache_field_index, 1);
+  EXPECT_EQ(region.cache_field_index, 0U);
   // A field carrying an explicit item list sorts by it, as OOXML's default sortType does.
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_ORDER_MANUAL);
   EXPECT_EQ(region.sort_by_field, nullptr);
   EXPECT_EQ(region.date_periods, 0U);
   EXPECT_EQ(region.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
-  EXPECT_EQ(region.group_base_index, -1);
+  EXPECT_EQ(region.has_group_base_index, 0);
 
   fm_pivot_field_info_t amount = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 1, 0, 1, &amount), 0);
   EXPECT_EQ(amount.axis, FM_PIVOT_AXIS_VALUE);
-  EXPECT_EQ(amount.cache_field_index, 1);
+  EXPECT_EQ(amount.has_cache_field_index, 1);
+  EXPECT_EQ(amount.cache_field_index, 1U);
 
   std::size_t item_count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 1, 0, 0, &item_count), 0);
@@ -313,7 +315,8 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   for (std::size_t i = 0; i < 2U; ++i) {
     fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
     ASSERT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 1, 0, 0, i, &item), 0);
-    EXPECT_EQ(item.cache_index, static_cast<std::int32_t>(i));
+    EXPECT_EQ(item.has_cache_index, 1);
+    EXPECT_EQ(item.cache_index, static_cast<std::uint32_t>(i));
     EXPECT_EQ(item.visible, 1);
     EXPECT_STREQ(item.name, i == 0 ? "North" : "South");
   }
@@ -324,8 +327,8 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   EXPECT_EQ(data_field.field_index, 1U);
   EXPECT_EQ(data_field.aggregation, FM_PIVOT_AGGREGATION_SUM);
   EXPECT_EQ(data_field.show_as, FM_PIVOT_SHOW_VALUES_AS_NORMAL);
-  EXPECT_EQ(data_field.show_as_base_field, -1);
-  EXPECT_EQ(data_field.show_as_base_item, -1);
+  EXPECT_EQ(data_field.has_show_as_base_field, 0);
+  EXPECT_EQ(data_field.has_show_as_base_item, 0);
 
   std::uint32_t order[8] = {};
   std::size_t order_count = 99;

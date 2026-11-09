@@ -859,7 +859,7 @@ TEST(ChartTemplateXml, PieRefusesASeriesWithMoreCellsThanTheRowLimit) {
     s.val = val;
     const auto xml = build_chart_xml(wb, pie, ChartSplit{{s}});
     ASSERT_FALSE(static_cast<bool>(xml)) << val;
-    EXPECT_EQ(xml.error().code, FormulonErrorCode::kSecResourceLimit) << val;
+    EXPECT_EQ(xml.error().code, FormulonErrorCode::kSecurityResourceLimit) << val;
   }
 }
 

@@ -222,7 +222,7 @@ class PrintSettingsTests(unittest.TestCase):
             wb.sheet(0).ooxml.set_range_xf_index(CellRect(0, 0, 2, 2), xf)
             for row, col in ((0, 0), (1, 1), (2, 2)):
                 self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(row, col), xf)
-            self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(3, 3), 0)
+            self.assertIsNone(wb.sheet(0).ooxml.get_cell_xf_index(3, 3))
 
 
 if __name__ == "__main__":

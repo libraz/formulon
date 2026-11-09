@@ -496,8 +496,12 @@ test('handle refs: indices, names, ids and their rejected spellings', async () =
     expectCode(() => ws.pivot(2 ** 31), OutOfRange);
     assert.throws(() => tableSheet.table(2 ** 32), RangeError);
     assert.throws(() => ws.drawing(2 ** 32), RangeError);
-    // Non-integers and negatives are range errors, like every other index.
-    for (const bad of [NaN, Infinity, -Infinity, -1, 1.5]) {
+    // A negative position is out of range; a non-integer is a range error.
+    expectCode(() => tableSheet.table(-1), OutOfRange);
+    expectCode(() => ws.pivot(-1), OutOfRange);
+    expectCode(() => wb.pivotCache(-1), f.StatusCode.InvalidArgument);
+    expectCode(() => ws.drawing(-1), f.StatusCode.InvalidArgument);
+    for (const bad of [NaN, Infinity, -Infinity, 1.5]) {
       assert.throws(() => tableSheet.table(bad), RangeError, `table ${bad}`);
       assert.throws(() => ws.pivot(bad), RangeError, `pivot ${bad}`);
       assert.throws(() => wb.pivotCache(bad), RangeError, `pivotCache ${bad}`);

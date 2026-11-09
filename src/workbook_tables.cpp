@@ -188,7 +188,7 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
 
 Expected<void, Error> Workbook::check_table_resize(std::size_t index, const MergeRange& rect) const {
   if (index >= tables_.size()) {
-    return invalid_table("check_table_resize: index out of range", "index=" + std::to_string(index));
+    return invalid_table("index out of range", "index=" + std::to_string(index));
   }
   const TableMetadata& table = tables_[index];
   const std::optional<MergeRange> current = parse_a1_rectangle(table.ref);
@@ -308,7 +308,7 @@ class TableRenameTransform final : public parser::RefTransform {
 Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name, std::string display_name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (index >= tables_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "rename_table: index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range",
                       "index=" + std::to_string(index) + " table_count=" + std::to_string(tables_.size()));
   }
   RETURN_IF_ERROR(check_table_identity(*this, name, display_name, index));
@@ -392,12 +392,12 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
                                                            std::string_view name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (table >= tables_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "rename_table_column: table index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "table index out of range",
                       "table=" + std::to_string(table) + " table_count=" + std::to_string(tables_.size()));
   }
   std::vector<TableColumn>& columns = tables_[table].columns;
   if (column >= columns.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "rename_table_column: column index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "column index out of range",
                       "column=" + std::to_string(column) + " column_count=" + std::to_string(columns.size()));
   }
   const auto taken = [&columns, column](std::string_view candidate) {

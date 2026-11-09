@@ -707,17 +707,7 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_record_error(fm_workbook_t* w
 namespace {
 
 // The largest `missingItemsLimit` the API sets: one item per worksheet row.
-constexpr std::int64_t kMaxMissingItemsLimit = 1048576;
-constexpr std::int32_t kAutomaticMissingItemsLimit = -1;
-
-std::int32_t missing_items_limit_to_fm(std::optional<std::uint32_t> limit) {
-  if (!limit.has_value()) {
-    return kAutomaticMissingItemsLimit;
-  }
-  return *limit > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())
-             ? std::numeric_limits<std::int32_t>::max()
-             : static_cast<std::int32_t>(*limit);
-}
+constexpr std::uint32_t kMaxMissingItemsLimit = 1048576;
 
 }  // namespace
 
@@ -737,7 +727,8 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_options(const fm_workbook_t* 
   fm_pivot_cache_options_t result{};
   result.struct_size = out->struct_size;
   result.save_data = cache->save_data() ? 1 : 0;
-  result.missing_items_limit = missing_items_limit_to_fm(cache->missing_items_limit());
+  result.has_missing_items_limit = cache->missing_items_limit().has_value() ? 1 : 0;
+  result.missing_items_limit = cache->missing_items_limit().value_or(0U);
   result.refresh_on_load = cache->refresh_on_load() ? 1 : 0;
   *out = result;
   return 0;
@@ -766,11 +757,10 @@ extern "C" fm_status_t fm_workbook_update_pivot_cache_options(fm_workbook_t* wb,
   if (!patch_op_ok_without_clear(patch->refresh_on_load_op)) {
     return invalid_argument("patch op out of range or CLEAR", "field=refresh_on_load");
   }
-  const std::int32_t held = missing_items_limit_to_fm(cache->missing_items_limit());
+  const std::optional<std::uint32_t> held = cache->missing_items_limit();
   // A loaded value outside the settable range survives a get / set round trip unchanged.
-  const std::int32_t limit = patch->missing_items_limit;
-  if (patch->missing_items_limit_op == FM_PATCH_OP_SET && (limit < 0 || limit > kMaxMissingItemsLimit) &&
-      limit != held) {
+  const std::uint32_t limit = patch->missing_items_limit;
+  if (patch->missing_items_limit_op == FM_PATCH_OP_SET && limit > kMaxMissingItemsLimit && held != limit) {
     return invalid_argument("missing_items_limit out of range", "missing_items_limit=" + std::to_string(limit));
   }
   if (patch->save_data_op == FM_PATCH_OP_KEEP && patch->missing_items_limit_op == FM_PATCH_OP_KEEP &&
@@ -782,8 +772,8 @@ extern "C" fm_status_t fm_workbook_update_pivot_cache_options(fm_workbook_t* wb,
   }
   if (patch->missing_items_limit_op == FM_PATCH_OP_CLEAR) {
     cache->set_missing_items_limit(std::nullopt);
-  } else if (patch->missing_items_limit_op == FM_PATCH_OP_SET && limit != held) {
-    cache->set_missing_items_limit(std::optional<std::uint32_t>(static_cast<std::uint32_t>(limit)));
+  } else if (patch->missing_items_limit_op == FM_PATCH_OP_SET && held != limit) {
+    cache->set_missing_items_limit(limit);
   }
   if (patch->refresh_on_load_op == FM_PATCH_OP_SET) {
     cache->set_refresh_on_load(patch->refresh_on_load != 0);

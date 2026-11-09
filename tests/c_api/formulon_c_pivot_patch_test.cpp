@@ -45,9 +45,10 @@ struct StyleSnapshot {
 
 StyleSnapshot Style(const fm_workbook_t* wb) {
   fm_pivot_style_options_t style = FM_STRUCT_INIT(fm_pivot_style_options_t);
-  EXPECT_EQ(fm_sheet_get_pivot_style_options(wb, 0, kPivot, &style), FM_STATUS_OK);
+  int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_pivot_style_options(wb, 0, kPivot, &present, &style), FM_STATUS_OK);
   return StyleSnapshot{style.style_name != nullptr ? style.style_name : "",
-                       style.present,
+                       present,
                        style.show_row_headers,
                        style.show_column_headers,
                        style.show_row_stripes,
@@ -513,8 +514,8 @@ fm_status_t BuildDatePivot(fm_workbook_t* wb) {
   data_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   data_spec.number_format = "";
   data_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  data_spec.show_as_base_field = -1;
-  data_spec.show_as_base_item = -1;
+  data_spec.has_show_as_base_field = 0;
+  data_spec.has_show_as_base_item = 0;
   std::size_t data_index = 99;
   return fm_sheet_add_pivot_data_field(wb, 0, pivot_index, &data_spec, &data_index);
 }
@@ -613,7 +614,7 @@ TEST(FormulonCApiPivotPatch, DateGroupRefusesABadBoundFlagOrNaNAndGroupsNothing)
   group = WeekGroup();
   group.periods = 0;
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, nullptr), FM_STATUS_OK);
 
   EXPECT_EQ(DatePeriods(wb.handle), 0U);
 }
@@ -625,8 +626,8 @@ TEST(FormulonCApiPivotPatch, DateGroupOfAPivotOrFieldPastTheEndIsOutOfRange) {
   const fm_pivot_date_group_spec_t group = WeekGroup();
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot + 1U, 0, &group), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 99U, &group), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, kPivot + 1U, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, kPivot, 99U), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot + 1U, 0, nullptr), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 99U, nullptr), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 9, kPivot, 0, &group), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(DatePeriods(wb.handle), 0U);
 }

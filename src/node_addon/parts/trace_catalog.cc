@@ -83,7 +83,7 @@ Napi::Value Workbook::Dependents(const Napi::CallbackInfo& info) {
 
 // ---- Dynamic-array spill info ---------------------------------------
 
-Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::GetSpill(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
@@ -92,17 +92,14 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
-  const fm_status_t rc = fm_sheet_get_spill_info(handle_, sheet, row, col, &spill);
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_spill(handle_, sheet, row, col, &present, &spill);
+  if (rc != 0 || present == 0) {
+    return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("rect", env.Null());
-  out.Set("engaged", Napi::Boolean::New(env, spill.engaged != 0));
+  out.Set("rect", RangeToJs(env, spill.rect));
   out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
-  if (spill.engaged != 0 || spill.blocked != 0) {
-    out.Set("rect", RangeToJs(env, spill.rect));
-  }
   return out;
 }
 
@@ -114,8 +111,10 @@ Napi::Value Workbook::GetArrayFormula(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   fm_array_formula_info_t array = FM_STRUCT_INIT(fm_array_formula_info_t);
-  const fm_status_t rc = fm_sheet_get_array_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &array);
-  if (rc != 0 || array.engaged == 0) {
+  int32_t present = 0;
+  const fm_status_t rc =
+      fm_sheet_get_array_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &array);
+  if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object value = Napi::Object::New(env);
@@ -183,20 +182,10 @@ Napi::Value FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, md.canonical_name));
   out.Set("minArity", Napi::Number::New(env, md.min_arity));
-  // `0xFFFFFFFF` is the unbounded / unknown-arity sentinel; surface it as
-  // `null` so JS callers do not mistake it for a concrete upper bound.
-  if (md.max_arity == 0xFFFFFFFFu) {
-    out.Set("maxArity", env.Null());
-  } else {
-    out.Set("maxArity", Napi::Number::New(env, md.max_arity));
-  }
+  out.Set("maxArity", JsNumberOrNull(env, md.has_max_arity, md.max_arity));
   out.Set("availability", Napi::Number::New(env, static_cast<uint32_t>(md.availability)));
-  if (md.signature_template != nullptr) {
-    out.Set("signature", Napi::String::New(env, md.signature_template));
-  }
-  if (md.description != nullptr) {
-    out.Set("description", Napi::String::New(env, md.description));
-  }
+  out.Set("signature", JsStringOrNull(env, md.signature_template));
+  out.Set("description", JsStringOrNull(env, md.description));
   return OptionalOrNull(env, rc, present, out);
 }
 

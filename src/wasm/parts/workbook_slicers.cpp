@@ -126,7 +126,7 @@ uint32_t JsWorkbook::addSlicer(uint32_t sheet, uint32_t tableSheet, uint32_t tab
     record_invalid_handle();
     return 0U;
   }
-  JsNarrowNumericReader reader("addSlicer");
+  JsNarrowNumericReader reader("Sheet.addSlicer");
   SlicerText store;
   const fm_slicer_patch_t slicer = pull_slicer(reader, spec, store);
   if (!reader.ok()) {
@@ -152,7 +152,7 @@ void JsWorkbook::updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updateSlicer");
+  JsNarrowNumericReader reader("Slicer.update");
   SlicerText store;
   const fm_slicer_patch_t slicer = pull_slicer(reader, spec, store);
   if (!reader.ok()) {

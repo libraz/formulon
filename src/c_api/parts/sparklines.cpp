@@ -106,14 +106,14 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
     const char* name;
     bool clearable;
   };
-  const Op ops[] = {{p.color_series_op, "color_series", false},
-                    {p.color_negative_op, "color_negative", false},
-                    {p.color_axis_op, "color_axis", false},
-                    {p.color_markers_op, "color_markers", false},
-                    {p.color_first_op, "color_first", false},
-                    {p.color_last_op, "color_last", false},
-                    {p.color_high_op, "color_high", false},
-                    {p.color_low_op, "color_low", false},
+  const Op ops[] = {{p.color_series_op, "color_series", true},
+                    {p.color_negative_op, "color_negative", true},
+                    {p.color_axis_op, "color_axis", true},
+                    {p.color_markers_op, "color_markers", true},
+                    {p.color_first_op, "color_first", true},
+                    {p.color_last_op, "color_last", true},
+                    {p.color_high_op, "color_high", true},
+                    {p.color_low_op, "color_low", true},
                     {p.manual_min_op, "manual_min", true},
                     {p.manual_max_op, "manual_max", true},
                     {p.line_weight_op, "line_weight", false},
@@ -149,6 +149,8 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
   for (std::size_t i = 0; i < 8; ++i) {
     if (set(colors[i].first)) {
       *targets[i] = color_spec_from_c(*colors[i].second);
+    } else if (colors[i].first == FM_PATCH_OP_CLEAR) {
+      *targets[i] = formulon::ColorSpec{};
     }
   }
   const std::pair<fm_patch_op_t, std::int32_t> flags[] = {{p.markers_op, p.markers},

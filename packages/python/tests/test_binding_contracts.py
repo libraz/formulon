@@ -143,7 +143,7 @@ class FormulonErrorStatusTests(unittest.TestCase):
                 with self.assertRaises(FormulonError) as caught:
                     wb.sheet(0).get_pagination()
         self.assertEqual(caught.exception.code, 7001)
-        self.assertEqual(str(caught.exception), "returned OK with a null pagination handle")
+        self.assertEqual(caught.exception.message, "returned OK with a null pagination handle")
         self.assertNotIn("fm_", str(caught.exception))
 
 
@@ -537,11 +537,11 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=3, type=2, alignment=2))
             # Setting the readings must not reset the rendering.
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "おおさか")])
-            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2, present=True))
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2, stated=True))
             data = wb.save()
         with Workbook.load(data) as reloaded:
             self.assertEqual(
-                reloaded.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2, present=True)
+                reloaded.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2, stated=True)
             )
 
     def test_phonetic_properties_reject_values_the_container_cannot_hold(self) -> None:
@@ -558,7 +558,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 wb.sheet(0).set_cell_phonetic_properties(
                     0, 0, PhoneticProperties(font_index=0x10000, type=0, alignment=0)
                 )
-            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(1, 3, 3, present=True))
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(1, 3, 3, stated=True))
 
     def test_a_value_write_discards_the_guide_and_its_rendering(self) -> None:
         with Workbook.create_default() as wb:
@@ -979,21 +979,21 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
             reloaded.sheet(0).set_cell_show_phonetic(0, 0, False)
             self.assertFalse(reloaded.sheet(0).get_cell_show_phonetic(0, 0))
 
-    def test_explicit_all_zero_phonetic_pr_is_present_and_round_trips(self) -> None:
+    def test_explicit_all_zero_phonetic_pr_is_stated_and_round_trips(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_text(0, 0, "漢字")
             wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "かんじ")])
-            self.assertFalse(wb.sheet(0).get_cell_phonetic_properties(0, 0).present)
+            self.assertFalse(wb.sheet(0).get_cell_phonetic_properties(0, 0).stated)
             wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=0, alignment=0))
-            self.assertTrue(wb.sheet(0).get_cell_phonetic_properties(0, 0).present)
+            self.assertTrue(wb.sheet(0).get_cell_phonetic_properties(0, 0).stated)
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertTrue(reloaded.sheet(0).get_cell_phonetic_properties(0, 0).present)
+            self.assertTrue(reloaded.sheet(0).get_cell_phonetic_properties(0, 0).stated)
             self.assertEqual(
-                reloaded.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0, present=True)
+                reloaded.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0, stated=True)
             )
             with self.assertRaises(FormulonError):
-                reloaded.sheet(9).get_cell_phonetic_properties(0, 0).present
+                reloaded.sheet(9).get_cell_phonetic_properties(0, 0).stated
 
 
 class SheetViewOriginAndSelectionTests(unittest.TestCase):
@@ -1317,7 +1317,7 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
 class ArgumentScopeTests(unittest.TestCase):
     """Every WASM block a call allocates for its arguments is freed on every exit."""
 
-    def _assert_rejected_without_leak(self, call, exception=ValueError) -> int:
+    def _assert_rejected_without_leak(self, call, exception=FormulonError) -> int:
         """Run ``call``, expect ``exception``, and return how many blocks it allocated."""
         live: set = set()
         allocations = 0
@@ -1469,7 +1469,7 @@ class PackedIntegerGuardTests(unittest.TestCase):
 
     def test_shape_emu_offsets(self) -> None:
         with Workbook.create_default() as wb:
-            for bad, exception in ((1.9, ValueError), ("5", TypeError), (2**63, ValueError)):
+            for bad, exception in ((1.9, TypeError), (2.0, TypeError), ("5", TypeError), (2**63, ValueError)):
                 with self.subTest(from_col_offset_emu=bad):
                     with self.assertRaises(exception):
                         wb.sheet(0).add_shape(
@@ -1482,19 +1482,19 @@ class PackedIntegerGuardTests(unittest.TestCase):
         with wb:
             for indices in ([1.7], [-1], ["1"]):
                 with self.subTest(indices=indices):
-                    with self.assertRaises((TypeError, ValueError)):
+                    with self.assertRaises((TypeError, FormulonError)):
                         wb.sheet(0).pivot(pivot).set_row_field_order(indices)
 
     def test_data_bar_length_percentages(self) -> None:
         with Workbook.create_default() as wb:
-            for bad in (1.5, 256, -1):
+            for bad, exception in ((1.5, TypeError), (256, ValueError), (-1, ValueError)):
                 with self.subTest(min_length_pct=bad):
                     rule = ConditionalFormatInput(
                         ranges=[CellRect(0, 0, 2, 0)],
                         type=3,
                         data_bar=DataBar(Cfvo(3), Cfvo(4), _rgb(0, 0, 255), min_length_pct=bad),
                     )
-                    with self.assertRaises(ValueError):
+                    with self.assertRaises(exception):
                         wb.sheet(0).add_cf_rule(rule)
             self.assertEqual(len(wb.sheet(0).list_cf_rules()), 0)
 

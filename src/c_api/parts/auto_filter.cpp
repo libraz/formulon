@@ -54,9 +54,6 @@ namespace {
 
 static_assert(sizeof(fm_cell_rect_t) == sizeof(formulon::MergeRange), "fm_cell_rect_t / MergeRange size mismatch");
 
-// `fm_filter_column_t::dxf_id` of a colour filter that names no dxf.
-constexpr std::uint32_t kAbsentDxfId = std::numeric_limits<std::uint32_t>::max();
-
 // The AutoFilter an entry point operates on: the sheet's own, or a table's.
 struct Target {
   std::size_t sheet = 0;
@@ -168,7 +165,8 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
         c.max_val_iso = keep(in.dynamic.max_val_iso);
         break;
       case formulon::FilterKind::kColor:
-        c.dxf_index = in.color.dxf_id.value_or(kAbsentDxfId);
+        c.has_dxf_index = in.color.dxf_id.has_value() ? 1 : 0;
+        c.dxf_index = in.color.dxf_id.value_or(0U);
         c.cell_color = in.color.cell_color ? 1 : 0;
         break;
       case formulon::FilterKind::kIcon:
@@ -311,7 +309,7 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       out->dynamic.max_val_iso = text_or_empty(in.max_val_iso);
       return 0;
     case formulon::FilterKind::kColor:
-      if (in.dxf_index != kAbsentDxfId) {
+      if (in.has_dxf_index != 0) {
         out->color.dxf_id = in.dxf_index;
       }
       out->color.cell_color = in.cell_color != 0;

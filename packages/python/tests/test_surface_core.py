@@ -43,29 +43,29 @@ class StructLayoutTests(unittest.TestCase):
         "CELL_NODE": 16,
         "PHONETIC_RUN": 12,
         "CFVO": 12,
-        "CF_MATCH": 144,
-        "CF_RULE": 376,
+        "CF_MATCH": 136,
+        "CF_RULE": 352,
         "PIVOT_CELL": 48,
         "PIVOT_FIELD_SPEC": 24,
-        "PIVOT_DATA_FIELD_SPEC": 32,
+        "PIVOT_DATA_FIELD_SPEC": 40,
         "PIVOT_FILTER_SPEC": 64,
-        "PIVOT_FIELD_INFO": 72,
-        "PIVOT_ITEM_INFO": 24,
-        "PIVOT_STYLE_OPTIONS": 32,
+        "PIVOT_FIELD_INFO": 80,
+        "PIVOT_ITEM_INFO": 28,
+        "PIVOT_STYLE_OPTIONS": 28,
         "PIVOT_OPTIONS": 108,
-        "PIVOT_CACHE_OPTIONS": 16,
+        "PIVOT_CACHE_OPTIONS": 20,
         "PIVOT_CALCULATED_ITEM": 20,
         "TABLE_INFO": 56,
         "TABLE_COLUMN_INFO": 20,
         "TABLE_STYLE_ELEMENT": 16,
-        "TABLE_STYLE_OPTIONS": 28,
+        "TABLE_STYLE_OPTIONS": 24,
         "TABLE_STYLE_OPTIONS_PATCH": 44,
         "TABLE_STYLE": 24,
         "READ_DIAGNOSTICS": 24,
         "SAVE_DIAGNOSTICS": 24,
-        "SPILL_INFO": 28,
-        "ARRAY_FORMULA": 28,
-        "FUNCTION_METADATA": 28,
+        "SPILL_INFO": 24,
+        "ARRAY_FORMULA": 24,
+        "FUNCTION_METADATA": 32,
         "LOCALE_FACTS": 60,
         "CIVIL_TIME": 24,
         "SHEET_VIEW": 88,
@@ -410,8 +410,8 @@ class SpillTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_formula(0, 0, "=SEQUENCE(3)")
             wb.recalc()
-            info = wb.sheet(0).get_spill_info(0, 0)
-            self.assertTrue(info.engaged)
+            info = wb.sheet(0).get_spill(0, 0)
+            self.assertIsNotNone(info)
             self.assertEqual(info.range, CellRect(0, 0, 2, 0))
             self.assertFalse(info.blocked)
 
@@ -420,12 +420,11 @@ class SpillTests(unittest.TestCase):
             wb.sheet(0).set_formula(0, 0, "=SEQUENCE(5)")
             wb.sheet(0).set_number(3, 0, 1.0)
             wb.recalc()
-            info = wb.sheet(0).get_spill_info(0, 0)
+            info = wb.sheet(0).get_spill(0, 0)
             self.assertTrue(info.blocked)
-            self.assertFalse(info.engaged)
             self.assertEqual(info.range, CellRect(0, 0, 4, 0))
-            self.assertFalse(wb.sheet(0).get_spill_info(1, 0).blocked)
-            self.assertIsNone(wb.sheet(0).get_spill_info(9, 9).range)
+            self.assertIsNone(wb.sheet(0).get_spill(1, 0))
+            self.assertIsNone(wb.sheet(0).get_spill(9, 9))
 
 
 class ArrayFormulaTests(unittest.TestCase):

@@ -46,7 +46,7 @@ void JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("addDataTable");
+  JsNarrowNumericReader reader("Sheet.addDataTable");
   fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
   if (js_value_present(spec)) {
     table.rect = js_pull_range(reader.value(spec, "rect", "rect"), &reader);

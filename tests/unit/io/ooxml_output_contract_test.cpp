@@ -370,10 +370,10 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
   // caller could no longer tell a stated margin from a defaulted one.
   fm_page_margins_t read = FM_STRUCT_INIT(fm_page_margins_t);
   ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, 0, &read), 0);
-  EXPECT_EQ(read.left_in_engaged, 1);
-  EXPECT_EQ(read.footer_in_engaged, 1);
-  EXPECT_EQ(read.right_in_engaged, 0);
-  EXPECT_EQ(read.top_in_engaged, 0);
+  EXPECT_EQ(read.has_left_in, 1);
+  EXPECT_EQ(read.has_footer_in, 1);
+  EXPECT_EQ(read.has_right_in, 0);
+  EXPECT_EQ(read.has_top_in, 0);
 }
 
 TEST(OoxmlPageMargins, IncompleteSourceElementIsCompletedOnSave) {

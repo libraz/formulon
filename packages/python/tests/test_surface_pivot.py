@@ -906,9 +906,9 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["行ラベル|Sum of Amount", "令和6年|40", "令和7年|12", "総計|52"]),
             ),
-            "Pivot.clear_field_date_group": (
+            "Pivot.set_field_date_group#clears": (
                 clear_date_group_setup,
-                lambda f: f.wb.sheet(0).pivot(f.pivot).clear_field_date_group(f.date),
+                lambda f: f.wb.sheet(0).pivot(f.pivot).set_field_date_group(f.date, None),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "45292|10", "45323|30", "45658|5", "45689|7", "総計|52"]),
             ),
@@ -1180,7 +1180,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             )
             wb.sheet(0).pivot(f.pivot).set_column_field_order([PIVOT_VALUES_FIELD])
             self.assertEqual(wb.sheet(0).pivot(f.pivot).get_column_field_order(), [PIVOT_VALUES_FIELD])
-            with self.assertRaises(ValueError):
+            with self.assertRaises(FormulonError):
                 wb.sheet(0).pivot(f.pivot).set_column_field_order([-3])
 
     def test_style_options_defaults_on_create_and_round_trips(self) -> None:

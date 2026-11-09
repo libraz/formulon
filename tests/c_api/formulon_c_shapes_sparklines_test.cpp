@@ -506,6 +506,13 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.date_axis_ref, nullptr);
 
+  // CLEAR removes a colour, which then reads as no colour.
+  fm_sparkline_group_patch_t uncolour = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  uncolour.color_high_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &uncolour), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &changed), 0);
+  EXPECT_EQ(changed.color_high.kind, FM_COLOR_KIND_NONE);
+
   ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), 0);
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(again.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);

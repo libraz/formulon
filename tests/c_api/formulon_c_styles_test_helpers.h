@@ -99,6 +99,13 @@ static_assert(offsetof(fm_styles_batch_spec_t, num_fmt_ids) == 15U * sizeof(void
 static_assert(sizeof(size_t) == sizeof(void*), "fm_styles_batch_spec_t assumes size_t is pointer-width");
 
 // A literal-RGB colour spec (`kind == FM_COLOR_KIND_RGB`).
+/// Reads a cell's xf index, dropping the presence flag.
+[[maybe_unused]] inline fm_status_t GetCellXfIndex(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                   uint32_t col, uint32_t* out_xf_index) {
+  int32_t present = 0;
+  return fm_sheet_get_cell_xf_index(wb, sheet_index, row, col, &present, out_xf_index);
+}
+
 [[maybe_unused]] inline fm_color_t RgbColor(uint32_t argb) {
   fm_color_t spec{};
   spec.kind = static_cast<uint8_t>(FM_COLOR_KIND_RGB);

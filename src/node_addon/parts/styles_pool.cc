@@ -218,6 +218,7 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_t& f) {
   out.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(f.pattern)));
   out.Set("foreground", ColorSpecToJs(env, f.foreground));
   out.Set("background", ColorSpecToJs(env, f.background));
+  out.Set("gradient", env.Null());
   if (f.has_gradient != 0) {
     Napi::Object gradient = Napi::Object::New(env);
     gradient.Set("type", Napi::Number::New(env, f.gradient_type));
@@ -353,21 +354,11 @@ Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf_t& xf) {
 }
 
 void SetCellXfAlignment(Napi::Env env, const fm_cell_xf_t& xf, Napi::Object* out) {
-  if (xf.has_text_rotation != 0) {
-    out->Set("textRotation", Napi::Number::New(env, xf.text_rotation));
-  }
-  if (xf.has_indent != 0) {
-    out->Set("indent", Napi::Number::New(env, xf.indent));
-  }
-  if (xf.has_relative_indent != 0) {
-    out->Set("relativeIndent", Napi::Number::New(env, xf.relative_indent));
-  }
-  if (xf.has_shrink_to_fit != 0) {
-    out->Set("shrinkToFit", Napi::Boolean::New(env, xf.shrink_to_fit != 0));
-  }
-  if (xf.has_reading_order != 0) {
-    out->Set("readingOrder", Napi::Number::New(env, xf.reading_order));
-  }
+  out->Set("textRotation", JsNumberOrNull(env, xf.has_text_rotation, xf.text_rotation));
+  out->Set("indent", JsNumberOrNull(env, xf.has_indent, xf.indent));
+  out->Set("relativeIndent", JsNumberOrNull(env, xf.has_relative_indent, xf.relative_indent));
+  out->Set("shrinkToFit", JsBoolOrNull(env, xf.has_shrink_to_fit, xf.shrink_to_fit));
+  out->Set("readingOrder", JsNumberOrNull(env, xf.has_reading_order, xf.reading_order));
 }
 
 void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_xf_t* out) {
@@ -454,12 +445,15 @@ Napi::Value StyleCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
 // ---- Cell-XF index --------------------------------------------------
 
 Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
-  return U32IndexCall(info, [&](fm_workbook_t* handle, uint32_t* xf) {
-    const uint32_t sheet = ArgU32(info, 0);
-    const uint32_t row = ArgU32(info, 1);
-    const uint32_t col = ArgU32(info, 2);
-    return fm_sheet_get_cell_xf_index(handle, sheet, row, col, xf);
-  });
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t present = 0;
+  uint32_t xf = 0;
+  const fm_status_t rc =
+      fm_sheet_get_cell_xf_index(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &xf);
+  return OptionalOrNull(env, rc, present, Napi::Number::New(env, xf));
 }
 
 Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
@@ -542,22 +536,14 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  if (d.font_engaged != 0) {
-    out.Set("font", FontRecordToJs(env, d.font));
-  }
-  if (d.fill_engaged != 0) {
-    out.Set("fill", FillRecordToJs(env, d.fill));
-  }
-  if (d.border_engaged != 0) {
-    out.Set("border", BorderRecordToJs(env, d.border));
-  }
+  out.Set("font", d.has_font != 0 ? Napi::Value(FontRecordToJs(env, d.font)) : env.Null());
+  out.Set("fill", d.has_fill != 0 ? Napi::Value(FillRecordToJs(env, d.fill)) : env.Null());
+  out.Set("border", d.has_border != 0 ? Napi::Value(BorderRecordToJs(env, d.border)) : env.Null());
   out.Set("numberFormat", JsStringOrNull(env, d.number_format));
-  if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
-    out.Set("alignment", AlignmentXmlToJs(env, d.alignment_xml));
-  }
-  if (d.protection_xml != nullptr && d.protection_xml[0] != '\0') {
-    out.Set("protection", ProtectionXmlToJs(env, d.protection_xml));
-  }
+  const bool has_alignment = d.alignment_xml != nullptr && d.alignment_xml[0] != '\0';
+  out.Set("alignment", has_alignment ? Napi::Value(AlignmentXmlToJs(env, d.alignment_xml)) : env.Null());
+  const bool has_protection = d.protection_xml != nullptr && d.protection_xml[0] != '\0';
+  out.Set("protection", has_protection ? Napi::Value(ProtectionXmlToJs(env, d.protection_xml)) : env.Null());
   return out;
 }
 
@@ -641,19 +627,19 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
       [&](CheckedSpecReader& reader, const Napi::Object& record) {
         Napi::Object font;
         if (reader.Object(record, "font", &font)) {
-          dxf.font_engaged = 1;
+          dxf.has_font = 1;
           PullFontRecord(reader, font, &font_name, &dxf.font);
         }
 
         Napi::Object fill;
         if (reader.Object(record, "fill", &fill)) {
-          dxf.fill_engaged = 1;
+          dxf.has_fill = 1;
           dxf.fill = PullFillRecord(reader, fill, &fill_stops);
         }
 
         Napi::Object border;
         if (reader.Object(record, "border", &border)) {
-          dxf.border_engaged = 1;
+          dxf.has_border = 1;
           dxf.border = PullBorderRecord(reader, border);
         }
 

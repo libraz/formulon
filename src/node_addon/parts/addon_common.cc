@@ -23,6 +23,22 @@ Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len) 
   return copy;
 }
 
+namespace {
+thread_local ScopedReaderLabel::Describe g_label_describe = nullptr;
+thread_local const void* g_label_data = nullptr;
+}  // namespace
+
+ScopedReaderLabel::ScopedReaderLabel(Describe describe, const void* data) noexcept
+    : previous_describe_(g_label_describe), previous_data_(g_label_data) {
+  g_label_describe = describe;
+  g_label_data = data;
+}
+
+ScopedReaderLabel::~ScopedReaderLabel() {
+  g_label_describe = previous_describe_;
+  g_label_data = previous_data_;
+}
+
 // FORMULON-ALLOW: N-API uses JavaScript exceptions for argument validation.
 void CheckedSpecReader::ObservePending() {
   if (!failed_ && env_.IsExceptionPending()) {
@@ -36,7 +52,8 @@ void CheckedSpecReader::ReportFailure(const std::string& message) {
     failed_ = true;
     return;
   }
-  ErrorType::New(env_, message).ThrowAsJavaScriptException();
+  const std::string label = g_label_describe != nullptr ? g_label_describe(g_label_data) + " " : std::string();
+  ErrorType::New(env_, label + message).ThrowAsJavaScriptException();
   failed_ = true;
 }
 
@@ -558,6 +575,13 @@ Napi::Value ThrowStatus(Napi::Env env, fm_status_t rc) {
   return ThrowFormulonError(env, rc, message, context, parse_error);
 }
 
+Napi::Value ThrowBindingStatus(Napi::Env env, fm_status_t code, const std::string& message) {
+  if (env.IsExceptionPending()) {
+    return env.Undefined();
+  }
+  return ThrowFormulonError(env, code, message.c_str(), "", env.Undefined());
+}
+
 Napi::Value ThrowInvalidHandle(Napi::Env env) {
   if (env.IsExceptionPending()) {
     return env.Undefined();
@@ -696,7 +720,7 @@ Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_info_t& cell)
   out.Set("value", ValueToJs(env, cell.value));
   out.Set("kind", Napi::Number::New(env, static_cast<int32_t>(cell.kind)));
   out.Set("depth", Napi::Number::New(env, cell.depth));
-  out.Set("fieldName", JsString(env, cell.field_name));
+  out.Set("fieldName", JsStringOrNull(env, cell.field_name));
   out.Set("numberFormat", JsStringOrNull(env, cell.number_format));
   return out;
 }
@@ -708,7 +732,7 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_info_t& m) {
   // Each kind carries only its own fields.
   switch (m.kind) {
     case FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT:
-      o.Set("dxfIndex", m.dxf_index_engaged != 0 ? Napi::Value(Napi::Number::New(env, m.dxf_index)) : env.Null());
+      o.Set("dxfIndex", m.has_dxf_index != 0 ? Napi::Value(Napi::Number::New(env, m.dxf_index)) : env.Null());
       break;
     case FM_CF_MATCH_KIND_COLOR_SCALE:
       o.Set("color", ColorSpecToJs(env, m.color));
@@ -719,7 +743,7 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_info_t& m) {
       bar.Set("axisPositionPct", Napi::Number::New(env, m.bar_axis_position_pct));
       bar.Set("isNegative", Napi::Boolean::New(env, m.bar_is_negative != 0));
       bar.Set("fill", ColorSpecToJs(env, m.bar_fill));
-      bar.Set("border", m.bar_border_engaged != 0 ? Napi::Value(ColorSpecToJs(env, m.bar_border)) : env.Null());
+      bar.Set("border", m.bar_border.kind != FM_COLOR_KIND_NONE ? Napi::Value(ColorSpecToJs(env, m.bar_border)) : env.Null());
       bar.Set("gradient", Napi::Boolean::New(env, m.bar_gradient != 0));
       bar.Set("direction", Napi::Number::New(env, static_cast<int32_t>(m.bar_direction)));
       o.Set("bar", bar);
@@ -890,8 +914,12 @@ void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_
   out.aggregation = static_cast<fm_pivot_aggregation_t>(reader.U32(spec, "aggregation", FM_PIVOT_AGGREGATION_SUM));
   out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;
   out.show_as = static_cast<fm_pivot_show_values_as_t>(reader.U32(spec, "showAs", 0U));
-  out.show_as_base_field = reader.I32(spec, "showAsBaseField", -1);
-  out.show_as_base_item = reader.I32(spec, "showAsBaseItem", -1);
+  bool base_field_present = false;
+  out.show_as_base_field = reader.U32(spec, "showAsBaseField", 0U, &base_field_present);
+  out.has_show_as_base_field = base_field_present ? 1 : 0;
+  bool base_item_present = false;
+  out.show_as_base_item = reader.U32(spec, "showAsBaseItem", 0U, &base_item_present);
+  out.has_show_as_base_item = base_item_present ? 1 : 0;
 }
 
 // Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.

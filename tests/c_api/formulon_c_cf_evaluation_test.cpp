@@ -64,7 +64,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(m.priority, 1);
-  EXPECT_EQ(m.dxf_index_engaged, 1);
+  EXPECT_EQ(m.has_dxf_index, 1);
   EXPECT_EQ(m.dxf_index, 7U);
 
   // Second matched cell: A3 (row=2).
@@ -86,7 +86,7 @@ TEST(FormulonCApiCf, EvaluateRangeRejectsRequestPastViewportCeiling) {
   CfResultsGuard results;
   EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, formulon::cf::kCfMaxRows - 1U, 1}),
                                        0, std::nan(""), &results.handle),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecResourceLimit));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit));
   EXPECT_EQ(results.handle, nullptr);
 }
 
@@ -128,7 +128,7 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
   ASSERT_EQ(match_count, 1U);
   fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
-  EXPECT_EQ(m.dxf_index_engaged, 1);
+  EXPECT_EQ(m.has_dxf_index, 1);
   EXPECT_EQ(m.dxf_index, 7U);
 }
 
@@ -265,7 +265,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "AND(A1>10,Sheet2!A1=5)";
-  rule.dxf_index_engaged = 1;
+  rule.has_dxf_index = 1;
   rule.dxf_index = 3;
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -283,7 +283,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   fm_cf_match_info_t match = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
   EXPECT_EQ(match.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
-  EXPECT_EQ(match.dxf_index_engaged, 1);
+  EXPECT_EQ(match.has_dxf_index, 1);
   EXPECT_EQ(match.dxf_index, 3U);
 }
 
@@ -299,7 +299,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
   rule.formula1 = "A1>10";
-  rule.dxf_index_engaged = 1;
+  rule.has_dxf_index = 1;
   rule.dxf_index = 4;
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -319,7 +319,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   fm_cf_match_info_t match = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
   EXPECT_EQ(match.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
-  EXPECT_EQ(match.dxf_index_engaged, 1);
+  EXPECT_EQ(match.has_dxf_index, 1);
   EXPECT_EQ(match.dxf_index, 4U);
 }
 

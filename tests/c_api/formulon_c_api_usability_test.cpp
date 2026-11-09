@@ -670,10 +670,13 @@ TEST(FormulonCApiUsability, ArrayFormulaTextCarriesTheEqualsWhicheverWayItWasEnt
   const fm_cell_rect_t block{0, 2, 2, 2};
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, &block, "A1:A3*2"), 0) << fm_get_last_error_message();
   fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 1, 2, &info), 0);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 1, 2, &present, &info), 0);
+  ASSERT_EQ(present, 1);
   EXPECT_EQ(Str(info.formula), "=A1:A3*2");
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, &block, "=A1:A3*3"), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 1, 2, &info), 0);
+  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 1, 2, &present, &info), 0);
+  ASSERT_EQ(present, 1);
   EXPECT_EQ(Str(info.formula), "=A1:A3*3");
 }
 
@@ -684,7 +687,7 @@ TEST(FormulonCApiUsability, CfFormulasCarryTheEqualsWhicheverWayTheyWereEntered)
   std::size_t index = 99;
   fm_cf_rule_t bare = FM_STRUCT_INIT(fm_cf_rule_t);
   bare.type = 1;  // CellIs
-  bare.op_engaged = 1;
+  bare.has_op = 1;
   bare.op = FM_COMPARISON_OPERATOR_BETWEEN;
   bare.formula1 = "1";
   bare.formula2 = "=10";

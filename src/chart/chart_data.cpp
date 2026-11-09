@@ -52,12 +52,12 @@ struct PlotRules {
 };
 
 Error chart_cell_budget_error(std::uint64_t cells) {
-  return make_error(FormulonErrorCode::kSecResourceLimit, "chart: source exceeds materialization limit",
+  return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: source exceeds materialization limit",
                     "cells=" + std::to_string(cells) + " ceiling=" + std::to_string(kMaxRangeExpansionCells));
 }
 
 Error chart_point_limit_error(std::uint64_t points) {
-  return make_error(FormulonErrorCode::kSecResourceLimit, "chart: point count exceeds Excel row limit",
+  return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: point count exceeds Excel row limit",
                     "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
 }
 

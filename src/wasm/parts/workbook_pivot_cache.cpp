@@ -72,7 +72,6 @@ emscripten::val JsWorkbook::pivotCacheGetWorksheetSource(uint32_t cacheId) const
     return emscripten::val::null();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("present", true);
   js_set_cstr_or_null_fields(o, {{"ref", source.ref}, {"sheet", source.sheet}, {"name", source.name}});
   return o;
 }
@@ -85,20 +84,27 @@ void JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val 
   std::string ref;
   std::string sheet;
   std::string name;
-  JsNarrowNumericReader reader("setPivotCacheWorksheetSource");
-  const bool present = reader.boolean(source, "present", true, "pivotCacheSource.present");
+  JsNarrowNumericReader reader("PivotCache.setWorksheetSource");
+  // `null` removes the source element.
+  if (source.isNull()) {
+    succeeded(fm_workbook_set_pivot_cache_worksheet_source(handle_, cacheId, nullptr));
+    return;
+  }
+  if (!reader.require_object(source, "source")) {
+    return;
+  }
   const char* ref_ptr = reader.optional_string(source, "ref", ref, "pivotCacheSource.ref");
   const char* sheet_ptr = reader.optional_string(source, "sheet", sheet, "pivotCacheSource.sheet");
   const char* name_ptr = reader.optional_string(source, "name", name, "pivotCacheSource.name");
   if (!reader.ok()) {
     return;
   }
-  // `present == false` clears the element; a NULL string is an absent attribute.
+  // A NULL string is an absent attribute.
   fm_pivot_worksheet_source_t c_source = FM_STRUCT_INIT(fm_pivot_worksheet_source_t);
   c_source.ref = ref_ptr;
   c_source.sheet = sheet_ptr;
   c_source.name = name_ptr;
-  succeeded(fm_workbook_set_pivot_cache_worksheet_source(handle_, cacheId, present ? &c_source : nullptr));
+  succeeded(fm_workbook_set_pivot_cache_worksheet_source(handle_, cacheId, &c_source));
 }
 
 double JsWorkbook::pivotCacheFieldCount(uint32_t cacheId) const {
@@ -270,7 +276,7 @@ emscripten::val JsWorkbook::pivotCacheGetOptions(uint32_t cacheId) const {
   }
   emscripten::val o = emscripten::val::object();
   o.set("saveData", opt.save_data != 0);
-  js_set_index_or_null(o, "missingItemsLimit", opt.missing_items_limit);
+  js_set_present_or_null(o, "missingItemsLimit", opt.has_missing_items_limit, opt.missing_items_limit);
   o.set("refreshOnLoad", opt.refresh_on_load != 0);
   return o;
 }
@@ -281,11 +287,11 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
     return;
   }
   if (!js_value_present(options)) {
-    record_type_error("setPivotCacheOptions: `options` must be an object");
+    record_type_error("PivotCache.updateOptions: `options` must be an object");
     return;
   }
   fm_pivot_cache_options_patch_t opt = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
-  JsNarrowNumericReader reader("setPivotCacheOptions");
+  JsNarrowNumericReader reader("PivotCache.updateOptions");
   // An omitted or `null` flag keeps the stored value.
   const auto flag = [&](const char* key, const char* field, fm_patch_op_t* op, int32_t* value) {
     const emscripten::val v = reader.value(options, key, field);
@@ -303,10 +309,7 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
       break;
     case JsPatchKey::kSet:
       opt.missing_items_limit_op = FM_PATCH_OP_SET;
-      opt.missing_items_limit = reader.i32_value(limit, -1, "pivotCacheOptions.missingItemsLimit");
-      if (reader.ok() && opt.missing_items_limit < 0) {
-        reader.fail_range("pivotCacheOptions.missingItemsLimit", "[0, 2147483647]");
-      }
+      opt.missing_items_limit = reader.u32_value(limit, 0U, "pivotCacheOptions.missingItemsLimit");
       break;
     case JsPatchKey::kKeep:
       break;

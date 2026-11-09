@@ -514,7 +514,7 @@ class EnumRecordFieldTests(unittest.TestCase):
             props = sheet.get_cell_phonetic_properties(0, 0)
             self.assertIs(props.type, PhoneticType.HIRAGANA)
             self.assertIs(props.alignment, PhoneticAlignment.CENTER)
-            self.assertTrue(props.present)
+            self.assertTrue(props.stated)
             sheet.set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=3, alignment=1))
             props = sheet.get_cell_phonetic_properties(0, 0)
             self.assertIs(props.type, PhoneticType.NO_CONVERSION)

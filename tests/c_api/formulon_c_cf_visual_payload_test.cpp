@@ -18,7 +18,7 @@ const formulon::cf::DataBarSpec& OnlyDataBarSpec(fm_workbook_t* handle) {
 
 TEST(FormulonCApiCfMutate, ZeroInitializedDataBarExtensionKeepsTheModelDefaults) {
   // The extension fields were appended to a struct callers already
-  // zero-initialize. Leaving every `*_engaged` flag at zero must produce
+  // zero-initialize. Leaving every `has_*` flag at zero must produce
   // exactly the spec the ABI produced before those fields existed.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -48,17 +48,13 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsReachTheModelWhenEngaged) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = MakeDataBarRule(&sqref);
-  rule.data_bar_gradient_engaged = 1;
+  rule.has_data_bar_gradient = 1;
   rule.data_bar_gradient = 0;  // solid, not gradient
-  rule.data_bar_axis_position_engaged = 1;
+  rule.has_data_bar_axis_position = 1;
   rule.data_bar_axis_position = 1;  // middle
-  rule.data_bar_negative_fill_engaged = 1;
   rule.data_bar_negative_fill = CfRgb(255, 0, 0, 255);
-  rule.data_bar_border_engaged = 1;
   rule.data_bar_border = CfRgb(1, 2, 3, 255);
-  rule.data_bar_negative_border_engaged = 1;
   rule.data_bar_negative_border = CfRgb(4, 5, 6, 255);
-  rule.data_bar_axis_color_engaged = 1;
   rule.data_bar_axis_color = CfRgb(7, 8, 9, 255);
 
   std::size_t rule_index = 0;
@@ -90,15 +86,12 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t seed = MakeDataBarRule(&sqref);
-  seed.data_bar_gradient_engaged = 1;
+  seed.has_data_bar_gradient = 1;
   seed.data_bar_gradient = 0;
-  seed.data_bar_axis_position_engaged = 1;
+  seed.has_data_bar_axis_position = 1;
   seed.data_bar_axis_position = 1;  // middle
-  seed.data_bar_negative_fill_engaged = 1;
   seed.data_bar_negative_fill = CfRgb(200, 30, 40, 255);
-  seed.data_bar_border_engaged = 1;
   seed.data_bar_border = CfRgb(11, 22, 33, 255);
-  seed.data_bar_axis_color_engaged = 1;
   seed.data_bar_axis_color = CfRgb(44, 55, 66, 255);
   std::size_t seed_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_index), 0) << fm_get_last_error_message();
@@ -106,18 +99,18 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   // Read it back, change one unrelated field, and write it out again.
   fm_cf_rule_t round_trip = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &round_trip), 0);
-  EXPECT_EQ(round_trip.data_bar_gradient_engaged, 1);
+  EXPECT_EQ(round_trip.has_data_bar_gradient, 1);
   EXPECT_EQ(round_trip.data_bar_gradient, 0);
-  EXPECT_EQ(round_trip.data_bar_axis_position_engaged, 1);
+  EXPECT_EQ(round_trip.has_data_bar_axis_position, 1);
   EXPECT_EQ(round_trip.data_bar_axis_position, 1U);
-  EXPECT_EQ(round_trip.data_bar_negative_fill_engaged, 1);
+  EXPECT_NE(round_trip.data_bar_negative_fill.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(CfR(round_trip.data_bar_negative_fill), 200U);
-  EXPECT_EQ(round_trip.data_bar_border_engaged, 1);
+  EXPECT_NE(round_trip.data_bar_border.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(CfG(round_trip.data_bar_border), 22U);
   // No negative border was set, so the getter must report it absent
   // rather than handing back an engaged black.
-  EXPECT_EQ(round_trip.data_bar_negative_border_engaged, 0);
-  EXPECT_EQ(round_trip.data_bar_axis_color_engaged, 1);
+  EXPECT_EQ(round_trip.data_bar_negative_border.kind, FM_COLOR_KIND_NONE);
+  EXPECT_NE(round_trip.data_bar_axis_color.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(CfB(round_trip.data_bar_axis_color), 66U);
 
   round_trip.stop_if_true = 1;
@@ -213,7 +206,7 @@ TEST(FormulonCApiCfMutate, DataBarRejectsInvertedLengthsAndUnknownAxisPosition) 
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   fm_cf_rule_t bad_axis = MakeDataBarRule(&sqref);
-  bad_axis.data_bar_axis_position_engaged = 1;
+  bad_axis.has_data_bar_axis_position = 1;
   bad_axis.data_bar_axis_position = 3;  // one past `none`
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bad_axis, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
@@ -258,7 +251,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   // The same JS object also carried `dataBar` and `iconSet` keys, so the
   // binding pulls their threshold strings into the same store after the
   // colorScale views are already in the record.
-  rule.data_bar_engaged = 1;
+  rule.has_data_bar = 1;
   rule.data_bar_min.type = 0;
   rule.data_bar_min.value = strings.emplace("5");
   rule.data_bar_max.type = 0;
@@ -268,7 +261,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   icon_thresholds[0].value = strings.emplace("40");
   icon_thresholds[1].type = 1;
   icon_thresholds[1].value = strings.emplace("80");
-  rule.icon_set_engaged = 1;
+  rule.has_icon_set = 1;
   rule.icon_set_thresholds = icon_thresholds;
   rule.icon_set_threshold_count = 2;
 
@@ -345,4 +338,35 @@ TEST(FormulonCApiCfMutate, RuleEngagingSeveralVisualPayloadsSurfacesLivePointers
   ASSERT_EQ(out.icon_set_threshold_count, 2U);
   ASSERT_NE(out.icon_set_thresholds, nullptr);
   EXPECT_STREQ(out.icon_set_thresholds[1].value, "80");
+}
+
+TEST(FormulonCApiCfMutate, UnsetDataBarColoursReadBackAsNoneAndASetBorderReadsBackItsRgb) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_rect_t sqref{0, 0, 9, 0};
+  const fm_cf_rule_t plain = MakeDataBarRule(&sqref);
+  ASSERT_EQ(plain.data_bar_negative_fill.kind, FM_COLOR_KIND_NONE);
+  ASSERT_EQ(plain.data_bar_border.kind, FM_COLOR_KIND_NONE);
+  ASSERT_EQ(plain.data_bar_negative_border.kind, FM_COLOR_KIND_NONE);
+  ASSERT_EQ(plain.data_bar_axis_color.kind, FM_COLOR_KIND_NONE);
+  std::size_t plain_index = 0;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &plain, &plain_index), 0) << fm_get_last_error_message();
+
+  fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &back), 0) << fm_get_last_error_message();
+  EXPECT_EQ(back.data_bar_border.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(back.data_bar_negative_border.kind, FM_COLOR_KIND_NONE);
+
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
+  fm_cf_rule_t bordered = MakeDataBarRule(&sqref);
+  bordered.data_bar_border = CfRgb(11, 22, 33, 255);
+  std::size_t bordered_index = 0;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bordered, &bordered_index), 0) << fm_get_last_error_message();
+  fm_cf_rule_t bordered_back = FM_STRUCT_INIT(fm_cf_rule_t);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &bordered_back), 0);
+  EXPECT_EQ(bordered_back.data_bar_border.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(CfR(bordered_back.data_bar_border), 11U);
+  EXPECT_EQ(CfG(bordered_back.data_bar_border), 22U);
+  EXPECT_EQ(CfB(bordered_back.data_bar_border), 33U);
+  EXPECT_EQ(bordered_back.data_bar_negative_border.kind, FM_COLOR_KIND_NONE);
 }

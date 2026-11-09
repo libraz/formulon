@@ -378,7 +378,7 @@ class JsWorkbook {
 
   // ---- Styles -------------------------------------------------------------
 
-  double getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const;
   void setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index);
   void clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col);
   /// Applies one xf across an inclusive rectangle, materialising blank
@@ -591,7 +591,7 @@ class JsWorkbook {
 
   emscripten::val precedents(uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
   emscripten::val dependents(uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
-  emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getSpill(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val parseReference(const std::string& text, emscripten::val options) const;
   std::string formatReference(emscripten::val range, emscripten::val options) const;
   emscripten::val getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const;
@@ -700,7 +700,8 @@ class JsWorkbook {
   /// bounds take the field's own.
   void pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
                               uint32_t calendar, uint32_t intervalDays, double start, double end);
-  void pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
+  /// The `null` form of `pivotFieldSetDateGroup`: removes the grouping; any other `group` is a type error.
+  void pivotFieldRemoveDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val group);
 
   void pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
   void pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);

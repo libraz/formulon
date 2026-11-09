@@ -27,14 +27,14 @@
 namespace formulon {
 
 /// Multiplies two non-negative integer-like operands as `std::size_t` with
-/// overflow detection. Returns `kFnOverflow` when the product would exceed
+/// overflow detection. Returns `kFunctionOverflow` when the product would exceed
 /// `std::numeric_limits<std::size_t>::max()`.
 inline Expected<std::size_t, Error> checked_mul_size_t(std::size_t a, std::size_t b) {
   if (a == 0U || b == 0U) {
     return std::size_t{0};
   }
   if (a > std::numeric_limits<std::size_t>::max() / b) {
-    return make_error(FormulonErrorCode::kFnOverflow, "checked_mul_size_t: size_t overflow",
+    return make_error(FormulonErrorCode::kFunctionOverflow, "size computation overflows",
                       "a=" + std::to_string(a) + " b=" + std::to_string(b));
   }
   return a * b;

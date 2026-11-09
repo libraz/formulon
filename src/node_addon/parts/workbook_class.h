@@ -155,7 +155,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Dependency-graph trace and dynamic-array spill.
   Napi::Value Precedents(const Napi::CallbackInfo& info);
   Napi::Value Dependents(const Napi::CallbackInfo& info);
-  Napi::Value SpillInfo(const Napi::CallbackInfo& info);
+  Napi::Value GetSpill(const Napi::CallbackInfo& info);
   Napi::Value ParseReference(const Napi::CallbackInfo& info);
   Napi::Value FormatReference(const Napi::CallbackInfo& info);
   /// `getSheetIndex(name)`: the index of the sheet named `name` (ignoring
@@ -336,7 +336,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldAddSubtotalFunction(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearSubtotalFunctions(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldClearDateGroup(const Napi::CallbackInfo& info);
   Napi::Value PivotSetRowFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotSetColFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldCount(const Napi::CallbackInfo& info);

@@ -28,14 +28,14 @@ void FillColumnA(fm_workbook_t* wb) {
 
 }  // namespace
 
-TEST(FormulonCApiArrayFormula, NotInABlockReportsNotEngaged) {
+TEST(FormulonCApiArrayFormula, NotInABlockReportsAbsent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=42"), 0);
   fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-  info.engaged = 7;
-  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 0, 0, &info), 0);
-  EXPECT_EQ(info.engaged, 0);
+  int32_t array_present = 7;
+  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 0, 0, &array_present, &info), 0);
+  EXPECT_EQ(array_present, 0);
   EXPECT_EQ(info.rect.last_row, 0U);
   EXPECT_EQ(info.formula, nullptr);
 }
@@ -54,8 +54,9 @@ TEST(FormulonCApiArrayFormula, SetThenGetFromEveryCellAndRecalcDistributes) {
   const std::string expected = stored;
   for (uint32_t r = 0; r < 3; ++r) {
     fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-    ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, r, 2, &info), 0);
-    EXPECT_EQ(info.engaged, 1);
+    int32_t array_present = 0;
+    ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, r, 2, &array_present, &info), 0);
+    EXPECT_EQ(array_present, 1);
     EXPECT_EQ(info.rect.first_row, 0U);
     EXPECT_EQ(info.rect.first_col, 2U);
     EXPECT_EQ(info.rect.last_row - info.rect.first_row + 1U, 3U);
@@ -81,8 +82,9 @@ TEST(FormulonCApiArrayFormula, AnchorBlankClearsTheBlockAndNonAnchorWriteIsRefus
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   for (uint32_t r = 0; r < 3; ++r) {
     fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-    ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, r, 2, &info), 0);
-    EXPECT_EQ(info.engaged, 0) << r;
+    int32_t array_present = 1;
+    ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, r, 2, &array_present, &info), 0);
+    EXPECT_EQ(array_present, 0) << r;
     fm_value_t v{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, r, 2, &v), 0);
     EXPECT_EQ(v.kind, FM_VALUE_KIND_BLANK) << r;
@@ -99,8 +101,9 @@ TEST(FormulonCApiArrayFormula, ReplacesAContainedBlockAndRefusesAPartialOverlap)
             kPreconditionFailed);
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3U, 4U}), "=A1:A3"), 0);
   fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 2, 4, &info), 0);
-  EXPECT_EQ(info.engaged, 1);
+  int32_t array_present = 0;
+  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 2, 4, &array_present, &info), 0);
+  EXPECT_EQ(array_present, 1);
   EXPECT_EQ(info.rect.first_row, 0U);
   EXPECT_EQ(info.rect.last_row - info.rect.first_row + 1U, 4U);
   EXPECT_EQ(info.rect.last_col - info.rect.first_col + 1U, 2U);
@@ -110,8 +113,10 @@ TEST(FormulonCApiArrayFormula, ArgumentChecks) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-  EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 0, 0, nullptr), kNullPointer);
-  EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 9, 0, 0, &info), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  int32_t array_present = 0;
+  EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 0, 0, &array_present, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 0, 0, nullptr, &info), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 9, 0, 0, &array_present, &info), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0U, 0U}), nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 9, record_arg(fm_cell_rect_t{0, 0, 0U, 0U}), "=1"),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

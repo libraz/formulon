@@ -334,7 +334,7 @@ val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
     return val::object();
   }
   val o = fields_to_val(&p, kPlotRd);
-  o.set("extendedLayout", p.extended_layout >= 0 ? val(p.extended_layout) : val::null());
+  o.set("extendedLayout", p.extended_layout != FM_CHART_EXTENDED_LAYOUT_ABSENT ? val(p.extended_layout) : val::null());
   o.set("barDirection", p.bar_direction == FM_CHART_BAR_DIRECTION_ABSENT ? val::null() : val(p.bar_direction));
   o.set("varyColors", val(p.vary_colors == FM_TRISTATE_TRUE));
   val axis_ids = val::array();
@@ -616,7 +616,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
     record_invalid_handle();
     return val::undefined();
   }
-  JsNarrowNumericReader reader("getChartPreview");
+  JsNarrowNumericReader reader("Chart.getPreview");
   const val spec = js_object_or_empty(overrides);
   std::string source_store;
   fm_chart_preview_overrides_spec_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_spec_t);

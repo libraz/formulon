@@ -237,6 +237,12 @@ TEST(FormulonCli, EvalLocalCanonicalizesTheFormulaBeforeEvaluating) {
   EXPECT_EQ(invariant.stdout_text, "6\n");
 }
 
+TEST(FormulonCli, EvalLocalReportsSyntaxErrorsInTheTypedText) {
+  const CliRun r = run_cli({"eval", "--profile", "mac-365-de_DE", "--local", "=SUMME(1;"});
+  EXPECT_EQ(r.exit_code, 65) << "stderr=" << r.stderr_text;
+  EXPECT_NE(r.stderr_text.find(" at 1:10"), std::string::npos) << r.stderr_text;
+}
+
 TEST(FormulonCli, EvalUnknownFunctionRemainsCellLevelNameError) {
   CliRun r = run_cli({"eval", "=NOTAREALFUNC(1,2)"});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;

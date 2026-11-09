@@ -14,6 +14,7 @@ import createFormulon, {
   PaperSize,
   PhoneticAlignment,
   PhoneticType,
+  PivotShowAsBase,
   PivotSortOrder,
   SlicerSortOrder,
   TableStyleElementType,
@@ -48,6 +49,7 @@ import createFormulon, {
   type EffectiveStyle,
   type Formulon,
   type Font,
+  type GradientFill,
   type CellStyle,
   type FormulonOptions,
   type NativeValue,
@@ -426,7 +428,7 @@ export function workbookSurface(): void {
 export function ooxmlLayer(): void {
   const font = wb.ooxml.getFont(0);
   const fontIndex: number = wb.ooxml.addFont(font);
-  const xf: number = sheet.ooxml.getCellXfIndex('A1');
+  const xf: number = sheet.ooxml.getCellXfIndex('A1') ?? 0;
   sheet.ooxml.setColumnXfIndex('B', xf);
   const columnStyle: number | null = sheet.ooxml.getColumnXfIndex(1);
   sheet.ooxml.setRowXfIndex('3', xf);
@@ -785,7 +787,7 @@ export function styleRecords(dxf: Dxf): void {
   const horizontal = xf.horizontal;
   const parent: number | undefined = xf.styleXfIndex;
   const format = sheet.getCellFormat('A1');
-  const xfIndex: number = sheet.ooxml.getCellXfIndex('A1');
+  const xfIndex: number | null = sheet.ooxml.getCellXfIndex('A1');
   const run = sheet.getCellPhoneticRuns('A1')[0];
   const span: number = run.end - run.start;
   sheet.setCellPhoneticProperties('A1', { fontIndex: 0, type: PhoneticType.Hiragana, alignment: PhoneticAlignment.Left });
@@ -806,7 +808,7 @@ export function styleRecords(dxf: Dxf): void {
   // @ts-expect-error the has* flags are gone
   wb.ooxml.addCellXf({ ...xfBase, hasVerticalAlign: true });
   const rule: ConditionalFormat = sheet.listCfRules()[0];
-  const dxfIndex: number | undefined = rule.dxfIndex;
+  const dxfIndex: number | null = rule.dxfIndex;
   void [size, argb, horizontal, parent, xfIndex, span, dxfIndex, format.source];
   // @ts-expect-error the font size is in points, `sizePt`
   void font.size;
@@ -829,7 +831,7 @@ export function drawingRecords(): void {
   const width: number = info.widthPx;
   sheet.restoreDrawing(bytes, { assignNewId: true });
   const metadata = formulon.getFunctionMetadata('SUM');
-  const signature: string | undefined = metadata?.signature;
+  const signature: string | null | undefined = metadata?.signature;
   void [format, width, signature];
   // @ts-expect-error the media path is not public
   void props.mediaPath;
@@ -994,6 +996,7 @@ export function nativeBooleansAndDates(): void {
   // @ts-expect-error a serial number is not a DateInput
   wb.setPinnedNow(45322);
   sheet.evaluateCfRange('A1:A9', { today: new Date() });
+  sheet.evaluateCfRange('A1:A9', { today: new Date(), timePeriodRules: false });
   // @ts-expect-error the date basis is `options.today`, not a serial
   sheet.evaluateCfRange('A1:A9', 45322);
   sheet.addThreadedComment({ id: '{A}', text: 't', personId: 'p', created: new Date() });
@@ -1007,10 +1010,34 @@ export function nativeBooleansAndDates(): void {
   // @ts-expect-error a Date is a date; there is no flag
   cache.setRecordValue(0, 0, 45322, { date: true });
   pivot.setFieldDateGroup(0, { periods: 16 | 64, start: new Date(2024, 0, 1), end: civil });
+  pivot.setFieldDateGroup(0, null);
+  // @ts-expect-error the grouping is removed with `setFieldDateGroup(field, null)`
+  pivot.clearFieldDateGroup(0);
   const mask: PivotDatePeriodMask = pivot.listFields()[0].datePeriods;
   void mask;
   // @ts-expect-error a bound is a DateInput, not a serial
   pivot.setFieldDateGroup(0, { periods: 16, start: 45292 });
+}
+
+export function absenceReads(): void {
+  const spill = sheet.getSpill('A1');
+  const blocked: boolean | undefined = spill?.blocked;
+  const spillRange: CellRect | undefined = spill?.range;
+  // @ts-expect-error the read is `getSpill`
+  sheet.getSpillInfo('A1');
+  const rank: number | null = sheet.listCfRules()[0].rank;
+  const gradient: GradientFill | null = wb.ooxml.getDxf(0).fill?.gradient ?? null;
+  const rotation: number | null = wb.ooxml.getCellXf(0).textRotation;
+  const colour: Color | null = sheet.listSparklineGroups()[0].colorHigh;
+  const fieldName: string | null = pivot.getLayout().cells[0].fieldName;
+  wb.addPivotCache(null);
+  wb.addPivotCache(7);
+  const previous: number = PivotShowAsBase.Previous;
+  const next: PivotShowAsBase = PivotShowAsBase.Next;
+  pivot.setDataField(0, { fieldIndex: 1, showAs: 7, showAsBaseField: 0, showAsBaseItem: PivotShowAsBase.Previous });
+  // @ts-expect-error the sentinel is a member of `PivotShowAsBase`
+  void formulon.PIVOT_SHOW_AS_BASE_PREVIOUS;
+  void [blocked, spillRange, rank, gradient, rotation, colour, fieldName, previous, next];
 }
 
 export function writerUnions(): void {

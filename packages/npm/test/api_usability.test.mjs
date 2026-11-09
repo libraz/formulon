@@ -124,7 +124,7 @@ const CELL_METHODS = {
   'Sheet.getHyperlink': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getLambdaText': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getPrecedents': { args: () => [CELL_ROW, CELL_COL, 1] },
-  'Sheet.getSpillInfo': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getSpill': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getTypedValue': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getValue': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.removeComment': { args: () => [CELL_ROW, CELL_COL] },
@@ -1307,9 +1307,11 @@ test('criterion 13: column geometry takes mode last and defaults to Display', as
     assert.equal(ws.convertColumnPtToChars(50), ws.convertColumnPtToChars(50, f.GeometryMode.Display));
     assert.equal(ws.getColumnWidthPt(0), ws.getColumnWidthPt(0, f.GeometryMode.Display));
     assert.notEqual(ws.convertColumnCharsToPt(10, f.GeometryMode.Print), undefined);
-    assert.throws(() => ws.convertColumnCharsToPt(10, 7), RangeError);
-    assert.throws(() => ws.convertColumnPtToChars(10, 7), RangeError);
-    assert.throws(() => ws.getColumnWidthPt(0, 7), RangeError);
+    const invalidArgument = (e) => e.name === 'FormulonError' && e.code === f.StatusCode.InvalidArgument;
+    assert.throws(() => ws.convertColumnCharsToPt(10, 7), invalidArgument);
+    assert.throws(() => ws.convertColumnPtToChars(10, 7), invalidArgument);
+    assert.throws(() => ws.getColumnWidthPt(0, 7), invalidArgument);
+    assert.throws(() => ws.getColumnWidthPt(0, '1'), TypeError);
   });
 });
 

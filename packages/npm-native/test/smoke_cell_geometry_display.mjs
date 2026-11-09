@@ -154,7 +154,11 @@ test('geometry accessors agree with each other', async () => {
     () => wb.sheet(0).getCellRectPt({ firstRow: 1, firstCol: 0, lastRow: 0, lastCol: 0 }, 0),
     isFormulonError,
   );
-  assert.throws(() => wb.sheet(0).getCellRectPt(A1_B2, 7), RangeError);
+  assert.throws(
+    () => wb.sheet(0).getCellRectPt(A1_B2, 7),
+    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+  );
+  assert.throws(() => wb.sheet(0).getCellRectPt(A1_B2, '1'), TypeError);
   wb.sheet(0).getColumnWidthPt(0, 1);
 
   const pt = wb.sheet(0).convertColumnCharsToPt(2340 / 256, 0);
@@ -168,9 +172,18 @@ test('geometry accessors agree with each other', async () => {
   assert.equal(wb.sheet(0).convertColumnCharsToPt(0, 0), 0);
   assert.throws(() => wb.sheet(0).convertColumnCharsToPt(-1, 0), isFormulonError);
   // A mode that is not a GeometryMode value (an argument left in its old place) is refused.
-  assert.throws(() => wb.sheet(0).convertColumnCharsToPt(10, 7), RangeError);
-  assert.throws(() => wb.sheet(0).convertColumnPtToChars(10, 7), RangeError);
-  assert.throws(() => wb.sheet(0).getColumnWidthPt(0, 7), RangeError);
+  assert.throws(
+    () => wb.sheet(0).convertColumnCharsToPt(10, 7),
+    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+  );
+  assert.throws(
+    () => wb.sheet(0).convertColumnPtToChars(10, 7),
+    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+  );
+  assert.throws(
+    () => wb.sheet(0).getColumnWidthPt(0, 7),
+    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+  );
   assert.throws(() => wb.sheet(99).getRowHeightPt(0), isFormulonError);
 });
 

@@ -37,7 +37,6 @@ HANDLE_FORWARDERS = {
     "Pivot.add_field_subtotal_function": "add_pivot_field_subtotal_function",
     "Pivot.add_filter": "add_pivot_filter",
     "Pivot.clear_data_fields": "clear_pivot_data_fields",
-    "Pivot.clear_field_date_group": "clear_pivot_field_date_group",
     "Pivot.clear_field_items": "clear_pivot_field_items",
     "Pivot.clear_field_subtotal_functions": "clear_pivot_field_subtotal_functions",
     "Pivot.clear_fields": "clear_pivot_fields",

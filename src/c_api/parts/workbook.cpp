@@ -485,15 +485,22 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t index,
 
 namespace {
 
-// Rejects a defined-name scope that is neither -1 (workbook) nor a sheet of the workbook.
+// Context text for a defined-name scope: `workbook` or the sheet index.
+std::string scope_context(std::int32_t local_sheet_id) {
+  return local_sheet_id == FM_DEFINED_NAME_SCOPE_WORKBOOK ? std::string("scope=workbook")
+                                                          : "scope=" + std::to_string(local_sheet_id);
+}
+
+// Rejects a defined-name scope that is neither workbook scope nor a sheet of the workbook.
 fm_status_t check_local_sheet_id(const fm_workbook_t* wb, std::int32_t local_sheet_id) {
   const std::size_t count = wb->workbook().sheet_count();
-  if (local_sheet_id == -1 || (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < count)) {
+  if (local_sheet_id == FM_DEFINED_NAME_SCOPE_WORKBOOK ||
+      (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < count)) {
     return 0;
   }
   return formulon::c_api::parts::set_binding_error(
-      formulon::FormulonErrorCode::kSheetIndexOutOfRange, "local_sheet_id is neither -1 nor a sheet of the workbook",
-      "local_sheet_id=" + std::to_string(local_sheet_id) + " sheet_count=" + std::to_string(count));
+      formulon::FormulonErrorCode::kSheetIndexOutOfRange, "defined-name scope is neither the workbook nor a sheet",
+      scope_context(local_sheet_id) + " sheet_count=" + std::to_string(count));
 }
 
 }  // namespace
@@ -673,8 +680,7 @@ extern "C" fm_status_t fm_workbook_remove_defined_name(fm_workbook_t* wb, const 
     return rc;
   }
   if (find_defined_name_index(wb, name, local_sheet_id) == wb->workbook().defined_names().size()) {
-    return not_found("no such name in that scope",
-                     "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
+    return not_found("no such name in that scope", "name=" + std::string(name) + " " + scope_context(local_sheet_id));
   }
   return finish_status(wb->workbook().set_defined_name_scoped(std::string(name), std::string(), local_sheet_id));
 }

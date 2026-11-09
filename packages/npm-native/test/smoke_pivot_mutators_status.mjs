@@ -17,7 +17,7 @@ import { assert, getModule, isFormulonError, path, pkgRoot, readFile } from './s
 function buildPivot(mod) {
   const wb = mod.Workbook.createDefault();
   wb.setProfileId('win-365-ja_JP');
-  const cache = wb.addPivotCache(0);
+  const cache = wb.addPivotCache();
   const { cacheId } = cache;
   wb.pivotCache(cacheId).setWorksheetSource({ range: 'A1:D5', sheet: 'Sheet1' });
   for (const name of ['Region', 'Product', 'Amount', 'Date']) wb.pivotCache(cacheId).addField(name);
@@ -136,7 +136,7 @@ const PIVOT_MUTATORS = [
     'Workbook.removePivotCache',
     {
       setup: (b) => {
-        b.spare = b.wb.addPivotCache(0);
+        b.spare = b.wb.addPivotCache();
       },
       act: (b) => b.wb.removePivotCache(b.spare),
       expect: (b) => {
@@ -545,13 +545,13 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.clearFieldDateGroup',
+    'Pivot.setFieldDateGroup (null ungroups)',
     {
       setup: (b) => {
         dateRows(b);
         b.pivot.setFieldDateGroup(b.date, { periods: 64, calendar: 0 });
       },
-      act: (b) => b.pivot.clearFieldDateGroup(b.date),
+      act: (b) => b.pivot.setFieldDateGroup(b.date, null),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), DATE_SERIAL_GRID),
     },
   ],
@@ -563,7 +563,7 @@ const PIVOT_MUTATORS = [
       expect: (b) => {
         assert.throws(
           () => b.pivot.updateField(99, { numberFormat: '#,##0.00' }),
-          (e) => isFormulonError(e, 5054),
+          (e) => isFormulonError(e, 13),
         );
         assert.equal(b.pivot.listFields()[b.amount].numberFormat, '#,##0.00');
         const saved = b.wb.save();
@@ -1028,7 +1028,7 @@ const STATUS_ACCESSORS = [
   ['getDate1904', [], null],
   ['getProfileId', [], null],
   ['getPinnedNow', [], null],
-  ['getSpillInfo', [0, 0, 0], [99, 0, 0]],
+  ['getSpill', [0, 0, 0], [99, 0, 0]],
   ['getArrayFormula', [0, 0, 0], [99, 0, 0]],
   ['getColumnWidthPt', [0, 0, 0], [99, 0, 0]],
   ['getRowHeightPt', [0, 0], [99, 0]],

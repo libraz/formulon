@@ -396,7 +396,7 @@ TEST(FormulonCApi, DefinedNameScopeOutsideTheSheetsIsSheetIndexOutOfRange) {
   }
   int32_t present = 0;
   fm_defined_name_t out = FM_STRUCT_INIT(fm_defined_name_t);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", -1, &present, &out), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &out), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(out.comment, nullptr);
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Local", 0, &present, &out), 0);

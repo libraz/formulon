@@ -851,23 +851,23 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   out->fit_to_height = view.fit_to_height;
   out->fit_to_page = view.fit_to_page ? 1 : 0;
 
-  // The `_engaged` flags report presence, which only the XML knows: the
+  // The `has_*` flags report presence, which only the XML knows: the
   // structured view cannot distinguish `scale="100"` from an absent
   // attribute that defaults to 100.
   pugi::xml_document doc;
   if (load_fragment(doc, print.page_setup_xml)) {
     const pugi::xml_node root = doc.first_child();
     const EngagedAttr attrs[] = {
-        {"orientation", &out->orientation_engaged},   {"paperSize", &out->paper_size_engaged},
-        {"scale", &out->scale_pct_engaged},           {"fitToWidth", &out->fit_to_width_engaged},
-        {"fitToHeight", &out->fit_to_height_engaged},
+        {"orientation", &out->has_orientation},   {"paperSize", &out->has_paper_size},
+        {"scale", &out->has_scale_pct},           {"fitToWidth", &out->has_fit_to_width},
+        {"fitToHeight", &out->has_fit_to_height},
     };
     read_engaged(root, attrs, std::size(attrs));
   }
   pugi::xml_document sheet_pr_doc;
   if (load_fragment(sheet_pr_doc, print.sheet_pr_xml)) {
     const pugi::xml_node page_setup_pr = sheet_pr_doc.first_child().child("pageSetUpPr");
-    out->fit_to_page_engaged = (page_setup_pr && page_setup_pr.attribute("fitToPage")) ? 1 : 0;
+    out->has_fit_to_page = (page_setup_pr && page_setup_pr.attribute("fitToPage")) ? 1 : 0;
   }
   return 0;
 }
@@ -899,8 +899,8 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
   if (load_fragment(doc, print.page_margins_xml)) {
     const pugi::xml_node root = doc.first_child();
     const EngagedAttr attrs[] = {
-        {"left", &out->left_in_engaged},     {"right", &out->right_in_engaged},   {"top", &out->top_in_engaged},
-        {"bottom", &out->bottom_in_engaged}, {"header", &out->header_in_engaged}, {"footer", &out->footer_in_engaged},
+        {"left", &out->has_left_in},     {"right", &out->has_right_in},   {"top", &out->has_top_in},
+        {"bottom", &out->has_bottom_in}, {"header", &out->has_header_in}, {"footer", &out->has_footer_in},
     };
     read_engaged(root, attrs, std::size(attrs));
   }
@@ -932,10 +932,10 @@ extern "C" fm_status_t fm_sheet_get_print_options(const fm_workbook_t* wb, size_
   out->horizontal_centered = root.attribute("horizontalCentered").as_bool(false) ? 1 : 0;
   out->vertical_centered = root.attribute("verticalCentered").as_bool(false) ? 1 : 0;
   const EngagedAttr attrs[] = {
-      {"gridLines", &out->grid_lines_engaged},
-      {"headings", &out->headings_engaged},
-      {"horizontalCentered", &out->horizontal_centered_engaged},
-      {"verticalCentered", &out->vertical_centered_engaged},
+      {"gridLines", &out->has_grid_lines},
+      {"headings", &out->has_headings},
+      {"horizontalCentered", &out->has_horizontal_centered},
+      {"verticalCentered", &out->has_vertical_centered},
   };
   read_engaged(root, attrs, std::size(attrs));
   return 0;
@@ -969,10 +969,10 @@ extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_
   out->scale_with_doc = root.attribute("scaleWithDoc").as_bool(true) ? 1 : 0;
   out->align_with_margins = root.attribute("alignWithMargins").as_bool(true) ? 1 : 0;
   const EngagedAttr attrs[] = {
-      {"differentOddEven", &out->different_odd_even_engaged},
-      {"differentFirst", &out->different_first_engaged},
-      {"scaleWithDoc", &out->scale_with_doc_engaged},
-      {"alignWithMargins", &out->align_with_margins_engaged},
+      {"differentOddEven", &out->has_different_odd_even},
+      {"differentFirst", &out->has_different_first},
+      {"scaleWithDoc", &out->has_scale_with_doc},
+      {"alignWithMargins", &out->has_align_with_margins},
   };
   read_engaged(root, attrs, std::size(attrs));
   TextStore& store = fresh_read_scratch(wb);

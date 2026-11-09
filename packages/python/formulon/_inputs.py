@@ -55,7 +55,7 @@ _COLOR_TEXT = re.compile(r"#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")
 
 
 def _invalid(message: str) -> FormulonError:
-    return FormulonError(StatusCode.INVALID_ARGUMENT, _diagnostic_override=(message, ""))
+    return FormulonError(StatusCode.INVALID_ARGUMENT, message, "")
 
 
 # ---------------------------------------------------------------------------

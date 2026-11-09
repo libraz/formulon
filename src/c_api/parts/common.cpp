@@ -471,24 +471,24 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
       rc != 0) {
     return rc;
   }
-  if (rule.op_engaged != 0) {
+  if (rule.has_op != 0) {
     if (auto rc = check_enum_domain(rule.op, 0, FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, "op"); rc != 0) {
       return rc;
     }
   }
-  if (rule.time_period_engaged != 0) {
+  if (rule.has_time_period != 0) {
     if (auto rc = check_enum_domain(rule.time_period, 0, FM_DATE_PERIOD_NEXT_WEEK, "time_period"); rc != 0) {
       return rc;
     }
   }
-  if (rule.data_bar_engaged != 0) {
+  if (rule.has_data_bar != 0) {
     if (auto rc = check_cfvo_types(&rule.data_bar_min, 1U, "data_bar_min.type"); rc != 0) {
       return rc;
     }
     if (auto rc = check_cfvo_types(&rule.data_bar_max, 1U, "data_bar_max.type"); rc != 0) {
       return rc;
     }
-    if (rule.data_bar_axis_position_engaged != 0) {
+    if (rule.has_data_bar_axis_position != 0) {
       if (auto rc = check_enum_domain(rule.data_bar_axis_position, 0, FM_CF_DATA_BAR_AXIS_POSITION_NONE,
                                       "data_bar_axis_position");
           rc != 0) {
@@ -511,7 +511,7 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
       return rc;
     }
   }
-  if (rule.icon_set_engaged != 0) {
+  if (rule.has_icon_set != 0) {
     if (auto rc = check_enum_domain(rule.icon_set_name, 0, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters),
                                     "icon_set_name");
         rc != 0) {
@@ -524,7 +524,7 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
         return rc;
       }
     }
-    if (rule.icon_set_floor_engaged != 0) {
+    if (rule.has_icon_set_floor != 0) {
       if (auto rc = check_cfvo_types(&rule.icon_set_floor, 1U, "icon_set_floor.type"); rc != 0) {
         return rc;
       }
@@ -752,7 +752,7 @@ fm_status_t validate(const fm_pivot_field_spec_t& spec) {
   if (auto rc = check_utf8({spec.source_name, spec.custom_name}); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.axis, 0, FM_PIVOT_AXIS_PAGE, "axis");
+  return check_enum_domain(spec.axis, FM_PIVOT_AXIS_ABSENT, FM_PIVOT_AXIS_PAGE, "axis");
 }
 
 fm_status_t validate(const fm_pivot_data_field_t& spec) {

@@ -4,7 +4,7 @@ import { assert, getModule } from './smoke_support.mjs';
 function makePivot(Workbook) {
   const wb = Workbook.createDefault();
   wb.setProfileId('win-365-ja_JP');
-  const cache = wb.addPivotCache(0);
+  const cache = wb.addPivotCache();
   cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
   cache.addField('Region');
   cache.addField('Amount');
@@ -207,7 +207,7 @@ test('pivot cache source snapshots each nested getter once before mutation', asy
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const cache = wb.addPivotCache(0);
+    const cache = wb.addPivotCache();
     let reads = 0;
     const source = { sheet: 'Sheet1' };
     Object.defineProperty(source, 'range', {
@@ -251,7 +251,7 @@ test('setWorksheetSource(null) clears the source and an empty source is still a 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const cache = wb.addPivotCache(0);
+    const cache = wb.addPivotCache();
     cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
     assert.deepEqual(JSON.parse(JSON.stringify(cache.getWorksheetSource())), {
       range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },

@@ -150,8 +150,10 @@ TEST(FormulonCApiArgumentRange, CellXfIndexPastTheTableIsRejectedBeforeAnyWrite)
   SaveAndReload(wb, FM_WORKBOOK_FORMAT_XLSX, &reloaded);
   const std::pair<std::uint32_t, std::uint32_t> kStyled[] = {{1U, 1U}, {3U, 0U}, {4U, 0U}};
   for (const auto& [row, col] : kStyled) {
+    std::int32_t present = 0;
     std::uint32_t xf = 0U;
-    ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, row, col, &xf), 0);
+    ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, row, col, &present, &xf), 0);
+    EXPECT_EQ(present, 1) << row << "," << col;
     EXPECT_EQ(xf, count - 1U) << row << "," << col;
   }
 }
@@ -171,16 +173,16 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
   spec.field_index = 1U;
   spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  spec.show_as_base_field = -1;
-  spec.show_as_base_item = -1;
 
   fm_pivot_data_field_t bad_field = spec;
   bad_field.field_index = static_cast<std::uint32_t>(field_count);
   fm_pivot_data_field_t bad_base = spec;
-  bad_base.show_as_base_field = static_cast<std::int32_t>(field_count);
-  fm_pivot_data_field_t negative_base = spec;
-  negative_base.show_as_base_field = -2;
-  for (const fm_pivot_data_field_t* rejected : {&bad_field, &bad_base, &negative_base}) {
+  bad_base.has_show_as_base_field = 1;
+  bad_base.show_as_base_field = static_cast<std::uint32_t>(field_count);
+  fm_pivot_data_field_t far_base = spec;
+  far_base.has_show_as_base_field = 1;
+  far_base.show_as_base_field = 0xFFFFFFFEU;
+  for (const fm_pivot_data_field_t* rejected : {&bad_field, &bad_base, &far_base}) {
     std::size_t idx = 99U;
     EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, rejected, &idx), FM_STATUS_INDEX_OUT_OF_RANGE);
     EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot, 0U, rejected), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -192,7 +194,8 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
   ASSERT_EQ(fm_sheet_get_pivot_data_field_at(wb.handle, 0, pivot, 0U, &read), 0);
   EXPECT_STREQ(read.name, "Sum of Amount");
 
-  spec.show_as_base_field = 0;
+  spec.has_show_as_base_field = 1;
+  spec.show_as_base_field = 0U;
   std::size_t added = 99U;
   EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, &spec, &added), 0) << fm_get_last_error_message();
   EXPECT_EQ(added, 1U);
@@ -317,7 +320,7 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, row, col, &flag), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, row, col, &flag), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, row, col, &flag, &lambda), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_get_spill_info(wb.handle, 0, row, col, &spill), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_spill(wb.handle, 0, row, col, &flag, &spill), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, row, col, &flag, &table), kInvalidArgument);
     EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, row, col), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, row, col, &flag, &link), kInvalidArgument);
@@ -327,7 +330,7 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     std::int32_t visible = 0;
     EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, row, col, &flag, &visible), kInvalidArgument);
     EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, row, col, 1), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, row, col, &xf), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, row, col, &flag, &xf), kInvalidArgument);
     EXPECT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, row, col), kInvalidArgument);
     fm_cell_nodes_t* nodes = nullptr;
     EXPECT_EQ(fm_sheet_get_precedents(wb.handle, 0, row, col, 1U, &nodes), kInvalidArgument);
@@ -363,7 +366,8 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, kLastRow, kLastCol, &flag), 0);
   EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, kLastRow, kLastCol, &flag), 0);
   EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, kLastRow, kLastCol, &flag, &lambda), 0);
-  EXPECT_EQ(fm_sheet_get_spill_info(wb.handle, 0, kLastRow, kLastCol, &spill), 0);
+  EXPECT_EQ(fm_sheet_get_spill(wb.handle, 0, kLastRow, kLastCol, &flag, &spill), 0);
+  EXPECT_EQ(flag, 0);
   EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, kLastRow, kLastCol, &flag, &table), 0);
   EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, kLastRow, kLastCol, &flag, &link), 0);
@@ -374,7 +378,8 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, kLastRow, kLastCol, &flag, &visible), 0);
   EXPECT_EQ(flag, 0);
   EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, kLastRow, kLastCol, 1), FM_STATUS_NOT_FOUND);
-  EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, kLastRow, kLastCol, &xf), 0);
+  EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, kLastRow, kLastCol, &flag, &xf), 0);
+  EXPECT_EQ(flag, 0);
   EXPECT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, kLastRow, kLastCol), 0);
   fm_cell_nodes_t* nodes = nullptr;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, kLastRow, kLastCol, 1U, &nodes), 0);
@@ -416,20 +421,23 @@ TEST(FormulonCApiArgumentRange, PivotCacheOptionsPatchWritesOnlyItsSetFields) {
   std::uint32_t cache_id = 0U;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, nullptr), 0) << fm_get_last_error_message();
   const fm_pivot_cache_options_t before = CacheOptions(wb, cache_id);
+  EXPECT_EQ(before.has_missing_items_limit, 0);
 
   fm_pivot_cache_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
   EXPECT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, &patch), 0) << fm_get_last_error_message();
   patch.missing_items_limit_op = FM_PATCH_OP_SET;
-  patch.missing_items_limit = 32500;
+  patch.missing_items_limit = 32500U;
   ASSERT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, &patch), 0) << fm_get_last_error_message();
   fm_pivot_cache_options_t after = CacheOptions(wb, cache_id);
-  EXPECT_EQ(after.missing_items_limit, 32500);
+  EXPECT_EQ(after.has_missing_items_limit, 1);
+  EXPECT_EQ(after.missing_items_limit, 32500U);
   EXPECT_EQ(after.save_data, before.save_data);
   EXPECT_EQ(after.refresh_on_load, before.refresh_on_load);
 
   patch.missing_items_limit_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, &patch), 0) << fm_get_last_error_message();
-  EXPECT_EQ(CacheOptions(wb, cache_id).missing_items_limit, -1);
+  const fm_pivot_cache_options_t cleared = CacheOptions(wb, cache_id);
+  EXPECT_EQ(cleared.has_missing_items_limit, 0);
 }
 
 TEST(FormulonCApiArgumentRange, PivotCacheOptionsPatchRefusesABadFieldAndChangesNothing) {
@@ -448,12 +456,13 @@ TEST(FormulonCApiArgumentRange, PivotCacheOptionsPatchRefusesABadFieldAndChanges
   bad_limit.refresh_on_load_op = FM_PATCH_OP_SET;
   bad_limit.refresh_on_load = before.refresh_on_load != 0 ? 0 : 1;
   bad_limit.missing_items_limit_op = FM_PATCH_OP_SET;
-  bad_limit.missing_items_limit = 1048577;
+  bad_limit.missing_items_limit = 1048577U;
   for (const fm_pivot_cache_options_patch_t* rejected : {&clear_flag, &bad_op, &bad_limit}) {
     EXPECT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, rejected), kInvalidArgument);
   }
   const fm_pivot_cache_options_t after = CacheOptions(wb, cache_id);
   EXPECT_EQ(after.save_data, before.save_data);
+  EXPECT_EQ(after.has_missing_items_limit, before.has_missing_items_limit);
   EXPECT_EQ(after.missing_items_limit, before.missing_items_limit);
   EXPECT_EQ(after.refresh_on_load, before.refresh_on_load);
 }
@@ -556,7 +565,7 @@ TEST(FormulonCApiArgumentRange, PivotCacheStatusesFollowTheSectionRules) {
   std::uint32_t taken = 0U;
   EXPECT_EQ(fm_workbook_add_pivot_cache(wb.handle, cache_id, &taken), kAlreadyExists);
 
-  // An unknown cache id is NOT_FOUND; an item past the shared items is 5054.
+  // An unknown cache id is NOT_FOUND; an item past the shared items is INDEX_OUT_OF_RANGE.
   fm_pivot_cache_options_t options = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   EXPECT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id + 100U, &options), kNotFound);
   std::int32_t is_date = -1;
@@ -671,7 +680,7 @@ TEST(FormulonCApiArgumentRange, FontSizeOutsideOneToFourHundredNineIsRejected) {
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &sized, &index), kInvalidArgument) << size;
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0, &sized), kInvalidArgument) << size;
     fm_dxf_t dxf{};
-    dxf.font_engaged = 1;
+    dxf.has_font = 1;
     dxf.font = sized;
     dxf.font.has_size_pt = 1;
     std::uint32_t dxf_index = 99U;

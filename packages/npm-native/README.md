@@ -15,7 +15,7 @@ The addon is built directly against the engine's static archive and exposes the 
 - **Multithreaded recalc** — pthreads are wired in by default through the engine's parallel scheduler.
 - **No V8 / WASM heap copies** — `load` and `save`, the most expensive operations on large workbooks, marshal straight to the engine.
 - **Larger workbooks** — not bound by the WASM package's 2 GiB growth ceiling.
-- **Same surface** — the declarations and the native class table register 407 instance methods plus the four static factories. Of those instance methods, 407 are shared with WASM; zero remain WASM-only. [Package surfaces](https://formulon.libraz.net/api/surfaces)
+- **Same surface** — the declarations and the native class table register 406 instance methods plus the four static factories. Of those instance methods, 406 are shared with WASM; zero remain WASM-only. [Package surfaces](https://formulon.libraz.net/api/surfaces)
 - **Excel profiles** — a new workbook and the one-shot `evaluateFormula` start on the default `win-365-en_US` profile; `wb.setProfileId()` selects any of the 28 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 
 ## Installation
@@ -88,7 +88,7 @@ On Node 24+, `using wb = formulon.Workbook.createDefault()` releases the workboo
 
 `wb.recalc()` remains serial. For synchronous parallel recalculation, call `wb.recalcParallel(threadCount)`; it returns a `ParallelRecalcStats` with evaluated cells, processed SCCs, parallel and serial steps, cycle recoveries, and started and used worker counts. The five 64-bit engine counters are `number` values and are exact through `Number.MAX_SAFE_INTEGER`.
 
-`threadCount` is `0` to auto-detect up to 8 workers, `1` to start no workers, or `2..8` for the worker upper bound. Calling it without an argument or with a non-number throws `TypeError`; a fractional, non-finite or negative value throws `RangeError`; a whole number above 8 throws `FormulonError` with `StatusCode.InvalidArgument`.
+`threadCount` is `0` to auto-detect up to 8 workers, `1` to start no workers, or `2..8` for the worker upper bound. It is optional (0 = automatic, capped at 8); a non-number is `TypeError`, a fractional or non-finite number `RangeError`, a negative number or one above 8 `InvalidArgument`.
 
 ### Lifetime and errors
 

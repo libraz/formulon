@@ -18,11 +18,11 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
 
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
-  rule.op_engaged = 1;
+  rule.has_op = 1;
   rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   std::string formula = "50";
   rule.formula1 = formula.c_str();
-  rule.dxf_index_engaged = 1;
+  rule.has_dxf_index = 1;
   rule.dxf_index = 0;
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -37,10 +37,10 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.type, 1U);
-  EXPECT_EQ(out.op_engaged, 1);
+  EXPECT_EQ(out.has_op, 1);
   EXPECT_EQ(out.op, FM_COMPARISON_OPERATOR_GREATER_THAN);
   EXPECT_EQ(out.priority, 1);  // auto-assigned since input <= 0
-  EXPECT_EQ(out.dxf_index_engaged, 1);
+  EXPECT_EQ(out.has_dxf_index, 1);
   EXPECT_EQ(out.dxf_index, 0U);
   ASSERT_NE(out.formula1, nullptr);
   EXPECT_STREQ(out.formula1, "=50");
@@ -75,7 +75,7 @@ TEST(FormulonCApiCfMutate, CellIsRuleTakesEachComparisonOperatorAsNamed) {
     fm_cell_rect_t sqref{0, 0, 9, 0};
     fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
     rule.type = 1;  // CellIs
-    rule.op_engaged = 1;
+    rule.has_op = 1;
     rule.op = static_cast<std::uint8_t>(c.op);
     rule.formula1 = "1";
     rule.formula2 = "10";
@@ -101,10 +101,10 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
-  rule.op_engaged = 1;
+  rule.has_op = 1;
   rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
-  rule.dxf_index_engaged = 1;
+  rule.has_dxf_index = 1;
   rule.dxf_index = 2;  // one past the last registered `<dxf>`
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -136,7 +136,7 @@ TEST(FormulonCApiCfMutate, AddRuleWithoutDxfIdIgnoresTheEmptyStylesTable) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
-  rule.op_engaged = 1;
+  rule.has_op = 1;
   rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
   rule.ranges = &sqref;
@@ -148,7 +148,7 @@ TEST(FormulonCApiCfMutate, AddRuleWithoutDxfIdIgnoresTheEmptyStylesTable) {
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
-  EXPECT_EQ(out.dxf_index_engaged, 0);
+  EXPECT_EQ(out.has_dxf_index, 0);
 }
 
 TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {
@@ -336,7 +336,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   db_rule.type = 3;  // DataBar
   db_rule.ranges = &db_sqref;
   db_rule.range_count = 1;
-  db_rule.data_bar_engaged = 1;
+  db_rule.has_data_bar = 1;
   db_rule.data_bar_min.type = 3;  // Min
   db_rule.data_bar_min.gte = 1;
   db_rule.data_bar_max.type = 4;  // Max
@@ -354,7 +354,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   icon_rule.type = 4;  // IconSet
   icon_rule.ranges = &icon_sqref;
   icon_rule.range_count = 1;
-  icon_rule.icon_set_engaged = 1;
+  icon_rule.has_icon_set = 1;
   icon_rule.icon_set_name = 0;  // Three_Arrows
   fm_cfvo_t icon_thresholds[2]{};
   icon_thresholds[0].type = 1;  // Percent
@@ -394,14 +394,14 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
 
   fm_cf_rule_t out_bar = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 1, &out_bar), 0);
-  EXPECT_EQ(out_bar.data_bar_engaged, 1);
+  EXPECT_EQ(out_bar.has_data_bar, 1);
   EXPECT_EQ(CfB(out_bar.data_bar_fill), 198U);
   EXPECT_EQ(out_bar.data_bar_min_length_pct, 10U);
   EXPECT_EQ(out_bar.data_bar_max_length_pct, 90U);
 
   fm_cf_rule_t out_icon = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 2, &out_icon), 0);
-  EXPECT_EQ(out_icon.icon_set_engaged, 1);
+  EXPECT_EQ(out_icon.has_icon_set, 1);
   EXPECT_EQ(out_icon.icon_set_threshold_count, 2U);
   ASSERT_NE(out_icon.icon_set_thresholds, nullptr);
   EXPECT_STREQ(out_icon.icon_set_thresholds[1].value, "67");
@@ -431,7 +431,7 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
-  rule.op_engaged = 1;
+  rule.has_op = 1;
   rule.op = FM_COMPARISON_OPERATOR_BETWEEN;
   rule.formula1 = "=$B1>100";
   rule.formula2 = "=SUM($C$1:$C$2)";
@@ -538,7 +538,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusO
   rule.type = 4;  // IconSet
   rule.ranges = &sqref;
   rule.range_count = 1;
-  rule.icon_set_engaged = 1;
+  rule.has_icon_set = 1;
   rule.icon_set_name = 0;  // Three_Arrows
   rule.icon_set_thresholds = thresholds;
   std::size_t index = 0;
@@ -611,7 +611,7 @@ TEST(FormulonCApiCfMutate, RuleRejectsAnIconSetOnlyACustomLevelNames) {
     rule.type = 4;  // IconSet
     rule.ranges = &sqref;
     rule.range_count = 1;
-    rule.icon_set_engaged = 1;
+    rule.has_icon_set = 1;
     rule.icon_set_name = static_cast<std::uint8_t>(c.name);
     rule.icon_set_thresholds = thresholds;
     rule.icon_set_threshold_count = c.threshold_count;
@@ -660,7 +660,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
     rule.text = c.text;
     rule.formula1 = c.formula1;
     if (c.time_period >= 0) {
-      rule.time_period_engaged = 1;
+      rule.has_time_period = 1;
       rule.time_period = static_cast<std::uint8_t>(c.time_period);
     }
     rule.ranges = ranges;

@@ -150,13 +150,13 @@ std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list,
 
 Expected<void, Error> Workbook::add_person(Person person) {
   if (!is_threaded_comment_guid(person.id)) {
-    return Invalid("add_person: id is not a GUID", person.id);
+    return Invalid("id is not a GUID", person.id);
   }
   if (HasPerson(persons_, person.id)) {
-    return Refuse(FormulonErrorCode::kAlreadyExists, "add_person: id already listed", person.id);
+    return Refuse(FormulonErrorCode::kAlreadyExists, "id already listed", person.id);
   }
   if (person.display_name.empty()) {
-    return Invalid("add_person: empty display name", person.id);
+    return Invalid("empty display name", person.id);
   }
   persons_.push_back(std::move(person));
   return Expected<void, Error>::Ok();
@@ -171,7 +171,7 @@ Expected<void, Error> Workbook::remove_person(std::string_view id) {
     }
   }
   if (index == persons_.size()) {
-    return Refuse(FormulonErrorCode::kNotFound, "remove_person: no such person", id);
+    return Refuse(FormulonErrorCode::kNotFound, "no such person", id);
   }
   for (std::size_t s = 0; s < sheet_count(); ++s) {
     for (const ThreadedComment& c : sheet(s).threaded_comments()) {
@@ -180,8 +180,7 @@ Expected<void, Error> Workbook::remove_person(std::string_view id) {
         referenced = referenced || m.person_id == id;
       }
       if (referenced) {
-        return Refuse(FormulonErrorCode::kPreconditionFailed,
-                      "remove_person: a threaded comment still names this person", id);
+        return Refuse(FormulonErrorCode::kPreconditionFailed, "a threaded comment still names this person", id);
       }
     }
   }
@@ -193,38 +192,38 @@ Expected<void, Error> Workbook::add_threaded_comment(std::size_t sheet_index, Th
   ASSIGN_OR_RETURN(Sheet * target, SheetAt(*this, sheet_index));
   std::vector<ThreadedComment>& list = target->mutable_threaded_comments();
   if (!is_threaded_comment_guid(comment.id)) {
-    return Invalid("add_threaded_comment: id is not a GUID", comment.id);
+    return Invalid("id is not a GUID", comment.id);
   }
   if (find_threaded_comment(list, comment.id) != list.size()) {
-    return Refuse(FormulonErrorCode::kAlreadyExists, "add_threaded_comment: id already used on this sheet", comment.id);
+    return Refuse(FormulonErrorCode::kAlreadyExists, "id already used on this sheet", comment.id);
   }
   if (!HasPerson(persons_, comment.person_id)) {
-    return Invalid("add_threaded_comment: author is not in the person list", comment.person_id);
+    return Invalid("author is not in the person list", comment.person_id);
   }
   // `dT` is optional: an empty stamp stores a comment with no time.
   if (!comment.created.empty() && !is_threaded_comment_timestamp(comment.created)) {
-    return Invalid("add_threaded_comment: created is not YYYY-MM-DDTHH:MM:SS.ss", comment.created);
+    return Invalid("created is not YYYY-MM-DDTHH:MM:SS.ss", comment.created);
   }
   RETURN_IF_ERROR(ValidateText(comment.text, comment.mentions, persons_));
 
   std::size_t insert_at = list.size();
   if (comment.parent_id.empty()) {
     if (!Sheet::coord_in_grid(comment.row, comment.col)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "add_threaded_comment: coordinate out of grid",
+      return make_error(FormulonErrorCode::kInvalidArgument, "coordinate out of grid",
                         "row=" + std::to_string(comment.row) + " col=" + std::to_string(comment.col));
     }
     if (find_thread_at(list, comment.row, comment.col) != list.size()) {
-      return Refuse(FormulonErrorCode::kAlreadyExists, "add_threaded_comment: cell already has a thread", comment.id);
+      return Refuse(FormulonErrorCode::kAlreadyExists, "cell already has a thread", comment.id);
     }
     for (const CellComment& note : target->comments()) {
       if (note.row == comment.row && note.col == comment.col) {
-        return Refuse(FormulonErrorCode::kAlreadyExists, "add_threaded_comment: cell already has a note", comment.id);
+        return Refuse(FormulonErrorCode::kAlreadyExists, "cell already has a note", comment.id);
       }
     }
   } else {
     const std::size_t root = find_threaded_comment(list, comment.parent_id);
     if (root == list.size() || !list[root].parent_id.empty()) {
-      return Invalid("add_threaded_comment: parent is not a thread on this sheet", comment.parent_id);
+      return Invalid("parent is not a thread on this sheet", comment.parent_id);
     }
     comment.row = list[root].row;
     comment.col = list[root].col;
@@ -246,7 +245,7 @@ Expected<void, Error> Workbook::edit_threaded_comment(std::size_t sheet_index, s
   std::vector<ThreadedComment>& list = target->mutable_threaded_comments();
   const std::size_t index = find_threaded_comment(list, id);
   if (index == list.size()) {
-    return Refuse(FormulonErrorCode::kNotFound, "edit_threaded_comment: no such comment", id);
+    return Refuse(FormulonErrorCode::kNotFound, "no such comment", id);
   }
   RETURN_IF_ERROR(ValidateText(text, mentions, persons_));
   list[index].text = std::move(text);
@@ -259,10 +258,10 @@ Expected<void, Error> Workbook::set_thread_resolved(std::size_t sheet_index, std
   std::vector<ThreadedComment>& list = target->mutable_threaded_comments();
   const std::size_t index = find_threaded_comment(list, thread_id);
   if (index == list.size()) {
-    return Refuse(FormulonErrorCode::kNotFound, "set_thread_resolved: no comment with this id", thread_id);
+    return Refuse(FormulonErrorCode::kNotFound, "no comment with this id", thread_id);
   }
   if (!list[index].parent_id.empty()) {
-    return Invalid("set_thread_resolved: the id names a reply, not a thread", thread_id);
+    return Invalid("the id names a reply, not a thread", thread_id);
   }
   list[index].done = done;
   return Expected<void, Error>::Ok();
@@ -273,7 +272,7 @@ Expected<void, Error> Workbook::remove_threaded_comment(std::size_t sheet_index,
   std::vector<ThreadedComment>& list = target->mutable_threaded_comments();
   const std::size_t index = find_threaded_comment(list, id);
   if (index == list.size()) {
-    return Refuse(FormulonErrorCode::kNotFound, "remove_threaded_comment: no such comment", id);
+    return Refuse(FormulonErrorCode::kNotFound, "no such comment", id);
   }
   if (!list[index].parent_id.empty()) {
     list.erase(list.begin() + static_cast<std::ptrdiff_t>(index));

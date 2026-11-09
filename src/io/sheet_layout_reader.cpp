@@ -239,8 +239,7 @@ Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet
     ctx.append(std::to_string(sheet_index));
     ctx.append(" sheet_count=");
     ctx.append(std::to_string(workbook.sheet_count()));
-    return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_view_and_layout: sheet_index out of range",
-                      std::move(ctx));
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index out of range", std::move(ctx));
   }
   pugi::xml_node worksheet = sheet_doc.child("worksheet");
   if (!worksheet) {

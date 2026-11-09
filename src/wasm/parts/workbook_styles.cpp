@@ -344,6 +344,8 @@ emscripten::val js_fill_record(const fm_fill_t& f) {
     }
     gradient.set("stops", stops);
     o.set("gradient", gradient);
+  } else {
+    o.set("gradient", emscripten::val::null());
   }
   return o;
 }
@@ -423,21 +425,11 @@ emscripten::val js_cell_xf_record(const fm_cell_xf_t& xf) {
 }
 
 void js_set_cell_xf_alignment(const fm_cell_xf_t& xf, emscripten::val* object) {
-  if (xf.has_text_rotation != 0) {
-    object->set("textRotation", xf.text_rotation);
-  }
-  if (xf.has_indent != 0) {
-    object->set("indent", xf.indent);
-  }
-  if (xf.has_relative_indent != 0) {
-    object->set("relativeIndent", xf.relative_indent);
-  }
-  if (xf.has_shrink_to_fit != 0) {
-    object->set("shrinkToFit", xf.shrink_to_fit != 0);
-  }
-  if (xf.has_reading_order != 0) {
-    object->set("readingOrder", xf.reading_order);
-  }
+  js_set_present_or_null(*object, "textRotation", xf.has_text_rotation, xf.text_rotation);
+  js_set_present_or_null(*object, "indent", xf.has_indent, xf.indent);
+  js_set_present_or_null(*object, "relativeIndent", xf.has_relative_indent, xf.relative_indent);
+  js_set_present_or_null(*object, "shrinkToFit", xf.has_shrink_to_fit, xf.shrink_to_fit != 0);
+  js_set_present_or_null(*object, "readingOrder", xf.has_reading_order, xf.reading_order);
 }
 
 // Builds the `getCellXf` / `getCellStyleXf` record from the C call's status
@@ -456,13 +448,14 @@ emscripten::val js_cell_xf_result(fm_status_t rc, const fm_cell_xf_t& xf) {
 
 // ---- Per-cell xf index get/set -----------------------------------------
 
-double JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
+emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
+  int32_t present = 0;
   uint32_t xf = 0;
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf)
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &present, &xf)
                                     : kBindingInvalidHandle)) {
-    return 0.0;
+    return emscripten::val::undefined();
   }
-  return static_cast<double>(xf);
+  return present != 0 ? emscripten::val(xf) : emscripten::val::null();
 }
 
 void JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index) {
@@ -479,7 +472,7 @@ void JsWorkbook::setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setRangeXfIndex");
+  JsNarrowNumericReader reader("Sheet.setRangeXfIndex");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return;
@@ -539,23 +532,16 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  if (d.font_engaged != 0) {
-    o.set("font", js_font_record(d.font));
-  }
-  if (d.fill_engaged != 0) {
-    o.set("fill", js_fill_record(d.fill));
-  }
-  if (d.border_engaged != 0) {
-    o.set("border", js_border_record(d.border));
-  }
+  o.set("font", d.has_font != 0 ? js_font_record(d.font) : emscripten::val::null());
+  o.set("fill", d.has_fill != 0 ? js_fill_record(d.fill) : emscripten::val::null());
+  o.set("border", d.has_border != 0 ? js_border_record(d.border) : emscripten::val::null());
   o.set("numberFormat",
         d.number_format != nullptr ? emscripten::val(std::string(d.number_format)) : emscripten::val::null());
-  if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
-    o.set("alignment", dxf_alignment_to_val(d.alignment_xml));
-  }
-  if (d.protection_xml != nullptr && d.protection_xml[0] != '\0') {
-    o.set("protection", dxf_protection_to_val(d.protection_xml));
-  }
+  o.set("alignment", d.alignment_xml != nullptr && d.alignment_xml[0] != '\0' ? dxf_alignment_to_val(d.alignment_xml)
+                                                                              : emscripten::val::null());
+  o.set("protection", d.protection_xml != nullptr && d.protection_xml[0] != '\0'
+                          ? dxf_protection_to_val(d.protection_xml)
+                          : emscripten::val::null());
   return o;
 }
 
@@ -681,19 +667,19 @@ uint32_t JsWorkbook::addDxf(emscripten::val record) {
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
         emscripten::val font = reader.value(rec, "font", "dxf.font");
         if (js_value_present(font)) {
-          dxf.font_engaged = 1;
+          dxf.has_font = 1;
           js_pull_font_record(font, &font_name, &dxf.font, reader);
         }
 
         emscripten::val fill = reader.value(rec, "fill", "dxf.fill");
         if (js_value_present(fill)) {
-          dxf.fill_engaged = 1;
+          dxf.has_fill = 1;
           dxf.fill = js_pull_fill_record(fill, &fill_stops, reader);
         }
 
         emscripten::val border = reader.value(rec, "border", "dxf.border");
         if (js_value_present(border)) {
-          dxf.border_engaged = 1;
+          dxf.has_border = 1;
           dxf.border = js_pull_border_record(border, kDxfBorderFields, reader);
         }
 

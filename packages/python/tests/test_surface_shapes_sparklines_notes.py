@@ -158,7 +158,7 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual((first.color_series.kind, first.color_series.argb), (1, 0xFF336699))
                 self.assertEqual((first.color_negative.theme, first.color_negative.tint), (5, -0.25))
                 self.assertEqual(first.color_low.indexed, 12)
-                self.assertEqual(first.color_high.kind, 0)
+                self.assertIsNone(first.color_high)
                 self.assertEqual((first.markers, first.high, first.negative), (True, False, True))
                 self.assertEqual(first.min_axis_type, SparklineAxisType.CUSTOM)
                 self.assertEqual((first.manual_min, first.manual_max), (-1.5, None))

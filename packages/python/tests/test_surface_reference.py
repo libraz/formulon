@@ -46,9 +46,9 @@ class ParseReferenceTests(unittest.TestCase):
             self.wb.parse_reference("R[-1]C", r1c1=True)
 
     def test_base_needs_both_axes(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             self.wb.parse_reference("R[-1]C", r1c1=True, base_row=1)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             self.wb.parse_reference("R[-1]C", r1c1=True, base_col=1)
 
     def test_base_outside_the_grid_raises(self) -> None:

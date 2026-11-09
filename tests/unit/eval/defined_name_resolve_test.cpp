@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstddef>
 #include <future>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -24,6 +25,7 @@
 #include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -734,6 +736,22 @@ TEST(DefinedNameResolve, HiddenMutationWaitsForConcurrentWorkbookMutation) {
   ASSERT_TRUE(static_cast<bool>(result));
   ASSERT_EQ(wb.defined_names().size(), 1U);
   EXPECT_TRUE(wb.defined_names()[0].hidden);
+}
+
+TEST(DefinedNameResolve, RefusalContextNamesTheScope) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  const auto workbook_scope = wb.set_defined_name_hidden("Missing", -1, true);
+  ASSERT_FALSE(static_cast<bool>(workbook_scope));
+  EXPECT_EQ(workbook_scope.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_NE(workbook_scope.error().context.find("scope=workbook"), std::string::npos);
+  const auto sheet_scope = wb.set_defined_name_comment("Missing", 0, "note");
+  ASSERT_FALSE(static_cast<bool>(sheet_scope));
+  EXPECT_NE(sheet_scope.error().context.find("scope=0"), std::string::npos);
+  const auto out_of_range = wb.set_defined_name_scoped("Rate", "0.1", 5);
+  ASSERT_FALSE(static_cast<bool>(out_of_range));
+  EXPECT_EQ(out_of_range.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_NE(out_of_range.error().context.find("scope=5"), std::string::npos);
 }
 
 }  // namespace

@@ -106,10 +106,10 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
-  rule.op_engaged = 1;
+  rule.has_op = 1;
   rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
-  rule.dxf_index_engaged = 1;
+  rule.has_dxf_index = 1;
   rule.dxf_index = 1;
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -122,7 +122,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
-  EXPECT_EQ(out.dxf_index_engaged, 0);
+  EXPECT_EQ(out.has_dxf_index, 0);
 
   // The record still feeds straight back in, which is what the disengage
   // buys: with the raw index it would be rejected. It goes in under a fresh
@@ -134,7 +134,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   // A resolvable index is still reported.
   SeedDxfs(wb.handle, 2);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
-  EXPECT_EQ(out.dxf_index_engaged, 1);
+  EXPECT_EQ(out.has_dxf_index, 1);
   EXPECT_EQ(out.dxf_index, 1U);
 }
 
@@ -211,13 +211,13 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
 
   fm_cf_rule_t unknown_op = base;
   unknown_op.type = 1;  // CellIs
-  unknown_op.op_engaged = 1;
+  unknown_op.has_op = 1;
   unknown_op.op = static_cast<std::uint8_t>(formulon::cf::CellIsOperator::NotBetween) + 1U;
   expect_rejected(unknown_op, "op");
 
   fm_cf_rule_t unknown_period = base;
   unknown_period.type = 15;  // TimePeriod
-  unknown_period.time_period_engaged = 1;
+  unknown_period.has_time_period = 1;
   unknown_period.time_period = static_cast<std::uint8_t>(formulon::cf::TimePeriod::NextMonth) + 1U;
   expect_rejected(unknown_period, "time_period");
 
@@ -225,7 +225,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   icon_thresholds[1].type = static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax) + 1U;
   fm_cf_rule_t unknown_cfvo = base;
   unknown_cfvo.type = 4;  // IconSet
-  unknown_cfvo.icon_set_engaged = 1;
+  unknown_cfvo.has_icon_set = 1;
   unknown_cfvo.icon_set_thresholds = icon_thresholds;
   unknown_cfvo.icon_set_threshold_count = 3;
   expect_rejected(unknown_cfvo, "icon_set_thresholds[].type");
@@ -233,7 +233,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   fm_cfvo_t legal_thresholds[3]{};
   fm_cf_rule_t unknown_icon_set = base;
   unknown_icon_set.type = 4;  // IconSet
-  unknown_icon_set.icon_set_engaged = 1;
+  unknown_icon_set.has_icon_set = 1;
   unknown_icon_set.icon_set_name = static_cast<std::uint8_t>(formulon::cf::IconSetName::Five_Quarters) + 1U;
   unknown_icon_set.icon_set_thresholds = legal_thresholds;
   unknown_icon_set.icon_set_threshold_count = 3;
@@ -251,16 +251,16 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
 
   fm_cf_rule_t unknown_floor = base;
   unknown_floor.type = 4;  // IconSet
-  unknown_floor.icon_set_engaged = 1;
+  unknown_floor.has_icon_set = 1;
   unknown_floor.icon_set_thresholds = legal_thresholds;
   unknown_floor.icon_set_threshold_count = 2;
-  unknown_floor.icon_set_floor_engaged = 1;
+  unknown_floor.has_icon_set_floor = 1;
   unknown_floor.icon_set_floor.type = static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax) + 1U;
   expect_rejected(unknown_floor, "icon_set_floor.type");
 
   fm_cf_rule_t unknown_direction = base;
   unknown_direction.type = 3;  // DataBar
-  unknown_direction.data_bar_engaged = 1;
+  unknown_direction.has_data_bar = 1;
   unknown_direction.data_bar_max.type = 4;  // Max
   unknown_direction.data_bar_min.type = 3;  // Min
   unknown_direction.data_bar_min_length_pct = 10;
@@ -321,10 +321,10 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 1;  // CellIs
-  rule.op_engaged = 1;
+  rule.has_op = 1;
   rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule.formula1 = "50";
-  rule.dxf_index_engaged = 1;
+  rule.has_dxf_index = 1;
   rule.dxf_index = 0;
   rule.ranges = &sqref;
   rule.range_count = 1;
@@ -337,10 +337,10 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   // stale scratch state from the first call.
   fm_cf_rule_t rule2 = FM_STRUCT_INIT(fm_cf_rule_t);
   rule2.type = 1;  // CellIs
-  rule2.op_engaged = 1;
+  rule2.has_op = 1;
   rule2.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
   rule2.formula1 = "50";
-  rule2.dxf_index_engaged = 1;
+  rule2.has_dxf_index = 1;
   rule2.dxf_index = 0;
   rule2.ranges = &sqref;
   rule2.range_count = 1;

@@ -35,6 +35,12 @@ namespace {
 using detail::find_defined_name;
 using detail::kFilterDatabaseName;
 
+/// Diagnostic context naming a defined-name scope: `scope=workbook` or
+/// `scope=<sheet index>` (a workbook-scope id is -1).
+std::string scope_context(std::int32_t local_sheet_id) {
+  return local_sheet_id == -1 ? std::string("scope=workbook") : "scope=" + std::to_string(local_sheet_id);
+}
+
 }  // namespace
 
 /// Removes the `_FilterDatabase` name scoped to `sheet_index`. Returns true
@@ -120,12 +126,11 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   // new definition before its graph is rebuilt.
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (name.empty()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: name is empty");
+    return make_error(FormulonErrorCode::kInvalidArgument, "name is empty");
   }
   if (local_sheet_id < -1 || (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) >= sheets_.size())) {
-    return make_error(
-        FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: local_sheet_id out of range",
-        "local_sheet_id=" + std::to_string(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
+    return make_error(FormulonErrorCode::kInvalidArgument, "scope sheet index out of range",
+                      scope_context(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
   }
   if (!file_name_.empty()) {
     formula = parser::bind_self_book_names(formula, file_name_);
@@ -161,11 +166,10 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     return strings::case_insensitive_eq(table.name, name) || strings::case_insensitive_eq(table.display_name, name);
   });
   if (!is_valid_defined_name(name)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: invalid name", "name=" + name);
+    return make_error(FormulonErrorCode::kInvalidArgument, "invalid name", "name=" + name);
   }
   if (is_table_name(name) || retained_table) {
-    return make_error(FormulonErrorCode::kAlreadyExists, "set_defined_name_scoped: name is taken by a table",
-                      "name=" + name);
+    return make_error(FormulonErrorCode::kAlreadyExists, "name is taken by a table", "name=" + name);
   }
   DefinedName entry;
   entry.name = std::move(name);
@@ -188,8 +192,8 @@ Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, s
     it->hidden = hidden;
     return Expected<void, Error>::Ok();
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_hidden: no such defined name",
-                    "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
+  return make_error(FormulonErrorCode::kInvalidArgument, "no such defined name",
+                    "name=" + std::string(name) + " " + scope_context(local_sheet_id));
 }
 
 Expected<void, Error> Workbook::set_defined_name_comment(std::string_view name, std::int32_t local_sheet_id,
@@ -199,8 +203,8 @@ Expected<void, Error> Workbook::set_defined_name_comment(std::string_view name, 
     it->comment = std::move(comment);
     return Expected<void, Error>::Ok();
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_comment: no such defined name",
-                    "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
+  return make_error(FormulonErrorCode::kInvalidArgument, "no such defined name",
+                    "name=" + std::string(name) + " " + scope_context(local_sheet_id));
 }
 
 }  // namespace formulon

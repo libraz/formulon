@@ -9,14 +9,21 @@
 #include <array>
 #include <cstddef>
 #include <string>
+#include <string_view>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "eval/builtin_names.h"
 #include "eval/formula_localize.h"
 #include "excel_locale.h"
 #include "excel_profile.h"
+#include "parser/ast.h"
+#include "parser/parse_status.h"
+#include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/formula_text.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 using formulon::c_api::parts::check_index;
@@ -24,6 +31,7 @@ using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::formula_parse_failed;
 using formulon::c_api::parts::null_argument;
 
 namespace {
@@ -44,6 +52,29 @@ const char* one_char(char c) noexcept {
   return &kOneChar[2 * static_cast<std::size_t>(static_cast<unsigned char>(c))];
 }
 
+// Parses `text` (stored spelling) and, on a syntax error, publishes the failure
+// placed by `place` over the text the caller passed. A leading `=` is part of
+// the offsets, as the parser counts from the body after it.
+template <typename PlaceFn>
+fm_status_t check_parses(std::string_view text, PlaceFn place) {
+  const std::string_view body = formulon::strip_formula_prefix(text);
+  if (body.empty() && text.empty()) {
+    return 0;
+  }
+  formulon::Arena arena;
+  formulon::parser::ParseFailure failure;
+  if (formulon::eval::parse_formula_entry_with_diagnostics(body, arena, &failure) != nullptr) {
+    return 0;
+  }
+  const std::uint32_t prefix = formulon::utf16_units_in(text.substr(0, text.size() - body.size()));
+  failure.range.start += prefix;
+  failure.range.end += prefix;
+  if (failure.range.line == 1U) {
+    failure.range.column += prefix;
+  }
+  return formula_parse_failed(place(failure.range, failure), "field=formula");
+}
+
 // Shared body of `fm_localize_formula` / `fm_canonicalize_formula`.
 fm_status_t convert_formula(const char* formula, const char* profile_id, bool localize, const char** out_formula) {
   clear_last_error();
@@ -58,8 +89,27 @@ fm_status_t convert_formula(const char* formula, const char* profile_id, bool lo
     return rc;
   }
   thread_local std::string buffer;
-  buffer = localize ? formulon::eval::localize_formula_text(formula, profile)
-                    : formulon::eval::canonicalize_formula_text(formula, profile);
+  if (localize) {
+    // The input is the canonical text, so the failure is already in the caller's coordinates.
+    if (auto rc = check_parses(formula,
+                               [](const formulon::parser::TextRange&, formulon::parser::ParseFailure f) { return f; });
+        rc != 0) {
+      return rc;
+    }
+    buffer = formulon::eval::localize_formula_text(formula, profile);
+  } else {
+    const formulon::eval::MappedFormulaText mapped = formulon::eval::canonicalize_formula_text_mapped(formula, profile);
+    const std::string_view source(formula);
+    if (auto rc = check_parses(mapped.text,
+                               [&](const formulon::parser::TextRange& range, formulon::parser::ParseFailure f) {
+                                 f.range = mapped.source_range(source, range);
+                                 return f;
+                               });
+        rc != 0) {
+      return rc;
+    }
+    buffer = mapped.text;
+  }
   *out_formula = buffer.c_str();
   return 0;
 }

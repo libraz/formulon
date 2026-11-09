@@ -5,7 +5,7 @@ import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 // `dispose` is the caller's job; the WASM package uses `delete` instead.
 function makePivotWorkbook(Workbook) {
   const wb = Workbook.createDefault();
-  const cache = wb.addPivotCache(0);
+  const cache = wb.addPivotCache();
   const { cacheId } = cache;
   // A cache with no declared source cannot be saved: Excel offers to repair
   // any package containing one, so the writer refuses rather than emit it.
@@ -286,7 +286,7 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const cache = wb.addPivotCache(0);
+    const cache = wb.addPivotCache();
     const { cacheId } = cache;
     cache.setWorksheetSource({ range: 'A1:D3', sheet: 'Sheet1' });
     for (const name of ['Region', 'Product', 'Sales', 'Qty']) cache.addField(name);
@@ -310,7 +310,10 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
     pivot.setFieldAxis(0, null);
     assert.deepEqual(pivot.getRowFieldOrder(), []);
     assert.throws(() => pivot.setFieldAxis(0, 4), isFormulonError);
-    assert.throws(() => pivot.setFieldAxis(0, -1), RangeError);
+    assert.throws(
+      () => pivot.setFieldAxis(0, -1),
+      (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+    );
   } finally {
     wb.dispose();
   }

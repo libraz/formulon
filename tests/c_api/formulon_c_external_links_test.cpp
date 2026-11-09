@@ -329,8 +329,9 @@ TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
     fm_cell_range_destroy(range);
 
     fm_array_formula_info_t array = FM_STRUCT_INIT(fm_array_formula_info_t);
-    ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 2, 0, &array), 0) << fm_get_last_error_message();
-    ASSERT_EQ(array.engaged, 1);
+    int32_t array_present = 0;
+    ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 2, 0, &array_present, &array), 0) << fm_get_last_error_message();
+    ASSERT_EQ(array_present, 1);
     EXPECT_EQ(Str(array.formula), "=" + book + "LN*2");
   }
 }

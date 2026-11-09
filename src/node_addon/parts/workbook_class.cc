@@ -90,6 +90,18 @@ std::string ArgumentLabel(const GuardedMethodData& method, std::size_t idx) {
   return qualified + " argument " + std::to_string(idx + 1);
 }
 
+// The public `Class.method` name of a registered method, for reader failures.
+std::string PublicMethodLabel(const void* data) {
+  const auto& method = *static_cast<const GuardedMethodData*>(data);
+  if (method.handle != nullptr) {
+    return method.handle->label;
+  }
+  if (method.sheet_scoped) {
+    return std::string("Sheet.") + method.name;
+  }
+  return method.owner == nullptr ? std::string(method.name) : std::string(method.owner) + "." + method.name;
+}
+
 bool RejectArgumentType(const Napi::CallbackInfo& info, const std::string& label, const char* expected) {
   Napi::TypeError::New(info.Env(), label + " must be a primitive " + expected).ThrowAsJavaScriptException();
   return false;
@@ -193,6 +205,7 @@ napi_value GuardedInstanceMethodCallback(napi_env raw_env, napi_callback_info ra
       return info.Env().Undefined();
     }
     Workbook* const instance = Workbook::Unwrap(info.This().As<Napi::Object>());
+    const ScopedReaderLabel label(&PublicMethodLabel, data);
     return instance == nullptr ? Napi::Value() : instance->RunActive(method, info);
   });
 }
@@ -237,7 +250,11 @@ void SetGuardedModuleFunction(Napi::Env env, Napi::Object exports, const char* n
   exports.Set(name, Napi::Function::New(
                         env,
                         [](const Napi::CallbackInfo& info) -> Napi::Value {
-                          return ValidatePositionalArgs(info, data) ? function(info) : info.Env().Undefined();
+                          if (!ValidatePositionalArgs(info, data)) {
+                            return info.Env().Undefined();
+                          }
+                          const ScopedReaderLabel label(&PublicMethodLabel, &data);
+                          return function(info);
                         },
                         name));
 }
@@ -665,7 +682,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotCacheRecordSetDate, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setPivotCacheRecordDate"),
           GuardedInstanceMethod<&Workbook::PivotCacheRecordSetText, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setPivotCacheRecordText"),
           GuardedInstanceMethod<&Workbook::PivotCacheRemove, 0x1ULL>("removePivotCache"),
-          GuardedInstanceMethod<&Workbook::PivotCacheSetWorksheetSource, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setPivotCacheWorksheetSource"),
+          GuardedInstanceMethod<&Workbook::PivotCacheSetWorksheetSource, 0x1ULL>("setPivotCacheWorksheetSource"),
           GuardedInstanceMethod<&Workbook::PivotColFieldOrder, 0x3ULL>("getPivotColumnFieldOrder"),
           GuardedInstanceMethod<&Workbook::PivotCount, 0x1ULL>("getPivotCount"),
           GuardedInstanceMethod<&Workbook::PivotCreate, 0x1DULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addPivot"),
@@ -679,7 +696,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotFieldAddSubtotalFunction, 0x7ULL, 0x8ULL>("addPivotFieldSubtotalFunction"),
           GuardedInstanceMethod<&Workbook::PivotFieldAt, 0x7ULL>("getPivotField"),
           GuardedInstanceMethod<&Workbook::PivotFieldClear, 0x3ULL>("clearPivotFields"),
-          GuardedInstanceMethod<&Workbook::PivotFieldClearDateGroup, 0x7ULL>("clearPivotFieldDateGroup"),
           GuardedInstanceMethod<&Workbook::PivotFieldClearItems, 0x7ULL>("clearPivotFieldItems"),
           GuardedInstanceMethod<&Workbook::PivotFieldClearSubtotalFunctions, 0x7ULL>("clearPivotFieldSubtotalFunctions"),
           GuardedInstanceMethod<&Workbook::PivotFieldCount, 0x3ULL>("getPivotFieldCount"),
@@ -688,7 +704,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotFieldSetAxis, 0x7ULL, 0x8ULL>("setPivotFieldAxis"),
           GuardedInstanceMethod<&Workbook::PivotUpdateField, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("updatePivotField"),
           GuardedInstanceMethod<&Workbook::PivotUpdateFieldItem, 0xFULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("updatePivotFieldItem"),
-          GuardedInstanceMethod<&Workbook::PivotFieldSetDateGroup, 0xFULL, 0x10ULL>("setPivotFieldDateGroup"),
+          GuardedInstanceMethod<&Workbook::PivotFieldSetDateGroup, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL, 0x0ULL, 0x8ULL>("setPivotFieldDateGroup"),
           GuardedInstanceMethod<&Workbook::PivotFilterAdd, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("addPivotFilter"),
           GuardedInstanceMethod<&Workbook::PivotFilterAt, 0x7ULL>("getPivotFilter"),
           GuardedInstanceMethod<&Workbook::PivotFilterClear, 0x3ULL>("clearPivotFilters"),
@@ -803,7 +819,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetActiveSheet, 0x1ULL>("setActiveSheet"),
           GuardedInstanceMethod<&Workbook::SheetName, 0x1ULL>("getSheetName"),
           GuardedInstanceMethod<&Workbook::GetSheetIndex, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getSheetIndex"),
-          GuardedInstanceMethod<&Workbook::SpillInfo, 0x7ULL>("getSpillInfo"),
+          GuardedInstanceMethod<&Workbook::GetSpill, 0x7ULL>("getSpill"),
           GuardedInstanceMethod<&Workbook::ParseReference, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("parseReference"),
           GuardedInstanceMethod<&Workbook::FormatReference, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("formatReference"),
           GuardedInstanceMethod<&Workbook::GetArrayFormula, 0x7ULL>("getArrayFormula"),

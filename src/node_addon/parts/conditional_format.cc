@@ -109,39 +109,21 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     ranges.Set(static_cast<uint32_t>(r), RangeToJs(env, rule.ranges[r]));
   }
   item.Set("ranges", ranges);
-  if (rule.dxf_index_engaged != 0) {
-    item.Set("dxfIndex", Napi::Number::New(env, rule.dxf_index));
-  }
-  if (rule.formula1 != nullptr) {
-    item.Set("formula1", Napi::String::New(env, rule.formula1));
-  }
-  if (rule.formula2 != nullptr) {
-    item.Set("formula2", Napi::String::New(env, rule.formula2));
-  }
-  if (rule.op_engaged != 0) {
-    item.Set("operator", Napi::Number::New(env, static_cast<uint32_t>(rule.op)));
-  }
-  if (rule.rank_engaged != 0) {
-    item.Set("rank", Napi::Number::New(env, rule.rank));
-    item.Set("percent", Napi::Boolean::New(env, rule.percent != 0));
-    item.Set("bottom", Napi::Boolean::New(env, rule.bottom != 0));
-  }
-  // aboveAverage flags are always engineered but only meaningful for
-  // the AboveAverage rule type; surface them only there to mirror the
-  // embind shape.
-  if (rule.type == 6 /* AboveAverage */) {
-    item.Set("aboveAverage", Napi::Boolean::New(env, rule.above_average != 0));
-    item.Set("equalAverage", Napi::Boolean::New(env, rule.equal_average != 0));
-    if (rule.std_dev_engaged != 0) {
-      item.Set("stdDev", Napi::Number::New(env, rule.std_dev));
-    }
-  }
-  if (rule.text != nullptr) {
-    item.Set("text", Napi::String::New(env, rule.text));
-  }
-  if (rule.time_period_engaged != 0) {
-    item.Set("timePeriod", Napi::Number::New(env, static_cast<uint32_t>(rule.time_period)));
-  }
+  item.Set("dxfIndex", JsNumberOrNull(env, rule.has_dxf_index, rule.dxf_index));
+  item.Set("formula1", JsStringOrNull(env, rule.formula1));
+  item.Set("formula2", JsStringOrNull(env, rule.formula2));
+  item.Set("operator", JsNumberOrNull(env, rule.has_op, static_cast<uint32_t>(rule.op)));
+  item.Set("rank", JsNumberOrNull(env, rule.has_rank, rule.rank));
+  item.Set("percent", JsBoolOrNull(env, rule.has_rank, rule.percent));
+  item.Set("bottom", JsBoolOrNull(env, rule.has_rank, rule.bottom));
+  // The average flags are meaningful only for the AboveAverage rule type.
+  const bool above_average_rule = rule.type == 6 /* AboveAverage */;
+  item.Set("aboveAverage", JsBoolOrNull(env, above_average_rule ? 1 : 0, rule.above_average));
+  item.Set("equalAverage", JsBoolOrNull(env, above_average_rule ? 1 : 0, rule.equal_average));
+  item.Set("stdDev", JsNumberOrNull(env, above_average_rule ? rule.has_std_dev : 0, rule.std_dev));
+  item.Set("text", JsStringOrNull(env, rule.text));
+  item.Set("timePeriod", JsNumberOrNull(env, rule.has_time_period, static_cast<uint32_t>(rule.time_period)));
+  item.Set("colorScale", env.Null());
   if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
     Napi::Object color_scale = Napi::Object::New(env);
     Napi::Array thresholds = Napi::Array::New(env, rule.color_scale_count);
@@ -154,7 +136,8 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     color_scale.Set("colors", colors);
     item.Set("colorScale", color_scale);
   }
-  if (rule.data_bar_engaged != 0) {
+  item.Set("dataBar", env.Null());
+  if (rule.has_data_bar != 0) {
     Napi::Object data_bar = Napi::Object::New(env);
     data_bar.Set("min", CfvoToJs(env, rule.data_bar_min));
     data_bar.Set("max", CfvoToJs(env, rule.data_bar_max));
@@ -162,32 +145,22 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     data_bar.Set("showValue", Napi::Boolean::New(env, rule.data_bar_show_value != 0));
     data_bar.Set("minLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_min_length_pct)));
     data_bar.Set("maxLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_max_length_pct)));
-    // `x14` extension payload. Each key appears only when the C ABI
-    // reports the matching `*_engaged` flag, so an absent key means the
-    // rule keeps the model default and the object round-trips through
-    // `addConditionalFormat` unchanged. The getter engages all six.
-    if (rule.data_bar_gradient_engaged != 0) {
-      data_bar.Set("gradient", Napi::Boolean::New(env, rule.data_bar_gradient != 0));
-    }
-    if (rule.data_bar_axis_position_engaged != 0) {
-      data_bar.Set("axisPosition", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_axis_position)));
-    }
-    if (rule.data_bar_negative_fill_engaged != 0) {
-      data_bar.Set("negativeFill", ColorSpecToJs(env, rule.data_bar_negative_fill));
-    }
-    if (rule.data_bar_border_engaged != 0) {
-      data_bar.Set("border", ColorSpecToJs(env, rule.data_bar_border));
-    }
-    if (rule.data_bar_negative_border_engaged != 0) {
-      data_bar.Set("negativeBorder", ColorSpecToJs(env, rule.data_bar_negative_border));
-    }
-    if (rule.data_bar_axis_color_engaged != 0) {
-      data_bar.Set("axisColor", ColorSpecToJs(env, rule.data_bar_axis_color));
-    }
+    // The `x14` extension keys read `null` when the rule keeps the model default.
+    data_bar.Set("gradient", JsBoolOrNull(env, rule.has_data_bar_gradient, rule.data_bar_gradient));
+    data_bar.Set("axisPosition", JsNumberOrNull(env, rule.has_data_bar_axis_position,
+                                                static_cast<uint32_t>(rule.data_bar_axis_position)));
+    const auto color_or_null = [&env](const fm_color_t& color) {
+      return color.kind != FM_COLOR_KIND_NONE ? Napi::Value(ColorSpecToJs(env, color)) : env.Null();
+    };
+    data_bar.Set("negativeFill", color_or_null(rule.data_bar_negative_fill));
+    data_bar.Set("border", color_or_null(rule.data_bar_border));
+    data_bar.Set("negativeBorder", color_or_null(rule.data_bar_negative_border));
+    data_bar.Set("axisColor", color_or_null(rule.data_bar_axis_color));
     data_bar.Set("direction", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_direction)));
     item.Set("dataBar", data_bar);
   }
-  if (rule.icon_set_engaged != 0) {
+  item.Set("iconSet", env.Null());
+  if (rule.has_icon_set != 0) {
     Napi::Object icon_set = Napi::Object::New(env);
     icon_set.Set("name", Napi::Number::New(env, static_cast<uint32_t>(rule.icon_set_name)));
     Napi::Array thresholds = Napi::Array::New(env, rule.icon_set_threshold_count);
@@ -198,9 +171,8 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
     icon_set.Set("reverse", Napi::Boolean::New(env, rule.icon_set_reverse != 0));
     icon_set.Set("showValue", Napi::Boolean::New(env, rule.icon_set_show_value != 0));
     icon_set.Set("percent", Napi::Boolean::New(env, rule.icon_set_percent != 0));
-    if (rule.icon_set_floor_engaged != 0) {
-      icon_set.Set("floor", CfvoToJs(env, rule.icon_set_floor));
-    }
+    icon_set.Set("floor", rule.has_icon_set_floor != 0 ? Napi::Value(CfvoToJs(env, rule.icon_set_floor)) : env.Null());
+    icon_set.Set("icons", env.Null());
     if (rule.icon_set_icon_count != 0U) {
       Napi::Array icons = Napi::Array::New(env, rule.icon_set_icon_count);
       for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
@@ -305,7 +277,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   bool dxf_index_present = false;
   rule.dxf_index = reader.U32(v, "dxfIndex", 0U, &dxf_index_present);
   if (dxf_index_present) {
-    rule.dxf_index_engaged = 1;
+    rule.has_dxf_index = 1;
   }
   rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.range_count = ranges_buf.size();
@@ -314,12 +286,12 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   bool op_present = false;
   rule.op = reader.I32(v, "operator", 0, &op_present);
   if (op_present) {
-    rule.op_engaged = 1;
+    rule.has_op = 1;
   }
   bool rank_present = false;
   rule.rank = reader.I32(v, "rank", 0, &rank_present);
   if (rank_present) {
-    rule.rank_engaged = 1;
+    rule.has_rank = 1;
   }
   rule.percent = reader.Bool(v, "percent", false) ? 1 : 0;
   rule.bottom = reader.Bool(v, "bottom", false) ? 1 : 0;
@@ -328,13 +300,13 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   bool std_dev_present = false;
   rule.std_dev = reader.Double(v, "stdDev", 0.0, &std_dev_present);
   if (std_dev_present) {
-    rule.std_dev_engaged = 1;
+    rule.has_std_dev = 1;
   }
   rule.text = text.empty() ? nullptr : text.c_str();
   bool time_period_present = false;
   rule.time_period = reader.I32(v, "timePeriod", 0, &time_period_present);
   if (time_period_present) {
-    rule.time_period_engaged = 1;
+    rule.has_time_period = 1;
   }
   Napi::Object cs;
   if (reader.Object(v, "colorScale", &cs)) {
@@ -381,7 +353,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   }
   Napi::Object db;
   if (reader.Object(v, "dataBar", &db)) {
-    rule.data_bar_engaged = 1;
+    rule.has_data_bar = 1;
     Napi::Object min;
     if (reader.Object(db, "min", &min)) {
       rule.data_bar_min = PullCfvo(reader, min, &cfvo_strings);
@@ -397,46 +369,42 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     rule.data_bar_show_value = reader.Bool(db, "showValue", true) ? 1 : 0;
     rule.data_bar_min_length_pct = reader.U8(db, "minLengthPct", 10U);
     rule.data_bar_max_length_pct = reader.U8(db, "maxLengthPct", 90U);
-    // `x14` extension payload. An omitted key leaves the `*_engaged` flag
+    // `x14` extension payload. An omitted key leaves the `has_*` flag
     // clear, which the C ABI reads as "keep the model default" (gradient
     // on, automatic axis, negative fill equal to the positive fill, no
     // border, black axis).
     bool gradient_present = false;
     const bool gradient = reader.Bool(db, "gradient", true, &gradient_present);
     if (gradient_present) {
-      rule.data_bar_gradient_engaged = 1;
+      rule.has_data_bar_gradient = 1;
       rule.data_bar_gradient = gradient ? 1 : 0;
     }
     bool axis_position_present = false;
     rule.data_bar_axis_position = reader.I32(db, "axisPosition", 0, &axis_position_present);
     if (axis_position_present) {
-      rule.data_bar_axis_position_engaged = 1;
+      rule.has_data_bar_axis_position = 1;
     }
     Napi::Object negative_fill;
     if (reader.Object(db, "negativeFill", &negative_fill)) {
-      rule.data_bar_negative_fill_engaged = 1;
       rule.data_bar_negative_fill = ReadColorSpec(reader, negative_fill, "negativeFill");
     }
     Napi::Object border;
     if (reader.Object(db, "border", &border)) {
-      rule.data_bar_border_engaged = 1;
       rule.data_bar_border = ReadColorSpec(reader, border, "border");
     }
     Napi::Object negative_border;
     if (reader.Object(db, "negativeBorder", &negative_border)) {
-      rule.data_bar_negative_border_engaged = 1;
       rule.data_bar_negative_border = ReadColorSpec(reader, negative_border, "negativeBorder");
     }
     Napi::Object axis_color;
     if (reader.Object(db, "axisColor", &axis_color)) {
-      rule.data_bar_axis_color_engaged = 1;
       rule.data_bar_axis_color = ReadColorSpec(reader, axis_color, "axisColor");
     }
     rule.data_bar_direction = reader.I32(db, "direction", 0);
   }
   Napi::Object is;
   if (reader.Object(v, "iconSet", &is)) {
-    rule.icon_set_engaged = 1;
+    rule.has_icon_set = 1;
     rule.icon_set_name = reader.I32(is, "name", 0);
     Napi::Array arr;
     if (reader.Array(is, "thresholds", &arr)) {
@@ -465,7 +433,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     // An omitted floor keeps Excel's default, `percent 0`.
     Napi::Object floor;
     if (reader.Object(is, "floor", &floor)) {
-      rule.icon_set_floor_engaged = 1;
+      rule.has_icon_set_floor = 1;
       rule.icon_set_floor = PullCfvo(reader, floor, &cfvo_strings);
     }
     Napi::Array icons;

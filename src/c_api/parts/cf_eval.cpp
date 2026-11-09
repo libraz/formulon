@@ -77,7 +77,7 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_info_t* out) {
     case formulon::cf::CFMatchKind::DifferentialFormat:
       out->kind = FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT;
       if (match.dxf_id.has_value()) {
-        out->dxf_index_engaged = 1;
+        out->has_dxf_index = 1;
         out->dxf_index = *match.dxf_id;
       }
       return;
@@ -96,7 +96,6 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_info_t* out) {
         out->bar_is_negative = bar.is_negative ? 1 : 0;
         out->bar_fill = to_c_color(bar.fill);
         if (bar.border.has_value()) {
-          out->bar_border_engaged = 1;
           out->bar_border = to_c_color(*bar.border);
         }
         out->bar_gradient = bar.gradient ? 1 : 0;

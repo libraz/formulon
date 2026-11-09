@@ -86,7 +86,6 @@ Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& inf
     return env.Null();
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("present", Napi::Boolean::New(env, true));
   out.Set("ref", JsStringOrNull(env, source.ref));
   out.Set("sheet", JsStringOrNull(env, source.sheet));
   out.Set("name", JsStringOrNull(env, source.name));
@@ -99,9 +98,18 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
     return ThrowInvalidHandle(env);
   }
   const uint32_t cache_id = ArgU32(info, 0);
+  // A null source removes the element.
+  if (info[1].IsNull()) {
+    return ValueOrThrow(env, fm_workbook_set_pivot_cache_worksheet_source(handle_, cache_id, nullptr),
+                        env.Undefined());
+  }
+  if (!info[1].IsObject()) {
+    Napi::TypeError::New(env, "PivotCache.setWorksheetSource argument 1 must be an object or null")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   Napi::Object source = ArgObject(info, 1);
   CheckedSpecReader reader(env);
-  const bool present = reader.Bool(source, "present", true);
   std::string ref;
   std::string sheet;
   std::string name;
@@ -115,9 +123,7 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
   c_source.ref = has_ref ? ref.c_str() : nullptr;
   c_source.sheet = has_sheet ? sheet.c_str() : nullptr;
   c_source.name = has_name ? name.c_str() : nullptr;
-  // `present: false` clears the element.
-  const fm_status_t rc =
-      fm_workbook_set_pivot_cache_worksheet_source(handle_, cache_id, present ? &c_source : nullptr);
+  const fm_status_t rc = fm_workbook_set_pivot_cache_worksheet_source(handle_, cache_id, &c_source);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 
@@ -293,7 +299,7 @@ Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("saveData", Napi::Boolean::New(env, o.save_data != 0));
-  out.Set("missingItemsLimit", JsIndexOrNull(env, o.missing_items_limit));
+  out.Set("missingItemsLimit", JsNumberOrNull(env, o.has_missing_items_limit, o.missing_items_limit));
   out.Set("refreshOnLoad", Napi::Boolean::New(env, o.refresh_on_load != 0));
   return out;
 }
@@ -322,10 +328,7 @@ Napi::Value Workbook::PivotCacheUpdateOptions(const Napi::CallbackInfo& info) {
       break;
     case PatchKey::kSet:
       o.missing_items_limit_op = FM_PATCH_OP_SET;
-      o.missing_items_limit = reader.I32(limit, "missingItemsLimit", 0);
-      if (reader.ok() && o.missing_items_limit < 0) {
-        reader.FailRange("missingItemsLimit", "[0, 2147483647]");
-      }
+      o.missing_items_limit = reader.U32(limit, "missingItemsLimit", 0U);
       break;
     case PatchKey::kKeep:
       break;

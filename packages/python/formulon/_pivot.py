@@ -12,7 +12,7 @@ import struct
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union, overload
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _sint, _uint
+from ._c import LIB, FormulonError, _NoCopy, _sint, _uint
 from ._handle_tables import CELL_ARGS
 from ._status import StatusCode
 from ._workbook import (
@@ -105,7 +105,7 @@ def _flag(value: Any, name: str) -> int:
     return flag(value, name)
 
 
-class Pivot:
+class Pivot(_NoCopy):
     """One PivotTable of a :class:`Sheet`; every operation on the pivot lives here.
 
     Obtain a handle from :meth:`Sheet.pivot`, :meth:`Sheet.list_pivots` or
@@ -144,10 +144,10 @@ class Pivot:
         with _ArgScope() as scope:
             out = scope.out_ptr()
             status = LIB.fm_sheet_resolve_pivot_runtime_id(
-                h, _uint(sheet, "sheet_index"), _uint(self._runtime_id, "id"), out
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(self._runtime_id, "id"), out
             )
             if status == _STATUS_NOT_FOUND:
-                raise FormulonError(StatusCode.NOT_FOUND, _diagnostic_override=("the pivot was removed", ""))
+                raise FormulonError(StatusCode.NOT_FOUND, "the pivot was removed", "")
             _check(status)
             return h, sheet, LIB.read_u32(out)
 
@@ -177,13 +177,19 @@ class Pivot:
         """
         h, sheet, pivot_index = self._locate()
         return _read_cstr_out(
-            LIB.fm_sheet_get_pivot_name, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_name,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
         )
 
     def _cache_id(self) -> int:
         h, sheet, pivot_index = self._locate()
         return _read_count(
-            LIB.fm_sheet_get_pivot_cache_id, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_cache_id,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
         )
 
     def get_properties(self) -> PivotProperties:
@@ -198,7 +204,12 @@ class Pivot:
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             _check(
-                LIB.fm_sheet_rename_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), name_ptr)
+                LIB.fm_sheet_rename_pivot(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    name_ptr,
+                )
             )
 
     def get_cache(self) -> PivotCache:
@@ -215,7 +226,10 @@ class Pivot:
             try:
                 _check(
                     LIB.fm_sheet_get_pivot_layout(
-                        h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
+                        h,
+                        _uint(sheet, "sheet_index", role="sheet"),
+                        _uint(pivot_index, "pivot_index", role="position"),
+                        out,
                     )
                 )
                 handle = LIB.read_u32(out)
@@ -229,7 +243,7 @@ class Pivot:
                 cptr = scope.struct(S.PIVOT_CELL)
                 for i in range(n):
                     S.zero_struct(LIB, S.PIVOT_CELL, cptr)
-                    _check(LIB.fm_pivot_report_get_cell_at(handle, _uint(i, "idx"), cptr))
+                    _check(LIB.fm_pivot_report_get_cell_at(handle, _uint(i, "idx", role="position"), cptr))
                     d = S.PIVOT_CELL.unpack(LIB, cptr)
                     value = Value._from_wasm(cptr + S.PIVOT_CELL_VALUE_OFFSET)
                     cells.append(
@@ -239,8 +253,8 @@ class Pivot:
                             value=to_native(value),
                             kind=PivotCellKind(d["kind"]),
                             depth=d["depth"],
-                            field_name=LIB.read_cstr(d["field_name"]),
-                            number_format=LIB.read_cstr(d["number_format"]),
+                            field_name=LIB.read_optional_cstr(d["field_name"]),
+                            number_format=LIB.read_optional_cstr(d["number_format"]),
                         )
                     )
                 return PivotLayout(range=rect, cells=cells)
@@ -267,10 +281,10 @@ class Pivot:
         _check(
             LIB.fm_sheet_set_pivot_anchor(
                 h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(row, "anchor_row"),
-                _uint(col, "anchor_col"),
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _uint(row, "anchor_row", role="coordinate"),
+                _uint(col, "anchor_col", role="coordinate"),
             )
         )
 
@@ -282,7 +296,11 @@ class Pivot:
             cols = scope.out_ptr()
             _check(
                 LIB.fm_sheet_get_pivot_grand_totals(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), rows, cols
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    rows,
+                    cols,
                 )
             )
             return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, columns=LIB.read_i32(cols) != 0)
@@ -309,7 +327,10 @@ class Pivot:
             S.PIVOT_GRAND_TOTALS_PATCH.pack(LIB, ptr, values)
             _check(
                 LIB.fm_sheet_update_pivot_grand_totals(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    ptr,
                 )
             )
 
@@ -317,15 +338,20 @@ class Pivot:
         """Return the table style :meth:`update_style_options` writes, or ``None`` without a style element."""
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             ptr = scope.struct(S.PIVOT_STYLE_OPTIONS)
             _check(
                 LIB.fm_sheet_get_pivot_style_options(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    present,
+                    ptr,
                 )
             )
-            d = S.PIVOT_STYLE_OPTIONS.unpack(LIB, ptr)
-            if not d["present"]:
+            if LIB.read_i32(present) == 0:
                 return None
+            d = S.PIVOT_STYLE_OPTIONS.unpack(LIB, ptr)
             return PivotStyleOptions(
                 style_name=LIB.read_cstr(d["style_name"]) or None,
                 show_row_headers=d["show_row_headers"] != 0,
@@ -380,7 +406,10 @@ class Pivot:
             ptr = _pack_pivot_style_options_patch(patch, scope)
             _check(
                 LIB.fm_sheet_update_pivot_style_options(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    ptr,
                 )
             )
 
@@ -391,7 +420,10 @@ class Pivot:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_get_pivot_report_layout(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    out,
                 )
             )
             return PivotReportLayout(LIB.read_i32(out))
@@ -401,7 +433,10 @@ class Pivot:
         h, sheet, pivot_index = self._locate()
         _check(
             LIB.fm_sheet_set_pivot_report_layout(
-                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _sint(layout, "layout")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _sint(layout, "layout"),
             )
         )
 
@@ -412,7 +447,12 @@ class Pivot:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_OPTIONS)
             _check(
-                LIB.fm_sheet_get_pivot_options(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr)
+                LIB.fm_sheet_get_pivot_options(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    ptr,
+                )
             )
             d = S.PIVOT_OPTIONS.unpack(LIB, ptr)
 
@@ -516,7 +556,10 @@ class Pivot:
             S.PIVOT_OPTIONS_PATCH.pack(LIB, ptr, values)
             _check(
                 LIB.fm_sheet_update_pivot_options(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    ptr,
                 )
             )
 
@@ -527,7 +570,10 @@ class Pivot:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_is_pivot_projection_pending(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    out,
                 )
             )
             return LIB.read_i32(out) != 0
@@ -538,7 +584,11 @@ class Pivot:
         It does not re-read the cache's source range. Raises when the report would overlap another structure; the pivot stays pending.
         """
         h, sheet, pivot_index = self._locate()
-        _check(LIB.fm_sheet_project_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
+        _check(
+            LIB.fm_sheet_project_pivot(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(pivot_index, "pivot_index", role="position")
+            )
+        )
 
     @overload
     def show_details(self, row: int, col: int) -> Sheet: ...
@@ -568,10 +618,10 @@ class Pivot:
             _check(
                 LIB.fm_sheet_show_pivot_details(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(row, "row"),
-                    _uint(col, "col"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
                     out,
                 )
             )
@@ -584,7 +634,10 @@ class Pivot:
         located = self._locate()
         h, sheet, pivot_index = located
         count = _read_count(
-            LIB.fm_sheet_get_pivot_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_field_count,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
         )
         return [self._field_at(located, i) for i in range(count)]
 
@@ -597,9 +650,9 @@ class Pivot:
             _check(
                 LIB.fm_sheet_get_pivot_field_at(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
                     ptr,
                 )
             )
@@ -610,12 +663,12 @@ class Pivot:
                 axis=PivotAxis(d["axis"]) if d["axis"] >= 0 else None,
                 subtotal_top=d["subtotal_top"] != 0,
                 number_format=LIB.read_cstr(d["number_format"]) or None,
-                cache_field_index=None if d["cache_field_index"] < 0 else d["cache_field_index"],
+                cache_field_index=d["cache_field_index"] if d["has_cache_field_index"] else None,
                 sort_order=PivotSortOrder(d["sort_order"]),
                 sort_by_field=LIB.read_cstr(d["sort_by_field"]) or None,
                 date_periods=PivotDatePeriod(d["date_periods"]),
                 date_calendar=PivotCalendar(d["date_calendar"]),
-                group_base_index=None if d["group_base_index"] < 0 else d["group_base_index"],
+                group_base_index=d["group_base_index"] if d["has_group_base_index"] else None,
                 default_subtotal=d["default_subtotal"] != 0,
                 subtotal_functions=[agg for agg in PivotAggregation if d["subtotal_functions"] & (1 << int(agg))],
                 insert_blank_row=d["insert_blank_row"] != 0,
@@ -659,7 +712,11 @@ class Pivot:
             )
             _check(
                 LIB.fm_sheet_add_pivot_field(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    ptr,
+                    out,
                 )
             )
             return LIB.read_u32(out)
@@ -731,9 +788,9 @@ class Pivot:
             _check(
                 LIB.fm_sheet_update_pivot_field(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
                     ptr,
                 )
             )
@@ -741,7 +798,11 @@ class Pivot:
     def clear_fields(self) -> None:
         """Drop every field from the pivot, emptying the row and column orders."""
         h, sheet, pivot_index = self._locate()
-        _check(LIB.fm_sheet_clear_pivot_fields(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
+        _check(
+            LIB.fm_sheet_clear_pivot_fields(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(pivot_index, "pivot_index", role="position")
+            )
+        )
 
     def set_field_axis(self, field_index: int, axis: Optional[PivotAxis]) -> None:
         """Set the axis of pivot field ``field_index``.
@@ -757,15 +818,15 @@ class Pivot:
         _check(
             LIB.fm_sheet_set_pivot_field_axis(
                 h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _uint(field_index, "field_index", role="position"),
                 _sint(_nullable_enum(axis, "axis"), "axis"),
             )
         )
 
-    def set_field_date_group(self, field_index: int, group: PivotDateGroupInput) -> None:
-        """Group the date field ``field_index`` by the periods of ``group.periods``.
+    def set_field_date_group(self, field_index: int, group: Optional[PivotDateGroupInput]) -> None:
+        """Group the date field ``field_index`` by the periods of ``group.periods``, or ungroup it with ``None``.
 
         ``field_index`` is a source field or one of its group fields; any grouping
         it has is replaced. Each period becomes a group field appended to the
@@ -781,41 +842,33 @@ class Pivot:
         interval, an invalid bound, a start after the end, or a field holding
         anything but dates raises ``FormulonError``.
 
+        ``None`` removes the grouping: the group fields leave every pivot on the
+        cache and the field returns to the axis position they held; a field that
+        is not grouped is left as it is.
+
         Raises:
-          TypeError: when ``group`` is not a :class:`PivotDateGroupInput`.
+          TypeError: when ``group`` is neither ``None`` nor a :class:`PivotDateGroupInput`.
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when ``group`` is
+            ``None`` and the group fields are not the last fields of the cache.
         """
-        if not isinstance(group, PivotDateGroupInput):
-            raise TypeError(f"formulon: group must be a PivotDateGroupInput, got {type(group).__name__}")
+        if group is not None and not isinstance(group, PivotDateGroupInput):
+            raise TypeError(f"formulon: group must be a PivotDateGroupInput or None, got {type(group).__name__}")
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
-            ptr = _pack_pivot_date_group(scope, group, date1904=self._sheet._workbook.get_date1904())
+            ptr = (
+                0
+                if group is None
+                else _pack_pivot_date_group(scope, group, date1904=self._sheet._workbook.get_date1904())
+            )
             _check(
                 LIB.fm_sheet_set_pivot_field_date_group(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
                     ptr,
                 )
             )
-
-    def clear_field_date_group(self, field_index: int) -> None:
-        """Remove the date grouping of pivot field ``field_index``.
-
-        ``field_index`` is a source field or one of its group fields. The group
-        fields leave every pivot on the cache and the field returns to the axis
-        position they held; a field that is not grouped is left as it is.
-
-        Raises:
-          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when the
-            group fields are not the last fields of the cache.
-        """
-        h, sheet, pivot_index = self._locate()
-        _check(
-            LIB.fm_sheet_clear_pivot_field_date_group(
-                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_index, "field_index")
-            )
-        )
 
     # -- Field items and subtotals -----------------------------------------
     def list_field_items(self, field_index: int) -> List[PivotItem]:
@@ -824,9 +877,9 @@ class Pivot:
         count = _read_count(
             LIB.fm_sheet_get_pivot_field_item_count,
             h,
-            _uint(sheet, "sheet_index"),
-            _uint(pivot_index, "pivot_index"),
-            _uint(field_index, "field_index"),
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
+            _uint(field_index, "field_index", role="position"),
         )
         return [self._field_item_at((h, sheet, pivot_index), field_index, i) for i in range(count)]
 
@@ -842,17 +895,17 @@ class Pivot:
             _check(
                 LIB.fm_sheet_get_pivot_field_item_at(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    _uint(item_index, "item_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
+                    _uint(item_index, "item_index", role="position"),
                     ptr,
                 )
             )
             d = S.PIVOT_ITEM_INFO.unpack(LIB, ptr)
             return PivotItem(
                 name=LIB.read_cstr(d["name"]) or None,
-                cache_index=None if d["cache_index"] < 0 else d["cache_index"],
+                cache_index=d["cache_index"] if d["has_cache_index"] else None,
                 visible=d["visible"] != 0,
                 caption=LIB.read_cstr(d["caption"]) if d["caption"] else None,
                 show_detail=d["show_detail"] != 0,
@@ -897,10 +950,10 @@ class Pivot:
             _check(
                 LIB.fm_sheet_update_pivot_field_item(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    _uint(item_index, "item_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
+                    _uint(item_index, "item_index", role="position"),
                     ptr,
                 )
             )
@@ -939,16 +992,16 @@ class Pivot:
             out = scope.out_ptr()
             lead = (
                 h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _uint(field_index, "field_index", role="position"),
             )
             if name is not None:
                 _check(LIB.fm_sheet_add_pivot_field_item(*lead, scope.cstr(name), 1 if visible else 0, out))
             else:
                 _check(
                     LIB.fm_sheet_add_pivot_field_item_by_cache_index(
-                        *lead, _uint(cache_index, "cache_index"), 1 if visible else 0, out
+                        *lead, _uint(cache_index, "cache_index", role="position"), 1 if visible else 0, out
                     )
                 )
             return LIB.read_u32(out)
@@ -958,7 +1011,10 @@ class Pivot:
         h, sheet, pivot_index = self._locate()
         _check(
             LIB.fm_sheet_clear_pivot_field_items(
-                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_index, "field_index")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _uint(field_index, "field_index", role="position"),
             )
         )
 
@@ -968,9 +1024,9 @@ class Pivot:
         _check(
             LIB.fm_sheet_add_pivot_field_subtotal_function(
                 h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _uint(field_index, "field_index", role="position"),
                 _sint(aggregation, "aggregation"),
             )
         )
@@ -980,14 +1036,17 @@ class Pivot:
         h, sheet, pivot_index = self._locate()
         _check(
             LIB.fm_sheet_clear_pivot_field_subtotal_functions(
-                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_index, "field_index")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _uint(field_index, "field_index", role="position"),
             )
         )
 
     # -- Axis orders -------------------------------------------------------
     def _get_field_order(self, fn) -> List[int]:
         h, sheet, pivot_index = self._locate()
-        head = (h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"))
+        head = (h, _uint(sheet, "sheet_index", role="sheet"), _uint(pivot_index, "pivot_index", role="position"))
         with _ArgScope() as scope:
             out_count = scope.out_ptr()
             # Size the buffer first, then fetch.
@@ -1007,15 +1066,17 @@ class Pivot:
             if indices:
                 arr_ptr = scope.alloc(4 * len(indices))
                 buf = b"".join(
-                    struct.pack("<I", _PIVOT_VALUES_FIELD_C if i == PIVOT_VALUES_FIELD else _uint(i, "index"))
+                    struct.pack(
+                        "<I", _PIVOT_VALUES_FIELD_C if i == PIVOT_VALUES_FIELD else _uint(i, "index", role="position")
+                    )
                     for i in indices
                 )
                 LIB.write_bytes(arr_ptr, buf)
             _check(
                 fn(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
                     arr_ptr,
                     _uint(len(indices), "count"),
                 )
@@ -1051,7 +1112,10 @@ class Pivot:
         """Every data field of the pivot, in order; a data field's position is its ``data_field_index``."""
         h, sheet, pivot_index = self._locate()
         count = _read_count(
-            LIB.fm_sheet_get_pivot_data_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_data_field_count,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
         )
         return [self._data_field_at((h, sheet, pivot_index), i) for i in range(count)]
 
@@ -1064,9 +1128,9 @@ class Pivot:
             _check(
                 LIB.fm_sheet_get_pivot_data_field_at(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(data_field_index, "data_field_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(data_field_index, "data_field_index", role="position"),
                     ptr,
                 )
             )
@@ -1077,8 +1141,8 @@ class Pivot:
                 aggregation=PivotAggregation(d["aggregation"]),
                 number_format=LIB.read_cstr(d["number_format"]) or None,
                 show_as=PivotShowValuesAs(d["show_as"]),
-                show_as_base_field=None if d["show_as_base_field"] < 0 else d["show_as_base_field"],
-                show_as_base_item=None if d["show_as_base_item"] < 0 else d["show_as_base_item"],
+                show_as_base_field=d["show_as_base_field"] if d["has_show_as_base_field"] else None,
+                show_as_base_item=d["show_as_base_item"] if d["has_show_as_base_item"] else None,
             )
 
     @staticmethod
@@ -1088,15 +1152,17 @@ class Pivot:
             LIB,
             ptr,
             {
-                "field_index": _uint(spec.field_index, "field_index"),
+                "field_index": _uint(spec.field_index, "field_index", role="position"),
                 "aggregation": _sint(spec.aggregation, "aggregation"),
                 "show_as": _sint(spec.show_as, "show_as"),
-                "show_as_base_field": _sint(
-                    -1 if spec.show_as_base_field is None else spec.show_as_base_field, "show_as_base_field"
-                ),
-                "show_as_base_item": _sint(
-                    -1 if spec.show_as_base_item is None else spec.show_as_base_item, "show_as_base_item"
-                ),
+                "has_show_as_base_field": 0 if spec.show_as_base_field is None else 1,
+                "show_as_base_field": 0
+                if spec.show_as_base_field is None
+                else _uint(spec.show_as_base_field, "show_as_base_field", role="position"),
+                "has_show_as_base_item": 0 if spec.show_as_base_item is None else 1,
+                "show_as_base_item": 0
+                if spec.show_as_base_item is None
+                else _uint(spec.show_as_base_item, "show_as_base_item", role="position"),
             },
         )
         S.write_str_field(LIB, ptr, S.PIVOT_DATA_FIELD_SPEC, "name", spec.name, scope)
@@ -1122,7 +1188,11 @@ class Pivot:
             ptr = self._pack_data_field_spec(spec, scope)
             _check(
                 LIB.fm_sheet_add_pivot_data_field(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    ptr,
+                    out,
                 )
             )
             return LIB.read_u32(out)
@@ -1138,9 +1208,9 @@ class Pivot:
             _check(
                 LIB.fm_sheet_set_pivot_data_field(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(data_field_index, "data_field_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(data_field_index, "data_field_index", role="position"),
                     ptr,
                 )
             )
@@ -1164,9 +1234,9 @@ class Pivot:
         return _read_cstr_out(
             LIB.fm_sheet_get_pivot_data_field_default_name,
             h,
-            _uint(sheet, "sheet_index"),
-            _uint(pivot_index, "pivot_index"),
-            _uint(field_index, "field_index"),
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
+            _uint(field_index, "field_index", role="position"),
             _sint(aggregation, "aggregation"),
             exclude,
         )
@@ -1174,7 +1244,11 @@ class Pivot:
     def clear_data_fields(self) -> None:
         """Drop every data-field entry from the pivot."""
         h, sheet, pivot_index = self._locate()
-        _check(LIB.fm_sheet_clear_pivot_data_fields(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
+        _check(
+            LIB.fm_sheet_clear_pivot_data_fields(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(pivot_index, "pivot_index", role="position")
+            )
+        )
 
     # -- Filters -----------------------------------------------------------
     def list_filters(self) -> List[PivotFilter]:
@@ -1190,7 +1264,10 @@ class Pivot:
         """
         h, sheet, pivot_index = self._locate()
         count = _read_count(
-            LIB.fm_sheet_get_pivot_filter_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_filter_count,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
         )
         return [self._filter_at((h, sheet, pivot_index), i) for i in range(count)]
 
@@ -1203,9 +1280,9 @@ class Pivot:
             _check(
                 LIB.fm_sheet_get_pivot_filter_at(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(filter_index, "filter_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(filter_index, "filter_index", role="position"),
                     ptr,
                 )
             )
@@ -1231,7 +1308,7 @@ class Pivot:
                 {
                     "axis": _sint(spec.axis, "axis"),
                     "type": _sint(spec.type, "type"),
-                    "data_field_index": _uint(spec.data_field_index, "data_field_index"),
+                    "data_field_index": _uint(spec.data_field_index, "data_field_index", role="position"),
                     "value_kind": _sint(operands["value_kind"], "value_kind"),
                     "value_int": _sint(operands.get("value_int", 0), "value_int"),
                     "value_double": float(operands.get("value_double", 0.0)),
@@ -1246,7 +1323,11 @@ class Pivot:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_add_pivot_filter(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    ptr,
+                    out,
                 )
             )
             return LIB.read_u32(out)
@@ -1256,14 +1337,21 @@ class Pivot:
         h, sheet, pivot_index = self._locate()
         _check(
             LIB.fm_sheet_remove_pivot_filter(
-                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(filter_index, "filter_index")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(pivot_index, "pivot_index", role="position"),
+                _uint(filter_index, "filter_index", role="position"),
             )
         )
 
     def clear_filters(self) -> None:
         """Drop every listed filter from the pivot."""
         h, sheet, pivot_index = self._locate()
-        _check(LIB.fm_sheet_clear_pivot_filters(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
+        _check(
+            LIB.fm_sheet_clear_pivot_filters(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(pivot_index, "pivot_index", role="position")
+            )
+        )
 
 
 def _show_details_coordinate_form(self, row: int, col: int) -> Sheet: ...

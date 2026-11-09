@@ -746,7 +746,7 @@ extern "C" fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_t* re
   if (wb == nullptr || record == nullptr || out_dxf_index == nullptr) {
     return null_argument();
   }
-  if (record->font_engaged != 0 && record->font.has_size_pt != 0) {
+  if (record->has_font != 0 && record->font.has_size_pt != 0) {
     if (fm_status_t rc = check_finite_non_negative(record->font.size_pt, "font.size_pt"); rc != 0) {
       return rc;
     }
@@ -754,37 +754,37 @@ extern "C" fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_t* re
       return rc;
     }
   }
-  if (record->font_engaged != 0) {
+  if (record->has_font != 0) {
     if (fm_status_t rc = check_font_enums(record->font); rc != 0) {
       return rc;
     }
   }
-  if (record->fill_engaged != 0) {
+  if (record->has_fill != 0) {
     if (fm_status_t rc = validate(record->fill); rc != 0) {
       return rc;
     }
   }
-  if (record->border_engaged != 0) {
+  if (record->has_border != 0) {
     if (fm_status_t rc = validate(record->border); rc != 0) {
       return rc;
     }
   }
-  if (auto rc = check_utf8({record->font_engaged != 0 ? record->font.name : nullptr, record->number_format,
+  if (auto rc = check_utf8({record->has_font != 0 ? record->font.name : nullptr, record->number_format,
                             record->alignment_xml, record->protection_xml});
       rc != 0) {
     return rc;
   }
 
   formulon::DifferentialFormat candidate;
-  candidate.has_font = record->font_engaged != 0;
+  candidate.has_font = record->has_font != 0;
   if (candidate.has_font) {
     candidate.font = font_from_c(record->font);
   }
-  candidate.has_fill = record->fill_engaged != 0;
+  candidate.has_fill = record->has_fill != 0;
   if (candidate.has_fill) {
     candidate.fill = fill_from_c(record->fill);
   }
-  candidate.has_border = record->border_engaged != 0;
+  candidate.has_border = record->has_border != 0;
   if (candidate.has_border) {
     candidate.border = border_from_c(record->border);
   }

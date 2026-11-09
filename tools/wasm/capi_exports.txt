@@ -267,7 +267,7 @@ fm_cell_nodes_get_node_count
 fm_cell_nodes_get_node_at
 
 # -- Dynamic-array spill ---------------------------------------------------------
-fm_sheet_get_spill_info
+fm_sheet_get_spill
 
 # -- Legacy array (CSE) formulas -------------------------------------------------
 fm_sheet_get_array_formula
@@ -396,7 +396,6 @@ fm_sheet_clear_pivot_field_items
 fm_sheet_add_pivot_field_subtotal_function
 fm_sheet_clear_pivot_field_subtotal_functions
 fm_sheet_set_pivot_field_date_group
-fm_sheet_clear_pivot_field_date_group
 fm_sheet_set_pivot_row_field_order
 fm_sheet_set_pivot_column_field_order
 fm_sheet_get_pivot_data_field_count

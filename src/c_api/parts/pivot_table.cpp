@@ -553,11 +553,14 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
   if (auto rc = check_index(spec.field_index, table.fields().size(), "field_index"); rc != 0) {
     return rc;
   }
-  // `-1` is the only unset spelling; any other negative wraps past every field.
-  if (spec.show_as_base_field != -1) {
-    if (auto rc = check_index(static_cast<std::uint32_t>(spec.show_as_base_field), table.fields().size(),
-                              "show_as_base_field");
-        rc != 0) {
+  if (auto rc = check_enum_domain(spec.has_show_as_base_field, 0, 1, "has_show_as_base_field"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(spec.has_show_as_base_item, 0, 1, "has_show_as_base_item"); rc != 0) {
+    return rc;
+  }
+  if (spec.has_show_as_base_field != 0) {
+    if (auto rc = check_index(spec.show_as_base_field, table.fields().size(), "show_as_base_field"); rc != 0) {
       return rc;
     }
   }
@@ -577,13 +580,13 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
   out->field_index = spec.field_index;
   out->number_format = std::move(number_format);
   out->show_as = pivot_show_as_from_fm(static_cast<fm_pivot_show_values_as_t>(spec.show_as));
-  if (spec.show_as_base_field >= 0) {
-    out->show_as_base_field = static_cast<std::uint32_t>(spec.show_as_base_field);
+  if (spec.has_show_as_base_field != 0) {
+    out->show_as_base_field = spec.show_as_base_field;
   } else {
     out->show_as_base_field.reset();
   }
-  if (spec.show_as_base_item >= 0) {
-    out->show_as_base_item = static_cast<std::uint32_t>(spec.show_as_base_item);
+  if (spec.has_show_as_base_item != 0) {
+    out->show_as_base_item = spec.show_as_base_item;
   } else {
     out->show_as_base_item.reset();
   }
@@ -778,10 +781,11 @@ extern "C" fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, 
 }
 
 extern "C" fm_status_t fm_sheet_get_pivot_style_options(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index, fm_pivot_style_options_t* out) {
+                                                        std::size_t pivot_index, int32_t* out_present,
+                                                        fm_pivot_style_options_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
+  if (auto rc = resolve_pivot_checked(wb, {out_present, out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -789,9 +793,10 @@ extern "C" fm_status_t fm_sheet_get_pivot_style_options(const fm_workbook_t* wb,
   }
   fm_pivot_style_options_t result{};
   result.struct_size = out->struct_size;
+  *out_present = 0;
   if (const auto& info = table->style_info(); info.has_value()) {
     result.style_name = text_or_null(info->name.c_str());
-    result.present = 1;
+    *out_present = 1;
     result.show_row_headers = info->show_row_headers ? 1 : 0;
     result.show_column_headers = info->show_col_headers ? 1 : 0;
     result.show_row_stripes = info->show_row_stripes ? 1 : 0;
@@ -824,9 +829,10 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_at(const fm_workbook_t* wb,
   result.aggregation = static_cast<fm_pivot_aggregation_t>(df.aggregation);
   result.number_format = text_or_null(pivot_num_fmt_code(wb->workbook(), df.number_format));
   result.show_as = static_cast<fm_pivot_show_values_as_t>(df.show_as);
-  result.show_as_base_field =
-      df.show_as_base_field.has_value() ? static_cast<std::int32_t>(*df.show_as_base_field) : -1;
-  result.show_as_base_item = df.show_as_base_item.has_value() ? static_cast<std::int32_t>(*df.show_as_base_item) : -1;
+  result.has_show_as_base_field = df.show_as_base_field.has_value() ? 1 : 0;
+  result.show_as_base_field = df.show_as_base_field.value_or(0U);
+  result.has_show_as_base_item = df.show_as_base_item.has_value() ? 1 : 0;
+  result.show_as_base_item = df.show_as_base_item.value_or(0U);
   *out = result;
   return 0;
 }
@@ -1066,7 +1072,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_default_name(const fm_workb
     return rc;
   }
   std::optional<std::size_t> exclude;
-  if (exclude_data_field != SIZE_MAX) {
+  if (exclude_data_field != FM_PIVOT_DATA_FIELD_NONE) {
     if (auto rc = check_index(exclude_data_field, table->data_fields().size(), "exclude_data_field"); rc != 0) {
       return rc;
     }

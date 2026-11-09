@@ -23,7 +23,10 @@ test('all declared runtime constants resolve from the staged ESM entry point', a
     assert.ok(name in mod, `missing runtime export declared in index.d.ts: ${name}`);
   }
   assert.equal(mod.PivotAxis.Row, 0);
-  assert.equal(mod.PIVOT_SHOW_AS_BASE_PREVIOUS, 1048828);
+  assert.equal(mod.PivotShowAsBase.Previous, 1048828);
+  assert.equal(mod.PivotShowAsBase.Next, 1048829);
+  assert.equal('PIVOT_SHOW_AS_BASE_PREVIOUS' in mod, false);
+  assert.equal('PIVOT_SHOW_AS_BASE_NEXT' in mod, false);
   // Named constants a consumer needs in order to interpret shared record
   // fields (`Value.errorCode`, `ExternalLink.kind`) or to drive the
   // calc policy. The WASM package exports the same names and ordinals;
@@ -364,7 +367,7 @@ test('print settings: typed patch touches only the keys it states', async () => 
   const read = wb.sheet(0).getPageSetup();
   assert.equal(read.orientation, mod.PageOrientation.Landscape);
   assert.equal(read.paperSize, 9);
-  assert.equal(read.orientationStated, true);
+  assert.equal('orientationStated' in read, false);
 
   wb.sheet(0).updatePageMargins({ leftIn: 0.25, topIn: 1.5 });
   const margins = wb.sheet(0).getPageMargins();
@@ -508,6 +511,8 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
   ]) {
     assert.equal(wb.sheet(0).ooxml.getCellXfIndex(row, col), xf);
   }
+  assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), null);
+  wb.sheet(0).ooxml.setCellXfIndex(3, 3, 0);
   assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), 0);
 });
 

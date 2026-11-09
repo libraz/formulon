@@ -935,7 +935,11 @@ test('getCellRectPt and getWidthModel default to the Display mode', async () => 
       plain(ws.getCellRectPt('B2:C3', f.GeometryMode.Display)),
     );
     assert.deepEqual(plain(ws.getWidthModel()), plain(ws.getWidthModel(f.GeometryMode.Display)));
-    assert.throws(() => ws.getCellRectPt('B2:C3', 99), RangeError);
+    assert.throws(
+      () => ws.getCellRectPt('B2:C3', 99),
+      (e) => e.name === 'FormulonError' && e.code === f.StatusCode.InvalidArgument,
+    );
+    assert.throws(() => ws.getCellRectPt('B2:C3', '1'), TypeError);
   });
 });
 

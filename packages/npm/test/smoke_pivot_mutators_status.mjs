@@ -26,7 +26,7 @@ import {
 function buildPivot(mod) {
   const wb = mod.Workbook.createDefault();
   wb.setProfileId('win-365-ja_JP');
-  const cache = wb.addPivotCache(0);
+  const cache = wb.addPivotCache();
   const cacheId = cache.cacheId;
   wb.pivotCache(cacheId).setWorksheetSource({ range: 'A1:D5', sheet: 'Sheet1' });
   for (const name of ['Region', 'Product', 'Amount', 'Date']) wb.pivotCache(cacheId).addField(name);
@@ -229,7 +229,7 @@ const PIVOT_MUTATORS = [
     'removePivotCache',
     {
       setup: (b) => {
-        b.spare = b.wb.addPivotCache(0);
+        b.spare = b.wb.addPivotCache();
       },
       act: (b) => b.wb.removePivotCache(b.spare),
       expect: (b) => {
@@ -764,13 +764,13 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.clearFieldDateGroup',
+    'Pivot.setFieldDateGroup',
     {
       setup: (b) => {
         dateRows(b);
         b.wb.sheet(0).pivot(b.pivot).setFieldDateGroup(b.date, { periods: 64, calendar: 0 });
       },
-      act: (b) => b.wb.sheet(0).pivot(b.pivot).clearFieldDateGroup(b.date),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).setFieldDateGroup(b.date, null),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), DATE_SERIAL_GRID),
     },
   ],
@@ -1111,7 +1111,7 @@ const STATUS_ACCESSORS = [
   ['getDate1904', [], null],
   ['getProfileId', [], null],
   ['getPinnedNow', [], null],
-  ['getSpillInfo', [0, 0, 0], [99, 0, 0]],
+  ['getSpill', [0, 0, 0], [99, 0, 0]],
   ['getArrayFormula', [0, 0, 0], [99, 0, 0]],
   ['getColumnWidthPt', [0, 0, 0], [99, 0, 0]],
   ['getRowHeightPt', [0, 0], [99, 0]],
@@ -1638,7 +1638,7 @@ test('setWorksheetSource(null) clears the source and an empty source is still a 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const cache = wb.addPivotCache(0);
+    const cache = wb.addPivotCache();
     cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
     assert.deepEqual(JSON.parse(JSON.stringify(cache.getWorksheetSource())), {
       range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },

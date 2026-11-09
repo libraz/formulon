@@ -354,7 +354,7 @@ TEST(FormulonCApiChart, InsertAndReadThroughAccessors) {
   EXPECT_EQ(plot.bar_direction, FM_CHART_BAR_DIRECTION_COLUMN);
   EXPECT_EQ(plot.has_grouping, 1);
   EXPECT_EQ(plot.grouping, FM_CHART_GROUPING_CLUSTERED);
-  EXPECT_EQ(plot.extended_layout, -1);
+  EXPECT_EQ(plot.extended_layout, FM_CHART_EXTENDED_LAYOUT_ABSENT);
   ASSERT_EQ(plot.series_count, 3U);
   ASSERT_EQ(plot.axis_id_count, 2U);
   uint32_t axis_id = 0;
@@ -562,10 +562,13 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   Open(wb.handle, id, &chart);
   EXPECT_EQ(Info(chart).title.kind, FM_CHART_TITLE_KIND_TEXT);
   EXPECT_STREQ(Info(chart).title.text, "Sales");
+  EXPECT_EQ(Info(chart).title.formula, nullptr);
   const fm_chart_title_t none{FM_CHART_TITLE_KIND_NONE, nullptr, nullptr};
   ASSERT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, &none), 0);
   Open(wb.handle, id, &chart);
   EXPECT_EQ(Info(chart).title.kind, FM_CHART_TITLE_KIND_NONE);
+  EXPECT_EQ(Info(chart).title.text, nullptr);
+  EXPECT_EQ(Info(chart).title.formula, nullptr);
   const fm_chart_title_t automatic{FM_CHART_TITLE_KIND_AUTO, nullptr, nullptr};
   ASSERT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, &automatic), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
@@ -1849,7 +1852,7 @@ TEST(FormulonCApiChart, PlotPercentAndDegreeFieldsRoundTrip) {
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   EXPECT_EQ(plot.has_first_slice_angle_deg, 1);
   EXPECT_EQ(plot.first_slice_angle_deg, 90U);
-  EXPECT_EQ(plot.extended_layout, -1);
+  EXPECT_EQ(plot.extended_layout, FM_CHART_EXTENDED_LAYOUT_ABSENT);
 
   patch = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   patch.first_slice_angle_deg_op = FM_PATCH_OP_CLEAR;

@@ -38,6 +38,7 @@ from ._c import (
     LIB,
     FormulonError,
     ValueKind,
+    _NoCopy,
     _sint,
     _uint,
     fm_value_t_size,
@@ -183,6 +184,7 @@ from ._workbook import (
     _decode_cell_rect_array,
     _decode_cell_rect_at,
     _decode_color,
+    _decode_optional_color,
     _decode_sparkline,
     _decode_sparkline_date_axis,
     _encode_chart_insert,
@@ -196,6 +198,7 @@ from ._workbook import (
     _pack_cell_rect_at,
     _pack_color,
     _pack_mentions,
+    _pack_optional_color,
     _pack_phonetic_run_array,
     _pack_pivot_spec,
     _pack_shape,
@@ -373,7 +376,7 @@ SHEET_METHODS = (
     "get_row_height_pt",
     "get_selection",
     "get_sheet_protection",
-    "get_spill_info",
+    "get_spill",
     "get_tab_color",
     "get_threaded_comment",
     "get_typed_value",
@@ -639,7 +642,7 @@ CELL_ARGS = {
     "Sheet.get_hyperlink": ((0, 1),),
     "Sheet.get_lambda_text": ((0, 1),),
     "Sheet.get_precedents": ((0, 1),),
-    "Sheet.get_spill_info": ((0, 1),),
+    "Sheet.get_spill": ((0, 1),),
     "Sheet.get_typed_value": ((0, 1),),
     "Sheet.get_value": ((0, 1),),
     "Sheet.remove_comment": ((0, 1),),
@@ -833,14 +836,16 @@ def _geometry_mode(mode: Any) -> int:
 
     Raises:
       TypeError: when ``mode`` is not an integer.
-      ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+      InvalidArgumentError: when ``mode`` is not a :class:`GeometryMode` member.
     """
     if isinstance(mode, bool) or not isinstance(mode, numbers.Integral):
         raise TypeError(f"formulon: mode must be a GeometryMode, got {type(mode).__name__}")
     try:
         return int(GeometryMode(mode))
     except ValueError:
-        raise ValueError(f"formulon: mode must be a GeometryMode, got {mode!r}") from None
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT, f"mode {mode!r} is not a GeometryMode", f"mode={mode!r}"
+        ) from None
 
 
 def _drawing_anchor_fields(anchor: DrawingAnchor) -> Dict[str, int]:
@@ -900,9 +905,7 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
         except OverflowError as exc:
             raise ValueError("formulon: the integer is too large for a float") from exc
         if not math.isfinite(number):
-            raise FormulonError(
-                StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{number!r} cannot be stored in a cell", "")
-            )
+            raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{number!r} cannot be stored in a cell", "")
         return "set_number", (number,)
     if isinstance(value, str):
         return ("set_formula" if value.startswith("=") else "set_text"), (value,)
@@ -1051,9 +1054,7 @@ _INT32_MAX = 0x7FFFFFFF
 
 
 def _out_of_range(label: str, value: Any) -> FormulonError:
-    return FormulonError(
-        StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{label} is out of range", f"value={value}")
-    )
+    return FormulonError(StatusCode.INVALID_ARGUMENT, f"{label} is out of range", f"value={value}")
 
 
 def _format_count(value: Any, label: str) -> int:
@@ -1155,7 +1156,7 @@ def _check_cell_format_patch(given: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(value, str):
                 raise TypeError(f"formulon: number_format must be a str, got {type(value).__name__}")
             if value == "":
-                raise FormulonError(StatusCode.INVALID_ARGUMENT, _diagnostic_override=("number_format is empty", ""))
+                raise FormulonError(StatusCode.INVALID_ARGUMENT, "number_format is empty", "")
             out[key] = value
         else:
             out[key] = _format_group(key, value, key)
@@ -1256,13 +1257,13 @@ def _read_auto_filter(workbook: "Workbook", fn, *indices: int) -> Optional[AutoF
     with _ArgScope() as scope:
         present = scope.out_ptr()
         ptr = scope.struct(S.AUTO_FILTER)
-        _check(fn(h, *(_uint(i, "index") for i in indices), present, ptr))
+        _check(fn(h, *(_uint(i, "index", role="position") for i in indices), present, ptr))
         if LIB.read_u32(present) == 0:
             return None
         return _decode_auto_filter(ptr)
 
 
-class Sheet:
+class Sheet(_NoCopy):
     """One sheet of a :class:`Workbook`; every sheet-scope operation lives here.
 
     Obtain a handle from :meth:`Workbook.sheet`, ``wb[key]``, iteration or
@@ -1369,7 +1370,7 @@ class Sheet:
     def _index(self) -> int:
         self._workbook._require()
         if self._position is None:
-            raise FormulonError(StatusCode.NOT_FOUND, _diagnostic_override=("the sheet was removed", ""))
+            raise FormulonError(StatusCode.NOT_FOUND, "the sheet was removed", "")
         return self._position
 
     def __repr__(self) -> str:
@@ -1388,7 +1389,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
-            _check(LIB.fm_workbook_rename_sheet(h, _uint(index, "sheet_index"), name_ptr))
+            _check(LIB.fm_workbook_rename_sheet(h, _uint(index, "sheet_index", role="sheet"), name_ptr))
         self._name = self._workbook._sheet_name(index)
 
     def move(self, to_index: int) -> None:
@@ -1399,7 +1400,11 @@ class Sheet:
         from_index = self._index()
         h = self._workbook._require()
         handles = self._workbook._sheet_handles()
-        _check(LIB.fm_workbook_move_sheet(h, _uint(from_index, "from_index"), _uint(to_index, "to_index")))
+        _check(
+            LIB.fm_workbook_move_sheet(
+                h, _uint(from_index, "from_index", role="sheet"), _uint(to_index, "to_index", role="sheet")
+            )
+        )
         handles.insert(to_index, handles.pop(from_index))
         self._workbook._renumber_sheets(handles)
 
@@ -1431,7 +1436,8 @@ class Sheet:
         if ref is None or ref.sheet_name is not None:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=(f"{rect!r} is not an unqualified A1 range", ""),
+                f"{rect!r} is not an unqualified A1 range",
+                "",
             )
         return ref.range
 
@@ -1450,7 +1456,8 @@ class Sheet:
         noun = "whole-column" if axis == "col" else "whole-row"
         raise FormulonError(
             StatusCode.INVALID_ARGUMENT,
-            _diagnostic_override=(f"{text!r} is not a {noun} A1 span without a sheet name", ""),
+            f"{text!r} is not a {noun} A1 span without a sheet name",
+            "",
         )
 
     def _span_args(self, name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any], names: Sequence[str]) -> List[Any]:
@@ -1482,7 +1489,8 @@ class Sheet:
                 return rect.first_row, rect.first_col
         raise FormulonError(
             StatusCode.INVALID_ARGUMENT,
-            _diagnostic_override=(f"{a1!r} is not a single-cell A1 reference", ""),
+            f"{a1!r} is not a single-cell A1 reference",
+            "",
         )
 
     def _key(self, key: Union[str, Tuple[int, int]]) -> Tuple[int, int]:
@@ -1509,7 +1517,8 @@ class Sheet:
             if len(value) != rows or any(not isinstance(line, Sequence) or len(line) != cols for line in value):
                 raise FormulonError(
                     StatusCode.INVALID_ARGUMENT,
-                    _diagnostic_override=(f"{key!r} takes a {rows}x{cols} grid", ""),
+                    f"{key!r} takes a {rows}x{cols} grid",
+                    "",
                 )
             self.set_values(rect.first_row, rect.first_col, value)
             return
@@ -1533,7 +1542,11 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_number(
-            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), float(value)
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
+            float(value),
         )
         _check(status)
 
@@ -1553,7 +1566,11 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_bool(
-            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), 1 if value else 0
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
+            1 if value else 0,
         )
         _check(status)
 
@@ -1578,7 +1595,11 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_error(
-            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), _sint(error, "error")
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
+            _sint(error, "error"),
         )
         _check(status)
 
@@ -1603,7 +1624,11 @@ class Sheet:
         with _ArgScope() as scope:
             text_ptr = scope.cstr(value)
             status = LIB.fm_sheet_set_text(
-                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                text_ptr,
             )
             _check(status)
 
@@ -1623,7 +1648,12 @@ class Sheet:
         row, col = self._cell_args("set_blank", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
-        status = LIB.fm_sheet_set_blank(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"))
+        status = LIB.fm_sheet_set_blank(
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
+        )
         _check(status)
 
     @overload
@@ -1654,7 +1684,11 @@ class Sheet:
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
             status = LIB.fm_sheet_set_formula(
-                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                formula_ptr,
             )
             _check(status)
 
@@ -1748,7 +1782,11 @@ class Sheet:
         with _ArgScope() as scope:
             text_ptr = scope.cstr(text or "")
             status = LIB.fm_sheet_set_cell_phonetic(
-                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                text_ptr,
             )
             _check(status)
 
@@ -1778,9 +1816,9 @@ class Sheet:
             ptr = _pack_phonetic_run_array(runs, scope)
             status = LIB.fm_sheet_set_cell_phonetic_runs(
                 h,
-                _uint(sheet, "sheet_index"),
-                _uint(row, "row"),
-                _uint(col, "col"),
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
                 ptr,
                 _uint(len(runs), "count"),
             )
@@ -1805,9 +1843,9 @@ class Sheet:
         count = _read_count(
             LIB.fm_sheet_get_cell_phonetic_run_count,
             h,
-            _uint(sheet, "sheet_index"),
-            _uint(row, "row"),
-            _uint(col, "col"),
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
         )
         runs: List[PhoneticRun] = []
         with _ArgScope() as scope:
@@ -1817,10 +1855,10 @@ class Sheet:
                 _check(
                     LIB.fm_sheet_get_cell_phonetic_run_at(
                         h,
-                        _uint(sheet, "sheet_index"),
-                        _uint(row, "row"),
-                        _uint(col, "col"),
-                        _uint(run_index, "run_index"),
+                        _uint(sheet, "sheet_index", role="sheet"),
+                        _uint(row, "row", role="coordinate"),
+                        _uint(col, "col", role="coordinate"),
+                        _uint(run_index, "run_index", role="position"),
                         run_ptr,
                     )
                 )
@@ -1844,7 +1882,7 @@ class Sheet:
     def set_cell_phonetic_properties(self, *args: Any, **kwargs: Any) -> None:
         """Set how the cell's phonetic guide renders.
 
-        ``row`` and ``col`` are 0-based. ``properties.present`` is ignored, so
+        ``row`` and ``col`` are 0-based. ``properties.stated`` is ignored, so
         the :class:`PhoneticProperties` :meth:`get_cell_phonetic_properties`
         returns can be passed back. Independent of
         :meth:`set_cell_phonetic_runs` in both directions: editing the readings
@@ -1863,10 +1901,10 @@ class Sheet:
         _check(
             LIB.fm_sheet_set_cell_phonetic_properties(
                 h,
-                _uint(sheet, "sheet_index"),
-                _uint(row, "row"),
-                _uint(col, "col"),
-                _uint(properties.font_index, "font_index"),
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                _uint(properties.font_index, "font_index", role="position"),
                 _uint(properties.type, "type"),
                 _uint(properties.alignment, "alignment"),
             )
@@ -1897,9 +1935,9 @@ class Sheet:
             _check(
                 LIB.fm_sheet_get_cell_phonetic_properties(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(row, "row"),
-                    _uint(col, "col"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
                     font_ptr,
                     type_ptr,
                     alignment_ptr,
@@ -1909,13 +1947,13 @@ class Sheet:
                 font_index=LIB.read_u32(font_ptr),
                 type=LIB.read_u32(type_ptr),
                 alignment=LIB.read_u32(alignment_ptr),
-                present=bool(
+                stated=bool(
                     _read_count(
                         LIB.fm_sheet_has_cell_phonetic_properties,
                         h,
-                        _uint(sheet, "sheet_index"),
-                        _uint(row, "row"),
-                        _uint(col, "col"),
+                        _uint(sheet, "sheet_index", role="sheet"),
+                        _uint(row, "row", role="coordinate"),
+                        _uint(col, "col", role="coordinate"),
                     )
                 ),
             )
@@ -1936,9 +1974,9 @@ class Sheet:
             _read_count(
                 LIB.fm_sheet_get_cell_show_phonetic,
                 h,
-                _uint(sheet, "sheet_index"),
-                _uint(row, "row"),
-                _uint(col, "col"),
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
             )
         )
 
@@ -1960,7 +1998,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_cell_show_phonetic(
-                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), 1 if show else 0
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                1 if show else 0,
             )
         )
 
@@ -1982,9 +2024,9 @@ class Sheet:
         return _read_optional_cstr_out(
             LIB.fm_sheet_get_cell_phonetic,
             h,
-            _uint(sheet, "sheet_index"),
-            _uint(row, "row"),
-            _uint(col, "col"),
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
         )
 
     # -- Cell read ---------------------------------------------------------
@@ -2039,7 +2081,11 @@ class Sheet:
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
             status = LIB.fm_sheet_get_value(
-                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), value_ptr
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                value_ptr,
             )
             _check(status)
             return Value._from_wasm(value_ptr)
@@ -2081,7 +2127,8 @@ class Sheet:
         if rows <= 0 or cols <= 0 or rows * cols > _GET_VALUES_CELL_CAP:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=(f"get_values reads at most {_GET_VALUES_CELL_CAP} cells, got {rows}x{cols}", ""),
+                f"get_values reads at most {_GET_VALUES_CELL_CAP} cells, got {rows}x{cols}",
+                "",
             )
         grid = [[_BLANK] * cols for _ in builtins.range(rows)]  # `range` is the parameter here
         for row, col, _, value in self._typed_cells(rect):
@@ -2113,10 +2160,8 @@ class Sheet:
         if value.kind is not ValueKind.NUMBER:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=(
-                    f"the cell holds {value.kind.name.lower()}, not a date serial",
-                    f"row={row} col={col}",
-                ),
+                f"the cell holds {value.kind.name.lower()}, not a date serial",
+                f"row={row} col={col}",
             )
         return serial_datetime(value.number, date1904=self._workbook.get_date1904())
 
@@ -2185,8 +2230,8 @@ class Sheet:
           TypeError: for a non-grid argument or an element :meth:`set_value`
             rejects by type.
           ValueError: for an integer too large to convert to a float.
-          InvalidArgumentError: for a NaN or infinite number, or a grid
-            reaching past the last row or column.
+          InvalidArgumentError: for rows of unequal length, a NaN or infinite
+            number, or a grid reaching past the last row or column.
           FormulaSyntaxError: for a formula that does not parse.
 
         Example::
@@ -2203,13 +2248,14 @@ class Sheet:
             grid.append([_cell_input(value) for value in line])
         width = len(grid[0]) if grid else 0
         if any(len(line) != width for line in grid):
-            raise TypeError("formulon: every row of values must have the same length")
+            raise FormulonError(StatusCode.INVALID_ARGUMENT, "every row of values must have the same length", "")
         if width == 0:
             return
         if row + len(grid) - 1 > _LAST_ROW or col + width - 1 > _LAST_COL:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=(f"a {len(grid)}x{width} grid at ({row}, {col}) runs past the sheet", ""),
+                f"a {len(grid)}x{width} grid at ({row}, {col}) runs past the sheet",
+                "",
             )
         for r, line in enumerate(grid):
             for c, (setter, payload) in enumerate(line):
@@ -2243,11 +2289,11 @@ class Sheet:
             _check(
                 LIB.fm_sheet_evaluate_cf_formula(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(row, "row"),
-                    _uint(col, "col"),
-                    _uint(anchor_row, "anchor_row"),
-                    _uint(anchor_col, "anchor_col"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    _uint(anchor_row, "anchor_row", role="coordinate"),
+                    _uint(anchor_col, "anchor_col", role="coordinate"),
                     formula_ptr,
                     value_ptr,
                 )
@@ -2376,7 +2422,11 @@ class Sheet:
         row, count = self._span_args("insert_rows", args, kwargs, ("row", "count"))
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_insert_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")))
+        _check(
+            LIB.fm_sheet_insert_rows(
+                h, _uint(sheet, "sheet", role="sheet"), _uint(row, "row", role="coordinate"), _uint(count, "count")
+            )
+        )
 
     @overload
     @_span_form
@@ -2399,7 +2449,11 @@ class Sheet:
         row, count = self._span_args("delete_rows", args, kwargs, ("row", "count"))
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_delete_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")))
+        _check(
+            LIB.fm_sheet_delete_rows(
+                h, _uint(sheet, "sheet", role="sheet"), _uint(row, "row", role="coordinate"), _uint(count, "count")
+            )
+        )
 
     @overload
     @_span_form
@@ -2422,7 +2476,11 @@ class Sheet:
         col, count = self._span_args("insert_columns", args, kwargs, ("col", "count"))
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_insert_columns(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")))
+        _check(
+            LIB.fm_sheet_insert_columns(
+                h, _uint(sheet, "sheet", role="sheet"), _uint(col, "col", role="coordinate"), _uint(count, "count")
+            )
+        )
 
     @overload
     @_span_form
@@ -2445,7 +2503,11 @@ class Sheet:
         col, count = self._span_args("delete_columns", args, kwargs, ("col", "count"))
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_delete_columns(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")))
+        _check(
+            LIB.fm_sheet_delete_columns(
+                h, _uint(sheet, "sheet", role="sheet"), _uint(col, "col", role="coordinate"), _uint(count, "count")
+            )
+        )
 
     # -- Partial recalc ----------------------------------------------------
     #
@@ -2461,7 +2523,7 @@ class Sheet:
             vp = scope.struct(S.CELL_RECT)
             out = scope.out_ptr()
             _pack_cell_rect_at(vp, rect)
-            _check(LIB.fm_sheet_recalc_viewport(h, _uint(sheet, "sheet"), vp, out))
+            _check(LIB.fm_sheet_recalc_viewport(h, _uint(sheet, "sheet", role="sheet"), vp, out))
             return LIB.read_u32(out)
 
     # -- Lambda text -------------------------------------------------------
@@ -2480,9 +2542,9 @@ class Sheet:
         return _read_optional_cstr_out(
             LIB.fm_sheet_get_lambda_text,
             h,
-            _uint(sheet, "sheet_index"),
-            _uint(row, "row"),
-            _uint(col, "col"),
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
         )
 
     # -- Merges ------------------------------------------------------------
@@ -2497,7 +2559,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = _pack_cell_rect_array([merge], scope)
-            _check(LIB.fm_sheet_add_merge(h, _uint(sheet, "sheet"), ptr))
+            _check(LIB.fm_sheet_add_merge(h, _uint(sheet, "sheet", role="sheet"), ptr))
 
     def remove_merge(self, range: Union[CellRect, str]) -> None:
         """Remove every merge on the sheet overlapping ``range``."""
@@ -2506,26 +2568,30 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = _pack_cell_rect_array([merge], scope)
-            _check(LIB.fm_sheet_remove_merge(h, _uint(sheet, "sheet"), ptr))
+            _check(LIB.fm_sheet_remove_merge(h, _uint(sheet, "sheet", role="sheet"), ptr))
 
     def clear_merges(self) -> None:
         """Drop every merge range on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_merges(h, _uint(sheet, "sheet")))
+        _check(LIB.fm_sheet_clear_merges(h, _uint(sheet, "sheet", role="sheet")))
 
     def list_merges(self) -> List[CellRect]:
         """Return every merge range on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        n = _read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))
+        n = _read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet", role="sheet"))
         out: List[CellRect] = []
         # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_RECT)
             for i in range(n):
                 S.zero_struct(LIB, S.CELL_RECT, ptr)
-                _check(LIB.fm_sheet_get_merge_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr))
+                _check(
+                    LIB.fm_sheet_get_merge_at(
+                        h, _uint(sheet, "sheet", role="sheet"), _uint(i, "index", role="position"), ptr
+                    )
+                )
                 out.append(_decode_cell_rect_at(ptr))
         return out
 
@@ -2585,7 +2651,13 @@ class Sheet:
                 S.write_str_field(LIB, ptr, S.HYPERLINK, "display", link.display, scope)
                 S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", link.tooltip, scope)
             _check(
-                LIB.fm_sheet_set_hyperlink(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), ptr)
+                LIB.fm_sheet_set_hyperlink(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    ptr,
+                )
             )
 
     @overload
@@ -2600,26 +2672,37 @@ class Sheet:
         row, col = self._cell_args("remove_hyperlink", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_hyperlink(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
+        _check(
+            LIB.fm_sheet_remove_hyperlink(
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+            )
+        )
 
     def clear_hyperlinks(self) -> None:
         """Drop every hyperlink on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_hyperlinks(h, _uint(sheet, "sheet")))
+        _check(LIB.fm_sheet_clear_hyperlinks(h, _uint(sheet, "sheet", role="sheet")))
 
     def list_hyperlinks(self) -> List[Hyperlink]:
         """Return every hyperlink on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        n = _read_count(LIB.fm_sheet_get_hyperlink_count, h, _uint(sheet, "sheet"))
+        n = _read_count(LIB.fm_sheet_get_hyperlink_count, h, _uint(sheet, "sheet", role="sheet"))
         out: List[Hyperlink] = []
         # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.HYPERLINK)
             for i in range(n):
                 S.zero_struct(LIB, S.HYPERLINK, ptr)
-                _check(LIB.fm_sheet_get_hyperlink_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr))
+                _check(
+                    LIB.fm_sheet_get_hyperlink_at(
+                        h, _uint(sheet, "sheet", role="sheet"), _uint(i, "index", role="position"), ptr
+                    )
+                )
                 d = S.HYPERLINK.unpack(LIB, ptr)
                 out.append(_hyperlink_from(d))
         return out
@@ -2637,7 +2720,11 @@ class Sheet:
         sheet = self._index()
         return self._workbook._lookup(
             LIB.fm_sheet_get_hyperlink,
-            (_uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")),
+            (
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+            ),
             S.HYPERLINK,
             _hyperlink_from,
         )
@@ -2659,7 +2746,14 @@ class Sheet:
             present = scope.out_ptr()
             ptr = scope.struct(S.COMMENT)
             _check(
-                LIB.fm_sheet_get_comment(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), present, ptr)
+                LIB.fm_sheet_get_comment(
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    present,
+                    ptr,
+                )
             )
             if not LIB.read_u32(present):
                 return None
@@ -2699,7 +2793,12 @@ class Sheet:
             text_ptr = scope.cstr(comment.text)
             _check(
                 LIB.fm_sheet_set_comment(
-                    h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), author_ptr, text_ptr
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    author_ptr,
+                    text_ptr,
                 )
             )
 
@@ -2719,7 +2818,14 @@ class Sheet:
         row, col = self._cell_args("remove_comment", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_comment(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")))
+        _check(
+            LIB.fm_sheet_remove_comment(
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+            )
+        )
 
     def list_comments(self) -> List[SheetComment]:
         """Return every comment on the sheet in storage order.
@@ -2733,9 +2839,13 @@ class Sheet:
         # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.COMMENT)
-            for index in range(_read_count(LIB.fm_sheet_get_comment_count, h, _uint(sheet, "sheet"))):
+            for index in range(_read_count(LIB.fm_sheet_get_comment_count, h, _uint(sheet, "sheet", role="sheet"))):
                 S.zero_struct(LIB, S.COMMENT, ptr)
-                _check(LIB.fm_sheet_get_comment_at(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr))
+                _check(
+                    LIB.fm_sheet_get_comment_at(
+                        h, _uint(sheet, "sheet", role="sheet"), _uint(index, "index", role="position"), ptr
+                    )
+                )
                 d = S.COMMENT.unpack(LIB, ptr)
                 out.append(
                     SheetComment(
@@ -2761,7 +2871,12 @@ class Sheet:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_get_comment_visible(
-                    h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), present, out
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    present,
+                    out,
                 )
             )
             if LIB.read_u32(present) == 0:
@@ -2782,7 +2897,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_comment_visible(
-                h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), 1 if visible else 0
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                1 if visible else 0,
             )
         )
 
@@ -2803,7 +2922,7 @@ class Sheet:
         """Return the number of protected ranges on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        return _read_count(LIB.fm_sheet_get_protected_range_count, h, _uint(sheet, "sheet"))
+        return _read_count(LIB.fm_sheet_get_protected_range_count, h, _uint(sheet, "sheet", role="sheet"))
 
     def _protected_range_at(self, protected_range_index: int) -> ProtectedRange:
         """Return the ``protected_range_index``-th protected range of the sheet in file order."""
@@ -2813,15 +2932,22 @@ class Sheet:
             ptr = scope.struct(S.PROTECTED_RANGE)
             _check(
                 LIB.fm_sheet_get_protected_range_at(
-                    h, _uint(sheet, "sheet"), _uint(protected_range_index, "protected_range_index"), ptr
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(protected_range_index, "protected_range_index", role="position"),
+                    ptr,
                 )
             )
             d = S.PROTECTED_RANGE.unpack(LIB, ptr)
             return ProtectedRange(
                 spin_count=d["spin_count"],
                 ranges=_decode_cell_rect_array(d["ranges"], d["range_count"]),
-                legacy_password_hash=LIB.read_cstr(d["legacy_password_hash"]) or None,
-                **{fld: LIB.read_cstr(d[fld]) for fld in self._PROTECTED_RANGE_TEXT if fld != "legacy_password_hash"},
+                legacy_password_hash=LIB.read_optional_cstr(d["legacy_password_hash"]),
+                **{
+                    fld: LIB.read_optional_cstr(d[fld])
+                    for fld in self._PROTECTED_RANGE_TEXT
+                    if fld != "legacy_password_hash"
+                },
             )
 
     def _protected_range_call(
@@ -2873,7 +2999,7 @@ class Sheet:
         sheet = self._index()
         index = self._protected_range_call(
             LIB.fm_sheet_add_protected_range,
-            (_uint(sheet, "sheet"),),
+            (_uint(sheet, "sheet", role="sheet"),),
             protected,
             returns_index=True,
         )
@@ -2956,7 +3082,7 @@ class Sheet:
             S.PROTECTED_RANGE_PATCH.pack(LIB, ptr, values)
             _check(
                 LIB.fm_sheet_update_protected_range(
-                    h, _uint(sheet, "sheet"), _uint(index, "protected_range_index"), ptr
+                    h, _uint(sheet, "sheet", role="sheet"), _uint(index, "protected_range_index", role="position"), ptr
                 )
             )
 
@@ -2970,7 +3096,11 @@ class Sheet:
         index = self._protected_range_index(protected_range)
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_protected_range(h, _uint(sheet, "sheet"), _uint(index, "protected_range_index")))
+        _check(
+            LIB.fm_sheet_remove_protected_range(
+                h, _uint(sheet, "sheet", role="sheet"), _uint(index, "protected_range_index", role="position")
+            )
+        )
 
     # -- Data validations --------------------------------------------------
     def list_validations(self) -> List[DataValidation]:
@@ -2981,7 +3111,7 @@ class Sheet:
         """Return the number of data-validation rules on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        return _read_count(LIB.fm_sheet_get_validation_count, h, _uint(sheet, "sheet"))
+        return _read_count(LIB.fm_sheet_get_validation_count, h, _uint(sheet, "sheet", role="sheet"))
 
     def _validation_at(self, validation_index: int) -> DataValidation:
         """Read the ``validation_index``-th data-validation rule on the sheet."""
@@ -2991,7 +3121,10 @@ class Sheet:
             ptr = scope.struct(S.DATA_VALIDATION)
             _check(
                 LIB.fm_sheet_get_validation_at(
-                    h, _uint(sheet, "sheet"), _uint(validation_index, "validation_index"), ptr
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(validation_index, "validation_index", role="position"),
+                    ptr,
                 )
             )
             return self._decode_validation(ptr)
@@ -3061,20 +3194,24 @@ class Sheet:
             ):
                 S.write_str_field(LIB, ptr, S.DATA_VALIDATION, fld, getattr(validation, fld), scope)
             out = scope.out_ptr()
-            _check(LIB.fm_sheet_add_validation(h, _uint(sheet, "sheet"), ptr, out))
+            _check(LIB.fm_sheet_add_validation(h, _uint(sheet, "sheet", role="sheet"), ptr, out))
             return LIB.read_u32(out)
 
     def remove_validation(self, validation_index: int) -> None:
         """Remove the validation rule at ``validation_index`` on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_validation(h, _uint(sheet, "sheet"), _uint(validation_index, "validation_index")))
+        _check(
+            LIB.fm_sheet_remove_validation(
+                h, _uint(sheet, "sheet", role="sheet"), _uint(validation_index, "validation_index", role="position")
+            )
+        )
 
     def clear_validations(self) -> None:
         """Drop every validation rule on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_validations(h, _uint(sheet, "sheet")))
+        _check(LIB.fm_sheet_clear_validations(h, _uint(sheet, "sheet", role="sheet")))
 
     # -- Sheet protection --------------------------------------------------
     # The two select flags are ``fm_tristate_t`` in C (FALSE 1, TRUE 2); the others are 0 / 1.
@@ -3087,7 +3224,7 @@ class Sheet:
         with _ArgScope() as scope:
             present = scope.out_ptr()
             ptr = scope.struct(S.SHEET_PROTECTION)
-            _check(LIB.fm_sheet_get_sheet_protection(h, _uint(sheet, "sheet_index"), present, ptr))
+            _check(LIB.fm_sheet_get_sheet_protection(h, _uint(sheet, "sheet_index", role="sheet"), present, ptr))
             if not LIB.read_i32(present):
                 return None
             d = S.SHEET_PROTECTION.unpack(LIB, ptr)
@@ -3132,7 +3269,7 @@ class Sheet:
                 S.SHEET_PROTECTION.pack(LIB, ptr, values)
                 for fld in S.SHEET_PROTECTION_TEXT_FIELDS:
                     S.write_str_field(LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), scope)
-            _check(LIB.fm_sheet_set_sheet_protection(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_set_sheet_protection(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def update_sheet_protection(
         self,
@@ -3199,7 +3336,7 @@ class Sheet:
                 else:
                     values[name] = scope.cstr(value)
             S.SHEET_PROTECTION_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_sheet_protection(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_sheet_protection(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     # -- Geometry / display ------------------------------------------------
     @overload
@@ -3215,7 +3352,12 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         _check(
-            LIB.fm_sheet_reset_row_height(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+            LIB.fm_sheet_reset_row_height(
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+            )
         )
 
     @overload
@@ -3231,7 +3373,12 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         _check(
-            LIB.fm_sheet_reset_column_width(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+            LIB.fm_sheet_reset_column_width(
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+            )
         )
 
     def get_format_defaults(self) -> SheetFormatDefaults:
@@ -3240,7 +3387,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.SHEET_FORMAT_DEFAULTS)
-            _check(LIB.fm_sheet_get_format_defaults(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_format_defaults(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             d = S.SHEET_FORMAT_DEFAULTS.unpack(LIB, ptr)
             return SheetFormatDefaults(
                 default_col_width_chars=(
@@ -3295,7 +3442,7 @@ class Sheet:
         with _ArgScope() as scope:
             ptr = scope.struct(S.SHEET_FORMAT_DEFAULTS_PATCH)
             S.SHEET_FORMAT_DEFAULTS_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_format_defaults(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_format_defaults(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def _read_f64_out(self, fn, *args) -> float:
         """Call a ``(..., double* out)`` ABI function and return the double."""
@@ -3313,27 +3460,40 @@ class Sheet:
             rp = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rp, cell_range)
             ptr = scope.struct(S.RECT_PT)
-            _check(LIB.fm_sheet_get_cell_rect_pt(h, _uint(sheet, "sheet_index"), rp, _sint(mode, "mode"), ptr))
+            _check(
+                LIB.fm_sheet_get_cell_rect_pt(
+                    h, _uint(sheet, "sheet_index", role="sheet"), rp, _sint(mode, "mode"), ptr
+                )
+            )
             return RectPt(**S.RECT_PT.unpack(LIB, ptr))
 
     def get_column_width_pt(self, col: int, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
         """Return the effective width of ``col`` in points (0 when hidden).
 
         Raises:
-          ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+          InvalidArgumentError: when ``mode`` is not a :class:`GeometryMode` member.
         """
         mode_c = _geometry_mode(mode)
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_get_column_width_pt, h, _uint(sheet, "sheet_index"), _uint(col, "col"), mode_c
+            LIB.fm_sheet_get_column_width_pt,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(col, "col", role="coordinate"),
+            mode_c,
         )
 
     def get_row_height_pt(self, row: int) -> float:
         """Return the effective height of ``row`` in points (0 when hidden)."""
         sheet = self._index()
         h = self._workbook._require()
-        return self._read_f64_out(LIB.fm_sheet_get_row_height_pt, h, _uint(sheet, "sheet_index"), _uint(row, "row"))
+        return self._read_f64_out(
+            LIB.fm_sheet_get_row_height_pt,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+        )
 
     def get_width_model(self, mode: GeometryMode = GeometryMode.DISPLAY) -> WidthModel:
         """Return the character-unit to point conversion model in ``mode``."""
@@ -3341,7 +3501,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.WIDTH_MODEL)
-            _check(LIB.fm_sheet_get_width_model(h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), ptr))
+            _check(LIB.fm_sheet_get_width_model(h, _uint(sheet, "sheet_index", role="sheet"), _sint(mode, "mode"), ptr))
             d = S.WIDTH_MODEL.unpack(LIB, ptr)
             return WidthModel(
                 points_per_char=d["points_per_char"],
@@ -3356,26 +3516,26 @@ class Sheet:
         """Convert a stored column width (padding included) to points, snapped to whole screen pixels.
 
         Raises:
-          ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+          InvalidArgumentError: when ``mode`` is not a :class:`GeometryMode` member.
         """
         mode_c = _geometry_mode(mode)
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_convert_column_chars_to_pt, h, _uint(sheet, "sheet_index"), float(chars), mode_c
+            LIB.fm_sheet_convert_column_chars_to_pt, h, _uint(sheet, "sheet_index", role="sheet"), float(chars), mode_c
         )
 
     def convert_column_pt_to_chars(self, pt: float, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
         """Convert points to the stored column width Excel writes for that column.
 
         Raises:
-          ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+          InvalidArgumentError: when ``mode`` is not a :class:`GeometryMode` member.
         """
         mode_c = _geometry_mode(mode)
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_convert_column_pt_to_chars, h, _uint(sheet, "sheet_index"), float(pt), mode_c
+            LIB.fm_sheet_convert_column_pt_to_chars, h, _uint(sheet, "sheet_index", role="sheet"), float(pt), mode_c
         )
 
     def _read_formula_text(self, fn, sheet: int, row: int, col: int) -> Optional[str]:
@@ -3383,9 +3543,9 @@ class Sheet:
         return _read_optional_cstr_out(
             fn,
             h,
-            _uint(sheet, "sheet_index"),
-            _uint(row, "row"),
-            _uint(col, "col"),
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
         )
 
     @overload
@@ -3450,7 +3610,7 @@ class Sheet:
             return self._read_cell_range_page(
                 LIB.fm_sheet_get_cells_in_range,
                 h,
-                _uint(sheet, "sheet_index"),
+                _uint(sheet, "sheet_index", role="sheet"),
                 rp,
                 _uint(cursor or 0, "cursor", 64),
                 _uint(limit or 0, "limit"),
@@ -3466,7 +3626,8 @@ class Sheet:
         if handle == 0:
             raise FormulonError(
                 StatusCode.BINDING_NULL_POINTER,
-                _diagnostic_override=("returned OK with a null cell-range handle", ""),
+                "returned OK with a null cell-range handle",
+                "",
             )
         try:
             count = _read_count(LIB.fm_cell_range_get_cell_count, handle)
@@ -3480,7 +3641,9 @@ class Sheet:
                 for i in range(count):
                     LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
                     _check(
-                        LIB.fm_cell_range_get_cell_at(handle, _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr)
+                        LIB.fm_cell_range_get_cell_at(
+                            handle, _uint(i, "idx", role="position"), row_ptr, col_ptr, formula_ptr, value_ptr
+                        )
                     )
                     formula_addr = LIB.read_u32(formula_ptr)
                     cells.append(
@@ -3519,7 +3682,7 @@ class Sheet:
         """Hide the body rows the sheet AutoFilter excludes and show the rest."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_apply_auto_filter(h, _uint(sheet, "sheet_index")))
+        _check(LIB.fm_sheet_apply_auto_filter(h, _uint(sheet, "sheet_index", role="sheet")))
 
     def clear_auto_filter_criteria(self) -> None:
         """Drop every column criterion of the sheet AutoFilter and show all its body rows.
@@ -3529,7 +3692,7 @@ class Sheet:
         """
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_auto_filter_criteria(h, _uint(sheet, "sheet_index")))
+        _check(LIB.fm_sheet_clear_auto_filter_criteria(h, _uint(sheet, "sheet_index", role="sheet")))
 
     def evaluate_auto_filter(self) -> AutoFilterEval:
         """Evaluate the sheet AutoFilter without changing the sheet.
@@ -3563,7 +3726,12 @@ class Sheet:
             _write_value_input(value, value_ptr, scope)
             _check(
                 LIB.fm_sheet_validate_value(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), value_ptr, ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    value_ptr,
+                    ptr,
                 )
             )
             d = S.VALIDATION_OUTCOME.unpack(LIB, ptr)
@@ -3585,7 +3753,7 @@ class Sheet:
         cells, next_cursor = self._read_cell_range_page(
             LIB.fm_sheet_get_invalid_cells,
             h,
-            _uint(sheet, "sheet_index"),
+            _uint(sheet, "sheet_index", role="sheet"),
             _uint(cursor or 0, "cursor", 64),
             _uint(limit or 0, "limit"),
         )
@@ -3613,13 +3781,17 @@ class Sheet:
         sheet = self._index()
         anchor = None if cell is None else self._cell_address(cell, "cell")
         h = self._workbook._require()
-        n = _read_count(LIB.fm_sheet_get_threaded_comment_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_threaded_comment_count, h, _uint(sheet, "sheet_index", role="sheet"))
         with _ArgScope() as scope:
             ptr = scope.struct(S.THREADED_COMMENT)
             out: List[ThreadedComment] = []
             for i in range(n):
                 S.zero_struct(LIB, S.THREADED_COMMENT, ptr)
-                _check(LIB.fm_sheet_get_threaded_comment_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr))
+                _check(
+                    LIB.fm_sheet_get_threaded_comment_at(
+                        h, _uint(sheet, "sheet_index", role="sheet"), _uint(i, "idx", role="position"), ptr
+                    )
+                )
                 d = S.THREADED_COMMENT.unpack(LIB, ptr)
                 out.append(_threaded_comment_from(d))
         if anchor is not None:
@@ -3645,8 +3817,8 @@ class Sheet:
                 LIB,
                 ptr,
                 {
-                    "row": _uint(row, "row"),
-                    "col": _uint(col, "col"),
+                    "row": _uint(row, "row", role="coordinate"),
+                    "col": _uint(col, "col", role="coordinate"),
                     "done": 1 if comment.done else 0,
                 },
             )
@@ -3659,7 +3831,7 @@ class Sheet:
             ):
                 S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, text, scope)
             _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, scope)
-            _check(LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def update_threaded_comment(
         self,
@@ -3699,14 +3871,14 @@ class Sheet:
                 values["mentions_count"] = _uint(len(mentions), "mentions_count")
             ptr = scope.struct(S.THREADED_COMMENT_PATCH)
             S.THREADED_COMMENT_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_threaded_comment(h, _uint(sheet, "sheet_index"), id_ptr, ptr))
+            _check(LIB.fm_sheet_update_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), id_ptr, ptr))
 
     def get_threaded_comment(self, comment_id: str) -> Optional[ThreadedComment]:
         """Return the threaded comment ``comment_id``, or ``None`` when the sheet has none."""
         sheet = self._index()
         return self._workbook._lookup(
             LIB.fm_sheet_get_threaded_comment,
-            (_uint(sheet, "sheet_index"), comment_id),
+            (_uint(sheet, "sheet_index", role="sheet"), comment_id),
             S.THREADED_COMMENT,
             _threaded_comment_from,
         )
@@ -3717,7 +3889,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             id_ptr = scope.cstr(comment_id)
-            _check(LIB.fm_sheet_remove_threaded_comment(h, _uint(sheet, "sheet_index"), id_ptr))
+            _check(LIB.fm_sheet_remove_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), id_ptr))
 
     # -- Drawing objects ---------------------------------------------------
     #
@@ -3736,9 +3908,7 @@ class Sheet:
 
         if isinstance(ref, Drawing):
             if ref.sheet is not self:
-                raise FormulonError(
-                    StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{where} is a Drawing of another sheet", "")
-                )
+                raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{where} is a Drawing of another sheet", "")
             return ref.object_id
         if isinstance(ref, bool) or not isinstance(ref, numbers.Integral):
             raise TypeError(f"formulon: {where} must be an object id or a Drawing, got {type(ref).__name__}")
@@ -3750,7 +3920,8 @@ class Sheet:
         if not isinstance(drawing, cls):
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=(f"drawing object {drawing.object_id} is not a {cls.__name__}", ""),
+                f"drawing object {drawing.object_id} is not a {cls.__name__}",
+                "",
             )
         return drawing
 
@@ -3758,13 +3929,13 @@ class Sheet:
         """The ``object_id`` of each record a count / at pair of the sheet lists, in order."""
         sheet = self._index()
         h = self._workbook._require()
-        n = _read_count(count_fn, h, _uint(sheet, "sheet_index"))
+        n = _read_count(count_fn, h, _uint(sheet, "sheet_index", role="sheet"))
         out: List[int] = []
         with _ArgScope() as scope:
             ptr = scope.struct(layout)
             for i in range(n):
                 S.zero_struct(LIB, layout, ptr)
-                _check(at_fn(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr))
+                _check(at_fn(h, _uint(sheet, "sheet_index", role="sheet"), _uint(i, "idx", role="position"), ptr))
                 out.append(layout.unpack(LIB, ptr)["object_id"])
         return out
 
@@ -3865,7 +4036,11 @@ class Sheet:
             S.PICTURE_INSERT_SPEC.pack(LIB, ptr, {"anchor": _drawing_anchor_fields(anchor)})
             S.write_str_field(LIB, ptr, S.PICTURE_INSERT_SPEC, "name", input.name, scope)
             S.write_str_field(LIB, ptr, S.PICTURE_INSERT_SPEC, "description", input.description, scope)
-            _check(LIB.fm_sheet_add_picture(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out))
+            _check(
+                LIB.fm_sheet_add_picture(
+                    h, _uint(sheet, "sheet_index", role="sheet"), buf, _uint(len(raw), "len"), ptr, out
+                )
+            )
             object_id = LIB.read_u32(out)
         return cast("Picture", self._drawing_handle(object_id))
 
@@ -3890,7 +4065,7 @@ class Sheet:
                 input.fill_kind, input.fill_color, input.line_kind, input.line_color, input.line_width_pt,
                 input.rotation_deg, input.hidden,
             )  # fmt: skip
-            _check(LIB.fm_sheet_add_shape(h, _uint(sheet, "sheet_index"), ptr, out))
+            _check(LIB.fm_sheet_add_shape(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             object_id = LIB.read_u32(out)
         return cast("Shape", self._drawing_handle(object_id))
 
@@ -3934,10 +4109,10 @@ class Sheet:
             _check(
                 LIB.fm_sheet_add_slicer(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(table_sheet, "table_sheet_index"),
-                    _uint(table_index, "table_index"),
-                    _uint(column, "column_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(table_sheet, "table_sheet_index", role="sheet"),
+                    _uint(table_index, "table_index", role="position"),
+                    _uint(column, "column_index", role="position"),
                     ptr,
                     out,
                 )
@@ -3962,7 +4137,12 @@ class Sheet:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_restore_drawing(
-                    h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), 1 if assign_new_id else 0, out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    buf,
+                    _uint(len(raw), "len"),
+                    1 if assign_new_id else 0,
+                    out,
                 )
             )
             object_id = LIB.read_u32(out)
@@ -3984,7 +4164,7 @@ class Sheet:
         drawing = self.drawing(object_id)
         sheet = self._index()
         h = self._workbook._require()
-        args = (h, _uint(sheet, "sheet_index"), _uint(drawing.object_id, "object_id"))
+        args = (h, _uint(sheet, "sheet_index", role="sheet"), _uint(drawing.object_id, "object_id"))
         if isinstance(drawing, (Picture, Chart)):
             _check(LIB.fm_sheet_remove_drawing(*args))
         elif isinstance(drawing, Shape):
@@ -3994,10 +4174,8 @@ class Sheet:
         else:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=(
-                    f"drawing object {drawing.object_id} is not a picture, chart, shape or table slicer",
-                    "",
-                ),
+                f"drawing object {drawing.object_id} is not a picture, chart, shape or table slicer",
+                "",
             )
 
     def add_data_table(self, spec: Union[DataTableInput, DataTable]) -> None:
@@ -4030,7 +4208,7 @@ class Sheet:
                     values[prefix + "_row"] = _uint(cell[0], prefix + "_row")
                     values[prefix + "_col"] = _uint(cell[1], prefix + "_col")
             S.DATA_TABLE.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_add_data_table(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_add_data_table(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     @overload
     @_coordinate_form
@@ -4049,7 +4227,12 @@ class Sheet:
             ptr = scope.struct(S.DATA_TABLE)
             _check(
                 LIB.fm_sheet_get_data_table(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), present, ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    present,
+                    ptr,
                 )
             )
             if not LIB.read_u32(present):
@@ -4081,7 +4264,14 @@ class Sheet:
         row, col = self._cell_args("remove_data_table", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_data_table(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")))
+        _check(
+            LIB.fm_sheet_remove_data_table(
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+            )
+        )
 
     def list_sparkline_groups(self) -> List[SparklineGroup]:
         """Every sparkline group of the sheet, in order."""
@@ -4091,7 +4281,7 @@ class Sheet:
         """Return the number of sparkline groups on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        return _read_count(LIB.fm_sheet_get_sparkline_group_count, h, _uint(sheet, "sheet_index"))
+        return _read_count(LIB.fm_sheet_get_sparkline_group_count, h, _uint(sheet, "sheet_index", role="sheet"))
 
     def _sparkline_group_at(self, group_index: int) -> SparklineGroup:
         """Return the sheet's ``group_index``-th sparkline group in document order with its sparklines."""
@@ -4102,7 +4292,7 @@ class Sheet:
             item_ptr = scope.struct(S.SPARKLINE)
             _check(
                 LIB.fm_sheet_get_sparkline_group_at(
-                    h, _uint(sheet, "sheet_index"), _uint(group_index, "idx"), group_ptr
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(group_index, "idx", role="position"), group_ptr
                 )
             )
             d = S.SPARKLINE_GROUP.unpack(LIB, group_ptr)
@@ -4111,14 +4301,14 @@ class Sheet:
             )
             group = SparklineGroup(
                 type=d["type"],
-                color_series=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_series"][1]),
-                color_negative=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_negative"][1]),
-                color_axis=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_axis"][1]),
-                color_markers=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_markers"][1]),
-                color_first=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_first"][1]),
-                color_last=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_last"][1]),
-                color_high=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_high"][1]),
-                color_low=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_low"][1]),
+                color_series=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_series"][1]),
+                color_negative=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_negative"][1]),
+                color_axis=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_axis"][1]),
+                color_markers=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_markers"][1]),
+                color_first=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_first"][1]),
+                color_last=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_last"][1]),
+                color_high=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_high"][1]),
+                color_low=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_low"][1]),
                 markers=bool(d["markers"]),
                 high=bool(d["high"]),
                 low=bool(d["low"]),
@@ -4141,7 +4331,11 @@ class Sheet:
                 S.zero_struct(LIB, S.SPARKLINE, item_ptr)
                 _check(
                     LIB.fm_sheet_get_sparkline_at(
-                        h, _uint(sheet, "sheet_index"), _uint(group_index, "idx"), _uint(k, "idx"), item_ptr
+                        h,
+                        _uint(sheet, "sheet_index", role="sheet"),
+                        _uint(group_index, "idx", role="position"),
+                        _uint(k, "idx", role="position"),
+                        item_ptr,
                     )
                 )
                 item = S.SPARKLINE.unpack(LIB, item_ptr)
@@ -4170,7 +4364,7 @@ class Sheet:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_add_sparkline_group(
-                    h, _uint(sheet, "sheet_index"), ptr, items, _uint(len(group.sparklines), "count"), out
+                    h, _uint(sheet, "sheet_index", role="sheet"), ptr, items, _uint(len(group.sparklines), "count"), out
                 )
             )
             return LIB.read_u32(out)
@@ -4180,14 +4374,14 @@ class Sheet:
         group_index: int,
         *,
         type: Union[SparklineType, Unchanged] = UNCHANGED,
-        color_series: Union[ColorInput, Unchanged] = UNCHANGED,
-        color_negative: Union[ColorInput, Unchanged] = UNCHANGED,
-        color_axis: Union[ColorInput, Unchanged] = UNCHANGED,
-        color_markers: Union[ColorInput, Unchanged] = UNCHANGED,
-        color_first: Union[ColorInput, Unchanged] = UNCHANGED,
-        color_last: Union[ColorInput, Unchanged] = UNCHANGED,
-        color_high: Union[ColorInput, Unchanged] = UNCHANGED,
-        color_low: Union[ColorInput, Unchanged] = UNCHANGED,
+        color_series: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        color_negative: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        color_axis: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        color_markers: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        color_first: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        color_last: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        color_high: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        color_low: Union[ColorInput, None, Unchanged] = UNCHANGED,
         markers: Union[bool, Unchanged] = UNCHANGED,
         high: Union[bool, Unchanged] = UNCHANGED,
         low: Union[bool, Unchanged] = UNCHANGED,
@@ -4251,7 +4445,7 @@ class Sheet:
             if value is not UNCHANGED
         }
         for key, value in given.items():
-            if value is None and key not in ("manual_min", "manual_max", "date_axis_range"):
+            if value is None and key not in ("manual_min", "manual_max", "date_axis_range", *_SPARKLINE_COLORS):
                 raise TypeError(f"formulon: {key} cannot be None")
         sheet = self._index()
         h = self._workbook._require()
@@ -4260,7 +4454,9 @@ class Sheet:
             ptr = scope.struct_array(S.SPARKLINE_GROUP_PATCH, 1)
             for key in _SPARKLINE_COLORS:
                 if key in given:
-                    _pack_color(ptr + S.SPARKLINE_GROUP_PATCH.offsets[key][1], given[key], f"SparklineGroup.{key}")
+                    _pack_optional_color(
+                        ptr + S.SPARKLINE_GROUP_PATCH.offsets[key][1], given[key], f"SparklineGroup.{key}"
+                    )
                     values[key + "_op"] = _PATCH_SET
             for key in ("manual_min", "manual_max"):
                 if key in given:
@@ -4293,13 +4489,21 @@ class Sheet:
             raw = bytearray(LIB.read_bytes(ptr, S.SPARKLINE_GROUP_PATCH.size))
             S.SPARKLINE_GROUP_PATCH.pack_into(raw, 0, values)
             LIB.write_bytes(ptr, bytes(raw))
-            _check(LIB.fm_sheet_update_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(group_index, "idx"), ptr))
+            _check(
+                LIB.fm_sheet_update_sparkline_group(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(group_index, "idx", role="position"), ptr
+                )
+            )
 
     def remove_sparkline_group(self, group_index: int) -> None:
         """Remove sparkline group ``group_index``."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(group_index, "idx")))
+        _check(
+            LIB.fm_sheet_remove_sparkline_group(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(group_index, "idx", role="position")
+            )
+        )
 
     def add_chart(self, input: ChartInsertInput) -> Chart:
         """Create the chart ``input`` describes and return its handle.
@@ -4337,7 +4541,7 @@ class Sheet:
                 "anchor": _drawing_anchor_fields(anchor),
             }
             ptr = _encode_chart_insert(scope, self._workbook, sheet, input, placement)
-            _check(LIB.fm_sheet_add_chart(h, _uint(sheet, "sheet_index"), ptr, out))
+            _check(LIB.fm_sheet_add_chart(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             object_id = LIB.read_u32(out)
         return cast("Chart", self._drawing_handle(object_id))
 
@@ -4350,7 +4554,11 @@ class Sheet:
             range_ptr = _pack_cell_rect_array([cell_range], scope)
             count_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
-            _check(LIB.fm_sheet_get_merges_in_range(h, _uint(sheet, "sheet_index"), range_ptr, 0, 0, count_ptr))
+            _check(
+                LIB.fm_sheet_get_merges_in_range(
+                    h, _uint(sheet, "sheet_index", role="sheet"), range_ptr, 0, 0, count_ptr
+                )
+            )
             total = LIB.read_u32(count_ptr)
             if total == 0:
                 return []
@@ -4358,7 +4566,7 @@ class Sheet:
             buf = scope.struct_array(S.CELL_RECT, total)
             _check(
                 LIB.fm_sheet_get_merges_in_range(
-                    h, _uint(sheet, "sheet_index"), range_ptr, buf, _uint(total, "capacity"), count_ptr
+                    h, _uint(sheet, "sheet_index", role="sheet"), range_ptr, buf, _uint(total, "capacity"), count_ptr
                 )
             )
             out: List[CellRect] = []
@@ -4388,7 +4596,12 @@ class Sheet:
             status_ptr = scope.out_ptr()
             _check(
                 LIB.fm_sheet_get_display_text(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr, status_ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    text_ptr,
+                    status_ptr,
                 )
             )
             return DisplayText(LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr)))
@@ -4404,12 +4617,13 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_sheet_paginate(h, _uint(sheet, "sheet_index"), out))
+            _check(LIB.fm_sheet_paginate(h, _uint(sheet, "sheet_index", role="sheet"), out))
             pagination = LIB.read_u32(out)
             if pagination == 0:
                 raise FormulonError(
                     StatusCode.BINDING_NULL_POINTER,
-                    _diagnostic_override=("returned OK with a null pagination handle", ""),
+                    "returned OK with a null pagination handle",
+                    "",
                 )
             try:
                 page_count = _read_count(LIB.fm_pagination_get_page_count, pagination)
@@ -4423,12 +4637,18 @@ class Sheet:
                 struct_ptr = scope.struct(S.PAGE_LAYOUT)
                 print_area = []
                 for i in range(range_count):
-                    _check(LIB.fm_pagination_get_print_area_at(pagination, _uint(i, "index"), range_ptr))
+                    _check(
+                        LIB.fm_pagination_get_print_area_at(pagination, _uint(i, "index", role="position"), range_ptr)
+                    )
                     print_area.append(_decode_cell_rect_at(range_ptr))
                 row_breaks = []
                 row_break_ptr = scope.struct(S.ROW_BREAK)
                 for i in range(break_count):
-                    _check(LIB.fm_pagination_get_row_break_at(pagination, _uint(i, "index"), row_break_ptr))
+                    _check(
+                        LIB.fm_pagination_get_row_break_at(
+                            pagination, _uint(i, "index", role="position"), row_break_ptr
+                        )
+                    )
                     brk = S.ROW_BREAK.unpack(LIB, row_break_ptr)
                     row_breaks.append(
                         RowBreak(row=brk["row"], first=brk["first"], last=brk["last"], manual=bool(brk["manual"]))
@@ -4436,7 +4656,11 @@ class Sheet:
                 column_breaks = []
                 column_break_ptr = scope.struct(S.COLUMN_BREAK)
                 for i in range(column_break_count):
-                    _check(LIB.fm_pagination_get_column_break_at(pagination, _uint(i, "index"), column_break_ptr))
+                    _check(
+                        LIB.fm_pagination_get_column_break_at(
+                            pagination, _uint(i, "index", role="position"), column_break_ptr
+                        )
+                    )
                     brk = S.COLUMN_BREAK.unpack(LIB, column_break_ptr)
                     column_breaks.append(
                         ColumnBreak(col=brk["col"], first=brk["first"], last=brk["last"], manual=bool(brk["manual"]))
@@ -4457,10 +4681,12 @@ class Sheet:
                 printable = RectPt(**read_struct(S.RECT_PT, LIB.fm_pagination_get_printable))
                 d = read_struct(S.PRINT_TITLES, LIB.fm_pagination_get_print_titles)
                 print_titles = _print_titles_from(d)
+                if print_titles.rows is None and print_titles.columns is None:
+                    print_titles = None
                 pages = []
                 for i in range(page_count):
                     S.zero_struct(LIB, S.PAGE_LAYOUT, struct_ptr)
-                    _check(LIB.fm_pagination_get_page_at(pagination, _uint(i, "index"), struct_ptr))
+                    _check(LIB.fm_pagination_get_page_at(pagination, _uint(i, "index", role="position"), struct_ptr))
                     page = S.PAGE_LAYOUT.unpack(LIB, struct_ptr)
                     page["range"] = _cell_rect_from(page.pop("rect"))
                     pages.append(PageLayout(**page))
@@ -4487,7 +4713,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.SHEET_VIEW)
-            _check(LIB.fm_sheet_get_view(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_view(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             d = S.SHEET_VIEW.unpack(LIB, ptr)
             return SheetView(
                 zoom_pct=d["zoom_pct"],
@@ -4614,7 +4840,7 @@ class Sheet:
         with _ArgScope() as scope:
             ptr = scope.struct(S.SHEET_VIEW_PATCH)
             S.SHEET_VIEW_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_view(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_view(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def get_selection(self) -> SheetSelection:
         """Return the active cell and ranges of the active pane's selection.
@@ -4632,12 +4858,22 @@ class Sheet:
             total_ptr = scope.out_ptr()
             array_ptr = 0
             # Size the buffer first, then fetch.
-            _check(LIB.fm_sheet_get_selection(h, _uint(sheet, "sheet_index"), row_ptr, col_ptr, 0, 0, total_ptr))
+            _check(
+                LIB.fm_sheet_get_selection(
+                    h, _uint(sheet, "sheet_index", role="sheet"), row_ptr, col_ptr, 0, 0, total_ptr
+                )
+            )
             total = LIB.read_u32(total_ptr)
             array_ptr = scope.struct_array(S.CELL_RECT, total)
             _check(
                 LIB.fm_sheet_get_selection(
-                    h, _uint(sheet, "sheet_index"), row_ptr, col_ptr, array_ptr, _uint(total, "capacity"), total_ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    row_ptr,
+                    col_ptr,
+                    array_ptr,
+                    _uint(total, "capacity"),
+                    total_ptr,
                 )
             )
             size = S.CELL_RECT.size
@@ -4668,9 +4904,9 @@ class Sheet:
             _check(
                 LIB.fm_sheet_set_selection(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(active_row, "active_row"),
-                    _uint(active_col, "active_col"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(active_row, "active_row", role="coordinate"),
+                    _uint(active_col, "active_col", role="coordinate"),
                     ptr,
                     _uint(len(rects), "count"),
                 )
@@ -4682,7 +4918,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.COLOR_SPEC)
-            _check(LIB.fm_sheet_get_tab_color(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_tab_color(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             color = _decode_color(ptr)
         return None if color.kind == ColorKind.NONE else color
 
@@ -4696,19 +4932,19 @@ class Sheet:
             if spec is not None:
                 ptr = scope.struct(S.COLOR_SPEC)
                 _pack_color(ptr, spec, "color")
-            _check(LIB.fm_sheet_set_tab_color(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_set_tab_color(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def _get_print_xml(self, export: str) -> Optional[str]:
         sheet = self._index()
         h = self._workbook._require()
-        return _read_cstr_out(getattr(LIB, export), h, _uint(sheet, "sheet_index")) or None
+        return _read_cstr_out(getattr(LIB, export), h, _uint(sheet, "sheet_index", role="sheet")) or None
 
     def _set_print_xml(self, export: str, xml: Optional[str]) -> None:
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             xml_ptr = scope.cstr(xml or "")
-            _check(getattr(LIB, export)(h, _uint(sheet, "sheet_index"), xml_ptr))
+            _check(getattr(LIB, export)(h, _uint(sheet, "sheet_index", role="sheet"), xml_ptr))
 
     def get_print_area(self) -> Optional[List[CellRect]]:
         """Return the print area's rectangles, or ``None`` when none is declared.
@@ -4722,14 +4958,14 @@ class Sheet:
         with _ArgScope() as scope:
             count_out = scope.out_ptr()
             # Size the buffer first, then fetch.
-            _check(LIB.fm_sheet_get_print_area(h, _uint(sheet, "sheet_index"), 0, 0, count_out))
+            _check(LIB.fm_sheet_get_print_area(h, _uint(sheet, "sheet_index", role="sheet"), 0, 0, count_out))
             total = LIB.read_u32(count_out)
             if total == 0:
                 return None
             ranges_ptr = scope.struct_array(S.CELL_RECT, total)
             _check(
                 LIB.fm_sheet_get_print_area(
-                    h, _uint(sheet, "sheet_index"), ranges_ptr, _uint(total, "capacity"), count_out
+                    h, _uint(sheet, "sheet_index", role="sheet"), ranges_ptr, _uint(total, "capacity"), count_out
                 )
             )
             return _decode_cell_rect_array(ranges_ptr, total)
@@ -4748,7 +4984,7 @@ class Sheet:
             ranges_ptr = _pack_cell_rect_array(rects, scope)
             _check(
                 LIB.fm_sheet_set_print_area(
-                    h, _uint(sheet, "sheet_index"), ranges_ptr, _uint(len(rects), "range_count")
+                    h, _uint(sheet, "sheet_index", role="sheet"), ranges_ptr, _uint(len(rects), "range_count")
                 )
             )
 
@@ -4758,7 +4994,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PRINT_TITLES)
-            _check(LIB.fm_sheet_get_print_titles(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_print_titles(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             titles = _print_titles_from(S.PRINT_TITLES.unpack(LIB, ptr))
             return None if titles.rows is None and titles.columns is None else titles
 
@@ -4782,7 +5018,7 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         if titles is None:
-            _check(LIB.fm_sheet_set_print_titles(h, _uint(sheet, "sheet_index"), 0))
+            _check(LIB.fm_sheet_set_print_titles(h, _uint(sheet, "sheet_index", role="sheet"), 0))
             return
         values: Dict[str, int] = {}
         for axis, kind, (flag, first, last) in (
@@ -4793,12 +5029,12 @@ class Sheet:
                 axis = Span(*self._span(axis, kind))
             if axis is not None:
                 values[flag] = 1
-                values[first] = _uint(axis.first, first)
-                values[last] = _uint(axis.last, last)
+                values[first] = _uint(axis.first, first, role="coordinate")
+                values[last] = _uint(axis.last, last, role="coordinate")
         with _ArgScope() as scope:
             ptr = scope.struct(S.PRINT_TITLES)
             S.PRINT_TITLES.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_set_print_titles(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_set_print_titles(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def set_row_break(self, row: int, brk: Optional[RowBreak]) -> None:
         """Set the row break before ``row``, replacing the span and ``manual`` flag of one already there.
@@ -4818,7 +5054,11 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = self._pack_break(scope, S.ROW_BREAK, brk)
-            _check(LIB.fm_sheet_set_row_break(h, _uint(sheet, "sheet_index"), _uint(row, "row"), ptr))
+            _check(
+                LIB.fm_sheet_set_row_break(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(row, "row", role="coordinate"), ptr
+                )
+            )
 
     def set_column_break(self, col: int, brk: Optional[ColumnBreak]) -> None:
         """Set or remove the column break before ``col``, as :meth:`set_row_break` does for rows.
@@ -4829,7 +5069,11 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = self._pack_break(scope, S.COLUMN_BREAK, brk)
-            _check(LIB.fm_sheet_set_column_break(h, _uint(sheet, "sheet_index"), _uint(col, "col"), ptr))
+            _check(
+                LIB.fm_sheet_set_column_break(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(col, "col", role="coordinate"), ptr
+                )
+            )
 
     @staticmethod
     def _pack_break(scope: _ArgScope, layout: S.Struct, brk: Union[RowBreak, ColumnBreak, None]) -> int:
@@ -4842,7 +5086,11 @@ class Sheet:
         layout.pack(
             LIB,
             ptr,
-            {"first": _uint(brk.first, "first"), "last": _uint(brk.last, "last"), "manual": 1 if brk.manual else 0},
+            {
+                "first": _uint(brk.first, "first", role="coordinate"),
+                "last": _uint(brk.last, "last", role="coordinate"),
+                "manual": 1 if brk.manual else 0,
+            },
         )
         return ptr
 
@@ -4850,17 +5098,17 @@ class Sheet:
         """Remove every manual break on both axes."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_breaks(h, _uint(sheet, "sheet_index")))
+        _check(LIB.fm_sheet_clear_breaks(h, _uint(sheet, "sheet_index", role="sheet")))
 
     def _read_breaks(self, count_fn, at_fn, layout: S.Struct, record, key: str) -> list:
         sheet = self._index()
         h = self._workbook._require()
-        count = _read_count(count_fn, h, _uint(sheet, "sheet_index"))
+        count = _read_count(count_fn, h, _uint(sheet, "sheet_index", role="sheet"))
         out = []
         with _ArgScope() as scope:
             ptr = scope.struct(layout)
             for i in range(count):
-                _check(at_fn(h, _uint(sheet, "sheet_index"), _uint(i, "index"), ptr))
+                _check(at_fn(h, _uint(sheet, "sheet_index", role="sheet"), _uint(i, "index", role="position"), ptr))
                 d = layout.unpack(LIB, ptr)
                 out.append(record(**{key: d[key]}, first=d["first"], last=d["last"], manual=bool(d["manual"])))
         return out
@@ -4929,7 +5177,7 @@ class Sheet:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PAGE_SETUP_PATCH)
             S.PAGE_SETUP_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_page_setup(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_page_setup(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def update_page_margins(
         self,
@@ -4967,7 +5215,7 @@ class Sheet:
                 values[f"{name}_op"] = _PATCH_SET
                 values[name] = float(value)
             S.PAGE_MARGINS_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_page_margins(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_page_margins(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def update_print_options(
         self,
@@ -4998,7 +5246,7 @@ class Sheet:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PRINT_OPTIONS_PATCH)
             S.PRINT_OPTIONS_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_print_options(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_print_options(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def update_header_footer(
         self,
@@ -5058,7 +5306,7 @@ class Sheet:
                 values[name] = scope.cstr(text)
             ptr = scope.struct(S.HEADER_FOOTER_PATCH)
             S.HEADER_FOOTER_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_header_footer(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_update_header_footer(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def get_page_setup(self) -> PageSetup:
         """Read the effective page setup and which attributes state it."""
@@ -5066,21 +5314,20 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PAGE_SETUP)
-            _check(LIB.fm_sheet_get_page_setup(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_page_setup(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             d = S.PAGE_SETUP.unpack(LIB, ptr)
             return PageSetup(
-                orientation=PageOrientation(d["orientation"]) if d["orientation_engaged"] else None,
+                orientation=PageOrientation(d["orientation"]) if d["has_orientation"] else None,
                 paper_size=d["paper_size"],
                 scale_pct=d["scale_pct"],
                 fit_to_width=d["fit_to_width"],
                 fit_to_height=d["fit_to_height"],
                 fit_to_page=bool(d["fit_to_page"]),
-                orientation_stated=bool(d["orientation_engaged"]),
-                paper_size_stated=bool(d["paper_size_engaged"]),
-                scale_pct_stated=bool(d["scale_pct_engaged"]),
-                fit_to_width_stated=bool(d["fit_to_width_engaged"]),
-                fit_to_height_stated=bool(d["fit_to_height_engaged"]),
-                fit_to_page_stated=bool(d["fit_to_page_engaged"]),
+                paper_size_stated=bool(d["has_paper_size"]),
+                scale_pct_stated=bool(d["has_scale_pct"]),
+                fit_to_width_stated=bool(d["has_fit_to_width"]),
+                fit_to_height_stated=bool(d["has_fit_to_height"]),
+                fit_to_page_stated=bool(d["has_fit_to_page"]),
             )
 
     def get_page_margins(self) -> PageMargins:
@@ -5089,7 +5336,7 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PAGE_MARGINS)
-            _check(LIB.fm_sheet_get_page_margins(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_page_margins(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             d = S.PAGE_MARGINS.unpack(LIB, ptr)
             return PageMargins(
                 left_in=d["left_in"],
@@ -5098,12 +5345,12 @@ class Sheet:
                 bottom_in=d["bottom_in"],
                 header_in=d["header_in"],
                 footer_in=d["footer_in"],
-                left_in_stated=bool(d["left_in_engaged"]),
-                right_in_stated=bool(d["right_in_engaged"]),
-                top_in_stated=bool(d["top_in_engaged"]),
-                bottom_in_stated=bool(d["bottom_in_engaged"]),
-                header_in_stated=bool(d["header_in_engaged"]),
-                footer_in_stated=bool(d["footer_in_engaged"]),
+                left_in_stated=bool(d["has_left_in"]),
+                right_in_stated=bool(d["has_right_in"]),
+                top_in_stated=bool(d["has_top_in"]),
+                bottom_in_stated=bool(d["has_bottom_in"]),
+                header_in_stated=bool(d["has_header_in"]),
+                footer_in_stated=bool(d["has_footer_in"]),
             )
 
     def get_print_options(self) -> PrintOptions:
@@ -5112,11 +5359,11 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PRINT_OPTIONS)
-            _check(LIB.fm_sheet_get_print_options(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_print_options(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             d = S.PRINT_OPTIONS.unpack(LIB, ptr)
         names = ("grid_lines", "headings", "horizontal_centered", "vertical_centered")
         fields: Dict[str, bool] = {name: bool(d[name]) for name in names}
-        fields.update({f"{name}_stated": bool(d[f"{name}_engaged"]) for name in names})
+        fields.update({f"{name}_stated": bool(d[f"has_{name}"]) for name in names})
         return PrintOptions(**fields)
 
     def get_header_footer(self) -> HeaderFooter:
@@ -5131,11 +5378,11 @@ class Sheet:
         flags = ("different_odd_even", "different_first", "scale_with_doc", "align_with_margins")
         with _ArgScope() as scope:
             ptr = scope.struct(S.HEADER_FOOTER)
-            _check(LIB.fm_sheet_get_header_footer(h, _uint(sheet, "sheet_index"), ptr))
+            _check(LIB.fm_sheet_get_header_footer(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
             d = S.HEADER_FOOTER.unpack(LIB, ptr)
             fields: Dict[str, object] = {name: LIB.read_cstr(d[name]) if d[name] else None for name in sections}
         fields.update({name: bool(d[name]) for name in flags})
-        fields.update({f"{name}_stated": bool(d[f"{name}_engaged"]) for name in flags})
+        fields.update({f"{name}_stated": bool(d[f"has_{name}"]) for name in flags})
         return HeaderFooter(**fields)
 
     def list_column_overrides(self) -> List[ColumnLayout]:
@@ -5158,14 +5405,14 @@ class Sheet:
         """The decoded column or row layout structs of the sheet, in order."""
         sheet = self._index()
         h = self._workbook._require()
-        n = _read_count(count_fn, h, _uint(sheet, "sheet_index"))
+        n = _read_count(count_fn, h, _uint(sheet, "sheet_index", role="sheet"))
         out: List[Dict[str, Any]] = []
         # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(layout)
             for i in range(n):
                 S.zero_struct(LIB, layout, ptr)
-                _check(at_fn(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr))
+                _check(at_fn(h, _uint(sheet, "sheet_index", role="sheet"), _uint(i, "idx", role="position"), ptr))
                 out.append(layout.unpack(LIB, ptr))
         return out
 
@@ -5188,7 +5435,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_column_width(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(width_chars)
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                float(width_chars),
             )
         )
 
@@ -5206,7 +5457,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_column_hidden(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if hidden else 0
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                1 if hidden else 0,
             )
         )
 
@@ -5228,7 +5483,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_column_outline(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(level, "level", 32)
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                _uint(level, "level", 32),
             )
         )
 
@@ -5246,7 +5505,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_column_collapsed(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if collapsed else 0
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                1 if collapsed else 0,
             )
         )
 
@@ -5280,7 +5543,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_row_height(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height_pt)
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                float(height_pt),
             )
         )
 
@@ -5302,7 +5569,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_row_auto_height(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height_pt)
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                float(height_pt),
             )
         )
 
@@ -5320,7 +5591,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_row_hidden(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if hidden else 0
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                1 if hidden else 0,
             )
         )
 
@@ -5342,7 +5617,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_row_outline(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(level, "level", 32)
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                _uint(level, "level", 32),
             )
         )
 
@@ -5360,7 +5639,11 @@ class Sheet:
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_set_row_collapsed(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if collapsed else 0
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                1 if collapsed else 0,
             )
         )
 
@@ -5368,7 +5651,9 @@ class Sheet:
     def evaluate_cf_range(
         self,
         range: Union[CellRect, str],
+        *,
         today: Optional[Union[datetime.datetime, datetime.date]] = None,
+        time_period_rules: bool = True,
     ) -> List[CfCell]:
         """Evaluate every CF block on the sheet against the cells of ``range``.
 
@@ -5378,7 +5663,14 @@ class Sheet:
             ``datetime`` (a naive local wall clock; an aware one is a
             ValueError; only the day counts). Omitted, it is today: the pinned
             date when the workbook has one, else the host's local date.
+          time_period_rules: ``False`` evaluates without a date, so no
+            ``timePeriod`` rule matches; ``today`` is then ignored.
+
+        Raises:
+          TypeError: when ``today`` or ``time_period_rules`` is passed positionally.
         """
+        if not time_period_rules:
+            return self._evaluate_cf_rect(self._rect(range), None)
         day = self._today_date() if today is None else civil_datetime(today, "today").date()
         return self._evaluate_cf_rect(self._rect(range), date_serial(day, date1904=self._workbook.get_date1904())[0])
 
@@ -5386,7 +5678,7 @@ class Sheet:
         pinned = self._workbook.get_pinned_now()
         return pinned.date() if pinned is not None else datetime.date.today()
 
-    def _evaluate_cf_rect(self, rect: CellRect, today_serial: float) -> List[CfCell]:
+    def _evaluate_cf_rect(self, rect: CellRect, today_serial: Optional[float]) -> List[CfCell]:
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5398,10 +5690,10 @@ class Sheet:
                 _check(
                     LIB.fm_sheet_evaluate_cf_range(
                         h,
-                        _uint(sheet, "sheet_index"),
+                        _uint(sheet, "sheet_index", role="sheet"),
                         rect_ptr,
-                        1,
-                        float(today_serial),
+                        0 if today_serial is None else 1,
+                        0.0 if today_serial is None else float(today_serial),
                         out,
                     )
                 )
@@ -5416,7 +5708,9 @@ class Sheet:
                 mcp = scope.out_ptr()
                 mptr = scope.struct(S.CF_MATCH)
                 for ci in range(n):
-                    _check(LIB.fm_cf_results_get_cell_at(results, _uint(ci, "cell_index"), rp, cp, mcp))
+                    _check(
+                        LIB.fm_cf_results_get_cell_at(results, _uint(ci, "cell_index", role="position"), rp, cp, mcp)
+                    )
                     row = LIB.read_u32(rp)
                     col = LIB.read_u32(cp)
                     mcount = LIB.read_u32(mcp)
@@ -5425,7 +5719,10 @@ class Sheet:
                         S.zero_struct(LIB, S.CF_MATCH, mptr)
                         _check(
                             LIB.fm_cf_results_get_match_at(
-                                results, _uint(ci, "cell_index"), _uint(mi, "match_index"), mptr
+                                results,
+                                _uint(ci, "cell_index", role="position"),
+                                _uint(mi, "match_index", role="position"),
+                                mptr,
                             )
                         )
                         d = S.CF_MATCH.unpack(LIB, mptr)
@@ -5447,7 +5744,7 @@ class Sheet:
         return _read_count(
             LIB.fm_sheet_get_cf_rule_count,
             h,
-            _uint(sheet, "sheet_index"),
+            _uint(sheet, "sheet_index", role="sheet"),
         )
 
     @staticmethod
@@ -5467,7 +5764,11 @@ class Sheet:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CF_RULE)
-            _check(LIB.fm_sheet_get_cf_rule_at(h, _uint(sheet, "sheet_index"), _uint(cf_rule_index, "idx"), ptr))
+            _check(
+                LIB.fm_sheet_get_cf_rule_at(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(cf_rule_index, "idx", role="position"), ptr
+                )
+            )
             d = S.CF_RULE.unpack(LIB, ptr)
             ranges = _decode_cell_rect_array(d["ranges"], d["range_count"])
             color_scale = None
@@ -5483,7 +5784,7 @@ class Sheet:
                 color_scale = ColorScale(thresholds, colors)
             offsets = S.CF_RULE.offsets
             data_bar = None
-            if d["data_bar_engaged"]:
+            if d["has_data_bar"]:
                 data_bar = DataBar(
                     self._decode_cfvo(ptr + offsets["data_bar_min"][1]),
                     self._decode_cfvo(ptr + offsets["data_bar_max"][1]),
@@ -5492,26 +5793,20 @@ class Sheet:
                     d["data_bar_min_length_pct"],
                     d["data_bar_max_length_pct"],
                     # x14 extension. Each field is decoded only when the C
-                    # ABI reports its `*_engaged` flag, so `None` keeps its
+                    # ABI reports its `has_*` flag, so `None` keeps its
                     # "no override" meaning on the way back in.
-                    bool(d["data_bar_gradient"]) if d["data_bar_gradient_engaged"] else None,
+                    bool(d["data_bar_gradient"]) if d["has_data_bar_gradient"] else None,
                     _enum(CfDataBarAxisPosition, d["data_bar_axis_position"])
-                    if d["data_bar_axis_position_engaged"]
+                    if d["has_data_bar_axis_position"]
                     else None,
-                    _decode_color(ptr + offsets["data_bar_negative_fill"][1])
-                    if d["data_bar_negative_fill_engaged"]
-                    else None,
-                    _decode_color(ptr + offsets["data_bar_border"][1]) if d["data_bar_border_engaged"] else None,
-                    _decode_color(ptr + offsets["data_bar_negative_border"][1])
-                    if d["data_bar_negative_border_engaged"]
-                    else None,
-                    _decode_color(ptr + offsets["data_bar_axis_color"][1])
-                    if d["data_bar_axis_color_engaged"]
-                    else None,
+                    _decode_optional_color(ptr + offsets["data_bar_negative_fill"][1]),
+                    _decode_optional_color(ptr + offsets["data_bar_border"][1]),
+                    _decode_optional_color(ptr + offsets["data_bar_negative_border"][1]),
+                    _decode_optional_color(ptr + offsets["data_bar_axis_color"][1]),
                     _enum(CfDataBarDirection, d["data_bar_direction"]),
                 )
             icon_set = None
-            if d["icon_set_engaged"]:
+            if d["has_icon_set"]:
                 icon_set = IconSet(
                     d["icon_set_name"],
                     [
@@ -5521,7 +5816,7 @@ class Sheet:
                     bool(d["icon_set_reverse"]),
                     bool(d["icon_set_show_value"]),
                     bool(d["icon_set_percent"]),
-                    self._decode_cfvo(ptr + offsets["icon_set_floor"][1]) if d["icon_set_floor_engaged"] else None,
+                    self._decode_cfvo(ptr + offsets["icon_set_floor"][1]) if d["has_icon_set_floor"] else None,
                     [
                         CfIcon(
                             LIB.read_i32(d["icon_set_icons"] + i * S.CF_ICON.size),
@@ -5536,18 +5831,18 @@ class Sheet:
                 priority=d["priority"],
                 stop_if_true=bool(d["stop_if_true"]),
                 ranges=ranges,
-                dxf_index=d["dxf_index"] if d["dxf_index_engaged"] else None,
-                formula1=LIB.read_cstr(d["formula1"]),
-                formula2=LIB.read_cstr(d["formula2"]),
-                operator=d["op"] if d["op_engaged"] else None,
-                rank=d["rank"] if d["rank_engaged"] else None,
+                dxf_index=d["dxf_index"] if d["has_dxf_index"] else None,
+                formula1=LIB.read_optional_cstr(d["formula1"]),
+                formula2=LIB.read_optional_cstr(d["formula2"]),
+                operator=d["op"] if d["has_op"] else None,
+                rank=d["rank"] if d["has_rank"] else None,
                 percent=bool(d["percent"]),
                 bottom=bool(d["bottom"]),
                 above_average=bool(d["above_average"]),
                 equal_average=bool(d["equal_average"]),
-                std_dev=d["std_dev"] if d["std_dev_engaged"] else None,
-                text=LIB.read_cstr(d["text"]),
-                time_period=d["time_period"] if d["time_period_engaged"] else None,
+                std_dev=d["std_dev"] if d["has_std_dev"] else None,
+                text=LIB.read_optional_cstr(d["text"]),
+                time_period=d["time_period"] if d["has_time_period"] else None,
                 color_scale=color_scale,
                 data_bar=data_bar,
                 icon_set=icon_set,
@@ -5576,18 +5871,18 @@ class Sheet:
                     "time_period": _uint(rule.time_period or 0, "time_period", 8),
                     "priority": _sint(rule.priority, "priority"),
                     "stop_if_true": 1 if rule.stop_if_true else 0,
-                    "dxf_index_engaged": 1 if rule.dxf_index is not None else 0,
-                    "dxf_index": _uint(rule.dxf_index or 0, "dxf_index"),
-                    "op_engaged": 1 if rule.operator is not None else 0,
-                    "rank_engaged": 1 if rule.rank is not None else 0,
+                    "has_dxf_index": 1 if rule.dxf_index is not None else 0,
+                    "dxf_index": _uint(rule.dxf_index or 0, "dxf_index", role="position"),
+                    "has_op": 1 if rule.operator is not None else 0,
+                    "has_rank": 1 if rule.rank is not None else 0,
                     "rank": _sint(rule.rank or 0, "rank"),
                     "percent": 1 if rule.percent else 0,
                     "bottom": 1 if rule.bottom else 0,
                     "above_average": 1 if rule.above_average else 0,
                     "equal_average": 1 if rule.equal_average else 0,
-                    "std_dev_engaged": 1 if rule.std_dev is not None else 0,
+                    "has_std_dev": 1 if rule.std_dev is not None else 0,
                     "std_dev": float(rule.std_dev or 0.0),
-                    "time_period_engaged": 1 if rule.time_period is not None else 0,
+                    "has_time_period": 1 if rule.time_period is not None else 0,
                 },
             )
             ranges_ptr = _pack_cell_rect_array(rule.ranges, scope)
@@ -5616,7 +5911,7 @@ class Sheet:
                 self._write_cfvo(ptr + ro["data_bar_min"][1], data_bar.minimum, scope)
                 self._write_cfvo(ptr + ro["data_bar_max"][1], data_bar.maximum, scope)
                 _pack_color(ptr + ro["data_bar_fill"][1], data_bar.fill, "data_bar.fill")
-                LIB.write_bytes(ptr + ro["data_bar_engaged"][1], struct.pack("<i", 1))
+                LIB.write_bytes(ptr + ro["has_data_bar"][1], struct.pack("<i", 1))
                 LIB.write_bytes(ptr + ro["data_bar_show_value"][1], struct.pack("<i", 1 if data_bar.show_value else 0))
                 LIB.write_bytes(
                     ptr + ro["data_bar_min_length_pct"][1],
@@ -5626,13 +5921,13 @@ class Sheet:
                     ptr + ro["data_bar_max_length_pct"][1],
                     struct.pack("<B", _uint(data_bar.max_length_pct, "max_length_pct", 8)),
                 )
-                # x14 extension. A `None` leaves the `*_engaged` flag clear,
-                # which the C ABI reads as "keep the model default".
+                # x14 extension. A `None` leaves the field zero, which the C ABI
+                # reads as "keep the model default".
                 if data_bar.gradient is not None:
-                    LIB.write_bytes(ptr + ro["data_bar_gradient_engaged"][1], struct.pack("<i", 1))
+                    LIB.write_bytes(ptr + ro["has_data_bar_gradient"][1], struct.pack("<i", 1))
                     LIB.write_bytes(ptr + ro["data_bar_gradient"][1], struct.pack("<i", 1 if data_bar.gradient else 0))
                 if data_bar.axis_position is not None:
-                    LIB.write_bytes(ptr + ro["data_bar_axis_position_engaged"][1], struct.pack("<i", 1))
+                    LIB.write_bytes(ptr + ro["has_data_bar_axis_position"][1], struct.pack("<i", 1))
                     LIB.write_bytes(
                         ptr + ro["data_bar_axis_position"][1],
                         struct.pack("<i", _sint(data_bar.axis_position, "axis_position")),
@@ -5644,7 +5939,6 @@ class Sheet:
                     ("axis_color", data_bar.axis_color),
                 ):
                     if color is not None:
-                        LIB.write_bytes(ptr + ro[f"data_bar_{field}_engaged"][1], struct.pack("<i", 1))
                         _pack_color(ptr + ro[f"data_bar_{field}"][1], color, f"data_bar.{field}")
                 LIB.write_bytes(
                     ptr + ro["data_bar_direction"][1], struct.pack("<i", _sint(data_bar.direction, "direction"))
@@ -5656,14 +5950,14 @@ class Sheet:
                 for i, value in enumerate(icon_set.thresholds):
                     self._write_cfvo(thresholds + i * S.CFVO.size, value, scope)
                 LIB.write_bytes(ptr + ro["icon_set_thresholds"][1], struct.pack("<I", thresholds))
-                LIB.write_bytes(ptr + ro["icon_set_engaged"][1], struct.pack("<i", 1))
+                LIB.write_bytes(ptr + ro["has_icon_set"][1], struct.pack("<i", 1))
                 LIB.write_bytes(ptr + ro["icon_set_name"][1], struct.pack("<i", _sint(icon_set.name, "icon_set")))
                 LIB.write_bytes(ptr + ro["icon_set_threshold_count"][1], struct.pack("<I", count))
                 LIB.write_bytes(ptr + ro["icon_set_reverse"][1], struct.pack("<i", 1 if icon_set.reverse else 0))
                 LIB.write_bytes(ptr + ro["icon_set_show_value"][1], struct.pack("<i", 1 if icon_set.show_value else 0))
                 LIB.write_bytes(ptr + ro["icon_set_percent"][1], struct.pack("<i", 1 if icon_set.percent else 0))
                 if icon_set.floor is not None:
-                    LIB.write_bytes(ptr + ro["icon_set_floor_engaged"][1], struct.pack("<i", 1))
+                    LIB.write_bytes(ptr + ro["has_icon_set_floor"][1], struct.pack("<i", 1))
                     self._write_cfvo(ptr + ro["icon_set_floor"][1], icon_set.floor, scope)
                 if icon_set.icons:
                     icons_ptr = scope.alloc(len(icon_set.icons) * S.CF_ICON.size)
@@ -5678,7 +5972,7 @@ class Sheet:
                         )
                     LIB.write_bytes(ptr + ro["icon_set_icons"][1], struct.pack("<I", icons_ptr))
                     LIB.write_bytes(ptr + ro["icon_set_icon_count"][1], struct.pack("<I", len(icon_set.icons)))
-            _check(LIB.fm_sheet_add_cf_rule(h, _uint(sheet, "sheet_index"), ptr, out))
+            _check(LIB.fm_sheet_add_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             return LIB.read_u32(out)
 
     def remove_cf_rule(self, cf_rule: Union[int, str]) -> None:
@@ -5691,13 +5985,17 @@ class Sheet:
         index = resolve_ref(cf_rule, lambda: [rule.id for rule in self.list_cf_rules()], "CF rule")
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_cf_rule(h, _uint(sheet, "sheet_index"), _uint(index, "idx")))
+        _check(
+            LIB.fm_sheet_remove_cf_rule(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "idx", role="position")
+            )
+        )
 
     def clear_cf_rules(self) -> None:
         """Drop every CF block on the sheet."""
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_clear_cf_rules(h, _uint(sheet, "sheet_index")))
+        _check(LIB.fm_sheet_clear_cf_rules(h, _uint(sheet, "sheet_index", role="sheet")))
 
     # -- Styles ------------------------------------------------------------
     @overload
@@ -5789,13 +6087,16 @@ class Sheet:
     def _pivot_count(self) -> int:
         sheet = self._index()
         h = self._workbook._require()
-        return _read_count(LIB.fm_sheet_get_pivot_count, h, _uint(sheet, "sheet_index"))
+        return _read_count(LIB.fm_sheet_get_pivot_count, h, _uint(sheet, "sheet_index", role="sheet"))
 
     def _pivot_name(self, pivot_index: int) -> str:
         sheet = self._index()
         h = self._workbook._require()
         return _read_cstr_out(
-            LIB.fm_sheet_get_pivot_name, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_name,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
         )
 
     def _pivot_index(self, pivot: Union[int, str, Pivot]) -> int:
@@ -5811,7 +6112,10 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         runtime_id = _read_count(
-            LIB.fm_sheet_get_pivot_runtime_id, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_runtime_id,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _uint(pivot_index, "pivot_index", role="position"),
         )
         pivot = self._pivots.get(runtime_id)
         if pivot is None:
@@ -5831,11 +6135,9 @@ class Sheet:
           IndexOutOfRangeError: when the index is past the last pivot.
           InvalidArgumentError: when ``pivot`` is a :class:`Pivot` of another sheet.
         """
-        pivot_index = _uint(self._pivot_index(pivot), "pivot_index")
+        pivot_index = _uint(self._pivot_index(pivot), "pivot_index", role="position")
         if pivot_index >= self._pivot_count():
-            raise FormulonError(
-                StatusCode.INDEX_OUT_OF_RANGE, _diagnostic_override=(f"pivot index {pivot_index} is out of range", "")
-            )
+            raise FormulonError(StatusCode.INDEX_OUT_OF_RANGE, f"pivot index {pivot_index} is out of range", "")
         return self._pivot_at(pivot_index)
 
     def add_pivot(self, input: PivotInput) -> Pivot:
@@ -5856,7 +6158,7 @@ class Sheet:
         with _ArgScope() as scope:
             spec = _pack_pivot_spec(scope, input.name, input.cache_id, anchor_row, anchor_col)
             out = scope.out_ptr()
-            _check(LIB.fm_sheet_add_pivot(h, _uint(sheet, "sheet_index"), spec, out))
+            _check(LIB.fm_sheet_add_pivot(h, _uint(sheet, "sheet_index", role="sheet"), spec, out))
             pivot_index = LIB.read_u32(out)
         return self._pivot_at(pivot_index)
 
@@ -5865,7 +6167,11 @@ class Sheet:
         pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
+        _check(
+            LIB.fm_sheet_remove_pivot(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(pivot_index, "pivot_index", role="position")
+            )
+        )
 
     # -- Tables ------------------------------------------------------------
     def _table_count(self) -> int:
@@ -5877,9 +6183,7 @@ class Sheet:
 
         if isinstance(table, Table):
             if table.sheet is not self:
-                raise FormulonError(
-                    StatusCode.INVALID_ARGUMENT, _diagnostic_override=("table is a Table of another sheet", "")
-                )
+                raise FormulonError(StatusCode.INVALID_ARGUMENT, "table is a Table of another sheet", "")
             return table.index
         sheet = self._index()
         h = self._workbook._require()
@@ -5905,7 +6209,9 @@ class Sheet:
           IndexOutOfRangeError: when the index is past the last table.
           InvalidArgumentError: when ``table`` is a :class:`Table` of another sheet.
         """
-        return self._workbook._table_handle(self._index(), _uint(self._table_index(table), "table_index"))
+        return self._workbook._table_handle(
+            self._index(), _uint(self._table_index(table), "table_index", role="position")
+        )
 
     def add_table(self, input: TableInput) -> Table:
         """Create the worksheet table ``input`` describes on this sheet and return its handle.
@@ -5926,10 +6232,10 @@ class Sheet:
         Formulas that name the table keep their structured references and
         evaluate to ``#NAME?``. Fails as :meth:`table` does when there is no such table.
         """
-        table_index = _uint(self._table_index(table), "table_index")
+        table_index = _uint(self._table_index(table), "table_index", role="position")
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_table(h, _uint(sheet, "sheet_index"), table_index))
+        _check(LIB.fm_sheet_remove_table(h, _uint(sheet, "sheet_index", role="sheet"), table_index))
 
     # -- Dependency-graph trace --------------------------------------------
     @overload
@@ -5945,9 +6251,9 @@ class Sheet:
         sheet = self._index()
         return self._trace(
             LIB.fm_sheet_get_precedents,
-            _uint(sheet, "sheet"),
-            _uint(row, "row"),
-            _uint(col, "col"),
+            _uint(sheet, "sheet", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
             _uint(depth, "depth"),
         )
 
@@ -5964,9 +6270,9 @@ class Sheet:
         sheet = self._index()
         return self._trace(
             LIB.fm_sheet_get_dependents,
-            _uint(sheet, "sheet"),
-            _uint(row, "row"),
-            _uint(col, "col"),
+            _uint(sheet, "sheet", role="sheet"),
+            _uint(row, "row", role="coordinate"),
+            _uint(col, "col", role="coordinate"),
             _uint(depth, "depth"),
         )
 
@@ -5984,7 +6290,7 @@ class Sheet:
                 nptr = scope.struct(S.CELL_NODE)
                 for i in range(n):
                     S.zero_struct(LIB, S.CELL_NODE, nptr)
-                    _check(LIB.fm_cell_nodes_get_node_at(handle, _uint(i, "idx"), nptr))
+                    _check(LIB.fm_cell_nodes_get_node_at(handle, _uint(i, "idx", role="position"), nptr))
                     d = S.CELL_NODE.unpack(LIB, nptr)
                     nodes.append(CellNode(sheet=d["sheet_index"], row=d["row"], col=d["col"]))
                 return nodes
@@ -5995,27 +6301,36 @@ class Sheet:
     # -- Dynamic-array spill -----------------------------------------------
     @overload
     @_coordinate_form
-    def get_spill_info(self, row: int, col: int) -> Spill: ...
+    def get_spill(self, row: int, col: int) -> Optional[Spill]: ...
 
     @overload
-    def get_spill_info(self, a1: str) -> Spill: ...
+    def get_spill(self, a1: str) -> Optional[Spill]: ...
 
-    def get_spill_info(self, *args: Any, **kwargs: Any) -> Spill:
-        """Return dynamic-array spill info for ``(row, col)``."""
-        row, col = self._cell_args("get_spill_info", args, kwargs, ())
+    def get_spill(self, *args: Any, **kwargs: Any) -> Optional[Spill]:
+        """Return the spill region ``(row, col)`` belongs to, or ``None`` when it is in no spill.
+
+        A blocked anchor reads as a :class:`Spill` with ``blocked`` set and the footprint it attempted.
+        """
+        row, col = self._cell_args("get_spill", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             ptr = scope.struct(S.SPILL_INFO)
-            _check(LIB.fm_sheet_get_spill_info(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr))
-            d = S.SPILL_INFO.unpack(LIB, ptr)
-            engaged = bool(d["engaged"])
-            blocked = bool(d["blocked"])
-            return Spill(
-                engaged=engaged,
-                blocked=blocked,
-                range=_cell_rect_from(d["rect"]) if engaged or blocked else None,
+            _check(
+                LIB.fm_sheet_get_spill(
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    present,
+                    ptr,
+                )
             )
+            if LIB.read_i32(present) == 0:
+                return None
+            d = S.SPILL_INFO.unpack(LIB, ptr)
+            return Spill(blocked=bool(d["blocked"]), range=_cell_rect_from(d["rect"]))
 
     # -- Legacy array (CSE) formulas ---------------------------------------
     @overload
@@ -6034,11 +6349,21 @@ class Sheet:
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             ptr = scope.struct(S.ARRAY_FORMULA)
-            _check(LIB.fm_sheet_get_array_formula(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr))
-            d = S.ARRAY_FORMULA.unpack(LIB, ptr)
-            if not d["engaged"]:
+            _check(
+                LIB.fm_sheet_get_array_formula(
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    present,
+                    ptr,
+                )
+            )
+            if LIB.read_i32(present) == 0:
                 return None
+            d = S.ARRAY_FORMULA.unpack(LIB, ptr)
             return ArrayFormula(
                 range=_cell_rect_from(d["rect"]),
                 formula=LIB.read_cstr(d["formula"]),
@@ -6061,11 +6386,11 @@ class Sheet:
             rp = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rp, rect)
             formula_ptr = scope.cstr(array_formula.formula)
-            status = LIB.fm_sheet_set_array_formula(h, _uint(sheet, "sheet"), rp, formula_ptr)
+            status = LIB.fm_sheet_set_array_formula(h, _uint(sheet, "sheet", role="sheet"), rp, formula_ptr)
             _check(status)
 
 
-class SheetOoxml:
+class SheetOoxml(_NoCopy):
     """The OOXML-level layer of a sheet, :attr:`Sheet.ooxml`.
 
     The cell, row and column XF indices, the range-style remap that works on
@@ -6090,7 +6415,7 @@ class SheetOoxml:
 
     def get_column_xf_index(self, col: int) -> Optional[int]:
         """The cell-style XF index column ``col`` carries (:meth:`set_column_xf_index`); ``None`` when it has none."""
-        col = _uint(col, "col")
+        col = _uint(col, "col", role="coordinate")
         spans = self._sheet._layout_overrides(
             LIB.fm_sheet_get_column_layout_count, LIB.fm_sheet_get_column_layout_at, S.COLUMN_LAYOUT
         )
@@ -6101,7 +6426,7 @@ class SheetOoxml:
 
     def get_row_xf_index(self, row: int) -> Optional[int]:
         """The cell-style XF index row ``row`` makes effective (:meth:`set_row_xf_index`); ``None`` when it has none."""
-        row = _uint(row, "row")
+        row = _uint(row, "row", role="coordinate")
         rows = self._sheet._layout_overrides(
             LIB.fm_sheet_get_row_layout_count, LIB.fm_sheet_get_row_layout_at, S.ROW_LAYOUT
         )
@@ -6124,7 +6449,7 @@ class SheetOoxml:
             _read_cstr_out(
                 LIB.fm_sheet_get_auto_filter_xml,
                 h,
-                _uint(sheet, "sheet_index"),
+                _uint(sheet, "sheet_index", role="sheet"),
             )
             or None
         )
@@ -6140,7 +6465,7 @@ class SheetOoxml:
         h = self._sheet._workbook._require()
         with _ArgScope() as scope:
             xml_ptr = scope.cstr(xml or "")
-            _check(LIB.fm_sheet_set_auto_filter_xml(h, _uint(sheet, "sheet_index"), xml_ptr))
+            _check(LIB.fm_sheet_set_auto_filter_xml(h, _uint(sheet, "sheet_index", role="sheet"), xml_ptr))
 
     def get_page_setup_xml(self) -> Optional[str]:
         """OOXML fragment for round trips; normally use :meth:`Sheet.get_page_setup`.
@@ -6241,7 +6566,11 @@ class SheetOoxml:
         h = self._sheet._workbook._require()
         _check(
             LIB.fm_sheet_set_column_xf_index(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                _uint(xf_index, "xf_index", role="position"),
             )
         )
 
@@ -6259,7 +6588,10 @@ class SheetOoxml:
         h = self._sheet._workbook._require()
         _check(
             LIB.fm_sheet_reset_column_xf_index(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
             )
         )
 
@@ -6284,7 +6616,11 @@ class SheetOoxml:
         h = self._sheet._workbook._require()
         _check(
             LIB.fm_sheet_set_row_xf_index(
-                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+                _uint(xf_index, "xf_index", role="position"),
             )
         )
 
@@ -6301,7 +6637,12 @@ class SheetOoxml:
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
         _check(
-            LIB.fm_sheet_reset_row_xf_index(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"))
+            LIB.fm_sheet_reset_row_xf_index(
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+            )
         )
 
     @overload
@@ -6320,7 +6661,11 @@ class SheetOoxml:
             ptr = scope.struct(S.EFFECTIVE_STYLE)
             _check(
                 LIB.fm_sheet_get_effective_style(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    ptr,
                 )
             )
             d = S.EFFECTIVE_STYLE.unpack(LIB, ptr)
@@ -6361,7 +6706,7 @@ class SheetOoxml:
                 _check(
                     LIB.fm_sheet_snapshot_range_xfs(
                         h,
-                        _uint(sheet, "sheet_index"),
+                        _uint(sheet, "sheet_index", role="sheet"),
                         rp,
                         bytes_ptr,
                         len_ptr,
@@ -6386,7 +6731,11 @@ class SheetOoxml:
         raw = bytes(data)
         with _ArgScope() as scope:
             buf = scope.buffer(raw) if raw else 0
-            _check(LIB.fm_sheet_restore_range_xfs(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len")))
+            _check(
+                LIB.fm_sheet_restore_range_xfs(
+                    h, _uint(sheet, "sheet_index", role="sheet"), buf, _uint(len(raw), "len")
+                )
+            )
 
     def get_range_xf_bases(self, range: Union[CellRect, str]) -> List[int]:
         """List, ascending, every cell XF some cell of the selection resolves to.
@@ -6423,14 +6772,18 @@ class SheetOoxml:
             _pack_cell_rect_at(rp, rect)
             rows_buf = cols_buf = 0
             if count:
-                rows_buf = scope.buffer(b"".join(struct.pack("<I", _uint(r, "excluded_row")) for r, _ in cells))
-                cols_buf = scope.buffer(b"".join(struct.pack("<I", _uint(c, "excluded_col")) for _, c in cells))
+                rows_buf = scope.buffer(
+                    b"".join(struct.pack("<I", _uint(r, "excluded_row", role="coordinate")) for r, _ in cells)
+                )
+                cols_buf = scope.buffer(
+                    b"".join(struct.pack("<I", _uint(c, "excluded_col", role="coordinate")) for _, c in cells)
+                )
             len_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
             _check(
                 LIB.fm_sheet_get_range_xf_bases_excluding(
                     h,
-                    _uint(sheet, "sheet_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
                     rp,
                     rows_buf,
                     cols_buf,
@@ -6447,7 +6800,7 @@ class SheetOoxml:
             _check(
                 LIB.fm_sheet_get_range_xf_bases_excluding(
                     h,
-                    _uint(sheet, "sheet_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
                     rp,
                     rows_buf,
                     cols_buf,
@@ -6479,12 +6832,14 @@ class SheetOoxml:
             rp = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rp, rect)
             if count:
-                from_buf = scope.buffer(b"".join(struct.pack("<I", _uint(k, "from_xf")) for k, _ in pairs))
-                to_buf = scope.buffer(b"".join(struct.pack("<I", _uint(v, "to_xf")) for _, v in pairs))
+                from_buf = scope.buffer(
+                    b"".join(struct.pack("<I", _uint(k, "from_xf", role="position")) for k, _ in pairs)
+                )
+                to_buf = scope.buffer(b"".join(struct.pack("<I", _uint(v, "to_xf", role="position")) for _, v in pairs))
             _check(
                 LIB.fm_sheet_remap_range_xfs(
                     h,
-                    _uint(sheet, "sheet_index"),
+                    _uint(sheet, "sheet_index", role="sheet"),
                     rp,
                     from_buf,
                     to_buf,
@@ -6494,20 +6849,30 @@ class SheetOoxml:
 
     @overload
     @_coordinate_form
-    def get_cell_xf_index(self, row: int, col: int) -> int: ...
+    def get_cell_xf_index(self, row: int, col: int) -> Optional[int]: ...
 
     @overload
-    def get_cell_xf_index(self, a1: str) -> int: ...
+    def get_cell_xf_index(self, a1: str) -> Optional[int]: ...
 
-    def get_cell_xf_index(self, *args: Any, **kwargs: Any) -> int:
-        """Return the xf (style record) index attached to a cell."""
+    def get_cell_xf_index(self, *args: Any, **kwargs: Any) -> Optional[int]:
+        """Return the xf (style record) index attached to a cell, or ``None`` when the cell has none of its own."""
         row, col = self._sheet._cell_args("get_cell_xf_index", args, kwargs, ())
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             out = scope.out_ptr()
-            _check(LIB.fm_sheet_get_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out))
-            return LIB.read_u32(out)
+            _check(
+                LIB.fm_sheet_get_cell_xf_index(
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    present,
+                    out,
+                )
+            )
+            return LIB.read_u32(out) if LIB.read_i32(present) else None
 
     @overload
     @_coordinate_form
@@ -6527,7 +6892,11 @@ class SheetOoxml:
         h = self._sheet._workbook._require()
         _check(
             LIB.fm_sheet_set_cell_xf_index(
-                h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), _uint(xf_index, "xf_index")
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+                _uint(xf_index, "xf_index", role="position"),
             )
         )
 
@@ -6549,7 +6918,14 @@ class SheetOoxml:
         row, col = self._sheet._cell_args("reset_cell_xf_index", args, kwargs, ())
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
-        _check(LIB.fm_sheet_reset_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
+        _check(
+            LIB.fm_sheet_reset_cell_xf_index(
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+            )
+        )
 
     def set_range_xf_index(self, range: Union[CellRect, str], xf_index: int) -> None:
         """Store ``xf_index`` on every cell of ``range``.
@@ -6567,7 +6943,11 @@ class SheetOoxml:
         with _ArgScope() as scope:
             rp = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rp, rect)
-            _check(LIB.fm_sheet_set_range_xf_index(h, _uint(sheet, "sheet"), rp, _uint(xf_index, "xf_index")))
+            _check(
+                LIB.fm_sheet_set_range_xf_index(
+                    h, _uint(sheet, "sheet", role="sheet"), rp, _uint(xf_index, "xf_index", role="position")
+                )
+            )
 
 
 for _qualname, _signature in _COORDINATE_FORMS.items():

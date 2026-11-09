@@ -651,7 +651,8 @@ describe('numbers that were bare become enum members', () => {
       const read = ws.getCellPhoneticProperties('A1');
       assert.equal(read.type, f.PhoneticType.Hiragana);
       assert.equal(read.alignment, f.PhoneticAlignment.Distributed);
-      assert.equal(read.present, true);
+      assert.equal(read.stated, true);
+      assert.equal('present' in read, false);
     });
   });
 

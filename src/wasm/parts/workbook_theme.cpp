@@ -78,9 +78,9 @@ void JsWorkbook::setThemeColors(emscripten::val colors) {
     return;
   }
   fm_theme_colors_t tc = FM_STRUCT_INIT(fm_theme_colors_t);
-  JsNarrowNumericReader reader("setThemeColors");
+  JsNarrowNumericReader reader("Workbook.setThemeColors");
   if (!reader.is_array(colors, "colors") || reader.length(colors, "colors") != std::size(tc.argb)) {
-    record_type_error("setThemeColors: `colors` must be an array of 12 RGB colours");
+    record_type_error("Workbook.setThemeColors: `colors` must be an array of 12 RGB colours");
     return;
   }
   for (uint32_t i = 0; i < std::size(tc.argb); ++i) {
@@ -89,7 +89,7 @@ void JsWorkbook::setThemeColors(emscripten::val colors) {
       return;
     }
     if (color.kind != FM_COLOR_KIND_RGB) {
-      record_type_error("setThemeColors: each colour must be an RGB colour");
+      record_type_error("Workbook.setThemeColors: each colour must be an RGB colour");
       return;
     }
     tc.argb[i] = color.argb;
@@ -102,7 +102,7 @@ void JsWorkbook::setThemeFonts(emscripten::val fonts) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setThemeFonts");
+  JsNarrowNumericReader reader("Workbook.setThemeFonts");
   const std::string major_latin = reader.required_string(fonts, "majorLatin", "theme.majorLatin");
   const std::string major_ea = reader.required_string(fonts, "majorEastAsian", "theme.majorEastAsian");
   const std::string minor_latin = reader.required_string(fonts, "minorLatin", "theme.minorLatin");
@@ -134,7 +134,7 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
   }
   emscripten::val holder = emscripten::val::object();
   holder.set("c", spec);
-  JsNarrowNumericReader reader("resolveColor");
+  JsNarrowNumericReader reader("Workbook.resolveColor");
   const fm_color_t color = js_pull_color_spec(holder, "c", &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();

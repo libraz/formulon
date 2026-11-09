@@ -60,12 +60,12 @@ void JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col,
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setCellPhoneticRuns");
-  if (!reader.is_array(runs, "setCellPhoneticRuns.runs")) {
-    record_type_error("setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
+  JsNarrowNumericReader reader("Sheet.setCellPhoneticRuns");
+  if (!reader.is_array(runs, "runs")) {
+    record_type_error("Sheet.setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
     return;
   }
-  const uint32_t count = reader.length(runs, "setCellPhoneticRuns.runs.length");
+  const uint32_t count = reader.length(runs, "runs.length");
   if (!reader.ok()) {
     return;
   }
@@ -76,13 +76,13 @@ void JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col,
   std::vector<fm_phonetic_run_t> records;
   records.reserve(count);
   for (uint32_t i = 0; i < count && reader.ok(); ++i) {
-    const emscripten::val run = reader.array_element(runs, i, "setCellPhoneticRuns.run");
-    const emscripten::val sb_value = reader.value(run, "start", "setCellPhoneticRuns.start");
-    const emscripten::val eb_value = reader.value(run, "end", "setCellPhoneticRuns.end");
-    const emscripten::val text_value = reader.value(run, "text", "setCellPhoneticRuns.text");
-    const uint32_t sb = reader.u32_value(sb_value, 0U, "setCellPhoneticRuns.start");
-    const uint32_t eb = reader.u32_value(eb_value, 0U, "setCellPhoneticRuns.end");
-    texts.push_back(reader.string_value(text_value, "setCellPhoneticRuns.text"));
+    const emscripten::val run = reader.array_element(runs, i, "run");
+    const emscripten::val sb_value = reader.value(run, "start", "start");
+    const emscripten::val eb_value = reader.value(run, "end", "end");
+    const emscripten::val text_value = reader.value(run, "text", "text");
+    const uint32_t sb = reader.u32_value(sb_value, 0U, "start");
+    const uint32_t eb = reader.u32_value(eb_value, 0U, "end");
+    texts.push_back(reader.string_value(text_value, "text"));
     records.push_back(fm_phonetic_run_t{sb, eb, nullptr});
   }
   if (!reader.ok()) {
@@ -100,7 +100,7 @@ void JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setCellPhoneticProperties");
+  JsNarrowNumericReader reader("Sheet.setCellPhoneticProperties");
   const uint32_t font_id = reader.u32(properties, "fontIndex", 0U, "phoneticProperties.fontIndex");
   const int32_t type = reader.i32(properties, "type", 0, "phoneticProperties.type");
   const int32_t alignment = reader.i32(properties, "alignment", 0, "phoneticProperties.alignment");
@@ -177,7 +177,7 @@ emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t r
   o.set("fontIndex", font_id);
   o.set("type", type);
   o.set("alignment", alignment);
-  o.set("present", present != 0);
+  o.set("stated", present != 0);
   return o;
 }
 
@@ -258,7 +258,7 @@ emscripten::val defined_name_to_val(const char* name, const char* formula, int32
   emscripten::val item = emscripten::val::object();
   js_set_cstr_fields(item, {{"name", name}, {"formula", formula}});
   js_set_cstr_or_null(item, "comment", comment);
-  js_set_index_or_null(item, "scope", local_sheet_id);
+  js_set_present_or_null(item, "scope", local_sheet_id != FM_DEFINED_NAME_SCOPE_WORKBOOK ? 1 : 0, local_sheet_id);
   item.set("hidden", hidden != 0);
   return item;
 }
@@ -384,11 +384,12 @@ emscripten::val JsWorkbook::tableAt(uint32_t sheet, uint32_t idx) const {
 
 emscripten::val JsWorkbook::getTableStyleOptions(uint32_t sheet, uint32_t idx) const {
   fm_table_style_options_t info = FM_STRUCT_INIT(fm_table_style_options_t);
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_table_style_options(handle_, sheet, idx, &info)
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_table_style_options(handle_, sheet, idx, &present, &info)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  if (info.present == 0) {
+  if (present == 0) {
     return emscripten::val::null();
   }
   emscripten::val o = emscripten::val::object();
@@ -420,30 +421,28 @@ void JsWorkbook::updateTableStyleOptions(uint32_t sheet, uint32_t idx, emscripte
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updateTableStyleOptions");
+  JsNarrowNumericReader reader("Table.updateStyleOptions");
   fm_table_style_options_patch_t p = FM_STRUCT_INIT(fm_table_style_options_patch_t);
   std::string style_name;
   // `null` removes the style name; a string replaces it; an omitted key keeps it.
-  const emscripten::val name_value = reader.value(patch, "styleName", "updateTableStyleOptions.styleName");
-  switch (js_patch_key(reader, name_value, "updateTableStyleOptions.styleName", true)) {
+  const emscripten::val name_value = reader.value(patch, "styleName", "styleName");
+  switch (js_patch_key(reader, name_value, "styleName", true)) {
     case JsPatchKey::kClear:
       p.style_name_op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
       p.style_name_op = FM_PATCH_OP_SET;
-      p.style_name = reader.optional_string_value(name_value, style_name, "updateTableStyleOptions.styleName");
+      p.style_name = reader.optional_string_value(name_value, style_name, "styleName");
       break;
     case JsPatchKey::kKeep:
       break;
   }
-  js_table_style_toggle(reader, patch, "showFirstColumn", "updateTableStyleOptions.showFirstColumn",
-                        &p.show_first_column_op, &p.show_first_column);
-  js_table_style_toggle(reader, patch, "showLastColumn", "updateTableStyleOptions.showLastColumn",
-                        &p.show_last_column_op, &p.show_last_column);
-  js_table_style_toggle(reader, patch, "showRowStripes", "updateTableStyleOptions.showRowStripes",
-                        &p.show_row_stripes_op, &p.show_row_stripes);
-  js_table_style_toggle(reader, patch, "showColumnStripes", "updateTableStyleOptions.showColumnStripes",
-                        &p.show_column_stripes_op, &p.show_column_stripes);
+  js_table_style_toggle(reader, patch, "showFirstColumn", "showFirstColumn", &p.show_first_column_op,
+                        &p.show_first_column);
+  js_table_style_toggle(reader, patch, "showLastColumn", "showLastColumn", &p.show_last_column_op, &p.show_last_column);
+  js_table_style_toggle(reader, patch, "showRowStripes", "showRowStripes", &p.show_row_stripes_op, &p.show_row_stripes);
+  js_table_style_toggle(reader, patch, "showColumnStripes", "showColumnStripes", &p.show_column_stripes_op,
+                        &p.show_column_stripes);
   if (!reader.ok()) {
     return;
   }
@@ -455,32 +454,32 @@ uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
     record_invalid_handle();
     return 0U;
   }
-  JsNarrowNumericReader reader("addTable");
+  JsNarrowNumericReader reader("Sheet.addTable");
   fm_cell_rect_t rect{};
-  const emscripten::val range = reader.value(spec, "range", "addTable.range");
-  if (reader.require_object(range, "addTable.range")) {
+  const emscripten::val range = reader.value(spec, "range", "range");
+  if (reader.require_object(range, "range")) {
     rect = js_pull_range(range, &reader);
   }
-  const std::string name = reader.string(spec, "name", "addTable.name");
+  const std::string name = reader.string(spec, "name", "name");
   // An omitted `styleName` applies the workbook default; `""` creates the table without a style element.
   std::string style_store;
-  const char* style_name = reader.optional_string(spec, "styleName", style_store, "addTable.styleName");
-  const emscripten::val columns = reader.value(spec, "columns", "addTable.columns");
+  const char* style_name = reader.optional_string(spec, "styleName", style_store, "styleName");
+  const emscripten::val columns = reader.value(spec, "columns", "columns");
   fm_table_spec_t table = FM_STRUCT_INIT(fm_table_spec_t);
-  table.header_row = js_tristate(reader, spec, "headerRow", "addTable.headerRow");
-  table.totals_row = js_tristate(reader, spec, "totalsRow", "addTable.totalsRow");
-  table.show_first_column = js_tristate(reader, spec, "showFirstColumn", "addTable.showFirstColumn");
-  table.show_last_column = js_tristate(reader, spec, "showLastColumn", "addTable.showLastColumn");
-  table.show_row_stripes = js_tristate(reader, spec, "showRowStripes", "addTable.showRowStripes");
-  table.show_column_stripes = js_tristate(reader, spec, "showColumnStripes", "addTable.showColumnStripes");
+  table.header_row = js_tristate(reader, spec, "headerRow", "headerRow");
+  table.totals_row = js_tristate(reader, spec, "totalsRow", "totalsRow");
+  table.show_first_column = js_tristate(reader, spec, "showFirstColumn", "showFirstColumn");
+  table.show_last_column = js_tristate(reader, spec, "showLastColumn", "showLastColumn");
+  table.show_row_stripes = js_tristate(reader, spec, "showRowStripes", "showRowStripes");
+  table.show_column_stripes = js_tristate(reader, spec, "showColumnStripes", "showColumnStripes");
   if (!reader.ok()) {
     return 0U;
   }
-  if (!reader.is_array(columns, "addTable.columns")) {
-    record_type_error("addTable: `columns` must be an array of column names");
+  if (!reader.is_array(columns, "columns")) {
+    record_type_error("Sheet.addTable: `columns` must be an array of column names");
     return 0U;
   }
-  const uint32_t count = reader.length(columns, "addTable.columns.length");
+  const uint32_t count = reader.length(columns, "columns.length");
   if (!reader.ok()) {
     return 0U;
   }
@@ -489,8 +488,8 @@ uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
   std::vector<std::string> names;
   names.reserve(count);
   for (uint32_t i = 0; i < count && reader.ok(); ++i) {
-    const emscripten::val column = reader.array_element(columns, i, "addTable.columns[]");
-    names.push_back(reader.string_value(column, "addTable.columns[]"));
+    const emscripten::val column = reader.array_element(columns, i, "columns[]");
+    names.push_back(reader.string_value(column, "columns[]"));
   }
   if (!reader.ok()) {
     return 0U;
@@ -518,15 +517,15 @@ void JsWorkbook::updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec)
     return;
   }
 
-  JsNarrowNumericReader reader("updateTable");
+  JsNarrowNumericReader reader("Table.update");
   fm_table_patch_t patch = FM_STRUCT_INIT(fm_table_patch_t);
-  const emscripten::val rect_value = reader.value(spec, "rect", "updateTable.rect");
+  const emscripten::val rect_value = reader.value(spec, "rect", "rect");
   if (reader.ok() && js_value_present(rect_value)) {
     patch.range_op = FM_PATCH_OP_SET;
     patch.range = js_pull_range(rect_value, &reader);
   }
-  js_table_style_toggle(reader, spec, "headerRow", "updateTable.headerRow", &patch.header_row_op, &patch.header_row);
-  js_table_style_toggle(reader, spec, "totalsRow", "updateTable.totalsRow", &patch.totals_row_op, &patch.totals_row);
+  js_table_style_toggle(reader, spec, "headerRow", "headerRow", &patch.header_row_op, &patch.header_row);
+  js_table_style_toggle(reader, spec, "totalsRow", "totalsRow", &patch.totals_row_op, &patch.totals_row);
   if (!reader.ok()) {
     return;
   }
@@ -542,7 +541,7 @@ void JsWorkbook::setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t col
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setTableColumnTotals");
+  JsNarrowNumericReader reader("Table.setColumnTotals");
   std::string label;
   std::string formula;
   const int32_t function =
@@ -763,10 +762,10 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
   double limit_value = 0.0;
   if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value) ||
       !js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
-    record_range_error("getCellsInRange: `cursor` and `limit` must be non-negative integers");
+    record_range_error("Sheet.getCellsInRange: `cursor` and `limit` must be non-negative integers");
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("getCellsInRange");
+  JsNarrowNumericReader reader("Sheet.getCellsInRange");
   const fm_cell_rect_t bounds = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();

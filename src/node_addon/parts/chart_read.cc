@@ -163,7 +163,8 @@ Napi::Object PlotToJs(Napi::Env env, const fm_chart_t* chart, size_t index, fm_s
     return o;
   }
   o.Set("type", JsNumber(env, p.type));
-  o.Set("extendedLayout", JsIndexOrNull(env, p.extended_layout));
+  o.Set("extendedLayout",
+        p.extended_layout == FM_CHART_EXTENDED_LAYOUT_ABSENT ? env.Null() : Napi::Value(JsNumber(env, p.extended_layout)));
   o.Set("barDirection", p.bar_direction == FM_CHART_BAR_DIRECTION_ABSENT ? env.Null() : JsNumber(env, p.bar_direction));
   o.Set("grouping", OptionalNumber(env, p.has_grouping, p.grouping));
   o.Set("varyColors", Napi::Boolean::New(env, p.vary_colors == FM_TRISTATE_TRUE));

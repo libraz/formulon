@@ -70,7 +70,7 @@ void SkipSpace(const char* end, const char** p) noexcept {
 /// scanner is malformed-input-resistant; callers get a structured
 /// error code (`kIoXmlParse`) and a generic message.
 Error MakeXmlParseError(std::size_t /*offset*/, const char* /*what*/) {
-  return make_error(FormulonErrorCode::kIoXmlParse, "sax: malformed sheet xml", "context=sax_xml_reader");
+  return make_error(FormulonErrorCode::kIoXmlParse, "malformed sheet xml", "context=sax_xml_reader");
 }
 
 // ---------------------------------------------------------------------------
@@ -972,7 +972,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   if (!a1::parse_a1_ref(r_attr, &row, &col)) {
     std::string ctx("context=sax_xml_reader r=");
     ctx.append(r_attr);
-    *err = make_error(FormulonErrorCode::kIoXmlParse, "sax: malformed <c r=...>", std::move(ctx));
+    *err = make_error(FormulonErrorCode::kIoXmlParse, "malformed <c r=...>", std::move(ctx));
     return false;
   }
   record->row = row;
@@ -1232,8 +1232,7 @@ Expected<void, Error> scan_sheet_data(ByteSpan xml, const SheetSaxCallbacks& cal
     if (!descended_into_wrapper) {
       // The first open element is the document root.
       if (header.name != "worksheet") {
-        return make_error(FormulonErrorCode::kIoSheetCorrupt, "sax: missing <worksheet> root",
-                          "context=sax_xml_reader");
+        return make_error(FormulonErrorCode::kIoSheetCorrupt, "missing <worksheet> root", "context=sax_xml_reader");
       }
       descended_into_wrapper = true;
       if (header.self_closing) {
@@ -1257,7 +1256,7 @@ Expected<void, Error> scan_sheet_data(ByteSpan xml, const SheetSaxCallbacks& cal
     }
   }
   if (!descended_into_wrapper) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "sax: missing <worksheet> root", "context=sax_xml_reader");
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "missing <worksheet> root", "context=sax_xml_reader");
   }
   return Expected<void, Error>::Ok();
 }

@@ -306,7 +306,7 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_YEARS, FM_PIVOT_CALENDAR_GREGORIAN, 1,
                                    std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_index, 0), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 0, nullptr), 0);
   ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, "#,##0.00"), 0);
   const std::uint32_t col_order[] = {1U};
   ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0, pivot_index, col_order, 1U), 0);
@@ -359,8 +359,8 @@ fm_pivot_data_field_t SumOfAmount(const char* number_format) {
   spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   spec.number_format = number_format;
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  spec.show_as_base_field = -1;
-  spec.show_as_base_item = -1;
+  spec.has_show_as_base_field = 0;
+  spec.has_show_as_base_item = 0;
   return spec;
 }
 

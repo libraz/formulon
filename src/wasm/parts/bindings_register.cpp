@@ -352,7 +352,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addPivotFieldItem", &JsWorkbook::pivotFieldAddItem)
       .function("addPivotFieldSubtotalFunction", &JsWorkbook::pivotFieldAddSubtotalFn)
       .function("clearPivotFields", &JsWorkbook::pivotFieldClear)
-      .function("clearPivotFieldDateGroup", &JsWorkbook::pivotFieldClearDateGroup)
       .function("clearPivotFieldItems", &JsWorkbook::pivotFieldClearItems)
       .function("clearPivotFieldSubtotalFunctions", &JsWorkbook::pivotFieldClearSubtotalFns)
       .function("getPivotFieldCount", &JsWorkbook::pivotFieldCount)
@@ -363,6 +362,12 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("updatePivotField", &JsWorkbook::pivotFieldUpdate)
       .function("updatePivotFieldItem", &JsWorkbook::pivotFieldItemUpdate)
       .function("setPivotFieldDateGroup", &JsWorkbook::pivotFieldSetDateGroup)
+      // `null` as the fourth argument removes the grouping.
+      .function("setPivotFieldDateGroup",
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
+                                                 uint32_t fieldIndex, emscripten::val group) {
+                  return self.pivotFieldRemoveDateGroup(sheet, pivotIndex, fieldIndex, group);
+                }))
       // The trailing three default as on the Node surface: one-day intervals
       // and the field's own first and last date (NaN).
       .function(
@@ -413,7 +418,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
                 emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
                                                  uint32_t fieldIndex, int32_t aggregation) {
                   return self.pivotDataFieldDefaultName(sheet, pivotIndex, fieldIndex, aggregation,
-                                                        std::numeric_limits<std::size_t>::max());
+                                                        FM_PIVOT_DATA_FIELD_NONE);
                 }))
       .function("showPivotDetails", &JsWorkbook::pivotShowDetails)
       .function("addPivotFilter", &JsWorkbook::pivotFilterAdd)
@@ -556,7 +561,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getSheetCount", &JsWorkbook::sheetCount)
       .function("getSheetName", &JsWorkbook::sheetName)
       .function("getSheetIndex", &JsWorkbook::getSheetIndex)
-      .function("getSpillInfo", &JsWorkbook::spillInfo)
+      .function("getSpill", &JsWorkbook::getSpill)
       .function("parseReference", &JsWorkbook::parseReference)
       .function("parseReference", emscripten::optional_override([](const JsWorkbook& self, const std::string& text) {
                   return self.parseReference(text, emscripten::val::undefined());

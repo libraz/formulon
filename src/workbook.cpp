@@ -109,7 +109,7 @@ void Workbook::set_passthrough_parts(std::vector<PassthroughPart> parts) {
 
 Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
   if (part.path.empty()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: empty part path");
+    return make_error(FormulonErrorCode::kInvalidArgument, "empty part path");
   }
 
   if (passthrough_parts_sorted_) {
@@ -126,8 +126,7 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
       }
     }
     if (first < passthrough_parts_.size() && passthrough_parts_[first].path == part.path) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: part already present",
-                        "path=" + part.path);
+      return make_error(FormulonErrorCode::kInvalidArgument, "part already present", "path=" + part.path);
     }
     passthrough_parts_.insert(passthrough_parts_.begin() + static_cast<std::ptrdiff_t>(first), std::move(part));
     return Expected<void, Error>::Ok();
@@ -138,8 +137,7 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
   // path, and only mark the invariant restored after the successful sort.
   for (const PassthroughPart& existing : passthrough_parts_) {
     if (existing.path == part.path) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: part already present",
-                        "path=" + part.path);
+      return make_error(FormulonErrorCode::kInvalidArgument, "part already present", "path=" + part.path);
     }
   }
   passthrough_parts_.push_back(std::move(part));
@@ -150,8 +148,7 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
 
 Expected<void, Error> Workbook::erase_passthrough_parts(std::vector<std::uint8_t> tombstones) {
   if (tombstones.size() != passthrough_parts_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument,
-                      "erase_passthrough_parts: tombstone mask size does not match part count");
+    return make_error(FormulonErrorCode::kInvalidArgument, "tombstone mask size does not match part count");
   }
   auto write = passthrough_parts_.begin();
   for (std::size_t i = 0; i < passthrough_parts_.size(); ++i) {
@@ -175,8 +172,7 @@ Expected<void, Error> Workbook::replace_passthrough_part(std::string_view path, 
       return Expected<void, Error>::Ok();
     }
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "replace_passthrough_part: no such part",
-                    "path=" + std::string(path));
+  return make_error(FormulonErrorCode::kInvalidArgument, "no such part", "path=" + std::string(path));
 }
 
 void Workbook::add_workbook_relationship(std::string type, std::string target) {
@@ -576,7 +572,7 @@ Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const
   sort_by_index(map, [](const XfRemap& lhs, const XfRemap& rhs) { return lhs.from < rhs.from; });
   for (std::size_t i = 0; i < map.size(); ++i) {
     if (map[i].to >= styles_.cell_xfs.size() || (i > 0U && map[i - 1U].from == map[i].from)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "remap_range_style: repeated or out-of-range xf");
+      return make_error(FormulonErrorCode::kInvalidArgument, "repeated or out-of-range xf");
     }
   }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
@@ -592,7 +588,7 @@ Expected<std::vector<std::uint8_t>, Error> Workbook::snapshot_range_style(std::s
 Expected<void, Error> Workbook::restore_range_style(std::size_t sheet_index, const std::uint8_t* bytes,
                                                     std::size_t len) {
   if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "restore_range_style: sheet_index out of range");
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index out of range");
   }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   return formulon::restore_range_style(sheets_[sheet_index], bytes, len, styles_.cell_xfs.size());

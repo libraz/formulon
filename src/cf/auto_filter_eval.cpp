@@ -518,7 +518,7 @@ double today_serial(const eval::EvalContext& ctx, bool date1904) {
 Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, const Sheet& sheet,
                                                         const AutoFilter& filter, const AutoFilterEvalDeps& deps) {
   if (filter.is_opaque()) {
-    return make_error(FormulonErrorCode::kAutoFilterInvalid, "evaluate_auto_filter: AutoFilter is opaque");
+    return make_error(FormulonErrorCode::kAutoFilterInvalid, "AutoFilter is opaque");
   }
   RETURN_IF_ERROR(validate_auto_filter(filter));
 
@@ -570,7 +570,7 @@ Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, cons
 Expected<void, Error> apply_auto_filter(Workbook& wb, std::size_t sheet_index, const AutoFilter& filter,
                                         const AutoFilterEvalDeps& deps) {
   if (sheet_index >= wb.sheet_count()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "apply_auto_filter: sheet_index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index));
   }
   Sheet& sheet = wb.sheet(sheet_index);

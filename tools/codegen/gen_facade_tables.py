@@ -44,7 +44,15 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   declares, and the parameters typed by an address record or a range type
   other than a plain ``CellRect``; ``DEFAULT_ARGS`` (``{Class.method:
   [[position, default], ...]}``), the ledger's ``params`` defaults at their
-  positions in the longest overload. Same rule for an absent or empty region.
+  positions in the longest overload; ``ARG_ROLES`` (``{Class.method:
+  [[position, role], ...]}``), the role of each integer parameter of the
+  backing C function that the longest overload of a generated method
+  declares as a ``number`` (an ``_index`` suffix optional in the match):
+  ``sheet`` (``sheet_index``), ``position`` (``index`` / ``*_index``),
+  ``coordinate`` (``row`` / ``col`` / ``first`` / ``last`` / ``*_row`` /
+  ``*_col``), else ``quantity``. Same rule for an absent or empty region.
+  Python methods are all handwritten and pass the role of each argument
+  themselves, by the same rule.
 * ``INPUT_KEYS`` (``{Class.method: [position, [key, ...]]}``) and
   ``INPUT_NESTED_KEYS`` (``{Class.method: {path: [key, ...]}}``) in the
   ``<input-keys>`` region of ``common.mjs``: for each non-patch op whose
@@ -91,6 +99,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import facade_scope  # noqa: E402
 
+from tools.dev.binding_drift.api_conventions import parse_header  # noqa: E402
 from tools.dev.binding_drift.api_conventions_arguments import _js_fields  # noqa: E402
 from tools.dev.binding_drift.api_conventions_bindings import (  # noqa: E402
     OOXML_CLASSES,
@@ -108,6 +117,7 @@ NODE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 ADDRESS_ARGS_JSON = REPO_ROOT / "tools/api/address_args.json"
 PYTHON_INPUTS = REPO_ROOT / "packages/python/formulon/_inputs.py"
 WASM_DTS = REPO_ROOT / "src/wasm/formulon.d.ts"
+C_HEADER = REPO_ROOT / "src/c_api/formulon_c.h"
 
 
 def _region_re(comment: str, tag: str) -> "re.Pattern[str]":
@@ -640,14 +650,91 @@ def default_args(
     return dict(sorted(out.items()))
 
 
+_C_INTEGER_TYPES = frozenset(
+    {"int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t", "size_t"}
+)
+_COORDINATE_NAMES = frozenset({"row", "col", "first", "last"})
+
+
+def arg_role(c_name: str) -> str:
+    """The role of the integer C parameter `c_name`: which error class a refused value takes."""
+    if c_name == "sheet_index":
+        return "sheet"
+    if c_name == "index" or c_name.endswith("_index"):
+        return "position"
+    if c_name in _COORDINATE_NAMES or c_name.endswith(("_row", "_col")):
+        return "coordinate"
+    return "quantity"
+
+
+def _c_integer_params(header: Optional[str] = None) -> Dict[str, List[str]]:
+    """`{c function: [integer by-value parameter, ...]}` of `formulon_c.h`, in declaration order."""
+    text = C_HEADER.read_text(encoding="utf-8") if header is None else header
+    functions, _typedefs = parse_header(text)
+    return {
+        fn.name: [p.name for p in fn.params if p.pointer_depth == 0 and p.base_type in _C_INTEGER_TYPES]
+        for fn in functions
+    }
+
+
+def arg_roles(
+    ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None, header: Optional[str] = None
+) -> Dict[str, List[List[object]]]:
+    """`ARG_ROLES`: `{Class.method: [[position, role], ...]}` at the positions of the longest overload. A
+    parameter counts when the backing C function takes it as an integer by value and the JS overload declares it
+    (camelCase, an `_index` suffix optional) as a `number`; the facade supplies the others (the handle, the
+    sheet index of `Sheet`). A handwritten method passes its roles itself."""
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    integers = _c_integer_params(header)
+    longest: Dict[str, List[Tuple[str, str]]] = {}
+    for interface, owner in _facade_interfaces(ledger).items():
+        decl = surface.decls.get(interface)
+        for member in decl.members if decl is not None and decl.kind == "interface" else ():
+            key = f"{owner}.{member.name}"
+            if member.is_method and len(member.params) >= len(longest.get(key, ())):
+                longest[key] = list(member.params)
+    js: Dict[str, List[List[object]]] = {}
+    for entry in ledger.entries.values():
+        if not isinstance(entry, dict) or entry.get("kind") != "op" or not isinstance(entry.get("c"), str):
+            continue
+        if entry.get("facade") == facade_scope.HANDWRITTEN_MODE:
+            continue
+        params = integers.get(entry["c"], [])
+        if not params:
+            continue
+        for key in facade_scope.qualified(entry, "js", ledger.collections):
+            declared = longest.get(key)
+            if declared is None:
+                continue
+            names = [name for name, _type in declared]
+            slots = []
+            for c_name in params:
+                spellings = [_camel(c_name)]
+                if c_name.endswith("_index"):
+                    spellings.append(_camel(c_name[: -len("_index")]))
+                camel = next((n for n in spellings if n in names), None)
+                if camel is None:
+                    continue
+                ptype = declared[names.index(camel)][1]
+                if "number" not in _strip_null(ptype, True):
+                    continue
+                slots.append([names.index(camel), arg_role(c_name)])
+            if slots:
+                js[key] = sorted(slots, key=lambda slot: slot[0])
+    return dict(sorted(js.items()))
+
+
 def signatures_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
-    """The JS `METHOD_ARITY`, `TYPED_ARGS` and `DEFAULT_ARGS` tables."""
+    """The JS `METHOD_ARITY`, `TYPED_ARGS`, `DEFAULT_ARGS` and `ARG_ROLES` tables."""
     arity, typed = method_signatures(ledger, dts)
     out = _js_frozen("METHOD_ARITY", "".join(f"{_INDENT}{_js_key(k)}: {n},\n" for k, n in arity.items()))
     body = "".join(f"{_INDENT}{_js_key(k)}: {_js_positions(v)},\n" for k, v in typed.items())
     out += _js_frozen("TYPED_ARGS", body)
     body = "".join(f"{_INDENT}{_js_key(k)}: {_js_positions(v)},\n" for k, v in default_args(ledger, dts).items())
-    return out + _js_frozen("DEFAULT_ARGS", body)
+    out += _js_frozen("DEFAULT_ARGS", body)
+    body = "".join(f"{_INDENT}{_js_key(k)}: {_js_positions(v)},\n" for k, v in arg_roles(ledger, dts).items())
+    return out + _js_frozen("ARG_ROLES", body)
 
 
 def _array_element(text: str) -> Optional[str]:

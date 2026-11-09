@@ -35,8 +35,6 @@ Napi::Value Workbook::SetAutoFilterXml(const Napi::CallbackInfo& info) {
 
 namespace {
 
-constexpr uint32_t kAbsentDxfId = UINT32_MAX;
-
 bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_cell_rect_t* out) {
   *out = fm_cell_rect_t{};
   Napi::Object object;
@@ -90,7 +88,7 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {
   o.Set("dynamicMaxValue", JsNumberOrNull(env, c.has_dyn_max_val, c.dyn_max_val));
   o.Set("valueIso", JsString(env, c.val_iso));
   o.Set("maxValueIso", JsString(env, c.max_val_iso));
-  o.Set("dxfIndex", JsNumber(env, c.dxf_index));
+  o.Set("dxfIndex", JsNumberOrNull(env, c.has_dxf_index, c.dxf_index));
   o.Set("cellColor", JsBool(env, c.cell_color));
   o.Set("iconSet", JsNumber(env, c.icon_set));
   o.Set("iconIndex", JsNumberOrNull(env, c.has_icon_index, c.icon_index));
@@ -249,7 +247,8 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   reader.String(spec, "maxValueIso", &max_val_iso);
   c.val_iso = in.Keep(std::move(val_iso));
   c.max_val_iso = in.Keep(std::move(max_val_iso));
-  c.dxf_index = reader.U32(spec, "dxfIndex", kAbsentDxfId);
+  c.dxf_index = reader.U32(spec, "dxfIndex", 0U, &present);
+  c.has_dxf_index = present ? 1 : 0;
   c.cell_color = reader.Bool(spec, "cellColor", false) ? 1 : 0;
   c.icon_set = reader.I32(spec, "iconSet", 0);
   c.icon_index = reader.I32(spec, "iconIndex", 0, &present);

@@ -171,7 +171,8 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(first.colorNegative.theme, 5);
   assert.equal(first.colorNegative.tint, -0.25);
   assert.equal(first.colorLow.indexed, 12);
-  assert.equal(first.colorHigh.kind, 0);
+  assert.equal(first.colorHigh, null);
+  assert.equal(second.colorSeries, null);
   assert.equal(first.markers, true);
   assert.equal(first.high, false);
   assert.equal(first.minAxisType, mod.SparklineAxisType.Custom);
@@ -231,6 +232,38 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.deepEqual(plainOf(loaded.sheet(0).listSparklineGroups()[0].sparklines[0].location), { row: 10, col: 6 });
   release(loaded);
   release(wb);
+});
+
+test('a sparkline colour reads null when absent and null on input means no colour', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    wb.sheet(0).addSparklineGroup({
+      sparklines: [{ source: 'Sheet1!A1:D1', location: 'F1' }],
+      colorSeries: { kind: 1, argb: 0xff336699, theme: 0, tint: 0, indexed: 0 },
+      colorHigh: null,
+    });
+    const read = wb.sheet(0).listSparklineGroups()[0];
+    assert.equal(read.colorSeries.argb, 0xff336699);
+    for (const key of [
+      'colorHigh',
+      'colorLow',
+      'colorFirst',
+      'colorLast',
+      'colorNegative',
+      'colorMarkers',
+      'colorAxis',
+    ]) {
+      assert.equal(key in read, true, key);
+      assert.equal(read[key], null, key);
+    }
+    // The read record goes back unchanged, and null clears a colour.
+    wb.sheet(0).updateSparklineGroup(0, read);
+    wb.sheet(0).updateSparklineGroup(0, { colorSeries: null });
+    assert.equal(wb.sheet(0).listSparklineGroups()[0].colorSeries, null);
+  } finally {
+    release(wb);
+  }
 });
 
 test('sparkline group arguments are validated', async () => {

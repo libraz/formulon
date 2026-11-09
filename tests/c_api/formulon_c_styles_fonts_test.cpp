@@ -277,7 +277,7 @@ TEST(FormulonCApiStyles, AddDxfRejectsInvalidPresentFontSizesWithoutMutation) {
     const std::size_t before_count = wb.handle->workbook().styles().dxfs.size();
 
     fm_dxf_t dxf{};
-    dxf.font_engaged = 1;
+    dxf.has_font = 1;
     dxf.font = MakeArial();
     dxf.font.size_pt = size;
     dxf.font.has_size_pt = 1;
@@ -292,10 +292,10 @@ TEST(FormulonCApiStyles, AddDxfRejectsInvalidPresentFontSizesWithoutMutation) {
 TEST(FormulonCApiStyles, AddDxfIgnoresAbsentFontSizePayloads) {
   const std::array<fm_dxf_t, 2> dxfs = [] {
     std::array<fm_dxf_t, 2> records{};
-    records[0].font_engaged = 0;
+    records[0].has_font = 0;
     records[0].font.has_size_pt = 1;
     records[0].font.size_pt = std::numeric_limits<double>::quiet_NaN();
-    records[1].font_engaged = 1;
+    records[1].has_font = 1;
     records[1].font.has_size_pt = 0;
     records[1].font.size_pt = -1.0;
     return records;
@@ -334,7 +334,7 @@ TEST(FormulonCApiStyles, CellAndDifferentialFontsAcceptTheBoundarySizes) {
     EXPECT_NE(batch_index, batch_sentinel);
 
     fm_dxf_t dxf{};
-    dxf.font_engaged = 1;
+    dxf.has_font = 1;
     dxf.font = font;
     dxf.font.has_size_pt = 1;
     std::uint32_t dxf_index = 0xFFFFFFFFU;

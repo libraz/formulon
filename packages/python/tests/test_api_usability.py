@@ -162,7 +162,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.get_hyperlink": Case(),
     "Sheet.get_lambda_text": Case(),
     "Sheet.get_precedents": Case(),
-    "Sheet.get_spill_info": Case(),
+    "Sheet.get_spill": Case(),
     "Sheet.get_value": Case(),
     "Sheet.get_typed_value": Case(),
     "Sheet.remove_comment": Case(),
@@ -1414,13 +1414,13 @@ class PlatformOnlyRemovalTests(unittest.TestCase):
             self.assertFalse(hasattr(Workbook, name), name)
         self.assertFalse(hasattr(Sheet, "has_cell_phonetic_properties"))
 
-    def test_phonetic_properties_expose_present(self) -> None:
+    def test_phonetic_properties_expose_stated(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             ws.set_text(0, 0, "x")
-            self.assertFalse(ws.get_cell_phonetic_properties(0, 0).present)
+            self.assertFalse(ws.get_cell_phonetic_properties(0, 0).stated)
             ws.set_cell_phonetic_properties(0, 0, PhoneticProperties(font_index=0, type=1, alignment=1))
-            self.assertTrue(ws.get_cell_phonetic_properties(0, 0).present)
+            self.assertTrue(ws.get_cell_phonetic_properties(0, 0).stated)
 
     def test_unset_pivot_option_strings_read_none(self) -> None:
         with _open() as wb:

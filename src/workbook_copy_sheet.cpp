@@ -38,7 +38,7 @@ namespace formulon {
 namespace {
 
 Error unsupported(const char* what) {
-  return make_error(FormulonErrorCode::kNotImplemented, "copy_sheet: sheet content cannot be copied", what);
+  return make_error(FormulonErrorCode::kNotImplemented, "sheet content cannot be copied", what);
 }
 
 /// A worksheet's `.xlsb` binary index: optional, rebuilt by Excel, so a copy goes without it.
@@ -58,7 +58,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
                                                   std::optional<std::string> new_name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (source >= sheets_.size() || insert_before > sheets_.size()) {
-    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "copy_sheet: index out of range",
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "index out of range",
                       "source=" + std::to_string(source) + " insert_before=" + std::to_string(insert_before) +
                           " sheet_count=" + std::to_string(sheets_.size()));
   }

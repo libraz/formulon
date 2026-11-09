@@ -107,10 +107,11 @@ std::vector<Reader> Readers() {
          fm_value_t v{};
          return fm_sheet_get_cell_at(wb, 0, 0, &row, &col, &formula, &v);
        }},
-      {"get_spill_info",
+      {"get_spill",
        [](fm_workbook_t* wb) {
+         int32_t present = 0;
          fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
-         return fm_sheet_get_spill_info(wb, 0, 1, 0, &info);
+         return fm_sheet_get_spill(wb, 0, 1, 0, &present, &info);
        }},
       {"get_pagination",
        [](fm_workbook_t* wb) {

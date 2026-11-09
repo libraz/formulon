@@ -676,9 +676,9 @@ extern "C" fm_status_t fm_sheet_get_table_column_at(const fm_workbook_t* wb, siz
 }
 
 extern "C" fm_status_t fm_sheet_get_table_style_options(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                        fm_table_style_options_t* out) {
+                                                        int32_t* out_present, fm_table_style_options_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -693,7 +693,7 @@ extern "C" fm_status_t fm_sheet_get_table_style_options(const fm_workbook_t* wb,
   *out = fm_table_style_options_t{};
   out->struct_size = struct_size;
   out->style_name = style.name.empty() ? nullptr : style.name.c_str();
-  out->present = style.present ? 1 : 0;
+  *out_present = style.present ? 1 : 0;
   out->show_first_column = style.present && style.show_first_column ? 1 : 0;
   out->show_last_column = style.present && style.show_last_column ? 1 : 0;
   out->show_row_stripes = style.present && style.show_row_stripes ? 1 : 0;
@@ -807,7 +807,7 @@ extern "C" fm_status_t fm_sheet_rename_table(fm_workbook_t* wb, size_t sheet_ind
 }
 
 extern "C" fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                    size_t column, const char* name, const char** out_name) {
+                                                    size_t column_index, const char* name, const char** out_name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr || out_name == nullptr) {
     return null_argument();
@@ -817,13 +817,13 @@ extern "C" fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sh
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(column, book.tables()[index].columns.size(), "column"); rc != 0) {
+  if (auto rc = check_index(column_index, book.tables()[index].columns.size(), "column_index"); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
-  auto renamed = book.rename_table_column(index, column, name);
+  auto renamed = book.rename_table_column(index, column_index, name);
   if (!renamed) {
     return set_last_error(renamed.error());
   }
@@ -832,7 +832,7 @@ extern "C" fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                        size_t column, int32_t function, const char* label,
+                                                        size_t column_index, int32_t function, const char* label,
                                                         const char* formula) {
   clear_last_error();
   if (wb == nullptr) {
@@ -844,7 +844,7 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
     return rc;
   }
   auto& tables = book.mutable_tables();
-  if (auto rc = check_index(column, tables[index].columns.size(), "column"); rc != 0) {
+  if (auto rc = check_index(column_index, tables[index].columns.size(), "column_index"); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({label}); rc != 0) {
@@ -868,7 +868,7 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
     }
     std::string bound;
     if (auto rc = check_entered_cell_formula(wb, tables[index].sheet_index, rect->last_row,
-                                             rect->first_col + static_cast<std::uint32_t>(column), formula,
+                                             rect->first_col + static_cast<std::uint32_t>(column_index), formula,
                                              "field=formula", &bound);
         rc != 0) {
       return rc;
@@ -878,10 +878,10 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
     book.bind_external_books(std::string_view(stored_formula));
     stored_formula = std::string(formulon::strip_formula_prefix(stored_formula));
   }
-  formulon::TableColumn& col = tables[index].columns[column];
+  formulon::TableColumn& col = tables[index].columns[column_index];
   col.totals_function = token == "none" ? std::string() : std::string(token);
   col.totals_label = text_or_empty(label);
   col.totals_row_formula = std::move(stored_formula);
   const formulon::TableMetadata& table = tables[index];
-  return table.totals_row ? write_totals_cell(book, table, column) : 0;
+  return table.totals_row ? write_totals_cell(book, table, column_index) : 0;
 }

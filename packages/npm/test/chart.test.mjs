@@ -555,7 +555,8 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
 
     // Wrong types raise before the engine is called.
     assert.throws(() => wb.sheet(0).chart(String(id)).getProperties(), TypeError);
-    assert.throws(() => wb.sheet(0).chart(-1).getProperties(), RangeError);
+    expectFailure(() => wb.sheet(0).chart(-1).getProperties(), mod.StatusCode.InvalidArgument);
+    assert.throws(() => wb.sheet(0).chart(1.5).getProperties(), RangeError);
     assert.throws(() => wb.sheet(0).chart(id).setType(0, 1.5), RangeError);
     assert.throws(
       () =>

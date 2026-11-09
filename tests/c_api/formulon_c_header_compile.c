@@ -25,6 +25,41 @@ static int32_t ContinueIteration(uint32_t iteration, double max_residual, uint32
 #error "FM_CELL_STYLE_BUILTIN_ID_NONE is no longer part of the C ABI"
 #endif
 
+// An optional value inside a record is announced by an `int32_t has_<field>`
+// flag; an optional index sits right after its flag as a `uint32_t`.
+#define EXPECT_HAS_FLAG(T, field) \
+  _Static_assert(sizeof(((T*)0)->field) == sizeof(int32_t), #T "." #field " is an int32_t flag")
+#define EXPECT_FLAGGED_INDEX(T, field)                                                                                \
+  _Static_assert(                                                                                                     \
+      offsetof(T, field) == offsetof(T, has_##field) + sizeof(int32_t) && sizeof(((T*)0)->field) == sizeof(uint32_t), \
+      #T "." #field " follows has_" #field)
+
+EXPECT_HAS_FLAG(fm_cf_match_info_t, has_dxf_index);
+EXPECT_HAS_FLAG(fm_page_setup_t, has_orientation);
+EXPECT_HAS_FLAG(fm_page_margins_t, has_left_in);
+EXPECT_HAS_FLAG(fm_print_options_t, has_grid_lines);
+EXPECT_HAS_FLAG(fm_header_footer_t, has_different_first);
+EXPECT_HAS_FLAG(fm_cf_rule_t, has_op);
+EXPECT_HAS_FLAG(fm_cf_rule_t, has_icon_set_floor);
+EXPECT_HAS_FLAG(fm_dxf_t, has_font);
+EXPECT_FLAGGED_INDEX(fm_function_metadata_info_t, max_arity);
+EXPECT_FLAGGED_INDEX(fm_filter_column_t, dxf_index);
+EXPECT_FLAGGED_INDEX(fm_pivot_cache_options_t, missing_items_limit);
+EXPECT_FLAGGED_INDEX(fm_pivot_field_info_t, cache_field_index);
+EXPECT_FLAGGED_INDEX(fm_pivot_field_info_t, group_base_index);
+EXPECT_FLAGGED_INDEX(fm_pivot_item_info_t, cache_index);
+EXPECT_FLAGGED_INDEX(fm_pivot_data_field_t, show_as_base_field);
+EXPECT_FLAGGED_INDEX(fm_pivot_data_field_t, show_as_base_item);
+
+// Absent enumerations read their `_ABSENT` member; the other sentinels are
+// named constants.
+_Static_assert(FM_PIVOT_AXIS_ABSENT == -1, "FM_PIVOT_AXIS_ABSENT changed");
+_Static_assert(FM_CHART_EXTENDED_LAYOUT_ABSENT == -1, "FM_CHART_EXTENDED_LAYOUT_ABSENT changed");
+_Static_assert(FM_DEFINED_NAME_SCOPE_WORKBOOK == -1, "FM_DEFINED_NAME_SCOPE_WORKBOOK changed");
+_Static_assert(FM_PIVOT_DATA_FIELD_NONE == SIZE_MAX, "FM_PIVOT_DATA_FIELD_NONE changed");
+_Static_assert(FM_PIVOT_SHOW_AS_BASE_PREVIOUS == 1048828u, "FM_PIVOT_SHOW_AS_BASE_PREVIOUS changed");
+_Static_assert(FM_PIVOT_SHOW_AS_BASE_NEXT == 1048829u, "FM_PIVOT_SHOW_AS_BASE_NEXT changed");
+
 int main(void) {
   fm_iterative_progress_cb callback = ContinueIteration;
   fm_parallel_recalc_stats_info_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
@@ -91,7 +126,7 @@ int main(void) {
   fm_status_t (*chars_to_pt)(const fm_workbook_t*, size_t, double, int32_t, double*) =
       fm_sheet_convert_column_chars_to_pt;
   fm_status_t (*column_outline)(fm_workbook_t*, size_t, uint32_t, uint32_t, uint32_t) = fm_sheet_set_column_outline;
-  fm_status_t (*get_cell_xf_index)(const fm_workbook_t*, size_t, uint32_t, uint32_t, uint32_t*) =
+  fm_status_t (*get_cell_xf_index)(const fm_workbook_t*, size_t, uint32_t, uint32_t, int32_t*, uint32_t*) =
       fm_sheet_get_cell_xf_index;
   fm_status_t (*add_dxf)(fm_workbook_t*, const fm_dxf_t*, uint32_t*) = fm_workbook_add_dxf;
   fm_status_t (*last_parse_error)(int32_t*, fm_parse_error_info_t*) = fm_get_last_parse_error;
@@ -182,6 +217,21 @@ int main(void) {
   fm_status_t (*get_pinned_now)(const fm_workbook_t*, int32_t*, fm_civil_time_t*) = fm_workbook_get_pinned_now;
   fm_status_t (*get_file_name)(const fm_workbook_t*, int32_t*, const char**) = fm_workbook_get_file_name;
   fm_status_t (*get_iterative)(const fm_workbook_t*, fm_iterative_settings_info_t*) = fm_workbook_get_iterative;
+  fm_status_t (*get_spill)(const fm_workbook_t*, size_t, uint32_t, uint32_t, int32_t*, fm_spill_info_t*) =
+      fm_sheet_get_spill;
+  fm_status_t (*get_array_formula)(const fm_workbook_t*, size_t, uint32_t, uint32_t, int32_t*,
+                                   fm_array_formula_info_t*) = fm_sheet_get_array_formula;
+  fm_status_t (*get_table_style_options)(const fm_workbook_t*, size_t, size_t, int32_t*, fm_table_style_options_t*) =
+      fm_sheet_get_table_style_options;
+  fm_status_t (*get_pivot_style_options)(const fm_workbook_t*, size_t, size_t, int32_t*, fm_pivot_style_options_t*) =
+      fm_sheet_get_pivot_style_options;
+  fm_status_t (*get_defined_name)(const fm_workbook_t*, const char*, int32_t, int32_t*, fm_defined_name_t*) =
+      fm_workbook_get_defined_name;
+  // A date grouping is removed by passing a `NULL` group to its setter.
+  fm_status_t (*set_pivot_field_date_group)(fm_workbook_t*, size_t, size_t, size_t, const fm_pivot_date_group_spec_t*) =
+      fm_sheet_set_pivot_field_date_group;
+  fm_status_t (*pivot_data_field_default_name)(const fm_workbook_t*, size_t, size_t, size_t, int32_t, size_t,
+                                               const char**) = fm_sheet_get_pivot_data_field_default_name;
   fm_status_t (*merges_in_range)(const fm_workbook_t*, size_t, const fm_cell_rect_t*, fm_cell_rect_t*, size_t,
                                  size_t*) = fm_sheet_get_merges_in_range;
   fm_status_t (*update_protected_range)(fm_workbook_t*, size_t, size_t, const fm_protected_range_patch_t*) =
@@ -303,6 +353,13 @@ int main(void) {
   (void)get_pinned_now;
   (void)get_file_name;
   (void)get_iterative;
+  (void)get_spill;
+  (void)get_array_formula;
+  (void)get_table_style_options;
+  (void)get_pivot_style_options;
+  (void)get_defined_name;
+  (void)set_pivot_field_date_group;
+  (void)pivot_data_field_default_name;
   (void)merges_in_range;
   (void)update_protected_range;
   (void)comment_patch;

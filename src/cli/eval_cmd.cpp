@@ -278,8 +278,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       return kExitFailure;
     }
     if (auto rc = fm_canonicalize_formula(formula_str.c_str(), profile_id, &canonical); rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
+      return report_eval_failure(err);
     }
     formula_str = canonical;
   }

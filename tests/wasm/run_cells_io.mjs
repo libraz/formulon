@@ -532,7 +532,7 @@ export function registerCellsIo(Module, test) {
       });
       // `dxfIndex` is a real index into `<dxfs>`, not a sentinel: every binding
       // signals "no differential format" by omitting the field, which leaves
-      // the C ABI's `dxf_index_engaged` at 0. Supplying `0` therefore claims the
+      // the C ABI's `has_dxf_index` at 0. Supplying `0` therefore claims the
       // first dxf, so the table has to have one.
       const dxf = wb.addDxf({ font: { bold: true } });
       wb.addCfRule(0, {

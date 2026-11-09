@@ -664,7 +664,7 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
     if (is_pie) {
       const std::uint64_t points = point_count(s.val);
       if (points > Sheet::kMaxRows) {
-        return make_error(FormulonErrorCode::kSecResourceLimit, "chart: point count exceeds Excel row limit",
+        return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: point count exceeds Excel row limit",
                           "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
       }
       for (std::uint32_t p = 0; p < points; ++p) {

@@ -71,7 +71,7 @@ with Workbook.load("input.xlsx") as wb:
 
 Every method that takes a cell accepts either `(row, col)` or an A1 string, and a rectangle argument accepts `"A1:B2"`. `ws["A1"]` and `ws[row, col]` read and write native values; `get_values` and `set_values` move a block of cells. A string that starts with `=` is entered as a formula; enter untrusted text with `ws.set_text("A1", text)`, which always stores text. In the default automatic calculation mode a read calculates pending cells first; in manual mode it returns the value as of the last `recalc()`, and `wb.has_dirty_cells()` tells whether edits are still waiting for one. `ErrorCode.DIV0.display_name` is `"#DIV/0!"`.
 
-A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet(key)` and `wb[key]` take an index or a name and raise `NotFoundError` or `IndexOutOfRangeError` when nothing matches; `wb.list_sheets()` lists every sheet.
+A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet(key)` and `wb[key]` take an index or a name and raise `NotFoundError` or `IndexOutOfRangeError` when nothing matches (`wb[-1]` is the last sheet, while a negative index passed to `wb.sheet()` is `IndexOutOfRangeError`); `wb.list_sheets()` lists every sheet.
 
 `wb.close()` or leaving the `with` block releases the workbook at that moment; `wb.closed` reports it, and any later call raises `WorkbookClosedError`. A workbook dropped without closing is released when the garbage collector reclaims it, which is best effort, so close workbooks you are done with. `Workbook.load` also takes bytes or a binary stream, and `wb.save()` without a destination returns the bytes.
 

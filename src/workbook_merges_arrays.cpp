@@ -139,12 +139,12 @@ Expected<void, Error> Workbook::set_array_formula(std::size_t sheet_index, std::
                                                   FormulaSource source) {
   RETURN_IF_ERROR(check_cell_target("set_array_formula", sheet_index, sheets_.size(), row, col));
   if (rows == 0U || cols == 0U) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_array_formula: rows and cols must be >= 1",
+    return make_error(FormulonErrorCode::kInvalidArgument, "rows and cols must be >= 1",
                       "rows=" + std::to_string(rows) + " cols=" + std::to_string(cols));
   }
   if (rows > Sheet::kMaxRows - row || cols > Sheet::kMaxCols - col ||
       static_cast<std::uint64_t>(rows) * cols > kMaxRangeExpansionCells) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_array_formula: array outside grid or too large",
+    return make_error(FormulonErrorCode::kInvalidArgument, "array outside grid or too large",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col) + " rows=" + std::to_string(rows) +
                           " cols=" + std::to_string(cols));
   }
@@ -185,7 +185,7 @@ Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange me
   RETURN_IF_ERROR(check_sheet_index("add_merge", sheet_index, sheets_.size()));
   merge = normalized(merge);
   if (!Sheet::rect_in_grid(merge.first_row, merge.first_col, merge.last_row, merge.last_col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: range out of grid",
+    return make_error(FormulonErrorCode::kInvalidArgument, "range out of grid",
                       "first_row=" + std::to_string(merge.first_row) + " first_col=" + std::to_string(merge.first_col) +
                           " last_row=" + std::to_string(merge.last_row) +
                           " last_col=" + std::to_string(merge.last_col));
@@ -220,8 +220,7 @@ Expected<void, Error> Workbook::remove_merge_at(std::size_t sheet_index, std::si
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   MergeRange removed;
   if (!sheets_[sheet_index].remove_merge_at(index, &removed)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "remove_merge_at: index out of range",
-                      "index=" + std::to_string(index));
+    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range", "index=" + std::to_string(index));
   }
   mark_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, removed,
                                         &Sheet::blocked_spill_anchors_intersecting);

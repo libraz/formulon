@@ -214,11 +214,12 @@ TEST(FormulonCApiStructuredRef, ArrayFormulaReadsAtItsAnchor) {
                 "=SUM(tblSales[Qty])"),
             0);
   fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, kInsideRow, kInsideCol, &info), 0);
-  ASSERT_EQ(info.engaged, 1);
+  int32_t array_present = 0;
+  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, kInsideRow, kInsideCol, &array_present, &info), 0);
+  ASSERT_EQ(array_present, 1);
   EXPECT_STREQ(info.formula, "=SUM([Qty])");
-  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, kOutsideRow, kOutsideCol, &info), 0);
-  ASSERT_EQ(info.engaged, 1);
+  ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, kOutsideRow, kOutsideCol, &array_present, &info), 0);
+  ASSERT_EQ(array_present, 1);
   EXPECT_STREQ(info.formula, "=SUM(tblSales[Qty])");
 }
 

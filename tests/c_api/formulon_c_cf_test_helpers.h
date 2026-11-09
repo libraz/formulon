@@ -122,7 +122,7 @@ template <typename MutateFn>
   rule.type = 3;  // DataBar
   rule.ranges = sqref;
   rule.range_count = 1;
-  rule.data_bar_engaged = 1;
+  rule.has_data_bar = 1;
   rule.data_bar_min.type = 3;  // Min
   rule.data_bar_min.gte = 1;
   rule.data_bar_max.type = 4;  // Max

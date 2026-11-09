@@ -4,7 +4,7 @@
 // bridge, `function_metadata` / `function_names` / `localize_function_name` /
 // `canonicalize_function_name` / `localize_formula` / `canonicalize_formula` /
 // `locale_facts` / `list_locale_error_names`, `compare_text` /
-// `collation_classes`, `spillInfo`, and the legacy array formula accessors.
+// `collation_classes`, `getSpill`, and the legacy array formula accessors.
 
 #include <emscripten/val.h>
 
@@ -92,20 +92,11 @@ emscripten::val function_metadata(const std::string& name) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", md.canonical_name);
   o.set("minArity", md.min_arity);
-  // `0xFFFFFFFF` is the unbounded / unknown-arity sentinel; surface it as
-  // `null` so JS callers do not mistake it for a concrete upper bound.
-  if (md.max_arity == 0xFFFFFFFFu) {
-    o.set("maxArity", emscripten::val::null());
-  } else {
-    o.set("maxArity", md.max_arity);
-  }
+  // An open argument list has no upper bound: `null`.
+  js_set_present_or_null(o, "maxArity", md.has_max_arity, md.max_arity);
   o.set("availability", static_cast<uint32_t>(md.availability));
-  if (md.signature_template != nullptr) {
-    o.set("signature", std::string(md.signature_template));
-  }
-  if (md.description != nullptr) {
-    o.set("description", std::string(md.description));
-  }
+  js_set_cstr_or_null(o, "signature", md.signature_template);
+  js_set_cstr_or_null(o, "description", md.description);
   return optional_or_null(rc, present, o);
 }
 
@@ -206,16 +197,19 @@ emscripten::val list_locale_error_names(const std::string& profile_id) {
 
 // ---- Spill info --------------------------------------------------------
 
-emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const {
+emscripten::val JsWorkbook::getSpill(uint32_t sheet, uint32_t row, uint32_t col) const {
   fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_spill_info(handle_, sheet, row, col, &info)
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_spill(handle_, sheet, row, col, &present, &info)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
   emscripten::val item = emscripten::val::object();
-  item.set("engaged", info.engaged != 0);
   item.set("blocked", info.blocked != 0);
-  item.set("rect", info.engaged != 0 || info.blocked != 0 ? cell_rect_to_val(info.rect) : emscripten::val::null());
+  item.set("rect", cell_rect_to_val(info.rect));
   return item;
 }
 
@@ -223,11 +217,12 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
 
 emscripten::val JsWorkbook::getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
   fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_array_formula(handle_, sheet, row, col, &info)
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_array_formula(handle_, sheet, row, col, &present, &info)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  if (info.engaged == 0) {
+  if (present == 0) {
     return emscripten::val::null();
   }
   emscripten::val array = emscripten::val::object();
@@ -241,7 +236,7 @@ void JsWorkbook::setArrayFormula(uint32_t sheet, emscripten::val range, const st
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setArrayFormula");
+  JsNarrowNumericReader reader("Sheet.setArrayFormula");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return;
@@ -258,7 +253,7 @@ double compare_text(const std::string& a, const std::string& b, int32_t strength
 }
 
 double convert_civil_to_serial(emscripten::val civil, bool date1904) {
-  JsNarrowNumericReader reader("convertCivilToSerial");
+  JsNarrowNumericReader reader("Formulon.convertCivilToSerial");
   if (!reader.require_object(civil, "civil")) {
     return 0.0;
   }
@@ -295,10 +290,10 @@ emscripten::val convert_serial_to_civil(double serial, bool date1904) {
 }
 
 emscripten::val collation_classes(emscripten::val values, int32_t strength, const std::string& profile_id) {
-  JsNarrowNumericReader reader("getCollationClasses");
+  JsNarrowNumericReader reader("Formulon.getCollationClasses");
   if (!reader.is_array(values, "values")) {
     if (reader.ok()) {
-      record_type_error("getCollationClasses: values must be an array");
+      record_type_error("Formulon.getCollationClasses: values must be an array");
     }
     return emscripten::val::undefined();
   }

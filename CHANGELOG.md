@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameters and fields cross the ABI as `int32_t`, and
   `fm_workbook_paginate` is `fm_sheet_get_pagination`.
 - **C ABI:** an out-of-range sheet index returns
-  `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) instead of
+  `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) instead of
   `FM_STATUS_INVALID_ARGUMENT`. Every sheet-taking function checks the handle,
   then NULL pointers, then the sheet index, then the remaining arguments. A
   successful call leaves `fm_get_last_error_message` empty.
@@ -121,6 +121,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names C functions and is for display, not comparison.
   `fm_workbook_get_sheet_index` finds a sheet by name and
   `fm_get_version_number` returns the version as one number.
+- **C ABI, JavaScript, Python:** an argument that cannot be right is refused
+  by what it addresses. A position (a sheet index, a collection index) that is
+  negative or past the end is `IndexOutOfRange` (`SheetIndexOutOfRange` for a
+  sheet; Python `IndexOutOfRangeError`), and a coordinate (row, column) or a
+  quantity (count, length) that is negative or outside its limit is
+  `InvalidArgument` (Python `InvalidArgumentError`). A non-number is
+  `TypeError`; in JavaScript a fractional or non-finite number is `RangeError`;
+  in Python any `float` or `bool` where an integer is expected is `TypeError`
+  and an integer wider than the parameter is `ValueError`. A negative value
+  used to be `RangeError` or `ValueError`. The message names the method and the
+  parameter and never a C type; match on the class and `code`, not the text.
+  Python `wb[-1]` counts from the end and is the last sheet, while
+  `wb.sheet(-1)` is `IndexOutOfRangeError`.
+- **C ABI, JavaScript, Python:** the status numbers `SheetIndexOutOfRange`,
+  `InvalidSheetName`, `SheetCountLimitExceeded` and `IndexOutOfRange` move from
+  5050, 5051, 5053 and 5054 to 10, 11, 12 and 13, so that general codes sit in
+  the general range; 5050 to 5054 are retired and never reused. The members
+  `FnOverflow` and `SecResourceLimit` are `FunctionOverflow` and
+  `SecurityResourceLimit` (C `FM_STATUS_FUNCTION_OVERFLOW`,
+  `FM_STATUS_SECURITY_RESOURCE_LIMIT`; Python `FUNCTION_OVERFLOW`,
+  `SECURITY_RESOURCE_LIMIT`). A caller that compares numbers must update them;
+  one that compares `StatusCode` members only needs the two new spellings.
+- **C ABI, JavaScript, Python:** "absent" is one thing on every read: `NULL` in
+  C, `null` in JavaScript and `None` in Python, never `""`, `0`, `-1` or a
+  presence flag in the record. `getSpill` returns `Spill | null`,
+  `getCellXfIndex` is `null` for a cell with no XF of its own,
+  `PivotCell.fieldName`, `FunctionMetadata.signature` and `description`,
+  `AutoFilterColumn.dxfIndex` and the sparkline group colours read `null`, and
+  `PageSetup.orientationStated` is gone (`orientation === null` says it).
+  `PhoneticProperties.present` is `stated`; like every read-only key of a read
+  record it is accepted and ignored on input, so `set(get())` round-trips. In
+  Python the same holds for the password fields of a protected range,
+  `PivotCell.field_name` and `number_format`, the totals-row label and formula
+  of a table column, `ExternalLink.target`, the `formula1`, `formula2` and
+  `text` of a conditional format, `ChartTitle.text` and `formula`,
+  `PivotCacheOptions.missing_items_limit` (`None` is automatic, and `-1` is
+  `InvalidArgumentError`), and `Pagination.print_titles`. `requested_id` of
+  `add_pivot_cache` is `Optional[int] = None`, and an explicit `0` is
+  `InvalidArgument` in every binding (C keeps `0` for "assign one").
+- **JavaScript, Python:** `getSpillInfo` (`get_spill_info`) is `getSpill`
+  (`get_spill`) and returns `{ blocked, range }` or `null`. The constants
+  `PIVOT_SHOW_AS_BASE_PREVIOUS` and `PIVOT_SHOW_AS_BASE_NEXT` are
+  `PivotShowAsBase.Previous` and `PivotShowAsBase.Next` (Python an `IntEnum`
+  with `PREVIOUS` and `NEXT`). `Pivot.clearFieldDateGroup`
+  (`clear_field_date_group`) is gone: `setFieldDateGroup(field, null)`
+  (`set_field_date_group(field, None)`) removes the grouping and does nothing
+  for an ungrouped field.
+- **JavaScript, Python:** `evaluateCfRange(range, { today, timePeriodRules })`
+  takes `timePeriodRules: false` to match no `TimePeriod` rule (combined with
+  `today` it is `InvalidArgument`), and Python
+  `evaluate_cf_range(range, *, today=None, time_period_rules=True)` takes both
+  as keywords; a positional `today` is `TypeError`.
+- **Python:** `FormulonError(code, message="", context="", parse_error=None)`
+  builds an error, and `str(e)` is `[CODE_NAME] message` with the context only
+  in `e.context`. `FormulaSyntaxError` carries `parse_error` (a `ParseError`
+  with `code`, `start`, `end`, `line`, `column`) and no longer repeats those
+  fields or `parse_error_code`. A ragged `set_values` grid is
+  `InvalidArgumentError`, and `parse_reference` with only one of `base_row` and
+  `base_col` is `TypeError`, as in JavaScript.
+- **Python:** `copy.copy`, `copy.deepcopy` and pickling of a `Workbook`, of any
+  handle class and of the `*Ooxml` views raise
+  `TypeError: Workbook cannot be copied; use Workbook.load(wb.save())`.
+- **JavaScript:** `canonicalizeFormula` and `localizeFormula` check the grammar
+  and throw with `parseError` offsets (UTF-16) into the text passed, as do
+  `canonicalize_formula` and `localize_formula` in Python and the CLI `eval`
+  command with `--profile`, which prints the position in the text as typed. Malformed text that
+  `canonicalizeFormula` used to rewrite is now refused.
+- **JavaScript:** `createFormulon()` of `@libraz/formulon-native` looks up the
+  prebuild itself. Importing the package no longer throws when none matches;
+  `createFormulon()` rejects with a plain `Error` naming the platform, which is
+  a host failure and not a `FormulonError`. `FORMULON_NATIVE_ROOT` replaces the
+  directory searched.
+- **JavaScript:** `recalcParallel(threadCount)`: `threadCount` is optional
+  (0 = automatic, capped at 8); a non-number is `TypeError`, a fractional or
+  non-finite number `RangeError`, a negative number or one above 8
+  `InvalidArgument`. A negative number used to be `RangeError`. A byte input
+  that is not an `ArrayBuffer`, `Uint8Array` or view is `TypeError` naming the
+  method and parameter, and an enum ordinal outside its table is
+  `InvalidArgument` with a message that names the method and the parameter.
+- **C ABI:** a few records and functions change shape; a caller compiled
+  against an earlier header must be recompiled. See [C ABI changes](#c-abi-changes).
 - **Command line:** plain output escapes only newline, carriage return, tab and
   backslash, so a value pastes back as written. `paginate` prints print-area ranges in A1 notation. `eval` with no formula
   exits with status 64, and an engine failure exits with status 1. `dump` and
@@ -1048,7 +1129,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   `FM_STATUS_NOT_FOUND`, and an out-of-range pivot, field or item index in
   `fm_sheet_update_pivot_field`, `fm_sheet_update_pivot_field_item` and
   `fm_sheet_update_pivot_style_options` is `FM_STATUS_INDEX_OUT_OF_RANGE`
-  (5054) instead of `FM_STATUS_INVALID_ARGUMENT`.
+  (13) instead of `FM_STATUS_INVALID_ARGUMENT`.
 - The chart `style` (`c:style`) reads and writes one scale, 1 to 48; a read
   prefers `c:style`, and a file that carries only an `mc:AlternateContent`
   `c14:style` of 100 + n reads as n.
@@ -1165,6 +1246,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_CF_DATA_BAR` | `FM_CF_MATCH_KIND_DATA_BAR` |
 | `FM_CF_DIFFERENTIAL_FORMAT` | `FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT` |
 | `FM_CF_ICON_SET` | `FM_CF_MATCH_KIND_ICON_SET` |
+| `fm_cf_match_info_t.dxf_id_engaged` | `fm_cf_match_info_t.has_dxf_index` |
 | `fm_cf_match_t` | `fm_cf_match_info_t` |
 | `FM_CF_OPERATOR_BETWEEN` | removed |
 | `FM_CF_OPERATOR_EQUAL` | removed |
@@ -1177,8 +1259,17 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_cf_results_cell_at` | `fm_cf_results_get_cell_at` |
 | `fm_cf_results_cell_count` | `fm_cf_results_get_cell_count` |
 | `fm_cf_results_match_at` | `fm_cf_results_get_match_at` |
-| `fm_cf_rule_t.dxf_id_engaged` | `fm_cf_rule_t.dxf_index_engaged` |
+| `fm_cf_rule_t.data_bar_axis_position_engaged` | `fm_cf_rule_t.has_data_bar_axis_position` |
+| `fm_cf_rule_t.data_bar_engaged` | `fm_cf_rule_t.has_data_bar` |
+| `fm_cf_rule_t.data_bar_gradient_engaged` | `fm_cf_rule_t.has_data_bar_gradient` |
+| `fm_cf_rule_t.dxf_id_engaged` | `fm_cf_rule_t.has_dxf_index` |
 | `fm_cf_rule_t.dxf_id` | `fm_cf_rule_t.dxf_index` |
+| `fm_cf_rule_t.icon_set_engaged` | `fm_cf_rule_t.has_icon_set` |
+| `fm_cf_rule_t.icon_set_floor_engaged` | `fm_cf_rule_t.has_icon_set_floor` |
+| `fm_cf_rule_t.op_engaged` | `fm_cf_rule_t.has_op` |
+| `fm_cf_rule_t.rank_engaged` | `fm_cf_rule_t.has_rank` |
+| `fm_cf_rule_t.std_dev_engaged` | `fm_cf_rule_t.has_std_dev` |
+| `fm_cf_rule_t.time_period_engaged` | `fm_cf_rule_t.has_time_period` |
 | `FM_CF_TIME_PERIOD_LAST_7_DAYS` | `FM_DATE_PERIOD_LAST_7_DAYS` |
 | `FM_CF_TIME_PERIOD_LAST_MONTH` | `FM_DATE_PERIOD_LAST_MONTH` |
 | `FM_CF_TIME_PERIOD_LAST_WEEK` | `FM_DATE_PERIOD_LAST_WEEK` |
@@ -1392,6 +1483,9 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_DRAWING_OBJECT_SHAPE` | `FM_DRAWING_OBJECT_KIND_SHAPE` |
 | `fm_drawing_object` | `fm_drawing_object_info_t` |
 | `fm_dxf_record` | `fm_dxf_t` |
+| `fm_dxf_t.border_engaged` | `fm_dxf_t.has_border` |
+| `fm_dxf_t.fill_engaged` | `fm_dxf_t.has_fill` |
+| `fm_dxf_t.font_engaged` | `fm_dxf_t.has_font` |
 | `fm_dxf_t.num_fmt_code` | `fm_dxf_t.number_format` |
 | `FM_DYNAMIC_FILTER_ABOVE_AVERAGE` | `FM_DYNAMIC_FILTER_TYPE_ABOVE_AVERAGE` |
 | `FM_DYNAMIC_FILTER_BELOW_AVERAGE` | `FM_DYNAMIC_FILTER_TYPE_BELOW_AVERAGE` |
@@ -1463,6 +1557,10 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_GRADIENT_LINEAR` | `FM_GRADIENT_TYPE_LINEAR` |
 | `FM_GRADIENT_PATH` | `FM_GRADIENT_TYPE_PATH` |
 | `fm_gradient_stop` | `fm_gradient_stop_t` |
+| `fm_header_footer_t.align_with_margins_engaged` | `fm_header_footer_t.has_align_with_margins` |
+| `fm_header_footer_t.different_first_engaged` | `fm_header_footer_t.has_different_first` |
+| `fm_header_footer_t.different_odd_even_engaged` | `fm_header_footer_t.has_different_odd_even` |
+| `fm_header_footer_t.scale_with_doc_engaged` | `fm_header_footer_t.has_scale_with_doc` |
 | `fm_hyperlink` | `fm_hyperlink_t` |
 | `FM_ICON_SET_3_ARROWS_GRAY` | `FM_ICON_SET_NAME_3_ARROWS_GRAY` |
 | `FM_ICON_SET_3_ARROWS` | `FM_ICON_SET_NAME_3_ARROWS` |
@@ -1494,13 +1592,18 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_merge_range` | folded into `fm_cell_rect_t` |
 | `fm_page_break_t` | `fm_row_break_t` |
 | `fm_page_layout` | `fm_page_layout_info_t` |
-| `fm_page_margins_t.bottom_engaged` | `fm_page_margins_t.bottom_in_engaged` |
-| `fm_page_margins_t.footer_engaged` | `fm_page_margins_t.footer_in_engaged` |
-| `fm_page_margins_t.header_engaged` | `fm_page_margins_t.header_in_engaged` |
-| `fm_page_margins_t.left_engaged` | `fm_page_margins_t.left_in_engaged` |
-| `fm_page_margins_t.right_engaged` | `fm_page_margins_t.right_in_engaged` |
-| `fm_page_margins_t.top_engaged` | `fm_page_margins_t.top_in_engaged` |
-| `fm_page_setup_t.scale_engaged` | `fm_page_setup_t.scale_pct_engaged` |
+| `fm_page_margins_t.bottom_engaged` | `fm_page_margins_t.has_bottom_in` |
+| `fm_page_margins_t.footer_engaged` | `fm_page_margins_t.has_footer_in` |
+| `fm_page_margins_t.header_engaged` | `fm_page_margins_t.has_header_in` |
+| `fm_page_margins_t.left_engaged` | `fm_page_margins_t.has_left_in` |
+| `fm_page_margins_t.right_engaged` | `fm_page_margins_t.has_right_in` |
+| `fm_page_margins_t.top_engaged` | `fm_page_margins_t.has_top_in` |
+| `fm_page_setup_t.fit_to_height_engaged` | `fm_page_setup_t.has_fit_to_height` |
+| `fm_page_setup_t.fit_to_page_engaged` | `fm_page_setup_t.has_fit_to_page` |
+| `fm_page_setup_t.fit_to_width_engaged` | `fm_page_setup_t.has_fit_to_width` |
+| `fm_page_setup_t.orientation_engaged` | `fm_page_setup_t.has_orientation` |
+| `fm_page_setup_t.paper_size_engaged` | `fm_page_setup_t.has_paper_size` |
+| `fm_page_setup_t.scale_engaged` | `fm_page_setup_t.has_scale_pct` |
 | `fm_pagination_horizontal_break_at` | `fm_pagination_get_row_break_at` |
 | `fm_pagination_horizontal_break_count` | `fm_pagination_get_row_break_count` |
 | `fm_pagination_horizontal_break_is_manual` | removed |
@@ -1648,6 +1751,10 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_pivot_style_info_t` | `fm_pivot_style_options_t` |
 | `fm_pivot_style_options_t.show_col_headers` | `fm_pivot_style_options_t.show_column_headers` |
 | `fm_pivot_style_options_t.show_col_stripes` | `fm_pivot_style_options_t.show_column_stripes` |
+| `fm_print_options_t.grid_lines_engaged` | `fm_print_options_t.has_grid_lines` |
+| `fm_print_options_t.headings_engaged` | `fm_print_options_t.has_headings` |
+| `fm_print_options_t.horizontal_centered_engaged` | `fm_print_options_t.has_horizontal_centered` |
+| `fm_print_options_t.vertical_centered_engaged` | `fm_print_options_t.has_vertical_centered` |
 | `fm_print_range_t` | folded into `fm_cell_rect_t` |
 | `fm_print_titles_t.has_cols` | `fm_print_titles_t.has_columns` |
 | `fm_print_titles` | `fm_print_titles_t` |
@@ -1722,7 +1829,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_range_style_bases_excluding` | `fm_sheet_get_range_xf_bases_excluding` |
 | `fm_sheet_range_style_bases` | `fm_sheet_get_range_xf_bases` |
 | `fm_sheet_remap_range_style` | `fm_sheet_remap_range_xfs` |
-| `fm_sheet_remove_auto_filter` | removed |
+| `fm_sheet_remove_auto_filter` | removed; use `fm_sheet_set_auto_filter` |
 | `fm_sheet_remove_col_break` | removed |
 | `fm_sheet_remove_row_break` | removed |
 | `fm_sheet_remove_validation_at` | `fm_sheet_remove_validation` |
@@ -1832,6 +1939,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_STATUS_FN_DOMAIN_ERROR` | removed |
 | `FM_STATUS_FN_HOST_NOT_AVAILABLE` | removed |
 | `FM_STATUS_FN_NOT_REGISTERED` | removed |
+| `FM_STATUS_FN_OVERFLOW` | `FM_STATUS_FUNCTION_OVERFLOW` |
 | `FM_STATUS_FN_REGEX_COMPILE` | removed |
 | `FM_STATUS_FN_REGEX_MATCH_LIMIT` | removed |
 | `FM_STATUS_FN_UNDERFLOW` | removed |
@@ -1858,6 +1966,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_STATUS_PRINT_LAYOUT_CONVERGENCE` | removed |
 | `FM_STATUS_SEC_EXTERNAL_NOT_ALLOWED` | removed |
 | `FM_STATUS_SEC_POLICY_BLOCKED` | removed |
+| `FM_STATUS_SEC_RESOURCE_LIMIT` | `FM_STATUS_SECURITY_RESOURCE_LIMIT` |
 | `FM_STATUS_SLICER_NOT_CONNECTED` | removed |
 | `FM_STATUS_SPARKLINE_INVALID` | removed |
 | `fm_status_string` | `fm_get_status_name` |
@@ -1901,7 +2010,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_table_clear_auto_filter` | `fm_sheet_clear_table_auto_filter_criteria` |
 | `fm_table_evaluate_auto_filter` | `fm_sheet_evaluate_table_auto_filter` |
 | `fm_table_get_auto_filter` | `fm_sheet_get_table_auto_filter` |
-| `fm_table_remove_auto_filter` | removed |
+| `fm_table_remove_auto_filter` | removed; use `fm_sheet_set_table_auto_filter` |
 | `fm_table_set_auto_filter` | `fm_sheet_set_table_auto_filter` |
 | `fm_table_style_element_t.has_dxf_id` | `fm_table_style_element_t.has_dxf_index` |
 | `fm_text_compare` | `fm_compare_text` |
@@ -1934,7 +2043,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_cell_at` | `fm_sheet_get_cell_at` |
 | `fm_workbook_cell_count` | `fm_sheet_get_cell_count` |
 | `fm_workbook_cf_evaluate_range` | `fm_sheet_evaluate_cf_range` |
-| `fm_workbook_clear_pinned_now` | removed |
+| `fm_workbook_clear_pinned_now` | removed; use `fm_workbook_set_pinned_now` |
 | `fm_workbook_create` | `fm_workbook_create_default` |
 | `fm_workbook_date1904` | `fm_workbook_get_date1904` |
 | `fm_workbook_defined_name_at` | `fm_workbook_get_defined_name_at` |
@@ -2028,7 +2137,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_pivot_field_add_subtotal_fn` | `fm_sheet_add_pivot_field_subtotal_function` |
 | `fm_workbook_pivot_field_add` | `fm_sheet_add_pivot_field` |
 | `fm_workbook_pivot_field_at` | `fm_sheet_get_pivot_field_at` |
-| `fm_workbook_pivot_field_clear_date_group` | `fm_sheet_clear_pivot_field_date_group` |
+| `fm_workbook_pivot_field_clear_date_group` | removed; use `fm_sheet_set_pivot_field_date_group` |
 | `fm_workbook_pivot_field_clear_items` | `fm_sheet_clear_pivot_field_items` |
 | `fm_workbook_pivot_field_clear_subtotal_fns` | `fm_sheet_clear_pivot_field_subtotal_functions` |
 | `fm_workbook_pivot_field_clear` | `fm_sheet_clear_pivot_fields` |
@@ -2098,7 +2207,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_set_text` | `fm_sheet_set_text` |
 | `fm_workbook_sheet_count` | `fm_workbook_get_sheet_count` |
 | `fm_workbook_sheet_name` | `fm_workbook_get_sheet_name` |
-| `fm_workbook_spill_info` | `fm_sheet_get_spill_info` |
+| `fm_workbook_spill_info` | `fm_sheet_get_spill` |
 | `fm_workbook_table_at` | `fm_sheet_get_table_at` |
 | `fm_workbook_table_count` | `fm_sheet_get_table_count` |
 | `fm_workbook_table_create` | `fm_sheet_add_table` |
@@ -2236,7 +2345,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `clearColumnStyle()` | `resetColumnXfIndex()` |
 | `clearColumnWidth()` | `resetColumnWidth()` |
 | `clearConditionalFormats()` | `clearCfRules()` |
-| `clearPinnedNow()` | removed |
+| `clearPinnedNow()` | removed; use `setPinnedNow()` |
 | `clearRowHeight()` | `resetRowHeight()` |
 | `clearRowStyle()` | `resetRowXfIndex()` |
 | `clearSheetBreaks()` | `clearBreaks()` |
@@ -2525,7 +2634,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotFieldAddSubtotalFn()` | `ws.pivot(...).addFieldSubtotalFunction()` |
 | `pivotFieldAt()` | removed; use `listPivotFields()` |
 | `pivotFieldClear()` | `ws.pivot(...).clearFields()` |
-| `pivotFieldClearDateGroup()` | `ws.pivot(...).clearFieldDateGroup()` |
+| `pivotFieldClearDateGroup()` | removed; use `ws.pivot(...).setFieldDateGroup()` |
 | `pivotFieldClearItems()` | `ws.pivot(...).clearFieldItems()` |
 | `pivotFieldClearSubtotalFns()` | `ws.pivot(...).clearFieldSubtotalFunctions()` |
 | `pivotFieldCount()` | removed; use `listPivotFields()` |
@@ -2586,6 +2695,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotSetOptions()` | `ws.pivot(...).updateOptions()` |
 | `pivotSetRowFieldOrder()` | `ws.pivot(...).setRowFieldOrder()` |
 | `pivotSetStyleInfo()` | `ws.pivot(...).updateStyleOptions()` |
+| `PivotShowAsBase.PIVOT_SHOW_AS_BASE_NEXT` | `PivotShowAsBase.Next` |
+| `PivotShowAsBase.PIVOT_SHOW_AS_BASE_PREVIOUS` | `PivotShowAsBase.Previous` |
 | `pivotShowDetails()` | `ws.pivot(...).showDetails()` |
 | `PivotStyleInfo` | `PivotStyleOptions` |
 | `PivotStyleInfoInput` | `PivotStyleOptionsPatch` |
@@ -2614,7 +2725,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `ReferenceRangeInput.rect` | `ReferenceRangeInput.range` |
 | `refMode()` | `getRefMode()` |
 | `remapRangeStyle()` | `remapRangeXfs()` |
-| `removeAutoFilter()` | removed |
+| `removeAutoFilter()` | removed; use `setAutoFilter()` |
 | `removeChartSeries()` | `ws.chart(...).removeSeries()` |
 | `removeConditionalFormatAt()` | `removeCfRule()` |
 | `removeHyperlinkAt()` | removed |
@@ -2623,7 +2734,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `removeSheetColBreak()` | removed |
 | `removeSheetRowBreak()` | removed |
 | `removeSlicer()` | `removeDrawing()` |
-| `removeTableAutoFilter()` | removed |
+| `removeTableAutoFilter()` | removed; use `ws.table(...).setAutoFilter()` |
 | `removeValidationAt()` | `removeValidation()` |
 | `renameSheet()` | `wb.sheet(...).rename()` |
 | `renameTableColumn()` | `ws.table(...).renameColumn()` |
@@ -2752,7 +2863,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `SparklineGroupInput.dateAxisRef` | `SparklineGroupInput.dateAxisRange` |
 | `SparklineGroupResult` | removed |
 | `Spill.rect` | `Spill.range` |
-| `spillInfo()` | `getSpillInfo()` |
+| `spillInfo()` | `getSpill()` |
 | `SpillInfo` | `Spill` |
 | `Status.status` | `Status.code` |
 | `Status` | removed |
@@ -2875,7 +2986,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `clear_column_style()` | `reset_column_xf_index()` |
 | `clear_column_width()` | `reset_column_width()` |
 | `clear_conditional_formats()` | `clear_cf_rules()` |
-| `clear_pinned_now()` | removed |
+| `clear_pinned_now()` | removed; use `set_pinned_now()` |
 | `clear_row_height()` | `reset_row_height()` |
 | `clear_row_style()` | `reset_row_xf_index()` |
 | `clear_table_auto_filter()` | `ws.table(...).clear_auto_filter_criteria()` |
@@ -3072,7 +3183,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_field_add_subtotal_fn()` | `ws.pivot(...).add_field_subtotal_function()` |
 | `pivot_field_at()` | removed; use `list_pivot_fields()` |
 | `pivot_field_clear()` | `ws.pivot(...).clear_fields()` |
-| `pivot_field_clear_date_group()` | `ws.pivot(...).clear_field_date_group()` |
+| `pivot_field_clear_date_group()` | removed; use `ws.pivot(...).set_field_date_group()` |
 | `pivot_field_clear_items()` | `ws.pivot(...).clear_field_items()` |
 | `pivot_field_clear_subtotal_fns()` | `ws.pivot(...).clear_field_subtotal_functions()` |
 | `pivot_field_count()` | removed; use `list_pivot_fields()` |
@@ -3127,6 +3238,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `PivotItemInfo` | `PivotItem` |
 | `PivotLayout.rect` | `PivotLayout.range` |
 | `PivotOptions.show_empty_col` | `PivotOptions.show_empty_column` |
+| `PivotShowAsBase.PIVOT_SHOW_AS_BASE_NEXT` | `PivotShowAsBase.NEXT` |
+| `PivotShowAsBase.PIVOT_SHOW_AS_BASE_PREVIOUS` | `PivotShowAsBase.PREVIOUS` |
 | `PivotStyleInfo` | `PivotStyleOptions` |
 | `PivotStyleOptions.name` | `PivotStyleOptions.style_name` |
 | `PivotWorksheetSource.ref` | `PivotWorksheetSource.range` |
@@ -3142,7 +3255,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `RectPt.width` | `RectPt.width_pt` |
 | `ref_mode()` | `get_ref_mode()` |
 | `remap_range_style()` | `remap_range_xfs()` |
-| `remove_auto_filter()` | removed |
+| `remove_auto_filter()` | removed; use `set_auto_filter()` |
 | `remove_chart_series()` | `ws.chart(...).remove_series()` |
 | `remove_col_break()` | removed |
 | `remove_conditional_format_at()` | `remove_cf_rule()` |
@@ -3151,7 +3264,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `remove_row_break()` | removed |
 | `remove_shape()` | `remove_drawing()` |
 | `remove_slicer()` | `remove_drawing()` |
-| `remove_table_auto_filter()` | removed |
+| `remove_table_auto_filter()` | removed; use `ws.table(...).set_auto_filter()` |
 | `remove_validation_at()` | `remove_validation()` |
 | `rename_sheet()` | `wb.sheet(...).rename()` |
 | `restore_range_style()` | `restore_range_xfs()` |
@@ -3250,7 +3363,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `SparklineEmptyCells` | folded into `BlanksAs` |
 | `SparklineGroup.date_axis_ref` | `SparklineGroup.date_axis_range` |
 | `Spill.rect` | `Spill.range` |
-| `spill_info()` | `get_spill_info()` |
+| `spill_info()` | `get_spill()` |
 | `SpillInfo` | `Spill` |
 | `StyleBatchIndices` | removed |
 | `table_create()` | `add_table()` |
@@ -3467,6 +3580,18 @@ through its operation instead.
 | `fm_picture_insert_spec_t` | begins with `struct_size`; every record taken by pointer does |
 | series `c:idx`, xf indices and counts | `uint32_t`; positional indices are `size_t`, and every enum field is `int32_t` |
 | 52 status codes | removed from `formulon_status.h` because no function returned them: 1, 5, 1002, 1008, 1011, 1012, 2000 to 2008, 3000 to 3003, 3005 to 3008, 4000, 4001, 4002, 4004, 4006, 5001, 5008, 5009, 5013, 5015, 5017, 5052, 6000 to 6004, 6006, 6007, 7004, 8000 to 8004, 9000, 9001, 9003 and 9004. The matching `StatusCode` members and Python names go with them; the general codes 7 and 9 and the specific codes still returned stay |
+| `fm_sheet_get_spill_info(wb, sheet_index, row, col, fm_spill_info_t*)`, and `engaged` in `fm_spill_info_t` and `fm_array_formula_info_t` | `fm_sheet_get_spill(wb, sheet_index, row, col, int32_t* out_present, fm_spill_info_t* out)` and `fm_sheet_get_array_formula(..., int32_t* out_present, fm_array_formula_info_t* out)`; the records lose `engaged`, and a blocked anchor is present with `blocked` set |
+| `fm_sheet_get_cell_xf_index(wb, sheet_index, row, col, uint32_t* out)`, which wrote 0 for a cell with no XF | `(…, int32_t* out_present, uint32_t* out_xf_index)` |
+| `fm_table_style_options_t.present`, `fm_pivot_style_options_t.present` | `int32_t* out_present` before the out record of `fm_sheet_get_table_style_options` and `fm_sheet_get_pivot_style_options`; a NULL `out_present` is `FM_STATUS_INVALID_ARGUMENT` |
+| `fm_sheet_clear_pivot_field_date_group` | removed; `fm_sheet_set_pivot_field_date_group(..., NULL)` clears the grouping |
+| `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050), `FM_STATUS_INVALID_SHEET_NAME` (5051), `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (5053), `FM_STATUS_INDEX_OUT_OF_RANGE` (5054), `FM_STATUS_FN_OVERFLOW`, `FM_STATUS_SEC_RESOURCE_LIMIT` | (10), (11), (12) and (13); `FM_STATUS_FUNCTION_OVERFLOW` and `FM_STATUS_SECURITY_RESOURCE_LIMIT`. 5050 to 5054 are retired and never reused |
+| `<field>_engaged` presence fields (`fm_page_setup_t`, `fm_page_margins_t`, `fm_print_options_t`, `fm_header_footer_t`, `fm_cf_rule_t`, `fm_dxf_t` records and the others) | `has_<field>` |
+| a `-1`, `UINT32_MAX` or `0xFFFFFFFF` meaning "none" in a record field: `fm_pivot_field_info_t` `cache_field_index` and `group_base_index`, `fm_pivot_item_info_t.cache_index`, `fm_pivot_data_field_t` `show_as_base_field` and `show_as_base_item`, `fm_pivot_cache_options_t.missing_items_limit`, `fm_function_metadata_info_t.max_arity`, `fm_filter_column_t.dxf_index` | `has_<field>` before a `uint32_t` field. `fm_filter_column_t` has no `struct_size` and gains `has_dxf_index`, so its array stride changes |
+| `-1` as a pivot `axis` (`fm_pivot_field_spec_t`, `fm_pivot_field_info_t`, `fm_sheet_set_pivot_field_axis`) and as `fm_chart_plot_info_t.extended_layout` | `FM_PIVOT_AXIS_ABSENT` and `FM_CHART_EXTENDED_LAYOUT_ABSENT` |
+| `fm_cf_match_info_t.has_bar_border` and the colour presence flags of `fm_cf_rule_t` (`has_data_bar_*`) | removed; an absent colour is `FM_COLOR_KIND_NONE`, as in every other colour field. A sparkline group colour is cleared with `CLEAR` |
+| `-1` as the workbook scope of a defined name (`fm_defined_name_t.local_sheet_id` and three functions), `SIZE_MAX` as no excluded data field, the numbers 1048828 and 1048829 as show-as base items | `FM_DEFINED_NAME_SCOPE_WORKBOOK`, `FM_PIVOT_DATA_FIELD_NONE`, `FM_PIVOT_SHOW_AS_BASE_PREVIOUS` and `FM_PIVOT_SHOW_AS_BASE_NEXT` |
+| `fm_chart_title_t` `text` and `formula` read as `""` when the title kind does not use them | `NULL` for the unused field; as input `NULL` and `""` both read as empty |
+| a C parameter that names a column or a plot group as `index` | `column_index` and `plot_index` (names only, no ABI change) |
 
 **Additive changes (no ABI break).** `fm_convert_civil_to_serial` and
 `fm_convert_serial_to_civil` convert between a civil time and a serial for
@@ -3660,7 +3785,7 @@ order.
   `na_as_blank` in `fm_chart_info_t` (`naAsBlank`, `na_as_blank`), the
   `na_as_blank` field of the display patch, and a preview override. Turning it
   off removes the extension, as Excel writes it.
-- `fm_sheet_get_spill_info` (`getSpillInfo`, `get_spill_info`) reports a spill that is
+- `fm_sheet_get_spill` (`getSpill`, `get_spill`) reports a spill that is
   blocked with `#SPILL!`: at the anchor, `blocked` is 1 and the anchor, rows
   and columns give the range the spill tried to fill, so a host can outline
   it as Excel does.

@@ -9,10 +9,10 @@
 // Positional wrappers over the C setters that take a record, for tests that
 // set every field.
 
-// Sets the defined name `name` to `formula` in scope `local_sheet_id` (`-1`
-// for workbook scope), with no comment and not hidden.
+// Sets the defined name `name` to `formula` in scope `local_sheet_id`
+// (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope), with no comment and not hidden.
 inline fm_status_t SetDefinedName(fm_workbook_t* wb, const char* name, const char* formula,
-                                  std::int32_t local_sheet_id = -1) {
+                                  std::int32_t local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK) {
   const fm_defined_name_t input{sizeof(fm_defined_name_t), name, formula, local_sheet_id, nullptr, 0};
   return fm_workbook_set_defined_name(wb, &input);
 }

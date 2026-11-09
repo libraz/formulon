@@ -630,7 +630,8 @@ def _rule_status_doc(ctx: Context) -> Iterable[Violation]:
 @_owned("R44.singleton.null")
 def _rule_singleton_null(ctx: Context) -> Iterable[Violation]:
     """A singleton (a noun with no `add` / `create`, outside every collection, not a plural) has no `remove` or
-    `clear` op: `set<X>(null)` removes it. A `reset` op restores the default of a noun that has a `set`."""
+    `clear` op: `set<X>(null)` removes it. A `reset` op restores the default of a noun that has a `set`, or whose
+    parts (`<noun>_<part>`) each have one."""
     in_collection = set(_collection_of(ctx))
     plurals = {c.get("plural") for c in ctx.ledger.collections.values() if isinstance(c, dict)}
     nouns: Dict[str, Dict[str, str]] = {}
@@ -649,7 +650,9 @@ def _rule_singleton_null(ctx: Context) -> Iterable[Violation]:
                     verb,
                     f"`{stem}` is a singleton; remove it with `set` and `null`, not `{verb}`",
                 )
-        if "reset" in verbs and "set" not in verbs:
+        parts = [verbs_of for part, verbs_of in nouns.items() if part.startswith(stem + "_")]
+        parts_settable = bool(parts) and all("set" in verbs_of for verbs_of in parts)
+        if "reset" in verbs and "set" not in verbs and not parts_settable:
             yield _ledger_violation(
                 "R44.singleton.null", verbs["reset"], "reset", f"`{stem}` has no `set` whose default `reset` restores"
             )

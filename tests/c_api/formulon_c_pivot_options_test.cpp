@@ -53,8 +53,8 @@ void AddSecondDataField(fm_workbook_t* wb) {
   spec.aggregation = FM_PIVOT_AGGREGATION_COUNT;
   spec.number_format = "";
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  spec.show_as_base_field = -1;
-  spec.show_as_base_item = -1;
+  spec.has_show_as_base_field = 0;
+  spec.has_show_as_base_item = 0;
   std::size_t index = 99;
   ASSERT_EQ(fm_sheet_add_pivot_data_field(wb, 0U, kPivot, &spec, &index), 0) << fm_get_last_error_message();
 }
@@ -147,7 +147,7 @@ fm_status_t UpdateOptionsFrom(fm_workbook_t* wb, std::size_t sheet, std::size_t 
 }
 
 /// `fm_workbook_update_pivot_cache_options` writing every member of `record`;
-/// a `missing_items_limit` of -1 clears the limit.
+/// a record without `has_missing_items_limit` clears the limit.
 fm_status_t UpdateCacheOptionsFrom(fm_workbook_t* wb, std::uint32_t cache_id, const fm_pivot_cache_options_t* record) {
   if (record == nullptr) {
     return fm_workbook_update_pivot_cache_options(wb, cache_id, nullptr);
@@ -155,7 +155,7 @@ fm_status_t UpdateCacheOptionsFrom(fm_workbook_t* wb, std::uint32_t cache_id, co
   fm_pivot_cache_options_patch_t p = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
   p.save_data_op = FM_PATCH_OP_SET;
   p.save_data = record->save_data;
-  p.missing_items_limit_op = record->missing_items_limit == -1 ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
+  p.missing_items_limit_op = record->has_missing_items_limit == 0 ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
   p.missing_items_limit = record->missing_items_limit;
   p.refresh_on_load_op = FM_PATCH_OP_SET;
   p.refresh_on_load = record->refresh_on_load;
@@ -841,8 +841,8 @@ std::string AddUnnamed(fm_workbook_t* wb, std::size_t field, fm_pivot_aggregatio
   spec.aggregation = aggregation;
   spec.number_format = "";
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  spec.show_as_base_field = -1;
-  spec.show_as_base_item = -1;
+  spec.has_show_as_base_field = 0;
+  spec.has_show_as_base_item = 0;
   std::size_t index = 99;
   EXPECT_EQ(fm_sheet_add_pivot_data_field(wb, 0U, kPivot, &spec, &index), 0) << fm_get_last_error_message();
   fm_pivot_data_field_t read = FM_STRUCT_INIT(fm_pivot_data_field_t);
@@ -1087,10 +1087,11 @@ TEST(FormulonCApiPivotOptions, CacheOptionsRoundTripThroughSave) {
   fm_pivot_cache_options_t o = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id, &o), 0);
   EXPECT_EQ(o.save_data, 1);
-  EXPECT_EQ(o.missing_items_limit, -1);
+  EXPECT_EQ(o.has_missing_items_limit, 0);
   EXPECT_EQ(o.refresh_on_load, 0);
 
   o.save_data = 0;
+  o.has_missing_items_limit = 1;
   o.missing_items_limit = 0;
   o.refresh_on_load = 1;
   ASSERT_EQ(UpdateCacheOptionsFrom(wb.handle, cache_id, &o), 0) << fm_get_last_error_message();
@@ -1117,7 +1118,8 @@ TEST(FormulonCApiPivotOptions, CacheOptionsRoundTripThroughSave) {
   fm_pivot_cache_options_t read = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_options(loaded.handle, cache_id, &read), 0);
   EXPECT_EQ(read.save_data, 0);
-  EXPECT_EQ(read.missing_items_limit, 0);
+  EXPECT_EQ(read.has_missing_items_limit, 1);
+  EXPECT_EQ(read.missing_items_limit, 0U);
   EXPECT_EQ(read.refresh_on_load, 1);
 }
 
@@ -1128,24 +1130,33 @@ TEST(FormulonCApiPivotOptions, CacheMissingItemsLimitMaxAndBoundaries) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, nullptr), 0) << fm_get_last_error_message();
   fm_pivot_cache_options_t o = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id, &o), 0);
+  o.has_missing_items_limit = 1;
   o.missing_items_limit = 32500;
   ASSERT_EQ(UpdateCacheOptionsFrom(wb.handle, cache_id, &o), 0) << fm_get_last_error_message();
   const std::string def = ExtractZipEntry(SavedPackage(wb.handle), "xl/pivotCache/pivotCacheDefinition1.xml");
   EXPECT_NE(def.find("missingItemsLimit=\"32500\""), std::string::npos) << def;
 
-  for (const std::int32_t limit : {-1, 0, 1, 1048576}) {
+  for (const std::uint32_t limit : {0U, 1U, 1048576U}) {
+    o.has_missing_items_limit = 1;
     o.missing_items_limit = limit;
     EXPECT_EQ(UpdateCacheOptionsFrom(wb.handle, cache_id, &o), 0) << limit;
     fm_pivot_cache_options_t read = FM_STRUCT_INIT(fm_pivot_cache_options_t);
     ASSERT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id, &read), 0);
+    EXPECT_EQ(read.has_missing_items_limit, 1);
     EXPECT_EQ(read.missing_items_limit, limit);
   }
-  for (const std::int32_t limit : {-2, 1048577, INT32_MIN, INT32_MAX}) {
+  o.has_missing_items_limit = 0;
+  EXPECT_EQ(UpdateCacheOptionsFrom(wb.handle, cache_id, &o), 0);
+  fm_pivot_cache_options_t automatic = FM_STRUCT_INIT(fm_pivot_cache_options_t);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id, &automatic), 0);
+  EXPECT_EQ(automatic.has_missing_items_limit, 0);
+  for (const std::uint32_t limit : {1048577U, UINT32_MAX}) {
+    o.has_missing_items_limit = 1;
     o.missing_items_limit = limit;
     EXPECT_EQ(UpdateCacheOptionsFrom(wb.handle, cache_id, &o), kInvalidArgument) << limit;
   }
   // A non-zero flag reads 1.
-  o.missing_items_limit = -1;
+  o.has_missing_items_limit = 0;
   o.save_data = 5;
   o.refresh_on_load = -3;
   ASSERT_EQ(UpdateCacheOptionsFrom(wb.handle, cache_id, &o), 0);

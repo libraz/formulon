@@ -62,8 +62,6 @@ from ._sheet import CellInput, Sheet, SheetOoxml
 from ._status import StatusCode
 from ._table import Table
 from ._workbook import (
-    PIVOT_SHOW_AS_BASE_NEXT,
-    PIVOT_SHOW_AS_BASE_PREVIOUS,
     PIVOT_VALUES_FIELD,
     UNCHANGED,
     Alignment,
@@ -270,6 +268,7 @@ from ._workbook import (
     PivotOptions,
     PivotProperties,
     PivotReportLayout,
+    PivotShowAsBase,
     PivotShowValuesAs,
     PivotSortOrder,
     PivotStyleOptions,
@@ -654,8 +653,6 @@ __all__ = [
     "Picture",
     "PictureProperties",
     "Pivot",
-    "PIVOT_SHOW_AS_BASE_NEXT",
-    "PIVOT_SHOW_AS_BASE_PREVIOUS",
     "PIVOT_VALUES_FIELD",
     "PivotAggregation",
     "PivotAxis",
@@ -682,6 +679,7 @@ __all__ = [
     "PivotOptions",
     "PivotProperties",
     "PivotReportLayout",
+    "PivotShowAsBase",
     "PivotShowValuesAs",
     "PivotSortOrder",
     "PivotWorksheetSource",

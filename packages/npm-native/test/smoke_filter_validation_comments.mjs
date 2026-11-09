@@ -65,7 +65,7 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
     assert.equal(col.dateGroups[0].year, 2026);
     assert.equal(col.dateGroups[0].month, 3);
     assert.equal(col.dateGroups[0].grouping, mod.DateTimeGrouping.Month);
-    assert.equal(col.dxfIndex, 0);
+    assert.equal(col.dxfIndex, null);
     assert.equal(got.sort, null);
     // Setting the unchanged record back is accepted.
     wb.sheet(0).setAutoFilter(got);

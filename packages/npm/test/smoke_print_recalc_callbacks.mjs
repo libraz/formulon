@@ -156,6 +156,8 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
     ]) {
       assert.equal(wb.sheet(0).ooxml.getCellXfIndex(row, col), xf);
     }
+    assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), null);
+    wb.sheet(0).ooxml.setCellXfIndex(3, 3, 0);
     assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), 0);
   } finally {
     wb.dispose();
@@ -305,6 +307,8 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
       const expected = invalidThreadCount === null ? TypeError : RangeError;
       assert.throws(() => wb.recalcParallel(invalidThreadCount), expected, String(invalidThreadCount));
     }
+    assert.throws(() => wb.recalcParallel('2'), TypeError);
+    expectFailure(() => wb.recalcParallel(-1), Module.StatusCode.InvalidArgument);
   } finally {
     wb.dispose();
   }

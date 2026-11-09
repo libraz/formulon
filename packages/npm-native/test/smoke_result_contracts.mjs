@@ -84,7 +84,7 @@ function failureProbes(wb, mod) {
     [true, () => mod.getLocaleFacts('nope')],
     [true, () => mod.compareText('a', 'b', 0, 'nope')],
     [true, () => mod.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
-    [true, () => wb.sheet(99).getSpillInfo(0, 0)],
+    [true, () => wb.sheet(99).getSpill(0, 0)],
     [true, () => wb.sheet(99).getArrayFormula(0, 0)],
     [true, () => wb.sheet(99).getFormatDefaults()],
     [true, () => wb.sheet(99).getCellRectPt({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],

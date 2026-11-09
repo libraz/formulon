@@ -81,8 +81,8 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df_spec.number_format = "";
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  df_spec.show_as_base_field = -1;
-  df_spec.show_as_base_item = -1;
+  df_spec.has_show_as_base_field = 0;
+  df_spec.has_show_as_base_item = 0;
   std::size_t df_index = 99;
   st = fm_sheet_add_pivot_data_field(wb, 0, pivot_index, &df_spec, &df_index);
   if (st != 0) {
@@ -201,8 +201,8 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df_spec.number_format = "";
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  df_spec.show_as_base_field = -1;
-  df_spec.show_as_base_item = -1;
+  df_spec.has_show_as_base_field = 0;
+  df_spec.has_show_as_base_item = 0;
   std::size_t df_index = 99;
   if (fm_status_t st = fm_sheet_add_pivot_data_field(wb, 0, pivot_index, &df_spec, &df_index); st != 0) {
     return st;
@@ -318,12 +318,13 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &date), 0);
   EXPECT_EQ(date.date_periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
   EXPECT_EQ(date.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
-  EXPECT_EQ(date.group_base_index, -1);
-  EXPECT_EQ(date.axis, -1);
+  EXPECT_EQ(date.has_group_base_index, 0);
+  EXPECT_EQ(date.axis, FM_PIVOT_AXIS_ABSENT);
   fm_pivot_field_info_t months = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 2, &months), 0);
   EXPECT_STREQ(months.source_name, "\xE6\x9C\x88 (Date)");  // 月 (Date)
-  EXPECT_EQ(months.group_base_index, 0);
+  EXPECT_EQ(months.has_group_base_index, 1);
+  EXPECT_EQ(months.group_base_index, 0U);
   EXPECT_EQ(months.date_periods, 0U);
   EXPECT_EQ(months.axis, FM_PIVOT_AXIS_ROW);
   std::uint32_t order[8] = {};
@@ -335,7 +336,8 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_index, "1900\xE5\xB9\xB4"));  // 1900年
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_index, "3\xE6\x9C\x88"));     // 3月
 
-  ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_index, 3), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 3, nullptr), 0)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_index, &field_count), 0);
   EXPECT_EQ(field_count, 2U);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &date), 0);

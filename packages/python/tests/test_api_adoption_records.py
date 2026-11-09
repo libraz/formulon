@@ -131,11 +131,16 @@ class SyntaxErrorTests(unittest.TestCase):
                 error = caught.exception
                 self.assertEqual(int(error.code), case["status"])
                 self.assertIn(
-                    error.parse_error_code.name, {re.sub(r"(?<!^)(?=[A-Z])", "_", c).upper() for c in case["codes"]}
+                    error.parse_error.code.name, {re.sub(r"(?<!^)(?=[A-Z])", "_", c).upper() for c in case["codes"]}
                 )
                 if case["start"] is not None:
                     self.assertEqual(
-                        (error.start, error.end, error.line, error.column),
+                        (
+                            error.parse_error.start,
+                            error.parse_error.end,
+                            error.parse_error.line,
+                            error.parse_error.column,
+                        ),
                         (case["start"], case["end"], case["line"], case["column"]),
                     )
 

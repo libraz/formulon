@@ -127,16 +127,17 @@ class ParseErrorPositionTest(unittest.TestCase):
                 LIB.free(formula)
 
             self.assertTrue(1000 <= status <= 1014, status)
-            error = FormulonError(status)
+            error = FormulonError._from_engine(status)
 
         self.assertIsInstance(error, FormulaSyntaxError)
         self.assertIsInstance(error, InvalidArgumentError)
         self.assertIsNotNone(error.parse_error)
         self.assertIsInstance(error.parse_error.code, ParseErrorCode)
-        self.assertEqual(error.parse_error_code, error.parse_error.code)
-        self.assertLessEqual(error.start, error.end)
-        self.assertGreaterEqual(error.line, 1)
-        self.assertGreaterEqual(error.column, 1)
+        self.assertLessEqual(error.parse_error.start, error.parse_error.end)
+        self.assertGreaterEqual(error.parse_error.line, 1)
+        self.assertGreaterEqual(error.parse_error.column, 1)
+        for retired in ("start", "end", "line", "column", "parse_error_code"):
+            self.assertFalse(hasattr(error, retired), retired)
 
     def test_fm_get_last_parse_error_reads_the_record_directly(self) -> None:
         with _RawWorkbook() as wb:
@@ -180,7 +181,7 @@ class ParseErrorPositionTest(unittest.TestCase):
         with _RawWorkbook() as wb:
             status = LIB.fm_sheet_set_number(wb, 99, 0, 0, 1.0)
             self.assertNotEqual(status, 0)
-            error = FormulonError(status)
+            error = FormulonError._from_engine(status)
 
         self.assertNotIsInstance(error, FormulaSyntaxError)
         self.assertIsNone(error.parse_error)

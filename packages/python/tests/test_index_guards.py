@@ -667,23 +667,18 @@ class IndexRangeTests(unittest.TestCase):
     def test_fractional_integer_arguments_are_rejected_without_truncation(self) -> None:
         for guard in (_uint, _sint):
             with self.subTest(guard=guard.__name__):
-                with self.assertRaises(ValueError):
-                    guard(1.5, "integer")
-                with self.assertRaises(ValueError):
-                    guard(float("nan"), "integer")
-                for not_a_number in (None, "5"):
+                for not_an_integer in (1.5, 1.0, float("nan"), True, None, "5"):
                     with self.assertRaises(TypeError):
-                        guard(not_a_number, "integer")
-                self.assertEqual(guard(1.0, "integer"), 1)
+                        guard(not_an_integer, "integer")
 
         with Workbook.create_default() as wb:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(TypeError):
                 wb.sheet(0).get_value(1.5, 0)
-            with self.assertRaises(ValueError):
+            with self.assertRaises(TypeError):
+                wb.sheet(0).get_value(1.0, 0)
+            with self.assertRaises(TypeError):
                 wb.sheet(0).set_hyperlink(1.5, 0, formulon.HyperlinkInput(target="https://example.test"))
-            # Integral real-valued inputs remain compatible with the old
-            # ``int(value)`` conversion used by this binding.
-            wb.update_iterative(enabled=True, max_iterations=100.0, max_change=0.001)
+            wb.update_iterative(enabled=True, max_iterations=100, max_change=0.001)
 
     def test_wrapping_row_does_not_overwrite_the_aliased_cell(self) -> None:
         with Workbook.create_default() as wb:
@@ -704,16 +699,20 @@ class IndexRangeTests(unittest.TestCase):
     def test_negative_indices_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_number(0, 0, 3.0)
-            for sheet, row, col in ((0, -1, 0), (0, 0, -1), (-1, 0, 0)):
-                with self.assertRaises(ValueError):
-                    wb.sheet(sheet).set_number(row, col, 99.0)
+            for row, col in ((-1, 0), (0, -1)):
+                with self.assertRaises(formulon.InvalidArgumentError) as ctx:
+                    wb.sheet(0).set_number(row, col, 99.0)
+                self.assertEqual(ctx.exception.code, formulon.StatusCode.INVALID_ARGUMENT)
+            with self.assertRaises(formulon.IndexOutOfRangeError) as ctx:
+                wb.sheet(-1)
+            self.assertEqual(ctx.exception.code, formulon.StatusCode.SHEET_INDEX_OUT_OF_RANGE)
             self.assertEqual(wb.sheet(0).get_typed_value(0, 0).number, 3.0)
 
     def test_huge_indices_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(formulon.InvalidArgumentError):
                 wb.sheet(0).set_text(2**64, 0, "wrapped")
-            with self.assertRaises(ValueError):
+            with self.assertRaises(formulon.InvalidArgumentError):
                 wb.sheet(0).set_formula(0, 2**48, "=1")
             with self.assertRaises(IndexError):
                 wb.sheet(2**32 + 0).name
@@ -722,9 +721,10 @@ class IndexRangeTests(unittest.TestCase):
 
     def test_error_message_names_the_parameter(self) -> None:
         with Workbook.create_default() as wb:
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(formulon.InvalidArgumentError) as ctx:
                 wb.sheet(0).set_number(2**32 + 5, 0, 1.0)
-            self.assertIn("row", str(ctx.exception))
+            self.assertEqual(ctx.exception.code, formulon.StatusCode.INVALID_ARGUMENT)
+            self.assertIn("row", ctx.exception.context)
 
     def test_a_wrapping_sheet_index_finds_no_handle(self) -> None:
         # A sheet index that would wrap modulo 2**32 never reaches the ABI:
@@ -747,11 +747,11 @@ class IndexRangeTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
                 wb.sheet(0).set_hyperlink(2**32 + 5, 0, formulon.HyperlinkInput(target="http://example.invalid"))
-            self.assertIn("row", str(ctx.exception))
+            self.assertIn("row", ctx.exception.context)
 
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(formulon.InvalidArgumentError) as ctx:
                 wb.sheet(0).add_merge(formulon.CellRect(first_row=-1, first_col=0, last_row=1, last_col=1))
-            self.assertIn("first_row", str(ctx.exception))
+            self.assertEqual(ctx.exception.context, "first_row=-1")
 
     def test_narrow_struct_fields_are_checked_at_their_own_width(self) -> None:
         # ``u8`` / ``u16`` fields overflow long before uint32 does, and

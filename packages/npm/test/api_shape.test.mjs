@@ -399,7 +399,7 @@ test('sheet() resolves names and indices and rejects the rest', async () => {
     expectFormulonError(() => wb.sheet('nope'), StatusCode.NotFound);
     expectFormulonError(() => wb.sheet(''), StatusCode.NotFound);
     expectFormulonError(() => wb.sheet(2), StatusCode.SheetIndexOutOfRange);
-    assert.throws(() => wb.sheet(-1), RangeError);
+    expectFormulonError(() => wb.sheet(-1), StatusCode.SheetIndexOutOfRange);
     assert.throws(() => wb.sheet(2 ** 32), RangeError);
     assert.throws(() => wb.sheet(1.5), RangeError);
     assert.throws(() => wb.sheet(true), TypeError);
@@ -673,7 +673,7 @@ test('H8: sheet() rejects a missing name, an out-of-range index and keys of the 
   await withWorkbook((wb, { StatusCode }) => {
     expectFormulonError(() => wb.sheet('nope'), StatusCode.NotFound);
     expectFormulonError(() => wb.sheet(99), StatusCode.SheetIndexOutOfRange);
-    assert.throws(() => wb.sheet(-1), RangeError);
+    expectFormulonError(() => wb.sheet(-1), StatusCode.SheetIndexOutOfRange);
     assert.throws(() => wb.sheet(1.5), RangeError);
     assert.throws(() => wb.sheet(true), TypeError);
     assert.throws(() => wb.sheet(null), TypeError);
@@ -740,16 +740,14 @@ test('a SheetRef is a Sheet, an index or a name; a Sheet of another workbook is 
 // ---- Argument guards (E1) -------------------------------------------------
 
 test('E1: a positional guard names the facade method and counts its arguments', async () => {
-  await withWorkbook((wb) => {
+  await withWorkbook((wb, { StatusCode }) => {
     const ws = wb.sheet(0);
     assert.throws(() => ws.setNumber(true, 0, 1), {
       name: 'TypeError',
       message: 'Sheet.setNumber argument 1 must be a primitive number',
     });
-    assert.throws(() => ws.setNumber(0, -1, 1), {
-      name: 'RangeError',
-      message: 'Sheet.setNumber argument 2 is outside uint32 range',
-    });
+    expectFormulonError(() => ws.setNumber(0, -1, 1), StatusCode.InvalidArgument);
+    assert.throws(() => ws.setNumber(0, 1.5, 1), RangeError);
     assert.throws(() => ws.setNumber(0, 0), {
       name: 'TypeError',
       message: 'Sheet.setNumber argument 3 must be a primitive number',
@@ -980,9 +978,15 @@ test('A5 / N4: a null pivot axis takes the field off the report; the -1 sentinel
     assert.equal(ws.pivot(pivot).listFields()[0].axis, null);
     ws.pivot(pivot).setFieldAxis(0, formulon.PivotAxis.Row);
     assert.equal(ws.pivot(pivot).listFields()[0].axis, formulon.PivotAxis.Row);
-    assert.throws(() => ws.pivot(pivot).setFieldAxis(0, -1), RangeError);
+    assert.throws(
+      () => ws.pivot(pivot).setFieldAxis(0, -1),
+      (e) => e.name === 'FormulonError' && e.code === formulon.StatusCode.InvalidArgument,
+    );
     assert.equal(ws.pivot(pivot).listFields()[0].axis, formulon.PivotAxis.Row);
-    assert.throws(() => wb.getDefinedName('x', -1), RangeError);
+    assert.throws(
+      () => wb.getDefinedName('x', -1),
+      (e) => e.name === 'FormulonError',
+    );
   } finally {
     wb.dispose();
   }
@@ -1119,10 +1123,13 @@ test('P3: a fractional or NaN iteration cap is a TypeError; a non-finite thresho
   });
 });
 
-test('P4: a scope that is no sheet index is a RangeError, one past the sheets is SheetIndexOutOfRange', async () => {
+test('P4: a fractional scope is a RangeError, a negative or past-the-end one is SheetIndexOutOfRange', async () => {
   await withWorkbook((wb, formulon) => {
     assert.throws(() => wb.setDefinedName({ name: 'N', formula: '1', scope: 1.5 }), RangeError);
-    assert.throws(() => wb.setDefinedName({ name: 'N', formula: '1', scope: -1 }), RangeError);
+    expectFormulonError(
+      () => wb.setDefinedName({ name: 'N', formula: '1', scope: -1 }),
+      formulon.StatusCode.SheetIndexOutOfRange,
+    );
     expectFormulonError(
       () => wb.setDefinedName({ name: 'N', formula: '1', scope: 2 ** 31 }),
       formulon.StatusCode.SheetIndexOutOfRange,

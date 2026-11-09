@@ -203,7 +203,7 @@ test('staged constant tables carry the ordinals the staged .d.ts declares', asyn
 // `delete` is embind's auto-added finaliser; the caller must call it.
 function makePivotWorkbook(Workbook) {
   const wb = Workbook.createDefault();
-  const cache = wb.addPivotCache(0);
+  const cache = wb.addPivotCache();
   const cacheId = cache.cacheId;
   // A cache without a worksheet source cannot be saved, so the fixture
   // declares the range its two fields and two records occupy.
@@ -652,14 +652,15 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
   const wb = Module.Workbook.createDefault();
   wb.sheet(0).setText(0, 0, '漢字');
   wb.sheet(0).setCellPhoneticRuns(0, 0, [{ start: 0, end: 2, text: 'かんじ' }]);
-  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, false);
+  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).stated, false);
   wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 0, type: 0, alignment: 0 });
-  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, true);
+  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).stated, true);
   const saved = wb.save();
   const loaded = Module.Workbook.load(saved);
   try {
     const got = loaded.sheet(0).getCellPhoneticProperties(0, 0);
-    assert.equal(got.present, true);
+    assert.equal(got.stated, true);
+    assert.equal('present' in got, false);
     assert.deepEqual([got.fontIndex, got.type, got.alignment], [0, 0, 0]);
   } finally {
     loaded.dispose();
@@ -769,8 +770,14 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
     wb.sheet(0).pivot(pivot).setFieldAxis(0, null);
     assert.deepEqual(wb.sheet(0).pivot(pivot).getRowFieldOrder(), []);
     expectFailure(() => wb.sheet(0).pivot(pivot).setFieldAxis(0, 4));
-    assert.throws(() => wb.sheet(0).pivot(pivot).setFieldAxis(0, -1), RangeError);
-    assert.throws(() => wb.sheet(0).pivot(pivot).setFieldAxis(0, -2), RangeError);
+    assert.throws(
+      () => wb.sheet(0).pivot(pivot).setFieldAxis(0, -1),
+      (e) => e.name === 'FormulonError' && e.code === Module.StatusCode.InvalidArgument,
+    );
+    assert.throws(
+      () => wb.sheet(0).pivot(pivot).setFieldAxis(0, -2),
+      (e) => e.name === 'FormulonError',
+    );
   } finally {
     wb.dispose();
   }

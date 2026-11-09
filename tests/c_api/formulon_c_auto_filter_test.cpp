@@ -33,7 +33,6 @@ constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::Form
 constexpr fm_status_t kNotFound = static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound);
 constexpr fm_status_t kAutoFilterInvalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kAutoFilterInvalid);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-constexpr std::uint32_t kAbsentDxf = std::numeric_limits<std::uint32_t>::max();
 
 struct WorkbookGuard {
   fm_workbook_t* handle = nullptr;
@@ -189,7 +188,7 @@ class EveryKind {
     columns_[4].column_offset = 4;
     columns_[4].show_button = 1;
     columns_[4].kind = 5;
-    columns_[4].dxf_index = kAbsentDxf;
+    columns_[4].has_dxf_index = 0;
     columns_[4].cell_color = 0;
 
     columns_[5].column_offset = 5;
@@ -273,7 +272,7 @@ void ExpectEveryKind(const FilterCopy& got) {
 
   const ColumnCopy& color = got.columns[4];
   EXPECT_EQ(color.record.kind, 5);
-  EXPECT_EQ(color.record.dxf_index, kAbsentDxf);
+  EXPECT_EQ(color.record.has_dxf_index, 0);
   EXPECT_EQ(color.record.cell_color, 0);
 
   const ColumnCopy& icon = got.columns[5];

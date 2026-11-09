@@ -221,8 +221,8 @@ TEST(FormulonCApiPivot, PivotMutationsInvalidateGetPivotDataFormula) {
   average_spec.aggregation = FM_PIVOT_AGGREGATION_AVERAGE;
   average_spec.number_format = "";
   average_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  average_spec.show_as_base_field = -1;
-  average_spec.show_as_base_item = -1;
+  average_spec.has_show_as_base_field = 0;
+  average_spec.has_show_as_base_item = 0;
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &average_spec), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
@@ -650,8 +650,8 @@ void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_i
   data_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   data_spec.number_format = "";
   data_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  data_spec.show_as_base_field = -1;
-  data_spec.show_as_base_item = -1;
+  data_spec.has_show_as_base_field = 0;
+  data_spec.has_show_as_base_item = 0;
   std::size_t data_field = 99;
   ASSERT_EQ(fm_sheet_add_pivot_data_field(wb, 0, pivot_index, &data_spec, &data_field), 0)
       << fm_get_last_error_message();
@@ -1013,8 +1013,8 @@ void BuildDatePivot(fm_workbook_t* wb, std::uint32_t* out_cache_id) {
   df.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df.number_format = "";
   df.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  df.show_as_base_field = -1;
-  df.show_as_base_item = -1;
+  df.has_show_as_base_field = 0;
+  df.has_show_as_base_item = 0;
   std::size_t df_index = 99;
   ASSERT_EQ(fm_sheet_add_pivot_data_field(wb, 0, pivot, &df, &df_index), 0) << fm_get_last_error_message();
 }

@@ -106,6 +106,43 @@ TEST(FormulonCApiLocale, FormulaBufferIsReplacedByTheNextCall) {
   EXPECT_STREQ(second, "=SUM(1.5,2)");
 }
 
+TEST(FormulonCApiLocale, CanonicalizeReportsSyntaxErrorsInTheLocalizedText) {
+  const char* out = nullptr;
+  fm_parse_error_info_t error = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t present = 0;
+
+  const char* truncated = "=SUMME(1;";
+  const fm_status_t rc = fm_canonicalize_formula(truncated, "mac-365-de_DE", &out);
+  EXPECT_GE(rc, 1000);
+  EXPECT_LE(rc, 1014);
+  ASSERT_EQ(fm_get_last_parse_error(&present, &error), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(error.end, 9U);
+  EXPECT_EQ(error.line, 1U);
+  EXPECT_EQ(error.column, 10U);
+
+  // The unterminated string sits at offset 23 of the typed text, not of the canonical rewrite.
+  const char* unterminated = "=WENN(A1>0;SUMME(B1:B3;\"x);0)";
+  EXPECT_GE(fm_canonicalize_formula(unterminated, "mac-365-de_DE", &out), 1000);
+  present = 0;
+  ASSERT_EQ(fm_get_last_parse_error(&present, &error), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(error.start, 23U);
+}
+
+TEST(FormulonCApiLocale, LocalizeReportsSyntaxErrorsInTheCanonicalText) {
+  const char* out = nullptr;
+  fm_parse_error_info_t error = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t present = 0;
+  const fm_status_t rc = fm_localize_formula("=SUM(1,", "mac-365-de_DE", &out);
+  EXPECT_GE(rc, 1000);
+  EXPECT_LE(rc, 1014);
+  ASSERT_EQ(fm_get_last_parse_error(&present, &error), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(error.end, 7U);
+  EXPECT_EQ(error.column, 8U);
+}
+
 TEST(FormulonCApiLocale, FormulaConversionRejectsBadArguments) {
   const char* out = nullptr;
   EXPECT_EQ(fm_localize_formula(nullptr, "mac-365-de_DE", &out), kNullPtr);

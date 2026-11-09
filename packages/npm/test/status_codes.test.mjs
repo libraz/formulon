@@ -24,10 +24,30 @@ test('StatusCode keys are PascalCase code names', async () => {
   assert.equal(StatusCode.Ok, 0);
   assert.equal(StatusCode.InvalidArgument, 2);
   assert.equal(StatusCode.ParserInvalidReference, 1004);
-  assert.equal(StatusCode.SheetIndexOutOfRange, 5050);
+  assert.equal(StatusCode.SheetIndexOutOfRange, 10);
   assert.equal(StatusCode.BindingInvalidHandle, 7000);
   for (const key of Object.keys(StatusCode)) {
     assert.match(key, /^[A-Z][A-Za-z0-9]*$/);
+  }
+});
+
+test('renamed and renumbered codes: the old names are gone and every workbook-structural code sits in the general band', async () => {
+  const { StatusCode } = await getModule();
+  assert.equal(StatusCode.FunctionOverflow, 3004);
+  assert.equal(StatusCode.SecurityResourceLimit, 6005);
+  assert.equal('FnOverflow' in StatusCode, false);
+  assert.equal('SecResourceLimit' in StatusCode, false);
+  assert.deepEqual(
+    [
+      StatusCode.SheetIndexOutOfRange,
+      StatusCode.InvalidSheetName,
+      StatusCode.SheetCountLimitExceeded,
+      StatusCode.IndexOutOfRange,
+    ],
+    [10, 11, 12, 13],
+  );
+  for (const retired of [5050, 5051, 5052, 5053, 5054]) {
+    assert.equal(Object.values(StatusCode).includes(retired), false, `${retired} is retired`);
   }
 });
 

@@ -121,10 +121,16 @@ fm_status_t UpdateStyleDefaults(fm_workbook_t* wb, const char* table_style, cons
   return fm_workbook_update_table_style_defaults(wb, &patch);
 }
 
-fm_table_style_options_t StyleOptions(const fm_workbook_t* wb, std::size_t index = 0U, std::size_t sheet = 0U) {
-  fm_table_style_options_t info = FM_STRUCT_INIT(fm_table_style_options_t);
-  EXPECT_EQ(fm_sheet_get_table_style_options(wb, sheet, index, &info), 0);
-  return info;
+/// The style record together with the `out_present` flag of the getter.
+struct TableStyleRead : fm_table_style_options_t {
+  std::int32_t present = 0;
+};
+
+TableStyleRead StyleOptions(const fm_workbook_t* wb, std::size_t index = 0U, std::size_t sheet = 0U) {
+  TableStyleRead read;
+  static_cast<fm_table_style_options_t&>(read) = FM_STRUCT_INIT(fm_table_style_options_t);
+  EXPECT_EQ(fm_sheet_get_table_style_options(wb, sheet, index, &read.present, &read), 0);
+  return read;
 }
 
 std::string Formula(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
@@ -284,7 +290,7 @@ TEST(FormulonCApiTable, UpdateStyleOptionsWritesTheElementInSchemaPosition) {
 TEST(FormulonCApiTable, GetStyleOptionsReadsTheAppliedStyle) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleLight9");
-  fm_table_style_options_t info = StyleOptions(wb.handle);
+  auto info = StyleOptions(wb.handle);
   EXPECT_EQ(info.present, 1);
   EXPECT_STREQ(info.style_name, "TableStyleLight9");
   EXPECT_EQ(info.show_first_column, 0);
@@ -300,10 +306,14 @@ TEST(FormulonCApiTable, GetStyleOptionsReadsTheAppliedStyle) {
   EXPECT_EQ(info.show_row_stripes, 0);
 
   fm_table_style_options_t ignored = FM_STRUCT_INIT(fm_table_style_options_t);
-  EXPECT_EQ(fm_sheet_get_table_style_options(wb.handle, 0, 0, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_get_table_style_options(nullptr, 0, 0, &ignored), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_get_table_style_options(wb.handle, 0, 1, &ignored), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_table_style_options(wb.handle, 9, 0, &ignored), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  std::int32_t ignored_present = 0;
+  EXPECT_EQ(fm_sheet_get_table_style_options(wb.handle, 0, 0, &ignored_present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_table_style_options(wb.handle, 0, 0, nullptr, &ignored), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_table_style_options(nullptr, 0, 0, &ignored_present, &ignored), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_table_style_options(wb.handle, 0, 1, &ignored_present, &ignored),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_style_options(wb.handle, 9, 0, &ignored_present, &ignored),
+            FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiTable, KeepOnlyStylePatchChangesNothing) {
@@ -322,7 +332,7 @@ TEST(FormulonCApiTable, UpdateStyleOptionsMergesOnlyTheSetFields) {
   patch.show_last_column_op = FM_PATCH_OP_SET;
   patch.show_last_column = 1;
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &patch), 0);
-  const fm_table_style_options_t info = StyleOptions(wb.handle);
+  const auto info = StyleOptions(wb.handle);
   EXPECT_STREQ(info.style_name, "TableStyleLight9");
   EXPECT_EQ(info.show_last_column, 1);
   EXPECT_EQ(info.show_row_stripes, 1);
@@ -336,7 +346,7 @@ TEST(FormulonCApiTable, UpdateStyleOptionsOnAnUnstyledTableCreatesTheElementWith
   patch.show_first_column_op = FM_PATCH_OP_SET;
   patch.show_first_column = 1;
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &patch), 0);
-  const fm_table_style_options_t info = StyleOptions(wb.handle);
+  const auto info = StyleOptions(wb.handle);
   EXPECT_EQ(info.present, 1);
   EXPECT_EQ(info.show_first_column, 1);
   EXPECT_EQ(info.show_row_stripes, 1) << "the creation default of a styled table";
@@ -385,7 +395,7 @@ TEST(FormulonCApiTable, AddWithoutAStyleNameTakesTheWorkbookDefault) {
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Plain", columns, 2, nullptr, 1, 0, &index),
             0);
   EXPECT_EQ(index, 0U);
-  fm_table_style_options_t info = StyleOptions(wb.handle, 0);
+  auto info = StyleOptions(wb.handle, 0);
   EXPECT_STREQ(info.style_name, "TableStyleMedium2");
   EXPECT_EQ(info.show_row_stripes, 1);
   EXPECT_EQ(info.show_first_column, 0);
@@ -412,7 +422,7 @@ TEST(FormulonCApiTable, AddWithAnEmptyStyleNameCreatesNoStyleElement) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableStyleLight9", nullptr), 0);
   CreateSalesTable(wb, "");
-  const fm_table_style_options_t info = StyleOptions(wb.handle);
+  const auto info = StyleOptions(wb.handle);
   EXPECT_EQ(info.present, 0);
   EXPECT_EQ(ExtractZipEntry(Save(wb.handle), "xl/tables/table1.xml").find("<tableStyleInfo"), std::string::npos);
 }
@@ -672,7 +682,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
 
 fm_dxf_t FillDxf() {
   fm_dxf_t dxf{};
-  dxf.fill_engaged = 1;
+  dxf.has_fill = 1;
   dxf.fill.pattern = 1;
   dxf.fill.foreground.kind = FM_COLOR_KIND_RGB;
   dxf.fill.foreground.argb = 0xFFDDEBF7U;
@@ -753,7 +763,7 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   EXPECT_EQ(got.elements[3].has_dxf_index, 0);
   fm_dxf_t reloaded_dxf{};
   ASSERT_EQ(fm_workbook_get_dxf_at(reloaded.handle, got.elements[0].dxf_index, &reloaded_dxf), 0);
-  EXPECT_EQ(reloaded_dxf.fill_engaged, 1);
+  EXPECT_EQ(reloaded_dxf.has_fill, 1);
 
   // Setting the record a get returned, views and all, leaves the part as it was.
   const std::string before = ExtractZipEntry(Save(reloaded.handle), "xl/styles.xml");

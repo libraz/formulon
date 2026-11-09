@@ -108,7 +108,7 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("getMergesInRange");
+  JsNarrowNumericReader reader("Sheet.getMergesInRange");
   const fm_cell_rect_t query = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();
@@ -222,7 +222,7 @@ void JsWorkbook::setWorkbookProtection(emscripten::val protection) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setWorkbookProtection");
+  JsNarrowNumericReader reader("Workbook.setWorkbookProtection");
   fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
   p.lock_structure = reader.boolean(protection, "lockStructure", false, "protection.lockStructure") ? 1 : 0;
   p.lock_windows = reader.boolean(protection, "lockWindows", false, "protection.lockWindows") ? 1 : 0;
@@ -330,7 +330,7 @@ void JsWorkbook::updateProtectedRange(uint32_t sheet, uint32_t index, emscripten
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updateProtectedRange");
+  JsNarrowNumericReader reader("Sheet.updateProtectedRange");
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
   fm_protected_range_patch_t p = FM_STRUCT_INIT(fm_protected_range_patch_t);
@@ -398,7 +398,7 @@ void JsWorkbook::addHyperlinkRange(uint32_t sheet, emscripten::val range, const 
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setHyperlinkRange");
+  JsNarrowNumericReader reader("Sheet.setHyperlinkRange");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return;
@@ -499,7 +499,7 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_add_validation` returns.
-  JsNarrowNumericReader reader("addValidation");
+  JsNarrowNumericReader reader("Sheet.addValidation");
   const emscripten::val ranges_value = reader.value(v, "ranges", "validation.ranges");
   std::vector<fm_cell_rect_t> ranges_buf;
   if (reader.require_array(ranges_value, "validation.ranges")) {
@@ -706,7 +706,7 @@ void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, emsc
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updateThreadedComment");
+  JsNarrowNumericReader reader("Sheet.updateThreadedComment");
   fm_threaded_comment_patch_t out = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
   std::string text;
   js_patch_string(reader, patch, "text", "patch.text", false, text, &out.text_op, &out.text);
@@ -742,7 +742,7 @@ void JsWorkbook::addPerson(emscripten::val person) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("addPerson");
+  JsNarrowNumericReader reader("Workbook.addPerson");
   const std::string id = reader.required_string(person, "id", "person.id");
   const std::string display_name = reader.required_string(person, "displayName", "person.displayName");
   // An omitted `userId` / `providerId` is the empty string.

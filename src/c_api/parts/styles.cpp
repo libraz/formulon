@@ -36,16 +36,10 @@ using formulon::c_api::parts::resolve_num_fmt_code;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
-namespace {
-
-/// Validates the `(handle, sheet_index, row, col)` quad and resolves
-/// the cell's `xf_index`. On failure populates the thread-local
-/// diagnostic and returns the status. On success writes
-/// `*out_xf_index` and returns `kOk`. The `xf_index` defaults to `0`
-/// (the default xf) when no cell exists at the address.
-fm_status_t resolve_xf(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
-                       std::uint32_t* out_xf_index) {
-  if (out_xf_index == nullptr) {
+extern "C" fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                  uint32_t col, int32_t* out_present, uint32_t* out_xf_index) {
+  clear_last_error();
+  if (out_present == nullptr || out_xf_index == nullptr) {
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
@@ -55,16 +49,9 @@ fm_status_t resolve_xf(const fm_workbook_t* wb, std::size_t sheet_index, std::ui
     return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
-  *out_xf_index = (cell != nullptr) ? cell->xf_index : 0U;
+  *out_present = cell != nullptr ? 1 : 0;
+  *out_xf_index = cell != nullptr ? cell->xf_index : 0U;
   return 0;
-}
-
-}  // namespace
-
-extern "C" fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                  uint32_t col, uint32_t* out_xf_index) {
-  clear_last_error();
-  return resolve_xf(wb, sheet_index, row, col, out_xf_index);
 }
 
 extern "C" fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -348,15 +335,15 @@ extern "C" fm_status_t fm_workbook_get_dxf_at(const fm_workbook_t* wb, uint32_t 
   formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t>& stops =
       fresh_arena(wb, &fm_workbook_t::gradient_stop_scratch);
   const formulon::DifferentialFormat& dxf = styles.dxfs[dxf_index];
-  out->font_engaged = dxf.has_font ? 1 : 0;
+  out->has_font = dxf.has_font ? 1 : 0;
   if (dxf.has_font) {
     font_to_c(dxf.font, &out->font);
   }
-  out->fill_engaged = dxf.has_fill ? 1 : 0;
+  out->has_fill = dxf.has_fill ? 1 : 0;
   if (dxf.has_fill) {
     fill_to_c(dxf.fill, &out->fill, stops);
   }
-  out->border_engaged = dxf.has_border ? 1 : 0;
+  out->has_border = dxf.has_border ? 1 : 0;
   if (dxf.has_border) {
     border_to_c(dxf.border, &out->border);
   }

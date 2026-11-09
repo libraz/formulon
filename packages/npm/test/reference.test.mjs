@@ -13,18 +13,17 @@ test('spillInfo reports a spill blocked by a value', async () => {
     wb.sheet(0).setFormula(1, 3, '=SEQUENCE(5)');
     wb.sheet(0).setText(3, 3, 'x');
     wb.recalc();
-    const blocked = wb.sheet(0).getSpillInfo(1, 3);
-    assert.equal(blocked.engaged, false);
+    const blocked = wb.sheet(0).getSpill(1, 3);
+    assert.equal('engaged' in blocked, false);
     assert.equal(blocked.blocked, true);
     assert.deepEqual(blocked.range, { firstRow: 1, firstCol: 3, lastRow: 5, lastCol: 3 });
     // Only the anchor reports the attempt.
-    assert.equal(wb.sheet(0).getSpillInfo(2, 3).blocked, false);
+    assert.equal(wb.sheet(0).getSpill(2, 3), null);
     wb.sheet(0).setBlank(3, 3);
     wb.recalc();
-    const engaged = wb.sheet(0).getSpillInfo(1, 3);
-    assert.equal(engaged.engaged, true);
+    const engaged = wb.sheet(0).getSpill(1, 3);
     assert.equal(engaged.blocked, false);
-    assert.equal(wb.sheet(0).getSpillInfo(0, 0).blocked, false);
+    assert.equal(wb.sheet(0).getSpill(0, 0), null);
   } finally {
     dispose(wb);
   }

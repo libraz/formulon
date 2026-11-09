@@ -236,7 +236,7 @@ Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   out.Set("fontIndex", Napi::Number::New(env, font_id));
   out.Set("type", Napi::Number::New(env, type));
   out.Set("alignment", Napi::Number::New(env, alignment));
-  out.Set("present", Napi::Boolean::New(env, present != 0));
+  out.Set("stated", Napi::Boolean::New(env, present != 0));
   return out;
 }
 

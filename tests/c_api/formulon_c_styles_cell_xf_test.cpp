@@ -8,8 +8,23 @@ TEST(FormulonCApiStyles, CellXfIndexDefaultsToZero) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t xf = 99;
-  EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, 0, 0, &xf), 0);
+  EXPECT_EQ(GetCellXfIndex(wb.handle, 0, 0, 0, &xf), 0);
   EXPECT_EQ(xf, 0U);
+}
+
+TEST(FormulonCApiStyles, CellXfIndexReportsWhetherACellExists) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::int32_t present = 7;
+  std::uint32_t xf = 99;
+  ASSERT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, 4, 4, &present, &xf), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(xf, 0U);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 4, 4, 1.0), 0);
+  ASSERT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, 4, 4, &present, &xf), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_EQ(xf, 0U);
+  EXPECT_NE(fm_sheet_get_cell_xf_index(wb.handle, 0, 4, 4, nullptr, &xf), 0);
 }
 
 TEST(FormulonCApiStyles, CellXfIndexRoundTrips) {
@@ -18,7 +33,7 @@ TEST(FormulonCApiStyles, CellXfIndexRoundTrips) {
   wb.handle->workbook().mutable_styles().cell_xfs.resize(43);
   EXPECT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 5, 7, 42), 0);
   std::uint32_t xf = 0;
-  EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, 5, 7, &xf), 0);
+  EXPECT_EQ(GetCellXfIndex(wb.handle, 0, 5, 7, &xf), 0);
   EXPECT_EQ(xf, 42U);
 }
 
@@ -31,10 +46,10 @@ TEST(FormulonCApiStyles, SetXfIndexRejectsBadSheet) {
 
 TEST(FormulonCApiStyles, NullArgumentRejected) {
   std::uint32_t xf = 0;
-  EXPECT_NE(fm_sheet_get_cell_xf_index(nullptr, 0, 0, 0, &xf), 0);
+  EXPECT_NE(GetCellXfIndex(nullptr, 0, 0, 0, &xf), 0);
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_NE(fm_sheet_get_cell_xf_index(wb.handle, 0, 0, 0, nullptr), 0);
+  EXPECT_NE(GetCellXfIndex(wb.handle, 0, 0, 0, nullptr), 0);
 }
 
 TEST(FormulonCApiStyles, GetCellXfRejectsOutOfRange) {
@@ -121,7 +136,7 @@ TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
   std::uint32_t xf = 0;
-  EXPECT_EQ(fm_sheet_get_cell_xf_index(wb2.handle, 0, 0, 0, &xf), 0);
+  EXPECT_EQ(GetCellXfIndex(wb2.handle, 0, 0, 0, &xf), 0);
   EXPECT_EQ(xf, 7U);
 }
 
@@ -388,7 +403,7 @@ TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   std::uint32_t reloaded_index = 0;
-  ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, 0, 0, &reloaded_index), 0);
+  ASSERT_EQ(GetCellXfIndex(reloaded.handle, 0, 0, 0, &reloaded_index), 0);
   fm_cell_xf_t after{};
   ASSERT_EQ(fm_workbook_get_cell_xf_at(reloaded.handle, reloaded_index, &after), 0);
   ExpectFlagged(after);

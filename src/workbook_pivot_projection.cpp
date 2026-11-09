@@ -273,7 +273,7 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
                                               const MergeRange& target, const MergeRange& own) {
   const Sheet& sheet = wb.sheet(sheet_index);
   const auto refuse = [&](const char* what) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, std::string("project_pivot: ") + what,
+    return make_error(FormulonErrorCode::kPreconditionFailed, std::string(what),
                       "sheet=" + std::to_string(sheet_index) + " pivot=" + std::to_string(pivot_index));
   };
   for (std::size_t i = 0; i < sheet.pivot_tables().size(); ++i) {
@@ -318,13 +318,13 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
 Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size_t pivot_index) {
   if (sheet_index >= sheets_.size() || pivot_index >= sheets_[sheet_index].pivot_tables().size() ||
       sheets_[sheet_index].pivot_tables()[pivot_index] == nullptr) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "project_pivot: index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range",
                       "sheet=" + std::to_string(sheet_index) + " pivot=" + std::to_string(pivot_index));
   }
   pivot::PivotTable& table = *sheets_[sheet_index].mutable_pivot_tables()[pivot_index];
   const pivot::PivotCache* cache = find_pivot_cache(table.pivot_cache_id());
   if (cache == nullptr) {
-    return make_error(FormulonErrorCode::kEvalPivotMissing, "project_pivot: pivot cache not found",
+    return make_error(FormulonErrorCode::kEvalPivotMissing, "pivot cache not found",
                       "cache_id=" + std::to_string(table.pivot_cache_id()));
   }
   // A cache saved without its records cannot be re-evaluated; the cells read
@@ -416,7 +416,7 @@ void Workbook::project_pending_pivots() {
 Expected<void, Error> Workbook::clear_pivot_projection(std::size_t sheet_index, std::size_t pivot_index) {
   if (sheet_index >= sheets_.size() || pivot_index >= sheets_[sheet_index].pivot_tables().size() ||
       sheets_[sheet_index].pivot_tables()[pivot_index] == nullptr) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "clear_pivot_projection: index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range",
                       "sheet=" + std::to_string(sheet_index) + " pivot=" + std::to_string(pivot_index));
   }
   pivot::PivotTable& table = *sheets_[sheet_index].mutable_pivot_tables()[pivot_index];

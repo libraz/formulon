@@ -55,7 +55,17 @@ from typing import (
 from xml.etree import ElementTree
 
 from . import _structs as S
-from ._c import LIB, FormulaSyntaxError, FormulonError, InvalidFileError, ValueKind, _sint, _uint, fm_value_t_size
+from ._c import (
+    LIB,
+    FormulaSyntaxError,
+    FormulonError,
+    InvalidFileError,
+    ValueKind,
+    _NoCopy,
+    _sint,
+    _uint,
+    fm_value_t_size,
+)
 from ._status import StatusCode
 
 __all__ = [
@@ -254,8 +264,6 @@ __all__ = [
     "PhoneticProperties",
     "PhoneticRun",
     "PictureProperties",
-    "PIVOT_SHOW_AS_BASE_NEXT",
-    "PIVOT_SHOW_AS_BASE_PREVIOUS",
     "PIVOT_VALUES_FIELD",
     "PivotAggregation",
     "PivotAxis",
@@ -281,6 +289,7 @@ __all__ = [
     "PivotOptions",
     "PivotProperties",
     "PivotReportLayout",
+    "PivotShowAsBase",
     "PivotShowValuesAs",
     "PivotSortOrder",
     "PivotWorksheetSource",
@@ -482,7 +491,7 @@ class ReadDiagnostics:
 def _check(status: int) -> None:
     """Raise :class:`FormulonError` (or its subclass for ``status``) if ``status`` is non-zero."""
     if status != 0:
-        raise FormulonError(status)
+        raise FormulonError._from_engine(status)
 
 
 # `_uint` / `_sint` live in `formulon._c` (imported above) alongside
@@ -756,8 +765,8 @@ class TableColumn:
 
     name: str
     totals_row_function: TableTotalsRowFunction = TableTotalsRowFunction.NONE
-    totals_row_label: str = ""
-    totals_row_formula: str = ""
+    totals_row_label: Optional[str] = None
+    totals_row_formula: Optional[str] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "totals_row_function", _enum(TableTotalsRowFunction, self.totals_row_function))
@@ -766,7 +775,7 @@ class TableColumn:
 @dataclass
 class TableColumnTotalsInput:
     """The totals-row entry :meth:`Table.set_column_totals` writes for one column. An empty
-    ``totals_row_label`` or ``totals_row_formula``, which a read gives for none, means none. A
+    ``totals_row_label`` or ``totals_row_formula``, which an empty string also gives, means none. A
     :class:`TableColumn` read back is accepted in its place; its ``name`` is ignored.
     """
 
@@ -1860,10 +1869,12 @@ class PivotSortOrder(IntEnum):
     DESCENDING = 2
 
 
-# Sentinel value for ``PivotDataFieldInput.show_as_base_item`` meaning
-# "(previous)" / "(next)" (mirrors the C ABI constants).
-PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828
-PIVOT_SHOW_AS_BASE_NEXT = 1048829
+class PivotShowAsBase(IntEnum):
+    """Special values of ``PivotDataFieldInput.show_as_base_item``: the "(previous)" / "(next)" base items."""
+
+    PREVIOUS = 1048828
+    NEXT = 1048829
+
 
 # The "Σ Values" level in a pivot row / column field order, as read by
 # ``Pivot.get_row_field_order`` / ``Pivot.get_column_field_order`` and accepted
@@ -1998,10 +2009,6 @@ class DataValidationInput:
     prompt_message: str = ""
 
 
-# `dxf_index` value meaning "no differential format".
-_FILTER_DXF_INDEX_NONE = 0xFFFFFFFF
-
-
 @dataclass
 class AutoFilterDateGroup:
     """One ``<dateGroupItem>`` of a values filter; finer fields than ``grouping`` are zero."""
@@ -2056,7 +2063,8 @@ class AutoFilterColumn:
     dynamic_max_value: Optional[float] = None
     value_iso: str = ""
     max_value_iso: str = ""
-    dxf_index: int = _FILTER_DXF_INDEX_NONE
+    #: ``None`` when the column names no differential format.
+    dxf_index: Optional[int] = None
     cell_color: bool = False
     icon_set: int = 0
     #: ``None`` when the icon filter names no icon.
@@ -2478,20 +2486,20 @@ class BlanksAs(IntEnum):
 class SparklineGroup:
     """A sparkline group of a sheet's worksheet extension list.
 
-    A colour with ``kind=0`` is absent; ``manual_min`` / ``manual_max`` are
+    Each colour is ``None`` when absent; ``manual_min`` / ``manual_max`` are
     ``None`` when the axis bound is not set. ``date_axis_range`` is the group's
     date range, ``None`` when absent or when its stored text does not parse.
     """
 
     type: SparklineType = SparklineType.LINE
-    color_series: Color = field(default_factory=lambda: Color())
-    color_negative: Color = field(default_factory=lambda: Color())
-    color_axis: Color = field(default_factory=lambda: Color())
-    color_markers: Color = field(default_factory=lambda: Color())
-    color_first: Color = field(default_factory=lambda: Color())
-    color_last: Color = field(default_factory=lambda: Color())
-    color_high: Color = field(default_factory=lambda: Color())
-    color_low: Color = field(default_factory=lambda: Color())
+    color_series: Optional[Color] = None
+    color_negative: Optional[Color] = None
+    color_axis: Optional[Color] = None
+    color_markers: Optional[Color] = None
+    color_first: Optional[Color] = None
+    color_last: Optional[Color] = None
+    color_high: Optional[Color] = None
+    color_low: Optional[Color] = None
     markers: bool = False
     high: bool = False
     low: bool = False
@@ -2524,14 +2532,14 @@ class SparklineGroupInput:
     """
 
     type: SparklineType = SparklineType.LINE
-    color_series: ColorInput = field(default_factory=lambda: Color())
-    color_negative: ColorInput = field(default_factory=lambda: Color())
-    color_axis: ColorInput = field(default_factory=lambda: Color())
-    color_markers: ColorInput = field(default_factory=lambda: Color())
-    color_first: ColorInput = field(default_factory=lambda: Color())
-    color_last: ColorInput = field(default_factory=lambda: Color())
-    color_high: ColorInput = field(default_factory=lambda: Color())
-    color_low: ColorInput = field(default_factory=lambda: Color())
+    color_series: Optional[ColorInput] = None
+    color_negative: Optional[ColorInput] = None
+    color_axis: Optional[ColorInput] = None
+    color_markers: Optional[ColorInput] = None
+    color_first: Optional[ColorInput] = None
+    color_last: Optional[ColorInput] = None
+    color_high: Optional[ColorInput] = None
+    color_low: Optional[ColorInput] = None
     markers: bool = False
     high: bool = False
     low: bool = False
@@ -2743,11 +2751,14 @@ class ChartDataSource:
 
 @dataclass(frozen=True)
 class ChartTitle:
-    """A chart or axis title; ``text`` is the flattened rich text (``TEXT``), ``formula`` the reference (``REF``)."""
+    """A chart or axis title; ``text`` is the flattened rich text (``TEXT``), ``formula`` the reference (``REF``).
+
+    The member the ``kind`` does not use is ``None``; a ``TEXT`` title needs ``text``.
+    """
 
     kind: ChartTitleKind
-    text: str = ""
-    formula: str = ""
+    text: Optional[str] = None
+    formula: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -3243,11 +3254,11 @@ class ProtectedRange:
     ranges: Union[Sequence[Union[CellRect, str]], str]
     #: The legacy 16-bit password hash (hex, ``password``); ``None`` when absent.
     legacy_password_hash: Optional[str] = None
-    algorithm_name: str = ""
-    hash_value: str = ""
-    salt_value: str = ""
+    algorithm_name: Optional[str] = None
+    hash_value: Optional[str] = None
+    salt_value: Optional[str] = None
     spin_count: int = 0
-    security_descriptor: str = ""
+    security_descriptor: Optional[str] = None
 
 
 @dataclass
@@ -3260,11 +3271,11 @@ class ProtectedRangeInput:
     ranges: Union[Sequence[Union[CellRect, str]], str]
     #: The legacy 16-bit password hash (hex, ``password``); ``None`` when absent.
     legacy_password_hash: Optional[str] = None
-    algorithm_name: str = ""
-    hash_value: str = ""
-    salt_value: str = ""
+    algorithm_name: Optional[str] = None
+    hash_value: Optional[str] = None
+    salt_value: Optional[str] = None
     spin_count: int = 0
-    security_descriptor: str = ""
+    security_descriptor: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -3454,7 +3465,8 @@ class Pagination:
     #: Effective print scale as a percentage (100 is 100%).
     scale_pct: float
     page_order: PageOrder
-    print_titles: "PrintTitles"
+    #: ``None`` when the sheet repeats neither rows nor columns.
+    print_titles: Optional["PrintTitles"]
     pages: List["PageLayout"]
 
     def __post_init__(self) -> None:
@@ -3636,7 +3648,6 @@ class PageSetup:
     fit_to_width: int
     fit_to_height: int
     fit_to_page: bool
-    orientation_stated: bool
     paper_size_stated: bool
     scale_pct_stated: bool
     fit_to_width_stated: bool
@@ -3859,8 +3870,8 @@ class ConditionalFormat:
     stop_if_true: bool
     ranges: List[CellRect]
     dxf_index: Optional[int]
-    formula1: str
-    formula2: str
+    formula1: Optional[str]
+    formula2: Optional[str]
     operator: Optional[ComparisonOperator]
     rank: Optional[int]
     percent: bool
@@ -3868,7 +3879,7 @@ class ConditionalFormat:
     above_average: bool
     equal_average: bool
     std_dev: Optional[float]
-    text: str
+    text: Optional[str]
     time_period: Optional[DatePeriod]
     color_scale: Optional[ColorScale]
     data_bar: Optional[DataBar]
@@ -3897,8 +3908,8 @@ class ConditionalFormatInput:
     stop_if_true: bool = False
     id: str = ""
     dxf_index: Optional[int] = None
-    formula1: str = ""
-    formula2: str = ""
+    formula1: Optional[str] = None
+    formula2: Optional[str] = None
     operator: Optional[ComparisonOperator] = None
     rank: Optional[int] = None
     percent: bool = False
@@ -3906,7 +3917,7 @@ class ConditionalFormatInput:
     above_average: bool = False
     equal_average: bool = False
     std_dev: Optional[float] = None
-    text: str = ""
+    text: Optional[str] = None
     time_period: Optional[DatePeriod] = None
     color_scale: Optional[ColorScale] = None
     data_bar: Optional[DataBar] = None
@@ -3926,12 +3937,10 @@ class CellNode:
 class Spill:
     """Dynamic-array spill region info for a cell."""
 
-    engaged: bool
     #: ``True`` when the cell anchors a spill that could not fill its footprint.
     blocked: bool
-    #: The region including its anchor (for a blocked anchor, the footprint it attempted); ``None`` when the
-    #: cell is neither part of a spill nor a blocked anchor.
-    range: Optional[CellRect]
+    #: The region including its anchor (for a blocked anchor, the footprint it attempted).
+    range: CellRect
 
 
 @dataclass(frozen=True)
@@ -4125,7 +4134,7 @@ class PhoneticRun:
 class PhoneticProperties:
     """Result of :meth:`Sheet.get_cell_phonetic_properties`; the fields are those of ``set_cell_phonetic_properties``.
 
-    ``present`` is true when the properties are explicit (a ``<phoneticPr>``
+    ``stated`` is true when the properties are explicit (a ``<phoneticPr>``
     element or :meth:`Sheet.set_cell_phonetic_properties`, an all-zero triple
     included), false for the state an absent element resolves to.
     """
@@ -4133,7 +4142,7 @@ class PhoneticProperties:
     font_index: int = 0
     type: PhoneticType = PhoneticType.HALFWIDTH_KATAKANA
     alignment: PhoneticAlignment = PhoneticAlignment.NO_CONTROL
-    present: bool = False
+    stated: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", _enum(PhoneticType, self.type))
@@ -4407,6 +4416,11 @@ def _decode_color(ptr: int) -> Color:
     return _color_from(S.COLOR_SPEC.unpack(LIB, ptr))
 
 
+def _decode_optional_color(ptr: int) -> Optional[Color]:
+    """:func:`_decode_color`, ``None`` for an absent colour (``ColorKind.NONE``)."""
+    return _optional_color_from(S.COLOR_SPEC.unpack(LIB, ptr))
+
+
 def _color_fields(spec: Color) -> Dict[str, object]:
     """The colour-spec record fields of ``spec``."""
     return {
@@ -4433,6 +4447,11 @@ def _optional_color_from(d: Mapping[str, Any]) -> Optional[Color]:
 def _pack_color(ptr: int, spec: ColorInput, label: str = "color") -> None:
     """Write the ``ColorInput`` ``spec`` as the colour-spec record at ``ptr``."""
     S.COLOR_SPEC.pack(LIB, ptr, _color_fields(color_input(spec, label)))
+
+
+def _pack_optional_color(ptr: int, spec: Optional[ColorInput], label: str = "color") -> None:
+    """:func:`_pack_color`, with ``None`` writing the absent colour (``ColorKind.NONE``)."""
+    _pack_color(ptr, Color() if spec is None else spec, label)
 
 
 # The font toggles whose element may be absent, each paired with a ``has_<name>`` C flag.
@@ -4752,7 +4771,8 @@ class ExternalLink:
     index: int
     rel_id: str
     part_path: str
-    target: str
+    #: ``None`` when the link's relationship part names no target.
+    target: Optional[str]
     target_external: bool
     kind: ExternalLinkKind
 
@@ -4767,8 +4787,9 @@ class PivotCell:
     value: NativeValue
     kind: PivotCellKind
     depth: int
-    field_name: str
-    number_format: str
+    #: ``None`` for a cell with no source field.
+    field_name: Optional[str]
+    number_format: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -4984,11 +5005,11 @@ class PivotOptions:
 class PivotCacheOptions:
     """The options of one pivot cache, as read by :meth:`PivotCache.get_options`.
 
-    ``missing_items_limit`` is ``-1`` for automatic, ``0`` for none, or up to 1048576.
+    ``missing_items_limit`` is ``None`` for automatic, ``0`` for none, or up to 1048576.
     """
 
     save_data: bool
-    missing_items_limit: int
+    missing_items_limit: Optional[int]
     refresh_on_load: bool
 
 
@@ -5013,7 +5034,8 @@ class PivotDataFieldInput:
     An empty or ``None`` ``name`` asks the engine to name the data field from
     the workbook profile's pivot wording (``"Sum of Sales"`` under en-US,
     ``"合計 / Sales"`` under ja-JP); that needs ``field_index`` to be in range.
-    ``show_as_base_field`` / ``show_as_base_item`` are ``None`` when unset.
+    ``show_as_base_field`` / ``show_as_base_item`` are ``None`` when unset; ``show_as_base_item`` is an item
+    index or a :class:`PivotShowAsBase` member.
     """
 
     name: Optional[str]
@@ -5052,7 +5074,8 @@ def _nullable_enum(value: Optional[int], name: str) -> int:
     if ordinal < 0:
         raise FormulonError(
             StatusCode.INVALID_ARGUMENT,
-            _diagnostic_override=(f"{name} {ordinal} is not a member; pass None for none", f"{name}={ordinal}"),
+            f"{name} {ordinal} is not a member; pass None for none",
+            f"{name}={ordinal}",
         )
     return ordinal
 
@@ -5061,11 +5084,12 @@ def _local_sheet_id(value: Optional[int]) -> int:
     """The C ``local_sheet_id``: ``-1`` for workbook scope (``None``), else the sheet index."""
     if value is None:
         return -1
-    index = _uint(value, "local_sheet_id", bits=64)
+    index = _uint(value, "scope", bits=64, role="sheet")
     if index > 0x7FFFFFFF:
         raise FormulonError(
             StatusCode.SHEET_INDEX_OUT_OF_RANGE,
-            _diagnostic_override=(f"local_sheet_id {index} is out of range", f"local_sheet_id={index}"),
+            f"scope {index} is out of range",
+            f"scope={index}",
         )
     return index
 
@@ -5242,8 +5266,8 @@ def _pack_pivot_spec(scope: _ArgScope, name: str, cache_id: int, anchor_row: int
         {
             "name": scope.cstr(name),
             "cache_id": _uint(cache_id, "cache_id"),
-            "anchor_row": _uint(anchor_row, "anchor_row"),
-            "anchor_col": _uint(anchor_col, "anchor_col"),
+            "anchor_row": _uint(anchor_row, "anchor_row", role="coordinate"),
+            "anchor_col": _uint(anchor_col, "anchor_col", role="coordinate"),
         },
     )
     return ptr
@@ -5314,7 +5338,8 @@ def _pack_pivot_worksheet_source(
     if given_name is not None and sheet_name is not None and given_name.casefold() != sheet_name.casefold():
         raise FormulonError(
             StatusCode.INVALID_ARGUMENT,
-            _diagnostic_override=("the range names a different sheet than sheet", f"sheet={given_name}"),
+            "the range names a different sheet than sheet",
+            f"sheet={given_name}",
         )
     ptr = scope.struct(S.PIVOT_WORKSHEET_SOURCE)
     S.PIVOT_WORKSHEET_SOURCE.pack(
@@ -5334,7 +5359,7 @@ def _cf_match_from(d: Dict[str, Any]) -> CfMatch:
     kind = _enum(CfMatchKind, d["kind"])
     match = {"kind": kind, "priority": d["priority"]}
     if kind == CfMatchKind.DIFFERENTIAL_FORMAT:
-        match["dxf_index"] = d["dxf_index"] if d["dxf_index_engaged"] else None
+        match["dxf_index"] = d["dxf_index"] if d["has_dxf_index"] else None
     elif kind == CfMatchKind.COLOR_SCALE:
         match["color"] = _color_from(d["color"])
     elif kind == CfMatchKind.DATA_BAR:
@@ -5343,7 +5368,7 @@ def _cf_match_from(d: Dict[str, Any]) -> CfMatch:
             axis_position_pct=d["bar_axis_position_pct"],
             is_negative=bool(d["bar_is_negative"]),
             fill=_color_from(d["bar_fill"]),
-            border=_color_from(d["bar_border"]) if d["bar_border_engaged"] else None,
+            border=_optional_color_from(d["bar_border"]),
             gradient=bool(d["bar_gradient"]),
             direction=_enum(CfDataBarDirection, d["bar_direction"]),
         )
@@ -5363,9 +5388,9 @@ def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
         raise TypeError(f"formulon: expected a CellXfInput, got {type(record).__name__}")
 
     return {
-        "font_index": _uint(record.font_index, "font_index"),
-        "fill_index": _uint(record.fill_index, "fill_index"),
-        "border_index": _uint(record.border_index, "border_index"),
+        "font_index": _uint(record.font_index, "font_index", role="position"),
+        "fill_index": _uint(record.fill_index, "fill_index", role="position"),
+        "border_index": _uint(record.border_index, "border_index", role="position"),
         "num_fmt_id": _uint(record.num_fmt_id, "num_fmt_id", 16),
         "horizontal": _uint(record.horizontal or 0, "horizontal", 8),
         "has_horizontal": 0 if record.horizontal is None else 1,
@@ -5391,7 +5416,7 @@ def _cell_xf_fields(record: CellXfInput) -> Dict[str, object]:
             )
         )
         else 0,
-        "style_xf_index": _uint(record.style_xf_index, "style_xf_index"),
+        "style_xf_index": _uint(record.style_xf_index, "style_xf_index", role="position"),
         "has_text_rotation": 1 if record.text_rotation is not None else 0,
         "text_rotation": _uint(record.text_rotation or 0, "text_rotation"),
         "has_indent": 1 if record.indent is not None else 0,
@@ -5569,9 +5594,7 @@ def _finite(value: Any, name: str) -> float:
         raise TypeError(f"formulon: {name} must be a number, got {type(value).__name__}")
     x = float(value)
     if not math.isfinite(x):
-        raise FormulonError(
-            StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{name} must be finite", f"{name}={x!r}")
-        )
+        raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{name} must be finite", f"{name}={x!r}")
     return x
 
 
@@ -5622,12 +5645,12 @@ def _pack_shape(
         values.update(
             anchor_kind=_sint(anchor_kind, "anchor_kind"),
             edit_as=_sint(edit_as, "edit_as"),
-            from_row=_uint(from_row, "from_row"),
-            from_col=_uint(from_col, "from_col"),
+            from_row=_uint(from_row, "from_row", role="coordinate"),
+            from_col=_uint(from_col, "from_col", role="coordinate"),
             from_row_offset_emu=_sint(from_row_offset_emu, "from_row_offset_emu", 64),
             from_col_offset_emu=_sint(from_col_offset_emu, "from_col_offset_emu", 64),
-            to_row=_uint(to_row, "to_row"),
-            to_col=_uint(to_col, "to_col"),
+            to_row=_uint(to_row, "to_row", role="coordinate"),
+            to_col=_uint(to_col, "to_col", role="coordinate"),
             to_row_offset_emu=_sint(to_row_offset_emu, "to_row_offset_emu", 64),
             to_col_offset_emu=_sint(to_col_offset_emu, "to_col_offset_emu", 64),
             width_emu=_sint(width_emu, "width_emu", 64),
@@ -5687,10 +5710,10 @@ def _pack_slicer(
         if len(corner) != 4 or len(offsets) != 4:
             raise TypeError("anchor must be (from_row, from_col, to_row, to_col) plus optional EMU offsets")
         values.update(
-            from_row=_uint(corner[0], "from_row"),
-            from_col=_uint(corner[1], "from_col"),
-            to_row=_uint(corner[2], "to_row"),
-            to_col=_uint(corner[3], "to_col"),
+            from_row=_uint(corner[0], "from_row", role="coordinate"),
+            from_col=_uint(corner[1], "from_col", role="coordinate"),
+            to_row=_uint(corner[2], "to_row", role="coordinate"),
+            to_col=_uint(corner[3], "to_col", role="coordinate"),
             from_row_offset_emu=_sint(offsets[0], "from_row_offset_emu", 64),
             from_col_offset_emu=_sint(offsets[1], "from_col_offset_emu", 64),
             to_row_offset_emu=_sint(offsets[2], "to_row_offset_emu", 64),
@@ -5806,7 +5829,7 @@ def _pack_sparkline_group(
         },
     )
     for key in _SPARKLINE_COLORS:
-        _pack_color(ptr + S.SPARKLINE_GROUP.offsets[key][1], getattr(group, key), f"SparklineGroup.{key}")
+        _pack_optional_color(ptr + S.SPARKLINE_GROUP.offsets[key][1], getattr(group, key), f"SparklineGroup.{key}")
     date_axis = _qualified_range_text(
         workbook,
         group.date_axis_range,
@@ -5834,9 +5857,7 @@ def _pack_sparklines(
             workbook, item.source, sheet, "Sparkline.source", getattr(item, "_stored_source", None)
         )
         if source is None:
-            raise FormulonError(
-                StatusCode.INVALID_ARGUMENT, _diagnostic_override=("a sparkline needs a source range", "")
-            )
+            raise FormulonError(StatusCode.INVALID_ARGUMENT, "a sparkline needs a source range", "")
         location = _cell_address(workbook, item.location, "Sparkline.location")
         location_text = workbook.format_reference(CellRect(location.row, location.col, location.row, location.col))
         S.write_str_field(LIB, base, S.SPARKLINE, "formula", source, scope)
@@ -5858,8 +5879,8 @@ def _image_anchor_fields(
     return {
         "anchor_kind": _sint(anchor_kind, "anchor_kind"),
         "edit_as": _sint(edit_as, "edit_as"),
-        "row": _uint(row, "row"),
-        "col": _uint(col, "col"),
+        "row": _uint(row, "row", role="coordinate"),
+        "col": _uint(col, "col", role="coordinate"),
         "row_offset_emu": _sint(row_offset_emu, "row_offset_emu", 64),
         "col_offset_emu": _sint(col_offset_emu, "col_offset_emu", 64),
         "width_emu": _sint(width_emu, "width_emu", 64),
@@ -5980,7 +6001,9 @@ def _read_chart_title(d: Dict[str, object]) -> Optional[ChartTitle]:
     if d["kind"] == _CHART_TITLE_NONE:
         return None
     return ChartTitle(
-        kind=_enum(ChartTitleKind, d["kind"]), text=LIB.read_cstr(d["text"]), formula=LIB.read_cstr(d["formula"])
+        kind=_enum(ChartTitleKind, d["kind"]),
+        text=LIB.read_optional_cstr(d["text"]),
+        formula=LIB.read_optional_cstr(d["formula"]),
     )
 
 
@@ -6078,7 +6101,7 @@ def _read_chart_plot(chart: int, plot: int) -> ChartPlot:
         hole_size=d["hole_size"] if d["has_hole_size"] else None,
         first_slice_angle_deg=d["first_slice_angle_deg"] if d["has_first_slice_angle_deg"] else None,
         axis_ids=[
-            _read_count(LIB.fm_chart_get_plot_axis_id_at, chart, _uint(plot, "plot"), _uint(i, "idx"))
+            _read_count(LIB.fm_chart_get_plot_axis_id_at, chart, _uint(plot, "plot"), _uint(i, "idx", role="position"))
             for i in range(d["axis_id_count"])
         ],
         series=[_read_chart_series(chart, plot, i) for i in range(d["series_count"])],
@@ -6139,7 +6162,7 @@ def _read_chart(chart: int, workbook: Workbook, sheet: int) -> ChartProperties:
             position=_enum(ChartLegendPosition, d["legend_position"]),
             overlay=bool(d["legend_overlay"]),
             hidden_entries=[
-                _read_count(LIB.fm_chart_get_legend_hidden_at, chart, _uint(i, "idx"))
+                _read_count(LIB.fm_chart_get_legend_hidden_at, chart, _uint(i, "idx", role="position"))
                 for i in range(d["legend_hidden_count"])
             ],
         ),
@@ -6153,7 +6176,7 @@ def _read_chart(chart: int, workbook: Workbook, sheet: int) -> ChartProperties:
         filter=ChartFilter(
             hidden_series=[series.index for plot in plots for series in plot.series if series.filtered],
             hidden_categories=[
-                _read_count(LIB.fm_chart_get_hidden_category_at, chart, _uint(i, "idx"))
+                _read_count(LIB.fm_chart_get_hidden_category_at, chart, _uint(i, "idx", role="position"))
                 for i in range(d["hidden_category_count"])
             ],
         ),
@@ -6180,7 +6203,11 @@ def _read_chart_data(data: int) -> ChartData:
         has_value_out = scope.out_ptr()
         value_out = scope.alloc(8)
         for i in range(info["category_label_count"]):
-            _check(LIB.fm_chart_data_get_category_at(data, _uint(i, "idx"), label_out, has_value_out, value_out))
+            _check(
+                LIB.fm_chart_data_get_category_at(
+                    data, _uint(i, "idx", role="position"), label_out, has_value_out, value_out
+                )
+            )
             labels.append(LIB.read_cstr(LIB.read_u32(label_out)))
             values.append(LIB.read_f64(value_out) if LIB.read_i32(has_value_out) else None)
         levels: List[List[str]] = []
@@ -6188,7 +6215,11 @@ def _read_chart_data(data: int) -> ChartData:
             size = _read_count(LIB.fm_chart_data_get_category_level_count, data, _uint(level, "level"))
             names: List[str] = []
             for i in range(size):
-                _check(LIB.fm_chart_data_get_category_level_at(data, _uint(level, "level"), _uint(i, "idx"), label_out))
+                _check(
+                    LIB.fm_chart_data_get_category_level_at(
+                        data, _uint(level, "level"), _uint(i, "idx", role="position"), label_out
+                    )
+                )
                 names.append(LIB.read_cstr(LIB.read_u32(label_out)))
             levels.append(names)
 
@@ -6249,10 +6280,12 @@ def _read_chart_data(data: int) -> ChartData:
 def _title_fields(title: Union[str, ChartTitle], scope: _ArgScope) -> Dict[str, object]:
     """Encode a title given as its text or as a :class:`ChartTitle`."""
     if isinstance(title, ChartTitle):
+        if title.kind == ChartTitleKind.TEXT and title.text is None:
+            raise FormulonError(StatusCode.INVALID_ARGUMENT, "a TEXT title needs text", "field=text")
         return {
             "kind": _sint(title.kind, "kind"),
-            "text": scope.cstr(title.text),
-            "formula": scope.cstr(title.formula),
+            "text": scope.opt_cstr(title.text),
+            "formula": scope.opt_cstr(title.formula),
         }
     return {"kind": 1, "text": scope.cstr(title)}
 
@@ -6353,7 +6386,7 @@ def _data_source_spec(value: object, key: str, scope: _ArgScope) -> Dict[str, ob
             LIB,
             array + i * S.CHART_LITERAL.size,
             {
-                "idx": _uint(i, "idx"),
+                "idx": _uint(i, "idx", role="position"),
                 "is_text": 1 if is_text else 0,
                 "number": 0.0 if is_text else float(point),
                 "text": scope.cstr(point) if is_text else 0,
@@ -6596,10 +6629,10 @@ def _cell_rect_fields(r: CellRect) -> Dict[str, int]:
     """The cell rect struct field values of ``r``; anything but a :class:`CellRect` is a ``TypeError``."""
     r = _require_cell_rect(r)
     return {
-        "first_row": _uint(r.first_row, "first_row"),
-        "first_col": _uint(r.first_col, "first_col"),
-        "last_row": _uint(r.last_row, "last_row"),
-        "last_col": _uint(r.last_col, "last_col"),
+        "first_row": _uint(r.first_row, "first_row", role="coordinate"),
+        "first_col": _uint(r.first_col, "first_col", role="coordinate"),
+        "last_row": _uint(r.last_row, "last_row", role="coordinate"),
+        "last_col": _uint(r.last_col, "last_col", role="coordinate"),
     }
 
 
@@ -6769,10 +6802,10 @@ def _pack_cell_rect_at(ptr: int, r: CellRect) -> None:
         LIB,
         ptr,
         {
-            "first_row": _uint(r.first_row, "first_row"),
-            "first_col": _uint(r.first_col, "first_col"),
-            "last_row": _uint(r.last_row, "last_row"),
-            "last_col": _uint(r.last_col, "last_col"),
+            "first_row": _uint(r.first_row, "first_row", role="coordinate"),
+            "first_col": _uint(r.first_col, "first_col", role="coordinate"),
+            "last_row": _uint(r.last_row, "last_row", role="coordinate"),
+            "last_col": _uint(r.last_col, "last_col", role="coordinate"),
         },
     )
 
@@ -6813,7 +6846,8 @@ _FILTER_COLUMN_STRINGS = (
 def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> None:
     fields: Dict[str, object] = {
         "column_offset": _uint(col.column_offset, "column_offset"),
-        "dxf_index": _uint(col.dxf_index, "dxf_index"),
+        "has_dxf_index": 0 if col.dxf_index is None else 1,
+        "dxf_index": _uint(0 if col.dxf_index is None else col.dxf_index, "dxf_index", role="position"),
     }
     for name in _FILTER_COLUMN_BOOLS:
         fields[name] = 1 if getattr(col, name) else 0
@@ -6880,7 +6914,7 @@ def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, scope: _ArgSco
         {
             "descending": 1 if cond.descending else 0,
             "sort_by": _sint(cond.sort_by, "sort_by"),
-            "dxf_index": _uint(cond.dxf_index or 0, "dxf_index"),
+            "dxf_index": _uint(cond.dxf_index or 0, "dxf_index", role="position"),
             "has_dxf_index": 0 if cond.dxf_index is None else 1,
             "icon_set": _sint(cond.icon_set, "icon_set"),
             "icon_index": _sint(cond.icon_index or 0, "icon_index"),
@@ -6950,7 +6984,7 @@ def _decode_filter_column(ptr: int) -> AutoFilterColumn:
     kwargs.update({name: LIB.read_cstr(d[c_name]) for name, c_name in _FILTER_COLUMN_STRINGS})
     return AutoFilterColumn(
         column_offset=d["column_offset"],
-        dxf_index=d["dxf_index"],
+        dxf_index=d["dxf_index"] if d["has_dxf_index"] else None,
         values=values,
         date_groups=groups,
         conditions=conditions,
@@ -7036,7 +7070,8 @@ def _save_format(dest: object, format: Optional[WorkbookFormat]) -> WorkbookForm
     if implied is not None and fmt != implied:
         raise FormulonError(
             StatusCode.INVALID_ARGUMENT,
-            _diagnostic_override=(f"format {fmt.name} contradicts the extension of {os.fspath(dest)!r}", ""),
+            f"format {fmt.name} contradicts the extension of {os.fspath(dest)!r}",
+            "",
         )
     return fmt
 
@@ -7079,7 +7114,7 @@ def _pivot_cache_value_kind(value: object) -> str:
     )
 
 
-class Workbook:
+class Workbook(_NoCopy):
     """An Excel workbook held by the engine.
 
     Construction:
@@ -7308,7 +7343,8 @@ class Workbook:
         if not self._handle:
             raise FormulonError(
                 StatusCode.BINDING_INVALID_HANDLE,
-                _diagnostic_override=("the workbook is closed", ""),
+                "the workbook is closed",
+                "",
             )
         return self._handle
 
@@ -7326,7 +7362,8 @@ class Workbook:
             if not self._handle:
                 raise FormulonError(
                     StatusCode.BINDING_INVALID_HANDLE,
-                    _diagnostic_override=("the workbook is closed", ""),
+                    "the workbook is closed",
+                    "",
                 )
             return self._handle
 
@@ -7337,7 +7374,7 @@ class Workbook:
 
     def _sheet_name(self, index: int) -> str:
         h = self._require()
-        return _read_cstr_out(LIB.fm_workbook_get_sheet_name, h, _uint(index, "sheet_index"))
+        return _read_cstr_out(LIB.fm_workbook_get_sheet_name, h, _uint(index, "sheet_index", role="sheet"))
 
     def _find_sheet(self, name: str) -> Optional[int]:
         """Index of the sheet named ``name`` (case-insensitive, as sheet names are unique), or ``None``."""
@@ -7389,7 +7426,8 @@ class Workbook:
           NotFoundError: when no sheet has the name ``key``, or ``key`` is a
             removed sheet.
           IndexOutOfRangeError: when ``key`` is an index ``>=`` the sheet count.
-          ValueError: when ``key`` is a negative index or does not fit 64 bits.
+          IndexOutOfRangeError: when ``key`` is a negative index (``StatusCode.SHEET_INDEX_OUT_OF_RANGE``).
+          ValueError: when ``key`` does not fit 64 bits.
           InvalidArgumentError: when ``key`` is a :class:`Sheet` of another
             workbook.
           TypeError: when ``key`` is none of the above.
@@ -7404,15 +7442,13 @@ class Workbook:
         self._require()
         if isinstance(key, Sheet):
             if key._workbook is not self:
-                raise FormulonError(
-                    StatusCode.INVALID_ARGUMENT, _diagnostic_override=("the sheet belongs to another workbook", "")
-                )
+                raise FormulonError(StatusCode.INVALID_ARGUMENT, "the sheet belongs to another workbook", "")
             key._index()
             return key
         if isinstance(key, str):
             index = self._find_sheet(key)
             if index is None:
-                raise FormulonError(StatusCode.NOT_FOUND, _diagnostic_override=(f"no sheet is named {key!r}", ""))
+                raise FormulonError(StatusCode.NOT_FOUND, f"no sheet is named {key!r}", "")
             return self._sheet_handles()[index]
         if isinstance(key, bool):
             raise TypeError("formulon: sheet key must be a str, an int or a Sheet, got bool")
@@ -7420,16 +7456,14 @@ class Workbook:
             index = operator.index(key)
         except TypeError:
             raise TypeError(f"formulon: sheet key must be a str, an int or a Sheet, got {type(key).__name__}") from None
-        index = _uint(index, "sheet_index", bits=64)
+        index = _uint(index, "sheet_index", bits=64, role="sheet")
         handles = self._sheet_handles()
         count = len(handles)
         if index >= count:
             raise FormulonError(
                 StatusCode.SHEET_INDEX_OUT_OF_RANGE,
-                _diagnostic_override=(
-                    f"sheet index {index} is out of range ({count} {'sheet' if count == 1 else 'sheets'})",
-                    f"sheet_index={index} sheet_count={count}",
-                ),
+                f"sheet index {index} is out of range ({count} {'sheet' if count == 1 else 'sheets'})",
+                f"sheet_index={index} sheet_count={count}",
             )
         return handles[index]
 
@@ -7438,7 +7472,10 @@ class Workbook:
         return list(self._sheet_handles())
 
     def __getitem__(self, key: SheetRef) -> Sheet:
-        """``wb[key]`` is :meth:`sheet`."""
+        """``wb[key]`` is :meth:`sheet`, except that a negative index counts from the end (``wb[-1]`` is the
+        last sheet) as for a sequence."""
+        if isinstance(key, numbers.Integral) and not isinstance(key, bool) and key < 0:
+            key = int(key) + len(self)
         return self.sheet(key)
 
     def __len__(self) -> int:
@@ -7490,7 +7527,7 @@ class Workbook:
         """
         index = self.sheet(sheet).index
         h = self._require()
-        _check(LIB.fm_workbook_set_active_sheet(h, _uint(index, "sheet_index")))
+        _check(LIB.fm_workbook_set_active_sheet(h, _uint(index, "sheet_index", role="sheet")))
 
     def add_sheet(self, name: str) -> Sheet:
         """Append a new sheet with the given UTF-8 display name and return its handle.
@@ -7529,7 +7566,12 @@ class Workbook:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_evaluate_formula_array(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr, out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    formula_ptr,
+                    out,
                 )
             )
             array = LIB.read_u32(out)
@@ -7545,7 +7587,11 @@ class Workbook:
                 for r in range(rows):
                     out_row: List[Value] = []
                     for c in range(cols):
-                        _check(LIB.fm_value_array_get_value_at(array, _uint(r * stride + c, "index"), value_ptr))
+                        _check(
+                            LIB.fm_value_array_get_value_at(
+                                array, _uint(r * stride + c, "index", role="position"), value_ptr
+                            )
+                        )
                         out_row.append(Value._from_wasm(value_ptr))
                     grid.append(out_row)
                 return grid
@@ -7770,7 +7816,7 @@ class Workbook:
             out: List[DefinedName] = []
             for i in range(n):
                 S.zero_struct(LIB, S.DEFINED_NAME, ptr)
-                _check(LIB.fm_workbook_get_defined_name_at(h, _uint(i, "idx"), ptr))
+                _check(LIB.fm_workbook_get_defined_name_at(h, _uint(i, "idx", role="position"), ptr))
                 d = S.DEFINED_NAME.unpack(LIB, ptr)
                 out.append(_defined_name_from(d))
         return out
@@ -7797,16 +7843,14 @@ class Workbook:
             present = scope.out_ptr()
             _check(LIB.fm_workbook_find_table(h, name_ptr, present, sheet_ptr, index_ptr))
             if LIB.read_i32(present) == 0:
-                raise FormulonError(
-                    StatusCode.NOT_FOUND, _diagnostic_override=(f'no table is named "{name}"', f"name={name}")
-                )
+                raise FormulonError(StatusCode.NOT_FOUND, f'no table is named "{name}"', f"name={name}")
             sheet, index = LIB.read_u32(sheet_ptr), LIB.read_u32(index_ptr)
         return self._table_handle(sheet, index)
 
     def _table_count(self, sheet_index: int) -> int:
         """Return the number of tables on sheet ``sheet_index``."""
         h = self._require()
-        return _read_count(LIB.fm_sheet_get_table_count, h, _uint(sheet_index, "sheet_index"))
+        return _read_count(LIB.fm_sheet_get_table_count, h, _uint(sheet_index, "sheet_index", role="sheet"))
 
     def _table_handle(self, sheet_index: int, table_index: int) -> Table:
         """The handle of table ``table_index`` on ``sheet_index``, created on first use and kept for the workbook's life."""
@@ -7814,7 +7858,10 @@ class Workbook:
 
         h = self._require()
         runtime_id = _read_count(
-            LIB.fm_sheet_get_table_runtime_id, h, _uint(sheet_index, "sheet_index"), _uint(table_index, "table_index")
+            LIB.fm_sheet_get_table_runtime_id,
+            h,
+            _uint(sheet_index, "sheet_index", role="sheet"),
+            _uint(table_index, "table_index", role="position"),
         )
         handle = self._tables.get(runtime_id)
         if handle is None:
@@ -7833,10 +7880,11 @@ class Workbook:
         if isinstance(table.name, str) and self._names_a_cell(table.name):
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=(f'invalid table name: "{table.name}" is a cell address', f"name={table.name}"),
+                f'invalid table name: "{table.name}" is a cell address',
+                f"name={table.name}",
             )
         h = self._require()
-        sheet = _uint(sheet_index, "sheet_index")
+        sheet = _uint(sheet_index, "sheet_index", role="sheet")
         with _ArgScope() as scope:
             names = [str(column) for column in table.columns or ()]
             name_ptrs = [scope.nonempty_cstr(column) for column in names]
@@ -7919,7 +7967,7 @@ class Workbook:
         index = removed.index
         h = self._require()
         handles = self._sheet_handles()
-        _check(LIB.fm_workbook_remove_sheet(h, _uint(index, "sheet_index")))
+        _check(LIB.fm_workbook_remove_sheet(h, _uint(index, "sheet_index", role="sheet")))
         handles.pop(index)
         removed._position = None
         self._renumber_sheets(handles)
@@ -8252,11 +8300,11 @@ class Workbook:
             if auto_filter is not None:
                 ptr = scope.struct_array(S.AUTO_FILTER, 1)
                 _pack_auto_filter(ptr, auto_filter, scope)
-            _check(fn(h, *(_uint(i, "index") for i in indices), ptr))
+            _check(fn(h, *(_uint(i, "index", role="position") for i in indices), ptr))
 
     def _evaluate_auto_filter(self, fn, *indices: int) -> "tuple[int, List[bool]]":
         h = self._require()
-        args = tuple(_uint(i, "index") for i in indices)
+        args = tuple(_uint(i, "index", role="position") for i in indices)
         with _ArgScope() as scope:
             count_ptr = scope.out_ptr()
             first_ptr = scope.out_ptr()
@@ -8299,7 +8347,7 @@ class Workbook:
             out: List[Person] = []
             for i in range(n):
                 S.zero_struct(LIB, S.PERSON, ptr)
-                _check(LIB.fm_workbook_get_person_at(h, _uint(i, "idx"), ptr))
+                _check(LIB.fm_workbook_get_person_at(h, _uint(i, "idx", role="position"), ptr))
                 d = S.PERSON.unpack(LIB, ptr)
                 out.append(_person_from(d))
         return out
@@ -8363,7 +8411,7 @@ class Workbook:
     # -- Print settings: typed patch setters -------------------------------
     #
     # Each keyword defaults to ``None`` meaning "leave this attribute as the
-    # file has it". That is how the C ``*_engaged`` flags are expressed in
+    # file has it". That is how the C ``has_*`` flags are expressed in
     # Python: a caller states the two or three attributes it cares about and
     # every other one, including attributes the engine does not model, stays
     # exactly where the file put it.
@@ -8401,7 +8449,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(layout)
-            _check(fn(h, _uint(index, index_field), ptr))
+            _check(fn(h, _uint(index, index_field, role="position"), ptr))
             return decode(ptr)
 
     def _style_count(self, fn) -> int:
@@ -8436,7 +8484,7 @@ class Workbook:
             out: List[CellStyle] = []
             for i in range(n):
                 S.zero_struct(LIB, S.CELL_STYLE_RECORD, ptr)
-                _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index"), ptr))
+                _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index", role="position"), ptr))
                 out.append(_cell_style_from(S.CELL_STYLE_RECORD.unpack(LIB, ptr)))
         return out
 
@@ -8459,7 +8507,7 @@ class Workbook:
                 LIB,
                 ptr,
                 {
-                    "style_xf_index": _uint(record.style_xf_index, "style_xf_index"),
+                    "style_xf_index": _uint(record.style_xf_index, "style_xf_index", role="position"),
                     "has_builtin_id": 0 if record.builtin_id is None else 1,
                     "builtin_id": 0 if record.builtin_id is None else _uint(record.builtin_id, "builtin_id"),
                     "i_level": _uint(record.i_level, "i_level"),
@@ -8499,7 +8547,7 @@ class Workbook:
             out: List[TableStyle] = []
             for i in range(n):
                 S.zero_struct(LIB, S.TABLE_STYLE, ptr)
-                _check(LIB.fm_workbook_get_table_style_at(h, _uint(i, "index"), ptr))
+                _check(LIB.fm_workbook_get_table_style_at(h, _uint(i, "index", role="position"), ptr))
                 out.append(_table_style_from(S.TABLE_STYLE.unpack(LIB, ptr)))
         return out
 
@@ -8528,7 +8576,9 @@ class Workbook:
                             "type": _sint(element.type, "type"),
                             "size": _uint(element.size, "size"),
                             "has_dxf_index": 0 if element.dxf_index is None else 1,
-                            "dxf_index": _uint(0 if element.dxf_index is None else element.dxf_index, "dxf_index"),
+                            "dxf_index": _uint(
+                                0 if element.dxf_index is None else element.dxf_index, "dxf_index", role="position"
+                            ),
                         },
                     )
             name_ptr = scope.cstr(style.name)
@@ -8717,7 +8767,9 @@ class Workbook:
         h = self._require()
         count = _read_count(LIB.fm_workbook_get_pivot_cache_count, h)
         return [
-            self._pivot_cache_handle(_read_count(LIB.fm_workbook_get_pivot_cache_id_at, h, _uint(index, "idx")))
+            self._pivot_cache_handle(
+                _read_count(LIB.fm_workbook_get_pivot_cache_id_at, h, _uint(index, "idx", role="position"))
+            )
             for index in range(count)
         ]
 
@@ -8733,22 +8785,30 @@ class Workbook:
         wanted = _uint(self._pivot_cache_id(cache_id), "cache_id")
         h = self._require()
         for index in range(_read_count(LIB.fm_workbook_get_pivot_cache_count, h)):
-            if _read_count(LIB.fm_workbook_get_pivot_cache_id_at, h, _uint(index, "idx")) == wanted:
+            if _read_count(LIB.fm_workbook_get_pivot_cache_id_at, h, _uint(index, "idx", role="position")) == wanted:
                 return self._pivot_cache_handle(wanted)
         raise FormulonError(
             StatusCode.NOT_FOUND,
-            _diagnostic_override=(f"the workbook has no pivot cache {wanted}", f"cache_id={wanted}"),
+            f"the workbook has no pivot cache {wanted}",
+            f"cache_id={wanted}",
         )
 
-    def add_pivot_cache(self, requested_id: int = 0) -> PivotCache:
+    def add_pivot_cache(self, requested_id: Optional[int] = None) -> PivotCache:
         """Create a new empty pivot cache and return its handle.
 
-        Its id is ``requested_id`` when non-zero, else one the engine assigns.
+        Its id is ``requested_id``, else one the engine assigns; a cache id is never 0.
         A new cache has no worksheet source, and a workbook containing one
         cannot be saved: call :meth:`PivotCache.set_worksheet_source` before
         saving.
+
+        Raises:
+          InvalidArgumentError: when ``requested_id`` is 0.
         """
         h = self._require()
+        if requested_id is None:
+            requested_id = 0
+        elif _uint(requested_id, "requested_id") == 0:
+            raise FormulonError(StatusCode.INVALID_ARGUMENT, "a pivot cache id is never 0", "requested_id=0")
         return self._pivot_cache_handle(
             _read_count(LIB.fm_workbook_add_pivot_cache, h, _uint(requested_id, "requested_id"))
         )
@@ -8771,7 +8831,8 @@ class Workbook:
             if cache.workbook is not self:
                 raise FormulonError(
                     StatusCode.INVALID_ARGUMENT,
-                    _diagnostic_override=("the pivot cache belongs to another workbook", ""),
+                    "the pivot cache belongs to another workbook",
+                    "",
                 )
             return cache.cache_id
         if isinstance(cache, bool):
@@ -8810,9 +8871,10 @@ class Workbook:
 
         Raises:
           FormulaSyntaxError: with ``StatusCode.PARSER_INVALID_REFERENCE`` when ``text`` is not a reference.
+          TypeError: when only one of ``base_row`` and ``base_col`` is given.
         """
         if (base_row is None) != (base_col is None):
-            raise ValueError("formulon: base_row and base_col must be given together")
+            raise TypeError("formulon: base_row and base_col must be given together")
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.REFERENCE)
@@ -8823,8 +8885,8 @@ class Workbook:
                 {
                     "r1c1": _tristate_default(bool(r1c1)),
                     "has_base": 0 if base_row is None else 1,
-                    "base_row": _uint(base_row or 0, "base_row"),
-                    "base_col": _uint(base_col or 0, "base_col"),
+                    "base_row": _uint(base_row or 0, "base_row", role="coordinate"),
+                    "base_col": _uint(base_col or 0, "base_col", role="coordinate"),
                 },
             )
             _check(LIB.fm_workbook_parse_reference(h, scope.cstr(text), spec, ptr))
@@ -8893,13 +8955,13 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.EXTERNAL_LINK_RECORD)
-            _check(LIB.fm_workbook_get_external_link_at(h, _uint(index, "index"), ptr))
+            _check(LIB.fm_workbook_get_external_link_at(h, _uint(index, "index", role="position"), ptr))
             d = S.EXTERNAL_LINK_RECORD.unpack(LIB, ptr)
             return ExternalLink(
                 index=d["index"],
                 rel_id=LIB.read_cstr(d["rel_id"]),
                 part_path=LIB.read_cstr(d["part_path"]),
-                target=LIB.read_cstr(d["target"]),
+                target=LIB.read_optional_cstr(d["target"]),
                 target_external=bool(d["target_external"]),
                 kind=ExternalLinkKind(d["kind"]),
             )
@@ -8985,7 +9047,7 @@ def _install_workbook_locks(cls: type) -> None:
 
 
 # <ooxml-namespace>
-class WorkbookOoxml:
+class WorkbookOoxml(_NoCopy):
     """The OOXML-level layer of a workbook, :attr:`Workbook.ooxml`.
 
     The style tables a cell XF indexes (fonts, fills, borders, number
@@ -9017,7 +9079,7 @@ class WorkbookOoxml:
             path_ptr = scope.out_ptr()
             out: List[PassthroughPart] = []
             for i in range(n):
-                status = LIB.fm_workbook_get_passthrough_at(h, _uint(i, "idx"), path_ptr)
+                status = LIB.fm_workbook_get_passthrough_at(h, _uint(i, "idx", role="position"), path_ptr)
                 _check(status)
                 out.append(PassthroughPart(path=LIB.read_cstr(LIB.read_u32(path_ptr))))
         return out
@@ -9068,15 +9130,15 @@ class WorkbookOoxml:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DXF_RECORD)
-            _check(LIB.fm_workbook_get_dxf_at(h, _uint(dxf_index, "dxf_index"), ptr))
+            _check(LIB.fm_workbook_get_dxf_at(h, _uint(dxf_index, "dxf_index", role="position"), ptr))
             d = S.DXF_RECORD.unpack(LIB, ptr)
             offsets = S.DXF_RECORD.offsets
-            font = _decode_font(ptr + offsets["font"][1]) if d["font_engaged"] else None
-            fill = _decode_fill(ptr + offsets["fill"][1]) if d["fill_engaged"] else None
+            font = _decode_font(ptr + offsets["font"][1]) if d["has_font"] else None
+            fill = _decode_fill(ptr + offsets["fill"][1]) if d["has_fill"] else None
             return Dxf(
                 font=font,
                 fill=fill,
-                border=_decode_border_record(ptr + offsets["border"][1]) if d["border_engaged"] else None,
+                border=_decode_border_record(ptr + offsets["border"][1]) if d["has_border"] else None,
                 number_format=_opt_cstr(d["number_format"]),
                 alignment=_alignment_from_xml(LIB.read_cstr(d["alignment_xml"])),
                 protection=_protection_from_xml(LIB.read_cstr(d["protection_xml"])),
@@ -9140,7 +9202,7 @@ class WorkbookOoxml:
         with _ArgScope() as scope:
             ptr = scope.struct(S.FONT_RECORD)
             _pack_font(ptr, record, scope)
-            _check(LIB.fm_workbook_set_font(h, _uint(font_index, "font_index"), ptr))
+            _check(LIB.fm_workbook_set_font(h, _uint(font_index, "font_index", role="position"), ptr))
 
     def add_fill(self, record: Fill) -> int:
         """Add (dedup) a fill record; return its index."""
@@ -9209,9 +9271,9 @@ class WorkbookOoxml:
                 LIB,
                 ptr,
                 {
-                    "font_engaged": 1 if record.font is not None else 0,
-                    "fill_engaged": 1 if record.fill is not None else 0,
-                    "border_engaged": 1 if record.border is not None else 0,
+                    "has_font": 1 if record.font is not None else 0,
+                    "has_fill": 1 if record.fill is not None else 0,
+                    "has_border": 1 if record.border is not None else 0,
                 },
             )
             offsets = S.DXF_RECORD.offsets
@@ -9232,7 +9294,11 @@ class WorkbookOoxml:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_XF)
-            _check(LIB.fm_workbook_get_cell_style_xf_at(h, _uint(cell_style_xf_index, "cell_style_xf_index"), ptr))
+            _check(
+                LIB.fm_workbook_get_cell_style_xf_at(
+                    h, _uint(cell_style_xf_index, "cell_style_xf_index", role="position"), ptr
+                )
+            )
             return self._workbook._decode_cell_xf(ptr)
 
 
@@ -9292,12 +9358,10 @@ def get_function_metadata(name: str) -> Optional[FunctionMetadata]:
         if not LIB.read_u32(present):
             return None
         d = S.FUNCTION_METADATA.unpack(LIB, ptr)
-        sig = LIB.read_cstr(d["signature_template"]) if d["signature_template"] else None
-        desc = LIB.read_cstr(d["description"]) if d["description"] else None
-        # 0xFFFFFFFF is the unbounded / unknown-arity sentinel; expose it
-        # as None so callers do not treat it as a concrete upper bound.
-        raw_max = d["max_arity"]
-        max_arity = None if raw_max == 0xFFFFFFFF else raw_max
+        sig = LIB.read_optional_cstr(d["signature_template"])
+        desc = LIB.read_optional_cstr(d["description"])
+        # An unbounded variadic has no upper bound: expose it as None.
+        max_arity = d["max_arity"] if d["has_max_arity"] else None
         return FunctionMetadata(
             name=LIB.read_cstr(d["canonical_name"]),
             min_arity=d["min_arity"],
@@ -9320,7 +9384,7 @@ def _map_profile_text(fn_name: str, text: str, profile_id: str) -> str:
 def list_function_names() -> List[str]:
     """Return the canonical names of every registered Formulon function, sorted."""
     return [
-        _read_cstr_out(LIB.fm_get_function_name_at, _uint(index, "idx"))
+        _read_cstr_out(LIB.fm_get_function_name_at, _uint(index, "idx", role="position"))
         for index in range(_read_count(LIB.fm_get_function_count))
     ]
 
@@ -9354,14 +9418,25 @@ def localize_formula(formula: str, profile_id: ProfileId) -> str:
     Function names, list / array separators, decimal points, booleans
     and error names take the locale form; strings, quoted sheet names,
     external qualifiers and structured-reference brackets are kept
-    verbatim. A pure text rewrite: the grammar is not validated.
+    verbatim.
+
+    Raises:
+      FormulaSyntaxError: when ``formula`` does not parse; ``parse_error`` locates the
+        failure as UTF-16 offsets into ``formula``.
+      InvalidArgumentError: when ``profile_id`` is not a documented profile.
     """
     return _map_profile_text("fm_localize_formula", formula, profile_id)
 
 
 @_lock_workbook_method
 def canonicalize_formula(formula: str, profile_id: ProfileId) -> str:
-    """Rewrite ``profile_id``-spelled formula text into the en-invariant form."""
+    """Rewrite ``profile_id``-spelled formula text into the en-invariant form.
+
+    Raises:
+      FormulaSyntaxError: when ``formula`` does not parse under the profile; ``parse_error``
+        locates the failure as UTF-16 offsets into ``formula``, the text as passed.
+      InvalidArgumentError: when ``profile_id`` is not a documented profile.
+    """
     return _map_profile_text("fm_canonicalize_formula", formula, profile_id)
 
 
@@ -9373,7 +9448,7 @@ def _read_locale_error_names(scope: _ArgScope, pid_ptr: int) -> List[ErrorName]:
     for index in range(_read_count(LIB.fm_get_locale_error_name_count)):
         _check(
             LIB.fm_get_locale_error_name_at(
-                pid_ptr, _uint(index, "error_index"), canonical_out, localized_out, measured_out
+                pid_ptr, _uint(index, "error_index", role="position"), canonical_out, localized_out, measured_out
             )
         )
         errors.append(

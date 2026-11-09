@@ -35,10 +35,20 @@ fm_table_spec_t SalesSpec() {
   return spec;
 }
 
-fm_table_style_options_t TableStyle(const fm_workbook_t* wb, std::size_t table = 0) {
+fm_table_style_options_t TableStyle(const fm_workbook_t* wb, std::size_t table = 0, int32_t* present = nullptr) {
   fm_table_style_options_t style = FM_STRUCT_INIT(fm_table_style_options_t);
-  EXPECT_EQ(fm_sheet_get_table_style_options(wb, 0, table, &style), FM_STATUS_OK);
+  int32_t stated = 0;
+  EXPECT_EQ(fm_sheet_get_table_style_options(wb, 0, table, &stated, &style), FM_STATUS_OK);
+  if (present != nullptr) {
+    *present = stated;
+  }
   return style;
+}
+
+int32_t TableStylePresent(const fm_workbook_t* wb, std::size_t table = 0) {
+  int32_t present = 0;
+  TableStyle(wb, table, &present);
+  return present;
 }
 
 fm_table_info_t TableInfo(const fm_workbook_t* wb, std::size_t table = 0) {
@@ -93,7 +103,8 @@ TEST(FormulonCApiInputRecords, DefinedNameByNameFillsTheRecordTheIndexedReadFill
 
   std::int32_t present = 0;
   fm_defined_name_t by_name = FM_STRUCT_INIT(fm_defined_name_t);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "RATE", -1, &present, &by_name), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "RATE", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &by_name),
+            FM_STATUS_OK);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(by_name.name, "Rate");
   EXPECT_EQ(index_formula, by_name.formula);
@@ -103,7 +114,8 @@ TEST(FormulonCApiInputRecords, DefinedNameByNameFillsTheRecordTheIndexedReadFill
 
   // An absent name is a successful read with nothing in the record.
   by_name = FM_STRUCT_INIT(fm_defined_name_t);
-  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Absent", -1, &present, &by_name), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Absent", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &by_name),
+            FM_STATUS_OK);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(by_name.name, nullptr);
   EXPECT_EQ(by_name.formula, nullptr);
@@ -120,7 +132,7 @@ TEST(FormulonCApiInputRecords, DefinedNameSetterRejectsMalformedRecords) {
   fm_defined_name_t name = FM_STRUCT_INIT(fm_defined_name_t);
   name.name = nullptr;
   name.formula = "1";
-  name.local_sheet_id = -1;
+  name.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
   EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &name), FM_STATUS_BINDING_NULL_POINTER);
   name.name = "Rate";
   name.formula = nullptr;
@@ -154,7 +166,7 @@ TEST(FormulonCApiInputRecords, TableSpecWithRangeAndNameGivesAHeaderRowAndTheDef
   EXPECT_EQ(info.header_row_count, 1U);
   EXPECT_EQ(info.totals_row_count, 0U);
   const fm_table_style_options_t style = TableStyle(wb.handle);
-  EXPECT_EQ(style.present, 1);
+  EXPECT_EQ(TableStylePresent(wb.handle), 1);
   ASSERT_NE(style.style_name, nullptr);
   EXPECT_EQ(style.show_row_stripes, 1);
   EXPECT_EQ(style.show_first_column, 0);
@@ -176,7 +188,7 @@ TEST(FormulonCApiInputRecords, TableSpecWritesAllFourStyleTogglesInOneCall) {
   ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), FM_STATUS_OK) << fm_get_last_error_message();
 
   const fm_table_style_options_t style = TableStyle(wb.handle);
-  EXPECT_EQ(style.present, 1);
+  EXPECT_EQ(TableStylePresent(wb.handle), 1);
   EXPECT_STREQ(style.style_name, "TableStyleMedium9");
   EXPECT_EQ(style.show_first_column, 1);
   EXPECT_EQ(style.show_last_column, 1);
@@ -209,7 +221,7 @@ TEST(FormulonCApiInputRecords, TableSpecStatesTheHeaderAndTotalsRowsAndAnEmptySt
   const fm_table_info_t info = TableInfo(wb.handle);
   EXPECT_EQ(info.header_row_count, 1U);
   EXPECT_EQ(info.totals_row_count, 1U);
-  EXPECT_EQ(TableStyle(wb.handle).present, 0);
+  EXPECT_EQ(TableStylePresent(wb.handle), 0);
 }
 
 TEST(FormulonCApiInputRecords, TableSpecRefusesAFlagOutsideTheTristateAndCreatesNothing) {

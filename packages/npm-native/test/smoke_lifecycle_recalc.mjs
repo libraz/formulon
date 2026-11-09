@@ -55,6 +55,13 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   const assertRejected = (errorClass, input, label) => {
     assert.throws(() => (input === undefined ? wb.recalcParallel() : wb.recalcParallel(input)), errorClass, label);
   };
+  const assertInvalidArgument = (input, label) => {
+    assert.throws(
+      () => wb.recalcParallel(input),
+      (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+      label,
+    );
+  };
   // An omitted threadCount takes its default (0, the hardware width); null is still a shape error.
   assert.equal(typeof wb.recalcParallel(), 'object');
   assertRejected(TypeError, null, 'null threadCount');
@@ -62,7 +69,8 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   assertRejected(RangeError, Infinity, 'Infinity threadCount');
   assertRejected(RangeError, -Infinity, '-Infinity threadCount');
   assertRejected(RangeError, 1.5, 'fractional threadCount');
-  assertRejected(RangeError, -1, 'negative threadCount');
+  assertRejected(TypeError, '2', 'string threadCount');
+  assertInvalidArgument(-1, 'negative threadCount');
   // An integer above the cap is refused by the engine.
   assert.throws(
     () => wb.recalcParallel(9),
@@ -230,15 +238,15 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
   assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 10);
   assert.throws(
     () => wb.copySheet(9, 0),
-    (e) => isFormulonError(e, 5050),
+    (e) => isFormulonError(e, 10),
   );
   assert.throws(
     () => wb.copySheet(0, 9),
-    (e) => isFormulonError(e, 5050),
+    (e) => isFormulonError(e, 10),
   );
   assert.throws(
     () => wb.copySheet(0, 0, ''),
-    (e) => isFormulonError(e, 5051),
+    (e) => isFormulonError(e, 11),
   );
   assert.equal(wb.listSheets().length, 3);
   wb.dispose();

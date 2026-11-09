@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _sint, _uint
+from ._c import LIB, FormulonError, _NoCopy, _sint, _uint
 from ._sheet import _normalize_auto_filter, _read_auto_filter
 from ._status import StatusCode
 from ._workbook import (
@@ -41,7 +41,7 @@ __all__ = ["Table", "TableTotalsRowFunction"]
 _STYLE_TOGGLES = ("show_first_column", "show_last_column", "show_row_stripes", "show_column_stripes")
 
 
-class Table:
+class Table(_NoCopy):
     """One worksheet table of a :class:`Sheet`.
 
     Obtain a handle from :meth:`Sheet.table`, :meth:`Sheet.list_tables`,
@@ -119,7 +119,7 @@ class Table:
                 h, _uint(self._runtime_id, "runtime_id"), sheet_ptr, index_ptr
             )
             if status == StatusCode.NOT_FOUND:
-                raise FormulonError(StatusCode.NOT_FOUND, _diagnostic_override=("the table was removed", ""))
+                raise FormulonError(StatusCode.NOT_FOUND, "the table was removed", "")
             _check(status)
             return h, LIB.read_u32(sheet_ptr), LIB.read_u32(index_ptr)
 
@@ -128,7 +128,11 @@ class Table:
         """The name of the table at ``(sheet, index)``."""
         with _ArgScope() as scope:
             info_ptr = scope.struct(S.TABLE_INFO)
-            _check(LIB.fm_sheet_get_table_at(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), info_ptr))
+            _check(
+                LIB.fm_sheet_get_table_at(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position"), info_ptr
+                )
+            )
             return LIB.read_cstr(S.TABLE_INFO.unpack(LIB, info_ptr)["name"])
 
     # -- Properties --------------------------------------------------------
@@ -137,7 +141,7 @@ class Table:
         from ._workbook import TableProperties
 
         h, sheet, index = self._locate()
-        sheet_arg, index_arg = _uint(sheet, "sheet_index"), _uint(index, "table_index")
+        sheet_arg, index_arg = _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position")
         with _ArgScope() as scope:
             info_ptr = scope.struct(S.TABLE_INFO)
             column_ptr = scope.struct(S.TABLE_COLUMN_INFO)
@@ -148,14 +152,18 @@ class Table:
             columns = []
             for c in range(info["column_count"]):
                 S.zero_struct(LIB, S.TABLE_COLUMN_INFO, column_ptr)
-                _check(LIB.fm_sheet_get_table_column_at(h, sheet_arg, index_arg, _uint(c, "column"), column_ptr))
+                _check(
+                    LIB.fm_sheet_get_table_column_at(
+                        h, sheet_arg, index_arg, _uint(c, "column", role="position"), column_ptr
+                    )
+                )
                 col = S.TABLE_COLUMN_INFO.unpack(LIB, column_ptr)
                 columns.append(
                     TableColumn(
                         name=LIB.read_cstr(col["name"]),
                         totals_row_function=col["totals_row_function"],
-                        totals_row_label=LIB.read_cstr(col["totals_row_label"]),
-                        totals_row_formula=LIB.read_cstr(col["totals_row_formula"]),
+                        totals_row_label=LIB.read_optional_cstr(col["totals_row_label"]),
+                        totals_row_formula=LIB.read_optional_cstr(col["totals_row_formula"]),
                     )
                 )
             return TableProperties(
@@ -210,7 +218,11 @@ class Table:
             raw = bytearray(LIB.read_bytes(ptr, S.TABLE_PATCH.size))
             S.TABLE_PATCH.pack_into(raw, 0, values)
             LIB.write_bytes(ptr, bytes(raw))
-            _check(LIB.fm_sheet_update_table(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), ptr))
+            _check(
+                LIB.fm_sheet_update_table(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position"), ptr
+                )
+            )
 
     def _range_rect(self, range: Union[SheetRect, CellRect, str], sheet: int) -> CellRect:
         """The rectangle ``range`` names, which must lie on sheet index ``sheet``."""
@@ -221,15 +233,14 @@ class Table:
         else:
             ref = self._workbook.parse_reference(range)
             if ref is None:
-                raise FormulonError(
-                    StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{range!r} is not an A1 range", "")
-                )
+                raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{range!r} is not an A1 range", "")
             rect = ref.range
             target = sheet if ref.sheet_name is None else self._workbook.sheet(ref.sheet_name).index
         if target != sheet:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _diagnostic_override=("the range is on a different sheet than the table", ""),
+                "the range is on a different sheet than the table",
+                "",
             )
         return rect
 
@@ -245,7 +256,12 @@ class Table:
         h, sheet, index = self._locate()
         with _ArgScope() as scope:
             _check(
-                LIB.fm_sheet_rename_table(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), scope.cstr(name))
+                LIB.fm_sheet_rename_table(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(index, "table_index", role="position"),
+                    scope.cstr(name),
+                )
             )
 
     # -- Style -------------------------------------------------------------
@@ -253,13 +269,20 @@ class Table:
         """Return the table's style name and toggles, or ``None`` without a style element."""
         h, sheet, index = self._locate()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             ptr = scope.struct(S.TABLE_STYLE_OPTIONS)
             _check(
-                LIB.fm_sheet_get_table_style_options(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), ptr)
+                LIB.fm_sheet_get_table_style_options(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(index, "table_index", role="position"),
+                    present,
+                    ptr,
+                )
             )
-            d = S.TABLE_STYLE_OPTIONS.unpack(LIB, ptr)
-            if not d["present"]:
+            if LIB.read_i32(present) == 0:
                 return None
+            d = S.TABLE_STYLE_OPTIONS.unpack(LIB, ptr)
             return TableStyleOptions(
                 style_name=LIB.read_cstr(d["style_name"]) or None,
                 show_first_column=d["show_first_column"] != 0,
@@ -313,7 +336,7 @@ class Table:
             S.TABLE_STYLE_OPTIONS_PATCH.pack(LIB, ptr, values)
             _check(
                 LIB.fm_sheet_update_table_style_options(
-                    h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), ptr
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position"), ptr
                 )
             )
 
@@ -336,7 +359,12 @@ class Table:
             out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_rename_table_column(
-                    h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), _uint(column, "column"), name_ptr, out
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(index, "table_index", role="position"),
+                    _uint(column, "column", role="position"),
+                    name_ptr,
+                    out,
                 )
             )
             return LIB.read_cstr(LIB.read_u32(out))
@@ -363,9 +391,9 @@ class Table:
             _check(
                 LIB.fm_sheet_set_table_column_totals(
                     h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(index, "table_index"),
-                    _uint(column, "column"),
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(index, "table_index", role="position"),
+                    _uint(column, "column", role="position"),
                     _sint(totals.totals_row_function, "totals_row_function"),
                     scope.nonempty_cstr(totals.totals_row_label),
                     scope.nonempty_cstr(totals.totals_row_formula),
@@ -391,7 +419,11 @@ class Table:
     def apply_auto_filter(self) -> None:
         """Hide the body rows the table's AutoFilter excludes and show the rest."""
         h, sheet, index = self._locate()
-        _check(LIB.fm_sheet_apply_table_auto_filter(h, _uint(sheet, "sheet_index"), _uint(index, "table_index")))
+        _check(
+            LIB.fm_sheet_apply_table_auto_filter(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position")
+            )
+        )
 
     def clear_auto_filter_criteria(self) -> None:
         """Drop every column criterion of the table's AutoFilter and show all its body rows.
@@ -401,7 +433,9 @@ class Table:
         """
         h, sheet, index = self._locate()
         _check(
-            LIB.fm_sheet_clear_table_auto_filter_criteria(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"))
+            LIB.fm_sheet_clear_table_auto_filter_criteria(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position")
+            )
         )
 
     def evaluate_auto_filter(self) -> AutoFilterEval:

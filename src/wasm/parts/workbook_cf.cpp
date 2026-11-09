@@ -52,7 +52,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val rang
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("evaluateCfRange");
+  JsNarrowNumericReader reader("Sheet.evaluateCfRange");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();
@@ -106,45 +106,27 @@ namespace {
 
 // Reads CF rule `index` of `sheet` into its `ConditionalFormatEntry` shape.
 emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
+  const emscripten::val null = emscripten::val::null();
   emscripten::val item = emscripten::val::object();
   js_set_cstr(item, "id", rule.id);
   item.set("type", static_cast<uint32_t>(rule.type));
   item.set("priority", rule.priority);
   item.set("stopIfTrue", rule.stop_if_true != 0);
   item.set("ranges", cell_rects_to_val(rule.ranges, rule.range_count));
-  if (rule.dxf_index_engaged != 0) {
-    item.set("dxfIndex", rule.dxf_index);
-  }
-  if (rule.formula1 != nullptr) {
-    item.set("formula1", std::string(rule.formula1));
-  }
-  if (rule.formula2 != nullptr) {
-    item.set("formula2", std::string(rule.formula2));
-  }
-  if (rule.op_engaged != 0) {
-    item.set("operator", static_cast<uint32_t>(rule.op));
-  }
-  if (rule.rank_engaged != 0) {
-    item.set("rank", rule.rank);
-    item.set("percent", rule.percent != 0);
-    item.set("bottom", rule.bottom != 0);
-  }
-  // aboveAverage flags are always present (default-engineered), but
-  // we only surface them for the AboveAverage rule type to avoid
-  // confusing FE consumers.
-  if (rule.type == 6 /* AboveAverage */) {
-    item.set("aboveAverage", rule.above_average != 0);
-    item.set("equalAverage", rule.equal_average != 0);
-    if (rule.std_dev_engaged != 0) {
-      item.set("stdDev", rule.std_dev);
-    }
-  }
-  if (rule.text != nullptr) {
-    item.set("text", std::string(rule.text));
-  }
-  if (rule.time_period_engaged != 0) {
-    item.set("timePeriod", static_cast<uint32_t>(rule.time_period));
-  }
+  js_set_present_or_null(item, "dxfIndex", rule.has_dxf_index, rule.dxf_index);
+  js_set_cstr_or_null(item, "formula1", rule.formula1);
+  js_set_cstr_or_null(item, "formula2", rule.formula2);
+  js_set_present_or_null(item, "operator", rule.has_op, static_cast<uint32_t>(rule.op));
+  js_set_present_or_null(item, "rank", rule.has_rank, rule.rank);
+  item.set("percent", rule.has_rank != 0 ? emscripten::val(rule.percent != 0) : null);
+  item.set("bottom", rule.has_rank != 0 ? emscripten::val(rule.bottom != 0) : null);
+  // The average flags belong to the AboveAverage rule type only.
+  const bool above_average_rule = rule.type == 6 /* AboveAverage */;
+  item.set("aboveAverage", above_average_rule ? emscripten::val(rule.above_average != 0) : null);
+  item.set("equalAverage", above_average_rule ? emscripten::val(rule.equal_average != 0) : null);
+  js_set_present_or_null(item, "stdDev", above_average_rule ? rule.has_std_dev : 0, rule.std_dev);
+  js_set_cstr_or_null(item, "text", rule.text);
+  js_set_present_or_null(item, "timePeriod", rule.has_time_period, static_cast<uint32_t>(rule.time_period));
   if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
     emscripten::val color_scale = emscripten::val::object();
     emscripten::val thresholds = emscripten::val::array();
@@ -156,8 +138,10 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
     color_scale.set("thresholds", thresholds);
     color_scale.set("colors", colors);
     item.set("colorScale", color_scale);
+  } else {
+    item.set("colorScale", null);
   }
-  if (rule.data_bar_engaged != 0) {
+  if (rule.has_data_bar != 0) {
     emscripten::val data_bar = emscripten::val::object();
     data_bar.set("min", cfvo_to_js(rule.data_bar_min));
     data_bar.set("max", cfvo_to_js(rule.data_bar_max));
@@ -165,34 +149,23 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
     data_bar.set("showValue", rule.data_bar_show_value != 0);
     data_bar.set("minLengthPct", static_cast<uint32_t>(rule.data_bar_min_length_pct));
     data_bar.set("maxLengthPct", static_cast<uint32_t>(rule.data_bar_max_length_pct));
-    // `x14` extension payload. Each key is present only when the C ABI
-    // reports the corresponding `*_engaged` flag, so an absent key means
-    // "this rule does not override the model default" and feeding the
-    // object straight back into `addConditionalFormat` reproduces the
-    // rule. The getter engages all six, so a rule read from a workbook
-    // always carries them.
-    if (rule.data_bar_gradient_engaged != 0) {
-      data_bar.set("gradient", rule.data_bar_gradient != 0);
-    }
-    if (rule.data_bar_axis_position_engaged != 0) {
-      data_bar.set("axisPosition", static_cast<uint32_t>(rule.data_bar_axis_position));
-    }
-    if (rule.data_bar_negative_fill_engaged != 0) {
-      data_bar.set("negativeFill", js_color_spec(rule.data_bar_negative_fill));
-    }
-    if (rule.data_bar_border_engaged != 0) {
-      data_bar.set("border", js_color_spec(rule.data_bar_border));
-    }
-    if (rule.data_bar_negative_border_engaged != 0) {
-      data_bar.set("negativeBorder", js_color_spec(rule.data_bar_negative_border));
-    }
-    if (rule.data_bar_axis_color_engaged != 0) {
-      data_bar.set("axisColor", js_color_spec(rule.data_bar_axis_color));
-    }
+    // The six `x14` keys read `null` when the rule does not override the model default.
+    data_bar.set("gradient", rule.has_data_bar_gradient != 0 ? emscripten::val(rule.data_bar_gradient != 0) : null);
+    js_set_present_or_null(data_bar, "axisPosition", rule.has_data_bar_axis_position,
+                           static_cast<uint32_t>(rule.data_bar_axis_position));
+    const auto color_or_null = [&null](const fm_color_t& color) {
+      return color.kind != FM_COLOR_KIND_NONE ? js_color_spec(color) : null;
+    };
+    data_bar.set("negativeFill", color_or_null(rule.data_bar_negative_fill));
+    data_bar.set("border", color_or_null(rule.data_bar_border));
+    data_bar.set("negativeBorder", color_or_null(rule.data_bar_negative_border));
+    data_bar.set("axisColor", color_or_null(rule.data_bar_axis_color));
     data_bar.set("direction", static_cast<uint32_t>(rule.data_bar_direction));
     item.set("dataBar", data_bar);
+  } else {
+    item.set("dataBar", null);
   }
-  if (rule.icon_set_engaged != 0) {
+  if (rule.has_icon_set != 0) {
     emscripten::val icon_set = emscripten::val::object();
     icon_set.set("name", static_cast<uint32_t>(rule.icon_set_name));
     emscripten::val thresholds = emscripten::val::array();
@@ -203,9 +176,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
     icon_set.set("reverse", rule.icon_set_reverse != 0);
     icon_set.set("showValue", rule.icon_set_show_value != 0);
     icon_set.set("percent", rule.icon_set_percent != 0);
-    if (rule.icon_set_floor_engaged != 0) {
-      icon_set.set("floor", cfvo_to_js(rule.icon_set_floor));
-    }
+    icon_set.set("floor", rule.has_icon_set_floor != 0 ? cfvo_to_js(rule.icon_set_floor) : null);
     if (rule.icon_set_icon_count != 0U) {
       emscripten::val icons = emscripten::val::array();
       for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
@@ -215,8 +186,12 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
         icons.set(j, icon);
       }
       icon_set.set("icons", icons);
+    } else {
+      icon_set.set("icons", null);
     }
     item.set("iconSet", icon_set);
+  } else {
+    item.set("iconSet", null);
   }
   return item;
 }
@@ -253,7 +228,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   std::vector<fm_cfvo_t> icon_set_thresholds;
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
-  JsNarrowNumericReader reader("addCfRule");
+  JsNarrowNumericReader reader("Sheet.addCfRule");
   const emscripten::val ranges_value = reader.value(v, "ranges", "rule.ranges");
   std::vector<fm_cell_rect_t> merge_ranges;
   if (reader.require_array(ranges_value, "rule.ranges")) {
@@ -276,7 +251,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   rule.stop_if_true = reader.boolean(v, "stopIfTrue", false, "rule.stopIfTrue") ? 1 : 0;
   const emscripten::val dxf_index = reader.value(v, "dxfIndex", "rule.dxfIndex");
   if (js_value_present(dxf_index)) {
-    rule.dxf_index_engaged = 1;
+    rule.has_dxf_index = 1;
     rule.dxf_index = reader.u32_value(dxf_index, 0U, "rule.dxfIndex");
   }
   rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
@@ -285,12 +260,12 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   const emscripten::val op = reader.value(v, "operator", "rule.operator");
   if (js_value_present(op)) {
-    rule.op_engaged = 1;
+    rule.has_op = 1;
     rule.op = reader.u8_value(op, 0U, "rule.operator");
   }
   const emscripten::val rank = reader.value(v, "rank", "rule.rank");
   if (js_value_present(rank)) {
-    rule.rank_engaged = 1;
+    rule.has_rank = 1;
     rule.rank = reader.i32_value(rank, 0, "rule.rank");
   }
   rule.percent = reader.boolean(v, "percent", false, "rule.percent") ? 1 : 0;
@@ -299,13 +274,13 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   rule.equal_average = reader.boolean(v, "equalAverage", false, "rule.equalAverage") ? 1 : 0;
   const emscripten::val std_dev = reader.value(v, "stdDev", "rule.stdDev");
   if (js_value_present(std_dev)) {
-    rule.std_dev_engaged = 1;
+    rule.has_std_dev = 1;
     rule.std_dev = reader.number_value(std_dev, 0.0, "rule.stdDev");
   }
   rule.text = text.empty() ? nullptr : text.c_str();
   const emscripten::val time_period = reader.value(v, "timePeriod", "rule.timePeriod");
   if (js_value_present(time_period)) {
-    rule.time_period_engaged = 1;
+    rule.has_time_period = 1;
     rule.time_period = reader.u8_value(time_period, 0U, "rule.timePeriod");
   }
   const emscripten::val color_scale = reader.value(v, "colorScale", "colorScale");
@@ -334,7 +309,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   }
   const emscripten::val data_bar = reader.value(v, "dataBar", "dataBar");
   if (js_value_present(data_bar)) {
-    rule.data_bar_engaged = 1;
+    rule.has_data_bar = 1;
     rule.data_bar_min = js_pull_cfvo(reader.value(data_bar, "min", "dataBar.min"), &cfvo_strings, reader);
     rule.data_bar_max = js_pull_cfvo(reader.value(data_bar, "max", "dataBar.max"), &cfvo_strings, reader);
     rule.data_bar_fill = js_pull_color_spec(data_bar, "fill", &reader);
@@ -342,44 +317,40 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
     rule.data_bar_min_length_pct = reader.u8(data_bar, "minLengthPct", 10U, "dataBar.minLengthPct");
     rule.data_bar_max_length_pct = reader.u8(data_bar, "maxLengthPct", 90U, "dataBar.maxLengthPct");
     // `x14` extension payload. An omitted key leaves the corresponding
-    // `*_engaged` flag clear, which the C ABI reads as "keep the model
+    // `has_*` flag clear, which the C ABI reads as "keep the model
     // default" (gradient on, automatic axis, negative fill equal to the
     // positive fill, no border, black axis).
     const emscripten::val gradient = reader.value(data_bar, "gradient", "dataBar.gradient");
     if (js_value_present(gradient)) {
-      rule.data_bar_gradient_engaged = 1;
+      rule.has_data_bar_gradient = 1;
       rule.data_bar_gradient = reader.boolean_value(gradient, true) ? 1 : 0;
     }
     const emscripten::val axis_position = reader.value(data_bar, "axisPosition", "dataBar.axisPosition");
     if (js_value_present(axis_position)) {
-      rule.data_bar_axis_position_engaged = 1;
+      rule.has_data_bar_axis_position = 1;
       rule.data_bar_axis_position = reader.u8_value(axis_position, 0U, "dataBar.axisPosition");
     }
     const emscripten::val negative_fill = reader.value(data_bar, "negativeFill", "dataBar.negativeFill");
     if (js_value_present(negative_fill)) {
-      rule.data_bar_negative_fill_engaged = 1;
       rule.data_bar_negative_fill = js_pull_color_spec_value(negative_fill, "dataBar.negativeFill", &reader);
     }
     const emscripten::val border = reader.value(data_bar, "border", "dataBar.border");
     if (js_value_present(border)) {
-      rule.data_bar_border_engaged = 1;
       rule.data_bar_border = js_pull_color_spec_value(border, "dataBar.border", &reader);
     }
     const emscripten::val negative_border = reader.value(data_bar, "negativeBorder", "dataBar.negativeBorder");
     if (js_value_present(negative_border)) {
-      rule.data_bar_negative_border_engaged = 1;
       rule.data_bar_negative_border = js_pull_color_spec_value(negative_border, "dataBar.negativeBorder", &reader);
     }
     const emscripten::val axis_color = reader.value(data_bar, "axisColor", "dataBar.axisColor");
     if (js_value_present(axis_color)) {
-      rule.data_bar_axis_color_engaged = 1;
       rule.data_bar_axis_color = js_pull_color_spec_value(axis_color, "dataBar.axisColor", &reader);
     }
     rule.data_bar_direction = reader.u8(data_bar, "direction", 0U, "dataBar.direction");
   }
   const emscripten::val icon_set = reader.value(v, "iconSet", "iconSet");
   if (js_value_present(icon_set)) {
-    rule.icon_set_engaged = 1;
+    rule.has_icon_set = 1;
     rule.icon_set_name = reader.u8(icon_set, "name", 0U, "iconSet.name");
     const emscripten::val thresholds = reader.value(icon_set, "thresholds", "iconSet.thresholds");
     if (reader.is_array(thresholds, "iconSet.thresholds")) {
@@ -398,7 +369,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
     // An omitted floor keeps Excel's default, `percent 0`.
     const emscripten::val floor = reader.value(icon_set, "floor", "iconSet.floor");
     if (js_value_present(floor)) {
-      rule.icon_set_floor_engaged = 1;
+      rule.has_icon_set_floor = 1;
       rule.icon_set_floor = js_pull_cfvo(floor, &cfvo_strings, reader);
     }
     const emscripten::val icons = reader.value(icon_set, "icons", "iconSet.icons");

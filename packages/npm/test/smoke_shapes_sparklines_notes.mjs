@@ -182,7 +182,8 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(first.colorNegative.theme, 5);
   assert.equal(first.colorNegative.tint, -0.25);
   assert.equal(first.colorLow.indexed, 12);
-  assert.equal(first.colorHigh.kind, 0);
+  assert.equal(first.colorHigh, null);
+  assert.equal(second.colorSeries, null);
   assert.equal(first.markers, true);
   assert.equal(first.high, false);
   assert.equal(first.minAxisType, mod.SparklineAxisType.Custom);

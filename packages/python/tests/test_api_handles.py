@@ -480,12 +480,14 @@ class HandleRefTests(HandleTestCase):
                 ws.drawing(2**32)
             with self.assertRaises(ValueError):
                 wb.pivot_cache(2**32)
-            # A negative index is a ValueError, like every other index; a float is not an index.
-            for bad in (-1,):
-                with self.subTest(bad=bad):
-                    for access in (table_sheet.table, ws.pivot, wb.pivot_cache, ws.drawing):
-                        with self.assertRaises(ValueError):
-                            access(bad)
+            # A negative position is out of range; a negative id names nothing; a float is not an index.
+            for access in (table_sheet.table, ws.pivot):
+                with self.assertRaises(IndexOutOfRangeError) as caught:
+                    access(-1)
+                self.assertEqual(caught.exception.code, out_of_range)
+            for access in (wb.pivot_cache, ws.drawing):
+                with self.assertRaises(FormulonError):
+                    access(-1)
             for bad in (float("nan"), float("inf"), -float("inf"), 1.5):
                 with self.subTest(bad=bad):
                     for access in (table_sheet.table, ws.pivot, wb.pivot_cache, ws.drawing):

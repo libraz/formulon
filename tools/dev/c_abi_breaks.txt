@@ -37,7 +37,7 @@ removed fm_sheet_restore_image :: renamed fm_sheet_restore_drawing, with flag FM
 removed fm_workbook_pivot_field_set_date_group :: renamed to fm_sheet_set_pivot_field_date_group, which groups by a FM_PIVOT_PERIOD_* mask into cache group fields with locale labels; it takes const fm_pivot_date_group_spec_t* (the granularity, year and -1 serial arguments are gone; has_start / has_end False take the field's first / last value)
 removed fm_buffer_free :: renamed to fm_buffer_destroy
 removed fm_cell_clear_xf_index :: renamed to fm_sheet_reset_cell_xf_index; it resets the cell to the default XF
-removed fm_cell_get_xf_index :: renamed to fm_sheet_get_cell_xf_index
+removed fm_cell_get_xf_index :: renamed to fm_sheet_get_cell_xf_index, which takes int32_t* out_present before uint32_t* out_xf_index
 removed fm_cell_nodes_at :: renamed to fm_cell_nodes_get_node_at
 removed fm_cell_nodes_count :: renamed to fm_cell_nodes_get_node_count
 removed fm_cell_range_at :: renamed to fm_cell_range_get_cell_at
@@ -235,7 +235,7 @@ removed fm_workbook_pivot_field_add_item :: renamed to fm_sheet_add_pivot_field_
 removed fm_workbook_pivot_field_add_item_at :: renamed to fm_sheet_add_pivot_field_item_by_cache_index
 removed fm_workbook_pivot_field_add_subtotal_fn :: renamed to fm_sheet_add_pivot_field_subtotal_function
 removed fm_workbook_pivot_field_clear :: renamed to fm_sheet_clear_pivot_fields
-removed fm_workbook_pivot_field_clear_date_group :: renamed to fm_sheet_clear_pivot_field_date_group
+removed fm_workbook_pivot_field_clear_date_group :: pass NULL to fm_sheet_set_pivot_field_date_group
 removed fm_workbook_pivot_field_clear_items :: renamed to fm_sheet_clear_pivot_field_items
 removed fm_workbook_pivot_field_clear_subtotal_fns :: renamed to fm_sheet_clear_pivot_field_subtotal_functions
 removed fm_workbook_pivot_field_count :: renamed to fm_sheet_get_pivot_field_count
@@ -278,7 +278,7 @@ retyped fm_workbook_set_theme_colors :: parameter type renamed (fm_theme_colors 
 retyped fm_workbook_set_theme_fonts :: parameter type renamed (fm_theme_fonts -> fm_theme_fonts_t)
 removed fm_workbook_sheet_count :: renamed to fm_workbook_get_sheet_count
 removed fm_workbook_sheet_name :: renamed to fm_workbook_get_sheet_name
-removed fm_workbook_spill_info :: renamed to fm_sheet_get_spill_info
+removed fm_workbook_spill_info :: renamed to fm_sheet_get_spill, which takes int32_t* out_present before fm_spill_info_t* out; the record loses engaged
 removed fm_workbook_table_at :: moved to fm_sheet_get_table(wb, sheet_index, table_index, out_name, out_rect); a table has one name, and fm_workbook_find_table finds it by name
 removed fm_workbook_table_count :: moved to fm_sheet_get_table_count, counting the tables of one sheet
 removed fm_workbook_table_create :: moved to fm_sheet_add_table, which takes const fm_table_spec_t* (range, one table name, columns, style, header / totals rows and the four style toggles) and writes a sheet-local table index

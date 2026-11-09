@@ -166,7 +166,8 @@ test('data table arguments are validated', async () => {
   assert.throws(() => wb.sheet(5).addDataTable(squares), isFormulonError);
   assert.throws(() => wb.sheet(5).getDataTable(0, 0), isFormulonError);
   assert.throws(() => wb.sheet(5).removeDataTable(0, 0), isFormulonError);
-  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: -1, col: 1 } }), RangeError);
+  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: -1, col: 1 } }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, columnInput: { row: 1.5, col: 1 } }), RangeError);
   wb.sheet(0).addDataTable(squares);
   assert.throws(() => wb.sheet(0).addDataTable(squares), isFormulonError);
   release(wb);

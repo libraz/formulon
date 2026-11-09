@@ -224,6 +224,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/text_number_range_test.cpp
   unit/eval/numbervalue_rules_test.cpp
   unit/eval/format_localize_test.cpp
+  unit/eval/formula_localize_map_test.cpp
   unit/eval/formula_localize_test.cpp
   unit/eval/dbcs_table_test.cpp
   unit/eval/references_locale_test.cpp

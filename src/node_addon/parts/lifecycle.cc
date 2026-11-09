@@ -42,18 +42,25 @@ bool FormatOmitted(const Napi::CallbackInfo& info) {
   return info.Length() == 0 || info[0].IsUndefined();
 }
 
-// Reads `threadCount`: a non-number is a TypeError and a non-integer or a
-// value outside uint32 a RangeError. The C ABI rejects a count past its
-// scheduler limit with the value the caller passed.
+// Reads `threadCount`: a non-number is a TypeError, a fractional, non-finite
+// or too-large number a RangeError and a negative integer InvalidArgument.
+// The C ABI rejects a count past its scheduler limit.
 bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
+  constexpr const char* kLabel = "Workbook.recalcParallel threadCount";
   const Napi::Value value = info[0];
   if (!value.IsNumber()) {
-    Napi::TypeError::New(info.Env(), "positional argument must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(info.Env(), std::string(kLabel) + " must be a number").ThrowAsJavaScriptException();
     return false;
   }
   const double number = NumberValue(value, 0.0);
-  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kUint32MaxNumber) {
-    Napi::RangeError::New(info.Env(), "positional argument is outside uint32 range").ThrowAsJavaScriptException();
+  if (!std::isfinite(number) || std::trunc(number) != number || number > kUint32MaxNumber) {
+    Napi::RangeError::New(info.Env(), std::string(kLabel) + " must be an integer within range")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  if (number < 0.0) {
+    ThrowBindingStatus(info.Env(), FM_STATUS_INVALID_ARGUMENT,
+                       std::string(kLabel) + " " + std::to_string(static_cast<int64_t>(number)) + " is negative");
     return false;
   }
   thread_count = static_cast<uint32_t>(number);

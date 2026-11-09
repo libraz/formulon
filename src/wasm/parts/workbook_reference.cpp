@@ -70,7 +70,7 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   if (!options_object(options, "parseReference", &opts)) {
     return val::undefined();
   }
-  JsNarrowNumericReader reader("parseReference");
+  JsNarrowNumericReader reader("Workbook.parseReference");
   const bool r1c1 = reader.boolean(opts, "r1c1", false, "r1c1");
   const val row_value = reader.value(opts, "baseRow", "baseRow");
   const val col_value = reader.value(opts, "baseCol", "baseCol");
@@ -110,7 +110,7 @@ std::string JsWorkbook::formatReference(emscripten::val range, emscripten::val o
   if (!options_object(options, "formatReference", &opts)) {
     return std::string();
   }
-  JsNarrowNumericReader reader("formatReference");
+  JsNarrowNumericReader reader("Workbook.formatReference");
   std::string sheet_store;
   const char* sheet_name = reader.optional_string(range, "sheetName", sheet_store, "sheetName");
   const val rect_value = reader.value(range, "rect", "rect");

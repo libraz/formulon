@@ -53,9 +53,7 @@ def _handle_index(ref: Any, owner: Any, what: str) -> Optional[int]:
             return None
         parent, noun, place = ref.workbook, "Table", "workbook"
     if parent is not owner:
-        raise FormulonError(
-            StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{what} is a {noun} of another {place}", "")
-        )
+        raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{what} is a {noun} of another {place}", "")
     return ref.index
 
 
@@ -85,7 +83,7 @@ def resolve_ref(ref: Union[int, str, Any], names: Callable[[], Iterable[str]], w
         for index, name in enumerate(names()):
             if _fold(name) == wanted:
                 return index
-        raise FormulonError(StatusCode.NOT_FOUND, _diagnostic_override=(f"no {what} is named {ref!r}", ""))
+        raise FormulonError(StatusCode.NOT_FOUND, f"no {what} is named {ref!r}", "")
     if isinstance(ref, bool):
         raise TypeError(f"formulon: {what} must be an int, a str or a handle, got bool")
     index = None if owner is None else _handle_index(ref, owner, what)

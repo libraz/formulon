@@ -16,6 +16,18 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     assert.ok(v.length > 0, `expected non-empty version, got ${JSON.stringify(v)}`);
   });
 
+  test('getSpill and getArrayFormula read null outside a spill or block', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      wb.setNumber(0, 0, 0, 1);
+      wb.recalc();
+      assert.equal(wb.getSpill(0, 25, 25), null);
+      assert.equal(wb.getArrayFormula(0, 25, 25), null);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('getStatusName covers known codes', () => {
     assert.equal(Module.getStatusName(0), 'OK');
     // Unknown / out-of-band codes still return a non-null string.
@@ -215,6 +227,8 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       assert.equal(wb.getValue(0, branchCount, 2).number, (5 + branchCount + 1) * 2);
 
       expectFailure(() => wb.recalcParallel(9), StatusCode.InvalidArgument);
+      expectFailure(() => wb.recalcParallel(-1), StatusCode.InvalidArgument);
+      expectFailure(() => wb.recalcParallel(2 ** 32 + 1), StatusCode.InvalidArgument);
 
       for (const invalidThreadCount of [
         -0.5,
@@ -222,7 +236,6 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
         Number.NaN,
         Number.POSITIVE_INFINITY,
         Number.NEGATIVE_INFINITY,
-        2 ** 32 + 1,
         null,
         undefined,
       ]) {

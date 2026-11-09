@@ -274,7 +274,7 @@ class ChartEditTests(unittest.TestCase):
             )
             wb.sheet(0).chart(oid).set_legend(None)
             self.assertIsNone(wb.sheet(0).chart(oid).get_properties().legend)
-            with self.assertRaises(ValueError):
+            with self.assertRaises(FormulonError):
                 wb.sheet(0).chart(oid).update_legend(position=ChartLegendPosition.TOP, hidden_entries=[-1])
 
             wb.sheet(0).chart(oid).update_display(blanks_as=BlanksAs.SPAN, plot_visible_only=False)

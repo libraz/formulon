@@ -391,18 +391,17 @@ Napi::Value Workbook::GetSheetPageSetup(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object result = Napi::Object::New(env);
-  result.Set("orientation", JsNumberOrNull(env, setup.orientation_engaged, setup.orientation));
+  result.Set("orientation", JsNumberOrNull(env, setup.has_orientation, setup.orientation));
   result.Set("paperSize", Napi::Number::New(env, setup.paper_size));
   result.Set("scalePct", Napi::Number::New(env, setup.scale_pct));
   result.Set("fitToWidth", Napi::Number::New(env, setup.fit_to_width));
   result.Set("fitToHeight", Napi::Number::New(env, setup.fit_to_height));
   result.Set("fitToPage", Napi::Boolean::New(env, setup.fit_to_page != 0));
-  result.Set("orientationStated", Napi::Boolean::New(env, setup.orientation_engaged != 0));
-  result.Set("paperSizeStated", Napi::Boolean::New(env, setup.paper_size_engaged != 0));
-  result.Set("scalePctStated", Napi::Boolean::New(env, setup.scale_pct_engaged != 0));
-  result.Set("fitToWidthStated", Napi::Boolean::New(env, setup.fit_to_width_engaged != 0));
-  result.Set("fitToHeightStated", Napi::Boolean::New(env, setup.fit_to_height_engaged != 0));
-  result.Set("fitToPageStated", Napi::Boolean::New(env, setup.fit_to_page_engaged != 0));
+  result.Set("paperSizeStated", Napi::Boolean::New(env, setup.has_paper_size != 0));
+  result.Set("scalePctStated", Napi::Boolean::New(env, setup.has_scale_pct != 0));
+  result.Set("fitToWidthStated", Napi::Boolean::New(env, setup.has_fit_to_width != 0));
+  result.Set("fitToHeightStated", Napi::Boolean::New(env, setup.has_fit_to_height != 0));
+  result.Set("fitToPageStated", Napi::Boolean::New(env, setup.has_fit_to_page != 0));
   return result;
 }
 
@@ -423,12 +422,12 @@ Napi::Value Workbook::GetSheetPageMargins(const Napi::CallbackInfo& info) {
   result.Set("bottomIn", Napi::Number::New(env, margins.bottom_in));
   result.Set("headerIn", Napi::Number::New(env, margins.header_in));
   result.Set("footerIn", Napi::Number::New(env, margins.footer_in));
-  result.Set("leftInStated", Napi::Boolean::New(env, margins.left_in_engaged != 0));
-  result.Set("rightInStated", Napi::Boolean::New(env, margins.right_in_engaged != 0));
-  result.Set("topInStated", Napi::Boolean::New(env, margins.top_in_engaged != 0));
-  result.Set("bottomInStated", Napi::Boolean::New(env, margins.bottom_in_engaged != 0));
-  result.Set("headerInStated", Napi::Boolean::New(env, margins.header_in_engaged != 0));
-  result.Set("footerInStated", Napi::Boolean::New(env, margins.footer_in_engaged != 0));
+  result.Set("leftInStated", Napi::Boolean::New(env, margins.has_left_in != 0));
+  result.Set("rightInStated", Napi::Boolean::New(env, margins.has_right_in != 0));
+  result.Set("topInStated", Napi::Boolean::New(env, margins.has_top_in != 0));
+  result.Set("bottomInStated", Napi::Boolean::New(env, margins.has_bottom_in != 0));
+  result.Set("headerInStated", Napi::Boolean::New(env, margins.has_header_in != 0));
+  result.Set("footerInStated", Napi::Boolean::New(env, margins.has_footer_in != 0));
   return result;
 }
 
@@ -579,10 +578,10 @@ Napi::Value Workbook::GetSheetPrintOptions(const Napi::CallbackInfo& info) {
   result.Set("headings", Napi::Boolean::New(env, options.headings != 0));
   result.Set("horizontalCentered", Napi::Boolean::New(env, options.horizontal_centered != 0));
   result.Set("verticalCentered", Napi::Boolean::New(env, options.vertical_centered != 0));
-  result.Set("gridLinesStated", Napi::Boolean::New(env, options.grid_lines_engaged != 0));
-  result.Set("headingsStated", Napi::Boolean::New(env, options.headings_engaged != 0));
-  result.Set("horizontalCenteredStated", Napi::Boolean::New(env, options.horizontal_centered_engaged != 0));
-  result.Set("verticalCenteredStated", Napi::Boolean::New(env, options.vertical_centered_engaged != 0));
+  result.Set("gridLinesStated", Napi::Boolean::New(env, options.has_grid_lines != 0));
+  result.Set("headingsStated", Napi::Boolean::New(env, options.has_headings != 0));
+  result.Set("horizontalCenteredStated", Napi::Boolean::New(env, options.has_horizontal_centered != 0));
+  result.Set("verticalCenteredStated", Napi::Boolean::New(env, options.has_vertical_centered != 0));
   return result;
 }
 
@@ -607,10 +606,10 @@ Napi::Value Workbook::GetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   result.Set("differentFirst", Napi::Boolean::New(env, hf.different_first != 0));
   result.Set("scaleWithDoc", Napi::Boolean::New(env, hf.scale_with_doc != 0));
   result.Set("alignWithMargins", Napi::Boolean::New(env, hf.align_with_margins != 0));
-  result.Set("differentOddEvenStated", Napi::Boolean::New(env, hf.different_odd_even_engaged != 0));
-  result.Set("differentFirstStated", Napi::Boolean::New(env, hf.different_first_engaged != 0));
-  result.Set("scaleWithDocStated", Napi::Boolean::New(env, hf.scale_with_doc_engaged != 0));
-  result.Set("alignWithMarginsStated", Napi::Boolean::New(env, hf.align_with_margins_engaged != 0));
+  result.Set("differentOddEvenStated", Napi::Boolean::New(env, hf.has_different_odd_even != 0));
+  result.Set("differentFirstStated", Napi::Boolean::New(env, hf.has_different_first != 0));
+  result.Set("scaleWithDocStated", Napi::Boolean::New(env, hf.has_scale_with_doc != 0));
+  result.Set("alignWithMarginsStated", Napi::Boolean::New(env, hf.has_align_with_margins != 0));
   return result;
 }
 

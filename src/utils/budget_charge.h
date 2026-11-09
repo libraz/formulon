@@ -59,7 +59,7 @@ Expected<void, Error> charge_then_reserve(ResourceBudget& budget, Container& con
     // A ceiling above `SIZE_MAX` cannot be honoured by a 32-bit `size_t`
     // container (the WASM main build), so reject before either step runs.
     if (count > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-      return make_error(FormulonErrorCode::kSecResourceLimit, "reserve count exceeds addressable size",
+      return make_error(FormulonErrorCode::kSecurityResourceLimit, "reserve count exceeds addressable size",
                         context + " requested=" + std::to_string(count));
     }
   }

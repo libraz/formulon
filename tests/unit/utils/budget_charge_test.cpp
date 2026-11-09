@@ -27,7 +27,7 @@ TEST(BudgetCharge, OverCeilingChargeKeepsContextAndBudgetDiagnostics) {
   ResourceBudget budget(10U);
   auto over = charge(budget, 11U, "sheet=0 anchor=A1");
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(budget.used(), 0U);
 
   const std::string& context = over.error().context;
@@ -45,10 +45,10 @@ TEST(BudgetCharge, EmptyContextLeavesBudgetDiagnosticsUnpadded) {
 }
 
 TEST(BudgetCharge, ChargeUsesTheBudgetsConfiguredErrorCode) {
-  ResourceBudget budget(1U, FormulonErrorCode::kFnOverflow);
+  ResourceBudget budget(1U, FormulonErrorCode::kFunctionOverflow);
   auto over = charge(budget, 2U, "ctx");
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kFnOverflow);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kFunctionOverflow);
 }
 
 TEST(ChargeThenReserve, SuccessfulChargeReservesTheContainer) {

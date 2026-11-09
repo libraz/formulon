@@ -221,8 +221,8 @@ describe('A1 text stands for a rectangle wherever a record holds one', () => {
       assert.deepEqual(plain(ws.getHyperlink('A1').range), rect(0, 0, 0, 0));
       assert.equal(ws.getHyperlink('A1').rect, undefined);
       ws.setFormula('C1', '=SEQUENCE(2)');
-      assert.deepEqual(plain(ws.getSpillInfo('C1').range), rect(0, 2, 1, 2));
-      assert.equal(ws.getSpillInfo('C1').rect, undefined);
+      assert.deepEqual(plain(ws.getSpill('C1').range), rect(0, 2, 1, 2));
+      assert.equal(ws.getSpill('C1').rect, undefined);
       const parsed = wb.parseReference('B2:D4');
       assert.deepEqual(plain(parsed.range), rect(1, 1, 3, 3));
       assert.equal(parsed.rect, undefined);

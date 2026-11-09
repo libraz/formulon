@@ -19,7 +19,7 @@ const requiredErrorClass = (value) => (typeof value === 'number' && Number.isInt
 function makeCheckedPivot(Module) {
   const wb = Module.Workbook.createDefault();
   const cache = wb.addPivotCache(0);
-  wb.setPivotCacheWorksheetSource(cache, { present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.setPivotCacheWorksheetSource(cache, { ref: 'A1:B3', sheet: 'Sheet1' });
   wb.addPivotCacheField(cache, 'Region');
   wb.addPivotCacheField(cache, 'Amount');
   for (const [region, amount] of [
@@ -53,6 +53,17 @@ function checkedPivotGrid(wb, pivot) {
 const CHECKED_PIVOT_GRID = ['Row Labels|Sum of Amount', 'East|10', 'West|30', 'Grand Total|40'];
 
 export function registerPivotRegressions(Module, test) {
+  test('setPivotFieldDateGroup accepts null and leaves an ungrouped field alone', () => {
+    const { wb, pivot, region } = makeCheckedPivot(Module);
+    try {
+      wb.setPivotFieldDateGroup(0, pivot, region, null);
+      assert.equal(wb.getPivotField(0, pivot, region).datePeriods, 0);
+      assert.equal('clearPivotFieldDateGroup' in wb, false);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('addPivotFieldItem by cache index hides the blank item an empty label cannot name', () => {
     const wb = Module.Workbook.createDefault();
     try {

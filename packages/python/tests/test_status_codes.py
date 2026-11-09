@@ -15,7 +15,8 @@ from formulon import (
     StatusCode,
     Workbook,
 )
-from formulon._c import LIB
+from formulon._c import LIB, FormulaSyntaxError, ParseError, ParseErrorCode
+from formulon._status import ERROR_RANGES, range_class_name
 
 _STATUS_HEADER = Path(__file__).resolve().parents[3] / "src" / "c_api" / "formulon_status.h"
 
@@ -35,9 +36,46 @@ class StatusCodeTest(unittest.TestCase):
                 self.assertRegex(member.name, r"^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$")
 
     def test_boundary_spelling(self) -> None:
-        self.assertEqual(StatusCode.SHEET_INDEX_OUT_OF_RANGE, 5050)
+        self.assertEqual(StatusCode.SHEET_INDEX_OUT_OF_RANGE, 10)
         self.assertEqual(StatusCode.PARSER_BOM_NOT_SUPPORTED, 1013)
         self.assertEqual(StatusCode.OK, 0)
+
+    def test_structural_codes_sit_in_the_general_band(self) -> None:
+        self.assertEqual(
+            (
+                StatusCode.SHEET_INDEX_OUT_OF_RANGE,
+                StatusCode.INVALID_SHEET_NAME,
+                StatusCode.SHEET_COUNT_LIMIT_EXCEEDED,
+                StatusCode.INDEX_OUT_OF_RANGE,
+            ),
+            (10, 11, 12, 13),
+        )
+        for member in (
+            StatusCode.SHEET_INDEX_OUT_OF_RANGE,
+            StatusCode.INVALID_SHEET_NAME,
+            StatusCode.SHEET_COUNT_LIMIT_EXCEEDED,
+            StatusCode.INDEX_OUT_OF_RANGE,
+        ):
+            with self.subTest(member=member.name):
+                self.assertEqual(range_class_name(int(member)), "FormulonError")
+
+    def test_retired_structural_numbers_are_not_assigned(self) -> None:
+        values = {int(member) for member in StatusCode}
+        for retired in (5050, 5051, 5053, 5054):
+            self.assertNotIn(retired, values)
+
+    def test_renamed_members_replace_the_abbreviated_ones(self) -> None:
+        self.assertEqual(StatusCode.FUNCTION_OVERFLOW, 3004)
+        self.assertEqual(StatusCode.SECURITY_RESOURCE_LIMIT, 6005)
+        for gone in ("FN_OVERFLOW", "SEC_RESOURCE_LIMIT"):
+            self.assertFalse(hasattr(StatusCode, gone), gone)
+        self.assertEqual(range_class_name(3004), "FunctionError")
+        self.assertEqual(range_class_name(6005), "SecurityError")
+
+    def test_every_code_lies_in_a_module_band(self) -> None:
+        for member in StatusCode:
+            with self.subTest(member=member.name):
+                self.assertTrue(any(first <= int(member) <= last for first, last, _ in ERROR_RANGES))
 
     def test_c_status_string_uses_the_same_names(self) -> None:
         for member in (
@@ -73,7 +111,44 @@ class ExceptionFamilyTest(unittest.TestCase):
         self.assertEqual(err.code.name, "PARSER_INVALID_REFERENCE")
         self.assertFalse(hasattr(err, "status"))
         self.assertFalse(hasattr(err, "status_name"))
-        self.assertEqual(str(err), err.message)
+        self.assertEqual(str(err), "[PARSER_INVALID_REFERENCE]")
+
+    def test_string_form_is_the_code_name_and_the_message_without_context(self) -> None:
+        err = FormulonError(StatusCode.INVALID_ARGUMENT, "bad", "k=v")
+        self.assertEqual(str(err), "[INVALID_ARGUMENT] bad")
+        self.assertNotIn("k=v", str(err))
+        self.assertEqual(err.context, "k=v")
+
+    def test_host_constructor_takes_code_message_context_and_parse_error(self) -> None:
+        err = FormulonError(StatusCode.NOT_FOUND, "x", "k=v")
+        self.assertIsInstance(err, NotFoundError)
+        self.assertEqual(
+            (err.code, err.message, err.context, err.parse_error), (StatusCode.NOT_FOUND, "x", "k=v", None)
+        )
+        bare = FormulonError(StatusCode.INVALID_ARGUMENT)
+        self.assertEqual((bare.message, bare.context, bare.parse_error), ("", "", None))
+        record = ParseError(ParseErrorCode.UNEXPECTED_EOF, 3, 3, 1, 4)
+        syntax = FormulonError(StatusCode.PARSER_UNTERMINATED_STRING, "eof", "", record)
+        self.assertIsInstance(syntax, FormulaSyntaxError)
+        self.assertIs(syntax.parse_error, record)
+
+    def test_engine_failure_string_carries_no_context(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(IndexOutOfRangeError) as caught:
+                wb.sheet(5)
+        self.assertTrue(caught.exception.context)
+        self.assertEqual(str(caught.exception), f"[SHEET_INDEX_OUT_OF_RANGE] {caught.exception.message}")
+        self.assertNotIn(caught.exception.context, str(caught.exception))
+
+    def test_syntax_error_keeps_only_the_parse_error_record(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(FormulaSyntaxError) as caught:
+                wb.sheet(0).set_formula("A1", "=SUM(1,")
+        error = caught.exception
+        self.assertIsInstance(error.parse_error, ParseError)
+        self.assertGreaterEqual(error.parse_error.start, 0)
+        for retired in ("start", "end", "line", "column", "parse_error_code"):
+            self.assertFalse(hasattr(error, retired), retired)
 
     def test_dedicated_subclass_per_code(self) -> None:
         self.assertIs(type(FormulonError(StatusCode.INVALID_ARGUMENT)), InvalidArgumentError)
@@ -100,7 +175,7 @@ class ExceptionFamilyTest(unittest.TestCase):
         err = FormulonError(123456)
         self.assertEqual(err.code, 123456)
         self.assertNotIsInstance(err.code, StatusCode)
-        self.assertEqual(str(err), err.message)
+        self.assertEqual(str(err), "[123456]")
 
     def test_engine_failures_arrive_as_the_family(self) -> None:
         with self.assertRaises(FormulonError) as ctx:

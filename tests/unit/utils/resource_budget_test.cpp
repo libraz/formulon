@@ -29,14 +29,14 @@ TEST(ResourceBudget, ConsumePastCeilingFailsAndLeavesCountUntouched) {
   ASSERT_FALSE(static_cast<bool>(over));
   // The failed charge must not advance the counter.
   EXPECT_EQ(budget.used(), 90U);
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ResourceBudget, ErrorCodeIsConfigurable) {
-  ResourceBudget budget(1U, FormulonErrorCode::kFnOverflow);
+  ResourceBudget budget(1U, FormulonErrorCode::kFunctionOverflow);
   auto over = budget.consume(2U);
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kFnOverflow);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kFunctionOverflow);
 }
 
 TEST(ResourceBudget, WouldExceedIsSideEffectFree) {

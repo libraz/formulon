@@ -55,8 +55,7 @@ namespace {
 // dep graph's 16-bit `sheet_id` is lossless by construction.
 Expected<void, Error> check_sheet_headroom(std::size_t current_count) {
   if (current_count >= Workbook::kMaxSheets) {
-    return make_error(FormulonErrorCode::kSheetCountLimitExceeded,
-                      "add_sheet: workbook already holds the maximum sheets",
+    return make_error(FormulonErrorCode::kSheetCountLimitExceeded, "workbook already holds the maximum sheets",
                       "limit=" + std::to_string(Workbook::kMaxSheets));
   }
   return {};
@@ -91,7 +90,7 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(validate_sheet_name(name));
   if (sheet_by_name(name) != nullptr) {
-    return make_error(FormulonErrorCode::kAlreadyExists, "add_sheet: name collides with an existing sheet",
+    return make_error(FormulonErrorCode::kAlreadyExists, "name collides with an existing sheet",
                       "name=\"" + name + "\"");
   }
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
@@ -103,7 +102,7 @@ Expected<void, Error> Workbook::check_entered_new_sheet_name(std::string_view na
   RETURN_IF_ERROR(validate_sheet_name(name));
   RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
   if (sheet_by_name(name) != nullptr) {
-    return make_error(FormulonErrorCode::kAlreadyExists, "copy_sheet: name collides with an existing sheet",
+    return make_error(FormulonErrorCode::kAlreadyExists, "name collides with an existing sheet",
                       "name=\"" + std::string(name) + "\"");
   }
   return Expected<void, Error>::Ok();
@@ -228,7 +227,7 @@ void move_table_sheet_indices(std::vector<TableMetadata>& tables, std::size_t fr
 Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string new_name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (static_cast<std::size_t>(index) >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "rename_sheet: index out of range",
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "index out of range",
                       "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
   // Validate the new name (non-empty, ≤ 31 code units, no forbidden
@@ -243,7 +242,7 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // sheet being renamed or a genuine collision.
   const std::size_t idx = sheet_index_by_name(new_name);
   if (idx != kNoSheet && idx != static_cast<std::size_t>(index)) {
-    return make_error(FormulonErrorCode::kAlreadyExists, "rename_sheet: name collides with another sheet",
+    return make_error(FormulonErrorCode::kAlreadyExists, "name collides with another sheet",
                       "name=\"" + new_name + "\" colliding_index=" + std::to_string(idx));
   }
 
@@ -316,11 +315,11 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   // pre-removal or post-removal workbook, never the metadata halfway state.
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (static_cast<std::size_t>(index) >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "remove_sheet: index out of range",
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "index out of range",
                       "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
   if (sheets_.size() <= 1U) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "remove_sheet: cannot remove the only sheet",
+    return make_error(FormulonErrorCode::kPreconditionFailed, "cannot remove the only sheet",
                       "sheet_count=" + std::to_string(sheets_.size()));
   }
   return remove_sheet_locked(index);
@@ -482,7 +481,7 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
 Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32_t to_index) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (static_cast<std::size_t>(from_index) >= sheets_.size() || static_cast<std::size_t>(to_index) >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "move_sheet: index out of range",
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "index out of range",
                       "from=" + std::to_string(from_index) + " to=" + std::to_string(to_index) +
                           " sheet_count=" + std::to_string(sheets_.size()));
   }

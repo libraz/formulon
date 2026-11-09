@@ -39,6 +39,7 @@ namespace {
 /// every JS method below is written a single time. A table is addressed by
 /// its sheet and sheet-local index; the sheet entry points ignore `table`.
 struct AutoFilterOps {
+  const char* label;  ///< Public `Class.method` that reports argument failures of the set call.
   fm_status_t (*get)(const fm_workbook_t*, size_t, size_t, int32_t*, fm_auto_filter_t*);
   fm_status_t (*set)(fm_workbook_t*, size_t, size_t, const fm_auto_filter_t*);
   fm_status_t (*apply)(fm_workbook_t*, size_t, size_t);
@@ -63,9 +64,13 @@ fm_status_t sheet_evaluate(const fm_workbook_t* wb, size_t sheet, size_t, uint8_
   return fm_sheet_evaluate_auto_filter(wb, sheet, buf, cap, count, first_row);
 }
 
-constexpr AutoFilterOps kSheetAutoFilter = {sheet_get, sheet_set, sheet_apply, sheet_clear, sheet_evaluate};
-constexpr AutoFilterOps kTableAutoFilter = {fm_sheet_get_table_auto_filter, fm_sheet_set_table_auto_filter,
-                                            fm_sheet_apply_table_auto_filter, fm_sheet_clear_table_auto_filter_criteria,
+constexpr AutoFilterOps kSheetAutoFilter = {"Sheet.setAutoFilter", sheet_get,   sheet_set,
+                                            sheet_apply,           sheet_clear, sheet_evaluate};
+constexpr AutoFilterOps kTableAutoFilter = {"Table.setAutoFilter",
+                                            fm_sheet_get_table_auto_filter,
+                                            fm_sheet_set_table_auto_filter,
+                                            fm_sheet_apply_table_auto_filter,
+                                            fm_sheet_clear_table_auto_filter_criteria,
                                             fm_sheet_evaluate_table_auto_filter};
 
 emscripten::val date_group_to_val(const fm_date_group_item_t& d) {
@@ -113,7 +118,7 @@ emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   o.set("dynamicType", c.dynamic_type);
   js_set_present_or_null(o, "dynamicValue", c.has_dyn_val, c.dyn_val);
   js_set_present_or_null(o, "dynamicMaxValue", c.has_dyn_max_val, c.dyn_max_val);
-  o.set("dxfIndex", c.dxf_index);
+  js_set_present_or_null(o, "dxfIndex", c.has_dxf_index, c.dxf_index);
   o.set("cellColor", c.cell_color != 0);
   o.set("iconSet", c.icon_set);
   js_set_present_or_null(o, "iconIndex", c.has_icon_index, c.icon_index);
@@ -313,7 +318,9 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   const emscripten::val dyn_max_val = reader.value(v, "dynamicMaxValue", "filterColumn.dynamicMaxValue");
   c.has_dyn_max_val = js_value_present(dyn_max_val) ? 1 : 0;
   c.dyn_max_val = reader.number_value(dyn_max_val, 0.0, "filterColumn.dynamicMaxValue");
-  c.dxf_index = reader.u32(v, "dxfIndex", UINT32_MAX, "filterColumn.dxfIndex");
+  const emscripten::val dxf_index = reader.value(v, "dxfIndex", "filterColumn.dxfIndex");
+  c.has_dxf_index = js_value_present(dxf_index) ? 1 : 0;
+  c.dxf_index = reader.u32_value(dxf_index, 0U, "filterColumn.dxfIndex");
   if (!reader.ok()) {
     return;
   }
@@ -365,7 +372,7 @@ void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet
     succeeded(ops.set(wb, sheet, table, nullptr));
     return;
   }
-  JsNarrowNumericReader reader("setAutoFilter");
+  JsNarrowNumericReader reader(ops.label);
   fm_auto_filter_t f = FM_STRUCT_INIT(fm_auto_filter_t);
   f.range = js_pull_range(reader.value(filter, "range", "autoFilter.range"), &reader);
   if (!reader.ok()) {

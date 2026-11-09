@@ -58,7 +58,7 @@ TEST(WorkbookDataTable, RefusesARefLargerThanTheCellCeiling) {
   auto added = wb.add_data_table(0, MergeRange{1, 1, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U}, DataTableInput{},
                                  InputAt(0, 0));
   ASSERT_FALSE(static_cast<bool>(added));
-  EXPECT_EQ(added.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(added.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(wb.sheet(0).cell_at(1, 1), nullptr);
   EXPECT_TRUE(wb.sheet(0).data_tables().empty());
 }

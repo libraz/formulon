@@ -141,16 +141,16 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
                                                           std::uint32_t col) {
   if (sheet >= sheet_count() || pivot >= sheets_[sheet].pivot_tables().size() ||
       sheets_[sheet].pivot_tables()[pivot] == nullptr) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "show_pivot_details: sheet or pivot index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet or pivot index out of range",
                       "sheet=" + std::to_string(sheet) + " pivot=" + std::to_string(pivot));
   }
   const pivot::PivotTable& table = *sheets_[sheet].pivot_tables()[pivot];
   if (!table.enable_drill()) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "show_pivot_details: the pivot disables drill-down");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "the pivot disables drill-down");
   }
   const pivot::PivotCache* cache = find_pivot_cache(table.pivot_cache_id());
   if (cache == nullptr) {
-    return make_error(FormulonErrorCode::kEvalPivotMissing, "show_pivot_details: pivot cache not found",
+    return make_error(FormulonErrorCode::kEvalPivotMissing, "pivot cache not found",
                       "cache_id=" + std::to_string(table.pivot_cache_id()));
   }
 

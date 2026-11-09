@@ -24,6 +24,19 @@ export function registerStyles(Module, test) {
     }
   });
 
+  test('getCellXfIndex reads null for an absent cell and the stored index for a present one', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.getCellXfIndex(0, 98, 25), null);
+      wb.setNumber(0, 2, 3, 5);
+      assert.equal(wb.getCellXfIndex(0, 2, 3), 0);
+      wb.setCellXfIndex(0, 98, 25, 0);
+      assert.equal(wb.getCellXfIndex(0, 98, 25), 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -148,7 +161,7 @@ export function registerStyles(Module, test) {
         [omittedRead.horizontal, omittedRead.vertical, omittedRead.wrapText, omittedRead.justifyLastLine],
         [null, null, null, null],
       );
-      assert.equal('textRotation' in omittedRead, false);
+      assert.equal(omittedRead.textRotation, null);
 
       // The presence flags are gone: an alignment is present when one of its keys is, so a stray flag adds none.
       const flagged = wb.getCellXf(
@@ -281,9 +294,9 @@ export function registerStyles(Module, test) {
 
       const gotAlignment = wb.getDxf(alignment);
       assert.deepEqual(gotAlignment.alignment, alignmentRecord);
-      assert.equal(gotAlignment.protection, undefined);
+      assert.equal(gotAlignment.protection, null);
       const gotProtection = wb.getDxf(protection);
-      assert.equal(gotProtection.alignment, undefined);
+      assert.equal(gotProtection.alignment, null);
       assert.deepEqual(gotProtection.protection, protectionRecord);
 
       const alignmentAgain = wb.addDxf(gotAlignment);
@@ -297,9 +310,9 @@ export function registerStyles(Module, test) {
         assert.equal(loaded.disposed, false);
         const loadedAlignment = loaded.getDxf(alignment);
         assert.deepEqual(loadedAlignment.alignment, alignmentRecord);
-        assert.equal(loadedAlignment.protection, undefined);
+        assert.equal(loadedAlignment.protection, null);
         const loadedProtection = loaded.getDxf(protection);
-        assert.equal(loadedProtection.alignment, undefined);
+        assert.equal(loadedProtection.alignment, null);
         assert.deepEqual(loadedProtection.protection, protectionRecord);
         const loadedAlignmentAgain = loaded.addDxf(loadedAlignment);
         assert.equal(loadedAlignmentAgain, alignment);

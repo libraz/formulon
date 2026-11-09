@@ -230,7 +230,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   }
   Napi::Object item = Napi::Object::New(env);
   for (size_t c = 0; c < 8U; ++c) {
-    item.Set(kSparklineColorKeys[c], ColorSpecToJs(env, *GroupColor(g, c)));
+    item.Set(kSparklineColorKeys[c], ColorSpecOrNull(env, *GroupColor(g, c)));
   }
   item.Set("type", JsNumber(env, g.type));
   item.Set("markers", Napi::Boolean::New(env, g.markers != 0));

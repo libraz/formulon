@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Tuple, Type, Union, cast
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _sint, _uint
+from ._c import LIB, FormulonError, _NoCopy, _sint, _uint
 from ._status import StatusCode
 from ._workbook import (
     _CHART_TITLE_NONE,
@@ -171,14 +171,14 @@ def _present(arguments: Dict[str, Any], names: Sequence[str], absent: Sequence[s
 
 def _removed() -> FormulonError:
     """The error a handle raises when the engine no longer has its object."""
-    return FormulonError(StatusCode.NOT_FOUND, _diagnostic_override=("the drawing was removed", ""))
+    return FormulonError(StatusCode.NOT_FOUND, "the drawing was removed", "")
 
 
 def _raw_kind(sheet: Sheet, object_id: int) -> Optional[int]:
     """The raw kind of drawing object ``object_id`` of ``sheet``, or ``None`` when its drawing has none."""
     return sheet._workbook._lookup(
         LIB.fm_sheet_get_drawing_object,
-        (_uint(sheet._index(), "sheet_index"), _uint(object_id, "object_id")),
+        (_uint(sheet._index(), "sheet_index", role="sheet"), _uint(object_id, "object_id")),
         S.DRAWING_OBJECT,
         lambda d: d["kind"],
     )
@@ -188,7 +188,7 @@ def _has_slicer(sheet: Sheet, object_id: int) -> bool:
     """Whether drawing object ``object_id`` of ``sheet`` is the frame of a table slicer."""
     found = sheet._workbook._lookup(
         LIB.fm_sheet_get_slicer,
-        (_uint(sheet._index(), "sheet_index"), _uint(object_id, "object_id")),
+        (_uint(sheet._index(), "sheet_index", role="sheet"), _uint(object_id, "object_id")),
         S.SLICER,
         lambda d: True,
     )
@@ -211,9 +211,7 @@ def _drawing_for(sheet: Sheet, object_id: int) -> Drawing:
     """
     raw = _raw_kind(sheet, object_id)
     if raw is None:
-        raise FormulonError(
-            StatusCode.NOT_FOUND, _diagnostic_override=(f"the sheet's drawing has no object {object_id}", "")
-        )
+        raise FormulonError(StatusCode.NOT_FOUND, f"the sheet's drawing has no object {object_id}", "")
     handles: Dict[int, Drawing] = sheet._drawings
     handle = handles.get(object_id)
     if handle is None:
@@ -250,7 +248,7 @@ def _line_patch_of(line: ChartLine) -> ChartLinePatch:
     }
 
 
-class Drawing:
+class Drawing(_NoCopy):
     """One anchored object of a sheet's drawing, named by its object id.
 
     Get it from :meth:`Sheet.drawing` or
@@ -304,7 +302,7 @@ class Drawing:
         """
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
-        return h, _uint(sheet, "sheet_index"), _uint(self._object_id, "object_id")
+        return h, _uint(sheet, "sheet_index", role="sheet"), _uint(self._object_id, "object_id")
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(object_id={self._object_id})"
@@ -361,7 +359,9 @@ def _set_anchor(handle: Drawing, anchor: DrawingAnchor) -> None:
 def _set_z_order(handle: Drawing, z_order_index: int) -> None:
     """Move the picture, chart, shape or slicer ``handle`` to item ``z_order_index`` of the stacking order."""
     h, sheet, object_id = handle._at()
-    _check(LIB.fm_sheet_set_drawing_z_order(h, sheet, object_id, _uint(z_order_index, "z_order_index")))
+    _check(
+        LIB.fm_sheet_set_drawing_z_order(h, sheet, object_id, _uint(z_order_index, "z_order_index", role="position"))
+    )
 
 
 def _snapshot(handle: Drawing) -> bytes:
@@ -405,9 +405,7 @@ class Picture(Drawing):
             info = scope.struct(S.IMAGE_INFO)
             _check(LIB.fm_sheet_get_picture(h, sheet, object_id, present, bytes_ptr, len_ptr, info))
             if not LIB.read_u32(present):
-                raise FormulonError(
-                    StatusCode.NOT_FOUND, _diagnostic_override=("the picture's media part is missing", "")
-                )
+                raise FormulonError(StatusCode.NOT_FOUND, "the picture's media part is missing", "")
             d = S.IMAGE_INFO.unpack(LIB, info)
             return PictureProperties(
                 format=_enum(ImageFormat, d["format"]),
@@ -603,7 +601,7 @@ class Chart(Drawing):
         """Set the chart title to ``title``; ``None`` removes it.
 
         A :class:`~formulon.ChartTitle` sets that kind, so
-        ``ChartTitle(ChartTitleKind.AUTO, "", "")`` returns the title to
+        ``ChartTitle(ChartTitleKind.AUTO)`` returns the title to
         Excel's automatic one.
         """
         h, sheet, object_id = self._at()
@@ -783,7 +781,7 @@ class Chart(Drawing):
             S.CHART_SERIES_PATCH.pack(LIB, ptr, fields)
             _check(
                 LIB.fm_sheet_update_chart_series(
-                    h, sheet, object_id, _uint(plot, "plot"), _uint(series_index, "series_index"), ptr
+                    h, sheet, object_id, _uint(plot, "plot"), _uint(series_index, "series_index", role="position"), ptr
                 )
             )
 
@@ -858,8 +856,8 @@ class Chart(Drawing):
                     sheet,
                     object_id,
                     _uint(plot, "plot"),
-                    _uint(series_index, "series_index"),
-                    _uint(point_index, "point_index"),
+                    _uint(series_index, "series_index", role="position"),
+                    _uint(point_index, "point_index", role="position"),
                     ptr,
                 )
             )
@@ -936,7 +934,7 @@ class Chart(Drawing):
         h, sheet, object_id = self._at()
         _check(
             LIB.fm_sheet_remove_chart_series(
-                h, sheet, object_id, _uint(plot, "plot"), _uint(series_index, "series_index")
+                h, sheet, object_id, _uint(plot, "plot"), _uint(series_index, "series_index", role="position")
             )
         )
 

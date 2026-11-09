@@ -126,17 +126,13 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = MakeDataBarRule(&sqref);
-  rule.data_bar_gradient_engaged = 1;
+  rule.has_data_bar_gradient = 1;
   rule.data_bar_gradient = 0;
-  rule.data_bar_axis_position_engaged = 1;
+  rule.has_data_bar_axis_position = 1;
   rule.data_bar_axis_position = 1;  // middle
-  rule.data_bar_negative_fill_engaged = 1;
   rule.data_bar_negative_fill = CfRgb(255, 0, 0, 255);
-  rule.data_bar_border_engaged = 1;
   rule.data_bar_border = CfRgb(1, 2, 3, 255);
-  rule.data_bar_negative_border_engaged = 1;
   rule.data_bar_negative_border = CfRgb(4, 5, 6, 255);
-  rule.data_bar_axis_color_engaged = 1;
   rule.data_bar_axis_color = CfRgb(7, 8, 9, 255);
   rule.data_bar_direction = 2;  // right to left
   std::size_t rule_index = 0;
@@ -153,9 +149,9 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   EXPECT_EQ(back.data_bar_axis_position, 1U);
   EXPECT_EQ(CfR(back.data_bar_negative_fill), 255U);
   EXPECT_EQ(CfG(back.data_bar_negative_fill), 0U);
-  EXPECT_EQ(back.data_bar_border_engaged, 1);
+  EXPECT_NE(back.data_bar_border.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(CfB(back.data_bar_border), 3U);
-  EXPECT_EQ(back.data_bar_negative_border_engaged, 1);
+  EXPECT_NE(back.data_bar_negative_border.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(CfB(back.data_bar_negative_border), 6U);
   EXPECT_EQ(CfR(back.data_bar_axis_color), 7U);
   EXPECT_EQ(CfB(back.data_bar_axis_color), 9U);
@@ -170,7 +166,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   rule.type = 4;  // IconSet
   rule.ranges = &sqref;
   rule.range_count = 1;
-  rule.icon_set_engaged = 1;
+  rule.has_icon_set = 1;
   rule.icon_set_name = 2;  // Three_Flags
   fm_cfvo_t thresholds[2]{};
   thresholds[0].type = 0;  // Number
@@ -183,7 +179,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   rule.icon_set_threshold_count = 2;
   rule.icon_set_show_value = 1;
   rule.icon_set_percent = 1;
-  rule.icon_set_floor_engaged = 1;
+  rule.has_icon_set_floor = 1;
   rule.icon_set_floor.type = 0;  // Number
   rule.icon_set_floor.value = "5";
   rule.icon_set_floor.gte = 0;
@@ -196,7 +192,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
-  EXPECT_EQ(back.icon_set_floor_engaged, 1);
+  EXPECT_EQ(back.has_icon_set_floor, 1);
   EXPECT_EQ(back.icon_set_floor.type, 0U);
   EXPECT_STREQ(back.icon_set_floor.value, "5");
   EXPECT_EQ(back.icon_set_floor.gte, 0);
@@ -210,7 +206,7 @@ TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
   rule.type = 4;  // IconSet
   rule.ranges = &sqref;
   rule.range_count = 1;
-  rule.icon_set_engaged = 1;
+  rule.has_icon_set = 1;
   fm_cfvo_t thresholds[2]{};
   rule.icon_set_thresholds = thresholds;
   rule.icon_set_threshold_count = 2;

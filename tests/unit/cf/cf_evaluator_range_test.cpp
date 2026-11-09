@@ -382,7 +382,7 @@ TEST(CFEvaluator, RangeEvaluatorReportsParseExhaustionWithoutPartialResults) {
   const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0U, 0U, 1U, 0U), host);
 
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(result.error().context.find("cell="), std::string::npos);
   EXPECT_NE(result.error().context.find("ceiling="), std::string::npos);
 }
@@ -442,7 +442,7 @@ TEST(CFEvaluator, RangeEvaluatorReportsShiftExhaustionEvenWhenRuleDoesNotMatch) 
   const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0U, 0U, 1U, 0U), host);
 
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(result.error().context.find("cell="), std::string::npos);
   EXPECT_NE(result.error().context.find("ceiling="), std::string::npos);
 }
@@ -668,7 +668,7 @@ TEST(CFEvaluator, EvaluateCfForRangeRejectsRequestPastViewportCeiling) {
   const auto host = MakeHost(harness);
   const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, kCfMaxRows - 1U, 1), host);
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(CFEvaluator, EvaluateCfForRangeOverlappingBlocksVisitEachCellOnce) {

@@ -80,22 +80,21 @@ static_assert(offsetof(fm_civil_time_t, hour) == 12U);
 static_assert(offsetof(fm_civil_time_t, minute) == 16U);
 static_assert(offsetof(fm_civil_time_t, second) == 20U);
 
-static_assert(sizeof(fm_cf_match_info_t) == 144U);
+static_assert(sizeof(fm_cf_match_info_t) == 136U);
 static_assert(offsetof(fm_cf_match_info_t, kind) == 4U);
 static_assert(offsetof(fm_cf_match_info_t, priority) == 8U);
-static_assert(offsetof(fm_cf_match_info_t, dxf_index_engaged) == 12U);
+static_assert(offsetof(fm_cf_match_info_t, has_dxf_index) == 12U);
 static_assert(offsetof(fm_cf_match_info_t, dxf_index) == 16U);
 static_assert(offsetof(fm_cf_match_info_t, color) == 24U);
 static_assert(offsetof(fm_cf_match_info_t, bar_length_pct) == 48U);
 static_assert(offsetof(fm_cf_match_info_t, bar_axis_position_pct) == 56U);
 static_assert(offsetof(fm_cf_match_info_t, bar_is_negative) == 64U);
 static_assert(offsetof(fm_cf_match_info_t, bar_fill) == 72U);
-static_assert(offsetof(fm_cf_match_info_t, bar_border_engaged) == 96U);
-static_assert(offsetof(fm_cf_match_info_t, bar_border) == 104U);
-static_assert(offsetof(fm_cf_match_info_t, bar_gradient) == 128U);
-static_assert(offsetof(fm_cf_match_info_t, icon_set_name) == 132U);
-static_assert(offsetof(fm_cf_match_info_t, icon_index) == 136U);
-static_assert(offsetof(fm_cf_match_info_t, bar_direction) == 140U);
+static_assert(offsetof(fm_cf_match_info_t, bar_border) == 96U);
+static_assert(offsetof(fm_cf_match_info_t, bar_gradient) == 120U);
+static_assert(offsetof(fm_cf_match_info_t, icon_set_name) == 124U);
+static_assert(offsetof(fm_cf_match_info_t, icon_index) == 128U);
+static_assert(offsetof(fm_cf_match_info_t, bar_direction) == 132U);
 
 static_assert(sizeof(fm_rect_pt_info_t) == 40U);
 static_assert(offsetof(fm_rect_pt_info_t, x) == 8U);
@@ -152,17 +151,17 @@ static_assert(offsetof(fm_column_break_t, last) == 12U);
 static_assert(offsetof(fm_column_break_t, manual) == 16U);
 
 static_assert(sizeof(fm_page_setup_t) == 52U);
-static_assert(offsetof(fm_page_setup_t, orientation_engaged) == 4U);
+static_assert(offsetof(fm_page_setup_t, has_orientation) == 4U);
 static_assert(offsetof(fm_page_setup_t, orientation) == 8U);
-static_assert(offsetof(fm_page_setup_t, paper_size_engaged) == 12U);
+static_assert(offsetof(fm_page_setup_t, has_paper_size) == 12U);
 static_assert(offsetof(fm_page_setup_t, paper_size) == 16U);
-static_assert(offsetof(fm_page_setup_t, scale_pct_engaged) == 20U);
+static_assert(offsetof(fm_page_setup_t, has_scale_pct) == 20U);
 static_assert(offsetof(fm_page_setup_t, scale_pct) == 24U);
-static_assert(offsetof(fm_page_setup_t, fit_to_width_engaged) == 28U);
+static_assert(offsetof(fm_page_setup_t, has_fit_to_width) == 28U);
 static_assert(offsetof(fm_page_setup_t, fit_to_width) == 32U);
-static_assert(offsetof(fm_page_setup_t, fit_to_height_engaged) == 36U);
+static_assert(offsetof(fm_page_setup_t, has_fit_to_height) == 36U);
 static_assert(offsetof(fm_page_setup_t, fit_to_height) == 40U);
-static_assert(offsetof(fm_page_setup_t, fit_to_page_engaged) == 44U);
+static_assert(offsetof(fm_page_setup_t, has_fit_to_page) == 44U);
 static_assert(offsetof(fm_page_setup_t, fit_to_page) == 48U);
 
 static_assert(sizeof(fm_page_setup_patch_t) == 52U);
@@ -180,17 +179,17 @@ static_assert(offsetof(fm_page_setup_patch_t, fit_to_page_op) == 44U);
 static_assert(offsetof(fm_page_setup_patch_t, fit_to_page) == 48U);
 
 static_assert(sizeof(fm_page_margins_t) == 96U);
-static_assert(offsetof(fm_page_margins_t, left_in_engaged) == 4U);
+static_assert(offsetof(fm_page_margins_t, has_left_in) == 4U);
 static_assert(offsetof(fm_page_margins_t, left_in) == 8U);
-static_assert(offsetof(fm_page_margins_t, right_in_engaged) == 16U);
+static_assert(offsetof(fm_page_margins_t, has_right_in) == 16U);
 static_assert(offsetof(fm_page_margins_t, right_in) == 24U);
-static_assert(offsetof(fm_page_margins_t, top_in_engaged) == 32U);
+static_assert(offsetof(fm_page_margins_t, has_top_in) == 32U);
 static_assert(offsetof(fm_page_margins_t, top_in) == 40U);
-static_assert(offsetof(fm_page_margins_t, bottom_in_engaged) == 48U);
+static_assert(offsetof(fm_page_margins_t, has_bottom_in) == 48U);
 static_assert(offsetof(fm_page_margins_t, bottom_in) == 56U);
-static_assert(offsetof(fm_page_margins_t, header_in_engaged) == 64U);
+static_assert(offsetof(fm_page_margins_t, has_header_in) == 64U);
 static_assert(offsetof(fm_page_margins_t, header_in) == 72U);
-static_assert(offsetof(fm_page_margins_t, footer_in_engaged) == 80U);
+static_assert(offsetof(fm_page_margins_t, has_footer_in) == 80U);
 static_assert(offsetof(fm_page_margins_t, footer_in) == 88U);
 
 static_assert(sizeof(fm_page_margins_patch_t) == 96U);
@@ -208,13 +207,13 @@ static_assert(offsetof(fm_page_margins_patch_t, footer_in_op) == 80U);
 static_assert(offsetof(fm_page_margins_patch_t, footer_in) == 88U);
 
 static_assert(sizeof(fm_print_options_t) == 36U);
-static_assert(offsetof(fm_print_options_t, grid_lines_engaged) == 4U);
+static_assert(offsetof(fm_print_options_t, has_grid_lines) == 4U);
 static_assert(offsetof(fm_print_options_t, grid_lines) == 8U);
-static_assert(offsetof(fm_print_options_t, headings_engaged) == 12U);
+static_assert(offsetof(fm_print_options_t, has_headings) == 12U);
 static_assert(offsetof(fm_print_options_t, headings) == 16U);
-static_assert(offsetof(fm_print_options_t, horizontal_centered_engaged) == 20U);
+static_assert(offsetof(fm_print_options_t, has_horizontal_centered) == 20U);
 static_assert(offsetof(fm_print_options_t, horizontal_centered) == 24U);
-static_assert(offsetof(fm_print_options_t, vertical_centered_engaged) == 28U);
+static_assert(offsetof(fm_print_options_t, has_vertical_centered) == 28U);
 static_assert(offsetof(fm_print_options_t, vertical_centered) == 32U);
 
 static_assert(sizeof(fm_print_options_patch_t) == 36U);
@@ -232,10 +231,11 @@ static_assert(offsetof(fm_cell_node_info_t, sheet_index) == 4U);
 static_assert(offsetof(fm_cell_node_info_t, row) == 8U);
 static_assert(offsetof(fm_cell_node_info_t, col) == 12U);
 
-static_assert(sizeof(fm_pivot_cache_options_t) == 16U);
+static_assert(sizeof(fm_pivot_cache_options_t) == 20U);
 static_assert(offsetof(fm_pivot_cache_options_t, save_data) == 4U);
-static_assert(offsetof(fm_pivot_cache_options_t, missing_items_limit) == 8U);
-static_assert(offsetof(fm_pivot_cache_options_t, refresh_on_load) == 12U);
+static_assert(offsetof(fm_pivot_cache_options_t, has_missing_items_limit) == 8U);
+static_assert(offsetof(fm_pivot_cache_options_t, missing_items_limit) == 12U);
+static_assert(offsetof(fm_pivot_cache_options_t, refresh_on_load) == 16U);
 
 static_assert(sizeof(fm_pivot_cache_options_patch_t) == 28U);
 static_assert(offsetof(fm_pivot_cache_options_patch_t, save_data_op) == 4U);
@@ -251,10 +251,9 @@ static_assert(offsetof(fm_pivot_grand_totals_patch_t, rows) == 8U);
 static_assert(offsetof(fm_pivot_grand_totals_patch_t, columns_op) == 12U);
 static_assert(offsetof(fm_pivot_grand_totals_patch_t, columns) == 16U);
 
-static_assert(sizeof(fm_spill_info_t) == 28U);
+static_assert(sizeof(fm_spill_info_t) == 24U);
 static_assert(offsetof(fm_spill_info_t, rect) == 4U);
-static_assert(offsetof(fm_spill_info_t, engaged) == 20U);
-static_assert(offsetof(fm_spill_info_t, blocked) == 24U);
+static_assert(offsetof(fm_spill_info_t, blocked) == 20U);
 
 static_assert(sizeof(fm_sheet_view_info_t) == 88U);
 static_assert(offsetof(fm_sheet_view_info_t, zoom_pct) == 4U);

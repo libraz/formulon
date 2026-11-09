@@ -98,7 +98,7 @@ void JsWorkbook::setCellStyle(emscripten::val record) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setCellStyle");
+  JsNarrowNumericReader reader("Workbook.setCellStyle");
   const std::string name = reader.string(record, "name", "cellStyle.name");
   fm_cell_style_t cs{};
   cs.name = name.c_str();
@@ -142,7 +142,7 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setTableStyle");
+  JsNarrowNumericReader reader("Workbook.setTableStyle");
   const std::string name = reader.string(style, "name", "style.name");
   const bool pivot = reader.boolean(style, "pivot", true, "style.pivot");
   const bool table = reader.boolean(style, "table", true, "style.table");
@@ -150,7 +150,7 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
   std::vector<fm_table_style_element_t> records;
   if (reader.ok() && js_value_present(elements)) {
     if (!reader.is_array(elements, "style.elements")) {
-      record_type_error("setTableStyle: `elements` must be an array");
+      record_type_error("Workbook.setTableStyle: `elements` must be an array");
       return;
     }
     const uint32_t count = reader.length(elements, "style.elements.length");

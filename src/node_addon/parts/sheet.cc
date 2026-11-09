@@ -301,13 +301,11 @@ Napi::Value Workbook::GetTableStyleOptions(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   fm_table_style_options_t style = FM_STRUCT_INIT(fm_table_style_options_t);
-  const fm_status_t rc = fm_sheet_get_table_style_options(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
-                                                          static_cast<std::size_t>(ArgU32(info, 1)), &style);
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
-  }
-  if (style.present == 0) {
-    return env.Null();
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_table_style_options(
+      handle_, static_cast<std::size_t>(ArgU32(info, 0)), static_cast<std::size_t>(ArgU32(info, 1)), &present, &style);
+  if (rc != 0 || present == 0) {
+    return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("styleName", JsStringOrNull(env, style.style_name));
@@ -581,7 +579,7 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   fm_defined_name_t in = FM_STRUCT_INIT(fm_defined_name_t);
   in.name = name.c_str();
   in.formula = formula.c_str();
-  in.local_sheet_id = scoped ? static_cast<int32_t>(sheet) : -1;
+  in.local_sheet_id = scoped ? static_cast<int32_t>(sheet) : FM_DEFINED_NAME_SCOPE_WORKBOOK;
   in.comment = has_comment ? comment.c_str() : nullptr;
   in.hidden = hidden ? 1 : 0;
   return ValueOrThrow(env, fm_workbook_set_defined_name(handle_, &in), env.Undefined());

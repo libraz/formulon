@@ -95,7 +95,8 @@ TEST(FormulonCApiUtf8Input, KeyedGettersRefuseAMalformedKey) {
   for (const char* bad : {kLoneSurrogate, kTruncated, "\xff"}) {
     std::int32_t present = 99;
     fm_defined_name_t name = FM_STRUCT_INIT(fm_defined_name_t);
-    EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, bad, -1, &present, &name), kUtf8Error);
+    EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, bad, FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &name),
+              kUtf8Error);
     EXPECT_EQ(fm_workbook_has_passthrough(wb.handle, bad, &present), kUtf8Error);
     fm_threaded_comment_t comment = FM_STRUCT_INIT(fm_threaded_comment_t);
     EXPECT_EQ(fm_sheet_get_threaded_comment(wb.handle, 0, bad, &present, &comment), kUtf8Error);
@@ -135,7 +136,7 @@ TEST(FormulonCApiUtf8Input, FontAndStyleRecordsRefuseAMalformedName) {
     EXPECT_EQ(font_index, 99U);
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0, &font), kUtf8Error);
     fm_dxf_t dxf{};
-    dxf.font_engaged = 1;
+    dxf.has_font = 1;
     dxf.font = font;
     std::uint32_t dxf_index = 99U;
     EXPECT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), kUtf8Error);

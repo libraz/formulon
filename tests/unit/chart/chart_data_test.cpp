@@ -702,7 +702,7 @@ TEST(ChartData, RejectsSparseCacheWithOutOfGridIndex) {
 
   auto data = resolve_chart_data(wb, 0, model);
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ChartData, RejectsOutOfGridPointFromXmlLiteralBeforeDenseAllocation) {
@@ -720,7 +720,7 @@ TEST(ChartData, RejectsOutOfGridPointFromXmlLiteralBeforeDenseAllocation) {
 
   auto data = resolve_chart_data(wb, 0U, model.value());
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ChartData, RejectsOutOfGridPointFromXmlCacheBeforeDenseAllocation) {
@@ -739,7 +739,7 @@ TEST(ChartData, RejectsOutOfGridPointFromXmlCacheBeforeDenseAllocation) {
 
   auto data = resolve_chart_data(wb, 0U, model.value());
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ChartData, RejectsRectangularReferenceBeforePositionAllocation) {
@@ -749,7 +749,7 @@ TEST(ChartData, RejectsRectangularReferenceBeforePositionAllocation) {
   ChartModel model = OneSeries(ChartPlotType::kBar, "", "Sheet1!$A$1:$XFC$1000");
   auto data = resolve_chart_data(wb, 0U, model);
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ChartData, RejectsExcessiveSparsePointCountBeforeAllocation) {
@@ -760,7 +760,7 @@ TEST(ChartData, RejectsExcessiveSparsePointCountBeforeAllocation) {
 
   auto data = resolve_chart_data(wb, 0, model);
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ChartData, RejectsMultiLevelCacheBeyondCellBudgetBeforeAllocation) {
@@ -772,7 +772,7 @@ TEST(ChartData, RejectsMultiLevelCacheBeyondCellBudgetBeforeAllocation) {
 
   auto data = resolve_chart_data(wb, 0, model);
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ChartData, DenseCacheScansUnsortedIndicesWithinExcelBounds) {

@@ -735,7 +735,7 @@ emscripten::val translate_cf_match(const fm_cf_match_info_t& m) {
   out.set("priority", m.priority);
   switch (m.kind) {
     case FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT:
-      out.set("dxfIndex", m.dxf_index_engaged != 0 ? emscripten::val(m.dxf_index) : emscripten::val::null());
+      out.set("dxfIndex", m.has_dxf_index != 0 ? emscripten::val(m.dxf_index) : emscripten::val::null());
       break;
     case FM_CF_MATCH_KIND_COLOR_SCALE:
       out.set("color", js_color_spec(m.color));
@@ -746,7 +746,8 @@ emscripten::val translate_cf_match(const fm_cf_match_info_t& m) {
       bar.set("axisPositionPct", m.bar_axis_position_pct);
       bar.set("isNegative", m.bar_is_negative != 0);
       bar.set("fill", js_color_spec(m.bar_fill));
-      bar.set("border", m.bar_border_engaged != 0 ? js_color_spec(m.bar_border) : emscripten::val::null());
+      bar.set("border",
+              m.bar_border.kind != FM_COLOR_KIND_NONE ? js_color_spec(m.bar_border) : emscripten::val::null());
       bar.set("gradient", m.bar_gradient != 0);
       bar.set("direction", static_cast<int32_t>(m.bar_direction));
       out.set("bar", bar);
@@ -789,7 +790,7 @@ emscripten::val pivot_cell_to_val(const fm_pivot_cell_info_t& cell) {
   item.set("value", value_to_val(cell.value));
   item.set("kind", static_cast<int32_t>(cell.kind));
   item.set("depth", cell.depth);
-  js_set_cstr(item, "fieldName", cell.field_name);
+  js_set_cstr_or_null(item, "fieldName", cell.field_name);
   js_set_cstr_or_null(item, "numberFormat", cell.number_format);
   return item;
 }

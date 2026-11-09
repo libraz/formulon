@@ -82,6 +82,10 @@ AddonData& GetAddonData(Napi::Env env);
 /// Without an injected error class it throws a `TypeError` instead.
 Napi::Value ThrowStatus(Napi::Env env, fm_status_t rc);
 
+/// Throws a `FormulonError` carrying `code` and `message` for a failure the
+/// binding detects before any C-ABI call; returns `env.Undefined()`.
+Napi::Value ThrowBindingStatus(Napi::Env env, fm_status_t code, const std::string& message);
+
 /// Throws the `FormulonError` of a call on a disposed workbook
 /// (`BindingInvalidHandle`, "the workbook is disposed") and returns
 /// `env.Undefined()`. No C-ABI call ran, so no last-error state is read.
@@ -217,7 +221,25 @@ Napi::Value JsBoolOrNull(Napi::Env env, int32_t present, int32_t v);
 Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles);
 
 // ---------------------------------------------------------------------
-/// Per-call reader for nested binding object fields. It owns the pending-error
+/// Names the public method whose arguments the readers are parsing, so a
+/// reader failure reads `Class.method <field> ...`. Scopes nest: the previous
+/// label returns when the scope ends. `describe` runs only on a failure.
+class ScopedReaderLabel final {
+ public:
+  using Describe = std::string (*)(const void* data);
+  ScopedReaderLabel(Describe describe, const void* data) noexcept;
+  ~ScopedReaderLabel();
+  ScopedReaderLabel(const ScopedReaderLabel&) = delete;
+  ScopedReaderLabel& operator=(const ScopedReaderLabel&) = delete;
+
+ private:
+  Describe previous_describe_;
+  const void* previous_data_;
+};
+
+/// Per-call reader for nested binding object fields. Its failures are
+/// prefixed with the label of the innermost `ScopedReaderLabel`, if any.
+/// It owns the pending-error It owns the pending-error
 /// bit for one binding invocation, so nested parsers stop touching JS objects
 /// as soon as a getter or checked conversion fails.
 class CheckedSpecReader final {

@@ -795,8 +795,8 @@ TEST(FormulonCApiPivot, RemovingADataFieldRepointsOrDropsEveryValueFilterType) {
     fm_pivot_data_field_t df = FM_STRUCT_INIT(fm_pivot_data_field_t);
     df.field_index = field;
     df.aggregation = FM_PIVOT_AGGREGATION_SUM;
-    df.show_as_base_field = -1;
-    df.show_as_base_item = -1;
+    df.has_show_as_base_field = 0;
+    df.has_show_as_base_item = 0;
     std::size_t idx = 0;
     ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, &df, &idx), 0) << fm_get_last_error_message();
   }
@@ -837,8 +837,8 @@ TEST(FormulonCApiPivot, MutateShowValuesAs) {
   df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df_spec.number_format = "";
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_ROW;
-  df_spec.show_as_base_field = -1;
-  df_spec.show_as_base_item = -1;
+  df_spec.has_show_as_base_field = 0;
+  df_spec.has_show_as_base_item = 0;
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &df_spec), 0) << fm_get_last_error_message();
 
   PivotCellsGuard projected;

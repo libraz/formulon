@@ -63,7 +63,8 @@ TEST(FormulonCStatus, StatusStringIsOkForZero) {
 #endif
 
 TEST(FormulonCStatus, UnknownValuesAreUnrecognized) {
-  for (const fm_status_t value : {-1, 1, 10, 999, 1015, 5052, 5051 + 100, 10000, 123456, INT32_MIN, INT32_MAX}) {
+  for (const fm_status_t value :
+       {-1, 1, 14, 999, 1015, 5050, 5052, 5054, 5051 + 100, 10000, 123456, INT32_MIN, INT32_MAX}) {
     EXPECT_STREQ(fm_get_status_name(value), "UNRECOGNIZED_STATUS") << value;
   }
 }

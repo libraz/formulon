@@ -116,7 +116,7 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
   assert.equal(fill.gradient.stops.length, 2);
   assert.equal(fill.gradient.stops[0].color.argb, 0xffff0000);
   assert.equal(fill.gradient.stops[1].color.theme, 4);
-  assert.equal(wb.ooxml.getFill(0).gradient, undefined);
+  assert.equal(wb.ooxml.getFill(0).gradient, null);
 
   const dxf = wb.ooxml.addDxf({ fill: { gradient: { ...gradient, type: 0, degree: 45 } } });
   const loaded = roundTrip(mod, wb);

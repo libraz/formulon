@@ -42,8 +42,12 @@ bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscript
   out.aggregation = static_cast<fm_pivot_aggregation_t>(
       reader.u32(spec, "aggregation", FM_PIVOT_AGGREGATION_SUM, "pivotDataField.aggregation"));
   out.show_as = static_cast<fm_pivot_show_values_as_t>(reader.u32(spec, "showAs", 0U, "pivotDataField.showAs"));
-  out.show_as_base_field = reader.i32(spec, "showAsBaseField", -1, "pivotDataField.showAsBaseField");
-  out.show_as_base_item = reader.i32(spec, "showAsBaseItem", -1, "pivotDataField.showAsBaseItem");
+  const emscripten::val base_field = reader.value(spec, "showAsBaseField", "pivotDataField.showAsBaseField");
+  out.has_show_as_base_field = js_value_present(base_field) ? 1 : 0;
+  out.show_as_base_field = reader.u32_value(base_field, 0U, "pivotDataField.showAsBaseField");
+  const emscripten::val base_item = reader.value(spec, "showAsBaseItem", "pivotDataField.showAsBaseItem");
+  out.has_show_as_base_item = js_value_present(base_item) ? 1 : 0;
+  out.show_as_base_item = reader.u32_value(base_item, 0U, "pivotDataField.showAsBaseItem");
   return reader.ok();
 }
 
@@ -138,7 +142,7 @@ void JsWorkbook::pivotSetAnchor(uint32_t sheet, uint32_t pivotIndex, emscripten:
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setPivotAnchor");
+  JsNarrowNumericReader reader("Pivot.setAnchor");
   const uint32_t row = reader.required_u32(cell, "row", "anchor.row");
   const uint32_t col = reader.required_u32(cell, "col", "anchor.col");
   if (!reader.ok()) {
@@ -165,7 +169,7 @@ void JsWorkbook::pivotUpdateStyleOptions(uint32_t sheet, uint32_t pivotIndex, em
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updatePivotStyleOptions");
+  JsNarrowNumericReader reader("Pivot.updateStyleOptions");
   fm_pivot_style_options_patch_t p = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
   std::string style_name;
   // `null` writes the element without a style name; a string replaces it; an omitted key keeps it.
@@ -262,12 +266,14 @@ emscripten::val JsWorkbook::pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIn
 
 emscripten::val JsWorkbook::pivotGetStyleOptions(uint32_t sheet, uint32_t pivotIndex) const {
   fm_pivot_style_options_t info = FM_STRUCT_INIT(fm_pivot_style_options_t);
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_pivot_style_options(handle_, sheet, pivotIndex, &info) : kBindingInvalidHandle;
+  int32_t present = 0;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_pivot_style_options(handle_, sheet, pivotIndex, &present, &info)
+                             : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
-  if (info.present == 0) {
+  if (present == 0) {
     return emscripten::val::null();
   }
   emscripten::val o = emscripten::val::object();
@@ -298,7 +304,7 @@ uint32_t JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscript
   std::string source_name;
   std::string custom_name;
   std::string number_format;
-  JsNarrowNumericReader reader("addPivotField");
+  JsNarrowNumericReader reader("Pivot.addField");
   // Every nested read uses this per-call reader so getter/proxy failures and
   // lossy integer conversions are reported before the C ABI is called.
   const char* source_name_ptr = reader.optional_string(spec, "sourceName", source_name, "pivotField.sourceName");
@@ -342,16 +348,16 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, ui
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "sourceName", info.source_name);
   js_set_cstr_or_null(o, "customName", info.custom_name);
-  js_set_index_or_null(o, "axis", info.axis);
+  js_set_present_or_null(o, "axis", info.axis != FM_PIVOT_AXIS_ABSENT ? 1 : 0, static_cast<int32_t>(info.axis));
   o.set("subtotalTop", info.subtotal_top != 0);
   js_set_cstr_or_null(o, "numberFormat", info.number_format);
-  js_set_index_or_null(o, "cacheFieldIndex", info.cache_field_index);
+  js_set_present_or_null(o, "cacheFieldIndex", info.has_cache_field_index, info.cache_field_index);
   o.set("sortOrder", info.sort_order);
   js_set_cstr_or_null(o, "sortByField",
                       info.sort_by_field != nullptr && info.sort_by_field[0] != '\0' ? info.sort_by_field : nullptr);
   o.set("datePeriods", info.date_periods);
   o.set("dateCalendar", info.date_calendar);
-  js_set_index_or_null(o, "groupBaseIndex", info.group_base_index);
+  js_set_present_or_null(o, "groupBaseIndex", info.has_group_base_index, info.group_base_index);
   o.set("defaultSubtotal", info.default_subtotal != 0);
   o.set("insertBlankRow", info.insert_blank_row != 0);
   o.set("fillDownLabels", info.fill_down_labels != 0);
@@ -389,7 +395,7 @@ emscripten::val JsWorkbook::pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex
   }
   emscripten::val o = emscripten::val::object();
   js_set_cstr_or_null(o, "name", info.name);
-  js_set_index_or_null(o, "cacheIndex", info.cache_index);
+  js_set_present_or_null(o, "cacheIndex", info.has_cache_index, info.cache_index);
   o.set("visible", info.visible != 0);
   if (info.caption != nullptr) {
     js_set_cstr(o, "caption", info.caption);
@@ -405,7 +411,7 @@ void JsWorkbook::pivotFieldUpdate(uint32_t sheet, uint32_t pivotIndex, uint32_t 
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updatePivotField");
+  JsNarrowNumericReader reader("Pivot.updateField");
   fm_pivot_field_patch_t p = FM_STRUCT_INIT(fm_pivot_field_patch_t);
   std::string custom_name;
   std::string number_format;
@@ -435,7 +441,7 @@ void JsWorkbook::pivotFieldItemUpdate(uint32_t sheet, uint32_t pivotIndex, uint3
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updatePivotFieldItem");
+  JsNarrowNumericReader reader("Pivot.updateFieldItem");
   fm_pivot_item_patch_t p = FM_STRUCT_INIT(fm_pivot_item_patch_t);
   std::string caption;
   js_patch_flag(reader, patch, "visible", "patch.visible", &p.visible_op, &p.visible);
@@ -504,11 +510,11 @@ void JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten
     return;
   }
   if (!js_value_present(options)) {
-    record_type_error("setPivotOptions: `options` must be an object");
+    record_type_error("Pivot.updateOptions: `options` must be an object");
     return;
   }
   fm_pivot_options_patch_t p = FM_STRUCT_INIT(fm_pivot_options_patch_t);
-  JsNarrowNumericReader reader("setPivotOptions");
+  JsNarrowNumericReader reader("Pivot.updateOptions");
   // An omitted or `null` flag keeps the stored value.
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
     const std::string field = std::string("pivotOptions.") + key;
@@ -616,7 +622,7 @@ uint32_t JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint
   std::size_t out = 0;
   fm_status_t rc = 0;
   if (item.typeOf().strictlyEquals(emscripten::val("object"))) {
-    JsNarrowNumericReader reader("addPivotFieldItem");
+    JsNarrowNumericReader reader("Pivot.addFieldItem");
     const uint32_t cacheIndex = reader.required_u32(item, "cacheIndex", "item.cacheIndex");
     if (!reader.ok()) {
       return 0U;
@@ -624,7 +630,7 @@ uint32_t JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint
     rc = fm_sheet_add_pivot_field_item_by_cache_index(handle_, sheet, pivotIndex, fieldIndex, cacheIndex,
                                                       visible ? 1 : 0, &out);
   } else {
-    JsNarrowNumericReader reader("addPivotFieldItem");
+    JsNarrowNumericReader reader("Pivot.addFieldItem");
     const std::string name = reader.string_value(item, "item");
     if (!reader.ok()) {
       return 0U;
@@ -675,9 +681,17 @@ void JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uin
   succeeded(fm_sheet_set_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, &group));
 }
 
-void JsWorkbook::pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
-  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex)
-                               : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldRemoveDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                           emscripten::val group) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (!group.isNull()) {
+    record_type_error("Pivot.setFieldDateGroup group must be null or a date group");
+    return;
+  }
+  succeeded(fm_sheet_set_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, nullptr));
 }
 
 namespace {
@@ -689,17 +703,17 @@ constexpr int32_t kPivotValuesFieldJs = -2;
 using PivotFieldOrderFn = fm_status_t (*)(fm_workbook_t*, size_t, size_t, const uint32_t*, size_t);
 
 void set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivotIndex, const emscripten::val& indices,
-                           PivotFieldOrderFn fn) {
+                           PivotFieldOrderFn fn, const char* label) {
   if (wb == nullptr) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("pivotFieldOrder");
-  if (!reader.is_array(indices, "pivotFieldOrder")) {
+  JsNarrowNumericReader reader(label);
+  if (!reader.is_array(indices, "indices")) {
     record_type_error("pivot field order must be an array");
     return;
   }
-  const uint32_t length = reader.length(indices, "pivotFieldOrder");
+  const uint32_t length = reader.length(indices, "indices");
   if (!reader.ok()) {
     return;
   }
@@ -710,10 +724,10 @@ void set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivotInde
     // let the checked conversion reject a symbol, fraction, non-finite value,
     // or uint32 overflow. No subsequent JS reads occur after failure.
     const std::string key = std::to_string(i);
-    const emscripten::val value = reader.value(indices, key.c_str(), "pivotFieldOrder.indices");
+    const emscripten::val value = reader.value(indices, key.c_str(), "indices");
     // -2 is the Values level; any other negative reaches the C ABI as an
     // out-of-range index and is rejected there.
-    const int32_t index = reader.i32_value(value, 0, "pivotFieldOrder.indices");
+    const int32_t index = reader.i32_value(value, 0, "indices");
     v.push_back(index == kPivotValuesFieldJs ? FM_PIVOT_VALUES_FIELD : static_cast<uint32_t>(index));
   }
   if (!reader.ok()) {
@@ -725,11 +739,13 @@ void set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivotInde
 }  // namespace
 
 void JsWorkbook::pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices) {
-  return set_pivot_field_order(handle_, sheet, pivotIndex, indices, &fm_sheet_set_pivot_row_field_order);
+  return set_pivot_field_order(handle_, sheet, pivotIndex, indices, &fm_sheet_set_pivot_row_field_order,
+                               "Pivot.setRowFieldOrder");
 }
 
 void JsWorkbook::pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices) {
-  return set_pivot_field_order(handle_, sheet, pivotIndex, indices, &fm_sheet_set_pivot_column_field_order);
+  return set_pivot_field_order(handle_, sheet, pivotIndex, indices, &fm_sheet_set_pivot_column_field_order,
+                               "Pivot.setColumnFieldOrder");
 }
 
 namespace {
@@ -787,7 +803,7 @@ uint32_t JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIndex, emsc
   fm_pivot_data_field_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   std::string name_buf;
   std::string nfmt_buf;
-  JsNarrowNumericReader reader("addPivotDataField");
+  JsNarrowNumericReader reader("Pivot.addDataField");
   if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf)) {
     return 0U;
   }
@@ -813,8 +829,8 @@ emscripten::val JsWorkbook::pivotDataFieldAt(uint32_t sheet, uint32_t pivotIndex
   o.set("aggregation", static_cast<int32_t>(spec.aggregation));
   js_set_cstr_or_null(o, "numberFormat", spec.number_format);
   o.set("showAs", static_cast<int32_t>(spec.show_as));
-  js_set_index_or_null(o, "showAsBaseField", spec.show_as_base_field);
-  js_set_index_or_null(o, "showAsBaseItem", spec.show_as_base_item);
+  js_set_present_or_null(o, "showAsBaseField", spec.has_show_as_base_field, spec.show_as_base_field);
+  js_set_present_or_null(o, "showAsBaseItem", spec.has_show_as_base_item, spec.show_as_base_item);
   return o;
 }
 
@@ -830,7 +846,7 @@ void JsWorkbook::pivotDataFieldSet(uint32_t sheet, uint32_t pivotIndex, uint32_t
   fm_pivot_data_field_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   std::string name_buf;
   std::string nfmt_buf;
-  JsNarrowNumericReader reader("setPivotDataField");
+  JsNarrowNumericReader reader("Pivot.setDataField");
   if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf)) {
     return;
   }
@@ -857,7 +873,7 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
   // than `js_pull_string`'s empty-string default, which the C ABI's own
   // required-field check does not treat the same as a missing argument.
   std::string field_name;
-  JsNarrowNumericReader reader("addPivotFilter");
+  JsNarrowNumericReader reader("Pivot.addFilter");
   const char* field_name_ptr = reader.optional_string(spec, "fieldName", field_name, "pivotFilter.fieldName");
 
   fm_pivot_filter_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_t);

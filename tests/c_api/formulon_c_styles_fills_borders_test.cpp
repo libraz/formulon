@@ -123,12 +123,12 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   EXPECT_EQ(border_again, border_index);
 
   fm_dxf_t dxf{};
-  dxf.font_engaged = 1;
+  dxf.has_font = 1;
   dxf.font = font;
   dxf.font.color = automatic;
-  dxf.fill_engaged = 1;
+  dxf.has_fill = 1;
   dxf.fill = fill;
-  dxf.border_engaged = 1;
+  dxf.has_border = 1;
   dxf.border = border;
   std::uint32_t dxf_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), 0);
@@ -281,7 +281,7 @@ TEST(FormulonCApiStyles, FontFillAndBorderOrdinalsOutsideTheirEnumerationsAreRej
     EXPECT_EQ(fm_workbook_add_border(wb.handle, &border, &index), FM_STATUS_INVALID_ARGUMENT) << style;
   }
   fm_dxf_t dxf{};
-  dxf.border_engaged = 1;
+  dxf.has_border = 1;
   dxf.border.left.style = 256;
   uint32_t dxf_index = 0;
   EXPECT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), FM_STATUS_INVALID_ARGUMENT);

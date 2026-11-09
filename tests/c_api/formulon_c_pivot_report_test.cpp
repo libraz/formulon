@@ -113,8 +113,9 @@ TEST(FormulonCApiPivotReport, NewPivotTakesThePivotStyleDefault) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, &pivot_index), 0) << fm_get_last_error_message();
   fm_pivot_style_options_t style = FM_STRUCT_INIT(fm_pivot_style_options_t);
-  ASSERT_EQ(fm_sheet_get_pivot_style_options(wb.handle, 0, pivot_index, &style), 0);
-  EXPECT_EQ(style.present, 1);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_style_options(wb.handle, 0, pivot_index, &present, &style), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_STREQ(style.style_name, "PivotStyleMedium5");
   EXPECT_EQ(style.show_row_headers, 1);
   EXPECT_EQ(style.show_column_headers, 1);
@@ -131,7 +132,8 @@ TEST(FormulonCApiPivotReport, NewPivotFallsBackToTheBuiltInStyleWhenTheDefaultIs
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, &pivot_index), 0) << fm_get_last_error_message();
   fm_pivot_style_options_t style = FM_STRUCT_INIT(fm_pivot_style_options_t);
-  ASSERT_EQ(fm_sheet_get_pivot_style_options(wb.handle, 0, pivot_index, &style), 0);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_style_options(wb.handle, 0, pivot_index, &present, &style), 0);
   EXPECT_STREQ(style.style_name, "PivotStyleLight16");
 }
 

@@ -38,6 +38,10 @@ export const StatusCode: Readonly<{
   AlreadyExists: 7;
   InternalError: 8;
   PreconditionFailed: 9;
+  SheetIndexOutOfRange: 10;
+  InvalidSheetName: 11;
+  SheetCountLimitExceeded: 12;
+  IndexOutOfRange: 13;
   ParserUnexpectedToken: 1000;
   ParserUnterminatedString: 1001;
   ParserInvalidNumber: 1003;
@@ -51,7 +55,7 @@ export const StatusCode: Readonly<{
   ParserTooManyErrors: 1014;
   EvalPivotMissing: 2009;
   EvalPivotInvalid: 2010;
-  FnOverflow: 3004;
+  FunctionOverflow: 3004;
   GraphScheduleFailed: 4003;
   GraphRecalcReentrant: 4005;
   IoFileNotFound: 5000;
@@ -76,7 +80,7 @@ export const StatusCode: Readonly<{
   IoChartUnparseable: 5025;
   IoChartInvalidReference: 5026;
   IoChartUnsupportedKind: 5027;
-  SecResourceLimit: 6005;
+  SecurityResourceLimit: 6005;
   BindingInvalidHandle: 7000;
   BindingNullPointer: 7001;
   BindingUtf8EncodingError: 7002;
@@ -86,10 +90,6 @@ export const StatusCode: Readonly<{
   PrintInvalidArea: 9002;
   PrintPageCountOverflow: 9005;
   ThreadedCommentInvalid: 9006;
-  SheetIndexOutOfRange: 5050;
-  InvalidSheetName: 5051;
-  SheetCountLimitExceeded: 5053;
-  IndexOutOfRange: 5054;
 }>;
 /** Union of the {@link StatusCode} values. */
 export type StatusCode =
@@ -101,6 +101,10 @@ export type StatusCode =
   | 7
   | 8
   | 9
+  | 10
+  | 11
+  | 12
+  | 13
   | 1000
   | 1001
   | 1003
@@ -148,11 +152,7 @@ export type StatusCode =
   | 8006
   | 9002
   | 9005
-  | 9006
-  | 5050
-  | 5051
-  | 5053
-  | 5054;
+  | 9006;
 // <status-codes:end>
 
 /** Why a formula failed to parse, as carried by {@link ParseError.code}. Values are fixed; new codes are only
@@ -249,7 +249,10 @@ export interface ParseError {
 
 /** The error every host-side failure throws: an engine call that did not complete, or a call on a
  *  disposed workbook (`StatusCode.BindingInvalidHandle`). Distinguish failures by `code`; there are no
- *  subclasses. An argument of the wrong type or range throws `TypeError` / `RangeError` instead.
+ *  subclasses. An argument of the wrong type throws `TypeError`, and a non-integer or non-finite number or one
+ *  beyond the 32-bit range throws `RangeError`. A negative or past-the-end position is
+ *  `StatusCode.IndexOutOfRange` (`StatusCode.SheetIndexOutOfRange` for a sheet), and a negative coordinate or
+ *  quantity is `StatusCode.InvalidArgument`.
  *
  *  A formula that does not parse fails with a parser status (1000-1014) and carries its position in
  *  `parseError`, wherever the formula entered: a cell, an ad-hoc evaluation, a defined name, a
@@ -678,8 +681,8 @@ export interface PivotCell {
   readonly kind: PivotCellKind;
   /** Header nesting depth; 0 for data cells. */
   readonly depth: number;
-  /** Source field name when known. */
-  readonly fieldName: string;
+  /** Source field name when known; `null` otherwise. */
+  readonly fieldName: string | null;
   /** The data field's number format code; `null` when unset. */
   readonly numberFormat: string | null;
 }
@@ -741,13 +744,14 @@ export const PivotShowValuesAs: Readonly<{
 /** Union of the {@link PivotShowValuesAs} ordinals. */
 export type PivotShowValuesAs = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 
-/** Sentinel value for `PivotDataFieldInput.showAsBaseItem` meaning
- *  "(previous)". Mirrors the magic value used by Excel's OOXML
- *  `<dataField>` element. */
-export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
-/** Sentinel value for `PivotDataFieldInput.showAsBaseItem` meaning
- *  "(next)". */
-export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
+/** The two special values `PivotDataFieldInput.showAsBaseItem` takes besides an item index: `Previous` is
+ *  "(previous)" and `Next` is "(next)". They mirror the magic values of Excel's OOXML `<dataField>` element. */
+export const PivotShowAsBase: Readonly<{
+  Previous: 1048828;
+  Next: 1048829;
+}>;
+/** Union of the {@link PivotShowAsBase} ordinals. */
+export type PivotShowAsBase = 1048828 | 1048829;
 /** The Σ Values level in the lists `Pivot.getRowFieldOrder` / `Pivot.getColumnFieldOrder`
  *  report and `Pivot.setRowFieldOrder` / `Pivot.setColumnFieldOrder` take. */
 export const PIVOT_VALUES_FIELD = -2;
@@ -971,7 +975,8 @@ export interface PivotFieldInput {
 }
 
 /** Plain-data spec for `Pivot.addDataField` /
- *  `Pivot.setDataField`. A `showAsBaseField` / `showAsBaseItem` that is omitted or `null` is unset. */
+ *  `Pivot.setDataField`. A `showAsBaseField` / `showAsBaseItem` that is omitted or `null` is unset.
+ *  `showAsBaseItem` is an item index or a {@link PivotShowAsBase} member. */
 export interface PivotDataFieldInput {
   /** Display name (key for GETPIVOTDATA). Omit it to let the
    *  engine name the data field from the Excel profile's pivot wording,
@@ -2285,8 +2290,10 @@ export interface FunctionMetadata {
   readonly maxArity: number | null;
   /** How far the engine implements the function. */
   readonly availability: FunctionAvailability;
-  readonly signature?: string;
-  readonly description?: string;
+  /** `null` unless a host metadata document supplies it. */
+  readonly signature: string | null;
+  /** `null` unless a host metadata document supplies it. */
+  readonly description: string | null;
 }
 
 /** Per-locale display overrides inside a {@link FunctionMetadataEntry}. */
@@ -2389,15 +2396,14 @@ export interface ArrayFormulaInput {
   formula: string;
 }
 
-/** Spill region info returned by `Sheet.getSpillInfo(row, col)`. */
+/** Spill region info returned by `Sheet.getSpill(row, col)`, which returns `null` when the cell is neither
+ *  part of a spill nor a blocked anchor. */
 export interface Spill {
-  readonly engaged: boolean;
   /** `true` when the cell is the anchor of a spill that failed with `#SPILL!`; then `range` is the rectangle
-   *  it attempted. `engaged` is `false` then. */
+   *  it attempted. */
   readonly blocked: boolean;
-  /** The region including its anchor, whose top-left cell holds the formula; `null` when the cell is
-   *  neither part of a spill nor a blocked anchor. */
-  readonly range: CellRect | null;
+  /** The region including its anchor, whose top-left cell holds the formula. */
+  readonly range: CellRect;
 }
 
 /** A parsed reference: the rectangle `range`, with a whole column or row expanded to the grid edge.
@@ -2428,8 +2434,8 @@ export interface FormatReferenceOptions {
 /** One CF rule, an element of `Sheet.listCfRules()`.
  *
  *  `id`, `type`, `priority`, `stopIfTrue` and `ranges` populate for every
- *  rule kind; the remaining fields are engaged by the kinds noted on
- *  each. A visual rule (`colorScale` / `dataBar` / `iconSet`) carries its
+ *  rule kind; every other key is present on every read and is `null`
+ *  unless the kind noted on it uses it. A visual rule (`colorScale` / `dataBar` / `iconSet`) carries its
  *  full sub-spec, so an entry read back here can be handed straight to
  *  `addCfRule`.
  */
@@ -2439,32 +2445,32 @@ export interface ConditionalFormat {
   readonly priority: number;
   readonly stopIfTrue: boolean;
   readonly ranges: readonly CellRect[];
-  readonly dxfIndex?: number;
+  readonly dxfIndex: number | null;
   /** Formula text, leading `=` included. */
-  readonly formula1?: string;
-  readonly formula2?: string;
-  /** Engaged for `CellIs` rules. */
-  readonly operator?: ComparisonOperator;
-  /** Engaged for `Top10` rules. */
-  readonly rank?: number;
-  readonly percent?: boolean;
-  readonly bottom?: boolean;
-  /** Engaged for `AboveAverage` rules. */
-  readonly aboveAverage?: boolean;
-  readonly equalAverage?: boolean;
-  readonly stdDev?: number;
-  /** Engaged for `ContainsText` / `BeginsWith` / `EndsWith` /
-   *  `NotContainsText` rules. */
-  readonly text?: string;
-  /** Engaged for `TimePeriod` rules. */
-  readonly timePeriod?: DatePeriod;
-  /** Engaged for `ColorScale` rules. */
-  readonly colorScale?: {
+  readonly formula1: string | null;
+  readonly formula2: string | null;
+  /** `null` unless the rule is `CellIs`. */
+  readonly operator: ComparisonOperator | null;
+  /** `null` unless the rule is `Top10`. */
+  readonly rank: number | null;
+  readonly percent: boolean | null;
+  readonly bottom: boolean | null;
+  /** `null` unless the rule is `AboveAverage`. */
+  readonly aboveAverage: boolean | null;
+  readonly equalAverage: boolean | null;
+  readonly stdDev: number | null;
+  /** `null` unless the rule is `ContainsText` / `BeginsWith` / `EndsWith` /
+   *  `NotContainsText`. */
+  readonly text: string | null;
+  /** `null` unless the rule is `TimePeriod`. */
+  readonly timePeriod: DatePeriod | null;
+  /** `null` unless the rule is `ColorScale`. */
+  readonly colorScale: {
     readonly thresholds: readonly CfValueObject[];
     readonly colors: readonly Color[];
-  };
-  /** Engaged for `DataBar` rules. */
-  readonly dataBar?: {
+  } | null;
+  /** `null` unless the rule is `DataBar`. */
+  readonly dataBar: {
     readonly min: CfValueObject;
     readonly max: CfValueObject;
     readonly fill: Color;
@@ -2472,21 +2478,20 @@ export interface ConditionalFormat {
     readonly minLengthPct: number;
     readonly maxLengthPct: number;
     /**
-     * `x14` extension payload. Present whenever the rule states the
-     * setting; a rule read back from a workbook always carries all six, so
-     * the object can be handed straight to `addCfRule`.
+     * `x14` extension payload. A key is `null` when the rule does not state the
+     * setting; the object can be handed straight to `addCfRule`.
      */
-    readonly gradient?: boolean;
-    readonly axisPosition?: CfDataBarAxisPosition;
-    readonly negativeFill?: Color;
-    readonly border?: Color;
-    readonly negativeBorder?: Color;
-    readonly axisColor?: Color;
+    readonly gradient: boolean | null;
+    readonly axisPosition: CfDataBarAxisPosition | null;
+    readonly negativeFill: Color | null;
+    readonly border: Color | null;
+    readonly negativeBorder: Color | null;
+    readonly axisColor: Color | null;
     /** Edge the bar grows from. */
     readonly direction: CfDataBarDirection;
-  };
-  /** Engaged for `IconSet` rules. */
-  readonly iconSet?: {
+  } | null;
+  /** `null` unless the rule is `IconSet`. */
+  readonly iconSet: {
     readonly name: IconSetName;
     /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries its leading `=` on read. */
     readonly thresholds: readonly CfValueObject[];
@@ -2497,12 +2502,12 @@ export interface ConditionalFormat {
      *  carries its own `type`, and that type is what interprets it. */
     readonly percent: boolean;
     /** Lower bound of the lowest icon's bucket; a cell below it gets no
-     *  icon. Always present on a rule read back from a workbook. */
-    readonly floor?: CfValueObject;
-    /** Custom icon set: the icon drawn for each level, present only when the
-     *  set does not draw its own icons. */
-    readonly icons?: readonly CfIcon[];
-  };
+     *  icon. `null` when the rule states no floor. */
+    readonly floor: CfValueObject | null;
+    /** Custom icon set: the icon drawn for each level; `null` when the
+     *  set draws its own icons. */
+    readonly icons: readonly CfIcon[] | null;
+  } | null;
 }
 
 /** One level of a custom icon set. `iconSet` is the set the icon comes from
@@ -2828,16 +2833,16 @@ export interface CellXf {
   readonly locked: boolean | null;
   /** `<protection hidden>`; `null` without a `<protection>` child, which means not hidden. */
   readonly hidden: boolean | null;
-  /** OOXML `textRotation`; present only when the source attribute existed. */
-  readonly textRotation?: number;
-  /** OOXML `indent`; present only when the source attribute existed. */
-  readonly indent?: number;
-  /** OOXML signed `relativeIndent`; present only when the source attribute existed. */
-  readonly relativeIndent?: number;
-  /** OOXML `shrinkToFit`; present only when the source attribute existed. */
-  readonly shrinkToFit?: boolean;
-  /** OOXML `readingOrder`; present only when the source attribute existed. */
-  readonly readingOrder?: ReadingOrder;
+  /** OOXML `textRotation`; `null` when the source attribute is absent. */
+  readonly textRotation: number | null;
+  /** OOXML `indent`; `null` when the source attribute is absent. */
+  readonly indent: number | null;
+  /** OOXML signed `relativeIndent`; `null` when the source attribute is absent. */
+  readonly relativeIndent: number | null;
+  /** OOXML `shrinkToFit`; `null` when the source attribute is absent. */
+  readonly shrinkToFit: boolean | null;
+  /** OOXML `readingOrder`; `null` when the source attribute is absent. */
+  readonly readingOrder: ReadingOrder | null;
   /** Index into `<cellStyleXfs>` of the named style this format inherits
    *  from. Always 0 for a record read back from `getCellStyleXf`. */
   readonly styleXfIndex?: number;
@@ -2931,8 +2936,8 @@ export interface Fill {
   readonly foreground: Color;
   /** The `<bgColor>` element; `ColorKind.None` without one. */
   readonly background: Color;
-  /** A `<gradientFill>`; when present the pattern fields are ignored. */
-  readonly gradient?: GradientFill;
+  /** A `<gradientFill>`, which makes the pattern fields ignored; `null` for a pattern fill. */
+  readonly gradient: GradientFill | null;
 }
 
 /** A gradient fill. `degree` is a linear gradient's angle; `left` / `right` /
@@ -2961,7 +2966,7 @@ export interface FillInput {
   pattern?: FillPattern;
   foreground?: ColorInput;
   background?: ColorInput;
-  gradient?: GradientFillInput;
+  gradient?: GradientFillInput | null;
 }
 
 /** A gradient of a {@link FillInput}; an omitted key is 0 (`type` linear). */
@@ -3045,16 +3050,16 @@ export interface CellXfInput {
   readonly locked?: boolean | null;
   /** `<protection hidden>`; an absent attribute means not hidden. */
   readonly hidden?: boolean | null;
-  /** OOXML `textRotation` (0..180 or 255). Omitted when absent. */
-  readonly textRotation?: number;
-  /** OOXML `indent` (0..255). Omitted when absent. */
-  readonly indent?: number;
-  /** OOXML signed `relativeIndent`. Omitted when absent. */
-  readonly relativeIndent?: number;
-  /** OOXML `shrinkToFit`; omitted when absent so explicit false is retained. */
-  readonly shrinkToFit?: boolean;
-  /** OOXML `readingOrder`. Omitted when absent. */
-  readonly readingOrder?: ReadingOrder;
+  /** OOXML `textRotation` (0..180 or 255). Omitted or `null` when absent. */
+  readonly textRotation?: number | null;
+  /** OOXML `indent` (0..255). Omitted or `null` when absent. */
+  readonly indent?: number | null;
+  /** OOXML signed `relativeIndent`. Omitted or `null` when absent. */
+  readonly relativeIndent?: number | null;
+  /** OOXML `shrinkToFit`; omitted or `null` when absent so explicit false is retained. */
+  readonly shrinkToFit?: boolean | null;
+  /** OOXML `readingOrder`. Omitted or `null` when absent. */
+  readonly readingOrder?: ReadingOrder | null;
   /** Index of the named style in `<cellStyleXfs>` this format inherits from.
    *  Only meaningful for `addCellXf`; must name an entry created by
    *  `addCellStyleXf`. Defaults to 0. */
@@ -3243,32 +3248,32 @@ export interface PhoneticPropertiesInput {
 export interface PhoneticProperties extends PhoneticPropertiesInput {
   /** `true` when the triple came from an explicit `<phoneticPr>` element or
    *  `setCellPhoneticProperties` (an all-zero triple included); `false` for
-   *  the state an absent element resolves to. */
-  readonly present: boolean;
+   *  the state an absent element resolves to. Not an input key. */
+  readonly stated: boolean;
 }
 
 /** Return type of `Workbook.ooxml.getDxf(dxfIndex)`.
- *  Optional properties are present only when that `<dxf>` child exists. */
+ *  A part is `null` when that `<dxf>` child does not exist. */
 export interface Dxf {
-  readonly font?: Font;
-  readonly fill?: Fill;
-  readonly border?: Border;
+  readonly font: Font | null;
+  readonly fill: Fill | null;
+  readonly border: Border | null;
   /** The number format code; `null` when the format sets none. The format's id is assigned on save. */
   readonly numberFormat: string | null;
-  readonly alignment?: Alignment;
-  readonly protection?: CellProtection;
+  readonly alignment: Alignment | null;
+  readonly protection: CellProtection | null;
 }
 
-/** Argument of `Workbook.ooxml.addDxf`: the parts of a differential format, each optional; an omitted part (or a
- *  `null` / omitted `numberFormat`) is not set. The {@link Dxf} record `getDxf` returns is accepted as is. */
+/** Argument of `Workbook.ooxml.addDxf`: the parts of a differential format, each optional; an omitted or `null`
+ *  part (and a `null` or omitted `numberFormat`) is not set. The {@link Dxf} record `getDxf` returns is accepted as is. */
 export interface DxfInput {
-  readonly font?: FontInput;
-  readonly fill?: FillInput;
-  readonly border?: BorderInput;
+  readonly font?: FontInput | null;
+  readonly fill?: FillInput | null;
+  readonly border?: BorderInput | null;
   /** A number format code; the format's id is assigned on save. */
   readonly numberFormat?: string | null;
-  readonly alignment?: Alignment;
-  readonly protection?: CellProtection;
+  readonly alignment?: Alignment | null;
+  readonly protection?: CellProtection | null;
 }
 
 /** Minimum severity for the engine's structured log stream. `Off` discards every record and is the default: an
@@ -3926,7 +3931,8 @@ export interface AutoFilterColumn {
   dynamicMaxValue: number | null;
   valueIso: string;
   maxValueIso: string;
-  dxfIndex: number;
+  /** The color filter's differential format; `null` for a column that filters on anything else. */
+  dxfIndex: number | null;
   cellColor: boolean;
   iconSet: IconSetName;
   /** `null` when the icon filter names no icon. */
@@ -3999,7 +4005,7 @@ export interface AutoFilterColumnInput {
   dynamicMaxValue?: number | null;
   valueIso?: string;
   maxValueIso?: string;
-  dxfIndex?: number;
+  dxfIndex?: number | null;
   cellColor?: boolean;
   iconSet?: IconSetName;
   iconIndex?: number | null;
@@ -4401,19 +4407,19 @@ export interface SparklineInput {
   location: CellAddress | string;
 }
 
-/** A sparkline group of the sheet's worksheet extension list. A colour with `kind` `ColorKind.None` is
- *  absent. `manualMin` / `manualMax` are `null` when the axis bound is not set.
+/** A sparkline group of the sheet's worksheet extension list. A colour is `null` when the group states none.
+ *  `manualMin` / `manualMax` are `null` when the axis bound is not set.
  *  `dateAxisRange` is the group's date range, `null` when absent or when its stored text does not parse. */
 export interface SparklineGroup {
   readonly type: SparklineType;
-  readonly colorSeries: Color;
-  readonly colorNegative: Color;
-  readonly colorAxis: Color;
-  readonly colorMarkers: Color;
-  readonly colorFirst: Color;
-  readonly colorLast: Color;
-  readonly colorHigh: Color;
-  readonly colorLow: Color;
+  readonly colorSeries: Color | null;
+  readonly colorNegative: Color | null;
+  readonly colorAxis: Color | null;
+  readonly colorMarkers: Color | null;
+  readonly colorFirst: Color | null;
+  readonly colorLast: Color | null;
+  readonly colorHigh: Color | null;
+  readonly colorLow: Color | null;
   readonly markers: boolean;
   readonly high: boolean;
   readonly low: boolean;
@@ -4434,17 +4440,17 @@ export interface SparklineGroup {
 }
 
 /** Input of `addSparklineGroup`: every modelled field, each defaulting as a new line group does when left
- *  out. `sparklines` is required by an add. A `SparklineGroup` read back passes as is. */
+ *  out; a colour of `null` is no colour. `sparklines` is required by an add. A `SparklineGroup` read back passes as is. */
 export interface SparklineGroupInput {
   readonly type?: SparklineType;
-  readonly colorSeries?: ColorInput;
-  readonly colorNegative?: ColorInput;
-  readonly colorAxis?: ColorInput;
-  readonly colorMarkers?: ColorInput;
-  readonly colorFirst?: ColorInput;
-  readonly colorLast?: ColorInput;
-  readonly colorHigh?: ColorInput;
-  readonly colorLow?: ColorInput;
+  readonly colorSeries?: ColorInput | null;
+  readonly colorNegative?: ColorInput | null;
+  readonly colorAxis?: ColorInput | null;
+  readonly colorMarkers?: ColorInput | null;
+  readonly colorFirst?: ColorInput | null;
+  readonly colorLast?: ColorInput | null;
+  readonly colorHigh?: ColorInput | null;
+  readonly colorLow?: ColorInput | null;
   readonly markers?: boolean;
   readonly high?: boolean;
   readonly low?: boolean;
@@ -4465,11 +4471,24 @@ export interface SparklineGroupInput {
 }
 
 /** Argument of `updateSparklineGroup`: every {@link SparklineGroupInput} key, each optional. A key left out is
- *  unchanged; `manualMin`, `manualMax` and `dateAxisRange` accept `null` to clear them and no other key does
- *  (a `TypeError`). `sparklines` replaces the group's sparklines when present, keeps them when absent and
+ *  unchanged; `manualMin`, `manualMax`, `dateAxisRange` and the eight colours accept `null` to clear them and no
+ *  other key does (a `TypeError`). `sparklines` replaces the group's sparklines when present, keeps them when absent and
  *  must not be empty (`StatusCode.InvalidArgument`). A `SparklineGroup` read back passes as is; any
  *  unknown key fails with a `TypeError`. */
-export type SparklineGroupPatch = Patch<SparklineGroupInput, 'manualMin' | 'manualMax' | 'dateAxisRange'>;
+export type SparklineGroupPatch = Patch<
+  SparklineGroupInput,
+  | 'manualMin'
+  | 'manualMax'
+  | 'dateAxisRange'
+  | 'colorSeries'
+  | 'colorNegative'
+  | 'colorAxis'
+  | 'colorMarkers'
+  | 'colorFirst'
+  | 'colorLast'
+  | 'colorHigh'
+  | 'colorLow'
+>;
 
 /** Kind of a {@link ChartDataSource}. */
 export const ChartSourceKind: Readonly<{
@@ -5039,7 +5058,6 @@ export interface PageSetup {
   readonly fitToWidth: number;
   readonly fitToHeight: number;
   readonly fitToPage: boolean;
-  readonly orientationStated: boolean;
   readonly paperSizeStated: boolean;
   readonly scalePctStated: boolean;
   readonly fitToWidthStated: boolean;
@@ -5192,8 +5210,11 @@ export type ProtectedRangeRef = number | string;
  *  Rows, columns and every index are 0-based; a row / column pair is `(row, col)`.
  *
  *  A method that cannot complete throws {@link FormulonError}, whose `code` is a `StatusCode`; a
- *  "fails with" note below names that code by its `StatusCode` key. An argument of the wrong type or outside its
- *  integer range throws `TypeError` / `RangeError` before any engine work; an argument that is well formed
+ *  "fails with" note below names that code by its `StatusCode` key. An argument of the wrong type throws
+ *  `TypeError`, and a fractional, non-finite or beyond-32-bit number where an integer is required throws
+ *  `RangeError`, both before any engine work. A negative or past-the-end position is
+ *  `StatusCode.IndexOutOfRange`, and a negative coordinate (row, column) or quantity (count, depth, thread
+ *  count) fails with `StatusCode.InvalidArgument`. An argument that is well formed
  *  but that the engine rejects fails with `StatusCode.InvalidArgument`; a setter given a value outside an Excel
  *  limit (row height, column width, font size, zoom, text length) fails the same way. A name or id that is already
  *  taken fails with `StatusCode.AlreadyExists`, and a refusal caused by the workbook's state (the last sheet, the
@@ -5267,7 +5288,8 @@ export interface Workbook {
   /** The handle of one sheet, by `SheetRef`. The workbook keeps one `Sheet` per sheet, so every lookup of the same
    *  sheet returns the same object. A name no sheet has fails with `StatusCode.NotFound`, an index past the last
    *  sheet with `StatusCode.SheetIndexOutOfRange`, and a `Sheet` handle of another workbook with
-   *  `StatusCode.InvalidArgument`; a negative or fractional index throws `RangeError`.
+   *  `StatusCode.InvalidArgument`; a negative index fails with `StatusCode.SheetIndexOutOfRange` and a fractional
+   *  one throws `RangeError`.
    *
    *  @example
    *  ```ts
@@ -5329,10 +5351,9 @@ export interface Workbook {
    * per-call telemetry. This call is synchronous: it returns after all
    * workers have joined. `threadCount` is an integer: 0 (the default) selects
    * automatic detection (capped at 8), 1 keeps evaluation on the caller and
-   * starts no workers, and 2..8 set the worker upper bound. A non-number
-   * argument throws `TypeError`; a fractional, non-finite or
-   * negative one throws `RangeError`; a value above 8 fails with
-   * `StatusCode.InvalidArgument`.
+   * starts no workers, and 2..8 set the worker upper bound. `threadCount` is optional (0 = automatic, capped
+   * at 8); a non-number is `TypeError`, a fractional or non-finite number `RangeError`, a negative number or
+   * one above 8 `StatusCode.InvalidArgument`.
    * The 64-bit counters in `stats` are JavaScript numbers and are exact
    * through `Number.MAX_SAFE_INTEGER` (2^53 - 1).
    * As with `recalc`, an exception thrown by an `IterativeProgressCallback` is
@@ -5482,9 +5503,10 @@ export interface Workbook {
   /** The handle of the pivot cache `cacheId`; `StatusCode.NotFound` when the workbook has no such cache. */
   pivotCache(cacheId: number | PivotCache): PivotCache;
   /** Creates a new empty pivot cache and returns its handle; its id is `requestedId` when given, else one the
-   *  engine assigns; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet source, and a workbook containing one cannot be saved: call
+   *  engine assigns. A cache id is never 0: an explicit 0 fails with `StatusCode.InvalidArgument`, and omission
+   *  or `null` asks the engine to assign one; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet source, and a workbook containing one cannot be saved: call
    *  `PivotCache.setWorksheetSource` before saving. */
-  addPivotCache(requestedId?: number): PivotCache;
+  addPivotCache(requestedId?: number | null): PivotCache;
   /** Removes the pivot cache `cacheId`; its handle then fails with `StatusCode.NotFound` until a cache with the
    *  same id is added. Fails with `StatusCode.PreconditionFailed` if any pivot table still references it. */
   removePivotCache(cacheId: number | PivotCache): void;
@@ -6079,8 +6101,12 @@ export interface Sheet {
 
   /** Evaluates every CF block on the sheet against the cells of `range` and returns only the cells that
    *  produced at least one match. `options.today` pins the date basis for `TimePeriod` rules (default: the pinned
-   *  clock, else today), a {@link DateInput}. */
-  evaluateCfRange(range: CellRect | string, options?: { today?: DateInput }): readonly CfCell[];
+   *  clock, else today), a {@link DateInput}. With `options.timePeriodRules` `false` (default `true`) no date is
+   *  passed, so no `TimePeriod` rule matches. */
+  evaluateCfRange(
+    range: CellRect | string,
+    options?: { today?: DateInput; timePeriodRules?: boolean },
+  ): readonly CfCell[];
 
   /** Computes print-area page breaks and physical page count for the sheet. */
   getPagination(): Pagination;
@@ -6234,20 +6260,25 @@ export interface Sheet {
   updateFormatDefaults(patch: SheetFormatDefaultsPatch): void;
 
   /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
-   *  Hidden rows and columns contribute zero extent. `mode` defaults to `Display`. */
+   *  Hidden rows and columns contribute zero extent. `mode` defaults to `Display`; one outside
+   *  `GeometryMode` fails with `StatusCode.InvalidArgument` and a non-number throws `TypeError`. */
   getCellRectPt(range: CellRect | string, mode?: GeometryMode): RectPt;
-  /** Effective column width in points under `mode` (default `Display`); zero when hidden. */
+  /** Effective column width in points under `mode` (default `Display`); zero when hidden. A `mode` outside
+   *  `GeometryMode` fails with `StatusCode.InvalidArgument` and a non-number throws `TypeError`. */
   getColumnWidthPt(col: number, mode?: GeometryMode): number;
   /** Effective row height in points; zero when hidden. */
   getRowHeightPt(row: number): number;
   /** The character-unit to point conversion model for the workbook's Normal font under `mode` (default
-   *  `Display`). */
+   *  `Display`). A `mode` outside `GeometryMode` fails with `StatusCode.InvalidArgument` and a non-number
+   *  throws `TypeError`. */
   getWidthModel(mode?: GeometryMode): WidthModel;
   /** Converts a stored column width (padding included) to points under `mode` (default `Display`), snapped to
-   *  whole screen pixels. A `mode` outside `GeometryMode` throws `RangeError`. */
+   *  whole screen pixels. A `mode` outside `GeometryMode` fails with `StatusCode.InvalidArgument`; a non-number
+   *  throws `TypeError`. */
   convertColumnCharsToPt(chars: number, mode?: GeometryMode): number;
   /** Inverse of `convertColumnCharsToPt`: the stored width Excel writes for a column of `pt`, under `mode`
-   *  (default `Display`). A `mode` outside `GeometryMode` throws `RangeError`. */
+   *  (default `Display`). A `mode` outside `GeometryMode` fails with `StatusCode.InvalidArgument`; a non-number
+   *  throws `TypeError`. */
   convertColumnPtToChars(pt: number, mode?: GeometryMode): number;
 
   /** The format the cell at `(row, col)` shows: number format, font, fill, border, alignment and protection of
@@ -6383,18 +6414,16 @@ export interface Sheet {
   getDependents(a1: string, depth?: number): readonly CellNode[];
 
   /** Returns dynamic-array spill info for `(row, col)`.
-   *  When the cell is part of a spill region (anchor or phantom),
-   *  `engaged` is `true` and `range` is the region; the per-cell values
-   *  are read via `getValue`, which is already spill-aware. When the cell
-   *  is not part of any region, `engaged` is `false` and `range` is `null`
-   *  unless the cell is a blocked anchor. */
-  getSpillInfo(row: number, col: number): Spill;
-  /** `getSpillInfo` at the A1 address `a1`. */
-  getSpillInfo(a1: string): Spill;
+   *  When the cell is part of a spill region (anchor or phantom), `range` is the region; the per-cell values
+   *  are read via `getValue`, which is already spill-aware. A blocked anchor reads `blocked: true` with the
+   *  rectangle it attempted. `null` when the cell is neither part of a region nor a blocked anchor. */
+  getSpill(row: number, col: number): Spill | null;
+  /** `getSpill` at the A1 address `a1`. */
+  getSpill(a1: string): Spill | null;
 
   /** Returns the legacy array (CSE, `<f t="array">`) formula covering `(row, col)`, the same
    *  value for every cell of the block; `null` outside any block. A dynamic-array
-   *  spill is not a legacy array formula; read that through `getSpillInfo`. */
+   *  spill is not a legacy array formula; read that through `getSpill`. */
   getArrayFormula(row: number, col: number): ArrayFormula | null;
   /** `getArrayFormula` at the A1 address `a1`. */
   getArrayFormula(a1: string): ArrayFormula | null;
@@ -6594,10 +6623,11 @@ export interface SheetOoxml {
   /** `getEffectiveStyle` at the A1 address `a1`. */
   getEffectiveStyle(a1: string): EffectiveStyle;
 
-  /** Returns the cell XF index of the cell at `(row, col)`. */
-  getCellXfIndex(row: number, col: number): number;
+  /** Returns the cell XF index of the cell at `(row, col)`; `null` when the cell has no XF of its own (an
+   *  explicit index 0 reads 0). */
+  getCellXfIndex(row: number, col: number): number | null;
   /** `getCellXfIndex` at the A1 address `a1`. */
-  getCellXfIndex(a1: string): number;
+  getCellXfIndex(a1: string): number | null;
   /** Persists `xfIndex` on the cell at `(row, col)`. An index not
    *  below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. */
   setCellXfIndex(row: number, col: number, xfIndex: number): void;
@@ -6787,14 +6817,13 @@ export interface Pivot {
    *  {@link DateInput}; omitted, they take the field's first value and its
    *  last (the midnight after it for a date without a time). An empty or
    *  unknown mask, a zero interval, an invalid bound, a start after the end
-   *  or a field holding anything but dates is `StatusCode.InvalidArgument`. */
-  setFieldDateGroup(fieldIndex: number, group: PivotDateGroupInput): void;
-  /** Removes the date grouping of pivot field `fieldIndex` (a source field,
-   *  or one of its group fields) from every pivot on its cache; the field
-   *  returns to the axis position its group fields held. A field that is
-   *  not grouped is left as it is. `StatusCode.PreconditionFailed` when the group
-   *  fields are not the last fields of the cache. */
-  clearFieldDateGroup(fieldIndex: number): void;
+   *  or a field holding anything but dates is `StatusCode.InvalidArgument`.
+   *
+   *  A `group` of `null` removes the date grouping of pivot field `fieldIndex` (a source field, or one of its
+   *  group fields) from every pivot on its cache; the field returns to the axis position its group fields held.
+   *  A field that is not grouped is left as it is. `StatusCode.PreconditionFailed` when the group fields are not
+   *  the last fields of the cache. */
+  setFieldDateGroup(fieldIndex: number, group: PivotDateGroupInput | null): void;
   /** Reads the row-axis field order (the list `setRowFieldOrder` takes). */
   getRowFieldOrder(): readonly number[];
   /** Replaces the row-axis field order with `indices`. Each entry must
@@ -7057,7 +7086,8 @@ export interface WorkbookCtor {
    *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
    *  to route on). Empty input fails with `StatusCode.InvalidArgument`, a damaged archive with one of
    *  the `StatusCode.Io*` codes (`StatusCode.IoZipCorrupt` for bytes that are not a ZIP archive), and a
-   *  value that is not an `ArrayBuffer` or an `ArrayBufferView` throws `TypeError`; read a `Blob` with
+   *  value that is not a `Uint8Array`, an `ArrayBuffer` or an `ArrayBufferView` (a string, `null`) throws
+   *  `TypeError`, as does every other method that takes bytes; read a `Blob` with
    *  `await blob.arrayBuffer()`. The formulas load dirty, so under `CalcMode.Auto` the first value read or
    *  save recomputes the workbook; to read the cached values the file carries, call
    *  `setCalcMode(CalcMode.Manual)` first (and `setCalcOnSave(false)` to save them unchanged).
@@ -7195,8 +7225,7 @@ export interface Formulon {
   GradientType: typeof GradientType;
   BorderStyle: typeof BorderStyle;
   FunctionAvailability: typeof FunctionAvailability;
-  PIVOT_SHOW_AS_BASE_PREVIOUS: typeof PIVOT_SHOW_AS_BASE_PREVIOUS;
-  PIVOT_SHOW_AS_BASE_NEXT: typeof PIVOT_SHOW_AS_BASE_NEXT;
+  PivotShowAsBase: typeof PivotShowAsBase;
   PIVOT_VALUES_FIELD: typeof PIVOT_VALUES_FIELD;
   mergeFunctionMetadata: typeof mergeFunctionMetadata;
   toNative: typeof toNative;
@@ -7271,12 +7300,15 @@ export interface Formulon {
   /** Rewrites stored (en-invariant) formula text into `profileId`'s Excel
    *  spelling: function names, list / array separators, decimal points,
    *  booleans and error names. Strings, quoted sheet names, external
-   *  qualifiers and structured-reference brackets are kept verbatim. A pure
-   *  text rewrite; the grammar is not validated. An unknown `profileId`
-   *  fails with `StatusCode.InvalidArgument`. */
+   *  qualifiers and structured-reference brackets are kept verbatim. The
+   *  canonical `formula` must parse: a syntax error fails with a parser status
+   *  and `FormulonError.parseError`, whose offsets (UTF-16) index into
+   *  `formula`. An unknown `profileId` fails with `StatusCode.InvalidArgument`. */
   localizeFormula(formula: string, profileId: ProfileId): string;
   /** Inverse of `localizeFormula`: rewrites `profileId`-spelled formula text
-   *  into the en-invariant form. */
+   *  into the en-invariant form. A syntax error fails with a parser status and
+   *  `FormulonError.parseError`, whose offsets (UTF-16) index into the localized
+   *  `formula` as passed. */
   canonicalizeFormula(formula: string, profileId: ProfileId): string;
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */

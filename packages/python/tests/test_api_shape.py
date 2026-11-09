@@ -70,7 +70,8 @@ class ExceptionClassTests(unittest.TestCase):
                 wb.sheet(5).name
             self.assertEqual(cm.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
             self.assertEqual(cm.exception.context, "sheet_index=5 sheet_count=1")
-            self.assertEqual(str(cm.exception), f"{cm.exception.message} [sheet_index=5 sheet_count=1]")
+            self.assertEqual(str(cm.exception), f"[SHEET_INDEX_OUT_OF_RANGE] {cm.exception.message}")
+            self.assertNotIn("sheet_count", str(cm.exception))
 
     def test_collection_index_out_of_range_is_index_error(self) -> None:
         with Workbook.create_default() as wb:
@@ -91,10 +92,10 @@ class ExceptionClassTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError) as cm:
                 wb.sheet(5).name
-            self.assertNotIn("fm_", str(cm.exception))
-            self.assertNotIn("SHEET_INDEX_OUT_OF_RANGE", str(cm.exception))
+            self.assertNotIn("fm_", cm.exception.message)
+            self.assertNotIn("SHEET_INDEX_OUT_OF_RANGE", cm.exception.message)
 
-    def test_message_without_context_has_no_brackets(self) -> None:
+    def test_string_form_is_the_code_name_and_the_message(self) -> None:
         wb = Workbook.create_default()
         wb.close()
         with self.assertRaises(WorkbookClosedError) as cm:
@@ -102,7 +103,7 @@ class ExceptionClassTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, StatusCode.BINDING_INVALID_HANDLE)
         self.assertEqual(cm.exception.message, "the workbook is closed")
         self.assertEqual(cm.exception.context, "")
-        self.assertEqual(str(cm.exception), "the workbook is closed")
+        self.assertEqual(str(cm.exception), "[BINDING_INVALID_HANDLE] the workbook is closed")
 
 
 class ExcelErrorTests(unittest.TestCase):
@@ -391,10 +392,10 @@ class WorkbookSheetAccessTests(unittest.TestCase):
                 with self.assertRaises(KeyError):
                     self.wb[name]
 
-    def test_negative_index_is_value_error(self) -> None:
-        with self.assertRaises(ValueError) as cm:
+    def test_negative_index_is_sheet_index_out_of_range(self) -> None:
+        with self.assertRaises(IndexOutOfRangeError) as cm:
             self.wb.sheet(-1)
-        self.assertNotIsInstance(cm.exception, FormulonError)
+        self.assertEqual(cm.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
 
     def test_index_at_count_is_index_out_of_range(self) -> None:
         for index in (2, 2**31, 2**32):
@@ -410,7 +411,7 @@ class WorkbookSheetAccessTests(unittest.TestCase):
             self.wb.sheet(2**64)
 
     def test_non_integer_key_is_type_error(self) -> None:
-        for bad in (1.5, True, None):
+        for bad in (1.5, 1.0, True, None):
             with self.subTest(bad=bad), self.assertRaises(TypeError):
                 self.wb.sheet(bad)  # type: ignore[arg-type]
 
@@ -751,10 +752,10 @@ class SheetHandleTests(unittest.TestCase):
             self.wb["nope"]
         with self.assertRaises(IndexOutOfRangeError):
             self.wb.sheet(99)
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(IndexOutOfRangeError) as cm:
             self.wb.sheet(-1)
-        self.assertNotIsInstance(cm.exception, FormulonError)
-        for bad in (1.5, True, None):
+        self.assertEqual(cm.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
+        for bad in (1.5, 1.0, True, None):
             with self.subTest(bad=bad), self.assertRaises(TypeError):
                 self.wb.sheet(bad)  # type: ignore[arg-type]
 
@@ -885,8 +886,8 @@ def _setter_kwargs(setter: object, record: object) -> "dict[str, object]":
 
 
 def _stated_kwargs(setter: object, record: object) -> "dict[str, object]":
-    """The ``_setter_kwargs`` of a presence-flagged record, keeping only the fields its ``*_stated`` flag marks."""
-    return {k: v for k, v in _setter_kwargs(setter, record).items() if getattr(record, f"{k}_stated")}
+    """The ``_setter_kwargs`` of a presence-flagged record, keeping only the fields its ``*_stated`` flag marks (a nullable field with no flag counts when not ``None``)."""
+    return {k: v for k, v in _setter_kwargs(setter, record).items() if getattr(record, f"{k}_stated", v is not None)}
 
 
 def _input_of(input_type: type, record: object) -> object:
@@ -1249,7 +1250,7 @@ class EnumBoundaryTests(unittest.TestCase):
                 with self.subTest(bad=bad), self.assertRaises(InvalidArgumentError):
                     ws.update_view(view_mode=bad)  # type: ignore[arg-type]
             for bad in (1.5, math.nan):
-                with self.subTest(bad=bad), self.assertRaises(ValueError):
+                with self.subTest(bad=bad), self.assertRaises(TypeError):
                     ws.update_view(view_mode=bad)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
                 ws.update_view(view_mode="0")  # type: ignore[arg-type]

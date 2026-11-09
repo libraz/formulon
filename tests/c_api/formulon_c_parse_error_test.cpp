@@ -111,7 +111,7 @@ bool CallEntry(fm_workbook_t* wb, const std::string& entry, const std::string& f
     fm_defined_name_t input = FM_STRUCT_INIT(fm_defined_name_t);
     input.name = "Rate";
     input.formula = text;
-    input.local_sheet_id = -1;
+    input.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
     *status = fm_workbook_set_defined_name(wb, &input);
   } else if (entry == "parse_reference") {
     fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);

@@ -349,7 +349,7 @@ void JsWorkbook::setDefinedName(emscripten::val input) {
   const std::string name = reader.required_string(input, "name", "name");
   const std::string formula = reader.required_string(input, "formula", "formula");
   const emscripten::val scope = reader.value(input, "scope", "scope");
-  int32_t local_sheet_id = -1;
+  int32_t local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
   if (js_value_present(scope)) {
     const uint32_t sheet = reader.u32_value(scope, 0U, "scope");
     if (reader.ok() && sheet > 2147483647U) {
@@ -440,16 +440,25 @@ JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
   // Do not bind this parameter as uint32_t: embind would otherwise coerce
   // e.g. -0.5, 1.5, NaN, Infinity, null, and a missing argument before this
   // method could apply the public 0..8 integer contract.
-  // Same contract as the Node guard: a non-number is a TypeError, a number
-  // that is not a uint32 is a RangeError, and the 0..8 limit is the C ABI's.
+  // Same contract as the Node guard: a non-number is a TypeError, a fractional
+  // or non-finite number a RangeError, a negative integer an InvalidArgument;
+  // the 0..8 limit is the C ABI's.
   if (!threadCount.isNumber()) {
-    record_type_error("positional argument must be a number");
+    record_type_error("Workbook.recalcParallel threadCount must be a number");
     return r;
   }
   const emscripten::val number = emscripten::val::global("Number");
   const double requested = threadCount.as<double>();
-  if (!number.call<bool>("isInteger", threadCount) || requested < 0.0 || requested > 4294967295.0) {
-    record_range_error("positional argument is outside uint32 range");
+  if (!number.call<bool>("isInteger", threadCount)) {
+    record_range_error("Workbook.recalcParallel threadCount must be a finite integer");
+    return r;
+  }
+  if (requested < 0.0) {
+    record_binding_failure(FM_STATUS_INVALID_ARGUMENT, "Workbook.recalcParallel threadCount is negative");
+    return r;
+  }
+  if (requested > 4294967295.0) {
+    record_binding_failure(FM_STATUS_INVALID_ARGUMENT, "Workbook.recalcParallel threadCount is above 8");
     return r;
   }
 
@@ -691,7 +700,7 @@ double JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewport) {
     record_invalid_handle();
     return 0.0;
   }
-  JsNarrowNumericReader reader("recalcViewport");
+  JsNarrowNumericReader reader("Sheet.recalcViewport");
   const fm_cell_rect_t vp = js_pull_range(viewport, &reader);
   if (!reader.ok()) {
     return 0.0;

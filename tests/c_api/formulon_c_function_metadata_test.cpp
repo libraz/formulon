@@ -20,8 +20,9 @@ TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
   ASSERT_NE(md.canonical_name, nullptr);
   EXPECT_STREQ(md.canonical_name, "SUM");
   EXPECT_EQ(md.min_arity, 1U);
-  // SUM is variadic.
-  EXPECT_EQ(md.max_arity, 0xFFFFFFFFU);
+  // SUM is variadic: no upper bound is reported.
+  EXPECT_EQ(md.has_max_arity, 0);
+  EXPECT_EQ(md.max_arity, 0U);
   EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_IMPLEMENTED);
   // Display text is host-supplied; the engine always reports NULL.
   EXPECT_EQ(md.signature_template, nullptr);
@@ -198,22 +199,32 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
   struct Expected {
     const char* name;
     std::uint32_t min_arity;
-    std::uint32_t max_arity;
+    std::uint32_t max_arity;  // 0 for an open argument list
   };
   for (const Expected& fn :
-       {Expected{"XLOOKUP", 3U, 6U}, Expected{"SUMIFS", 3U, 0xFFFFFFFFU}, Expected{"IFERROR", 2U, 2U},
-        Expected{"INDEX", 2U, 4U}, Expected{"OFFSET", 3U, 5U}, Expected{"INDIRECT", 1U, 2U}, Expected{"SORT", 1U, 4U},
-        Expected{"UNIQUE", 1U, 3U}, Expected{"FILTER", 2U, 3U}, Expected{"IF", 2U, 3U}, Expected{"LET", 3U, 253U},
-        Expected{"LAMBDA", 1U, 254U}, Expected{"VLOOKUP", 3U, 4U}}) {
+       {Expected{"XLOOKUP", 3U, 6U}, Expected{"SUMIFS", 3U, 0U}, Expected{"IFERROR", 2U, 2U}, Expected{"INDEX", 2U, 4U},
+        Expected{"OFFSET", 3U, 5U}, Expected{"INDIRECT", 1U, 2U}, Expected{"SORT", 1U, 4U}, Expected{"UNIQUE", 1U, 3U},
+        Expected{"FILTER", 2U, 3U}, Expected{"IF", 2U, 3U}, Expected{"LET", 3U, 253U}, Expected{"LAMBDA", 1U, 254U},
+        Expected{"VLOOKUP", 3U, 4U}}) {
     fm_function_metadata_info_t md = FM_STRUCT_INIT(fm_function_metadata_info_t);
     ASSERT_EQ(fm_get_function_metadata(fn.name, &present, &md), 0) << fn.name;
     ASSERT_EQ(present, 1) << fn.name << " did not resolve";
     ASSERT_NE(md.canonical_name, nullptr);
     EXPECT_STREQ(md.canonical_name, fn.name);
     EXPECT_EQ(md.min_arity, fn.min_arity) << fn.name;
+    EXPECT_EQ(md.has_max_arity, fn.max_arity == 0U ? 0 : 1) << fn.name;
     EXPECT_EQ(md.max_arity, fn.max_arity) << fn.name;
     EXPECT_EQ(md.availability, FM_FUNCTION_AVAILABILITY_IMPLEMENTED);
   }
+}
+
+TEST(FormulonCApiFunctionMetadata, BoundedFunctionReportsMaxArity) {
+  int32_t present = 0;
+  fm_function_metadata_info_t md = FM_STRUCT_INIT(fm_function_metadata_info_t);
+  ASSERT_EQ(fm_get_function_metadata("ABS", &present, &md), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(md.has_max_arity, 1);
+  EXPECT_EQ(md.max_arity, 1U);
 }
 
 TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {

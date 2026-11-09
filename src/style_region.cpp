@@ -347,13 +347,13 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
   const std::uint64_t area = (static_cast<std::uint64_t>(rect.last_row - rect.first_row) + 1U) *
                              (static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U);
   if (!all_rows && !all_cols && area > cell_limit) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "remap_range_style: too many cells to restyle");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "too many cells to restyle");
   }
   std::vector<CapturedCell> owned = stored_cells(sheet, rect);
   std::uint64_t written = static_cast<std::uint64_t>(
       std::count_if(owned.begin(), owned.end(), [](const CapturedCell& cell) { return cell.explicit_xf; }));
   if (written > cell_limit) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "remap_range_style: too many cells to restyle");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "too many cells to restyle");
   }
 
   const bool default_hidden = sheet.format_defaults().zero_height;
@@ -441,7 +441,7 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
     }
   }
   if (written > cell_limit) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "remap_range_style: too many cells to restyle");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "too many cells to restyle");
   }
 
   SheetLayout& mutable_layout = sheet.mutable_layout();
@@ -604,7 +604,7 @@ Expected<void, Error> restore_range_style(Sheet& sheet, const std::uint8_t* byte
   std::vector<RowStyle> rows;
   std::vector<CapturedCell> cells;
   if (!parse_capture(bytes, len, xf_count, rect, flags, cols, rows, cells)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "restore_range_style: not a valid range style capture");
+    return make_error(FormulonErrorCode::kInvalidArgument, "not a valid range style capture");
   }
 
   SheetLayout& layout = sheet.mutable_layout();

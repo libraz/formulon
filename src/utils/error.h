@@ -31,6 +31,19 @@ enum class FormulonErrorCode : int32_t {
   kAlreadyExists = 7,
   kInternalError = 8,
   kPreconditionFailed = 9,
+  /// Sheet index passed to a sheet-level operation is `>= sheet_count()`.
+  kSheetIndexOutOfRange = 10,
+  /// Sheet name fails structural validation: malformed UTF-8, empty, longer
+  /// than 31 UTF-16 units, or contains a forbidden character (`: \ / ? * [ ]`).
+  /// A well-formed name already taken is `kAlreadyExists`.
+  kInvalidSheetName = 11,
+  /// Appending a sheet would push `sheet_count()` past `Workbook::kMaxSheets`.
+  /// The dependency graph identifies a cell by a 16-bit sheet id, so a
+  /// workbook holding more sheets than that could not address the excess
+  /// ones without aliasing an existing sheet.
+  kSheetCountLimitExceeded = 12,
+  /// A non-sheet index addresses past the end of a counted collection.
+  kIndexOutOfRange = 13,
 
   // ===== 1000-1999: Parser / Tokenizer =====
   kParserUnexpectedToken = 1000,
@@ -56,7 +69,7 @@ enum class FormulonErrorCode : int32_t {
   kEvalPivotInvalid = 2010,
 
   // ===== 3000-3999: Functions =====
-  kFnOverflow = 3004,
+  kFunctionOverflow = 3004,
 
   // ===== 4000-4999: Dependency graph / Recalc =====
   kGraphScheduleFailed = 4003,
@@ -105,7 +118,7 @@ enum class FormulonErrorCode : int32_t {
   kIoChartUnsupportedKind = 5027,
 
   // ===== 6000-6999: Crypto / Security =====
-  kSecResourceLimit = 6005,
+  kSecurityResourceLimit = 6005,
 
   // ===== 7000-7999: Bindings / C API =====
   kBindingInvalidHandle = 7000,
@@ -128,26 +141,6 @@ enum class FormulonErrorCode : int32_t {
   /// A threaded-comment operation named an unknown thread, person or reply,
   /// or supplied an id or timestamp that is not well formed.
   kThreadedCommentInvalid = 9006,
-
-  // ----- Workbook structural mutation (5050-5069) -----
-  // Reuse the I/O band: sheet name validation, sheet rearrangement, and
-  // defined-name editing all sit at the workbook-level mutation surface,
-  // which is logically adjacent to the OOXML (de)serialisation that owns
-  // the same metadata.
-  /// Sheet index passed to a structural mutation (`rename_sheet`,
-  /// `remove_sheet`, `move_sheet`) is `>= sheet_count()`.
-  kSheetIndexOutOfRange = 5050,
-  /// Sheet name fails structural validation: malformed UTF-8, empty, longer
-  /// than 31 UTF-16 units, or contains a forbidden character (`: \ / ? * [ ]`).
-  /// A well-formed name already taken is `kAlreadyExists`.
-  kInvalidSheetName = 5051,
-  /// Appending a sheet would push `sheet_count()` past `Workbook::kMaxSheets`.
-  /// The dependency graph identifies a cell by a 16-bit sheet id, so a
-  /// workbook holding more sheets than that could not address the excess
-  /// ones without aliasing an existing sheet.
-  kSheetCountLimitExceeded = 5053,
-  /// A non-sheet index addresses past the end of a counted collection.
-  kIndexOutOfRange = 5054,
 };
 
 /// Structured error payload returned by every fallible internal API.
@@ -210,6 +203,14 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kInternalError";
     case FormulonErrorCode::kPreconditionFailed:
       return "kPreconditionFailed";
+    case FormulonErrorCode::kSheetIndexOutOfRange:
+      return "kSheetIndexOutOfRange";
+    case FormulonErrorCode::kInvalidSheetName:
+      return "kInvalidSheetName";
+    case FormulonErrorCode::kSheetCountLimitExceeded:
+      return "kSheetCountLimitExceeded";
+    case FormulonErrorCode::kIndexOutOfRange:
+      return "kIndexOutOfRange";
 
     // Parser
     case FormulonErrorCode::kParserUnexpectedToken:
@@ -242,8 +243,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kEvalPivotInvalid";
 
     // Functions
-    case FormulonErrorCode::kFnOverflow:
-      return "kFnOverflow";
+    case FormulonErrorCode::kFunctionOverflow:
+      return "kFunctionOverflow";
 
     // Graph / Recalc
     case FormulonErrorCode::kGraphScheduleFailed:
@@ -298,8 +299,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kIoChartUnsupportedKind";
 
     // Crypto / Security
-    case FormulonErrorCode::kSecResourceLimit:
-      return "kSecResourceLimit";
+    case FormulonErrorCode::kSecurityResourceLimit:
+      return "kSecurityResourceLimit";
 
     // Bindings / C API
     case FormulonErrorCode::kBindingInvalidHandle:
@@ -324,16 +325,6 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kPrintPageCountOverflow";
     case FormulonErrorCode::kThreadedCommentInvalid:
       return "kThreadedCommentInvalid";
-
-    // Workbook structural mutation
-    case FormulonErrorCode::kSheetIndexOutOfRange:
-      return "kSheetIndexOutOfRange";
-    case FormulonErrorCode::kInvalidSheetName:
-      return "kInvalidSheetName";
-    case FormulonErrorCode::kSheetCountLimitExceeded:
-      return "kSheetCountLimitExceeded";
-    case FormulonErrorCode::kIndexOutOfRange:
-      return "kIndexOutOfRange";
   }
   return "kUnknownError";
 }

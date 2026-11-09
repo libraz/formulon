@@ -139,6 +139,12 @@ extern "C" fm_status_t fm_get_function_metadata(const char* name, int32_t* out_p
   // `canonical_name` is static storage; callers may hold the result indefinitely.
   out->canonical_name = canonical;
   formulon::eval::builtin_arity(canonical, &out->min_arity, &out->max_arity);
+  if (out->max_arity == formulon::eval::kVariadic) {
+    out->has_max_arity = 0;
+    out->max_arity = 0U;
+  } else {
+    out->has_max_arity = 1;
+  }
   out->availability = function_availability(std::string_view(canonical));
   // Display text is host-supplied, never engine-owned: see the file header.
   out->signature_template = nullptr;

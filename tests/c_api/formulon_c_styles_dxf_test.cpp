@@ -27,13 +27,13 @@ TEST(FormulonCApiStyles, DifferentialFormatGetterExposesCfDxfTable) {
 
   fm_dxf_t out{};
   ASSERT_EQ(fm_workbook_get_dxf_at(wb.handle, 0, &out), 0);
-  EXPECT_EQ(out.font_engaged, 1);
+  EXPECT_EQ(out.has_font, 1);
   EXPECT_EQ(out.font.bold, 1);
   EXPECT_EQ(out.font.color.argb, 0xFFFF0000U);
-  EXPECT_EQ(out.fill_engaged, 1);
+  EXPECT_EQ(out.has_fill, 1);
   EXPECT_EQ(out.fill.pattern, 1);
   EXPECT_EQ(out.fill.foreground.argb, 0xFFFFFF00U);
-  EXPECT_EQ(out.border_engaged, 1);
+  EXPECT_EQ(out.has_border, 1);
   EXPECT_EQ(out.border.left.style, 1);
   EXPECT_EQ(out.border.left.color.argb, 0xFF000000U);
   ASSERT_NE(out.number_format, nullptr);
@@ -47,12 +47,12 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_dxf_t dxf{};
-  dxf.font_engaged = 1;
+  dxf.has_font = 1;
   dxf.font.name = "Arial";
   dxf.font.size_pt = 12.0;
   dxf.font.bold = 1;
   dxf.font.color = RgbColor(0xFFFF0000U);
-  dxf.fill_engaged = 1;
+  dxf.has_fill = 1;
   dxf.fill.pattern = 1;
   dxf.fill.foreground = RgbColor(0xFFFFFF00U);
   dxf.number_format = "0.00";
@@ -69,11 +69,11 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
 
   fm_dxf_t out{};
   ASSERT_EQ(fm_workbook_get_dxf_at(wb.handle, a, &out), 0);
-  EXPECT_EQ(out.font_engaged, 1);
+  EXPECT_EQ(out.has_font, 1);
   EXPECT_STREQ(out.font.name, "Arial");
   EXPECT_EQ(out.font.bold, 1);
   EXPECT_EQ(out.font.color.argb, 0xFFFF0000U);
-  EXPECT_EQ(out.fill_engaged, 1);
+  EXPECT_EQ(out.has_fill, 1);
   EXPECT_EQ(out.fill.pattern, 1);
   EXPECT_EQ(out.fill.foreground.argb, 0xFFFFFF00U);
   ASSERT_NE(out.number_format, nullptr);
@@ -84,7 +84,7 @@ TEST(FormulonCApiStyles, DxfNumberFormatIsNullWhenTheDxfHasNone) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_dxf_t dxf{};
-  dxf.font_engaged = 1;
+  dxf.has_font = 1;
   dxf.font.bold = 1;
   dxf.font.has_bold = 1;
   std::uint32_t index = 0xFFFFFFFFU;
@@ -117,7 +117,7 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_dxf_t dxf{};
-  dxf.font_engaged = 1;
+  dxf.has_font = 1;
   dxf.font.name = "Calibri";
   dxf.font.size_pt = 9.0;
   dxf.font.color = RgbColor(0xFF112233U);
@@ -223,7 +223,7 @@ TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle
 
   // A rule that leaves bold alone must not fold onto the switch-it-off one.
   fm_dxf_t leave_bold_alone{};
-  leave_bold_alone.font_engaged = 1;
+  leave_bold_alone.has_font = 1;
   leave_bold_alone.font.name = "";
   leave_bold_alone.font.size_pt = 11.0;
   leave_bold_alone.font.color = RgbColor(0xFF000000U);
@@ -240,7 +240,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_dxf_t dxf{};
-  dxf.font_engaged = 1;
+  dxf.has_font = 1;
   dxf.font.name = "";
   dxf.font.size_pt = 11.0;
   dxf.font.has_bold = 1;

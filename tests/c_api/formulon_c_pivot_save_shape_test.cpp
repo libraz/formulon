@@ -84,8 +84,8 @@ void BuildHostPivot(fm_workbook_t* wb) {
     df.aggregation = FM_PIVOT_AGGREGATION_SUM;
     df.number_format = "";
     df.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-    df.show_as_base_field = -1;
-    df.show_as_base_item = -1;
+    df.has_show_as_base_field = 0;
+    df.has_show_as_base_item = 0;
     std::size_t idx = 99;
     ASSERT_EQ(fm_sheet_add_pivot_data_field(wb, 0, pivot, &df, &idx), 0) << fm_get_last_error_message();
   }
@@ -283,8 +283,8 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   spec.aggregation = FM_PIVOT_AGGREGATION_COUNT;
   spec.number_format = "";
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  spec.show_as_base_field = -1;
-  spec.show_as_base_item = -1;
+  spec.has_show_as_base_field = 0;
+  spec.has_show_as_base_item = 0;
   std::size_t index = 99;
   EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, 0U, &spec, &index), kPreconditionFailed);
   EXPECT_EQ(index, 99U);

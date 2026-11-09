@@ -154,7 +154,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   // path the ABI offers - get a rule, remove it, add the amended record
   // back - since `fm_sheet_add_cf_rule` refuses the same index.
   if (rule.dxf_id.has_value() && static_cast<std::size_t>(*rule.dxf_id) < dxf_count) {
-    out->dxf_index_engaged = 1;
+    out->has_dxf_index = 1;
     out->dxf_index = *rule.dxf_id;
   }
   // `cf::CFCellRange` and `fm_cell_rect_t` are layout-identical (see the
@@ -173,11 +173,11 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
                             formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula2))))
                       : nullptr;
   if (rule.op.has_value()) {
-    out->op_engaged = 1;
+    out->has_op = 1;
     out->op = static_cast<std::int32_t>(to_c(*rule.op));
   }
   if (rule.rank.has_value()) {
-    out->rank_engaged = 1;
+    out->has_rank = 1;
     out->rank = *rule.rank;
   }
   out->percent = rule.percent ? 1 : 0;
@@ -185,12 +185,12 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   out->above_average = rule.above_average ? 1 : 0;
   out->equal_average = rule.equal_average ? 1 : 0;
   if (rule.std_dev.has_value()) {
-    out->std_dev_engaged = 1;
+    out->has_std_dev = 1;
     out->std_dev = *rule.std_dev;
   }
   out->text = rule.text.has_value() ? text_arena.emplace(*rule.text) : nullptr;
   if (rule.time_period.has_value()) {
-    out->time_period_engaged = 1;
+    out->has_time_period = 1;
     out->time_period = static_cast<std::int32_t>(to_c(*rule.time_period));
   }
   if (rule.color_scale.has_value()) {
@@ -210,7 +210,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   }
   if (rule.data_bar.has_value()) {
     const auto& spec = *rule.data_bar;
-    out->data_bar_engaged = 1;
+    out->has_data_bar = 1;
     out->data_bar_min = from_cfvo(wb, spec.min, text_arena);
     out->data_bar_max = from_cfvo(wb, spec.max, text_arena);
     out->data_bar_fill = cf_color_to_c(spec.fill);
@@ -221,21 +221,17 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     // straight back to `fm_sheet_add_cf_rule`, rebuilds the same spec. The
     // model has no "unset" state for gradient / axis / negative fill, so
     // reporting them as engaged is what makes the round trip exact.
-    out->data_bar_gradient_engaged = 1;
+    out->has_data_bar_gradient = 1;
     out->data_bar_gradient = spec.gradient ? 1 : 0;
-    out->data_bar_axis_position_engaged = 1;
+    out->has_data_bar_axis_position = 1;
     out->data_bar_axis_position = to_c(spec.axis_position);
-    out->data_bar_negative_fill_engaged = 1;
     out->data_bar_negative_fill = cf_color_to_c(spec.negative_fill);
-    out->data_bar_border_engaged = spec.border.has_value() ? 1 : 0;
     if (spec.border.has_value()) {
       out->data_bar_border = cf_color_to_c(*spec.border);
     }
-    out->data_bar_negative_border_engaged = spec.negative_border.has_value() ? 1 : 0;
     if (spec.negative_border.has_value()) {
       out->data_bar_negative_border = cf_color_to_c(*spec.negative_border);
     }
-    out->data_bar_axis_color_engaged = 1;
     out->data_bar_axis_color = cf_color_to_c(spec.axis_color);
     out->data_bar_direction = to_c(spec.direction);
   }
@@ -246,14 +242,14 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     for (const auto& threshold : spec.thresholds) {
       thresholds.push_back(from_cfvo(wb, threshold, text_arena));
     }
-    out->icon_set_engaged = 1;
+    out->has_icon_set = 1;
     out->icon_set_name = static_cast<std::int32_t>(spec.name);
     out->icon_set_thresholds = cfvo_arena.adopt(std::move(thresholds));
     out->icon_set_threshold_count = static_cast<std::uint32_t>(spec.thresholds.size());
     out->icon_set_reverse = spec.reverse ? 1 : 0;
     out->icon_set_show_value = spec.show_value ? 1 : 0;
     out->icon_set_percent = spec.percent ? 1 : 0;
-    out->icon_set_floor_engaged = 1;
+    out->has_icon_set_floor = 1;
     out->icon_set_floor = from_cfvo(wb, spec.floor, text_arena);
     std::vector<fm_cf_icon_t> icons;
     icons.reserve(spec.custom_icons.size());
@@ -298,31 +294,22 @@ fm_status_t check_payload_colors(const fm_cf_rule_t& rule) {
       }
     }
   }
-  if (rule.data_bar_engaged == 0) {
+  if (rule.has_data_bar == 0) {
     return 0;
   }
   if (auto rc = check_color_kind(rule.data_bar_fill, "data_bar_fill.kind"); rc != 0) {
     return rc;
   }
-  if (rule.data_bar_negative_fill_engaged != 0) {
-    if (auto rc = check_color_kind(rule.data_bar_negative_fill, "data_bar_negative_fill.kind"); rc != 0) {
-      return rc;
-    }
+  if (auto rc = check_color_kind(rule.data_bar_negative_fill, "data_bar_negative_fill.kind"); rc != 0) {
+    return rc;
   }
-  if (rule.data_bar_border_engaged != 0) {
-    if (auto rc = check_color_kind(rule.data_bar_border, "data_bar_border.kind"); rc != 0) {
-      return rc;
-    }
+  if (auto rc = check_color_kind(rule.data_bar_border, "data_bar_border.kind"); rc != 0) {
+    return rc;
   }
-  if (rule.data_bar_negative_border_engaged != 0) {
-    if (auto rc = check_color_kind(rule.data_bar_negative_border, "data_bar_negative_border.kind"); rc != 0) {
-      return rc;
-    }
+  if (auto rc = check_color_kind(rule.data_bar_negative_border, "data_bar_negative_border.kind"); rc != 0) {
+    return rc;
   }
-  if (rule.data_bar_axis_color_engaged != 0) {
-    return check_color_kind(rule.data_bar_axis_color, "data_bar_axis_color.kind");
-  }
-  return 0;
+  return check_color_kind(rule.data_bar_axis_color, "data_bar_axis_color.kind");
 }
 
 formulon::cf::CfValueObject to_cfvo(const fm_cfvo_t& src) {
@@ -356,7 +343,7 @@ bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* ou
 }
 
 bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
-  if (rule.data_bar_engaged == 0 || rule.data_bar_min_length_pct > 100 || rule.data_bar_max_length_pct > 100 ||
+  if (rule.has_data_bar == 0 || rule.data_bar_min_length_pct > 100 || rule.data_bar_max_length_pct > 100 ||
       rule.data_bar_min_length_pct > rule.data_bar_max_length_pct) {
     return false;
   }
@@ -368,20 +355,20 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   spec.max = to_cfvo(rule.data_bar_max);
   spec.fill = cf_color_from_c(rule.data_bar_fill);
   spec.negative_fill =
-      rule.data_bar_negative_fill_engaged != 0 ? cf_color_from_c(rule.data_bar_negative_fill) : spec.fill;
-  if (rule.data_bar_border_engaged != 0) {
+      rule.data_bar_negative_fill.kind != FM_COLOR_KIND_NONE ? cf_color_from_c(rule.data_bar_negative_fill) : spec.fill;
+  if (rule.data_bar_border.kind != FM_COLOR_KIND_NONE) {
     spec.border = cf_color_from_c(rule.data_bar_border);
   }
-  if (rule.data_bar_negative_border_engaged != 0) {
+  if (rule.data_bar_negative_border.kind != FM_COLOR_KIND_NONE) {
     spec.negative_border = cf_color_from_c(rule.data_bar_negative_border);
   }
-  if (rule.data_bar_axis_position_engaged != 0) {
+  if (rule.has_data_bar_axis_position != 0) {
     spec.axis_position = data_bar_axis_position_from_c(rule.data_bar_axis_position);
   }
-  if (rule.data_bar_axis_color_engaged != 0) {
+  if (rule.data_bar_axis_color.kind != FM_COLOR_KIND_NONE) {
     spec.axis_color = cf_color_from_c(rule.data_bar_axis_color);
   }
-  if (rule.data_bar_gradient_engaged != 0) {
+  if (rule.has_data_bar_gradient != 0) {
     spec.gradient = rule.data_bar_gradient != 0;
   }
   spec.direction = data_bar_direction_from_c(rule.data_bar_direction);
@@ -394,7 +381,7 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
 
 bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
   // An N-icon set carries exactly its N-1 boundaries; the floor is separate.
-  if (rule.icon_set_engaged == 0 || rule.icon_set_thresholds == nullptr ||
+  if (rule.has_icon_set == 0 || rule.icon_set_thresholds == nullptr ||
       rule.icon_set_threshold_count + 1U !=
           formulon::cf::icon_count(static_cast<formulon::cf::IconSetName>(rule.icon_set_name))) {
     return false;
@@ -408,7 +395,7 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   spec.reverse = rule.icon_set_reverse != 0;
   spec.show_value = rule.icon_set_show_value != 0;
   spec.percent = rule.icon_set_percent != 0;
-  if (rule.icon_set_floor_engaged != 0) {
+  if (rule.has_icon_set_floor != 0) {
     spec.floor = to_cfvo(rule.icon_set_floor);
   }
   // Shape and domain of the icons are checked by `validate(rule, ...)`.
@@ -617,7 +604,7 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     return rc;
   }
   out_rule.stop_if_true = rule->stop_if_true != 0;
-  if (rule->dxf_index_engaged != 0) {
+  if (rule->has_dxf_index != 0) {
     // A `dxfId` past the end of `<dxfs>` makes Excel treat the whole
     // `xl/styles.xml` reference as broken and strip every conditional format
     // from the workbook on open. The writer already refuses to emit an
@@ -641,23 +628,23 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
       return rc;
     }
   }
-  if (rule->op_engaged != 0) {
+  if (rule->has_op != 0) {
     out_rule.op = cf_operator_from_c(rule->op);
   }
-  if (rule->rank_engaged != 0) {
+  if (rule->has_rank != 0) {
     out_rule.rank = rule->rank;
   }
   out_rule.percent = (rule->percent != 0);
   out_rule.bottom = (rule->bottom != 0);
   out_rule.above_average = (rule->above_average != 0);
   out_rule.equal_average = (rule->equal_average != 0);
-  if (rule->std_dev_engaged != 0) {
+  if (rule->has_std_dev != 0) {
     out_rule.std_dev = rule->std_dev;
   }
   if (rule->text != nullptr) {
     out_rule.text = std::string(rule->text);
   }
-  if (rule->time_period_engaged != 0) {
+  if (rule->has_time_period != 0) {
     out_rule.time_period = date_period_from_c(rule->time_period);
   }
   if (!out_rule.formula1.has_value() || out_rule.formula1->empty()) {

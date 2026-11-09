@@ -10,7 +10,7 @@
 //     the request (one evaluation, one recalc pass, one pivot build).
 //   * `consume(n)` either charges `n` units and succeeds, or leaves the
 //     consumed count untouched and returns an `Error` carrying the code the
-//     budget was constructed with (default `kSecResourceLimit`).
+//     budget was constructed with (default `kSecurityResourceLimit`).
 //   * `would_exceed(n)` is the side-effect-free variant for call sites that
 //     no-op instead of propagating an error.
 //   * Arithmetic is `uint64_t` and overflow-safe: a request larger than the
@@ -175,7 +175,7 @@ inline constexpr std::uint64_t kMaxSheetLoadCellBytes = 256ULL * 1024ULL * 1024U
 /// Typical use:
 ///
 /// ```cpp
-/// ResourceBudget cells(kMaxPivotResultCells, FormulonErrorCode::kFnOverflow);
+/// ResourceBudget cells(kMaxPivotResultCells, FormulonErrorCode::kFunctionOverflow);
 /// auto ok = cells.consume(rows * cols);
 /// if (!ok) {
 ///   return std::move(ok.error());
@@ -185,10 +185,10 @@ class ResourceBudget {
  public:
   /// Builds a budget with the given ceiling. `code` selects the error code
   /// surfaced when the ceiling is exceeded, so call sites can keep their
-  /// module's established code (e.g. `kFnOverflow` for function-layer
+  /// module's established code (e.g. `kFunctionOverflow` for function-layer
   /// overflows).
   explicit constexpr ResourceBudget(std::uint64_t ceiling,
-                                    FormulonErrorCode code = FormulonErrorCode::kSecResourceLimit) noexcept
+                                    FormulonErrorCode code = FormulonErrorCode::kSecurityResourceLimit) noexcept
       : ceiling_(ceiling), code_(code) {}
 
   /// True when charging `units` more work would exceed the ceiling.

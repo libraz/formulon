@@ -236,6 +236,8 @@ formulon::Value intern_cache_text(formulon::pivot::PivotCache& cache, std::strin
 
 formulon::pivot::PivotAxis pivot_axis_from_fm(fm_pivot_axis_t axis) {
   switch (axis) {
+    case FM_PIVOT_AXIS_ABSENT:
+      return formulon::pivot::PivotAxis::None;
     case FM_PIVOT_AXIS_ROW:
       return formulon::pivot::PivotAxis::Row;
     case FM_PIVOT_AXIS_COL:

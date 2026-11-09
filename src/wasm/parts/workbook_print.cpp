@@ -10,7 +10,7 @@
 // matching the rest of the JS surface.
 //
 // The patch setters snapshot each field through JsNarrowNumericReader before
-// deriving its `_engaged` flag. This keeps getter/proxy failures and lossy
+// deriving its `has_*` flag. This keeps getter/proxy failures and lossy
 // primitive conversions inside the binding boundary, while `{ orientation:
 // 1 }` still changes the orientation and nothing else.
 //
@@ -156,7 +156,7 @@ void JsWorkbook::setSheetTabColor(uint32_t sheet, emscripten::val color) {
     succeeded(fm_sheet_set_tab_color(handle_, sheet, nullptr));
     return;
   }
-  JsNarrowNumericReader reader("setTabColor");
+  JsNarrowNumericReader reader("Sheet.setTabColor");
   const fm_color_t spec = js_pull_color_spec_value(color, "color", &reader);
   if (!reader.ok()) {
     return;
@@ -188,7 +188,7 @@ void JsWorkbook::setSheetPrintArea(uint32_t sheet, emscripten::val ranges) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setPrintArea");
+  JsNarrowNumericReader reader("Sheet.setPrintArea");
   const std::vector<fm_cell_rect_t> rects = js_pull_range_array(ranges, "ranges", &reader);
   if (!reader.ok()) {
     return;
@@ -249,7 +249,7 @@ void JsWorkbook::setSheetRowBreak(uint32_t sheet, uint32_t row, emscripten::val 
     succeeded(fm_sheet_set_row_break(handle_, sheet, row, nullptr));
     return;
   }
-  JsNarrowNumericReader reader("setRowBreak");
+  JsNarrowNumericReader reader("Sheet.setRowBreak");
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   brk.first = reader.u32(input, "first", 0U, "break.first");
   brk.last = reader.u32(input, "last", 0U, "break.last");
@@ -269,7 +269,7 @@ void JsWorkbook::setSheetColBreak(uint32_t sheet, uint32_t col, emscripten::val 
     succeeded(fm_sheet_set_column_break(handle_, sheet, col, nullptr));
     return;
   }
-  JsNarrowNumericReader reader("setColumnBreak");
+  JsNarrowNumericReader reader("Sheet.setColumnBreak");
   fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
   brk.first = reader.u32(input, "first", 0U, "break.first");
   brk.last = reader.u32(input, "last", 0U, "break.last");
@@ -299,7 +299,7 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updatePageSetup");
+  JsNarrowNumericReader reader("Sheet.updatePageSetup");
   fm_page_setup_patch_t out = FM_STRUCT_INIT(fm_page_setup_patch_t);
   const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
     const std::string field = std::string("pageSetup.") + key;
@@ -325,7 +325,7 @@ void JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updatePageMargins");
+  JsNarrowNumericReader reader("Sheet.updatePageMargins");
   fm_page_margins_patch_t out = FM_STRUCT_INIT(fm_page_margins_patch_t);
   const auto margin = [&](const char* key, fm_patch_op_t* op, double* value) {
     const std::string field = std::string("pageMargins.") + key;
@@ -349,7 +349,7 @@ void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updatePrintOptions");
+  JsNarrowNumericReader reader("Sheet.updatePrintOptions");
   fm_print_options_patch_t out = FM_STRUCT_INIT(fm_print_options_patch_t);
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
     const std::string field = std::string("printOptions.") + key;
@@ -378,7 +378,7 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   std::string even_footer;
   std::string first_header;
   std::string first_footer;
-  JsNarrowNumericReader reader("updateHeaderFooter");
+  JsNarrowNumericReader reader("Sheet.updateHeaderFooter");
   fm_header_footer_patch_t out = FM_STRUCT_INIT(fm_header_footer_patch_t);
   const auto section = [&](const char* key, std::string& storage, fm_patch_op_t* op, const char** value) {
     const std::string field = std::string("headerFooter.") + key;
@@ -411,7 +411,7 @@ emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
     return emscripten::val::undefined();
   }
   emscripten::val out = emscripten::val::object();
-  js_set_present_or_null(out, "orientation", setup.orientation_engaged, setup.orientation);
+  js_set_present_or_null(out, "orientation", setup.has_orientation, setup.orientation);
   out.set("paperSize", setup.paper_size);
   out.set("scalePct", setup.scale_pct);
   out.set("fitToWidth", setup.fit_to_width);
@@ -419,12 +419,11 @@ emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
   out.set("fitToPage", setup.fit_to_page != 0);
   // Presence flags: the value fields always carry the effective setting,
   // so these are the only way to tell an explicit value from a default.
-  out.set("orientationStated", setup.orientation_engaged != 0);
-  out.set("paperSizeStated", setup.paper_size_engaged != 0);
-  out.set("scalePctStated", setup.scale_pct_engaged != 0);
-  out.set("fitToWidthStated", setup.fit_to_width_engaged != 0);
-  out.set("fitToHeightStated", setup.fit_to_height_engaged != 0);
-  out.set("fitToPageStated", setup.fit_to_page_engaged != 0);
+  out.set("paperSizeStated", setup.has_paper_size != 0);
+  out.set("scalePctStated", setup.has_scale_pct != 0);
+  out.set("fitToWidthStated", setup.has_fit_to_width != 0);
+  out.set("fitToHeightStated", setup.has_fit_to_height != 0);
+  out.set("fitToPageStated", setup.has_fit_to_page != 0);
   return out;
 }
 
@@ -440,12 +439,12 @@ emscripten::val JsWorkbook::getSheetPageMargins(uint32_t sheet) const {
   out.set("bottomIn", margins.bottom_in);
   out.set("headerIn", margins.header_in);
   out.set("footerIn", margins.footer_in);
-  out.set("leftInStated", margins.left_in_engaged != 0);
-  out.set("rightInStated", margins.right_in_engaged != 0);
-  out.set("topInStated", margins.top_in_engaged != 0);
-  out.set("bottomInStated", margins.bottom_in_engaged != 0);
-  out.set("headerInStated", margins.header_in_engaged != 0);
-  out.set("footerInStated", margins.footer_in_engaged != 0);
+  out.set("leftInStated", margins.has_left_in != 0);
+  out.set("rightInStated", margins.has_right_in != 0);
+  out.set("topInStated", margins.has_top_in != 0);
+  out.set("bottomInStated", margins.has_bottom_in != 0);
+  out.set("headerInStated", margins.has_header_in != 0);
+  out.set("footerInStated", margins.has_footer_in != 0);
   return out;
 }
 
@@ -459,10 +458,10 @@ emscripten::val JsWorkbook::getSheetPrintOptions(uint32_t sheet) const {
   out.set("headings", options.headings != 0);
   out.set("horizontalCentered", options.horizontal_centered != 0);
   out.set("verticalCentered", options.vertical_centered != 0);
-  out.set("gridLinesStated", options.grid_lines_engaged != 0);
-  out.set("headingsStated", options.headings_engaged != 0);
-  out.set("horizontalCenteredStated", options.horizontal_centered_engaged != 0);
-  out.set("verticalCenteredStated", options.vertical_centered_engaged != 0);
+  out.set("gridLinesStated", options.has_grid_lines != 0);
+  out.set("headingsStated", options.has_headings != 0);
+  out.set("horizontalCenteredStated", options.has_horizontal_centered != 0);
+  out.set("verticalCenteredStated", options.has_vertical_centered != 0);
   return out;
 }
 
@@ -482,10 +481,10 @@ emscripten::val JsWorkbook::getSheetHeaderFooter(uint32_t sheet) const {
   out.set("differentFirst", hf.different_first != 0);
   out.set("scaleWithDoc", hf.scale_with_doc != 0);
   out.set("alignWithMargins", hf.align_with_margins != 0);
-  out.set("differentOddEvenStated", hf.different_odd_even_engaged != 0);
-  out.set("differentFirstStated", hf.different_first_engaged != 0);
-  out.set("scaleWithDocStated", hf.scale_with_doc_engaged != 0);
-  out.set("alignWithMarginsStated", hf.align_with_margins_engaged != 0);
+  out.set("differentOddEvenStated", hf.has_different_odd_even != 0);
+  out.set("differentFirstStated", hf.has_different_first != 0);
+  out.set("scaleWithDocStated", hf.has_scale_with_doc != 0);
+  out.set("alignWithMarginsStated", hf.has_align_with_margins != 0);
   return out;
 }
 

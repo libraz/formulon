@@ -338,8 +338,8 @@ inline constexpr std::uint64_t kCfMaxViewportCells = kMaxRecalcViewportCells;
 /// appear. Order is row-major over `range`.
 ///
 /// A `range` wider than `kCfMaxViewportCells` cells is rejected with
-/// `kSecResourceLimit` before any cell is visited. Formula evaluation that
-/// exhausts the prepared walk's arena budget also returns `kSecResourceLimit`
+/// `kSecurityResourceLimit` before any cell is visited. Formula evaluation that
+/// exhausts the prepared walk's arena budget also returns `kSecurityResourceLimit`
 /// and discards all matches accumulated by the range walk.
 ///
 /// The walk is driven by the sheet's CF blocks, not by `range`: each

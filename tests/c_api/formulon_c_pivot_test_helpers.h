@@ -266,8 +266,6 @@ template <typename Enum>
   df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
   df_spec.number_format = "";
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  df_spec.show_as_base_field = -1;
-  df_spec.show_as_base_item = -1;
   std::size_t df_index = 99;
   st = fm_sheet_add_pivot_data_field(wb, 0, pivot_index, &df_spec, &df_index);
   if (st != 0) {

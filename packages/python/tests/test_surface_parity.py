@@ -266,7 +266,7 @@ class SurfaceParityTests(unittest.TestCase):
         "Pivot.set_column_field_order",
         "get_precedents",
         "get_dependents",
-        "get_spill_info",
+        "get_spill",
         "parse_reference",
         "format_reference",
         "get_array_formula",

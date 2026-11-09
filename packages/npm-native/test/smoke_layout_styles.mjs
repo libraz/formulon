@@ -459,9 +459,9 @@ test('dxf alignment and protection records survive get/add identity and save/loa
 
   const gotAlignment = wb.ooxml.getDxf(alignment);
   assert.deepEqual(gotAlignment.alignment, alignmentRecord);
-  assert.equal(gotAlignment.protection, undefined);
+  assert.equal(gotAlignment.protection, null);
   const gotProtection = wb.ooxml.getDxf(protection);
-  assert.equal(gotProtection.alignment, undefined);
+  assert.equal(gotProtection.alignment, null);
   assert.deepEqual(gotProtection.protection, protectionRecord);
   for (const key of ['alignmentXml', 'protectionXml']) {
     assert.equal(key in gotAlignment, false, key);
@@ -477,9 +477,9 @@ test('dxf alignment and protection records survive get/add identity and save/loa
   assert.equal(loaded.disposed, false);
   const loadedAlignment = loaded.ooxml.getDxf(alignment);
   assert.deepEqual(loadedAlignment.alignment, alignmentRecord);
-  assert.equal(loadedAlignment.protection, undefined);
+  assert.equal(loadedAlignment.protection, null);
   const loadedProtection = loaded.ooxml.getDxf(protection);
-  assert.equal(loadedProtection.alignment, undefined);
+  assert.equal(loadedProtection.alignment, null);
   assert.deepEqual(loadedProtection.protection, protectionRecord);
   const loadedAlignmentAgain = loaded.ooxml.addDxf(loadedAlignment);
   assert.equal(loadedAlignmentAgain, alignment);
@@ -719,14 +719,15 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setText(0, 0, '漢字');
   wb.sheet(0).setCellPhoneticRuns(0, 0, [{ start: 0, end: 2, text: 'かんじ' }]);
-  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, false);
+  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).stated, false);
   wb.sheet(0).setCellPhoneticProperties(0, 0, { fontIndex: 0, type: 0, alignment: 0 });
-  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, true);
+  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).stated, true);
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   try {
     const got = loaded.sheet(0).getCellPhoneticProperties(0, 0);
-    assert.equal(got.present, true);
+    assert.equal(got.stated, true);
+    assert.equal('present' in got, false);
     assert.deepEqual([got.fontIndex, got.type, got.alignment], [0, 0, 0]);
   } finally {
     loaded.dispose();

@@ -138,8 +138,10 @@ export const PivotShowValuesAs = Object.freeze({
   RankAscending: 14,
   RankDescending: 15,
 });
-export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
-export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
+export const PivotShowAsBase = Object.freeze({
+  Previous: 1048828,
+  Next: 1048829,
+});
 export const PIVOT_VALUES_FIELD = -2;
 export const PivotFilterKind = Object.freeze({
   ValueTopCount: 0,
@@ -647,6 +649,10 @@ export const StatusCode = Object.freeze({
   AlreadyExists: 7,
   InternalError: 8,
   PreconditionFailed: 9,
+  SheetIndexOutOfRange: 10,
+  InvalidSheetName: 11,
+  SheetCountLimitExceeded: 12,
+  IndexOutOfRange: 13,
   ParserUnexpectedToken: 1000,
   ParserUnterminatedString: 1001,
   ParserInvalidNumber: 1003,
@@ -660,7 +666,7 @@ export const StatusCode = Object.freeze({
   ParserTooManyErrors: 1014,
   EvalPivotMissing: 2009,
   EvalPivotInvalid: 2010,
-  FnOverflow: 3004,
+  FunctionOverflow: 3004,
   GraphScheduleFailed: 4003,
   GraphRecalcReentrant: 4005,
   IoFileNotFound: 5000,
@@ -685,7 +691,7 @@ export const StatusCode = Object.freeze({
   IoChartUnparseable: 5025,
   IoChartInvalidReference: 5026,
   IoChartUnsupportedKind: 5027,
-  SecResourceLimit: 6005,
+  SecurityResourceLimit: 6005,
   BindingInvalidHandle: 7000,
   BindingNullPointer: 7001,
   BindingUtf8EncodingError: 7002,
@@ -695,10 +701,6 @@ export const StatusCode = Object.freeze({
   PrintInvalidArea: 9002,
   PrintPageCountOverflow: 9005,
   ThreadedCommentInvalid: 9006,
-  SheetIndexOutOfRange: 5050,
-  InvalidSheetName: 5051,
-  SheetCountLimitExceeded: 5053,
-  IndexOutOfRange: 5054,
 });
 // <status-codes:end>
 
@@ -843,6 +845,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'PivotCellKind',
   'PivotAxis',
   'PivotAggregation',
+  'PivotShowAsBase',
   'PivotShowValuesAs',
   'PivotFilterKind',
   'PivotDatePeriod',
@@ -928,8 +931,6 @@ export const FORMULON_MEMBERS = Object.freeze([
   'GradientType',
   'BorderStyle',
   'FunctionAvailability',
-  'PIVOT_SHOW_AS_BASE_PREVIOUS',
-  'PIVOT_SHOW_AS_BASE_NEXT',
   'PIVOT_VALUES_FIELD',
   'mergeFunctionMetadata',
   'toNative',
@@ -1025,6 +1026,13 @@ const RUNTIME_WRAPPERS = Object.freeze({
             value === undefined && !CIVIL_DATE_FIELDS.includes(field) ? 0 : int32Field(value, `${where} ${field}`);
         }
         return convert(fields, dateSystem(options, where));
+      },
+  ],
+  getImageInfo: [
+    'getImageInfo',
+    (info) =>
+      function getImageInfo(bytes) {
+        return info(requireBytes(bytes, 'Formulon.getImageInfo', 'bytes'));
       },
   ],
   convertSerialToCivil: [
@@ -1280,7 +1288,7 @@ const SHEET_METHODS = Object.freeze([
   'getRowHeightPt',
   'getSelection',
   'getSheetProtection',
-  'getSpillInfo',
+  'getSpill',
   'getTabColor',
   'getThreadedComment',
   'getTypedValue',
@@ -1561,7 +1569,6 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.addFieldSubtotalFunction': 'addPivotFieldSubtotalFunction',
   'Pivot.addFilter': 'addPivotFilter',
   'Pivot.clearDataFields': 'clearPivotDataFields',
-  'Pivot.clearFieldDateGroup': 'clearPivotFieldDateGroup',
   'Pivot.clearFieldItems': 'clearPivotFieldItems',
   'Pivot.clearFieldSubtotalFunctions': 'clearPivotFieldSubtotalFunctions',
   'Pivot.clearFields': 'clearPivotFields',
@@ -1675,7 +1682,7 @@ const CELL_ARGS = Object.freeze({
   'Sheet.getHyperlink': [[0, 1]],
   'Sheet.getLambdaText': [[0, 1]],
   'Sheet.getPrecedents': [[0, 1]],
-  'Sheet.getSpillInfo': [[0, 1]],
+  'Sheet.getSpill': [[0, 1]],
   'Sheet.getTypedValue': [[0, 1]],
   'Sheet.getValue': [[0, 1]],
   'Sheet.removeComment': [[0, 1]],
@@ -1986,7 +1993,6 @@ const PATCH_KEYS = Object.freeze({
       'fitToWidth',
       'fitToWidthStated',
       'orientation',
-      'orientationStated',
       'paperSize',
       'paperSizeStated',
       'scalePct',
@@ -2451,7 +2457,7 @@ const INPUT_KEYS = Object.freeze({
   'Sheet.restoreDrawing': [1, ['assignNewId']],
   'Sheet.setArrayFormula': [0, ['formula', 'range']],
   'Sheet.setAutoFilter': [0, ['columns', 'range', 'sort']],
-  'Sheet.setCellPhoneticProperties': [2, ['alignment', 'fontIndex', 'present', 'type']],
+  'Sheet.setCellPhoneticProperties': [2, ['alignment', 'fontIndex', 'stated', 'type']],
   'Sheet.setColumnBreak': [1, ['first', 'last', 'manual']],
   'Sheet.setComment': [2, ['author', 'text']],
   'Sheet.setHyperlink': [2, ['display', 'location', 'range', 'target', 'tooltip']],
@@ -2868,7 +2874,19 @@ const PATCH_NULLABLE = Object.freeze({
     saltValue: 'string',
     spinCount: 'number',
   },
-  'Sheet.updateSparklineGroup': { dateAxisRange: 'object', manualMax: 'number', manualMin: 'number' },
+  'Sheet.updateSparklineGroup': {
+    colorAxis: 'object',
+    colorFirst: 'object',
+    colorHigh: 'object',
+    colorLast: 'object',
+    colorLow: 'object',
+    colorMarkers: 'object',
+    colorNegative: 'object',
+    colorSeries: 'object',
+    dateAxisRange: 'object',
+    manualMax: 'number',
+    manualMin: 'number',
+  },
   'Slicer.update': { style: 'string' },
   'Table.updateStyleOptions': { styleName: 'string' },
   'Workbook.updateTableStyleDefaults': { pivotStyle: 'string', tableStyle: 'string' },
@@ -2909,7 +2927,6 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.addFieldSubtotalFunction': 2,
   'Pivot.addFilter': 1,
   'Pivot.clearDataFields': 0,
-  'Pivot.clearFieldDateGroup': 1,
   'Pivot.clearFieldItems': 1,
   'Pivot.clearFieldSubtotalFunctions': 1,
   'Pivot.clearFields': 0,
@@ -3052,7 +3069,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getSelection': 0,
   'Sheet.getSheetPrXml': 0,
   'Sheet.getSheetProtection': 0,
-  'Sheet.getSpillInfo': 2,
+  'Sheet.getSpill': 2,
   'Sheet.getTabColor': 0,
   'Sheet.getThreadedComment': 1,
   'Sheet.getTypedValue': 2,
@@ -3317,6 +3334,302 @@ const DEFAULT_ARGS = Object.freeze({
   'Sheet.listCells': [[0, null]],
   'Workbook.copySheet': [[1, null]],
   'Workbook.recalcParallel': [[0, 0]],
+});
+const ARG_ROLES = Object.freeze({
+  'Chart.addSeries': [[0, 'position']],
+  'Chart.removeSeries': [
+    [0, 'position'],
+    [1, 'position'],
+  ],
+  'Chart.setType': [[0, 'position']],
+  'Chart.setZOrder': [[0, 'position']],
+  'Chart.updateAxis': [[0, 'quantity']],
+  'Chart.updatePlot': [[0, 'position']],
+  'Chart.updatePoint': [
+    [0, 'position'],
+    [1, 'position'],
+    [2, 'position'],
+  ],
+  'Chart.updateSeries': [
+    [0, 'position'],
+    [1, 'position'],
+  ],
+  'Picture.setZOrder': [[0, 'position']],
+  'Pivot.addFieldItem': [[0, 'position']],
+  'Pivot.addFieldSubtotalFunction': [[0, 'position']],
+  'Pivot.clearFieldItems': [[0, 'position']],
+  'Pivot.clearFieldSubtotalFunctions': [[0, 'position']],
+  'Pivot.getDataFieldDefaultName': [
+    [0, 'position'],
+    [2, 'quantity'],
+  ],
+  'Pivot.getFieldItem': [
+    [0, 'position'],
+    [1, 'position'],
+  ],
+  'Pivot.removeFilter': [[0, 'position']],
+  'Pivot.setDataField': [[0, 'position']],
+  'Pivot.setFieldAxis': [[0, 'position']],
+  'PivotCache.addCalculatedItem': [[0, 'position']],
+  'PivotCache.clearFieldSharedItems': [[0, 'position']],
+  'PivotCache.moveCalculatedItem': [[1, 'position']],
+  'PivotCache.removeCalculatedField': [[0, 'position']],
+  'PivotCache.setCalculatedFieldFormula': [[0, 'position']],
+  'Shape.setZOrder': [[0, 'position']],
+  'Sheet.addSlicer': [[1, 'position']],
+  'Sheet.deleteColumns': [
+    [0, 'coordinate'],
+    [1, 'quantity'],
+  ],
+  'Sheet.deleteRows': [
+    [0, 'coordinate'],
+    [1, 'quantity'],
+  ],
+  'Sheet.evaluateCfFormula': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'coordinate'],
+    [3, 'coordinate'],
+  ],
+  'Sheet.evaluateFormulaArray': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getArrayFormula': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getCellPhonetic': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getCellPhoneticProperties': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getCellShowPhonetic': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getCellXfIndex': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getCellsInRange': [
+    [1, 'quantity'],
+    [2, 'quantity'],
+  ],
+  'Sheet.getColumnWidthPt': [[0, 'coordinate']],
+  'Sheet.getComment': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getCommentVisible': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getDataTable': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getDependents': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'quantity'],
+  ],
+  'Sheet.getDisplayText': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getEffectiveStyle': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getFormulaR1C1': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getHyperlink': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getInvalidCells': [
+    [0, 'quantity'],
+    [1, 'quantity'],
+  ],
+  'Sheet.getLambdaText': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getPrecedents': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'quantity'],
+  ],
+  'Sheet.getRowHeightPt': [[0, 'coordinate']],
+  'Sheet.getSpill': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getValue': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.insertColumns': [
+    [0, 'coordinate'],
+    [1, 'quantity'],
+  ],
+  'Sheet.insertRows': [
+    [0, 'coordinate'],
+    [1, 'quantity'],
+  ],
+  'Sheet.removeComment': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.removeDataTable': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.removeHyperlink': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.removeValidation': [[0, 'position']],
+  'Sheet.resetCellXfIndex': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.resetColumnWidth': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.resetColumnXfIndex': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.resetRowHeight': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.resetRowXfIndex': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setBlank': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setBool': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setCellPhonetic': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setCellPhoneticProperties': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setCellPhoneticRuns': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setCellShowPhonetic': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setCellXfIndex': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'position'],
+  ],
+  'Sheet.setColumnBreak': [[0, 'coordinate']],
+  'Sheet.setColumnCollapsed': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setColumnHidden': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setColumnOutline': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'quantity'],
+  ],
+  'Sheet.setColumnWidth': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setColumnXfIndex': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'position'],
+  ],
+  'Sheet.setCommentVisible': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setError': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setNumber': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setRangeXfIndex': [[1, 'position']],
+  'Sheet.setRowAutoHeight': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setRowBreak': [[0, 'coordinate']],
+  'Sheet.setRowCollapsed': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setRowHeight': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setRowHidden': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.setRowOutline': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'quantity'],
+  ],
+  'Sheet.setRowXfIndex': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+    [2, 'position'],
+  ],
+  'Sheet.setText': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.validateValue': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Slicer.setZOrder': [[0, 'position']],
+  'Table.renameColumn': [[0, 'position']],
+  'Table.setColumnTotals': [[0, 'position']],
+  'Workbook.addPivotCache': [[0, 'quantity']],
+  'Workbook.getBorder': [[0, 'position']],
+  'Workbook.getCellStyleXf': [[0, 'position']],
+  'Workbook.getCellXf': [[0, 'position']],
+  'Workbook.getDxf': [[0, 'position']],
+  'Workbook.getFill': [[0, 'position']],
+  'Workbook.getFont': [[0, 'position']],
+  'Workbook.getNumberFormat': [[0, 'quantity']],
+  'Workbook.recalcParallel': [[0, 'quantity']],
+  'Workbook.removePivotCache': [[0, 'quantity']],
+  'Workbook.setFont': [[0, 'position']],
 });
 // </method-signatures>
 // Arguments the declarations type `T | null` (or optional) where the raw method
@@ -3635,7 +3948,7 @@ function tableRange(raw, sheet, range, where) {
     onSheet = sheet;
     rect = range;
   } else if (isObject(range)) {
-    onSheet = requireIndex(range.sheet, `${where} range.sheet`);
+    onSheet = requireIndex(range.sheet, `${where} range.sheet`, 'sheet');
     rect = requireObject(range.rect, `${where} range.rect`);
   } else {
     throw new TypeError(`${where} range must be a CellRect, a SheetRect or an A1 string`);
@@ -3725,13 +4038,47 @@ function requireInteger(value, where) {
   return value;
 }
 
-// An index or id argument: a number in uint32 range.
-function requireIndex(value, where) {
+// An integer argument by role. A negative value is `IndexOutOfRange` for a `position`,
+// `SheetIndexOutOfRange` for a `sheet`, and `InvalidArgument` for a `coordinate` (also at or above 2^31) and a
+// `quantity`; a fraction, NaN or an infinity, and a value beyond 32 bits, is a `RangeError`.
+function requireIndex(value, where, role) {
   requireNumber(value, where);
-  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
-    throw new RangeError(`${where} is outside uint32 range`);
+  if (!Number.isInteger(value)) throw new RangeError(`${where} must be an integer`);
+  if (value > 0xffffffff) throw new RangeError(`${where} is too large`);
+  if (value < 0) {
+    switch (role) {
+      case 'sheet':
+        throw new FormulonError(
+          StatusCode.SheetIndexOutOfRange,
+          `${where} ${value} is out of range`,
+          `sheet_index=${value}`,
+        );
+      case 'position':
+        throw new FormulonError(StatusCode.IndexOutOfRange, `${where} ${value} is out of range`, `index=${value}`);
+      case 'coordinate':
+        throw new FormulonError(
+          StatusCode.InvalidArgument,
+          `${where} ${value} is outside the grid`,
+          `coordinate=${value}`,
+        );
+      default:
+        throw new FormulonError(StatusCode.InvalidArgument, `${where} ${value} must not be negative`, `value=${value}`);
+    }
+  }
+  if (role === 'coordinate' && value >= 0x80000000) {
+    throw new FormulonError(StatusCode.InvalidArgument, `${where} ${value} is outside the grid`, `coordinate=${value}`);
   }
   return value;
+}
+
+/** A byte-input argument as a `Uint8Array`: an `ArrayBuffer`, a `Uint8Array` or any `ArrayBufferView`. */
+function requireBytes(value, where, param) {
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  const got =
+    value === null ? 'null' : typeof value === 'object' ? (value.constructor?.name ?? 'object') : typeof value;
+  throw new TypeError(`${where} ${param} expects Uint8Array, ArrayBuffer or ArrayBufferView, got ${got}`);
 }
 
 /** A patch field: `undefined` keeps `current`, `null` is refused, anything else must pass `check`. */
@@ -3860,7 +4207,12 @@ function expandCells(raw, where, pairs, args) {
 // `CellRect` arguments (`RECT_ARGS`) given as A1 ranges, alone or in an array.
 function expandRects(raw, positions, args) {
   let out = args;
-  const rect = (value) => (typeof value === 'string' ? rangeAddress(raw, value) : value);
+  const rect = (value) =>
+    typeof value === 'string'
+      ? rangeAddress(raw, value)
+      : isObject(value)
+        ? checkRangeFields('CellRect', value, 'range')
+        : value;
   for (const at of positions) {
     const value = args[at];
     const next = Array.isArray(value) ? value.map(rect) : rect(value);
@@ -3907,7 +4259,7 @@ function normalizeAddress(raw, kind, value, sheet, label) {
     return value.map((item, i) => normalizeAddress(raw, element, item, sheet, `${label}[${i}]`));
   }
   if (!RANGE_KINDS.has(kind)) return normalizeRecordRanges(raw, value, kind, sheet, label);
-  if (isObject(value)) return value;
+  if (isObject(value)) return checkRangeFields(kind, value, label);
   if (kind === 'CellRect') return unqualifiedRect(raw, value, label);
   if (kind === 'SheetRect') {
     const [sheetName, rect] = parsedRange(raw, value, label, kind);
@@ -3938,11 +4290,28 @@ function normalizeAddress(raw, kind, value, sheet, label) {
   return { row: rect.firstRow, col: rect.firstCol };
 }
 
+const RECT_FIELDS = ['firstRow', 'firstCol', 'lastRow', 'lastCol'];
+
+/** Checks the coordinate fields of a `CellRect`, `CellAddress` or `SheetRect` record; absent fields are left to the call. */
+function checkRangeFields(kind, value, label) {
+  const check = (record, fields, path) => {
+    for (const field of fields) {
+      if (record[field] !== undefined) requireIndex(record[field], `${path} ${field}`, 'coordinate');
+    }
+  };
+  if (kind === 'CellAddress') check(value, ['row', 'col'], label);
+  else if (kind === 'SheetRect') {
+    if (value.sheet !== undefined) requireIndex(value.sheet, `${label} sheet`, 'sheet');
+    if (isObject(value.rect)) check(value.rect, RECT_FIELDS, `${label} rect`);
+  } else check(value, RECT_FIELDS, label);
+  return value;
+}
+
 /** The `{ row, col }` of a `CellAddress` or a one-cell A1 string. */
 function addressOf(raw, value, label) {
   if (typeof value === 'string') return normalizeAddress(raw, 'CellAddress', value, undefined, label);
   requireObject(value, label);
-  return value;
+  return checkRangeFields('CellAddress', value, label);
 }
 
 /** `record` with its key `from` named `to`; anything but an object (a `null` read) passes as it is. */
@@ -4222,7 +4591,9 @@ function checkForwardedPatch(where, patch, fields = {}) {
 function geometryMode(mode, where, position) {
   if (mode === undefined) return GeometryMode.Display;
   requireNumber(mode, `${where} argument ${position}`);
-  if (!GEOMETRY_MODES.has(mode)) throw new RangeError(`${where} argument ${position} must be a GeometryMode`);
+  if (!GEOMETRY_MODES.has(mode)) {
+    throw new FormulonError(StatusCode.InvalidArgument, `${where} mode ${mode} is not a GeometryMode`, `mode=${mode}`);
+  }
   return mode;
 }
 
@@ -5011,7 +5382,7 @@ function makeFacade(Raw, registry, runtime) {
             throw new TypeError(`${where} argument 2 has no field ${key}`);
           }
         }
-        requireIndex(item.cacheIndex, `${where} cacheIndex`);
+        requireIndex(item.cacheIndex, `${where} cacheIndex`, 'position');
         item = { cacheIndex: item.cacheIndex };
       }
       const [raw, sheet, pivot] = this.#locate();
@@ -5032,8 +5403,12 @@ function makeFacade(Raw, registry, runtime) {
 
     setFieldDateGroup(field, group) {
       const where = 'Pivot.setFieldDateGroup';
-      requireObject(group, `${where} argument 2`);
       const [raw, sheet, pivot] = this.#locate();
+      if (group === null) {
+        raw.setPivotFieldDateGroup(sheet, pivot, field, null);
+        return;
+      }
+      requireObject(group, `${where} argument 2`);
       const bound = (key) =>
         group[key] === undefined ? undefined : dateInputSerial(runtime, group[key], raw.getDate1904(), where, key);
       const args = [
@@ -5126,7 +5501,7 @@ function makeFacade(Raw, registry, runtime) {
     getWorksheetSource() {
       const raw = this.#raw();
       const source = raw.getPivotCacheWorksheetSource(this.#cacheId);
-      if (source === null || source === undefined || source.present === false) return null;
+      if (source === null || source === undefined) return null;
       let range = null;
       if (typeof source.sheet === 'string') {
         const sheet = raw.getSheetIndex(source.sheet);
@@ -5143,10 +5518,10 @@ function makeFacade(Raw, registry, runtime) {
     setWorksheetSource(source) {
       const where = 'PivotCache.setWorksheetSource';
       const raw = this.#raw();
-      if (source === null) return raw.setPivotCacheWorksheetSource(this.#cacheId, { present: false });
+      if (source === null) return raw.setPivotCacheWorksheetSource(this.#cacheId, null);
       requireObject(source, `${where} argument 1`);
       refuseOtherKeys(where, 1, source, ['range', 'sheet', 'name']);
-      const input = { present: true };
+      const input = {};
       let sheet = present(source.sheet) ? sheetRefIndex(this.#workbook, source.sheet, `${where} sheet`) : undefined;
       if (present(source.range)) {
         let rect;
@@ -5364,7 +5739,7 @@ function makeFacade(Raw, registry, runtime) {
       }
       return index;
     }
-    if (typeof ref === 'number') return requireIndex(ref, label);
+    if (typeof ref === 'number') return requireIndex(ref, label, 'sheet');
     throw new TypeError(`${label} must be a sheet name, a sheet index or a Sheet`);
   }
 
@@ -5688,7 +6063,7 @@ function makeFacade(Raw, registry, runtime) {
       const sheet = this.#current();
       const named = (kind, value, label) => handleIndex(this, kind, value, label);
       const [index] = resolveRef(raw, sheet, 'Sheet.table', [0, 'table'], [ref], named);
-      requireIndex(index, 'Sheet.table argument 1');
+      requireIndex(index, 'Sheet.table argument 1', 'position');
       if (index >= raw.getTableCount(sheet)) {
         throw new FormulonError(
           StatusCode.IndexOutOfRange,
@@ -5722,7 +6097,7 @@ function makeFacade(Raw, registry, runtime) {
       const sheet = this.#current();
       input = colorInputs(input, `${where} argument 1`);
       if (isObject(input) && input.format !== undefined) {
-        if (input.dxfIndex !== undefined) throw new TypeError(`${where} takes format or dxfIndex, not both`);
+        if (present(input.dxfIndex)) throw new TypeError(`${where} takes format or dxfIndex, not both`);
         const format = requireObject(input.format, `${where} format`);
         for (const [key, value] of Object.entries(format)) {
           if (value !== undefined && !DXF_INPUT_KEYS.includes(key)) {
@@ -5758,7 +6133,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     pivot(index) {
-      requireIndex(index, 'Sheet.pivot argument 1');
+      requireIndex(index, 'Sheet.pivot argument 1', 'position');
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       if (index >= raw.getPivotCount(sheet)) {
@@ -5808,7 +6183,7 @@ function makeFacade(Raw, registry, runtime) {
         return ref.objectId;
       }
       if (typeof ref !== 'number') throw new TypeError(`${where} must be an object id or a Drawing`);
-      return requireIndex(ref, where);
+      return requireIndex(ref, where, 'quantity');
     }
 
     // The `DrawingProperties` of `objectId`; `NotFound` when the sheet's drawing has no such object.
@@ -6007,8 +6382,8 @@ function makeFacade(Raw, registry, runtime) {
         if (value === null) throw new TypeError(`${where} ${key} must be a CellAddress or an A1 string`);
         if (value === undefined) continue;
         const cell = addressOf(raw, value, `${where} ${key}`);
-        patch[rowKey] = requireIndex(cell.row, `${where} ${key}.row`);
-        patch[colKey] = requireIndex(cell.col, `${where} ${key}.col`);
+        patch[rowKey] = requireIndex(cell.row, `${where} ${key}.row`, 'coordinate');
+        patch[colKey] = requireIndex(cell.col, `${where} ${key}.col`, 'coordinate');
       }
       raw.updateView(this.#current(), patch);
     }
@@ -6282,8 +6657,8 @@ function makeFacade(Raw, registry, runtime) {
         typeof cell[0] === 'string'
           ? cellAddress(raw, cell[0], where)
           : {
-              firstRow: requireIndex(cell[0], `${where} argument 1`),
-              firstCol: requireIndex(cell[1], `${where} argument 2`),
+              firstRow: requireIndex(cell[0], `${where} argument 1`, 'coordinate'),
+              firstCol: requireIndex(cell[1], `${where} argument 2`, 'coordinate'),
             };
       const ids = new Set();
       return comments.filter((comment) => {
@@ -6306,15 +6681,27 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Sheet.evaluateCfRange';
       const raw = rawOf(this.#workbook);
       let today;
+      let timePeriodRules = true;
       if (options !== undefined) {
         requireObject(options, `${where} argument 2`);
-        refuseOtherKeys(where, 2, options, ['today']);
+        refuseOtherKeys(where, 2, options, ['today', 'timePeriodRules']);
+        if (options.timePeriodRules !== undefined) {
+          timePeriodRules = requireBoolean(options.timePeriodRules, `${where} timePeriodRules`);
+        }
         if (options.today !== undefined) {
+          if (!timePeriodRules) {
+            throw new FormulonError(
+              StatusCode.InvalidArgument,
+              `${where} today has no effect when timePeriodRules is false`,
+              'option=today',
+            );
+          }
           const civil = { ...toCivil(options.today, where, 'today'), hour: 0, minute: 0, second: 0 };
           today = civilSerial(runtime, civil, raw.getDate1904());
         }
       }
-      return raw.evaluateCfRange(this.#current(), range, today ?? todaySerial(runtime, raw));
+      const serial = timePeriodRules ? (today ?? todaySerial(runtime, raw)) : Number.NaN;
+      return raw.evaluateCfRange(this.#current(), range, serial);
     }
 
     // An `ExcelError` names its `ErrorCode`.
@@ -6469,11 +6856,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     static load(bytes) {
-      if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
-      else if (ArrayBuffer.isView(bytes) && !(bytes instanceof Uint8Array)) {
-        bytes = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      }
-      return new Workbook(token, Raw.load(bytes));
+      return new Workbook(token, Raw.load(requireBytes(bytes, 'Workbook.load', 'bytes')));
     }
 
     static createDefault() {
@@ -6569,9 +6952,7 @@ function makeFacade(Raw, registry, runtime) {
         return index;
       }
       if (typeof ref === 'number') {
-        if (!Number.isInteger(ref) || ref < 0 || ref > 0xffffffff) {
-          throw new RangeError(`${where} is outside uint32 range`);
-        }
+        requireIndex(ref, where, 'sheet');
         this.#alive();
         if (ref >= this.#sheets.length) {
           throw new FormulonError(
@@ -6657,7 +7038,7 @@ function makeFacade(Raw, registry, runtime) {
         return ref.cacheId;
       }
       if (typeof ref !== 'number') throw new TypeError(`${where} must be a cache id or a PivotCache`);
-      return requireIndex(ref, where);
+      return requireIndex(ref, where, 'quantity');
     }
 
     listPivotCaches() {
@@ -6675,7 +7056,18 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     addPivotCache(requestedId) {
-      const requested = requestedId === undefined || requestedId === null ? 0 : requestedId;
+      let requested = 0;
+      if (requestedId !== undefined && requestedId !== null) {
+        requireNumber(requestedId, 'Workbook.addPivotCache argument 1');
+        if (requestedId === 0) {
+          throw new FormulonError(
+            StatusCode.InvalidArgument,
+            'Workbook.addPivotCache requestedId 0 is not a valid cache id; omit it to assign one',
+            'requested_id=0',
+          );
+        }
+        requested = requestedId;
+      }
       return this.#cacheHandle(this.#raw.addPivotCache(requested));
     }
 
@@ -6802,14 +7194,14 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     getColumnXfIndex(col) {
-      requireIndex(col, 'Sheet.getColumnXfIndex argument 1');
+      requireIndex(col, 'Sheet.getColumnXfIndex argument 1', 'coordinate');
       const raw = rawOf(this.#sheet.workbook);
       const span = raw.listColumnOverrides(sheetIndex(this.#sheet)).find((c) => c.first <= col && col <= c.last);
       return span?.xfIndex ?? null;
     }
 
     getRowXfIndex(row) {
-      requireIndex(row, 'Sheet.getRowXfIndex argument 1');
+      requireIndex(row, 'Sheet.getRowXfIndex argument 1', 'coordinate');
       const raw = rawOf(this.#sheet.workbook);
       const override = raw.listRowOverrides(sheetIndex(this.#sheet)).find((r) => r.row === row);
       return override?.xfIndex ?? null;
@@ -6824,8 +7216,8 @@ function makeFacade(Raw, registry, runtime) {
       const cols = [];
       for (const [i, cell] of excluded.entries()) {
         const { row, col } = addressOf(raw, cell, `${where} argument 2[${i}]`);
-        rows.push(requireIndex(row, `${where} argument 2[${i}].row`));
-        cols.push(requireIndex(col, `${where} argument 2[${i}].col`));
+        rows.push(requireIndex(row, `${where} argument 2[${i}].row`, 'coordinate'));
+        cols.push(requireIndex(col, `${where} argument 2[${i}].col`, 'coordinate'));
       }
       return raw.getRangeXfBasesExcluding(sheetIndex(this.#sheet), range, rows, cols);
     }
@@ -6933,6 +7325,7 @@ function makeFacade(Raw, registry, runtime) {
 
   const argumentForms = [
     ['Workbook', Workbook, rawOf, () => undefined],
+    ['Workbook', WorkbookOoxml, (self) => rawOf(ooxmlState.workbookOf(self)), () => undefined],
     ['Sheet', Sheet, (self) => rawOf(self.workbook), sheetIndex],
     ['Pivot', Pivot, (self) => rawOf(self.sheet.workbook), (self) => sheetIndex(self.sheet)],
     ['Table', Table, (self) => tableState.locate(self)[0], (self) => tableState.locate(self)[1]],
@@ -6988,7 +7381,17 @@ function makeFacade(Raw, registry, runtime) {
  */
 function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
   const prefix = `${owner}.`;
-  const tables = [CELL_ARGS, RECT_ARGS, SPAN_ARGS, REF_ARGS, TYPED_ARGS, DEFAULT_ARGS];
+  const tables = [
+    CELL_ARGS,
+    RECT_ARGS,
+    SPAN_ARGS,
+    REF_ARGS,
+    TYPED_ARGS,
+    DEFAULT_ARGS,
+    ARG_ROLES,
+    ARG_TYPES,
+    ENUM_FIELDS,
+  ];
   const keys = new Set(tables.flatMap((table) => Object.keys(table)));
   for (const where of keys) {
     if (!where.startsWith(prefix)) continue;
@@ -7001,6 +7404,9 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
     const ref = REF_ARGS[where];
     const typed = TYPED_ARGS[where];
     const defaults = DEFAULT_ARGS[where];
+    const roles = ARG_ROLES[where];
+    const types = ARG_TYPES[where];
+    const enums = ENUM_FIELDS[where];
     defineMethod(
       proto,
       name,
@@ -7014,9 +7420,64 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
           const named = (kind, value, label) => handleIndex(this, kind, value, label);
           args = resolveRef(rawOf(this), sheetOf(this), where, ref, args, named);
         }
+        if (types !== undefined) args = checkArgumentTypes(where, types, args);
+        if (roles !== undefined) checkArgumentRoles(where, roles, args);
+        if (enums !== undefined) checkEnumFields(where, enums, args);
         return inner.apply(this, args);
       }),
     );
+  }
+}
+
+/**
+ * Normalises the `bytes` arguments of `types` and refuses a `value` argument that is not a record; an omitted
+ * argument is left to the call.
+ */
+function checkArgumentTypes(where, types, args) {
+  let out = args;
+  for (const [position, type] of types) {
+    const value = out[position];
+    if (value === undefined) continue;
+    if (type === 'bytes') {
+      const bytes = requireBytes(value, where, `argument ${position + 1}`);
+      if (bytes !== value) {
+        out = [...out];
+        out[position] = bytes;
+      }
+    } else if (!isObject(value)) {
+      const got = value === null ? 'null' : typeof value;
+      throw new TypeError(`${where} argument ${position + 1} expects a Value record, got ${got}`);
+    }
+  }
+  return out;
+}
+
+/** Refuses an enum-valued field of a record argument that is not a member of its table. */
+function checkEnumFields(where, enums, args) {
+  for (const [position, field, table, tableName] of enums) {
+    const record = args[position];
+    if (!isObject(record)) continue;
+    const value = record[field];
+    if (value === undefined || value === null) continue;
+    requireNumber(value, `${where} ${field}`);
+    if (!Object.values(table).includes(value)) {
+      throw new FormulonError(
+        StatusCode.InvalidArgument,
+        `${where} ${field} ${value} is not a ${tableName}`,
+        `${field}=${value}`,
+      );
+    }
+  }
+}
+
+/**
+ * Checks each number at a position of `roles` (`ARG_ROLES`, positions of the coordinate form) by its role; other
+ * types are left to the call.
+ */
+function checkArgumentRoles(where, roles, args) {
+  for (const [position, role] of roles) {
+    const value = args[position];
+    if (typeof value === 'number') requireIndex(value, `${where} argument ${position + 1}`, role);
   }
 }
 
@@ -7131,6 +7592,20 @@ const sortRead = (sort) =>
     : { ...renamed(sort, 'ref', 'range'), conditions: sort.conditions.map((c) => renamed(c, 'ref', 'range')) };
 const autoFilterRead = (filter) => (isObject(filter) ? { ...filter, sort: sortRead(filter.sort) } : filter);
 
+// Arguments the generated forwarders pass on whole: `Class.method` -> [position in the public call, type]. A
+// `bytes` argument is normalised to a `Uint8Array`; a `value` argument must be a tagged `Value` record.
+const ARG_TYPES = Object.freeze({
+  'Sheet.addPicture': [[0, 'bytes']],
+  'Sheet.restoreDrawing': [[0, 'bytes']],
+  'Sheet.restoreRangeXfs': [[0, 'bytes']],
+  'Workbook.formatValue': [[0, 'value']],
+});
+
+// Enum-valued record fields checked before the call: `Class.method` -> [position in the public call, field, table, table name].
+const ENUM_FIELDS = Object.freeze({
+  'Table.setColumnTotals': [[1, 'totalsRowFunction', TableTotalsRowFunction, 'TableTotalsRowFunction']],
+});
+
 // Reads whose raw record names a key other than the public one, by `Class.method`: the result as the public record.
 const READ_ADAPTERS = Object.freeze({
   'Sheet.getArrayFormula': rangeKey,
@@ -7138,7 +7613,7 @@ const READ_ADAPTERS = Object.freeze({
   'Sheet.getDataTable': rangeKey,
   'Sheet.getHyperlink': rangeKey,
   'Sheet.getPagination': (pagination) => ({ ...pagination, pages: pagination.pages.map(rangeKey) }),
-  'Sheet.getSpillInfo': rangeKey,
+  'Sheet.getSpill': rangeKey,
   'Sheet.listHyperlinks': (links) => links.map(rangeKey),
   'Table.getAutoFilter': autoFilterRead,
   'Workbook.parseReference': rangeKey,
@@ -7243,7 +7718,11 @@ function installForwarders(proto, owner, entries, Raw, call) {
               args[position] = sentinel;
             } else if (typeof sentinel === 'number' && sentinel < 0 && typeof value === 'number' && value < 0) {
               // The C sentinel is not a public value; absence is spelled `null`.
-              throw new RangeError(`${where} argument ${position + 1} is outside uint32 range`);
+              throw new FormulonError(
+                StatusCode.InvalidArgument,
+                `${where} argument ${position + 1} ${value} is not valid; absence is null`,
+                `value=${value}`,
+              );
             }
             return adaptRead(call(this, rawName, adaptArgs(args)));
           }),

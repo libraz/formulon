@@ -344,8 +344,7 @@ Expected<void, Error> Workbook::set_file_name(std::string_view name) {
   constexpr std::size_t kMaxFileNameBytes = 218;
   if (!name.empty()) {
     const auto refuse = [name](const char* reason) {
-      return make_error(FormulonErrorCode::kInvalidArgument, std::string("set_file_name: ") + reason,
-                        "name=" + std::string(name));
+      return make_error(FormulonErrorCode::kInvalidArgument, std::string(reason), "name=" + std::string(name));
     };
     if (!parser::detail::HasWorkbookExtension(name)) {
       return refuse("no workbook extension");

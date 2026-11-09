@@ -57,8 +57,8 @@ fm_pivot_data_field_t DataSpec(std::size_t field, fm_pivot_aggregation_t aggrega
   spec.aggregation = aggregation;
   spec.number_format = "";
   spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
-  spec.show_as_base_field = -1;
-  spec.show_as_base_item = -1;
+  spec.has_show_as_base_field = 0;
+  spec.has_show_as_base_item = 0;
   return spec;
 }
 

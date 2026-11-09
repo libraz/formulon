@@ -440,9 +440,9 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   //     indexing past their end;
   //   * result-cell budget — even a non-wrapping product can describe a
   //     matrix far past anything a real pivot produces.
-  // Both surface `kFnOverflow` so the caller keeps one recoverable path.
+  // Both surface `kFunctionOverflow` so the caller keeps one recoverable path.
   ASSIGN_OR_RETURN(std::size_t value_count, checked_mul_size_t(row_leaf_count, col_leaf_count));
-  ResourceBudget result_cell_budget(kMaxPivotResultCells, FormulonErrorCode::kFnOverflow);
+  ResourceBudget result_cell_budget(kMaxPivotResultCells, FormulonErrorCode::kFunctionOverflow);
   RETURN_IF_ERROR(result_cell_budget.consume(static_cast<std::uint64_t>(value_count)));
 
   // Bucket surviving record indices by (row_leaf, col_leaf).

@@ -696,9 +696,12 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
 // Dynamic-array spill payload
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                               std::uint32_t col, fm_spill_info_t* out) {
+extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
+                                          std::uint32_t col, std::int32_t* out_present, fm_spill_info_t* out) {
   clear_last_error();
+  if (out_present == nullptr) {
+    return null_argument("out_present");
+  }
   if (out == nullptr) {
     return null_argument();
   }
@@ -717,6 +720,7 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::siz
   const std::uint32_t struct_size = out->struct_size;
   *out = FM_STRUCT_INIT(fm_spill_info_t);
   out->struct_size = struct_size;
+  *out_present = 0;
   const auto& s = wb->workbook().sheet(sheet_index);
   // Try anchor lookup first; fall back to phantom-coverage map.
   const formulon::SpillRegion* region = s.spill_region_at_anchor(row, col);
@@ -731,11 +735,12 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::siz
         static_cast<std::uint64_t>(blocked->anchor_col) + blocked->cols <= formulon::Sheet::kMaxCols) {
       out->rect = cell_rect_from_extent(blocked->anchor_row, blocked->anchor_col, blocked->rows, blocked->cols);
       out->blocked = 1;
+      *out_present = 1;
     }
     return 0;
   }
   out->rect = cell_rect_from_extent(region->anchor_row, region->anchor_col, region->rows, region->cols);
-  out->engaged = 1;
+  *out_present = 1;
   return 0;
 }
 
@@ -744,8 +749,12 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::siz
 // ---------------------------------------------------------------------------
 
 extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                                  std::uint32_t col, fm_array_formula_info_t* out) {
+                                                  std::uint32_t col, std::int32_t* out_present,
+                                                  fm_array_formula_info_t* out) {
   clear_last_error();
+  if (out_present == nullptr) {
+    return null_argument("out_present");
+  }
   if (out == nullptr) {
     return null_argument();
   }
@@ -761,6 +770,7 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   const std::uint32_t struct_size = out->struct_size;
   *out = FM_STRUCT_INIT(fm_array_formula_info_t);
   out->struct_size = struct_size;
+  *out_present = 0;
   const std::optional<formulon::Workbook::ArrayFormulaInfo> info =
       wb->workbook().array_formula_at(sheet_index, row, col);
   if (!info.has_value()) {
@@ -770,7 +780,7 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   out->formula = publish_scratch(
       wb, display_formula_text(wb->workbook(), info->formula,
                                table_display_name_at(wb->workbook(), sheet_index, info->anchor_row, info->anchor_col)));
-  out->engaged = 1;
+  *out_present = 1;
   return 0;
 }
 

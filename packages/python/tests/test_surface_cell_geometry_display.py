@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from _xf_input import input_of
 
-from formulon import CellXfInput, FormulonError, PrintTitles, RowBreak, Value, ValueKind, WidthPlatform, Workbook
+from formulon import CellXfInput, FormulonError, RowBreak, Value, ValueKind, WidthPlatform, Workbook
 from formulon._workbook import (
     CellRect,
     DisplayStatus,
@@ -338,7 +338,7 @@ class PaginationDetailTests(unittest.TestCase):
             self.assertGreater(p.printable.width_pt, 0.0)
             self.assertGreater(p.scale_pct, 0.0)
             self.assertIn(p.page_order, (0, 1))
-            self.assertEqual(p.print_titles, PrintTitles(rows=None, columns=None))
+            self.assertIsNone(p.print_titles)
             self.assertEqual(len(p.pages), p.page_count)
             self.assertGreater(p.page_count, 1)
             self.assertIn(10, [b.row for b in p.row_breaks])

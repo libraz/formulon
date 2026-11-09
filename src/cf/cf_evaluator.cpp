@@ -187,7 +187,7 @@ struct PreparedCfEvaluator::Impl {
 
   Error resource_error(CellAddress target) const {
     return make_error(
-        FormulonErrorCode::kSecResourceLimit, "conditional-format formula evaluation exhausted its arena budget",
+        FormulonErrorCode::kSecurityResourceLimit, "conditional-format formula evaluation exhausted its arena budget",
         "cell=" + a1::encode_a1(target.row, target.col) + " ceiling=" + std::to_string(formula_cache.available_bytes));
   }
 
@@ -294,7 +294,8 @@ Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const She
                                                                        const CFHost& host) {
   const utils::RectRange request(range.first.row, range.first.col, range.last.row, range.last.col);
   if (request.size() > kCfMaxViewportCells) {
-    return make_error(FormulonErrorCode::kSecResourceLimit, "conditional-format range exceeds the viewport ceiling",
+    return make_error(FormulonErrorCode::kSecurityResourceLimit,
+                      "conditional-format range exceeds the viewport ceiling",
                       "cells=" + std::to_string(request.size()) + " ceiling=" + std::to_string(kCfMaxViewportCells));
   }
 

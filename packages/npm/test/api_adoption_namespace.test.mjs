@@ -203,7 +203,11 @@ test('Sheet.ooxml reads the row and column XF the style setters store', () => {
     assert.equal(ws.ooxml.getColumnXfIndex(1), null);
     ws.ooxml.resetRowXfIndex(3, 3);
     assert.equal(ws.ooxml.getRowXfIndex(3), null);
-    assert.throws(() => ws.ooxml.getColumnXfIndex(-1), RangeError);
+    assert.throws(
+      () => ws.ooxml.getColumnXfIndex(-1),
+      (e) => e.name === 'FormulonError' && e.code === StatusCode.InvalidArgument,
+    );
+    assert.throws(() => ws.ooxml.getColumnXfIndex(1.5), RangeError);
   });
 });
 

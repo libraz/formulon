@@ -150,6 +150,19 @@ class LedgerRuleTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r44_a_reset_is_satisfied_by_setters_on_every_part(self) -> None:
+        def ledger(*part_verbs: str) -> dict:
+            entries = {"palette.reset": _op(js="resetPalette")}
+            entries.update({key: _op(js=key.replace(".", "_")) for key in part_verbs})
+            return {"entries": entries}
+
+        self.assert_rule(
+            "R44.singleton.null",
+            self.fixture.context("", ledger("palette_colors.set", "palette_fonts.get")),
+            self.fixture.context("", ledger("palette_colors.set", "palette_fonts.set")),
+            [("ledger", "palette.reset", "reset")],
+        )
+
 
 class BindingSurfaceRuleTest(BindingRuleTestBase):
     """R38, R39, R41 and R42: rules read off the declaration files and the Python package."""

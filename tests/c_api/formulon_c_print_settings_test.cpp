@@ -138,8 +138,8 @@ TEST(FormulonCApiPrintSettings, EmptyStringRemovesElementAndResetsStructuredView
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &after), 0);
   EXPECT_EQ(after.orientation, FM_PAGE_ORIENTATION_PORTRAIT);
   EXPECT_EQ(after.scale_pct, 100U);
-  EXPECT_EQ(after.orientation_engaged, 0);
-  EXPECT_EQ(after.scale_pct_engaged, 0);
+  EXPECT_EQ(after.has_orientation, 0);
+  EXPECT_EQ(after.has_scale_pct, 0);
 }
 
 TEST(FormulonCApiPrintSettings, RejectsMalformedFragments) {
@@ -222,7 +222,7 @@ TEST(FormulonCApiPrintSettings, FitToPagePreservesOtherSheetPrContent) {
   fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
   EXPECT_EQ(setup.fit_to_page, 1);
-  EXPECT_EQ(setup.fit_to_page_engaged, 1);
+  EXPECT_EQ(setup.has_fit_to_page, 1);
 }
 
 TEST(FormulonCApiPrintSettings, ClearingFitToPageKeepsTheElements) {
@@ -240,7 +240,7 @@ TEST(FormulonCApiPrintSettings, ClearingFitToPageKeepsTheElements) {
   fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
   EXPECT_EQ(setup.fit_to_page, 0);
-  EXPECT_EQ(setup.fit_to_page_engaged, 0);
+  EXPECT_EQ(setup.has_fit_to_page, 0);
 }
 
 TEST(FormulonCApiPrintSettings, FitToPageCreatesSheetPrWhenAbsent) {
@@ -745,13 +745,13 @@ TEST(FormulonCApiPrintSettings, PageMarginsPatchTouchesOnlySetFields) {
   ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, 0, &read), 0);
   EXPECT_DOUBLE_EQ(read.left_in, 0.25);
   EXPECT_DOUBLE_EQ(read.top_in, 1.5);
-  EXPECT_EQ(read.left_in_engaged, 1);
-  EXPECT_EQ(read.top_in_engaged, 1);
+  EXPECT_EQ(read.has_left_in, 1);
+  EXPECT_EQ(read.has_top_in, 1);
   // An unstated margin reports the OOXML default value with its presence
   // flag clear, so the caller can tell "0.7 because the file says so" from
   // "0.7 because nothing says otherwise".
   EXPECT_DOUBLE_EQ(read.right_in, 0.7);
-  EXPECT_EQ(read.right_in_engaged, 0);
+  EXPECT_EQ(read.has_right_in, 0);
 }
 
 TEST(FormulonCApiPrintSettings, PageMarginsPatchRejectsNonFiniteAndNegative) {
@@ -847,7 +847,7 @@ TEST(FormulonCApiPrintSettings, ClearingFitToPageThroughPageSetupDropsTheStatedA
   fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
   EXPECT_EQ(setup.fit_to_page, 0);
-  EXPECT_EQ(setup.fit_to_page_engaged, 0);
+  EXPECT_EQ(setup.has_fit_to_page, 0);
   EXPECT_EQ(GetSheetPrXml(wb.handle), "<sheetPr><pageSetUpPr/></sheetPr>");
 }
 
@@ -858,10 +858,10 @@ TEST(FormulonCApiPrintSettings, PrintOptionsGetterReportsStatedAndAbsentAttribut
   fresh.grid_lines = 7;
   ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &fresh), 0);
   EXPECT_EQ(fresh.grid_lines, 0);
-  EXPECT_EQ(fresh.grid_lines_engaged, 0);
-  EXPECT_EQ(fresh.headings_engaged, 0);
-  EXPECT_EQ(fresh.horizontal_centered_engaged, 0);
-  EXPECT_EQ(fresh.vertical_centered_engaged, 0);
+  EXPECT_EQ(fresh.has_grid_lines, 0);
+  EXPECT_EQ(fresh.has_headings, 0);
+  EXPECT_EQ(fresh.has_horizontal_centered, 0);
+  EXPECT_EQ(fresh.has_vertical_centered, 0);
 
   fm_print_options_patch_t patch = FM_STRUCT_INIT(fm_print_options_patch_t);
   patch.grid_lines_op = FM_PATCH_OP_SET;
@@ -873,19 +873,19 @@ TEST(FormulonCApiPrintSettings, PrintOptionsGetterReportsStatedAndAbsentAttribut
   fm_print_options_t read = FM_STRUCT_INIT(fm_print_options_t);
   ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.grid_lines, 1);
-  EXPECT_EQ(read.grid_lines_engaged, 1);
+  EXPECT_EQ(read.has_grid_lines, 1);
   // A stated `false` is distinct from an absent attribute.
   EXPECT_EQ(read.headings, 0);
-  EXPECT_EQ(read.headings_engaged, 1);
+  EXPECT_EQ(read.has_headings, 1);
   EXPECT_EQ(read.horizontal_centered, 0);
-  EXPECT_EQ(read.horizontal_centered_engaged, 0);
-  EXPECT_EQ(read.vertical_centered_engaged, 0);
+  EXPECT_EQ(read.has_horizontal_centered, 0);
+  EXPECT_EQ(read.has_vertical_centered, 0);
 
   ASSERT_EQ(fm_sheet_set_print_options_xml(wb.handle, 0, "<printOptions verticalCentered=\"1\"/>"), 0);
   ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.vertical_centered, 1);
-  EXPECT_EQ(read.vertical_centered_engaged, 1);
-  EXPECT_EQ(read.grid_lines_engaged, 0);
+  EXPECT_EQ(read.has_vertical_centered, 1);
+  EXPECT_EQ(read.has_grid_lines, 0);
 }
 
 TEST(FormulonCApiPrintSettings, HeaderFooterGetterReadsDecodedSectionsAndNullForAbsentOnes) {
@@ -896,12 +896,12 @@ TEST(FormulonCApiPrintSettings, HeaderFooterGetterReadsDecodedSectionsAndNullFor
   EXPECT_EQ(fresh.odd_header, nullptr);
   EXPECT_EQ(fresh.first_footer, nullptr);
   EXPECT_EQ(fresh.different_odd_even, 0);
-  EXPECT_EQ(fresh.different_odd_even_engaged, 0);
+  EXPECT_EQ(fresh.has_different_odd_even, 0);
   // CT_HeaderFooter defaults these two to true.
   EXPECT_EQ(fresh.scale_with_doc, 1);
-  EXPECT_EQ(fresh.scale_with_doc_engaged, 0);
+  EXPECT_EQ(fresh.has_scale_with_doc, 0);
   EXPECT_EQ(fresh.align_with_margins, 1);
-  EXPECT_EQ(fresh.align_with_margins_engaged, 0);
+  EXPECT_EQ(fresh.has_align_with_margins, 0);
 
   fm_header_footer_patch_t patch = FM_STRUCT_INIT(fm_header_footer_patch_t);
   patch.odd_header_op = FM_PATCH_OP_SET;
@@ -926,12 +926,12 @@ TEST(FormulonCApiPrintSettings, HeaderFooterGetterReadsDecodedSectionsAndNullFor
   EXPECT_EQ(read.first_header, nullptr);
   EXPECT_EQ(read.first_footer, nullptr);
   EXPECT_EQ(read.different_odd_even, 1);
-  EXPECT_EQ(read.different_odd_even_engaged, 1);
+  EXPECT_EQ(read.has_different_odd_even, 1);
   EXPECT_EQ(read.scale_with_doc, 0);
-  EXPECT_EQ(read.scale_with_doc_engaged, 1);
-  EXPECT_EQ(read.different_first_engaged, 0);
+  EXPECT_EQ(read.has_scale_with_doc, 1);
+  EXPECT_EQ(read.has_different_first, 0);
   EXPECT_EQ(read.align_with_margins, 1);
-  EXPECT_EQ(read.align_with_margins_engaged, 0);
+  EXPECT_EQ(read.has_align_with_margins, 0);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1075,9 +1075,9 @@ TEST(FormulonCApiPrintSettings, PageSetupUpdatesMergeAcrossCalls) {
   fm_page_setup_t read = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.scale_pct, 75U);
-  EXPECT_EQ(read.scale_pct_engaged, 1);
+  EXPECT_EQ(read.has_scale_pct, 1);
   EXPECT_EQ(read.orientation, FM_PAGE_ORIENTATION_LANDSCAPE);
-  EXPECT_EQ(read.orientation_engaged, 1);
+  EXPECT_EQ(read.has_orientation, 1);
   const std::string xml = GetPageSetupXml(wb.handle);
   EXPECT_NE(xml.find("scale=\"75\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("orientation=\"landscape\""), std::string::npos) << xml;
@@ -1089,7 +1089,7 @@ TEST(FormulonCApiPrintSettings, PageSetupScalePctDefaultsToOneHundredWhenAbsent)
   fm_page_setup_t read = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.scale_pct, 100U);
-  EXPECT_EQ(read.scale_pct_engaged, 0);
+  EXPECT_EQ(read.has_scale_pct, 0);
 }
 
 TEST(FormulonCApiPrintSettings, PageMarginsAreInchesInTheFileAndOnRead) {
@@ -1112,7 +1112,7 @@ TEST(FormulonCApiPrintSettings, PageMarginsAreInchesInTheFileAndOnRead) {
   ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, 0, &read), 0);
   EXPECT_DOUBLE_EQ(read.left_in, 0.5);
   EXPECT_DOUBLE_EQ(read.header_in, 0.25);
-  EXPECT_EQ(read.header_in_engaged, 1);
+  EXPECT_EQ(read.has_header_in, 1);
 }
 
 TEST(FormulonCApiPrintSettings, PageMarginsUpdatesMergeAcrossCalls) {
@@ -1130,10 +1130,10 @@ TEST(FormulonCApiPrintSettings, PageMarginsUpdatesMergeAcrossCalls) {
   fm_page_margins_t read = FM_STRUCT_INIT(fm_page_margins_t);
   ASSERT_EQ(fm_sheet_get_page_margins(wb.handle, 0, &read), 0);
   EXPECT_DOUBLE_EQ(read.top_in, 1.25);
-  EXPECT_EQ(read.top_in_engaged, 1);
+  EXPECT_EQ(read.has_top_in, 1);
   EXPECT_DOUBLE_EQ(read.footer_in, 0.4);
-  EXPECT_EQ(read.footer_in_engaged, 1);
-  EXPECT_EQ(read.left_in_engaged, 0);
+  EXPECT_EQ(read.has_footer_in, 1);
+  EXPECT_EQ(read.has_left_in, 0);
 }
 
 TEST(FormulonCApiPrintSettings, PrintOptionsUpdatesMergeAcrossCalls) {
@@ -1152,7 +1152,7 @@ TEST(FormulonCApiPrintSettings, PrintOptionsUpdatesMergeAcrossCalls) {
   ASSERT_EQ(fm_sheet_get_print_options(wb.handle, 0, &read), 0);
   EXPECT_EQ(read.grid_lines, 1);
   EXPECT_EQ(read.headings, 1);
-  EXPECT_EQ(read.horizontal_centered_engaged, 0);
+  EXPECT_EQ(read.has_horizontal_centered, 0);
 }
 
 TEST(FormulonCApiPrintSettings, HeaderFooterUpdatesMergeAcrossCalls) {
@@ -1330,9 +1330,9 @@ TEST(FormulonCApiPrintPatch, ClearingOrientationRemovesTheAttribute) {
   ASSERT_EQ(fm_sheet_update_page_setup(wb.handle, 0, &clear), 0) << fm_get_last_error_message();
   fm_page_setup_t read = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &read), 0);
-  EXPECT_EQ(read.orientation_engaged, 0);
+  EXPECT_EQ(read.has_orientation, 0);
   EXPECT_EQ(read.orientation, FM_PAGE_ORIENTATION_PORTRAIT);
-  EXPECT_EQ(read.paper_size_engaged, 1);
+  EXPECT_EQ(read.has_paper_size, 1);
   EXPECT_EQ(read.paper_size, 9U);
   EXPECT_EQ(read.scale_pct, 80U);
 }

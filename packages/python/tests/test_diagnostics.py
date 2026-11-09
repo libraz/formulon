@@ -90,27 +90,27 @@ class DiagnosticCaptureTests(unittest.TestCase):
         self.assertEqual(instance.last_diagnostic(1), ("pending message", "pending context"))
 
     def test_status_failure_captures_both_diagnostics_once_and_take_is_one_shot(self) -> None:
-        instance, calls = _fake_instance("fm_workbook_remove_sheet", 5050)
+        instance, calls = _fake_instance("fm_workbook_remove_sheet", 10)
 
-        self.assertEqual(instance.fm_workbook_remove_sheet(0, 99), 5050)
+        self.assertEqual(instance.fm_workbook_remove_sheet(0, 99), 10)
         self.assertEqual(calls, {"message": 1, "context": 1})
-        self.assertEqual(instance.last_diagnostic(5050), ("captured message", "captured context"))
-        self.assertEqual(instance.last_diagnostic(5050), ("", ""))
+        self.assertEqual(instance.last_diagnostic(10), ("captured message", "captured context"))
+        self.assertEqual(instance.last_diagnostic(10), ("", ""))
         self.assertEqual(calls, {"message": 1, "context": 1})
 
     def test_status_success_clears_prior_pending_without_reads(self) -> None:
         instance, calls = _fake_instance("fm_workbook_remove_sheet", 0)
-        instance._last_diagnostic.value = (5050, "stale message", "stale context")
+        instance._last_diagnostic.value = (10, "stale message", "stale context")
 
         self.assertEqual(instance.fm_workbook_remove_sheet(0, 99), 0)
         self.assertEqual(calls, {"message": 0, "context": 0})
-        self.assertEqual(instance.last_diagnostic(5050), ("", ""))
+        self.assertEqual(instance.last_diagnostic(10), ("", ""))
 
     def test_absent_or_mismatched_take_does_not_raw_read(self) -> None:
         instance, calls = _fake_instance("fm_workbook_remove_sheet", 0)
 
-        self.assertEqual(instance.last_diagnostic(5050), ("", ""))
-        instance._last_diagnostic.value = (5050, "message", "context")
+        self.assertEqual(instance.last_diagnostic(10), ("", ""))
+        instance._last_diagnostic.value = (10, "message", "context")
         self.assertEqual(instance.last_diagnostic(0), ("", ""))
         self.assertEqual(calls, {"message": 0, "context": 0})
 

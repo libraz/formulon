@@ -281,8 +281,9 @@ Napi::Value Workbook::PivotGetStyleOptions(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   fm_pivot_style_options_t style = FM_STRUCT_INIT(fm_pivot_style_options_t);
-  const fm_status_t rc = fm_sheet_get_pivot_style_options(handle_, sheet, pivot_index, &style);
-  if (rc != 0 || style.present == 0) {
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_pivot_style_options(handle_, sheet, pivot_index, &present, &style);
+  if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object out = Napi::Object::New(env);
@@ -317,15 +318,15 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("sourceName", JsString(env, field.source_name));
   out.Set("customName", JsStringOrNull(env, field.custom_name));
-  out.Set("axis", JsIndexOrNull(env, field.axis));
+  out.Set("axis", field.axis == FM_PIVOT_AXIS_ABSENT ? env.Null() : Napi::Value(Napi::Number::New(env, field.axis)));
   out.Set("subtotalTop", Napi::Boolean::New(env, field.subtotal_top != 0));
   out.Set("numberFormat", JsStringOrNull(env, field.number_format));
-  out.Set("cacheFieldIndex", JsIndexOrNull(env, field.cache_field_index));
+  out.Set("cacheFieldIndex", JsNumberOrNull(env, field.has_cache_field_index, field.cache_field_index));
   out.Set("sortOrder", Napi::Number::New(env, field.sort_order));
   out.Set("sortByField", JsStringOrNull(env, field.sort_by_field));
   out.Set("datePeriods", Napi::Number::New(env, field.date_periods));
   out.Set("dateCalendar", Napi::Number::New(env, field.date_calendar));
-  out.Set("groupBaseIndex", JsIndexOrNull(env, field.group_base_index));
+  out.Set("groupBaseIndex", JsNumberOrNull(env, field.has_group_base_index, field.group_base_index));
   out.Set("defaultSubtotal", Napi::Boolean::New(env, field.default_subtotal != 0));
   out.Set("insertBlankRow", Napi::Boolean::New(env, field.insert_blank_row != 0));
   out.Set("fillDownLabels", Napi::Boolean::New(env, field.fill_down_labels != 0));
@@ -368,7 +369,7 @@ Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsStringOrNull(env, item.name));
-  out.Set("cacheIndex", JsIndexOrNull(env, item.cache_index));
+  out.Set("cacheIndex", JsNumberOrNull(env, item.has_cache_index, item.cache_index));
   out.Set("visible", Napi::Boolean::New(env, item.visible != 0));
   out.Set("caption", item.caption != nullptr ? Napi::Value(Napi::String::New(env, item.caption)) : env.Null());
   out.Set("showDetail", Napi::Boolean::New(env, item.show_detail != 0));
@@ -674,6 +675,13 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  const PivotFieldArgs field = ReadPivotField(info);
+  // A null grouping removes the field's date grouping.
+  if (info[3].IsNull() || info[3].IsUndefined()) {
+    return ValueOrThrow(
+        env, fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index, nullptr),
+        env.Undefined());
+  }
   // The trailing three are optional on both surfaces: one-day intervals and the source data's own bounds.
   CheckedSpecReader reader(env);
   fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
@@ -689,14 +697,9 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const PivotFieldArgs field = ReadPivotField(info);
   return ValueOrThrow(
       env, fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index, &group),
       env.Undefined());
-}
-
-Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_clear_pivot_field_date_group);
 }
 
 Napi::Value Workbook::InvokePivotFieldOrder(const Napi::CallbackInfo& info, PivotFieldOrderFn fn) {
@@ -781,8 +784,8 @@ Napi::Value Workbook::PivotDataFieldAt(const Napi::CallbackInfo& info) {
   out.Set("aggregation", Napi::Number::New(env, static_cast<int32_t>(spec.aggregation)));
   out.Set("numberFormat", JsStringOrNull(env, spec.number_format));
   out.Set("showAs", Napi::Number::New(env, static_cast<int32_t>(spec.show_as)));
-  out.Set("showAsBaseField", JsIndexOrNull(env, spec.show_as_base_field));
-  out.Set("showAsBaseItem", JsIndexOrNull(env, spec.show_as_base_item));
+  out.Set("showAsBaseField", JsNumberOrNull(env, spec.has_show_as_base_field, spec.show_as_base_field));
+  out.Set("showAsBaseItem", JsNumberOrNull(env, spec.has_show_as_base_item, spec.show_as_base_item));
   return out;
 }
 

@@ -108,7 +108,9 @@ void put_optional(double value, std::int32_t& has, double& out) {
 // ---------------------------------------------------------------------------
 
 fm_chart_title_t to_fm(const formulon::ChartTitle& t) {
-  return fm_chart_title_t{to_c(t.kind), t.text.c_str(), t.ref_formula.c_str()};
+  const bool is_text = t.kind == formulon::ChartTitleKind::kText;
+  const bool is_ref = t.kind == formulon::ChartTitleKind::kRef;
+  return fm_chart_title_t{to_c(t.kind), is_text ? t.text.c_str() : nullptr, is_ref ? t.ref_formula.c_str() : nullptr};
 }
 
 fm_chart_fill_t to_fm(const formulon::ChartFill& f) {
@@ -183,10 +185,10 @@ void spell_formulas(const formulon::Workbook& book, formulon::ChartModel& model)
   }
 }
 
-/// Extended-chart layout of `p`, or -1 for a plot that is not extended or has an unknown layout.
+/// Extended-chart layout of `p`; ABSENT for a plot that is not extended or has an unknown layout.
 std::int32_t extended_layout_from(const formulon::ChartPlot& p) {
   if (p.type != formulon::ChartPlotType::kChartex) {
-    return -1;
+    return FM_CHART_EXTENDED_LAYOUT_ABSENT;
   }
   static const char* const kLayouts[] = {"boxWhisker", "clusteredColumn", "funnel",  "paretoLine",
                                          "regionMap",  "sunburst",        "treemap", "waterfall"};
@@ -195,7 +197,7 @@ std::int32_t extended_layout_from(const formulon::ChartPlot& p) {
       return i;
     }
   }
-  return -1;
+  return FM_CHART_EXTENDED_LAYOUT_ABSENT;
 }
 
 /// Role of an unresolved input, from the engine's input label.
@@ -398,15 +400,15 @@ extern "C" fm_status_t fm_chart_get_hidden_category_at(const fm_chart_t* chart, 
   return index_list_at(chart, chart != nullptr ? &chart->model.category_filter : nullptr, idx, out);
 }
 
-extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot, fm_chart_plot_info_t* out) {
+extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot_index, fm_chart_plot_info_t* out) {
   clear_last_error();
   if (chart == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_index(plot, chart->model.plots.size(), "plot"); rc != 0) {
+  if (auto rc = check_index(plot_index, chart->model.plots.size(), "plot_index"); rc != 0) {
     return rc;
   }
-  const formulon::ChartPlot& p = chart->model.plots[plot];
+  const formulon::ChartPlot& p = chart->model.plots[plot_index];
   if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
@@ -429,15 +431,16 @@ extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_get_plot_axis_id_at(const fm_chart_t* chart, size_t plot, size_t idx, uint32_t* out) {
+extern "C" fm_status_t fm_chart_get_plot_axis_id_at(const fm_chart_t* chart, size_t plot_index, size_t idx,
+                                                    uint32_t* out) {
   clear_last_error();
   if (chart == nullptr || out == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_index(plot, chart->model.plots.size(), "plot"); rc != 0) {
+  if (auto rc = check_index(plot_index, chart->model.plots.size(), "plot_index"); rc != 0) {
     return rc;
   }
-  const std::vector<std::uint32_t>& ids = chart->model.plots[plot].axis_ids;
+  const std::vector<std::uint32_t>& ids = chart->model.plots[plot_index].axis_ids;
   if (auto rc = check_index(idx, ids.size(), "index"); rc != 0) {
     return rc;
   }
@@ -445,14 +448,14 @@ extern "C" fm_status_t fm_chart_get_plot_axis_id_at(const fm_chart_t* chart, siz
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t plot, size_t series,
+extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t plot_index, size_t series,
                                               fm_chart_series_info_t* out) {
   clear_last_error();
   if (chart == nullptr || out == nullptr) {
     return null_argument();
   }
   const formulon::ChartSeries* s = nullptr;
-  if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
+  if (auto rc = find_series(chart, plot_index, series, &s); rc != 0) {
     return rc;
   }
   if (auto rc = begin_record(out); rc != 0) {
@@ -482,8 +485,8 @@ extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t pl
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
-                                                      size_t idx, fm_chart_literal_info_t* out) {
+extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, size_t plot_index, size_t series,
+                                                      int32_t role, size_t idx, fm_chart_literal_info_t* out) {
   clear_last_error();
   if (chart == nullptr || out == nullptr) {
     return null_argument();
@@ -492,7 +495,7 @@ extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, s
     return rc;
   }
   const formulon::ChartSeries* s = nullptr;
-  if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
+  if (auto rc = find_series(chart, plot_index, series, &s); rc != 0) {
     return rc;
   }
   if (auto rc = check_enum_domain(role, 0, FM_CHART_ROLE_SIZE, "role"); rc != 0) {
@@ -511,14 +514,14 @@ extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, s
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, size_t plot, size_t series, size_t idx,
-                                                    fm_chart_point_info_t* out) {
+extern "C" fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, size_t plot_index, size_t series,
+                                                    size_t idx, fm_chart_point_info_t* out) {
   clear_last_error();
   if (chart == nullptr || out == nullptr) {
     return null_argument();
   }
   const formulon::ChartSeries* s = nullptr;
-  if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
+  if (auto rc = find_series(chart, plot_index, series, &s); rc != 0) {
     return rc;
   }
   if (auto rc = check_index(idx, s->points.size(), "index"); rc != 0) {

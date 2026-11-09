@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 from . import _structs as S
-from ._c import LIB, _sint, _uint, fm_value_t_size
+from ._c import LIB, _NoCopy, _sint, _uint, fm_value_t_size
 from ._inputs import date_serial
 from ._workbook import (
     _PATCH_CLEAR,
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 __all__ = ["PivotCache"]
 
 
-class PivotCache:
+class PivotCache(_NoCopy):
     """One pivot cache of a :class:`Workbook`, named by its :attr:`cache_id`.
 
     Obtain a handle from :meth:`Workbook.pivot_cache`,
@@ -127,7 +127,7 @@ class PivotCache:
             d = S.PIVOT_CACHE_OPTIONS.unpack(LIB, ptr)
             return PivotCacheOptions(
                 save_data=d["save_data"] != 0,
-                missing_items_limit=d["missing_items_limit"],
+                missing_items_limit=d["missing_items_limit"] if d["has_missing_items_limit"] else None,
                 refresh_on_load=d["refresh_on_load"] != 0,
             )
 
@@ -141,10 +141,11 @@ class PivotCache:
         """Update the options of the cache; an omitted argument keeps its setting.
 
         See :class:`PivotCacheOptions` for the members. ``missing_items_limit``
-        given as ``None`` (or ``-1``) makes the limit automatic.
+        given as ``None`` makes the limit automatic.
 
         Raises:
           TypeError: when ``save_data`` or ``refresh_on_load`` is not a ``bool``.
+          InvalidArgumentError: for a negative ``missing_items_limit``.
         """
         for flag in (save_data, refresh_on_load):
             if flag is not UNCHANGED and not isinstance(flag, bool):
@@ -155,11 +156,11 @@ class PivotCache:
                 values[name + "_op"] = _PATCH_SET
                 values[name] = 1 if flag else 0
         if missing_items_limit is not UNCHANGED:
-            if missing_items_limit is None or missing_items_limit == -1:
+            if missing_items_limit is None:
                 values["missing_items_limit_op"] = _PATCH_CLEAR
             else:
                 values["missing_items_limit_op"] = _PATCH_SET
-                values["missing_items_limit"] = _sint(missing_items_limit, "missing_items_limit")
+                values["missing_items_limit"] = _uint(missing_items_limit, "missing_items_limit")
         h, cache_id = self._call()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_CACHE_OPTIONS_PATCH)
@@ -175,10 +176,16 @@ class PivotCache:
             fields.append(
                 PivotCacheField(
                     name=_read_cstr_out(
-                        LIB.fm_workbook_get_pivot_cache_field_name, h, cache_id, _uint(i, "field_index")
+                        LIB.fm_workbook_get_pivot_cache_field_name,
+                        h,
+                        cache_id,
+                        _uint(i, "field_index", role="position"),
                     ),
                     formula=_read_optional_cstr_out(
-                        LIB.fm_workbook_get_pivot_cache_field_formula, h, cache_id, _uint(i, "field_index")
+                        LIB.fm_workbook_get_pivot_cache_field_formula,
+                        h,
+                        cache_id,
+                        _uint(i, "field_index", role="position"),
                     ),
                 )
             )
@@ -220,14 +227,18 @@ class PivotCache:
             formula_ptr = scope.cstr(formula)
             _check(
                 LIB.fm_workbook_set_pivot_cache_calculated_field_formula(
-                    h, cache_id, _uint(field_index, "field_index"), formula_ptr
+                    h, cache_id, _uint(field_index, "field_index", role="position"), formula_ptr
                 )
             )
 
     def remove_calculated_field(self, field_index: int) -> None:
         """Remove calculated field ``field_index`` and its data fields in every pivot table."""
         h, cache_id = self._call()
-        _check(LIB.fm_workbook_remove_pivot_cache_calculated_field(h, cache_id, _uint(field_index, "field_index")))
+        _check(
+            LIB.fm_workbook_remove_pivot_cache_calculated_field(
+                h, cache_id, _uint(field_index, "field_index", role="position")
+            )
+        )
 
     def list_calculated_items(self) -> List[PivotCalculatedItem]:
         """Every calculated item of the cache, in solve order; an item's position is its ``item_index``."""
@@ -238,7 +249,11 @@ class PivotCache:
             ptr = scope.struct(S.PIVOT_CALCULATED_ITEM)
             for i in range(count):
                 S.zero_struct(LIB, S.PIVOT_CALCULATED_ITEM, ptr)
-                _check(LIB.fm_workbook_get_pivot_cache_calculated_item_at(h, cache_id, _uint(i, "item_index"), ptr))
+                _check(
+                    LIB.fm_workbook_get_pivot_cache_calculated_item_at(
+                        h, cache_id, _uint(i, "item_index", role="position"), ptr
+                    )
+                )
                 d = S.PIVOT_CALCULATED_ITEM.unpack(LIB, ptr)
                 items.append(
                     PivotCalculatedItem(
@@ -263,7 +278,7 @@ class PivotCache:
             out = scope.out_ptr()
             _check(
                 LIB.fm_workbook_add_pivot_cache_calculated_item(
-                    h, cache_id, _uint(field_index, "field_index"), name_ptr, formula_ptr, out
+                    h, cache_id, _uint(field_index, "field_index", role="position"), name_ptr, formula_ptr, out
                 )
             )
             return LIB.read_u32(out)
@@ -275,7 +290,7 @@ class PivotCache:
             formula_ptr = scope.cstr(formula)
             _check(
                 LIB.fm_workbook_set_pivot_cache_calculated_item_formula(
-                    h, cache_id, _uint(item_index, "item_index"), formula_ptr
+                    h, cache_id, _uint(item_index, "item_index", role="position"), formula_ptr
                 )
             )
 
@@ -284,14 +299,21 @@ class PivotCache:
         h, cache_id = self._call()
         _check(
             LIB.fm_workbook_move_pivot_cache_calculated_item(
-                h, cache_id, _uint(item_index, "item_index"), _uint(new_index, "new_index")
+                h,
+                cache_id,
+                _uint(item_index, "item_index", role="position"),
+                _uint(new_index, "new_index", role="position"),
             )
         )
 
     def remove_calculated_item(self, item_index: int) -> None:
         """Remove calculated item ``item_index``, its item in the cache field and in every pivot table."""
         h, cache_id = self._call()
-        _check(LIB.fm_workbook_remove_pivot_cache_calculated_item(h, cache_id, _uint(item_index, "item_index")))
+        _check(
+            LIB.fm_workbook_remove_pivot_cache_calculated_item(
+                h, cache_id, _uint(item_index, "item_index", role="position")
+            )
+        )
 
     # -- Shared items ------------------------------------------------------
     def list_field_shared_items(self, field_index: int) -> List[PivotCacheSharedItem]:
@@ -300,14 +322,14 @@ class PivotCache:
         A date item holds its serial number as a number and has ``is_date`` set.
         """
         h, cache_id = self._call()
-        field = _uint(field_index, "field_index")
+        field = _uint(field_index, "field_index", role="position")
         count = _read_count(LIB.fm_workbook_get_pivot_cache_field_shared_item_count, h, cache_id, field)
         items: List[PivotCacheSharedItem] = []
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
             date_ptr = scope.out_ptr()
             for i in range(count):
-                item = _uint(i, "item_index")
+                item = _uint(i, "item_index", role="position")
                 _check(LIB.fm_workbook_get_pivot_cache_field_shared_item_value(h, cache_id, field, item, value_ptr))
                 value = Value._from_wasm(value_ptr)
                 _check(LIB.fm_workbook_is_pivot_cache_field_shared_item_date(h, cache_id, field, item, date_ptr))
@@ -331,7 +353,7 @@ class PivotCache:
         """
         kind = _pivot_cache_value_kind(value)
         h, cache_id = self._call()
-        field = _uint(field_index, "field_index")
+        field = _uint(field_index, "field_index", role="position")
         if kind == "date":
             _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_date(h, cache_id, field, self._date_serial(value)))
         elif kind == "number":
@@ -352,7 +374,11 @@ class PivotCache:
     def clear_field_shared_items(self, field_index: int) -> None:
         """Drop every shared item from cache field ``field_index``."""
         h, cache_id = self._call()
-        _check(LIB.fm_workbook_clear_pivot_cache_field_shared_items(h, cache_id, _uint(field_index, "field_index")))
+        _check(
+            LIB.fm_workbook_clear_pivot_cache_field_shared_items(
+                h, cache_id, _uint(field_index, "field_index", role="position")
+            )
+        )
 
     # -- Records -----------------------------------------------------------
     def get_record_count(self) -> int:
@@ -381,8 +407,8 @@ class PivotCache:
         """
         kind = _pivot_cache_value_kind(value)
         h, cache_id = self._call()
-        record = _uint(record_index, "record_index")
-        field = _uint(field_index, "field_index")
+        record = _uint(record_index, "record_index", role="position")
+        field = _uint(field_index, "field_index", role="position")
         if kind == "date":
             _check(LIB.fm_workbook_set_pivot_cache_record_date(h, cache_id, record, field, self._date_serial(value)))
         elif kind == "number":

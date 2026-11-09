@@ -260,7 +260,7 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const cache = wb.addPivotCache(0);
+    const cache = wb.addPivotCache();
     const region = cache.addField('Region');
     const amount = cache.addField('Amount');
     // Shared item 0 renders as "North"; shared item 1 is the blank, which

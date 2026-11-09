@@ -203,7 +203,7 @@ uint32_t JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscr
     record_invalid_handle();
     return 0U;
   }
-  JsNarrowNumericReader reader("restoreDrawing");
+  JsNarrowNumericReader reader("Sheet.restoreDrawing");
   const emscripten::val options = js_object_or_empty(opts);
   std::vector<uint8_t> data;
   if (!val_to_bytes_checked(bytes, &data)) {

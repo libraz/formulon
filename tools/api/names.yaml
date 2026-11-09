@@ -47,6 +47,8 @@ collections:
   threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
   hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.add, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
+  auto_filter_column: { key: natural, by: column_offset, plural: auto_filter_columns, ops: [auto_filter.clear], no_getter: "the columns are read and written as the AutoFilter record's columns; clearing every criterion is the one call of its own" }
+  table_auto_filter_column: { key: natural, by: column_offset, plural: table_auto_filter_columns, ops: [table_auto_filter.clear], no_getter: "the columns are read and written as the table AutoFilter record's columns; clearing every criterion is the one call of its own" }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
   defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.remove, defined_name.set, defined_name_attrs.get_at] }
   data_table: { key: natural, by: cell, plural: data_tables, ops: [data_table.add, data_table.get, data_table.remove] }
@@ -2187,6 +2189,11 @@ entries:
     js: Waterfall
     py: WATERFALL
     surfaces: [c, wasm, native, py]
+  constant.fm_chart_extended_layout_absent:
+    kind: constant
+    c: FM_CHART_EXTENDED_LAYOUT_ABSENT
+    enum: enum.chart_extended_layout
+    surfaces: [c]
   enum.chart_insert_kind:
     kind: enum
     c: fm_chart_insert_kind_t
@@ -3729,7 +3736,7 @@ entries:
     c: fm_sparkline_group_patch_t
     js: SparklineGroupPatch
     surfaces: [c, wasm, native]
-    clearable: [manual_min, manual_max, date_axis_range]
+    clearable: [color_series, color_negative, color_axis, color_markers, color_first, color_last, color_high, color_low, manual_min, manual_max, date_axis_range]
   record.protected_range_patch:
     kind: record
     role: patch
@@ -5511,6 +5518,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_clear_pinned_now, js: clearPinnedNow, py: clear_pinned_now }
     drop: { js: clearPinnedNow, py: clear_pinned_now, closes: R44.singleton.null, c: fm_workbook_clear_pinned_now }
+    replaced_by: pinned_now.set
   excel_profile_id.get:
     kind: op
     scope: workbook
@@ -7013,6 +7021,8 @@ entries:
     py: clear_pivot_field_date_group
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_date_group, js: pivotFieldClearDateGroup, py: pivot_field_clear_date_group }
+    drop: { c: fm_sheet_clear_pivot_field_date_group, js: clearPivotFieldDateGroup, py: clear_pivot_field_date_group, closes: R44.singleton.null }
+    replaced_by: pivot_field_date_group.set
     handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_number_format.set:
     kind: op
@@ -7309,10 +7319,10 @@ entries:
   spill_info.get:
     kind: op
     scope: sheet
-    noun: spill_info
-    c: fm_sheet_get_spill_info
-    js: getSpillInfo
-    py: get_spill_info
+    noun: spill
+    c: fm_sheet_get_spill
+    js: getSpill
+    py: get_spill
     cell_args: [[0, 1]]
     reads_values: true
     surfaces: [c, wasm, native, py]
@@ -7582,6 +7592,7 @@ entries:
     surfaces: [c, wasm, native, py]
     drop: { c: fm_sheet_remove_auto_filter, js: removeAutoFilter, py: remove_auto_filter, closes: R44.singleton.null }
     was: { c: fm_sheet_remove_auto_filter, js: removeAutoFilter, py: remove_auto_filter }
+    replaced_by: auto_filter.set
   auto_filter.apply:
     kind: op
     scope: sheet
@@ -7641,6 +7652,7 @@ entries:
     surfaces: [c, wasm, native, py]
     drop: { c: fm_sheet_remove_table_auto_filter, js: removeTableAutoFilter, py: remove_table_auto_filter, closes: R44.singleton.null }
     was: { c: fm_table_remove_auto_filter, js: removeTableAutoFilter, py: remove_table_auto_filter }
+    replaced_by: table_auto_filter.set
   table_auto_filter.apply:
     kind: op
     scope: sheet
@@ -8807,7 +8819,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_theme_script_font, js: setThemeScriptFont, py: set_theme_script_font }
     facade: handwritten
-  theme.clear:
+  theme.reset:
     kind: op
     scope: workbook
     noun: theme
@@ -10155,6 +10167,11 @@ entries:
     enum: enum.pivot_axis
     surfaces: [c]
     was: { c: FM_PIVOT_AXIS_PAGE }
+  constant.fm_pivot_axis_absent:
+    kind: constant
+    c: FM_PIVOT_AXIS_ABSENT
+    enum: enum.pivot_axis
+    surfaces: [c]
   constant.fm_pivot_sort_descending:
     kind: constant
     c: FM_PIVOT_SORT_ORDER_DESCENDING
@@ -12395,6 +12412,14 @@ entries:
     py: PIVOT_VALUES_FIELD
     surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_VALUES_FIELD, js: PIVOT_VALUES_FIELD, py: PIVOT_VALUES_FIELD }
+  constant.fm_pivot_data_field_none:
+    kind: constant
+    c: FM_PIVOT_DATA_FIELD_NONE
+    surfaces: [c]
+  constant.fm_defined_name_scope_workbook:
+    kind: constant
+    c: FM_DEFINED_NAME_SCOPE_WORKBOOK
+    surfaces: [c]
   constant.fm_pivot_period_seconds:
     kind: constant
     c: FM_PIVOT_PERIOD_SECONDS
@@ -12842,9 +12867,11 @@ entries:
     drop: { c: FM_STATUS_FN_DOMAIN_ERROR, closes: R0.coverage }
   constant.fm_status_fn_overflow:
     kind: constant
-    c: FM_STATUS_FN_OVERFLOW
+    c: FM_STATUS_FUNCTION_OVERFLOW
+    js: FunctionOverflow
+    py: FUNCTION_OVERFLOW
     enum: enum.status_code
-    surfaces: [c]
+    surfaces: [c, wasm, native, py]
     was: { c: FM_STATUS_FN_OVERFLOW }
   constant.fm_status_fn_underflow:
     kind: constant
@@ -13132,9 +13159,11 @@ entries:
     drop: { c: FM_STATUS_CRYPTO_KEY_DERIVATION_FAILED, closes: R0.coverage }
   constant.fm_status_sec_resource_limit:
     kind: constant
-    c: FM_STATUS_SEC_RESOURCE_LIMIT
+    c: FM_STATUS_SECURITY_RESOURCE_LIMIT
+    js: SecurityResourceLimit
+    py: SECURITY_RESOURCE_LIMIT
     enum: enum.status_code
-    surfaces: [c]
+    surfaces: [c, wasm, native, py]
     was: { c: FM_STATUS_SEC_RESOURCE_LIMIT }
   constant.fm_status_sec_external_not_allowed:
     kind: constant
@@ -13350,18 +13379,27 @@ entries:
     surfaces: [wasm]
     was: { js: delete }
     drop: { js: delete, closes: R10.js }
+  enum.pivot_show_as_base:
+    kind: enum
+    js: PivotShowAsBase
+    py: PivotShowAsBase
+    surfaces: [wasm, native, py]
   constant.pivot_show_as_base_previous:
     kind: constant
-    js: PIVOT_SHOW_AS_BASE_PREVIOUS
-    py: PIVOT_SHOW_AS_BASE_PREVIOUS
-    surfaces: [wasm, native, py]
-    was: { js: PIVOT_SHOW_AS_BASE_PREVIOUS }
+    enum: enum.pivot_show_as_base
+    c: FM_PIVOT_SHOW_AS_BASE_PREVIOUS
+    js: Previous
+    py: PREVIOUS
+    surfaces: [c, wasm, native, py]
+    was: { js: PIVOT_SHOW_AS_BASE_PREVIOUS, py: PIVOT_SHOW_AS_BASE_PREVIOUS }
   constant.pivot_show_as_base_next:
     kind: constant
-    js: PIVOT_SHOW_AS_BASE_NEXT
-    py: PIVOT_SHOW_AS_BASE_NEXT
-    surfaces: [wasm, native, py]
-    was: { js: PIVOT_SHOW_AS_BASE_NEXT }
+    enum: enum.pivot_show_as_base
+    c: FM_PIVOT_SHOW_AS_BASE_NEXT
+    js: Next
+    py: NEXT
+    surfaces: [c, wasm, native, py]
+    was: { js: PIVOT_SHOW_AS_BASE_NEXT, py: PIVOT_SHOW_AS_BASE_NEXT }
   binding.enum_name:
     kind: free
     scope: process
@@ -15107,7 +15145,7 @@ entries:
   field.page_margins_left_in_engaged:
     kind: field
     record: record.page_margins
-    c: left_in_engaged
+    c: has_left_in
     js: leftInStated
     py: left_in_stated
     surfaces: [c, wasm, native, py]
@@ -15145,7 +15183,7 @@ entries:
   field.page_margins_right_in_engaged:
     kind: field
     record: record.page_margins
-    c: right_in_engaged
+    c: has_right_in
     js: rightInStated
     py: right_in_stated
     surfaces: [c, wasm, native, py]
@@ -15183,7 +15221,7 @@ entries:
   field.page_margins_top_in_engaged:
     kind: field
     record: record.page_margins
-    c: top_in_engaged
+    c: has_top_in
     js: topInStated
     py: top_in_stated
     surfaces: [c, wasm, native, py]
@@ -15221,7 +15259,7 @@ entries:
   field.page_margins_bottom_in_engaged:
     kind: field
     record: record.page_margins
-    c: bottom_in_engaged
+    c: has_bottom_in
     js: bottomInStated
     py: bottom_in_stated
     surfaces: [c, wasm, native, py]
@@ -15259,7 +15297,7 @@ entries:
   field.page_margins_header_in_engaged:
     kind: field
     record: record.page_margins
-    c: header_in_engaged
+    c: has_header_in
     js: headerInStated
     py: header_in_stated
     surfaces: [c, wasm, native, py]
@@ -15297,7 +15335,7 @@ entries:
   field.page_margins_footer_in_engaged:
     kind: field
     record: record.page_margins
-    c: footer_in_engaged
+    c: has_footer_in
     js: footerInStated
     py: footer_in_stated
     surfaces: [c, wasm, native, py]
@@ -15335,7 +15373,7 @@ entries:
   field.page_setup_scale_pct_engaged:
     kind: field
     record: record.page_setup
-    c: scale_pct_engaged
+    c: has_scale_pct
     js: scalePctStated
     py: scale_pct_stated
     surfaces: [c, wasm, native, py]
@@ -16049,9 +16087,10 @@ entries:
   field.cf_match_dxf_index_engaged:
     kind: field
     record: record.cf_match
+    c: has_dxf_index
     surfaces: [c, wasm, native, py]
     closes: R8.js
-    was: { js: dxfIdEngaged, py: dxf_id_engaged }
+    was: { c: dxf_id_engaged, js: dxfIdEngaged, py: dxf_id_engaged }
     drop: { js: dxfIndexEngaged, py: dxf_index_engaged, closes: R8.js }
   field.cf_match_bar_length_pct:
     kind: field
@@ -16084,9 +16123,9 @@ entries:
   field.cf_match_bar_border_engaged:
     kind: field
     record: record.cf_match
-    surfaces: [wasm, native, py]
-    was: { js: barBorderEngaged, py: bar_border_engaged }
-    drop: { js: barBorderEngaged, py: bar_border_engaged, closes: R8.js }
+    surfaces: [c, wasm, native, py]
+    was: { c: bar_border_engaged, js: barBorderEngaged, py: bar_border_engaged }
+    drop: { c: bar_border_engaged, js: barBorderEngaged, py: bar_border_engaged, closes: R8.js }
     closes: R8.js
   field.cf_match_bar_border:
     kind: field
@@ -16189,10 +16228,213 @@ entries:
   field.cf_rule_dxf_index_engaged:
     kind: field
     record: record.cf_rule
-    c: dxf_index_engaged
+    c: has_dxf_index
     surfaces: [c]
     closes: R8.c
     was: { c: dxf_id_engaged }
+  field.page_setup_has_orientation:
+    kind: field
+    record: record.page_setup
+    c: has_orientation
+    surfaces: [c]
+    closes: R8.c
+    was: { c: orientation_engaged }
+  field.page_setup_has_paper_size:
+    kind: field
+    record: record.page_setup
+    c: has_paper_size
+    surfaces: [c]
+    closes: R8.c
+    was: { c: paper_size_engaged }
+  field.page_setup_has_fit_to_width:
+    kind: field
+    record: record.page_setup
+    c: has_fit_to_width
+    surfaces: [c]
+    closes: R8.c
+    was: { c: fit_to_width_engaged }
+  field.page_setup_has_fit_to_height:
+    kind: field
+    record: record.page_setup
+    c: has_fit_to_height
+    surfaces: [c]
+    closes: R8.c
+    was: { c: fit_to_height_engaged }
+  field.page_setup_has_fit_to_page:
+    kind: field
+    record: record.page_setup
+    c: has_fit_to_page
+    surfaces: [c]
+    closes: R8.c
+    was: { c: fit_to_page_engaged }
+  field.print_options_has_grid_lines:
+    kind: field
+    record: record.print_options
+    c: has_grid_lines
+    surfaces: [c]
+    closes: R8.c
+    was: { c: grid_lines_engaged }
+  field.print_options_has_headings:
+    kind: field
+    record: record.print_options
+    c: has_headings
+    surfaces: [c]
+    closes: R8.c
+    was: { c: headings_engaged }
+  field.print_options_has_horizontal_centered:
+    kind: field
+    record: record.print_options
+    c: has_horizontal_centered
+    surfaces: [c]
+    closes: R8.c
+    was: { c: horizontal_centered_engaged }
+  field.print_options_has_vertical_centered:
+    kind: field
+    record: record.print_options
+    c: has_vertical_centered
+    surfaces: [c]
+    closes: R8.c
+    was: { c: vertical_centered_engaged }
+  field.header_footer_has_different_odd_even:
+    kind: field
+    record: record.header_footer
+    c: has_different_odd_even
+    surfaces: [c]
+    closes: R8.c
+    was: { c: different_odd_even_engaged }
+  field.header_footer_has_different_first:
+    kind: field
+    record: record.header_footer
+    c: has_different_first
+    surfaces: [c]
+    closes: R8.c
+    was: { c: different_first_engaged }
+  field.header_footer_has_scale_with_doc:
+    kind: field
+    record: record.header_footer
+    c: has_scale_with_doc
+    surfaces: [c]
+    closes: R8.c
+    was: { c: scale_with_doc_engaged }
+  field.header_footer_has_align_with_margins:
+    kind: field
+    record: record.header_footer
+    c: has_align_with_margins
+    surfaces: [c]
+    closes: R8.c
+    was: { c: align_with_margins_engaged }
+  field.cf_rule_has_op:
+    kind: field
+    record: record.cf_rule
+    c: has_op
+    surfaces: [c]
+    closes: R8.c
+    was: { c: op_engaged }
+  field.cf_rule_has_rank:
+    kind: field
+    record: record.cf_rule
+    c: has_rank
+    surfaces: [c]
+    closes: R8.c
+    was: { c: rank_engaged }
+  field.cf_rule_has_std_dev:
+    kind: field
+    record: record.cf_rule
+    c: has_std_dev
+    surfaces: [c]
+    closes: R8.c
+    was: { c: std_dev_engaged }
+  field.cf_rule_has_time_period:
+    kind: field
+    record: record.cf_rule
+    c: has_time_period
+    surfaces: [c]
+    closes: R8.c
+    was: { c: time_period_engaged }
+  field.cf_rule_has_data_bar:
+    kind: field
+    record: record.cf_rule
+    c: has_data_bar
+    surfaces: [c]
+    closes: R8.c
+    was: { c: data_bar_engaged }
+  field.cf_rule_has_icon_set:
+    kind: field
+    record: record.cf_rule
+    c: has_icon_set
+    surfaces: [c]
+    closes: R8.c
+    was: { c: icon_set_engaged }
+  field.cf_rule_has_data_bar_gradient:
+    kind: field
+    record: record.cf_rule
+    c: has_data_bar_gradient
+    surfaces: [c]
+    closes: R8.c
+    was: { c: data_bar_gradient_engaged }
+  field.cf_rule_has_data_bar_axis_position:
+    kind: field
+    record: record.cf_rule
+    c: has_data_bar_axis_position
+    surfaces: [c]
+    closes: R8.c
+    was: { c: data_bar_axis_position_engaged }
+  field.cf_rule_has_data_bar_negative_fill:
+    kind: field
+    record: record.cf_rule
+    surfaces: [c]
+    closes: R8.c
+    was: { c: data_bar_negative_fill_engaged }
+    drop: { c: data_bar_negative_fill_engaged, closes: R8.c }
+  field.cf_rule_has_data_bar_border:
+    kind: field
+    record: record.cf_rule
+    surfaces: [c]
+    closes: R8.c
+    was: { c: data_bar_border_engaged }
+    drop: { c: data_bar_border_engaged, closes: R8.c }
+  field.cf_rule_has_data_bar_negative_border:
+    kind: field
+    record: record.cf_rule
+    surfaces: [c]
+    closes: R8.c
+    was: { c: data_bar_negative_border_engaged }
+    drop: { c: data_bar_negative_border_engaged, closes: R8.c }
+  field.cf_rule_has_data_bar_axis_color:
+    kind: field
+    record: record.cf_rule
+    surfaces: [c]
+    closes: R8.c
+    was: { c: data_bar_axis_color_engaged }
+    drop: { c: data_bar_axis_color_engaged, closes: R8.c }
+  field.cf_rule_has_icon_set_floor:
+    kind: field
+    record: record.cf_rule
+    c: has_icon_set_floor
+    surfaces: [c]
+    closes: R8.c
+    was: { c: icon_set_floor_engaged }
+  field.dxf_record_has_font:
+    kind: field
+    record: record.dxf_record
+    c: has_font
+    surfaces: [c]
+    closes: R8.c
+    was: { c: font_engaged }
+  field.dxf_record_has_fill:
+    kind: field
+    record: record.dxf_record
+    c: has_fill
+    surfaces: [c]
+    closes: R8.c
+    was: { c: fill_engaged }
+  field.dxf_record_has_border:
+    kind: field
+    record: record.dxf_record
+    c: has_border
+    surfaces: [c]
+    closes: R8.c
+    was: { c: border_engaged }
   field.table_style_element_has_dxf_index:
     kind: field
     record: record.table_style_element

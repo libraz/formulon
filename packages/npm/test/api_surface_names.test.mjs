@@ -1032,7 +1032,8 @@ describe('colours, fills and styles', () => {
       for (const name of f.listFunctionNames()) {
         const meta = f.getFunctionMetadata(name);
         lacksKeys(meta, ['signatureTemplate']);
-        assert.ok(meta.signature === undefined || typeof meta.signature === 'string', name);
+        assert.ok(meta.signature === null || typeof meta.signature === 'string', name);
+        assert.ok(meta.description === null || typeof meta.description === 'string', name);
       }
     });
   });

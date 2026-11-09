@@ -235,11 +235,10 @@ Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view na
     }
   }
   if (pos == styles.cell_styles.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "remove_cell_style: no such cell style",
-                      "name=" + std::string(name));
+    return make_error(FormulonErrorCode::kInvalidArgument, "no such cell style", "name=" + std::string(name));
   }
   if (styles.cell_styles[pos].builtin_id == 0U) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "remove_cell_style: the Normal style cannot be removed",
+    return make_error(FormulonErrorCode::kInvalidArgument, "the Normal style cannot be removed",
                       "name=" + std::string(name));
   }
   const std::uint32_t removed_xf = styles.cell_styles[pos].xf_id;

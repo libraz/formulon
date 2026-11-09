@@ -42,8 +42,6 @@ undefined per the C ABI contract.
 
 from __future__ import annotations
 
-import math
-import numbers
 import operator
 import struct
 import threading
@@ -79,24 +77,29 @@ fm_value_t_size = 16
 
 
 def _coerce_integral(value: int, name: str) -> int:
-    """Convert an integer or integral real without truncating a fraction.
+    """Convert an integer, or an object with ``__index__``, to ``int``.
 
-    A non-number raises ``TypeError``; a fractional or non-finite real raises
-    ``ValueError``.
+    A ``bool``, any ``float`` (``2.0`` included) and any non-integer raise
+    ``TypeError``.
     """
 
+    if isinstance(value, (bool, float)):
+        raise TypeError(f"formulon: {name} must be an integer, got {type(value).__name__}")
     try:
         return operator.index(value)
     except TypeError:
-        pass
-    if not isinstance(value, numbers.Real):
-        raise TypeError(f"formulon: {name} must be an integer, got {type(value).__name__}")
-    if not math.isfinite(value) or value != int(value):
-        raise ValueError(f"formulon: {name} must be an integer, got {value!r}")
-    return int(value)
+        raise TypeError(f"formulon: {name} must be an integer, got {type(value).__name__}") from None
 
 
-def _uint(value: int, name: str, bits: int = 32) -> int:
+#: How an unsigned argument is classified when it is negative: a sheet position, any other
+#: collection position, a grid coordinate or a quantity.
+ARG_ROLE_NAMES = ("sheet", "position", "coordinate", "quantity")
+
+# The first coordinate the grid cannot hold.
+_COORDINATE_LIMIT = 1 << 31
+
+
+def _uint(value: int, name: str, bits: int = 32, role: str = "quantity") -> int:
     """Validate ``value`` as an unsigned WASM argument of ``bits`` width.
 
     Every integer the C ABI takes by value crosses into WebAssembly as an
@@ -116,21 +119,39 @@ def _uint(value: int, name: str, bits: int = 32) -> int:
 
     Args:
       value: the caller-supplied index, count, or length.
-      name: the C ABI parameter or struct field name, used in the message.
+      name: the parameter name, used in the message.
       bits: width of the destination (32 for ``uint32_t`` / ``size_t``,
         16 and 8 for the narrower struct fields, which overflow well
         before an ``i32`` does).
+      role: what the value addresses (:data:`ARG_ROLE_NAMES`). A negative
+        ``"sheet"`` is a ``StatusCode.SHEET_INDEX_OUT_OF_RANGE`` failure, a negative
+        ``"position"`` a ``StatusCode.INDEX_OUT_OF_RANGE`` one, and a negative
+        ``"coordinate"`` or ``"quantity"`` (or a coordinate the grid cannot hold)
+        a ``StatusCode.INVALID_ARGUMENT`` one.
 
     Returns:
       ``value`` as an ``int``, unchanged.
 
     Raises:
-      TypeError: when ``value`` is not a number.
-      ValueError: when ``value`` is fractional, negative, or does not fit
-        ``bits``.
+      TypeError: when ``value`` is not an integer (a ``float`` and a ``bool`` included).
+      IndexOutOfRangeError: when ``value`` is a negative position or sheet position.
+      InvalidArgumentError: when ``value`` is a negative coordinate or quantity, or a
+        coordinate the grid cannot hold.
+      ValueError: when ``value`` does not fit ``bits``.
     """
     ivalue = _coerce_integral(value, name)
-    if ivalue < 0 or ivalue >= (1 << bits):
+    if ivalue < 0:
+        if role == "sheet":
+            raise FormulonError(
+                StatusCode.SHEET_INDEX_OUT_OF_RANGE, f"{name} {ivalue} is out of range", f"{name}={ivalue}"
+            )
+        if role == "position":
+            raise FormulonError(StatusCode.INDEX_OUT_OF_RANGE, f"{name} {ivalue} is out of range", f"{name}={ivalue}")
+        what = "outside the grid" if role == "coordinate" else "negative"
+        raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{name} {ivalue} is {what}", f"{name}={ivalue}")
+    if role == "coordinate" and ivalue >= _COORDINATE_LIMIT:
+        raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{name} {ivalue} is outside the grid", f"{name}={ivalue}")
+    if ivalue >= (1 << bits):
         raise ValueError(f"formulon: {name} out of range for uint{bits}: {ivalue}")
     return ivalue
 
@@ -144,9 +165,8 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
     value is meaningful.
 
     Raises:
-      TypeError: when ``value`` is not a number.
-      ValueError: when ``value`` is fractional or does not fit a signed
-        ``bits``-wide int.
+      TypeError: when ``value`` is not an integer (a ``float`` and a ``bool`` included).
+      ValueError: when ``value`` does not fit a signed ``bits``-wide int.
     """
     ivalue = _coerce_integral(value, name)
     limit = 1 << (bits - 1)
@@ -237,23 +257,25 @@ _INVALID_FILE_CODES = frozenset(
 
 
 class FormulonError(Exception):
-    """Raised for host-side failures of the Formulon engine.
+    """Raised for failures of the Formulon engine and of argument validation.
 
-    Constructing ``FormulonError`` with a status that has a dedicated
+    ``FormulonError(code, message="", context="", parse_error=None)`` builds a
+    host-side error. Constructing it with a status that has a dedicated
     subclass yields that subclass (:class:`IndexOutOfRangeError`,
     :class:`InvalidArgumentError`, :class:`AlreadyExistsError`,
     :class:`FormulaSyntaxError`, :class:`InvalidFileError`, :class:`NotFoundError`,
     :class:`WorkbookClosedError`), so ``except IndexError`` / ``except
     ValueError`` / ``except KeyError`` also catch the matching failures.
 
-    ``str(e)`` is the engine's message, followed by ``[context]`` when the
-    context is non-empty.
+    ``str(e)`` is ``[CODE_NAME] message`` (``[INVALID_ARGUMENT] unknown
+    function``); the context is only in :attr:`context`.
 
     Attributes:
       code: the :class:`~formulon.StatusCode` member of the failure (a plain
         ``int`` for a value the enum does not list).
       message: human-readable description of the failure.
       context: structured ``key=value`` details; empty when there are none.
+      parse_error: the position of a formula syntax failure, else ``None``.
 
     The message and context are copied out when the failure is detected, so
     they stay valid whatever later calls do.
@@ -269,58 +291,51 @@ class FormulonError(Exception):
     context: str
     parse_error: Optional[ParseError]
 
-    def __new__(cls, status: int, *args: object, **kwargs: object) -> "FormulonError":
+    def __new__(cls, code: int, *args: object, **kwargs: object) -> "FormulonError":
         if cls is FormulonError:
-            if _SYNTAX_STATUS_FIRST <= status <= _SYNTAX_STATUS_LAST:
+            if _SYNTAX_STATUS_FIRST <= code <= _SYNTAX_STATUS_LAST:
                 cls = FormulaSyntaxError
-            elif status in INDEX_OUT_OF_RANGE_CODES:
+            elif code in INDEX_OUT_OF_RANGE_CODES:
                 cls = IndexOutOfRangeError
-            elif status == StatusCode.INVALID_ARGUMENT:
+            elif code == StatusCode.INVALID_ARGUMENT:
                 cls = InvalidArgumentError
-            elif status == StatusCode.ALREADY_EXISTS:
+            elif code == StatusCode.ALREADY_EXISTS:
                 cls = AlreadyExistsError
-            elif status in NOT_FOUND_CODES:
+            elif code in NOT_FOUND_CODES:
                 cls = NotFoundError
-            elif status == StatusCode.BINDING_INVALID_HANDLE:
+            elif code == StatusCode.BINDING_INVALID_HANDLE:
                 cls = WorkbookClosedError
-            elif status in _INVALID_FILE_CODES:
+            elif code in _INVALID_FILE_CODES:
                 cls = InvalidFileError
         return super().__new__(cls)
 
     def __init__(
         self,
-        status: int,
-        *,
-        _diagnostic_override: Optional[Tuple[str, str]] = None,
-        _host_only: bool = False,
+        code: int,
+        message: str = "",
+        context: str = "",
+        parse_error: Optional[ParseError] = None,
     ) -> None:
         try:
-            self.code = StatusCode(int(status))
+            self.code = StatusCode(int(code))
         except ValueError:
-            self.code = int(status)
-        self.parse_error = None
-        if _host_only:
-            # A trap leaves the module instance poisoned (see `_wrapped`
-            # below); reading the diagnostic buffers would call back into
-            # it, so this path never touches WASM memory.
-            self.message, self.context = _diagnostic_override or ("", "")
-        else:
-            # An override still drains a pending C diagnostic so it cannot
-            # leak into a later exception on this Python thread.
-            message, context = LIB.last_diagnostic(int(status))
-            if _diagnostic_override is not None:
-                message, context = _diagnostic_override
-            self.message, self.context = message, context
-            self.parse_error = LIB.last_parse_error(int(status))
-        text = self.message
-        if self.context:
-            text += f" [{self.context}]"
-        super().__init__(text)
+            self.code = int(code)
+        self.message = message
+        self.context = context
+        self.parse_error = parse_error
+        super().__init__(message)
+
+    @classmethod
+    def _from_engine(cls, status: int) -> "FormulonError":
+        """The error for a non-zero ``status`` the engine just returned, with its recorded diagnostic."""
+        message, context = LIB.last_diagnostic(int(status))
+        return cls(status, message, context, LIB.last_parse_error(int(status)))
 
     def __str__(self) -> str:
-        # `KeyError` (a base of `NotFoundError`) would otherwise render the
+        # Also keeps `KeyError` (a base of `NotFoundError`) from rendering the
         # message through `repr`.
-        return Exception.__str__(self)
+        name = self.code.name if isinstance(self.code, StatusCode) else str(self.code)
+        return f"[{name}] {self.message}" if self.message else f"[{name}]"
 
 
 class InvalidArgumentError(FormulonError, ValueError):
@@ -334,30 +349,9 @@ class AlreadyExistsError(FormulonError, ValueError):
 class FormulaSyntaxError(InvalidArgumentError):
     """A formula or reference text failed to parse (statuses 1000 to 1014).
 
-    ``parse_error_code``, ``start``, ``end``, ``line`` and ``column`` describe
-    the offending span (see :class:`ParseError`) and are ``None`` when the
-    engine recorded no position.
+    ``parse_error`` locates the offending span (see :class:`ParseError`) and is
+    ``None`` when the engine recorded no position.
     """
-
-    @property
-    def parse_error_code(self) -> Optional[ParseErrorCode]:
-        return None if self.parse_error is None else self.parse_error.code
-
-    @property
-    def start(self) -> Optional[int]:
-        return None if self.parse_error is None else self.parse_error.start
-
-    @property
-    def end(self) -> Optional[int]:
-        return None if self.parse_error is None else self.parse_error.end
-
-    @property
-    def line(self) -> Optional[int]:
-        return None if self.parse_error is None else self.parse_error.line
-
-    @property
-    def column(self) -> Optional[int]:
-        return None if self.parse_error is None else self.parse_error.column
 
 
 class NotFoundError(FormulonError, KeyError):
@@ -383,6 +377,28 @@ class InvalidFileError(FormulonError):
     relationships or content types, and corrupt XLSB records. A damaged part
     the workbook still opens without (a drawing, a chart) is not one.
     """
+
+
+class _NoCopy:
+    """Mixin refusing ``copy.copy``, ``copy.deepcopy`` and stdlib serialization.
+
+    A handle owns or borrows engine state that a copy would share and later
+    destroy; a workbook moves between processes as ``Workbook.load(wb.save())``.
+    """
+
+    __slots__ = ()
+
+    def _refuse_copy(self) -> "TypeError":
+        return TypeError(f"{type(self).__name__} cannot be copied; use Workbook.load(wb.save())")
+
+    def __copy__(self):
+        raise self._refuse_copy()
+
+    def __deepcopy__(self, memo):
+        raise self._refuse_copy()
+
+    def __reduce_ex__(self, protocol):
+        raise self._refuse_copy()
 
 
 # Generated from the current working-tree C header and WASM export manifest:
@@ -759,7 +775,6 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_add_pivot_field_subtotal_function",
     "fm_sheet_get_pivot_field_at",
     "fm_sheet_clear_pivot_fields",
-    "fm_sheet_clear_pivot_field_date_group",
     "fm_sheet_clear_pivot_field_items",
     "fm_sheet_clear_pivot_field_subtotal_functions",
     "fm_sheet_get_pivot_field_count",
@@ -844,7 +859,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_set_theme_script_font",
     "fm_workbook_get_sheet_name",
     "fm_workbook_get_sheet_index",
-    "fm_sheet_get_spill_info",
+    "fm_sheet_get_spill",
     "fm_workbook_resolve_table_runtime_id",
     "fm_workbook_get_theme_script_font_at",
     "fm_workbook_get_theme_script_font",
@@ -1051,11 +1066,7 @@ class _WasmInstance:
         must already hold ``_call_lock``.
         """
         if self._poison_message is not None:
-            raise FormulonError(
-                StatusCode.INTERNAL_ERROR,
-                _diagnostic_override=(self._poison_message, ""),
-                _host_only=True,
-            )
+            raise FormulonError(StatusCode.INTERNAL_ERROR, self._poison_message)
         try:
             return fn(self._store, *args)
         except wasmtime.Trap as trap:
@@ -1065,11 +1076,7 @@ class _WasmInstance:
             # other Workbook, fails the same way instead of running
             # against it.
             self._poison_message = str(trap)
-            raise FormulonError(
-                StatusCode.INTERNAL_ERROR,
-                _diagnostic_override=(self._poison_message, ""),
-                _host_only=True,
-            ) from trap
+            raise FormulonError(StatusCode.INTERNAL_ERROR, self._poison_message) from trap
 
     def __getattr__(self, name: str):
         self._ensure()
@@ -1190,6 +1197,10 @@ class _WasmInstance:
         self._ensure()
         with self._call_lock:
             return self._read_cstr_unlocked(ptr)
+
+    def read_optional_cstr(self, ptr: int) -> Optional[str]:
+        """Decode a C string like :meth:`read_cstr`; ``None`` when ``ptr`` is 0 (an absent string)."""
+        return None if ptr == 0 else self.read_cstr(ptr)
 
     def _read_cstr_unlocked(self, ptr: int) -> str:
         """Decode a C string while the caller already owns ``_call_lock``."""

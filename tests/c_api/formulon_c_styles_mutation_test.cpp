@@ -34,7 +34,7 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
   std::uint32_t reread_xf = 0;
-  EXPECT_EQ(fm_sheet_get_cell_xf_index(wb2.handle, 0, 0, 0, &reread_xf), 0);
+  EXPECT_EQ(GetCellXfIndex(wb2.handle, 0, 0, 0, &reread_xf), 0);
   fm_cell_xf_t reloaded{};
   EXPECT_EQ(fm_workbook_get_cell_xf_at(wb2.handle, reread_xf, &reloaded), 0);
   fm_font_t reloaded_font{};
@@ -82,7 +82,7 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
 
   std::uint32_t reread_xf = 0;
-  ASSERT_EQ(fm_sheet_get_cell_xf_index(wb2.handle, 0, 1, 1, &reread_xf), 0);
+  ASSERT_EQ(GetCellXfIndex(wb2.handle, 0, 1, 1, &reread_xf), 0);
   ASSERT_EQ(reread_xf, xf_index);
 
   fm_cell_xf_t reloaded{};
@@ -135,7 +135,7 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   std::uint32_t reread_index = 0;
-  ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, 0, 0, &reread_index), 0);
+  ASSERT_EQ(GetCellXfIndex(reloaded.handle, 0, 0, 0, &reread_index), 0);
   fm_cell_xf_t reread{};
   ASSERT_EQ(fm_workbook_get_cell_xf_at(reloaded.handle, reread_index, &reread), 0);
   EXPECT_EQ(reread.horizontal, 7);
@@ -179,7 +179,7 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_get_cell_style_at(loaded.handle, 1, &style), 0);
   EXPECT_STREQ(style.name, "Highlight");
   std::uint32_t reread_cell_xf = 0;
-  ASSERT_EQ(fm_sheet_get_cell_xf_index(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);
+  ASSERT_EQ(GetCellXfIndex(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);
   fm_cell_xf_t reread{};
   ASSERT_EQ(fm_workbook_get_cell_xf_at(loaded.handle, reread_cell_xf, &reread), 0);
   EXPECT_EQ(reread.style_xf_index, style.style_xf_index);

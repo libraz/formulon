@@ -279,7 +279,7 @@ test('H1: one handle per sheet, by index or case-insensitive name', () => {
   assert.equal(ws.workbook, wb);
   expectCode(() => wb.sheet('nope'), StatusCode.NotFound);
   expectCode(() => wb.sheet(99), StatusCode.SheetIndexOutOfRange);
-  assert.throws(() => wb.sheet(-1), RangeError);
+  expectCode(() => wb.sheet(-1), StatusCode.SheetIndexOutOfRange);
   assert.throws(() => wb.sheet(1.5), RangeError);
   assert.throws(() => wb.sheet(true), TypeError);
   assert.throws(() => wb.sheet(null), TypeError);

@@ -275,8 +275,6 @@ test('a CellRect argument requires four integer fields', async () => {
     const malformed = [
       { firstRow: 0, firstCol: 0, lastRow: 1 },
       { ...rect, firstRow: '0' },
-      { ...rect, lastCol: 1.5 },
-      { ...rect, firstCol: Number.NaN },
       { ...rect, lastRow: null },
     ];
     for (const bad of malformed) {
@@ -284,7 +282,14 @@ test('a CellRect argument requires four integer fields', async () => {
       assert.throws(() => wb.sheet(0).ooxml.setRangeXfIndex(bad, 0), TypeError, JSON.stringify(bad));
       assert.throws(() => wb.sheet(0).getCellRectPt(bad, 0), TypeError, JSON.stringify(bad));
     }
-    assert.throws(() => wb.sheet(0).addMerge({ ...rect, firstRow: -1 }), RangeError);
+    // A non-integer field is a range error; a negative one is a refused coordinate.
+    for (const bad of [
+      { ...rect, lastCol: 1.5 },
+      { ...rect, firstCol: Number.NaN },
+    ]) {
+      assert.throws(() => wb.sheet(0).addMerge(bad), RangeError, JSON.stringify(bad));
+    }
+    assert.throws(() => wb.sheet(0).addMerge({ ...rect, firstRow: -1 }), isFormulonError);
     assert.equal(wb.sheet(0).listMerges().length, 0);
     // A well-typed rectangle the engine refuses is a FormulonError, not a TypeError.
     assert.throws(() => wb.sheet(0).addMerge({ firstRow: 1, firstCol: 0, lastRow: 0, lastCol: 0 }), isFormulonError);

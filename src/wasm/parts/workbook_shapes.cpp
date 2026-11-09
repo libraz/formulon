@@ -130,7 +130,7 @@ fm_color_t* group_color(fm_sparkline_group_t& g, std::size_t i) {
 emscripten::val sparkline_group_to_val(fm_sparkline_group_t g, emscripten::val sparklines) {
   emscripten::val o = emscripten::val::object();
   for (std::size_t i = 0; i < 8U; ++i) {
-    o.set(kSparklineColorKeys[i], js_color_spec(*group_color(g, i)));
+    o.set(kSparklineColorKeys[i], js_color_spec_or_null(*group_color(g, i)));
   }
   o.set("type", g.type);
   o.set("markers", g.markers != 0);
@@ -252,7 +252,7 @@ uint32_t JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
     record_invalid_handle();
     return 0U;
   }
-  JsNarrowNumericReader reader("addShape");
+  JsNarrowNumericReader reader("Sheet.addShape");
   ShapeText store;
   const fm_shape_patch_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
@@ -270,7 +270,7 @@ void JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val 
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updateShape");
+  JsNarrowNumericReader reader("Shape.update");
   ShapeText store;
   const fm_shape_patch_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
@@ -310,7 +310,7 @@ uint32_t JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
     record_invalid_handle();
     return 0U;
   }
-  JsNarrowNumericReader reader("addSparklineGroup");
+  JsNarrowNumericReader reader("Sheet.addSparklineGroup");
   std::string ref_store;
   std::vector<std::string> texts;
   std::vector<fm_sparkline_t> items;
@@ -336,7 +336,7 @@ void JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("updateSparklineGroup");
+  JsNarrowNumericReader reader("Sheet.updateSparklineGroup");
   std::string ref_store;
   std::vector<std::string> texts;
   std::vector<fm_sparkline_t> items;

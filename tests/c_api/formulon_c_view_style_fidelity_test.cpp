@@ -319,7 +319,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   fm_dxf_t dxf{};
-  dxf.fill_engaged = 1;
+  dxf.has_fill = 1;
   dxf.fill = GradientFill(stops, 3);
   dxf.fill.gradient_type = FM_GRADIENT_TYPE_LINEAR;
   dxf.fill.gradient_degree = 45.0;
@@ -342,7 +342,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
 
   fm_dxf_t dxf_back{};
   ASSERT_EQ(fm_workbook_get_dxf_at(reloaded.handle, dxf_index, &dxf_back), 0);
-  ASSERT_EQ(dxf_back.fill_engaged, 1);
+  ASSERT_EQ(dxf_back.has_fill, 1);
   EXPECT_EQ(dxf_back.fill.has_gradient, 1);
   EXPECT_EQ(dxf_back.fill.gradient_degree, 45.0);
   EXPECT_EQ(dxf_back.fill.gradient_stop_count, 3U);
@@ -360,7 +360,7 @@ fm_cf_rule_t IconRule(const fm_cell_rect_t* sqref, fm_cfvo_t* thresholds, const 
   rule.type = 4;  // IconSet
   rule.ranges = sqref;
   rule.range_count = 1;
-  rule.icon_set_engaged = 1;
+  rule.has_icon_set = 1;
   rule.icon_set_name = 0;  // Three_Arrows
   thresholds[0].type = 1;  // Percent
   thresholds[0].value = "33";
@@ -510,7 +510,7 @@ TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndRoundTrip) {
   fm_defined_name_t rate = FM_STRUCT_INIT(fm_defined_name_t);
   rate.name = "Rate";
   rate.formula = "Sheet1!$A$1";
-  rate.local_sheet_id = -1;
+  rate.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
   rate.comment = "Tax rate";
   rate.hidden = 1;
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &rate), 0);
@@ -532,7 +532,7 @@ TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndRoundTrip) {
   fm_defined_name_t cleared = FM_STRUCT_INIT(fm_defined_name_t);
   cleared.name = "Rate";
   cleared.formula = "Sheet1!$A$1";
-  cleared.local_sheet_id = -1;
+  cleared.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
   cleared.comment = "";
   cleared.hidden = 1;
   ASSERT_EQ(fm_workbook_set_defined_name(reloaded.handle, &cleared), 0);

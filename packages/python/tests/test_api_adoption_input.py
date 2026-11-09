@@ -91,7 +91,7 @@ class FormulaTextTests(unittest.TestCase):
     def test_grid_checks_run_before_any_write(self) -> None:
         with self.assertRaises(TypeError):
             self.ws.set_values("A1", [[1, object()]])
-        with self.assertRaises(TypeError):
+        with self.assertRaises(InvalidArgumentError):
             self.ws.set_values("A1", [[1, 2], [3]])
         self.assertIsNone(self.ws.get_value("A1"))
 
@@ -298,18 +298,18 @@ class TypedErrorTests(unittest.TestCase):
         record = caught.exception.parse_error
         self.assertIsInstance(record, ParseError)
         self.assertIsInstance(record.code, ParseErrorCode)
-        self.assertEqual(caught.exception.parse_error_code, record.code)
+        self.assertFalse(hasattr(caught.exception, "parse_error_code"))
         with self.assertRaises(dataclasses.FrozenInstanceError):
             record.start = 0  # type: ignore[misc]
 
     def test_invalid_file_statuses_construct_the_subclass(self) -> None:
         for status in (StatusCode.IO_ZIP_CORRUPT, StatusCode.IO_XML_PARSE, StatusCode.IO_XLSB_CORRUPT):
             with self.subTest(status=status.name):
-                error = FormulonError(status, _diagnostic_override=("bad", ""))
+                error = FormulonError(status, "bad")
                 self.assertIs(type(error), InvalidFileError)
         for status in (StatusCode.IO_WRITE_FAILED, StatusCode.NOT_FOUND):
             with self.subTest(status=status.name):
-                self.assertNotIsInstance(FormulonError(status, _diagnostic_override=("x", "")), InvalidFileError)
+                self.assertNotIsInstance(FormulonError(status, "x"), InvalidFileError)
         with self.assertRaises(InvalidFileError):
             Workbook.load(b"not a zip archive")
 
