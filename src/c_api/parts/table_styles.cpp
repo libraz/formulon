@@ -248,8 +248,8 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     // Attributes the record does not carry (`xr9:uid`) stay with the style.
     next.extra_attrs = std::move(section.styles[existing].extra_attrs);
     section.styles[existing] = std::move(next);
-  } else if (std::any_of(section.styles.begin(), section.styles.end(), [&](const auto& style) {
-               return formulon::sheet_names::write_collides(style.name, next.name);
+  } else if (std::any_of(section.styles.begin(), section.styles.end(), [&](const auto& other) {
+               return formulon::sheet_names::write_collides(other.name, next.name);
              })) {
     return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "name already in use", "name=" + next.name);
   } else {

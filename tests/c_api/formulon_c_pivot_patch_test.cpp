@@ -202,7 +202,7 @@ TEST(FormulonCApiPivotPatch, StylePatchWithABadMemberChangesNothing) {
   EXPECT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_INVALID_ARGUMENT);
   // An op outside the enumeration.
   patch = set_style();
-  patch.show_row_stripes_op = static_cast<fm_patch_op_t>(9);
+  patch.show_row_stripes_op = static_cast<fm_patch_op_t>(3);
   EXPECT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_INVALID_ARGUMENT);
 
   EXPECT_EQ(Style(wb.handle), before);

@@ -845,7 +845,7 @@ TEST(FormulonCApiCfMutate, UpdateRefusesFieldsTheRuleTypeDoesNotUseAndChangesNot
             FM_STATUS_INVALID_ARGUMENT);
 
   fm_cf_rule_patch_t bad_op = FM_STRUCT_INIT(fm_cf_rule_patch_t);
-  bad_op.priority_op = static_cast<fm_patch_op_t>(9);
+  bad_op.priority_op = static_cast<fm_patch_op_t>(3);
   EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str(), &bad_op),
             FM_STATUS_INVALID_ARGUMENT);
 

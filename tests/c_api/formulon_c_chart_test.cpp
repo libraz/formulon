@@ -1649,7 +1649,7 @@ TEST(FormulonCApiChart, DisplayPatchRejectsBadFields) {
       // An op outside KEEP / CLEAR / SET.
       {sizeof(fm_chart_display_patch_t), static_cast<fm_patch_op_t>(3), FM_BLANKS_AS_GAP, FM_PATCH_OP_KEEP, 0,
        FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0},
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, static_cast<fm_patch_op_t>(-1), 0, FM_PATCH_OP_KEEP, 0,
+      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, static_cast<fm_patch_op_t>(3), 0, FM_PATCH_OP_KEEP, 0,
        FM_PATCH_OP_KEEP, 0},
       {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0, static_cast<fm_patch_op_t>(3), 1,
        FM_PATCH_OP_KEEP, 0},
