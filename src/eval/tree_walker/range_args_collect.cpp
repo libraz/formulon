@@ -355,6 +355,11 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
       const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
       const std::vector<Value>& ev = expanded.value();
+      // A single-cell range is that cell's value, not a 1x1 array.
+      if (rrows == 1U && rcols == 1U && ev.size() == 1U) {
+        values.push_back(ev[0]);
+        return RangeArgOutcome::kCollected;
+      }
       ArrayValue* arr = array_from_values(rrows, rcols, ev.data(), ev.size(), arena);
       if (arr == nullptr) {
         result = Value::error(ErrorCode::Num);

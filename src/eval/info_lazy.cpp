@@ -75,6 +75,7 @@ bool is_static_reference_shape(const parser::AstNode& node) noexcept {
     case parser::NodeKind::Ref:
     case parser::NodeKind::RangeOp:
     case parser::NodeKind::StructuredRef:
+    case parser::NodeKind::SpillRef:
       return true;
     case parser::NodeKind::ExternalRef:
       // A cell or range on one sheet of another workbook. Neither the

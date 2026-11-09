@@ -103,8 +103,8 @@ ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Valu
                               Arena& arena);
 
 /// Applies `fn(cell, ctx)` to every cell of `in` into a same-shaped array
-/// under `kMaxDerivedArrayCells`. A 1x1 result unwraps to its scalar;
-/// allocation failure is `#NUM!`.
+/// under `kMaxDerivedArrayCells`, 1x1 included; allocation failure is
+/// `#NUM!`.
 Value map_array_cells(const ArrayValue& in, Value (*fn)(const Value& cell, void* ctx), void* ctx, Arena& arena);
 
 /// `map_array_cells` for a callable `fn(const Value&) -> Value`; the loop stays

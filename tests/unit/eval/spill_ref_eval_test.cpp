@@ -101,12 +101,9 @@ TEST(SpillRefEval, SumOverSpillRef) {
   EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
 }
 
-TEST(SpillRefEval, SpillRefArithmeticBroadcasts1x1) {
-  // `=A1#+B1#` over two 1x1 spills: the BinaryOp now broadcasts cellwise
-  // when either operand is a Value::Array, so the result is a 1x1 Array
-  // containing 50. Without a mutable_sheet bound the EvalContext leaves
-  // the Array un-spilled (see `EvalContext::dispatch_array_result`'s
-  // mutable_sheet gate), so callers see Value::Array directly here.
+TEST(SpillRefEval, SpillRefArithmeticOnOneCellSpillsIsAScalar) {
+  // A one-cell spill reference reads as that cell's value (Mac Excel 365: TYPE(C1#) = 1 for a 1x1 spill),
+  // so `=A1#+B1#` over two one-cell spills is the scalar 50.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 1U, 1U, std::vector<Value>{Value::number(42.0)}));
@@ -118,10 +115,8 @@ TEST(SpillRefEval, SpillRefArithmeticBroadcasts1x1) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=A1#+B1#", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_array());
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_EQ(v.as_array_cols(), 1U);
-  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 50.0);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 50.0);
 }
 
 // ---------------------------------------------------------------------------

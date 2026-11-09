@@ -20,6 +20,7 @@
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
+#include "eval/dynamic_array/indexing.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
@@ -236,9 +237,8 @@ constexpr bool carries_xlookup_result(std::uint32_t index, std::uint32_t /*arity
 
 // Every builtin whose reference result this layer can resolve to a rectangle:
 // `is_reference_call_name` answers from it and `resolve_reference_call`
-// dispatches through it. `SINGLE`, `TAKE` and `DROP` are reference-returning
-// to Excel too (`kReferenceReturning` in builtin_names.cpp) but have no
-// rectangle resolver here.
+// dispatches through it. `SINGLE` is reference-returning to Excel too
+// (`kReferenceReturning` in builtin_names.cpp) but has no rectangle resolver here.
 constexpr ReferenceCall kReferenceCalls[] = {
     {"INDIRECT", &resolve_indirect_call, &carries_none},
     {"OFFSET", &resolve_offset_call, &carries_none},
@@ -248,6 +248,8 @@ constexpr ReferenceCall kReferenceCalls[] = {
     {"SWITCH", &resolve_switch_call, &carries_switch_result},
     {"INDEX", &resolve_lookup_call<&resolve_index_reference>, &carries_first},
     {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>, &carries_xlookup_result},
+    {"TAKE", &resolve_take_drop_reference, &carries_first},
+    {"DROP", &resolve_take_drop_reference, &carries_first},
     // Rebuilt from the source's populated extent, so no argument is carried.
     {"TRIMRANGE", &resolve_trim_reference, &carries_none},
     {"_TRO_ALL", &resolve_trim_reference, &carries_none},

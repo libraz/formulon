@@ -69,7 +69,7 @@ Value map_array_cells(const ArrayValue& in, Value (*fn)(const Value& cell, void*
   for (std::size_t i = 0; i < count; ++i) {
     cells[i] = fn(in.cells[i], ctx);
   }
-  return count == 1U ? cells[0] : Value::array(out);
+  return Value::array(out);
 }
 
 const TailArray* make_tail_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::uint32_t head,

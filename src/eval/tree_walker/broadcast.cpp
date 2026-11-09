@@ -336,8 +336,8 @@ Value eval_broadcast_cell(const FunctionDef& def, const std::vector<BroadcastArg
 // broadcast rectangle of its already-collected arguments and returns a
 // spilled `Value::Array`. `out_rows` / `out_cols` are the max extents
 // over the array arguments; scalars broadcast to every cell. A 1x1
-// result unwraps to a plain scalar so a single-cell range argument does
-// not spill. Per-cell error propagation mirrors the scalar dispatch
+// result stays an array, as in Excel (a single-cell range argument never
+// reaches here). Per-cell error propagation mirrors the scalar dispatch
 // path: with `propagate_errors`, the first error argument short-circuits
 // that cell before the impl runs.
 Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& args, std::uint32_t out_rows,
@@ -348,18 +348,14 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
     views.push_back(v.is_array() ? array_broadcast_arg(*v.as_array()) : scalar_broadcast_arg(v));
   }
   std::vector<Value> cell_args(views.size(), Value::blank());
-  const Value result = build_dense_result(out_rows, out_cols, arena, [&](std::uint32_t r, std::uint32_t c) {
+  return build_dense_result(out_rows, out_cols, arena, [&](std::uint32_t r, std::uint32_t c) {
     return eval_broadcast_cell(def, views, cell_args, r, c, arena);
   });
-  if (out_rows == 1U && out_cols == 1U && result.is_array()) {
-    return result.as_array()->cells[0];
-  }
-  return result;
 }
 
 // Evaluates a `last_arg_scalar` function once per element of `last`, the
 // array its last argument evaluated to, with `values` holding the other
-// arguments. A 1x1 result unwraps to a scalar.
+// arguments. The result has the shape of `last`, 1x1 included.
 Value lift_last_arg_call(const FunctionDef& def, std::vector<Value> values, const ArrayValue& last, Arena& arena) {
   return map_array_with(
       last,

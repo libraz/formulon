@@ -114,6 +114,10 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
       if (arr == nullptr) {
         return Value::error(spill_err);
       }
+      // A one-cell region is a one-cell reference: it reads as that cell's value, as `Ref` does.
+      if (arr->rows == 1U && arr->cols == 1U) {
+        return arr->cells[0];
+      }
       return Value::array(arr);
     }
 

@@ -7,6 +7,7 @@
 #include "eval/tree_walker.h"
 
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -14,6 +15,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker_lazy_table.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -1039,6 +1041,98 @@ TEST(TreeWalkerXlfnPrefix, UnknownAfterStripStillNameError) {
   const Value v = EvalSource("=_xlfn.NOSUCHFN(1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// Mac Excel 365: an array in any lifted argument keeps the result an array, 1x1 included (TYPE 64).
+TEST(TreeWalkerLift, OneByOneArrayArgumentKeepsAnArrayResult) {
+  for (const char* src : {"=ABS({1})", "=LEN({\"ab\"})", "=ROUND({1.5},0)", "=ROUND(1.5,{0})", "=ROUND({1.5},{0})",
+                          "=ISNUMBER({1})", "=NOT({TRUE})", "=UPPER({\"a\"})", "=ABS(SEQUENCE(1))",
+                          "=LET(v,{1},ABS(v))", "=LET(f,LAMBDA(x,ABS(x)),f({1}))", "=ABS(ABS({1}))"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_array()) << src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_array()->rows, 1U) << src;
+    EXPECT_EQ(v.as_array()->cols, 1U) << src;
+  }
+  for (const char* src : {"=TYPE(ABS({1}))", "=TYPE(ROUND(1.5,{0}))", "=TYPE(ISNUMBER({1}))", "=TYPE(UPPER({\"a\"}))",
+                          "=TYPE(ABS(ABS({1})))"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 64.0) << src;
+  }
+  const Value is_num = EvalSource("=ISNUMBER(ABS({1}))");
+  ASSERT_TRUE(is_num.is_array()) << is_num.debug_to_string();
+  EXPECT_TRUE(is_num.as_array()->cells[0].as_boolean());
+}
+
+// A 1x1 range argument, INDEX into an array and a reducer are single values (TYPE 1).
+TEST(TreeWalkerLift, SingleCellSourcesStayScalar) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(-2.0));
+  for (const char* src : {"=TYPE(ABS(A1:A1))", "=TYPE(ABS(A1))", "=TYPE(ABS(ABS(A1:A1)))", "=TYPE(ROUND(A1:A1,0))",
+                          "=TYPE(LEN(A1:A1))", "=TYPE(INDEX({1},1))", "=TYPE(ABS(INDEX({1},1)))", "=TYPE(SUM({1}))"}) {
+    const Value v = formulon::test::EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 1.0) << src;
+  }
+  const Value rows = EvalSource("=ROWS(ABS({1;2}))");
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_EQ(rows.as_number(), 2.0);
+}
+
+// Mac Excel 365: a 1x1 reference lifts as a single cell -- a spill reference, a name, TAKE / DROP / OFFSET /
+// XLOOKUP over a range -- while a 1x1 array value (a FILTER result with one row left) stays an array.
+TEST(TreeWalkerLift, OneByOneReferencesLiftAsCellsAndArrayValuesStayArrays) {
+  Workbook wb = Workbook::create();
+  Sheet& ws = wb.sheet(0);
+  ws.set_cell_value(0, 0, Value::number(-2.0));
+  ws.set_cell_value(1, 0, Value::number(1.0));
+  ws.set_cell_value(0, 1, Value::number(3.0));
+  ws.set_cell_value(1, 1, Value::number(4.0));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SEQUENCE(1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("nm", "Sheet1!$A$1:$A$1")));
+  struct Case {
+    const char* formula;
+    double type;
+  };
+  const Case cases[] = {
+      {"=TYPE(C1#)", 1.0},
+      {"=TYPE(nm)", 1.0},
+      {"=TYPE(TAKE(A1:B2,1,1))", 1.0},
+      {"=TYPE(DROP(A1:B2,1,1))", 1.0},
+      {"=TYPE(ABS(C1#))", 1.0},
+      {"=TYPE(ABS(TAKE(A1:B2,1,1)))", 1.0},
+      {"=TYPE(ABS(DROP(A1:B2,1,1)))", 1.0},
+      {"=TYPE(ABS(nm))", 1.0},
+      {"=TYPE(ABS(OFFSET(A1,0,0,1,1)))", 1.0},
+      {"=TYPE(ABS(XLOOKUP(1,A1:A2,A1:A2)))", 1.0},
+      {"=TYPE(LARGE({1,2},{1}))", 64.0},
+      {"=TYPE(ABS(CHOOSECOLS(A1:B2,1)))", 64.0},
+      {"=TYPE(ABS(INDEX(A1:B2,1,0)))", 64.0},
+      {"=TYPE(ABS(FILTER(A1:A2,A1:A2>0)))", 64.0},
+  };
+  std::uint32_t row = 10;
+  for (const Case& c : cases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row++, 0U, c.formula))) << c.formula;
+  }
+  // ISREF: a spill reference and TAKE / DROP over a range are references; TAKE over an array value is not.
+  const char* const refs[] = {"=ISREF(C1#)", "=ISREF(TAKE(A1:B2,1,1))", "=ISREF(DROP(A1:B2,1,1))",
+                              "=ISREF(TAKE({1,2},1))"};
+  const bool ref_expected[] = {true, true, true, false};
+  for (const char* f : refs) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row++, 0U, f))) << f;
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  row = 10;
+  for (const Case& c : cases) {
+    const Value v = wb.sheet(0).resolve_cell_value(row++, 0);
+    ASSERT_TRUE(v.is_number()) << c.formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), c.type) << c.formula;
+  }
+  for (std::size_t i = 0; i < std::size(refs); ++i) {
+    const Value v = wb.sheet(0).resolve_cell_value(row++, 0);
+    ASSERT_TRUE(v.is_boolean()) << refs[i] << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_boolean(), ref_expected[i]) << refs[i];
+  }
 }
 
 }  // namespace

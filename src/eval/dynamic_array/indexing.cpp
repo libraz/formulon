@@ -4,16 +4,22 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "eval/builtin_names.h"
 #include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
+#include "eval/eval_context.h"
+#include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/range_resolvers.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -93,6 +99,20 @@ Value eval_choose_lanes(const parser::AstNode& call, Arena& arena, const Functio
 /// TAKE / DROP. Both read `(array, [rows], [cols])` and slice the result; the
 /// only difference is whether a count names the span to keep or the span to
 /// remove, which `resolve_take_drop_range` decides from `take`.
+// Whether `node` denotes a reference, so TAKE / DROP over it yield a reference.
+bool denotes_reference(const parser::AstNode& node, const EvalContext& ctx) {
+  const parser::AstNode& source = resolve_range_binding(node, ctx.name_env(), /*accept_ref=*/true);
+  switch (source.kind()) {
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::RangeOp:
+    case parser::NodeKind::SpillRef:
+    case parser::NodeKind::StructuredRef:
+      return true;
+    default:
+      return false;
+  }
+}
+
 Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, bool take) {
   Value err = Value::error(ErrorCode::Value);
@@ -119,10 +139,60 @@ Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
+  // A one-cell slice of a reference is a one-cell reference, which reads as that cell's value.
+  if (out->rows == 1U && out->cols == 1U && denotes_reference(call.as_call_arg(0), ctx)) {
+    return out->cells[0];
+  }
   return Value::array(out);
 }
 
 }  // namespace
+
+bool resolve_take_drop_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                 const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                                 std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                                 std::uint32_t* out_right_col, bool* out_is_range, ErrorCode* out_err) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 3U) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  const bool take = strings::case_insensitive_eq(strip_future_prefix(call.as_call_name()), "TAKE");
+  std::string_view sheet;
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  if (!resolve_reference_rect(call.as_call_arg(0), arena, registry, ctx, &sheet, &top, &left, &bottom, &right,
+                              out_err)) {
+    return false;
+  }
+  Value err = Value::error(ErrorCode::Value);
+  std::uint32_t row_lo = 0;
+  std::uint32_t row_hi = 0;
+  const parser::AstNode* row_arg = is_omitted_arg(call.as_call_arg(1)) ? nullptr : &call.as_call_arg(1);
+  std::uint32_t col_lo = 0;
+  std::uint32_t col_hi = right - left + 1U;
+  const parser::AstNode* col_arg = call_arg_supplied(call, 2U) ? &call.as_call_arg(2) : nullptr;
+  if (!dynamic_array::resolve_take_drop_range(row_arg, bottom - top + 1U, take, arena, registry, ctx, row_lo, row_hi,
+                                              err) ||
+      !dynamic_array::resolve_take_drop_range(col_arg, right - left + 1U, take, arena, registry, ctx, col_lo, col_hi,
+                                              err)) {
+    *out_err = err.is_error() ? err.as_error() : ErrorCode::Value;
+    return false;
+  }
+  if (row_lo >= row_hi || col_lo >= col_hi) {
+    *out_err = ErrorCode::Calc;
+    return false;
+  }
+  *out_sheet = sheet;
+  *out_top_row = top + row_lo;
+  *out_bottom_row = top + row_hi - 1U;
+  *out_left_col = left + col_lo;
+  *out_right_col = left + col_hi - 1U;
+  *out_is_range = *out_top_row != *out_bottom_row || *out_left_col != *out_right_col;
+  return true;
+}
 
 Value eval_choosecols_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx) {

@@ -17,8 +17,12 @@
 #ifndef FORMULON_EVAL_DYNAMIC_ARRAY_INDEXING_H_
 #define FORMULON_EVAL_DYNAMIC_ARRAY_INDEXING_H_
 
+#include <cstdint>
+#include <string_view>
+
 #include "eval/lazy_impls.h"
 #include "utils/arena.h"
+#include "utils/error.h"
 #include "value.h"
 
 namespace formulon {
@@ -38,6 +42,14 @@ Value eval_chooserows_lazy(const parser::AstNode& call, Arena& arena, const Func
                            const EvalContext& ctx);
 Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
+
+/// The rectangle TAKE / DROP `call` returns when its first argument is a reference (Excel stores both with
+/// reference class). Fails with `#VALUE!` for a source that is no reference and with the slice arguments'
+/// errors. Same contract as `resolve_reference_call`.
+bool resolve_take_drop_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                 const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                                 std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                                 std::uint32_t* out_right_col, bool* out_is_range, ErrorCode* out_err);
 Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
 

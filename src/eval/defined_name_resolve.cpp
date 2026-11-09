@@ -203,7 +203,6 @@ Shaped evaluate_defined_name_shaped(const DefinedName* def, Arena& arena, const 
       shaped = true;
       break;
     case parser::NodeKind::RangeOp: {
-      // A bounded rectangle stays an array even when it is one cell.
       parser::Reference lhs{};
       parser::Reference rhs{};
       if (declared_rect_endpoint_pair(*root, &lhs, &rhs, ctx.workbook())) {
@@ -219,7 +218,13 @@ Shaped evaluate_defined_name_shaped(const DefinedName* def, Arena& arena, const 
     return eval_node_shaped(*root, arena, registry, def_ctx);
   }
   if (is_range_shaped_ast(*root)) {
-    return Shaped{eval_node_as_array(*root, arena, registry, def_ctx), nullptr};
+    const Value v = eval_node_as_array(*root, arena, registry, def_ctx);
+    // A one-cell reference body reads as that cell's value; an array constant stays an array.
+    if (root->kind() != parser::NodeKind::ArrayLiteral && v.is_array() && v.as_array()->rows == 1U &&
+        v.as_array()->cols == 1U) {
+      return Shaped{v.as_array()->cells[0], nullptr};
+    }
+    return Shaped{v, nullptr};
   }
   return Shaped{eval_node(*root, arena, registry, def_ctx), nullptr};
 }
